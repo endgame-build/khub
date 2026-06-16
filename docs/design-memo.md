@@ -1,6 +1,6 @@
 # Knowledge Hub — Design Memo (Draft)
 
-**Status:** draft, 2026-06-16. Captures decisions from the initial brainstorm. Items marked **OPEN** are resolved before any code.
+**Status:** engineering core locked, 2026-06-16. The deployment model and the engineering preset's core ontology are settled. Remaining open items (naming, id scheme, engine swap) are non-blocking.
 
 ## What it is
 
@@ -55,7 +55,7 @@ Scope: **full system model** — the complete typed map, not just a decision lay
 | Layer | Types |
 |-------|-------|
 | Motivation | `Requirement`, `Constraint`, `Risk`, `Decision` (kind: architecture[=ADR]/product/process) |
-| Capability | `Capability` — keystone (**OPEN**: confirm inclusion) |
+| Capability | `Capability` — keystone |
 | Delivery | `Epic`, `Feature` |
 | Structure | `Component` (service/library/frontend/worker), `APISchema` (rest/graphql/grpc/event), `DataEntity` |
 | Code org | `Repository` |
@@ -101,14 +101,17 @@ The core library is the only place logic lives. The CLI, skill, and any future M
 - **forge** owns finer delivery artifacts (work packages, specs). The hub links to them, it does not replace them.
 - **hub-subtree / facet spoke** supplies the sync pattern reused for hub-to-engagement sync.
 
-## Open questions
+## Locked
 
-1. **Capability spine** — confirm `Capability` as the keystone of the engineering preset (recommended), or omit it.
-2. **Core trim** — push any of `Actor` / `Environment` / `Technology` / `Requirement` to optional to keep the core leaner?
-3. **Naming** — `khub` vs `kh` for the CLI and the dot-directory.
-4. **Id scheme** — human-readable type-prefixed slugs (`comp-auth`, `adr-0012`) vs UUIDs; alignment with facet IDs (`FUNC` / `UCAP` / `COMP`) for the ingestion path.
-5. **Engine swap** — NetworkX is the default projection engine; decide when a move to an embedded Cypher engine or Neo4j earns its cost.
+- **Capability spine** — `Capability` is the keystone of the engineering preset. Requirement ← Capability ← Feature / Component.
+- **Core type set** — `Actor`, `Environment`, `Technology`, and `Requirement` all stay in core; each covers a distinct dimension.
+
+## Open questions (non-blocking)
+
+1. **Naming** — `khub` vs `kh` for the CLI and the dot-directory.
+2. **Id scheme** — human-readable type-prefixed slugs (`comp-auth`, `adr-0012`) vs UUIDs; alignment with facet IDs (`FUNC` / `UCAP` / `COMP`) for the ingestion path.
+3. **Engine swap** — NetworkX is the default projection engine; decide when a move to an embedded Cypher engine or Neo4j earns its cost.
 
 ## Next step
 
-Resolve the open questions, then move to a written implementation plan covering build phases P0–P6. No code until the design is approved.
+Engineering core is locked. Implementation proceeds from the build phases P0–P6, owned by Noor.
