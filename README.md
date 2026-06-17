@@ -1,7 +1,11 @@
-# Knowledge Hub
+# Knowledge Hub (khub)
 
-A git-backed, ontology-typed knowledge base. Markdown files with YAML frontmatter are the source of truth; a [LinkML](https://linkml.io) ontology is the type system; a Python library and a generic `khub` CLI provide validated CRUD and graph queries.
+**Structured, schema-bound context management for analytical and operational work.**
 
-Canonical ontology presets — one per engagement type — are the reusable IP. Each engagement gets its own repo seeded from a preset, where the team authors entities and extends the schema as the work demands.
+khub gives an AI agent typed, validated, queryable context — structured memory it can navigate and write back to — instead of unstructured documents stuffed into a context window.
 
-**Status:** design. See [`docs/design-memo.md`](docs/design-memo.md).
+One generic engine: every entity is one Markdown file with YAML frontmatter, held in git. A [LinkML](https://linkml.io) ontology is the contract — types, attributes, and legal relations. A Python core library provides schema-validated CRUD and graph queries; a generic `khub` CLI and a Claude Code skill are thin, schema-driven surfaces over it. The graph is a projection rebuilt from the Markdown on demand — no database is ever the source of truth.
+
+**The schema is the operational setup.** It configures what a given hub is *for*. Canonical ontology presets — one per domain (building and maintaining a system, consulting, research, operations) — are the reusable IP. Each engagement gets its own repo seeded from a preset, where agents and humans co-author entities and extend the schema as the work demands.
+
+**Status:** design — engine and v1 seed schema locked. See [`docs/design-memo.md`](docs/design-memo.md).
