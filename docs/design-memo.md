@@ -1,6 +1,6 @@
 # Knowledge Hub (khub) — Design Memo
 
-**Status:** engine and v1 seed schema locked, 2026-06-17. khub is structured, schema-bound context management for analytical and operational work — a domain-agnostic engine where the schema is the operational setup. v1 proves the engine on a small engineering seed schema. The richer engineering ontology is a documented target, not a v1 commitment.
+**Status:** engine and v1 seed schema locked, 2026-06-17; identity and storage-layout model refined, 2026-06-18. khub is structured, schema-bound context management for analytical and operational work — a domain-agnostic engine where the schema is the operational setup. v1 proves the engine on a small engineering seed schema. The richer engineering ontology is a documented target, not a v1 commitment.
 
 ## What it is
 
@@ -43,7 +43,8 @@ The core library is the only place logic lives. The CLI, skill, and any future M
 
 ### Authoring and integrity
 
-- **Identity.** The library mints each entity's id as an immutable, type-prefixed, human-readable slug (`comp-auth`, `adr-0012`); the filename equals the id; relations reference the id; a deterministic suffix resolves collisions. An external identifier rides along as a non-authoritative `source_id` alias (the ingestion path). Renaming a slug is deferred.
+- **Identity.** Each entity's **id is its slug** — one bare, human-readable token (`auth`, `initech-pov`, `adr-0012`) that names the file or folder on disk and identifies the node in the graph. No type prefix. Uniqueness is per type — `(type, slug)` — with the file path as the globally-unique key; a deterministic suffix resolves within-type slug collisions. Typed relations resolve by their schema-known target type (`lives_in: api`); polymorphic (`any`-typed) relations take a bare slug too, qualified as `type/slug` only when a slug is ambiguous across types. An external identifier rides along as a non-authoritative `source_id` alias (the ingestion path). Renaming a slug is deferred.
+- **Storage layout is per-type config.** A type declares how its entities sit on disk: `file` (`clients/{slug}.md`) for leaf entities, or `folder` (`projects/{slug}/{entry}.md`, `entry` defaulting to `_index`) for container entities, whose folder also holds their attachments and child entities. The default is `file`; a preset sets layout per type and an engagement can override it. The path template is the engine-honored contract, not documentation.
 - **Write rules.** Referential integrity hard-fails on write — a relation to a non-existent target is rejected. An incomplete but well-formed entity is saved as a `draft`; capture is never blocked.
 - **Lifecycle.** Every entity carries `status: draft|active`. `check` enforces required-relation completeness over the active subgraph only — a `draft` does not satisfy another entity's required relation.
 - **The integrity loop** keeps the graph clean without manual policing — the v1 acceptance signals:
@@ -65,7 +66,7 @@ client-repo/
     schema.yaml        # seeded from the preset — edit/delete freely
     generated/         # json-schema + pydantic, regenerated, gitignored
   knowledge/
-    <type-folders>/    # one .md per entity
+    <type-folders>/    # one .md per leaf entity, or {slug}/ folder per container entity
 ```
 
 The schema header stamps provenance (`# khub-preset: engineering@1.0.0`). The engagement schema is a fully editable fork; the canonical preset stays pristine in the hub. Drift detection and promote-back (`diff-preset`) and hub↔engagement sync reuse atelier's git-subtree pattern — both deferred past v1.
