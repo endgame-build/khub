@@ -110,7 +110,7 @@ The CLI is a thin, schema-introspecting adapter over the core library's verbs: c
 | | `khub check` | graph-wide: relations resolve, required relations complete, no orphans, no stray files, no edge cycles | v1 |
 | | `khub stale [--days N]` | entities past an `updated` threshold; dates backfilled from `git log` | v1 |
 | | `khub log [<id>]` | git history at ontology altitude | v1 |
-| Projection | `khub reindex` | regenerate the navigation index from the graph | v1 (HQ parity) |
+| Projection | `khub reindex` | regenerate the OKF `index.md` navigation from the graph | v1 (HQ parity) |
 | | `khub backfill [--type T]` | add missing frontmatter and dates from `git log` | v1 (HQ parity) |
 | | `khub build` | materialize the SQLite projection | fast-follow |
 | | `khub diff-preset` | drift against the canonical preset, and promote-back | deferred |
@@ -140,7 +140,7 @@ Prove the **engine** on the real thing: cut **firm-hq** over to khub. The provin
 
 **In:** the engine (schema-introspecting core library, in-memory `networkx` index, the integrity loop `validate`/`check`/`stale` + `log`, plus `reindex` and `backfill` for HQ parity); the full author and query command surface; `khub init`; the Claude Code skill; and the **firm-ops preset**, the LinkML port of `hq.schema.yml` (12 types, 19 edges), captured in full in `firm-ops-preset.md`.
 
-**Out** (deferred and named): the engineering preset and any preset beyond firm-ops; the SQLite/graph projection and FTS search; `diff-preset` drift/promotion; hub↔engagement sync; the MCP server; facet ingestion (fast-follow #1); graph visualization; `rename`; concurrency arbitration.
+**Out** (deferred and named): the engineering preset and any preset beyond firm-ops; the SQLite/graph projection and FTS search; `diff-preset` drift/promotion; hub↔engagement sync; the MCP server; facet and OKF-bundle ingestion (fast-follow #1); graph visualization; `rename`; concurrency arbitration.
 
 ### The v1 Proving Ground: HQ Firm-Ops
 
@@ -188,7 +188,7 @@ khub records the **durable nodes**; live execution lives in the specialist tool 
 - **facet** seeds structural entities and supplies the ingestion format; the overlap is only the ingestion path. Coupling stays loose: khub reads facet output with no runtime dependency.
 - **forge / beads / GitHub** own live delivery execution (work packages, sprint state, tickets). khub records the durable spec/epic/story/decision/incident nodes and links out by `resource`.
 - **firm-hq** is the working precedent for the projection-and-validation pattern; khub generalizes it (LinkML contract, schema-introspected checks, no graph engine in v1) and is itself the kind of operational hub an HQ preset would produce.
-- **OKF (Open Knowledge Format)** is the vendor-neutral substrate khub speaks (Google, v0.1: a git tree of `.md` concepts with a required `type`, cross-links, `index.md`, `log.md`). A khub workspace is a conformant OKF bundle, so khub is an OKF implementation and extension: it adds a typed schema, typed relations, a `draft|active` lifecycle, the serialization formats, and the graph engine as OKF-tolerated frontmatter and structure. khub adopts OKF's optional `title`, `description`, and `resource` fields, emits OKF `index.md` from `reindex`, and reads external OKF bundles permissively as drafts. It does not adopt OKF's conventional body sections; relations stay typed in frontmatter.
+- **OKF (Open Knowledge Format)** is the vendor-neutral substrate khub speaks (Google, v0.1: a git tree of `.md` concepts with a required `type`, cross-links, `index.md`, `log.md`). A khub workspace is a conformant OKF bundle, so khub is an OKF implementation and extension: it adds a typed schema, typed relations, a `draft|active` lifecycle, the serialization formats, and the graph engine as OKF-tolerated frontmatter and structure. khub adopts OKF's optional `title`, `description`, and `resource` fields, emits OKF `index.md` (stamped `okf_version`) from `reindex`, and reads external OKF bundles permissively as drafts, a consume-side fast-follow with facet ingestion. It does not adopt OKF's conventional body sections; relations stay typed in frontmatter.
 
 ## Open Questions (Non-Blocking)
 
