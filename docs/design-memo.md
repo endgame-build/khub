@@ -62,7 +62,17 @@ Python 3.11+, shipped as a `khub` console script (`uv tool install`). The Claude
 ### Authoring and Integrity
 
 - **Identity.** Each entity's **id is its slug**: one bare, human-readable token (`auth`, `initech-pov`, `adr-0012`) that names the file or folder on disk and identifies the node in the graph. No type prefix. Uniqueness is per type, `(type, slug)`, with the file path as the globally-unique key; a deterministic suffix resolves within-type slug collisions. Typed relations resolve by their schema-known target type (`lives_in: api`); polymorphic (`any`-typed) relations take a bare slug too, qualified as `type/slug` only when a slug is ambiguous across types. An external identifier rides along as a non-authoritative `source_id` alias (the ingestion path). Renaming a slug is deferred.
-- **Storage layout is per-type config.** A type declares how its entities sit on disk: `file` (`clients/{slug}.md`) for leaf entities, or `folder` (`projects/{slug}/{entry}.md`, `entry` defaulting to `_index`) for container entities, whose folder also holds their attachments and child entities. The default is `file`; a preset sets layout per type and an engagement can override it. The path template is a contract the engine honors at runtime.
+- **Storage layout is per-type config.** A type stores its entities as individual files or as a single-file collection. A preset sets the layout per type; an engagement can override it.
+
+  Inventory as files (one entity per file):
+  - `[inventory_name]/[item_name]/[slug].[md|json|jsonl|gjson|yaml]`
+  - `[inventory_name]/[item_name]/_index.[md|json|jsonl|gjson|yaml]`
+  - `[inventory_name]/[item_name].[md|json|jsonl|gjson|yaml]`
+
+  Inventory as a single file (collection):
+  - `[inventory_name].[json|jsonl|gjson|yaml]`
+  - `[inventory_name]/[inventory_name].[json|jsonl|gjson|yaml]`
+  - `[inventory_name]/_index.[json|jsonl|gjson|yaml]`
 - **Write rules.** Referential integrity hard-fails on write: a relation to a non-existent target is rejected. An incomplete but well-formed entity is saved as a `draft`, so capture is never blocked.
 - **Lifecycle.** Every entity carries `status: draft|active`. `check` enforces required-relation completeness over the active subgraph only: a `draft` does not satisfy another entity's required relation.
 - **The integrity loop** keeps the graph clean without manual policing. The v1 acceptance signals:
