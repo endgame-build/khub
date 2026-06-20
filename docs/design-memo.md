@@ -49,7 +49,9 @@ The concrete stack under the five layers. Each pick stays dependency-light and e
 | Git history | `git` over `subprocess` | `log` and `stale` read history; git is present, so no library dependency |
 | Tooling | **uv**, **Ruff**, **mypy**, **pytest** | a golden-corpus test runs khub against an HQ snapshot and asserts parity with `kb.py` |
 
-Python 3.11+, shipped as a `khub` console script (`uv tool install`). The Claude Code skill is a thin `SKILL.md` over the same commands; an MCP server exposing the same verbs as tools comes later.
+Python 3.11+, shipped as a `khub` console script (`uv tool install`). The Claude Code skill is a thin `SKILL.md` over the same commands; an MCP server exposing the same verbs comes after v1, its tools generated from the LinkML/Pydantic models so they validate for free.
+
+Two eval tiers: deterministic golden-file tests cover the engine (the HQ-parity test above), and an OKF-style fuzzy goldens-eval scores the LLM ingestion layer (precision and recall over extracted types and edges, gated on `khub check`) at the ingestion fast-follow.
 
 ### Principles (Invariants)
 
@@ -89,7 +91,7 @@ Python 3.11+, shipped as a `khub` console script (`uv tool install`). The Claude
 
 ### Command Surface
 
-The CLI is a thin, schema-introspecting adapter over the core library's verbs: create, get, update, delete, link, query. Every read command emits `--format json` for the agent or a Rich table for a human. The Claude Code skill maps agent intent onto these same commands.
+The CLI is a thin, schema-introspecting adapter over the core library's verbs: create, get, update, delete, link, query. Every read command emits `--format json` for the agent or a Rich table for a human. The Claude Code skill maps agent intent onto these same commands and is the agent's retrieval surface: `query`, `get`, and the graph walks (`neighbors`/`impact`/`history`) in v1, with `search` at the FTS fast-follow.
 
 | Group | Command | Does | Tier |
 |-------|---------|------|------|
@@ -112,6 +114,7 @@ The CLI is a thin, schema-introspecting adapter over the core library's verbs: c
 | | `khub log [<id>]` | git history at ontology altitude | v1 |
 | Projection | `khub reindex` | regenerate the OKF `index.md` navigation from the graph | v1 (HQ parity) |
 | | `khub backfill [--type T]` | add missing frontmatter and dates from `git log` | v1 (HQ parity) |
+| | `khub viz` | self-contained Cytoscape HTML over the typed graph | v1 |
 | | `khub build` | materialize the SQLite projection | fast-follow |
 | | `khub diff-preset` | drift against the canonical preset, and promote-back | deferred |
 | | `khub rename <id> <new-slug>` | rename a slug and rewrite inbound references | deferred |
@@ -156,7 +159,7 @@ Prove the **engine** on the real thing: cut **firm-hq** over to khub. The provin
 
 **In:** the engine (schema-introspecting core library, in-memory `networkx` index, the integrity loop `validate`/`check`/`stale` + `log`, plus `reindex` and `backfill` for HQ parity); the full author and query command surface; `khub init`; the Claude Code skill; and the **firm-ops preset**, the LinkML port of `hq.schema.yml` (12 types, 19 edges), captured in full in `firm-ops-preset.md`.
 
-**Out** (deferred and named): the engineering preset and any preset beyond firm-ops; the SQLite/graph projection and FTS search; `diff-preset` drift/promotion; hub↔engagement sync; the MCP server; facet and OKF-bundle ingestion (fast-follow #1); graph visualization; `rename`; concurrency arbitration.
+**Out** (deferred and named): the engineering preset and any preset beyond firm-ops; the SQLite/graph projection and FTS search; `diff-preset` drift/promotion; hub↔engagement sync; the MCP server; facet and OKF-bundle ingestion (fast-follow #1); `rename`; concurrency arbitration.
 
 ### The v1 Proving Ground: HQ Firm-Ops
 
@@ -204,14 +207,13 @@ khub records the **durable nodes**; live execution lives in the specialist tool 
 - **facet** seeds structural entities and supplies the ingestion format; the overlap is only the ingestion path. Coupling stays loose: khub reads facet output with no runtime dependency.
 - **forge / beads / GitHub** own live delivery execution (work packages, sprint state, tickets). khub records the durable spec/epic/story/decision/incident nodes and links out by `resource`.
 - **firm-hq** is the working precedent for the projection-and-validation pattern; khub generalizes it (LinkML contract, schema-introspected checks, no graph engine in v1) and is itself the kind of operational hub an HQ preset would produce.
-- **OKF (Open Knowledge Format)** is the vendor-neutral substrate khub speaks (Google, v0.1: a git tree of `.md` concepts with a required `type`, cross-links, `index.md`, `log.md`). khub's Markdown entities are conformant OKF concepts, so khub is an OKF implementation and extension: it adds a typed schema, typed relations, a `draft|active` lifecycle, the graph engine, and extra serialization formats (YAML/JSON/JSONL/gjson and collections, which OKF lacks). Markdown entities carry the extras as OKF-tolerated frontmatter; any workspace projects to a conformant OKF bundle. khub adopts OKF's optional `title`, `description`, and `resource` fields, emits OKF `index.md` (stamped `okf_version`) from `reindex`, and reads external OKF bundles permissively as drafts, a consume-side fast-follow with facet ingestion. It does not adopt OKF's conventional body sections; relations stay typed in frontmatter.
+- **OKF (Open Knowledge Format)** is the vendor-neutral substrate khub speaks (Google, v0.1: a git tree of `.md` concepts with a required `type`, cross-links, `index.md`, `log.md`). khub's Markdown entities are conformant OKF concepts, so khub is an OKF implementation and extension: it adds a typed schema, typed relations, a `draft|active` lifecycle, the graph engine, and extra serialization formats (YAML/JSON/JSONL/gjson and collections, which OKF lacks). Markdown entities carry the extras as OKF-tolerated frontmatter; any workspace projects to a conformant OKF bundle. khub adopts OKF's optional `title`, `description`, and `resource` fields, emits OKF `index.md` (stamped `okf_version`) from `reindex`, and reads external OKF bundles permissively as drafts, a consume-side fast-follow with facet ingestion (schema-validated and one-directional; khub is record-of and writes nothing back to the source). It does not adopt OKF's conventional body sections; relations stay typed in frontmatter.
 
 ## Open Questions (Non-Blocking)
 
-1. **Agent retrieval surface.** v1's query layer plus the skill already let an agent pull schema-bound context. Whether agent-optimized retrieval / context-assembly becomes its own feature is deferred.
-2. **"Operational setup" depth.** v1 reads the schema as ontology-level setup (types, relations, integrity, queries). Whether a schema should also configure operational procedures (workflows, agent routines) is a later question.
-3. **Projection engine.** In-memory for v1; SQLite (nodes/edges + FTS) is the fast-follow past the performance budget; a graph engine only much later, if ever.
-4. **id ↔ facet alignment.** khub mints its own slugs and aliases facet ids via `source_id`; which facet layer ingestion seeds from is settled at ingestion-build time.
+1. **"Operational setup" depth.** v1 reads the schema as ontology-level setup (types, relations, integrity, queries). Whether a schema should also configure operational procedures (workflows, agent routines) is a later question.
+2. **Projection engine.** In-memory for v1; SQLite (nodes/edges + FTS) is the fast-follow past the performance budget; a graph engine only much later, if ever.
+3. **id ↔ facet alignment.** khub mints its own slugs and aliases facet ids via `source_id`; which facet layer ingestion seeds from is settled at ingestion-build time.
 
 ## Next Step
 
