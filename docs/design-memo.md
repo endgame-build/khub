@@ -123,19 +123,19 @@ The CLI is a thin, schema-introspecting adapter over the core library's verbs: c
 
 The hub repo (this repo) holds the engine, the canonical presets, the skill, and an installer.
 
-`khub init <preset>` scaffolds a fresh workspace. It flattens the chosen preset (with `core` merged in) into one self-contained, editable schema, then lays down the entity tree.
+`khub init <preset>` scaffolds a fresh workspace. It merges the hub's `core.yaml` and `<preset>.yaml` into one self-contained, editable `.khub/schema.yaml`, then lays down the entity tree. After init the engagement carries no runtime dependency on the hub.
 
 ```
-client-repo/
+engagement-repo/
   .khub/
-    config.yaml
-    schema.yaml        # seeded from the preset, edit freely
+    config.yaml        # workspace config: preset provenance, source, defaults
+    schema.yaml        # core + preset flattened; the one file you edit
     generated/         # json-schema + pydantic, regenerated, gitignored
   knowledge/
     <type-folders>/    # entities per the type's storage layout (see Authoring and Integrity)
 ```
 
-The schema header stamps provenance (`# khub-preset: engineering@1.0.0`). The engagement schema is an editable fork; the canonical preset stays pristine in the hub. Drift detection and promote-back (`diff-preset`) and hub↔engagement sync reuse atelier's git-subtree pattern; both stay deferred past v1.
+The schema header stamps provenance (`# khub-preset: engineering@1.0.0`). For v1 the engagement owns `schema.yaml` outright: editing that one file (add a type, change an enum, override a type's layout) is the entire override mechanism, with no runtime tie to the hub. Pulling a preset improvement down, or promoting an override back up, is the post-v1 sync mechanism: a layered git-subtree merge (the preset as a subtree plus an overrides patch), with `diff-preset` reporting the delta. Flattening is the v1 model; layering is post-v1. The sync side stays deferred past v1.
 
 ## Distribution
 
