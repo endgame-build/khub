@@ -134,6 +134,22 @@ client-repo/
 
 The schema header stamps provenance (`# khub-preset: engineering@1.0.0`). The engagement schema is an editable fork; the canonical preset stays pristine in the hub. Drift detection and promote-back (`diff-preset`) and hub↔engagement sync reuse atelier's git-subtree pattern; both stay deferred past v1.
 
+## Distribution
+
+khub ships as a Python package and runs through `uv`. The zero-install path mirrors `npx`, straight from the private repo over git:
+
+```
+uvx --from git+ssh://git@github.com/endgame-build/knowledge-hub khub init firm-ops ./my-hub
+uv tool install git+ssh://git@github.com/endgame-build/knowledge-hub      # install once, then reuse
+khub init engineering ./acme-hub
+```
+
+Everything stays private for now. `uvx` and `uv tool install` run from the private repo over git, authenticating with an SSH key or an HTTPS token (uv delegates auth to git). A public PyPI release and the bare `uvx khub` shorthand wait until there is a reason to open the engine.
+
+**Engine and presets.** For now the engine and presets are collocated in this single private repo. The engine is generic plumbing; the presets are the IP, so they will most likely split into their own private repo later, pulled into `init` through `khub init --preset-source <private>`. Open-core (a public engine with private presets) stays a later option.
+
+**Skill.** The Claude Code skill ships through the acme/marketplace plugin marketplace alongside facet and forge, separate from the CLI.
+
 ## v1 Scope
 
 Prove the **engine** on the real thing: cut **firm-hq** over to khub. The proving ground is HQ's live firm-operations corpus, roughly 380 entities across 12 types, already running the projection-and-validation pattern under `kb.py`. khub reaches parity with `kb.py` running read-only against the same files, then takes over. Markdown is truth, so the risk stays low: khub never owns the data, the `.md` files go untouched, and the incumbent keeps working until cutover.
