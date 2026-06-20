@@ -52,7 +52,7 @@ Only these frontmatter fields are edges. Everything else is opaque metadata.
 
 ## Entities: Full Inventory
 
-Twelve node types. Each is one `.md` file with frontmatter. `req` = required for validation. Fields marked **→** are graph edges.
+Twelve node types. Each is one `.md` file with frontmatter. `req` = required for validation. Fields marked **→** are graph edges. The Identity paths show HQ's live layout; folders that use a `CLAUDE.md` entry today become `_index.md` at cutover, since khub supports only `[slug]` or `_index` as a folder entry.
 
 ### 1. opportunity: Pipeline Deal
 
@@ -340,10 +340,11 @@ v1 builds khub and cuts firm-hq over to it: install khub, seed from the firm-ops
 
 1. Author the firm-ops LinkML preset in the hub repo from this capture; resolve the five porting notes below.
 2. `khub init firm-ops` against a branch of firm-hq → writes `.khub/` (config + flattened schema).
-3. **Id strategy (resolved).** id = slug, bare on disk, so HQ's `initech-pov` folder and its bare relation values (`client: initech`, `engagement: initech-pov`) map through untouched. Typed edges resolve by the schema-known target type; polymorphic edges resolve by slug and need a `type/slug` qualifier only if a slug turns out ambiguous across types; HQ's are globally unique today, so none do. CRM/Recorder/Airtable ids become `source_id` aliases. No edge rewrite.
-4. `khub validate` + `khub check` over the imported graph; fix referential breaks (the porting notes predict where they land).
-5. Repoint the integration scripts from `kb.py` calls to khub's library.
-6. Retire `kb.py`, `build-graph.py`, `hq.schema.yml`; delete `.hq-graph.sqlite` (regenerated).
+3. Rename `CLAUDE.md` → `_index.md` across opportunity, project, build, and partnership folders. khub supports `[slug]` or `_index` as a folder entry, not `CLAUDE.md`.
+4. **Id strategy (resolved).** id = slug, bare on disk, so HQ's `initech-pov` folder and its bare relation values (`client: initech`, `engagement: initech-pov`) map through untouched. Typed edges resolve by the schema-known target type; polymorphic edges resolve by slug and need a `type/slug` qualifier only if a slug turns out ambiguous across types; HQ's are globally unique today, so none do. CRM/Recorder/Airtable ids become `source_id` aliases. No edge rewrite.
+5. `khub validate` + `khub check` over the imported graph; fix referential breaks (the porting notes predict where they land).
+6. Repoint the integration scripts from `kb.py` calls to khub's library.
+7. Retire `kb.py`, `build-graph.py`, `hq.schema.yml`; delete `.hq-graph.sqlite` (regenerated).
 
 **Status gate:** v1 cuts HQ over for `validate`/`check`/`query`/`reindex`/`backfill`, running read-only against the live files first, then taking over. Full retirement of `kb.py` waits on the SQLite/FTS fast-follow for search parity. This capture is the input to step 1.
 
@@ -354,7 +355,7 @@ Five divergences to resolve when this becomes a real khub preset. None is a bloc
 1. **Stored inverse edge.** HQ stores both `supersedes` and `superseded_by` on decisions. khub invariant #4 forbids storing the inverse; derive `superseded_by` from `supersedes`. Drop the field on port.
 2. **Slug = id.** The slug is bare and serves as the id; nothing is prefixed. Uniqueness is `(type, slug)`, with the file path as the unique key. HQ's globally-unique slugs resolve directly, including across polymorphic edges; a `type/slug` qualifier is only needed if two types ever share a slug. Layout (file vs folder, entry filename) is per-preset schema config, overridable per type. CRM/Recorder/Airtable ids ride along as `source_id` aliases.
 3. **No lifecycle field.** HQ has no universal `draft|active`; it relies on per-type `stage`/`status` enums. khub adds `status: draft|active` for required-relation completeness. Add it; map "closed/complete/retired" terminal stages as needed.
-4. **Path-shared types.** `project` and `build` both live at `projects/{slug}/CLAUDE.md`, discriminated by the `type` field, not the folder. In khub both declare the same `folder` layout under `projects/`, and the engine reads `type` from frontmatter, so the shared directory carries over cleanly.
+4. **Path-shared types and the `CLAUDE.md` entry.** `project` and `build` both live at `projects/{slug}/CLAUDE.md` today, discriminated by the `type` field, not the folder. khub does not support `CLAUDE.md` as a folder entry (entries are `[slug]` or `_index`), so the cutover renames `CLAUDE.md` → `_index.md` across opportunity, project, build, and partnership folders. Both types then declare the same `folder` layout under `projects/`, and the engine reads `type` from frontmatter, so the shared directory carries over cleanly.
 5. **`partner` edge `from`-list.** The edge vocabulary omits `client` from `partner`'s `from`, yet `client` uses it. Tighten the LinkML `domain` to include `client`, or drop it from client. Cosmetic, yet it would fail a strict `check`.
 
 Lower-priority: `decided_by` is an untyped name list, not a `person` edge; promote it to an edge if person-level decision attribution matters. `controls` points at `external` (ISO ids), which khub models as `source_id`/`external_url`, not nodes.

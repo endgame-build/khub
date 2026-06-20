@@ -123,7 +123,7 @@ client-repo/
     schema.yaml        # seeded from the preset, edit freely
     generated/         # json-schema + pydantic, regenerated, gitignored
   knowledge/
-    <type-folders>/    # one .md per leaf entity, or {slug}/ folder per container entity
+    <type-folders>/    # entities per the type's storage layout (see Authoring and Integrity)
 ```
 
 The schema header stamps provenance (`# khub-preset: engineering@1.0.0`). The engagement schema is an editable fork; the canonical preset stays pristine in the hub. Drift detection and promote-back (`diff-preset`) and hub↔engagement sync reuse atelier's git-subtree pattern; both stay deferred past v1.
@@ -149,7 +149,7 @@ The firm-ops schema is the real engine test. It exercises every mechanism the en
 | decision history and reach | `supersedes` chain (inverse derived); `affects` |
 | multi-predicate over one type-pair | `owner` vs `team` (both → person, a predicate cannot be inferred from the target type) |
 | polymorphic (`any`-typed) edges + `type/slug` | `engagement` (→ opportunity\|project\|build\|partnership); `affects`/`related`/`sources` |
-| mixed storage layout | flat `clients/{slug}.md` vs folder `projects/{slug}/CLAUDE.md` |
+| mixed storage layout | flat `clients/{slug}.md` vs folder `projects/{slug}/_index.md` |
 | path-shared types | `project` and `build` share `projects/{slug}/`, discriminated by `type` |
 | child entities nested under a parent | `meeting`/`transcript` under `projects/*/meetings/` |
 | `draft`/`active` lifecycle | added by khub over HQ's per-type `stage`/`status` |
