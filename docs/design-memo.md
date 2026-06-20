@@ -6,7 +6,7 @@
 
 khub is **structured, schema-bound context management for analytical and operational work**, a semantic, ontology-aligned context hub for agents. It gives an AI agent typed, validated, queryable context (structured memory it navigates and writes back to) instead of unstructured documents stuffed into a context window.
 
-One generic engine: every entity is one Markdown file with YAML frontmatter, held in git. A LinkML ontology defines the types, attributes, and legal relations. A Python core library provides schema-validated CRUD and graph queries. A generic CLI (`khub`) and a Claude Code skill are thin, schema-driven surfaces over that library. khub is an Open Knowledge Format (OKF) implementation and extension: its Markdown entities are OKF concepts, and khub adds a typed schema, a graph, and extra serialization formats on top. Any workspace projects to a conformant OKF bundle.
+One generic engine: every entity is one Markdown file with YAML frontmatter, held in git. A khub schema defines the entity types, their attributes, and legal relations, and compiles to LinkML for validation. A Python core library provides schema-validated CRUD and graph queries. A generic CLI (`khub`) and a Claude Code skill are thin, schema-driven surfaces over that library. khub is an Open Knowledge Format (OKF) implementation and extension: its Markdown entities are OKF concepts, and khub adds a typed schema, a graph, and extra serialization formats on top. Any workspace projects to a conformant OKF bundle.
 
 **The schema is the operational setup.** It configures what a given hub is *for*. The engine knows nothing about engineering, consulting, or research; the schema does. Swap the schema, and the same engine becomes a different operational hub.
 
@@ -26,12 +26,35 @@ Both are first-class, symmetric writers of the same graph through the same libra
 | # | Layer | Tech |
 |---|-------|------|
 | 1 | Source of truth | Markdown + YAML frontmatter, git |
-| 2 | Ontology | LinkML (YAML), the contract |
+| 2 | Ontology | khub schema (entities/attributes/relations), compiled to LinkML |
 | 3 | Core library | Python: validate / create / get / update / delete / link / query |
 | 4 | Graph projection | In-memory index (v1); SQLite (nodes/edges + FTS) as fast-follow; no graph engine in v1 |
 | 5 | Access | Generic CLI (`khub`) + Claude Code skill (MCP later) |
 
 The core library is the only place logic lives. The CLI, skill, and any future MCP server are thin, schema-introspecting adapters over it. Adding or changing a type is an edit to the ontology, with no surface code changes.
+
+### Schema
+
+The schema is authored in khub's own vocabulary, not raw LinkML. A `base` block holds the attributes and relations every entity carries (`type`, `status`, `created`/`updated`, `tags`, the OKF fields, the `any → any` edges); khub merges it into every entity at resolve time, so a type declares only its domain delta and may override a base attribute by redeclaring it. `entities` hold the types, each with `attributes` (scalars and enums), `relations` (typed edges, `to:` a target or `any`), and storage config (`layout`/`format`/`nests_under`). `imports` pulls in `core`.
+
+```yaml
+# core.yaml
+base:
+  attributes: { type: {required: true}, status: {enum: [draft, active], required: true},
+                created: {type: date, required: true}, updated: {type: date},
+                title: {}, description: {}, resource: {}, tags: {type: list} }
+  relations:  { related: {to: any, many: true}, sources: {to: any, many: true},
+                references: {to: any, many: true}, depends_on: {to: any, many: true} }
+
+# firm-ops.yaml
+imports: [core]
+entities:
+  client:  { layout: file,   attributes: { name: {required: true}, industry: {} } }
+  project: { layout: folder, attributes: { stage: {enum: [diagnose, prove, scale, complete], required: true} },
+             relations: { client: {to: client, required: true}, owner: {to: person, required: true} } }
+```
+
+khub compiles the resolved schema to LinkML, which generates the Pydantic models (validation) and JSON Schema (MCP tools, editors) into `generated/`. Authors and agents see only the khub vocabulary; LinkML is the generation backend.
 
 ### Technology Choices
 
@@ -39,7 +62,7 @@ The concrete stack under the five layers. Each pick stays dependency-light and e
 
 | Concern | Choice | Why |
 |---------|--------|-----|
-| Schema | **LinkML** (`linkml`, `linkml-runtime`) | one contract generates Pydantic v2 models and JSON Schema into `generated/`; validation comes from the schema |
+| Schema | **khub schema** → **LinkML** (`linkml`, `linkml-runtime`) | authors write entities/attributes/relations; khub compiles to LinkML, which generates Pydantic v2 and JSON Schema into `generated/` |
 | Validation | **Pydantic v2**, generated from LinkML | a fast core, precise errors that feed `validate`, typed objects as the library's return type |
 | Frontmatter | **`python-frontmatter`** to read, **`ruamel.yaml`** to write | round-trip writes preserve key order and comments, so `khub set` produces a minimal git diff |
 | In-memory graph (v1) | **`networkx`** adjacency index | `descendants`/`ancestors` give blast radius and supersession chains; cycle detection backs `check` |
@@ -130,7 +153,7 @@ engagement-repo/
   .khub/
     config.yaml        # workspace config: preset provenance, source, defaults
     schema.yaml        # core + preset flattened; the one file you edit
-    generated/         # json-schema + pydantic, regenerated, gitignored
+    generated/         # linkml + pydantic + json-schema, regenerated, gitignored
   knowledge/
     <type-folders>/    # entities per the type's storage layout (see Authoring and Integrity)
 ```
