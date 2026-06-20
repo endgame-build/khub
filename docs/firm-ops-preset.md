@@ -144,7 +144,7 @@ Identity: `{projects,opportunities,partnerships}/*/meetings/*.md`. A processed m
 |---|---|---|---|
 | `type` | const | ✓ | `meeting` |
 | `date` | date | ✓ | event date |
-| `engagement` | string | ✓ | **→ opportunity \| project \| build \| partnership** (parent slug) |
+| `engagement` | string | ✓ | **→ opportunity \| project \| build \| partnership** (parent slug; path-derived at cutover) |
 | `call_type` | enum | ✓ | client, sales, partner, internal (internal = all attendees @end.game) |
 | `source` | enum | ✓ | recording, manual |
 | `note_id` | string | | Recorder note id; primary dedup key |
@@ -350,13 +350,14 @@ v1 builds khub and cuts firm-hq over to it: install khub, seed from the firm-ops
 
 ## Porting Notes: HQ Schema → khub LinkML Preset
 
-Five divergences to resolve when this becomes a real khub preset. None is a blocker; each is a deliberate choice the engine forces.
+Six divergences to resolve when this becomes a real khub preset. None is a blocker; each is a deliberate choice the engine forces.
 
 1. **Stored inverse edge.** HQ stores both `supersedes` and `superseded_by` on decisions. khub invariant #4 forbids storing the inverse; derive `superseded_by` from `supersedes`. Drop the field on port.
 2. **Slug = id.** The slug is bare and serves as the id; nothing is prefixed. Uniqueness is `(type, slug)`, with the file path as the unique key. HQ's globally-unique slugs resolve directly, including across polymorphic edges; a `type/slug` qualifier is only needed if two types ever share a slug. Layout (file vs folder, entry filename) is per-preset schema config, overridable per type. CRM/Recorder/Airtable ids ride along as `source_id` aliases.
 3. **No lifecycle field.** HQ has no universal `draft|active`; it relies on per-type `stage`/`status` enums. khub adds `status: draft|active` for required-relation completeness. Add it; map "closed/complete/retired" terminal stages as needed.
 4. **Path-shared types and the `CLAUDE.md` entry.** `project` and `build` both live at `projects/{slug}/CLAUDE.md` today, discriminated by the `type` field, not the folder. khub does not support `CLAUDE.md` as a folder entry (entries are `[slug]` or `_index`), so the cutover renames `CLAUDE.md` → `_index.md` across opportunity, project, build, and partnership folders. Both types then declare the same `folder` layout under `projects/`, and the engine reads `type` from frontmatter, so the shared directory carries over cleanly.
 5. **`partner` edge `from`-list.** The edge vocabulary omits `client` from `partner`'s `from`, yet `client` uses it. Tighten the LinkML `domain` to include `client`, or drop it from client. Cosmetic, yet it would fail a strict `check`.
+6. **Nested meetings derive `engagement` from the path.** HQ meetings nest under their engagement folder (`projects/{slug}/meetings/…`) and also carry an explicit `engagement:` field. khub derives the `engagement` edge from the nested placement, so the field drops on port. Transcripts stay partly explicit: they nest under the engagement, yet the meeting→transcript link remains the meeting's `transcript:` field.
 
 Lower-priority: `decided_by` is an untyped name list, not a `person` edge; promote it to an edge if person-level decision attribution matters. `controls` points at `external` (ISO ids), which khub models as `source_id`/`external_url`, not nodes.
 

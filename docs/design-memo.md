@@ -56,12 +56,12 @@ Python 3.11+, shipped as a `khub` console script (`uv tool install`). The Claude
 1. **Markdown is truth.** One entity equals one file in git. Audit, diff, PR review, and portability come for free.
 2. **The graph is a derived projection,** rebuilt from the Markdown on demand. No graph database is ever the source of truth. History (`khub log`) is derived from git the same way.
 3. **The schema is the contract.** Surfaces introspect the schema at runtime and never hardcode per-type knowledge.
-4. **Frontmatter relations are authoritative.** A relation is a role-named entity field the schema marks as an edge: the field name is the predicate, the value is the target. Stored single-sided on one entity; the inverse is derived, never stored. Inline body links are navigational only.
+4. **Relations are authoritative, from three sources.** A relation feeds the graph from an explicit role-named field the schema marks as an edge (the field name is the predicate, the value is the target), from the derived inverse of such a field, or from a nested entity's placement, where living under a parent item's folder derives the parent edge from the path. Forward fields are stored single-sided on one entity; inverse and placement-derived edges are computed, never stored. Inline body links are navigational only.
 5. **Structural integrity is not semantic truth.** khub guarantees an entity is well-formed and every relation resolves; it does not guarantee an assertion is correct. A schema-legal but false write validates. The backstop is attributable git history and `git revert`, not a gate.
 
 ### Authoring and Integrity
 
-- **Identity.** Each entity's **id is its slug**: one bare, human-readable token (`auth`, `initech-pov`, `adr-0012`) that names the file or folder on disk and identifies the node in the graph. No type prefix. Uniqueness is per type, `(type, slug)`, with the file path as the globally-unique key; a deterministic suffix resolves within-type slug collisions. Typed relations resolve by their schema-known target type (`lives_in: api`); polymorphic (`any`-typed) relations take a bare slug too, qualified as `type/slug` only when a slug is ambiguous across types. An external identifier rides along as a non-authoritative `source_id` alias (the ingestion path). Renaming a slug is deferred.
+- **Identity.** Each entity's **id is its slug**: one bare, human-readable token (`auth`, `initech-pov`, `adr-0012`) that names the file or folder on disk and identifies the node in the graph. No type prefix. Uniqueness is per type, `(type, slug)`, with the file path as the globally-unique key; a deterministic suffix resolves within-type slug collisions. A nested entity's id is hierarchical, `{parent-slug}/{slug}`, unique within its parent, so its path and id stay isomorphic. Typed relations resolve by their schema-known target type (`lives_in: api`); polymorphic (`any`-typed) relations take a bare slug too, qualified as `type/slug` only when a slug is ambiguous across types. An external identifier rides along as a non-authoritative `source_id` alias (the ingestion path). Renaming a slug is deferred.
 - **Storage layout is per-type config.** A type stores its entities as individual files or as a single-file collection. A preset sets the layout per type; an engagement can override it.
 
   Inventory as files (one entity per file):
@@ -73,6 +73,11 @@ Python 3.11+, shipped as a `khub` console script (`uv tool install`). The Claude
   - `[inventory_name].[json|jsonl|gjson|yaml]`
   - `[inventory_name]/[inventory_name].[json|jsonl|gjson|yaml]`
   - `[inventory_name]/_index.[json|jsonl|gjson|yaml]`
+
+  An inventory sits at the knowledge root or **nests under a parent item's folder**, where the same patterns apply re-rooted:
+  - `[parent_inventory]/[parent_item]/[inventory_name]/[item_name].[md|json|jsonl|gjson|yaml]` (plus the `_index` and collection variants)
+
+  A nested inventory declares its parent type and the edge its placement encodes; the engine derives that edge from the path, so the parent relation needs no frontmatter field.
 - **Write rules.** Referential integrity hard-fails on write: a relation to a non-existent target is rejected. An incomplete but well-formed entity is saved as a `draft`, so capture is never blocked.
 - **Lifecycle.** Every entity carries `status: draft|active`. `check` enforces required-relation completeness over the active subgraph only: a `draft` does not satisfy another entity's required relation.
 - **The integrity loop** keeps the graph clean without manual policing. The v1 acceptance signals:
@@ -151,7 +156,7 @@ The firm-ops schema is the real engine test. It exercises every mechanism the en
 | polymorphic (`any`-typed) edges + `type/slug` | `engagement` (→ opportunity\|project\|build\|partnership); `affects`/`related`/`sources` |
 | mixed storage layout | flat `clients/{slug}.md` vs folder `projects/{slug}/_index.md` |
 | path-shared types | `project` and `build` share `projects/{slug}/`, discriminated by `type` |
-| child entities nested under a parent | `meeting`/`transcript` under `projects/*/meetings/` |
+| nested inventory, edge from placement | `meeting` under `projects/{slug}/meetings/`; `engagement` derived from the path |
 | `draft`/`active` lifecycle | added by khub over HQ's per-type `stage`/`status` |
 | real scale and mess | ~380 entities, plus reference docs with no frontmatter to skip cleanly |
 
