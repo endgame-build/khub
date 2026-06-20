@@ -6,7 +6,7 @@
 
 khub is **structured, schema-bound context management for analytical and operational work**, a semantic, ontology-aligned context hub for agents. It gives an AI agent typed, validated, queryable context (structured memory it navigates and writes back to) instead of unstructured documents stuffed into a context window.
 
-One generic engine: every entity is one Markdown file with YAML frontmatter, held in git. A LinkML ontology defines the types, attributes, and legal relations. A Python core library provides schema-validated CRUD and graph queries. A generic CLI (`khub`) and a Claude Code skill are thin, schema-driven surfaces over that library.
+One generic engine: every entity is one Markdown file with YAML frontmatter, held in git. A LinkML ontology defines the types, attributes, and legal relations. A Python core library provides schema-validated CRUD and graph queries. A generic CLI (`khub`) and a Claude Code skill are thin, schema-driven surfaces over that library. On disk this is a conformant Open Knowledge Format (OKF) bundle: khub is an OKF implementation and extension, the same markdown-plus-frontmatter substrate with a typed schema and graph layered on top.
 
 **The schema is the operational setup.** It configures what a given hub is *for*. The engine knows nothing about engineering, consulting, or research; the schema does. Swap the schema, and the same engine becomes a different operational hub.
 
@@ -80,6 +80,7 @@ Python 3.11+, shipped as a `khub` console script (`uv tool install`). The Claude
   A nested inventory declares its parent type and the edge its placement encodes; the engine derives that edge from the path, so the parent relation needs no frontmatter field.
 - **Write rules.** Referential integrity hard-fails on write: a relation to a non-existent target is rejected. An incomplete but well-formed entity is saved as a `draft`, so capture is never blocked.
 - **Lifecycle.** Every entity carries `status: draft|active`. `check` enforces required-relation completeness over the active subgraph only: a `draft` does not satisfy another entity's required relation.
+- **Standard fields.** Beyond `type` and `status`, an entity may carry OKF's optional `title`, `description`, and `resource` (the canonical URI of the underlying asset, khub's link-out), plus `tags` and `created`/`updated`. Per-type fields and relations come from the schema.
 - **The integrity loop** keeps the graph clean without manual policing. The v1 acceptance signals:
   - `khub validate`: per-entity well-formedness against the schema, plus referential integrity.
   - `khub check`: graph-wide. Relations resolve, required relations complete for `active` entities, no orphans, and no stray files.
@@ -180,13 +181,14 @@ The operational loop is the payoff the firm-ops schema does not carry:
 
 > incident `Event` → affects `Component` → `PostMortem` → produces `Decision (ADR)` → remediated by `Story` → changes `Component`.
 
-khub records the **durable nodes**; live execution lives in the specialist tool (Story status in beads/GitHub, incident response in incident.io, test runs in CI), linked by `external_url`. khub records durable state; the specialist tool tracks live execution. Deferred to a candidate tier (monotonic to add): `Constraint`, `Risk`, `Technology`, `TechnicalRecord`, `Actor`.
+khub records the **durable nodes**; live execution lives in the specialist tool (Story status in beads/GitHub, incident response in incident.io, test runs in CI), linked by `resource`. khub records durable state; the specialist tool tracks live execution. Deferred to a candidate tier (monotonic to add): `Constraint`, `Risk`, `Technology`, `TechnicalRecord`, `Actor`.
 
 ## Boundary and Relationships
 
 - **facet** seeds structural entities and supplies the ingestion format; the overlap is only the ingestion path. Coupling stays loose: khub reads facet output with no runtime dependency.
-- **forge / beads / GitHub** own live delivery execution (work packages, sprint state, tickets). khub records the durable spec/epic/story/decision/incident nodes and links out by `external_url`.
+- **forge / beads / GitHub** own live delivery execution (work packages, sprint state, tickets). khub records the durable spec/epic/story/decision/incident nodes and links out by `resource`.
 - **firm-hq** is the working precedent for the projection-and-validation pattern; khub generalizes it (LinkML contract, schema-introspected checks, no graph engine in v1) and is itself the kind of operational hub an HQ preset would produce.
+- **OKF (Open Knowledge Format)** is the vendor-neutral substrate khub speaks (Google, v0.1: a git tree of `.md` concepts with a required `type`, cross-links, `index.md`, `log.md`). A khub workspace is a conformant OKF bundle, so khub is an OKF implementation and extension: it adds a typed schema, typed relations, a `draft|active` lifecycle, the serialization formats, and the graph engine as OKF-tolerated frontmatter and structure. khub adopts OKF's optional `title`, `description`, and `resource` fields, emits OKF `index.md` from `reindex`, and reads external OKF bundles permissively as drafts. It does not adopt OKF's conventional body sections; relations stay typed in frontmatter.
 
 ## Open Questions (Non-Blocking)
 
