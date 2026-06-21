@@ -57,6 +57,8 @@ The schema layer is the foundation every other surface stands on: operators decl
 - [ ] Resolve the type so it compiles to a validatable model
 - [ ] Treat the relation field name as the predicate
 
+> `project` here is illustrative vocabulary, shown in flow-style YAML to demonstrate the type-declaration grammar — not a placement directive. The real `project` type is authored in `firm-ops.yaml` (STORY-SCH-004). In v1, `core.yaml` holds only the `base` block; entity types live in the preset.
+
 ##### AC-002: Declared Constraints Generate Validation
 
 **Given** a type declares an enum, a pattern, and a cardinality
@@ -300,7 +302,7 @@ The schema layer is the foundation every other surface stands on: operators decl
 - [ ] Carry each type's attributes, enums (`stage`, `call_type`, `role`, `doc_kind`), and patterns
 - [ ] Set each type's storage layout (file for client and meeting, folder for project)
 
-##### AC-002: Declare All Nineteen Edges
+##### AC-002: Declare All Edges (16 Stored, 17 Total)
 
 **Given** the relation vocabulary
 **When** the operator declares relations
