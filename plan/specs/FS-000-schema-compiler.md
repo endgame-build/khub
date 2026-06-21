@@ -127,7 +127,7 @@ The schema layer is the foundation every other surface stands on: operators decl
 #### Preconditions
 
 - [ ] PRE-001: `core.yaml` defines a `base` block with attributes and relations
-- [ ] PRE-002: A preset pulls in `core` via `imports: [core]`
+- [ ] PRE-002: `khub init` writes the `base` block as a header into the engagement's `schema.yaml`, alongside the preset's entities (no import declaration)
 
 #### Acceptance Criteria
 
@@ -149,13 +149,13 @@ The schema layer is the foundation every other surface stands on: operators decl
 - [ ] Apply the type's declaration over the base for that attribute
 - [ ] Leave every other base attribute inherited unchanged
 
-##### AC-003: Missing Import
+##### AC-003: Missing Base Block
 
-**Given** a preset that omits `imports: [core]`
+**Given** a schema that declares entities with no `base` block present
 **When** the schema resolves
 **Then** the system shall:
 - [ ] Report that the base block is unavailable
-- [ ] Display: "Preset does not import 'core'; base attributes are missing"
+- [ ] Display: "Schema declares entities but no base block; base attributes are missing"
 - [ ] Reject the schema rather than produce types with no `draft` flag or `type`
 
 ##### AC-004: Universal Edges Available Everywhere
@@ -171,7 +171,7 @@ The schema layer is the foundation every other surface stands on: operators decl
 |----|------|-------------|
 | REQ-SCH002-01 | EARS-E | When the schema resolves, the system shall merge the base block into every entity type |
 | REQ-SCH002-02 | EARS-U | The system shall let a type override a base attribute by redeclaring it |
-| REQ-SCH002-03 | EARS-W | If a preset does not import `core`, then the system shall reject the schema for a missing base |
+| REQ-SCH002-03 | EARS-W | If a schema declares entities with no base block present, then the system shall reject the schema for a missing base |
 | REQ-SCH002-04 | EARS-U | The system shall make the universal `any → any` edges available on every type without redeclaration |
 
 #### Business Rules
@@ -184,7 +184,7 @@ The schema layer is the foundation every other surface stands on: operators decl
 
 #### Technical Notes
 
-- **Artifact:** the `base` block in `core.yaml`; `imports: [core]` in each preset
+- **Artifact:** the `base` block in `core.yaml`; `khub init` writes it as a `base:` header into the engagement `schema.yaml` (the base is not a declared dependency — no `imports`)
 - **Library verb:** the resolve-time base merger
 - **Base attributes:** `type`, `draft`, `author`, `created`, `updated`, `title`, `description`, `resource`, `tags`
 - **Base relations:** `related`, `sources`, `references`, `depends_on` (all `to: any`, many)
@@ -193,7 +193,7 @@ The schema layer is the foundation every other surface stands on: operators decl
 #### Test Hints
 
 - **Unit:** base-merge precedence, override resolution
-- **Integration:** missing-import rejection; universal-edge availability
+- **Integration:** missing-base rejection; universal-edge availability
 - **E2E:** override `updated` to required on one type, confirm others stay optional
 
 ---
@@ -352,7 +352,7 @@ The schema layer is the foundation every other surface stands on: operators decl
 
 #### Technical Notes
 
-- **Artifact:** `firm-ops.yaml` (`imports: [core]`, 12 types, 17 relation predicates)
+- **Artifact:** `firm-ops.yaml` (12 types, 17 relation predicates); the base comes from `core.yaml`'s `base` block, written into the engagement by `khub init` (no `imports`)
 - **Library verb:** authored content, compiled via STORY-SCH-003
 - **Source:** `docs/firm-ops-preset.md` (the capture)
 - **Invariant upheld:** relations authoritative; slug = id; the `draft` flag
@@ -421,7 +421,7 @@ The schema layer's "entities" are the schema constructs themselves, not firm-ops
 | Base block changes | Propagate to every type on the next resolve | The base is merged, not copied |
 | A type overrides a base attribute | The type's declaration wins for that attribute | Per-type delta over inherited default |
 | Schema changes | Regenerate `generated/`, overwriting the prior output | Generated artifacts are derived and disposable |
-| Preset omits `imports: [core]` | Reject the schema | No entity may lack `type` and the `draft` flag |
+| Schema declares entities with no base block | Reject the schema | No entity may lack `type` and the `draft` flag |
 
 ### Shared Business Rules
 
@@ -450,5 +450,5 @@ Type declaration and base merge are the two halves of a resolved schema; compile
 |-------|----------|--------|------|
 | Layered preset sync (subtree + overrides patch) | Deferred | v1 flattens core + preset at init; hub↔engagement sync is post-v1 | 2026-06-20 |
 | The engineering preset (intent/behavior spine) | Post-v1 | Built after firm-ops, by hand and via the promote-back flywheel | 2026-06-20 |
-| Multi-preset composition (importing more than `core`) | Deferred | v1 imports `core` only; richer composition is unscheduled | 2026-06-20 |
+| Preset imports / multi-preset composition | Deferred | v1 has no imports; the base is a written `base:` header, not an imported dependency; preset-to-preset composition is unscheduled | 2026-06-21 |
 | Nested storage layout (`nests_under`) and placement-derived edges | Deferred | v1 supports file and folder layouts only; nesting is post-MVP | 2026-06-21 |

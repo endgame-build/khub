@@ -35,7 +35,7 @@ The core library is the only place logic lives. The CLI, skill, and any future M
 
 ### Schema
 
-The schema is authored in khub's own vocabulary, not raw LinkML. A `base` block holds the attributes and relations every entity carries (`type`, `draft`, `author`, `created`/`updated`, `tags`, the OKF fields, the `any → any` edges); khub merges it into every entity at resolve time, so a type declares only its domain delta and may override a base attribute by redeclaring it. `entities` hold the types, each with `attributes` (scalars and enums), `relations` (typed edges, `to:` a single type, a list of types, or `any`), and storage config (`layout`/`format`; nesting is post-MVP). `imports` pulls in `core`.
+The schema is authored in khub's own vocabulary, not raw LinkML. A `base` block holds the attributes and relations every entity carries (`type`, `draft`, `author`, `created`/`updated`, `tags`, the OKF fields, the `any → any` edges); khub merges it into every entity at resolve time, so a type declares only its domain delta and may override a base attribute by redeclaring it. `entities` hold the types, each with `attributes` (scalars and enums), `relations` (typed edges, `to:` a single type, a list of types, or `any`), and storage config (`layout`/`format`; nesting is post-MVP). The base is not a declared dependency: `khub init` writes the `base` block as a header into the engagement's `schema.yaml`, alongside the preset's entities.
 
 ```yaml
 # core.yaml
@@ -46,8 +46,7 @@ base:
   relations:  { related: {to: any, many: true}, sources: {to: any, many: true},
                 references: {to: any, many: true}, depends_on: {to: any, many: true} }
 
-# firm-ops.yaml
-imports: [core]
+# firm-ops.yaml  (the base is written in by `khub init`, not imported)
 entities:
   client:  { layout: file,   attributes: { name: {required: true}, industry: {} } }
   project: { layout: folder, attributes: { stage: {enum: [diagnose, prove, scale, complete], required: true} },

@@ -27,7 +27,7 @@ Delivers the resolver — the half of the schema layer that turns authored khub 
 | STORY-SCH-001 | AC-004 | A type declares only its domain delta, inheriting `type`, `draft`, `created`, `updated`, `tags`, and OKF fields from the base | TS-SCH-001-04 |
 | STORY-SCH-002 | AC-001 | Merge base attributes and the universal `any → any` edges into every entity at resolve time; every entity carries boolean `draft` (default `false`) | TS-SCH-002-01 |
 | STORY-SCH-002 | AC-002 | A type overrides a base attribute by redeclaring it; all other base attributes stay inherited unchanged | TS-SCH-002-02 |
-| STORY-SCH-002 | AC-003 | A preset omitting `imports: [core]` is rejected with a located error for the missing base | TS-SCH-002-03 |
+| STORY-SCH-002 | AC-003 | A schema declaring entities with no base block present is rejected with a located error | TS-SCH-002-03 |
 | STORY-SCH-002 | AC-004 | The universal edges (`related`, `sources`, `references`, `depends_on`) are accepted on any type without redeclaration | TS-SCH-002-04 |
 
 ---
@@ -42,7 +42,7 @@ Delivers the resolver — the half of the schema layer that turns authored khub 
 | STORY-SCH-001 | REQ-SCH001-04 | EARS-U | The system shall let a type declare only its domain delta, inheriting the base block | TS-SCH-001-U05 |
 | STORY-SCH-002 | REQ-SCH002-01 | EARS-E | When the schema resolves, the system shall merge the base block into every entity type | TS-SCH-002-U01 |
 | STORY-SCH-002 | REQ-SCH002-02 | EARS-U | The system shall let a type override a base attribute by redeclaring it | TS-SCH-002-U02 |
-| STORY-SCH-002 | REQ-SCH002-03 | EARS-W | If a preset does not import `core`, then the system shall reject the schema for a missing base | TS-SCH-002-U04 |
+| STORY-SCH-002 | REQ-SCH002-03 | EARS-W | If a schema declares entities with no base block present, then the system shall reject the schema for a missing base | TS-SCH-002-U04 |
 | STORY-SCH-002 | REQ-SCH002-04 | EARS-U | The system shall make the universal `any → any` edges available on every type without redeclaration | TS-SCH-002-U05 |
 
 ---
@@ -68,7 +68,7 @@ Delivers the resolver — the half of the schema layer that turns authored khub 
 
 | Attribute | Type | Required | Description |
 |-----------|------|----------|-------------|
-| Imports | Collection | Yes | The presets pulled in; a preset must import `core` for the base |
+| Imports | Collection | No | Not used for the base in v1 — the base is a `base:` header written by `khub init`; `imports` is reserved for post-v1 preset composition |
 | Base Block | Reference | Yes | The attributes and relations every entity inherits (from `core.yaml`) |
 | Type Declarations | Collection | No | The entity types this schema declares beyond the base |
 
@@ -140,7 +140,7 @@ The only lifecycle the resolver introduces is the base block's `draft` flag, car
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| schema_files | Collection | Yes | Authored khub-vocabulary YAML — `core.yaml` plus any imported preset |
+| schema_files | Collection | Yes | Authored khub-vocabulary YAML — `core.yaml`'s base plus the preset's entities (no import declaration) |
 
 - **Output (success):**
 
@@ -153,7 +153,7 @@ The only lifecycle the resolver introduces is the base block's `draft` flag, car
 | Error | Condition | Message |
 |-------|-----------|---------|
 | unknown_relation_target | A relation `to:` names a type the schema does not declare | `Type 'project' relation 'owner' targets unknown type 'persn'` |
-| missing_base_import | A preset omits `imports: [core]` | `Preset does not import 'core'; base attributes are missing` |
+| missing_base | A schema declares entities with no base block present | `Schema declares entities but no base block; base attributes are missing` |
 | raw_linkml_smuggled | A declaration uses raw LinkML constructs instead of khub vocabulary | Located error naming the offending construct |
 
 ---
@@ -174,13 +174,14 @@ The only lifecycle the resolver introduces is the base block's `draft` flag, car
 |---------|---------------|---------|
 | Valid | `type`, `draft`, `author`, `created`, `updated`, `title`, `description`, `resource`, `tags` + `related`/`sources`/`references`/`depends_on` (`to: any`, many) | Merge-into-every-entity (TS-SCH-002-01) |
 | Override | a type sets `updated: {required: true}` over optional base | Override precedence (TS-SCH-002-02) |
-| Missing | preset without `imports: [core]` | Missing-import rejection (TS-SCH-002-03) |
+| Missing | schema with entities but no base block | Missing-base rejection (TS-SCH-002-03) |
 
 ---
 
 ## Implementation Notes
 
 - **Resolve, don't copy:** the base block is merged into each type at resolve time. The merged fields are never written back into the type's declaration (SCH-004). A change to the base propagates to every type on the next resolve.
+- **Base is supplied, not imported:** the base block lives in `core.yaml` and is written into the engagement `schema.yaml` as a `base:` header by `khub init` — it is not a declared dependency (no `imports: [core]`). The resolver finds the base block among the input files and merges it; a schema that declares entities with no base block present is rejected (`missing_base`).
 - **Override precedence:** a type-level attribute declaration replaces the base's declaration for that one attribute; every other base attribute stays inherited unchanged (SCH-005). Confirm by overriding `updated` to required on one type and checking a sibling stays optional.
 - **Predicate from field name:** a relation's field name is its predicate; its `to:` value is the target — a single type, a list of types, or `any` (SCH-002, SCH-003). Resolve the target against the set of declared types.
 - **Universal edges:** `related`, `sources`, `references`, `depends_on` (all `to: any`, many) come from the base and are available on every type without redeclaration (STORY-SCH-002 AC-004).

@@ -127,7 +127,7 @@ The compiler is a transform with two outcomes, not an entity workflow. The state
 | Error | Condition | Message |
 |-------|-----------|---------|
 | duplicate_type | The schema declares the same type twice | `Duplicate type 'project'` |
-| import_cycle | The imports form a cycle | `Import cycle through 'core'` |
+| import_cycle | The imports form a cycle (post-v1; v1 has no imports) | `Import cycle through 'core'` |
 
 ---
 
@@ -138,7 +138,7 @@ The compiler is a transform with two outcomes, not an entity workflow. The state
 | Variant | Key Attributes | Purpose |
 |---------|---------------|---------|
 | Valid | resolved two-type schema, base merged | Clean compile + determinism (TS-SCH-003-01, TS-SCH-003-04) |
-| Invalid | duplicate `project` type; imports cycling through `core` | Atomic-fail, no partial artifacts (TS-SCH-003-03) |
+| Invalid | duplicate `project` type (cyclic imports are post-v1) | Atomic-fail, no partial artifacts (TS-SCH-003-03) |
 | Boundary | identical schema compiled twice into the same target | Byte-identical regeneration (TS-SCH-003-04) |
 
 ---

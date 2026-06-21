@@ -152,19 +152,19 @@ Tests the schema foundation: operators declare types in khub vocabulary (`base`,
 
 **Test Data:** one type overriding `updated`; a sibling type that does not
 
-#### TS-SCH-002-03: Missing Import
+#### TS-SCH-002-03: Missing Base Block
 
 **Validates:** AC-003
 **Level:** Integration
 
-**Given** a preset that omits `imports: [core]`
+**Given** a schema that declares entities with no `base` block present
 **When** the schema resolves
 **Then:**
 - [ ] the base block is reported as unavailable
-- [ ] the message reads: `Preset does not import 'core'; base attributes are missing`
+- [ ] the message reads: `Schema declares entities but no base block; base attributes are missing`
 - [ ] the schema is rejected rather than producing types with no `draft` flag or `type`
 
-**Test Data:** preset file with the `imports:` line removed
+**Test Data:** an entities-bearing schema file with no `base` block in the input set
 
 #### TS-SCH-002-04: Universal Edges Available Everywhere
 
@@ -185,7 +185,7 @@ Tests the schema foundation: operators declare types in khub vocabulary (`base`,
 | TS-SCH-002-U01 | Base merger | Merges base attributes and universal relations into every entity at resolve time | REQ-SCH002-01, SCH-004 |
 | TS-SCH-002-U02 | Base merger | Applies a type-level redeclaration over the base for that attribute | REQ-SCH002-02, SCH-005 |
 | TS-SCH-002-U03 | Base merger | Guarantees every entity carries `type` and the boolean `draft` flag | SCH-006 |
-| TS-SCH-002-U04 | Base merger | Rejects a preset that does not import `core` | REQ-SCH002-03 |
+| TS-SCH-002-U04 | Base merger | Rejects a schema that declares entities with no base block | REQ-SCH002-03 |
 | TS-SCH-002-U05 | Base merger | Exposes the universal `any → any` edges on every type without redeclaration | REQ-SCH002-04 |
 
 ---
@@ -222,19 +222,21 @@ Tests the schema foundation: operators declare types in khub vocabulary (`base`,
 
 **Test Data:** authored `core.yaml` + preset containing no LinkML keywords
 
-#### TS-SCH-003-03: Malformed Schema — Duplicate Type or Import Cycle
+#### TS-SCH-003-03: Malformed Schema — Duplicate Type (Import Cycle Post-v1)
 
 **Validates:** AC-003
 **Level:** Integration
 
-**Given** a schema with a duplicate type or an import cycle
+**Given** a schema with a duplicate type
 **When** the compiler runs
 **Then:**
 - [ ] the compile fails with a located error
-- [ ] the message reads `Duplicate type 'project'` or `Import cycle through 'core'`
+- [ ] the message reads `Duplicate type 'project'`
 - [ ] no artifacts are written to `generated/`
 
-**Test Data:** schema declaring `project` twice; schema whose imports form a cycle through `core`
+> v1 has no imports (the base is a written `base:` header, not an imported dependency), so an import cycle is not reachable in v1. The duplicate-type case is the v1-active malformed-schema rejection; the `Import cycle through 'core'` guard applies only once preset-to-preset imports return post-v1.
+
+**Test Data:** schema declaring `project` twice (v1); a cyclic-imports schema is a post-v1 case
 
 #### TS-SCH-003-04: Regeneration Is Deterministic
 
@@ -351,11 +353,11 @@ Tests the schema foundation: operators declare types in khub vocabulary (`base`,
 | STORY-SCH-001 | AC-004 | A type declares only its delta | TS-SCH-001-04 |
 | STORY-SCH-002 | AC-001 | Merge base into every entity | TS-SCH-002-01 |
 | STORY-SCH-002 | AC-002 | A type overrides a base attribute | TS-SCH-002-02 |
-| STORY-SCH-002 | AC-003 | Missing import | TS-SCH-002-03 |
+| STORY-SCH-002 | AC-003 | Missing base block | TS-SCH-002-03 |
 | STORY-SCH-002 | AC-004 | Universal edges available everywhere | TS-SCH-002-04 |
 | STORY-SCH-003 | AC-001 | Compile to generated artifacts | TS-SCH-003-01 |
 | STORY-SCH-003 | AC-002 | Operators see only khub vocabulary | TS-SCH-003-02 |
-| STORY-SCH-003 | AC-003 | Malformed schema (duplicate/cycle) | TS-SCH-003-03 |
+| STORY-SCH-003 | AC-003 | Malformed schema (duplicate type; cycle post-v1) | TS-SCH-003-03 |
 | STORY-SCH-003 | AC-004 | Regeneration is deterministic | TS-SCH-003-04 |
 | STORY-SCH-004 | AC-001 | Declare all twelve types | TS-SCH-004-01 |
 | STORY-SCH-004 | AC-002 | Declare all edges (16 stored, 17 total) | TS-SCH-004-02 |
@@ -372,7 +374,7 @@ Tests the schema foundation: operators declare types in khub vocabulary (`base`,
 | REQ-SCH001-04 | EARS-U | A type declares only its delta, inheriting the base | TS-SCH-001-04, TS-SCH-001-U05 |
 | REQ-SCH002-01 | EARS-E | Merge the base block into every entity type | TS-SCH-002-01, TS-SCH-002-U01 |
 | REQ-SCH002-02 | EARS-U | A type overrides a base attribute by redeclaring it | TS-SCH-002-02, TS-SCH-002-U02 |
-| REQ-SCH002-03 | EARS-W | Reject a preset that does not import `core` | TS-SCH-002-03, TS-SCH-002-U04 |
+| REQ-SCH002-03 | EARS-W | Reject a schema that declares entities with no base block | TS-SCH-002-03, TS-SCH-002-U04 |
 | REQ-SCH002-04 | EARS-U | Universal `any → any` edges on every type without redeclaration | TS-SCH-002-04, TS-SCH-002-U05 |
 | REQ-SCH003-01 | EARS-E | Generate Pydantic and JSON Schema into `generated/` | TS-SCH-003-01, TS-SCH-003-U02 |
 | REQ-SCH003-02 | EARS-U | Keep LinkML a hidden backend; operators write only khub vocabulary | TS-SCH-003-02, TS-SCH-003-U01 |
@@ -423,14 +425,14 @@ Tests the schema foundation: operators declare types in khub vocabulary (`base`,
 |---------|---------------|---------|
 | Valid | `type`, `draft`, `author`, `created`, `updated`, `title`, `description`, `resource`, `tags` + `related`/`sources`/`references`/`depends_on` (`to: any`) | Merge-into-every-entity (TS-SCH-002-01) |
 | Override | type sets `updated: {required: true}` over optional base | Override precedence (TS-SCH-002-02) |
-| Missing | preset without `imports: [core]` | Missing-import rejection (TS-SCH-002-03) |
+| Missing | schema with entities but no base block | Missing-base rejection (TS-SCH-002-03) |
 
 #### Schema (compile input)
 
 | Variant | Key Attributes | Purpose |
 |---------|---------------|---------|
 | Valid | resolved two-type schema, base merged | Clean compile + determinism (TS-SCH-003-01, TS-SCH-003-04) |
-| Invalid | duplicate `project` type; imports cycling through `core` | Atomic-fail, no partial artifacts (TS-SCH-003-03) |
+| Invalid | duplicate `project` type (cyclic imports are post-v1) | Atomic-fail, no partial artifacts (TS-SCH-003-03) |
 | Boundary | identical schema compiled twice | Byte-identical regeneration (TS-SCH-003-04) |
 
 #### Firm-Ops Entity (e.g. decision, project, build, client)

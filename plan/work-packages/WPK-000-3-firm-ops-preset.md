@@ -58,7 +58,7 @@ Delivers `firm-ops.yaml` — the khub port of `hq.schema.yml` and the first real
 | Attribute | Type | Required | Description |
 |-----------|------|----------|-------------|
 | Name | Text | Yes | `firm-ops` — the named, authored schema that `init` seeds from |
-| Imports | Collection | Yes | `[core]` — pulls in the base block (v1 imports `core` only) |
+| Imports | Collection | No | None in v1 — the base comes from `core.yaml` (written by `khub init`), not an import; `imports` is reserved for post-v1 preset composition |
 | Types | Collection | Yes | The 12 firm-ops entity types |
 | Relations | Collection | Yes | The 12 firm-ops stored predicates (plus 4 universal from `core`; `superseded_by` derived) |
 | Source | Reference | Yes | `docs/firm-ops-preset.md` — the authoritative capture |
@@ -127,14 +127,14 @@ decision A  --supersedes-->  decision B
 
 ### STORY-SCH-004: Author and Compile the Firm-Ops Preset
 
-- **Verb:** authored `firm-ops.yaml` (`imports: [core]`), compiled via `core.compile` (WPK-000-2)
+- **Verb:** authored `firm-ops.yaml` (no `imports`; the base comes from `core.yaml`), compiled via `core.compile` (WPK-000-2)
 - **CLI:** the compiled preset seeds `khub init firm-ops`
 - **Input:**
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | docs/firm-ops-preset.md | Reference | Yes | The authoritative capture — 12 types, 17 relation predicates, six porting notes |
-| core.yaml | Reference | Yes | The base block the preset imports |
+| core.yaml | Reference | Yes | The base block, supplied alongside the preset (written into the engagement by `khub init`; not imported) |
 | HQ snapshot | Reference | Yes | Read-only copy of a tagged `firm-hq` branch, for validation |
 
 - **Output (success):**
@@ -167,7 +167,7 @@ decision A  --supersedes-->  decision B
 
 ## Implementation Notes
 
-- **Source of truth:** `docs/firm-ops-preset.md` is the authoritative capture. Author `firm-ops.yaml` with `imports: [core]`, 12 types, 17 relation predicates (16 stored + derived `superseded_by`).
+- **Source of truth:** `docs/firm-ops-preset.md` is the authoritative capture. Author `firm-ops.yaml` with 12 types and 17 relation predicates (16 stored + derived `superseded_by`); the base comes from `core.yaml` (no `imports` declaration).
 - **The six porting notes (AC-003):**
   1. Drop `superseded_by`; derive it from `supersedes` — no stored inverse (SCH-011).
   2. Add the boolean `draft` flag over HQ's per-type `stage`/`status`.
