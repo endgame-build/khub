@@ -13,12 +13,14 @@ Tiers: **v1** ships in the first release; **fast-follow** lands shortly after (m
 | `-q, --quiet` / `-v, --verbose` | Quieter or louder logging. |
 | `--version`, `--help` | Version and help. |
 
+Read commands include `draft` entities in scope and surface each entity's `orphan`/`stale` flag by default; `--active`/`--draft` and `--orphan`/`--stale` narrow the set.
+
 ## Validation and open schema
 
 khub validates the **schema-declared subset** of an entity and leaves everything else alone:
 
 1. **Declared fields are enforced.** Any present field the schema knows is checked against its type, enum, pattern, and cardinality. A malformed value, or a relation to a non-existent target, is rejected on write.
-2. **`required` is a status gate, not a capture block.** A missing required field or relation does not reject the write; it saves the entity as `draft`. Capture is never blocked. `check` enforces required-completeness over the `active` subgraph.
+2. **`required` is a completeness gate, not a capture block.** A missing required field or relation does not reject the write; it saves the entity as a draft (`draft: true`). Capture is never blocked. `check` enforces required-completeness over the `active` subgraph.
 3. **Extensions are free.** Any key the schema does not declare is accepted with any value, validated against nothing, and preserved on round-trip (Pydantic `extra="allow"` over the generated model).
 4. **`--strict` closes the schema.** `validate --strict` (and `add`/`edit --strict`) rejects unknown keys, for when a closed contract is wanted.
 
@@ -32,14 +34,14 @@ khub validates the **schema-declared subset** of an entity and leaves everything
 | `khub schema show <type>` | `--format` | one type's fields, enums, required, relations, layout (view) | v1 |
 | `khub schema edges` | `--format` | the relation vocabulary (view) | v1 |
 | `khub schema --diff` | `--format` | engagement overrides versus the canonical preset | fast-follow |
-| `khub status` | `--format` | counts per type, draft vs active, orphan and stale counts, OKF-conformance flag | v1 |
+| `khub status` | `--format` | counts per type, draft vs active, orphan and stale counts, OKF-conformance flag (projectable-to-OKF) | v1 |
 
 ## Author
 
 | Command | Args and options | Does | Tier |
 |---|---|---|---|
-| `khub add <type>` | `--<field> <value>` (repeatable; schema or extension), `--id <slug>`, `--parent <id>`, `--body <text>` / `--body-file <path>`, `--strict` | mint a slug, write a well-formed (possibly `draft`) entity; print its id | v1 |
-| `khub get <id>` | `--format json\|table\|raw`, `--edges` | print an entity; `--edges` includes derived inverse and placement edges | v1 |
+| `khub add <type>` | `--<field> <value>` (repeatable; schema or extension), `--id <slug>`, `--body <text>` / `--body-file <path>`, `--strict` | mint a slug, write a well-formed (possibly `draft`) entity; print its id | v1 |
+| `khub get <id>` | `--format json\|table\|raw`, `--edges` | print an entity; `--edges` includes derived inverse edges | v1 |
 | `khub edit <id> <field> <value>` | or `--<field> <value>` (repeatable), `--body` / `--body-file`, `--strict` | edit fields, bump `updated`, re-validate | v1 |
 | `khub remove <id>` | `--force` | delete an entity; refuses while an inbound edge resolves to it, unless `--force` | v1 |
 | `khub link <id> <predicate> <target>` | | add a schema-checked relation | v1 |
@@ -49,7 +51,7 @@ khub validates the **schema-declared subset** of an entity and leaves everything
 
 | Command | Args and options | Does | Tier |
 |---|---|---|---|
-| `khub query` | `--type <t>`, `--status <draft\|active>`, `--<field> <value>`, `--tag <tag>`, `--has <pred>`, `--missing <pred>`, `--limit <n>`, `--format json\|table\|ids` | filter entities by frontmatter; `--missing` surfaces gaps | v1 |
+| `khub query` | `--type <t>`, `--draft` / `--active`, `--orphan`, `--stale`, `--<field> <value>`, `--tag <tag>`, `--has <pred>`, `--missing <pred>`, `--limit <n>`, `--format json\|table\|ids` | filter entities by frontmatter; includes drafts and carries `orphan`/`stale` flags by default; `--missing` surfaces gaps | v1 |
 | `khub search <text>` | `--type <t>`, `--limit <n>`, `--format` | full-text over body and prose | fast-follow (FTS) |
 
 ## Traversal
@@ -65,8 +67,8 @@ khub validates the **schema-declared subset** of an entity and leaves everything
 
 | Command | Args and options | Does | Tier |
 |---|---|---|---|
-| `khub validate [target=all]` | `--all`, `--strict`, `--fix`, `--format` | per-entity well-formedness and referential integrity over the declared subset | v1 |
-| `khub check` | `--format` | graph-wide: relations resolve, required-completeness for `active`, no orphans, no stray files, no edge cycles | v1 |
+| `khub validate [target=all]` | `--strict`, `--fix` (v1: date backfill only), `--format` | per-entity well-formedness and referential integrity over the declared subset (default: whole workspace) | v1 |
+| `khub check` | `--format` | graph-wide: relations resolve, required-completeness for `active`, no orphans (zero relations), no stray files (non-entities inside a type layout; reference docs outside type layouts are skipped), no edge cycles | v1 |
 | `khub stale` | `--days <n=30>`, `--format` | entities past an `updated` threshold; dates backfilled from `git log` | v1 |
 | `khub log [id]` | `--limit <n>`, `--since <date>`, `--format` | git history at ontology altitude (who changed what, when); distinct from `history` | v1 |
 

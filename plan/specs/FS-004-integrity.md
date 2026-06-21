@@ -3,7 +3,7 @@ id: FS-004
 name: Integrity Loop
 priority: Critical
 dependencies: [FS-002]
-updated: 2026-06-20
+updated: 2026-06-21
 ---
 
 # Integrity Loop
@@ -22,10 +22,10 @@ The integrity loop keeps the graph clean without manual policing, and it is the 
 
 | ID | Name | Actor |
 |----|------|-------|
-| STORY-INT-001 | Validate Entities | Agent, Author |
-| STORY-INT-002 | Check the Graph | Agent, Author |
+| STORY-INT-001 | Validate Entities | Agent, Operator |
+| STORY-INT-002 | Check the Graph | Agent, Operator |
 | STORY-INT-003 | Find Stale Entities | Operator, Agent |
-| STORY-INT-004 | Render Git History at Ontology Altitude | Agent, Author |
+| STORY-INT-004 | Render Git History at Ontology Altitude | Agent, Operator |
 
 ---
 
@@ -35,21 +35,21 @@ The integrity loop keeps the graph clean without manual policing, and it is the 
 
 ### STORY-INT-001: Validate Entities
 
-**As an** Agent or Author
+**As an** Agent or Operator
 **I want to** check entities for well-formedness and referential integrity over the declared subset
 **So that** I know every present field is legal and every relation resolves, before trusting the data
 
 #### Preconditions
 
 - [ ] PRE-001: A `.khub/` workspace resolves with a compiled schema
-- [ ] PRE-002: The target path or `--all` selects entities to validate
+- [ ] PRE-002: The target path (default: the whole workspace) selects entities to validate
 
 #### Acceptance Criteria
 
 ##### AC-001: Validate a Clean Tree
 
 **Given** a workspace where every declared field is legal and every relation resolves
-**When** the agent runs `khub validate --all`
+**When** the agent runs `khub validate`
 **Then** the system shall:
 - [ ] Check each present declared field against its type, enum, pattern, and cardinality
 - [ ] Confirm every relation resolves to an existing target
@@ -60,7 +60,7 @@ The integrity loop keeps the graph clean without manual policing, and it is the 
 ##### AC-002: Report Per-Entity Errors
 
 **Given** an entity with a malformed value and an entity with an unresolved relation
-**When** the agent runs `khub validate --all`
+**When** the agent runs `khub validate`
 **Then** the system shall:
 - [ ] Report each error with its entity id, field, and reason
 - [ ] Continue past the first error and report all of them
@@ -69,7 +69,7 @@ The integrity loop keeps the graph clean without manual policing, and it is the 
 ##### AC-003: Strict Closes the Schema
 
 **Given** an entity carrying undeclared fields
-**When** the agent runs `khub validate --all --strict`
+**When** the agent runs `khub validate --strict`
 **Then** the system shall:
 - [ ] Reject undeclared keys as errors under `--strict`
 - [ ] Pass the same tree without `--strict` (extensions allowed)
@@ -77,7 +77,7 @@ The integrity loop keeps the graph clean without manual policing, and it is the 
 ##### AC-004: Skip Reference Files Cleanly
 
 **Given** the tree holds reference markdown with no frontmatter
-**When** the agent runs `khub validate --all`
+**When** the agent runs `khub validate`
 **Then** the system shall:
 - [ ] Skip files with no recognized frontmatter, not error on them
 - [ ] Count only typed entities
@@ -101,7 +101,8 @@ The integrity loop keeps the graph clean without manual policing, and it is the 
 
 #### Technical Notes
 
-- **Command:** `khub validate [target=all]` — `--all`, `--strict`, `--fix`, `--format`
+- **Command:** `khub validate [target=all]` — `--strict`, `--fix`, `--format`
+- **`--fix` scope (v1):** date backfill only (the same `git log` logic as `backfill`); broader auto-repair is the deferred story below
 - **Library verb:** `core.validate(target, strict)` over the generated Pydantic model
 - **Entities:** any type; reference docs skipped
 - **Invariant upheld:** structural integrity is guaranteed, semantic truth is not (Principle 5)
@@ -111,13 +112,13 @@ The integrity loop keeps the graph clean without manual policing, and it is the 
 
 - **Unit:** field/enum/pattern checks; extension passthrough
 - **Integration:** referential-integrity failure; `--strict` rejection
-- **E2E:** validate an HQ snapshot reaches parity with `kb.py validate`
+- **E2E:** validate an HQ snapshot cleanly (functional cutover, not byte-parity with `kb.py`)
 
 ---
 
 ### STORY-INT-002: Check the Graph
 
-**As an** Agent or Author
+**As an** Agent or Operator
 **I want to** run a graph-wide integrity pass over the active subgraph
 **So that** required relations are complete, no entity is orphaned, no file is stray, and no edge cycles
 
@@ -135,8 +136,8 @@ The integrity loop keeps the graph clean without manual policing, and it is the 
 **Then** the system shall:
 - [ ] Confirm every relation resolves
 - [ ] Confirm required relations are complete for `active` entities only
-- [ ] Confirm no orphans (entities with no inbound or outbound edge where the schema expects one)
-- [ ] Confirm no stray files outside the type layouts
+- [ ] Confirm no orphans (entities with neither an inbound nor an outbound relation)
+- [ ] Confirm no stray files — files inside a type's layout path that do not parse as that type (reference markdown outside every type layout is skipped, not flagged)
 - [ ] Confirm no edge cycles
 - [ ] Display: "Graph check passed"
 - [ ] Exit 0
@@ -181,7 +182,8 @@ The integrity loop keeps the graph clean without manual policing, and it is the 
 |----|------|-------------|
 | INT-004 | Required-completeness is enforced over `active` entities only | Validation |
 | INT-005 | A `draft` does not satisfy another entity's required relation | Validation |
-| INT-006 | `check` is the structural gap query: orphans and missing required relations | Validation |
+| INT-006 | `check` is the structural gap query: orphans (entities with zero relations, in or out) and missing required relations | Validation |
+| INT-011 | A stray file sits inside a type's layout path but does not parse as that type; markdown outside every type layout is a reference doc, skipped not flagged | Validation |
 
 #### State Machine
 
@@ -282,7 +284,7 @@ The integrity loop keeps the graph clean without manual policing, and it is the 
 #### Technical Notes
 
 - **Command:** `khub stale` — `--days <n=30>`, `--format`
-- **Library verb:** `core.stale(days)` reading `git log` via subprocess
+- **Library verb:** `core.stale(days)` reading `git log` via subprocess (shares the `git log` date helper with `backfill`, FS-005)
 - **Entities:** any type with an `updated` field
 - **Invariant upheld:** history is derived from git, the same way the graph is
 - **Output:** Rich table or JSON, sorted by age
@@ -291,13 +293,13 @@ The integrity loop keeps the graph clean without manual policing, and it is the 
 
 - **Unit:** threshold comparison, sort order
 - **Integration:** git-date backfill for a missing `updated`
-- **E2E:** `stale --days 30` on an HQ snapshot matches `kb.py report --stale`
+- **E2E:** `stale --days 30` surfaces the stale set on an HQ snapshot
 
 ---
 
 ### STORY-INT-004: Render Git History at Ontology Altitude
 
-**As an** Agent or Author
+**As an** Agent or Operator
 **I want to** read git history described in entities and relations, not files
 **So that** I can orient on what changed without a gate, distinct from the supersession chain
 
@@ -403,7 +405,7 @@ The integrity loop reads the firm-ops graph and emits report records. The report
 | Relations Resolve | Yes/No | Yes | No dangling edge |
 | Required Complete | Yes/No | Yes | Active entities meet required relations |
 | Orphans | Collection | No | Entities missing an expected edge |
-| Stray Files | Collection | No | Files outside the type layouts |
+| Stray Files | Collection | No | Files inside a type's layout that are not valid entities of that type |
 | Cycles | Collection | No | Edge cycles with participating ids |
 
 ### Check Outcome *(named enumeration)*
@@ -419,7 +421,7 @@ The integrity loop reads the firm-ops graph and emits report records. The report
 |----------|---------|---------------------|
 | owner | most types | An active entity needs a resolvable owner |
 | client | opportunity, project, build, case-study | An active engagement needs a client |
-| engagement | meeting | A meeting needs its parent (path-derived) |
+| engagement | meeting | A meeting needs its engagement (explicit edge) |
 
 ### Cascade Behaviors
 
@@ -436,6 +438,7 @@ The integrity loop reads the firm-ops graph and emits report records. The report
 | INT-SHARED-001 | Completeness is evaluated over the active subgraph only; drafts are excluded | STORY-INT-001, STORY-INT-002 |
 | INT-SHARED-002 | History and staleness are derived from git, never hand-maintained | STORY-INT-003, STORY-INT-004 |
 | INT-SHARED-003 | khub guarantees structural integrity, not semantic correctness | STORY-INT-001, STORY-INT-002 |
+| INT-SHARED-004 | Orphan (zero relations) and stale are core projection properties, surfaced by default in `status` and `query`; `check`/`stale` gate on the same computation | STORY-INT-002, STORY-INT-003 |
 
 ### Cross-Feature Dependencies
 

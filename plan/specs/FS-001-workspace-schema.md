@@ -3,14 +3,14 @@ id: FS-001
 name: Workspace & Schema
 priority: Critical
 dependencies: [FS-000]
-updated: 2026-06-20
+updated: 2026-06-21
 ---
 
 # Workspace & Schema
 
 ## Overview
 
-Stands up a khub workspace and exposes the active schema to every other surface. `khub init` scaffolds a seeded fork from a preset, flattening `core` and the chosen preset into one editable `.khub/schema.yaml` and invoking the FS-000 compiler; `khub schema` and `khub status` read that workspace back. This is the workspace foundation, one layer above the schema: nothing authors, queries, or checks until a workspace exists and the schema can be introspected. The firm-ops preset (12 types, 19 edges) is the v1 proving ground.
+Stands up a khub workspace and exposes the active schema to every other surface. `khub init` scaffolds a seeded fork from a preset, flattening `core` and the chosen preset into one editable `.khub/schema.yaml` and invoking the FS-000 compiler; `khub schema` and `khub status` read that workspace back. This is the workspace foundation, one layer above the schema: nothing authors, queries, or checks until a workspace exists and the schema can be introspected. The firm-ops preset (12 types, 17 relation predicates) is the v1 proving ground.
 
 **Primary Actor:** Operator
 
@@ -23,7 +23,7 @@ Stands up a khub workspace and exposes the active schema to every other surface.
 | ID | Name | Actor |
 |----|------|-------|
 | STORY-WS-001 | Initialize a Workspace from a Preset | Operator |
-| STORY-WS-002 | Introspect the Active Schema | Agent, Author |
+| STORY-WS-002 | Introspect the Active Schema | Agent, Operator |
 | STORY-WS-003 | Report Workspace Status | Operator, Agent |
 
 ---
@@ -52,8 +52,9 @@ Stands up a khub workspace and exposes the active schema to every other surface.
 **When** they run `khub init firm-ops ./hq`
 **Then** the system shall:
 - [ ] Merge `core.yaml` and `firm-ops.yaml` into one flattened `.khub/schema.yaml`
-- [ ] Write `.khub/config.yaml` with preset provenance, source, and defaults
-- [ ] Stamp the schema header with provenance (`# khub-preset: firm-ops@<version>`)
+- [ ] Write `.khub/config.yaml` with preset provenance + version, source, and command defaults (`format`, `stale_days`)
+- [ ] Set the workspace name from `--name` (default: the target directory name) in `config.yaml`
+- [ ] Stamp the schema header with provenance (`# khub-preset: firm-ops@<version>`, the preset's declared semver)
 - [ ] Compile the resolved schema to LinkML, Pydantic, and JSON Schema under `.khub/generated/`
 - [ ] Add `.khub/generated/` to the workspace `.gitignore`
 - [ ] Lay down the entity tree per each type's storage layout
@@ -103,6 +104,7 @@ Stands up a khub workspace and exposes the active schema to every other surface.
 | WS-001 | The schema is flattened (core + preset) at init; layering and sync are post-v1 | Constraint |
 | WS-002 | `.khub/generated/` is derived and gitignored, never authored by hand | Constraint |
 | WS-003 | Init is non-destructive to entity files; only `.khub/` is written | Constraint |
+| WS-009 | The preset `version` is the preset file's declared semver, stamped into provenance; `config.yaml` `defaults` holds workspace command defaults (`format`, `stale_days`) | Constraint |
 
 #### Technical Notes
 
@@ -122,7 +124,7 @@ Stands up a khub workspace and exposes the active schema to every other surface.
 
 ### STORY-WS-002: Introspect the Active Schema
 
-**As an** Agent or Author
+**As an** Agent or Operator
 **I want to** read the effective schema — types, fields, enums, relations, and storage layout
 **So that** every surface introspects the contract at runtime and never hardcodes per-type knowledge
 
@@ -166,8 +168,8 @@ Stands up a khub workspace and exposes the active schema to every other surface.
 **Given** a valid workspace
 **When** the agent runs `khub schema edges`
 **Then** the system shall:
-- [ ] Return all 19 predicates with their `from`, `to`, and cardinality
-- [ ] Distinguish typed edges from universal (`any → any`) edges
+- [ ] Return all 17 predicates (16 stored + the derived `superseded_by`) with their `from`, `to`, and cardinality
+- [ ] Distinguish typed, union, and universal (`any → any`) edges, and mark which are derived
 - [ ] Mark which predicates are required relations
 
 #### Requirements (EARS)
@@ -198,7 +200,7 @@ Stands up a khub workspace and exposes the active schema to every other surface.
 
 - **Unit:** type lookup, enum extraction, required-relation flagging
 - **Integration:** JSON shape parity between `schema` and `schema show`
-- **E2E:** `schema edges` over firm-ops returns 19 predicates
+- **E2E:** `schema edges` over firm-ops returns 17 predicates
 
 ---
 
@@ -263,7 +265,8 @@ Stands up a khub workspace and exposes the active schema to every other surface.
 | ID | Rule | Enforcement |
 |----|------|-------------|
 | WS-006 | Status counts are derived from the graph projection, never stored | Constraint |
-| WS-007 | The OKF-conformance flag reflects the live tree at read time | Validation |
+| WS-007 | The OKF-conformance flag reports whether the workspace would project to a valid OKF bundle (every entity carries `type`, relations resolve, an `index.md` generates) — the conditions `export --okf` requires | Validation |
+| WS-008 | Orphan and stale are core projection properties, computed identically for `status`, `query`, and `check` | Constraint |
 
 #### Technical Notes
 
@@ -317,7 +320,6 @@ Stands up a khub workspace and exposes the active schema to every other surface.
 |-------|-------------|
 | file | One entity per file (e.g. `clients/{slug}.md`) |
 | folder | A folder per entity with `_index.md` as the entry (e.g. `projects/{slug}/_index.md`) |
-| nested | An inventory re-rooted under a parent item's folder; the parent edge derives from the path |
 
 ### Serialization Format *(named enumeration)*
 

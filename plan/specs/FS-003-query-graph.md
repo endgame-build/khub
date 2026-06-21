@@ -3,7 +3,7 @@ id: FS-003
 name: Query & Graph
 priority: High
 dependencies: [FS-002]
-updated: 2026-06-20
+updated: 2026-06-21
 ---
 
 # Query & Graph
@@ -22,7 +22,7 @@ The read and traversal surface — the agent's primary retrieval path into typed
 
 | ID | Name | Actor |
 |----|------|-------|
-| STORY-QRY-001 | Filter Entities by Frontmatter | Agent, Author |
+| STORY-QRY-001 | Filter Entities by Frontmatter | Agent, Operator |
 | STORY-QRY-002 | Walk One-Hop Neighbors | Agent |
 | STORY-QRY-003 | Compute Blast Radius | Agent |
 | STORY-QRY-004 | Trace Supersession History | Agent |
@@ -35,7 +35,7 @@ The read and traversal surface — the agent's primary retrieval path into typed
 
 ### STORY-QRY-001: Filter Entities by Frontmatter
 
-**As an** Agent or Author
+**As an** Agent or Operator
 **I want to** filter entities by type, status, field values, and relation presence
 **So that** I can pull a precise slice of typed context, including gaps via `--missing`
 
@@ -52,6 +52,7 @@ The read and traversal surface — the agent's primary retrieval path into typed
 **When** the agent runs `khub query --type opportunity --stage discovery --format json`
 **Then** the system shall:
 - [ ] Return only `opportunity` entities at stage `discovery`
+- [ ] Annotate each match with its `orphan` and `stale` flags by default
 - [ ] Emit each match as JSON when `--format json` is set
 - [ ] Apply `--limit` when given
 
@@ -95,10 +96,11 @@ The read and traversal surface — the agent's primary retrieval path into typed
 |----|------|-------------|
 | QRY-001 | Filters match against frontmatter and derived edges, never body prose | Constraint |
 | QRY-002 | An empty result is a success, not an error | Constraint |
+| QRY-009 | Query output carries each entity's `orphan` and `stale` flags by default; `--orphan`/`--stale` filter on them | Constraint |
 
 #### Technical Notes
 
-- **Command:** `khub query` — `--type`, `--status`, `--<field>`, `--tag`, `--has`, `--missing`, `--limit`, `--format json\|table\|ids`
+- **Command:** `khub query` — `--type`, `--draft` / `--active`, `--orphan`, `--stale`, `--<field>`, `--tag`, `--has`, `--missing`, `--limit`, `--format json\|table\|ids`
 - **Library verb:** `core.query(filters)`
 - **Entities:** any type
 - **Invariant upheld:** the graph is a derived projection (Principle 2)
@@ -173,13 +175,14 @@ The read and traversal surface — the agent's primary retrieval path into typed
 |----|------|-------------|
 | QRY-003 | Inbound adjacency includes derived inverses, computed not stored | Constraint |
 | QRY-004 | Default direction is both; `--in` / `--out` narrow it | Constraint |
+| QRY-010 | `neighbors --depth N` is bounded multi-hop adjacency over all predicates; `impact` is the unbounded single-predicate closure — distinct surfaces | Constraint |
 
 #### Technical Notes
 
 - **Command:** `khub neighbors <id>` — `--predicate`, `--in` / `--out` / `--both`, `--depth <n=1>`, `--format`
 - **Library verb:** `core.neighbors(id, predicate, direction, depth)` over `networkx`
 - **Entities:** any type
-- **Invariant upheld:** relations are authoritative from three sources
+- **Invariant upheld:** relations are authoritative from two sources
 - **Output:** Rich table or JSON adjacency list
 
 #### Test Hints
@@ -362,12 +365,12 @@ Query and traversal read the same firm-ops nodes and edges that authoring writes
 
 | Attribute | Type | Required | Description |
 |-----------|------|----------|-------------|
-| Predicate | Text | Yes | The relation name (one of 19 in firm-ops) |
+| Predicate | Text | Yes | The relation name (one of 17 in firm-ops) |
 | Source | Reference | Yes | The node the edge is stored on |
 | Target | Reference | Yes | The resolved target node |
 | Direction | Type | Yes | Outbound (stored) or inbound (including derived inverse) |
 | Cardinality | Type | Yes | Single or many, per the schema |
-| Is Derived | Yes/No | Yes | True for inverse and placement edges |
+| Is Derived | Yes/No | Yes | True for inverse edges |
 
 #### Query Result
 
@@ -382,7 +385,7 @@ Query and traversal read the same firm-ops nodes and edges that authoring writes
 | Value | Description |
 |-------|-------------|
 | out | The edge is stored on the source entity's frontmatter |
-| in | The edge points at the entity, including derived inverses and placement edges |
+| in | The edge points at the entity, including derived inverses |
 | both | The default; inbound and outbound combined |
 
 ### Traversal Kind *(named enumeration)*
@@ -406,7 +409,8 @@ Query and traversal read the same firm-ops nodes and edges that authoring writes
 | ID | Rule | Applies To |
 |----|------|------------|
 | QRY-SHARED-001 | All reads operate on the derived projection, rebuilt from Markdown; no result is stored | STORY-QRY-001, STORY-QRY-002, STORY-QRY-003, STORY-QRY-004 |
-| QRY-SHARED-002 | Inbound walks include derived inverse and placement edges | STORY-QRY-002, STORY-QRY-004 |
+| QRY-SHARED-002 | Inbound walks include derived inverse edges | STORY-QRY-002, STORY-QRY-004 |
+| QRY-SHARED-003 | All reads include `draft` entities in scope by default and carry each entity's `stale` (and `orphan`) flag; `--active` excludes drafts, `--draft` isolates them | STORY-QRY-001, STORY-QRY-002, STORY-QRY-003, STORY-QRY-004 |
 
 ### Cross-Feature Dependencies
 

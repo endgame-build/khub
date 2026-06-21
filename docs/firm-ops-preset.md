@@ -6,7 +6,7 @@
 
 HQ is a reusable preset. The design memo already predicted this: *"firm-hq is the working precedent for the projection-and-validation pattern; khub generalizes it ... and is itself the kind of operational hub an HQ preset would produce."* HQ runs the same five-layer engine khub specifies, on a hand-rolled schema instead of LinkML. Porting it to khub means expressing `hq.schema.yml` as a LinkML ontology and swapping `kb.py` for the generic core library. The model below is the IP: the firm's judgment about how to model running a consulting firm.
 
-The preset's spine is the **opportunity → project/build** lifecycle (the deal becomes the work), wrapped by a **client/partnership/person directory**, fed by a **meeting/transcript activity stream**, and governed by **decision** and **isms-doc** records. Twelve entity types, nineteen relation predicates.
+The preset's spine is the **opportunity → project/build** lifecycle (the deal becomes the work), wrapped by a **client/partnership/person directory**, fed by a **meeting/transcript activity stream**, and governed by **decision** and **isms-doc** records. Twelve entity types, seventeen relation predicates.
 
 ## Engine, as HQ Runs It Today (Maps 1:1 to khub's Five Layers)
 
@@ -18,13 +18,17 @@ The preset's spine is the **opportunity → project/build** lifecycle (the deal 
 | 4 Graph projection | in-memory (v1), SQLite fast-follow | already SQLite: `build-graph.py` → `.hq-graph.sqlite` (`nodes`, `edges`, `fts5`) | HQ is ahead of v1 here |
 | 5 Access | CLI + Claude Code skill | `kb.py` CLI + `.claude/` skills, hooks, rules | generalize CLI |
 
-**Integrity loop, HQ → khub:** `kb.py validate` → khub `validate` (per-entity well-formedness + referential integrity). `report --orphans` → khub `check` (no inbound edges). `report --stale` (>30 days) → khub `stale`. `report --impact <slug>` → khub blast-radius query. `backfill` (dates from git) → khub `stale` git backfill. HQ has no `khub log` analog and no `draft|active` lifecycle; it uses per-type `stage`/`status` enums instead.
+**Integrity loop, HQ → khub:** `kb.py validate` → khub `validate` (per-entity well-formedness + referential integrity). `report --orphans` → khub `check` (zero relations — no inbound or outbound edge). `report --stale` (>30 days) → khub `stale`. `report --impact <slug>` → khub blast-radius query. `backfill` (dates from git) → khub `stale` git backfill. HQ has no `khub log` analog and no `draft` flag; it uses per-type `stage`/`status` enums instead.
 
 **Edge mechanic (the invariant that already matches):** `build-graph.py` walks frontmatter, and only fields the schema marks `edge:` become graph edges; the field name is the predicate, the value is the target slug, stored single-sided on the source node (`build-graph.py:117-134`). This is khub invariant #4 exactly, with one exception flagged in the porting notes (`supersedes`/`superseded_by` are both stored).
 
-## Relation Vocabulary: All 19 Predicates
+## Relation Vocabulary: All 17 Predicates
 
 Only these frontmatter fields are edges. Everything else is opaque metadata.
+
+**Count.** Seventeen predicates: sixteen are stored (declared with `from`/`to`/cardinality), and `superseded_by` is the seventeenth — a derived inverse of `supersedes`, never stored. Four of the sixteen stored (`related`, `sources`, `references`, `depends_on`) are universal `any → any` edges inherited from `core`; the firm-ops preset declares the other twelve.
+
+khub-core also provides an `author` attribute (the writer — person or agent), available on every type; it is metadata, not a graph predicate, so it stays out of the count above. The firm-ops `owner` edge (→ person) is the accountability relation, distinct from `author`.
 
 | Predicate | From | To | Card | Meaning |
 |---|---|---|---|---|
@@ -36,10 +40,8 @@ Only these frontmatter fields are edges. Everything else is opaque metadata.
 | `source_project` | case-study | project, build | 1 | Source engagement |
 | `transcript` | meeting | transcript | 1 | Processed transcript path |
 | `supersedes` | decision | decision | 1 | Replaces |
-| `superseded_by` | decision | decision | 1 | Replaced by (stored inverse; see porting notes) |
+| `superseded_by` | decision | decision | 1 | Replaced by (derived inverse of `supersedes`; not stored — khub invariant #4) |
 | `affects` | decision | any | N | Entities impacted |
-| `promoted_to` | fragment | file | 1 | Reference-area destination |
-| `controls` | isms-doc | external | N | ISO 27001 Annex A control IDs |
 | `partner` | opportunity, project, build, client | partnership | 1 | Partnership involvement |
 | `related` | any | any | N | Free-form cross-links |
 | `related_opportunities` | partnership | opportunity | N | Pipeline from partner |
@@ -48,7 +50,7 @@ Only these frontmatter fields are edges. Everything else is opaque metadata.
 | `references` | any | any | N | Soft link |
 | `depends_on` | any | any | N | Hard dependency |
 
-`related`, `sources`, `references`, `depends_on` are universal (`any → any`); the rest are typed. Note `partner` is declared `from: [opportunity, project, build]` in the edge vocabulary, yet the `client` node also carries it; capture reflects actual usage.
+`related`, `sources`, `references`, `depends_on` are universal (`any → any`) and come from `core`, not the firm-ops preset; the rest are typed. Several typed edges take a **union** of target types — `engagement` (opportunity\|project\|build\|partnership), `source_project` and `related_projects` (project\|build) — which the khub vocabulary expresses with a list-valued `to:`. Note `partner` is declared `from: [opportunity, project, build]` in the edge vocabulary, yet the `client` node also carries it; capture reflects actual usage.
 
 ## Entities: Full Inventory
 
@@ -138,13 +140,13 @@ Identity: `projects/{slug}/CLAUDE.md`. The "we build it" variant of project; sam
 
 ### 4. meeting: Engagement Touchpoint
 
-Identity: `{projects,opportunities,partnerships}/*/meetings/*.md`. A processed meeting note, attached to a parent engagement and (optionally) its raw transcript.
+Identity: `meetings/{slug}.md` (flat for MVP; HQ's nested `*/meetings/` folders flatten on port). A processed meeting note, attached to a parent engagement by an explicit `engagement` edge and (optionally) its raw transcript.
 
 | Field | Type | Req | Constraint / edge |
 |---|---|---|---|
 | `type` | const | ✓ | `meeting` |
 | `date` | date | ✓ | event date |
-| `engagement` | string | ✓ | **→ opportunity \| project \| build \| partnership** (parent slug; path-derived at cutover) |
+| `engagement` | string | ✓ | **→ opportunity \| project \| build \| partnership** (explicit union edge) |
 | `call_type` | enum | ✓ | client, sales, partner, internal (internal = all attendees @end.game) |
 | `source` | enum | ✓ | recording, manual |
 | `note_id` | string | | Recorder note id; primary dedup key |
@@ -155,7 +157,7 @@ Identity: `{projects,opportunities,partnerships}/*/meetings/*.md`. A processed m
 
 ### 5. transcript: Raw Meeting Capture
 
-Identity: `inbox/*/*.md`, `*/meetings/transcripts/*.md`. The unprocessed Recorder export; lands in `inbox/`, gets routed by `notes_folder`. Largest node population in the live graph (140).
+Identity: `transcripts/{slug}.md` (flat for MVP; `inbox/` remains a pre-routing staging area outside the typed layout). The unprocessed Recorder export; lands in `inbox/`, gets routed by `notes_folder`. Largest node population in the live graph (140).
 
 | Field | Type | Req | Constraint / edge |
 |---|---|---|---|
@@ -173,18 +175,18 @@ Identity: `inbox/*/*.md`, `*/meetings/transcripts/*.md`. The unprocessed Recorde
 
 ### 6. fragment: Atomic Thought
 
-Identity: `fragments/{owner}/*.md`. A partner's personal note; matures through stages and may be promoted into a reference area.
+Identity: `fragments/{slug}.md`. A partner's personal note; the writer is the core `author` field in frontmatter. Matures through stages and may be promoted into a reference area.
 
 | Field | Type | Req | Constraint / edge |
 |---|---|---|---|
 | `type` | const | ✓ | `fragment` |
-| `owner` | string | ✓ | **→ person** (also the folder partition) |
+| `author` | string | ✓ | core base field (the writer); required on fragment |
 | `stage` | enum | ✓ | raw, mature, synthesis, promoted |
 | `created` | date | ✓ | |
 | `updated` | date | | |
 | `tags` | list | | |
 | `related` | list | | **→ any** |
-| `promoted_to` | string | | **→ file** (reference-area destination) |
+| `promoted_to` | string | | reference-area path (a `resource` link-out, not an edge) |
 | `confidence` | float | | 0–1 |
 | `sources` | list | | **→ any** |
 
@@ -224,7 +226,7 @@ Identity: `case-studies/*.md` (published under `engagement/case-studies/` in the
 
 ### 9. isms-doc: Compliance Artifact
 
-Identity: `security/**/*.md`. An ISO 27001 ISMS document, linked to Annex A controls by id. Owner: Noor.
+Identity: `security/**/*.md`. An ISMS/compliance document. Owner: Noor.
 
 | Field | Type | Req | Constraint / edge |
 |---|---|---|---|
@@ -236,7 +238,6 @@ Identity: `security/**/*.md`. An ISO 27001 ISMS document, linked to Annex A cont
 | `created` | date | ✓ | |
 | `updated` | date | ✓ | |
 | `next_review` | date | | |
-| `controls` | list | | **→ external**, items `^[A-Z]\.[0-9]+(\.[0-9]+)?$` (Annex A ids) |
 | `tags` | list | | |
 
 ### 10. partnership: BD Relationship
@@ -306,9 +307,9 @@ HQ is more than the typed graph. Roughly half the repo is untyped reference mark
 | Research | `research/` | competitive intelligence (currently near-empty) | untyped reference |
 | Inbox | `inbox/` | unprocessed transcripts (become transcript nodes on routing) | staging |
 | Archive | `archive/` | completed projects, past meetings; `archive/decisions/` = decision nodes | mixed |
-| Fragments | `fragments/{owner}/` | partner thinking (fragment nodes) | typed |
+| Fragments | `fragments/` | partner thinking (fragment nodes) | typed |
 
-External integrations the model references but does not own: **CRM** (`crm_id`, `budget_id`: deals, projects, companies, budgets), **Recorder** (`notes_folder*`, `note_id`: transcripts), **Airtable** (`airtable_id`: legacy CRM, read-only), **endgame-build/** GitHub org (`external_repo`), **ISO 27001 Annex A** (`controls`). In khub terms these are `source_id`/`external_url` aliases, not entities.
+External integrations the model references but does not own: **CRM** (`crm_id`, `budget_id`: deals, projects, companies, budgets), **Recorder** (`notes_folder*`, `note_id`: transcripts), **Airtable** (`airtable_id`: legacy CRM, read-only), **endgame-build/** GitHub org (`external_repo`). In khub terms these are `source_id`/`external_url` aliases, not entities.
 
 ## Cutover: khub Replaces HQ's Incumbent Engine
 
@@ -331,14 +332,14 @@ v1 builds khub and cuts firm-hq over to it: install khub, seed from the firm-ops
 
 **What the cutover needs (v1 delivers the first three; search waits on the fast-follow):**
 
-- **The firm-ops preset.** The LinkML port of `hq.schema.yml` (12 types, 19 edges) from this capture. In v1.
+- **The firm-ops preset.** The LinkML port of `hq.schema.yml` (12 types, 17 relation predicates) from this capture. In v1.
 - **`index.md` regeneration.** HQ's `kb.py reindex` keeps the nav page current; `khub reindex` reproduces it. In v1.
 - **Date backfill from git.** HQ's `kb.py backfill` maps to `khub backfill`, extended to insert missing frontmatter. In v1.
-- **SQLite + FTS search.** HQ runs `fts5` today; khub's in-memory v1 has no full-text search, so `kb.py` stays for search until the SQLite fast-follow lands.
+- **SQLite + FTS search.** HQ runs `fts5` today; khub's in-memory v1 has no full-text search. Cutover is still full — `kb.py` is retired — with `khub query` (frontmatter) and ripgrep covering search until the SQLite/FTS fast-follow lands.
 
 **Migration steps (one-time):**
 
-1. Author the firm-ops LinkML preset in the hub repo from this capture; resolve the five porting notes below.
+1. Author the firm-ops LinkML preset in the hub repo from this capture; resolve the six porting notes below.
 2. `khub init firm-ops` against a branch of firm-hq → writes `.khub/` (config + flattened schema).
 3. Rename `CLAUDE.md` → `_index.md` across opportunity, project, build, and partnership folders. khub supports `[slug]` or `_index` as a folder entry, not `CLAUDE.md`.
 4. **Id strategy (resolved).** id = slug, bare on disk, so HQ's `initech-pov` folder and its bare relation values (`client: initech`, `engagement: initech-pov`) map through untouched. Typed edges resolve by the schema-known target type; polymorphic edges resolve by slug and need a `type/slug` qualifier only if a slug turns out ambiguous across types; HQ's are globally unique today, so none do. CRM/Recorder/Airtable ids become `source_id` aliases. No edge rewrite.
@@ -346,7 +347,7 @@ v1 builds khub and cuts firm-hq over to it: install khub, seed from the firm-ops
 6. Repoint the integration scripts from `kb.py` calls to khub's library.
 7. Retire `kb.py`, `build-graph.py`, `hq.schema.yml`; delete `.hq-graph.sqlite` (regenerated).
 
-**Status gate:** v1 cuts HQ over for `validate`/`check`/`query`/`reindex`/`backfill`, running read-only against the live files first, then taking over. Full retirement of `kb.py` waits on the SQLite/FTS fast-follow for search parity. This capture is the input to step 1.
+**Status gate:** v1 fully cuts HQ over — `validate`/`check`/`query`/`reindex`/`backfill` running read-only against the live files first, then taking over — and retires `kb.py`, `build-graph.py`, and `hq.schema.yml`. FTS search lands as a post-cutover fast-follow; `khub query` and ripgrep cover search in the interim. This capture is the input to step 1.
 
 ## Porting Notes: HQ Schema → khub LinkML Preset
 
@@ -354,13 +355,13 @@ Six divergences to resolve when this becomes a real khub preset. None is a block
 
 1. **Stored inverse edge.** HQ stores both `supersedes` and `superseded_by` on decisions. khub invariant #4 forbids storing the inverse; derive `superseded_by` from `supersedes`. Drop the field on port.
 2. **Slug = id.** The slug is bare and serves as the id; nothing is prefixed. Uniqueness is `(type, slug)`, with the file path as the unique key. HQ's globally-unique slugs resolve directly, including across polymorphic edges; a `type/slug` qualifier is only needed if two types ever share a slug. Layout (file vs folder, entry filename) is per-preset schema config, overridable per type. CRM/Recorder/Airtable ids ride along as `source_id` aliases.
-3. **No lifecycle field.** HQ has no universal `draft|active`; it relies on per-type `stage`/`status` enums. khub adds `status: draft|active` for required-relation completeness. Add it; map "closed/complete/retired" terminal stages as needed.
+3. **No lifecycle field.** HQ has no universal completeness flag; it relies on per-type `stage`/`status` enums. khub adds a boolean `draft` field (`draft: true|false`, default `false`) for required-relation completeness. Add it. Because the flag is a separate `draft` field rather than a `status` enum, HQ's per-type `status` enums (`decision`, `isms-doc`) keep their own values and no longer collide with the lifecycle.
 4. **Path-shared types and the `CLAUDE.md` entry.** `project` and `build` both live at `projects/{slug}/CLAUDE.md` today, discriminated by the `type` field, not the folder. khub does not support `CLAUDE.md` as a folder entry (entries are `[slug]` or `_index`), so the cutover renames `CLAUDE.md` → `_index.md` across opportunity, project, build, and partnership folders. Both types then declare the same `folder` layout under `projects/`, and the engine reads `type` from frontmatter, so the shared directory carries over cleanly.
 5. **`partner` edge `from`-list.** The edge vocabulary omits `client` from `partner`'s `from`, yet `client` uses it. Tighten the LinkML `domain` to include `client`, or drop it from client. Cosmetic, yet it would fail a strict `check`.
-6. **Nested meetings derive `engagement` from the path.** HQ meetings nest under their engagement folder (`projects/{slug}/meetings/…`) and also carry an explicit `engagement:` field. khub derives the `engagement` edge from the nested placement, so the field drops on port. Transcripts stay partly explicit: they nest under the engagement, yet the meeting→transcript link remains the meeting's `transcript:` field.
+6. **Meetings flatten to a root folder (nesting deferred).** HQ meetings nest under their engagement folder (`projects/{slug}/meetings/…`) and carry an explicit `engagement:` field. For MVP, khub drops nested inventories and path-derived edges: the cutover flattens meetings to `meetings/{slug}.md` and transcripts to `transcripts/{slug}.md`, and `engagement` stays an explicit edge (a union target). The meeting→transcript link remains the meeting's `transcript:` field. Nesting and placement-derived edges are a post-MVP addition.
 
-Lower-priority: `decided_by` is an untyped name list, not a `person` edge; promote it to an edge if person-level decision attribution matters. `controls` points at `external` (ISO ids), which khub models as `source_id`/`external_url`, not nodes.
+Lower-priority: `decided_by` is an untyped name list, not a `person` edge; promote it to an edge if person-level decision attribution matters. Per-type `stage` enums are provisional and will be revised as the firm-ops workflow stages settle (mark to update).
 
 ## Completeness Checklist
 
-All 12 node types captured: opportunity, project, build, meeting, transcript, fragment, decision, case-study, isms-doc, partnership, person, client. All 19 edge predicates captured: owner, client, team, engagement, origin_opportunity, source_project, transcript, supersedes, superseded_by, affects, promoted_to, controls, partner, related, related_opportunities, related_projects, sources, references, depends_on. Reference areas and external integrations captured. Cutover plan (khub replacing the incumbent engine) included. Nothing in `hq.schema.yml` is omitted.
+All 12 node types captured: opportunity, project, build, meeting, transcript, fragment, decision, case-study, isms-doc, partnership, person, client. All 17 relation predicates captured: owner, client, team, engagement, origin_opportunity, source_project, transcript, supersedes, superseded_by, affects, partner, related, related_opportunities, related_projects, sources, references, depends_on — 16 stored plus the derived `superseded_by` (khub invariant #4), of which four (`related`, `sources`, `references`, `depends_on`) are universal edges inherited from `core`. Reference areas and external integrations captured. Cutover plan (khub replacing the incumbent engine) included. The ISO-specific `controls` edge is dropped on port and `promoted_to` becomes a `resource` link-out, not an edge (see porting notes); otherwise nothing in `hq.schema.yml` is omitted.

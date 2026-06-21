@@ -3,7 +3,7 @@ id: FS-002
 name: Authoring
 priority: Critical
 dependencies: [FS-001]
-updated: 2026-06-20
+updated: 2026-06-21
 ---
 
 # Authoring
@@ -22,11 +22,11 @@ The write surface over the core library: mint, read, edit, relate, and remove en
 
 | ID | Name | Actor |
 |----|------|-------|
-| STORY-ENT-001 | Create an Entity | Agent, Author |
-| STORY-ENT-002 | Read an Entity | Agent, Author |
-| STORY-ENT-003 | Edit an Entity | Agent, Author |
-| STORY-ENT-004 | Link and Unlink Relations | Agent, Author |
-| STORY-ENT-005 | Remove an Entity | Agent, Author |
+| STORY-ENT-001 | Create an Entity | Agent, Operator |
+| STORY-ENT-002 | Read an Entity | Agent, Operator |
+| STORY-ENT-003 | Edit an Entity | Agent, Operator |
+| STORY-ENT-004 | Link and Unlink Relations | Agent, Operator |
+| STORY-ENT-005 | Remove an Entity | Agent, Operator |
 
 ---
 
@@ -36,7 +36,7 @@ The write surface over the core library: mint, read, edit, relate, and remove en
 
 ### STORY-ENT-001: Create an Entity
 
-**As an** Agent or Author
+**As an** Agent or Operator
 **I want to** mint a new entity of a schema type with field values
 **So that** typed context is captured as one Markdown file in git, validated against the schema
 
@@ -58,7 +58,7 @@ The write surface over the core library: mint, read, edit, relate, and remove en
 - [ ] Mint a bare slug as the id, unique within the type
 - [ ] Write one file at the type's layout path (`opportunities/{slug}/_index.md`)
 - [ ] Set `created` and `updated` to today
-- [ ] Set `status: active` because all required fields and relations are present
+- [ ] Set `draft: false` because all required fields and relations are present
 - [ ] Print the new id
 - [ ] Display: "Created opportunity '{slug}' (active)"
 
@@ -67,7 +67,7 @@ The write surface over the core library: mint, read, edit, relate, and remove en
 **Given** the agent omits a required field or relation
 **When** they run `khub add opportunity --stage discovery`
 **Then** the system shall:
-- [ ] Save the entity with `status: draft`
+- [ ] Save the entity with `draft: true`
 - [ ] Preserve the supplied fields
 - [ ] Not block capture
 - [ ] Display: "Created opportunity '{slug}' (draft: missing required client, owner)"
@@ -90,14 +90,23 @@ The write surface over the core library: mint, read, edit, relate, and remove en
 - [ ] Display: "Unknown field 'vibe' rejected under --strict"
 - [ ] Without `--strict`, accept and preserve `vibe` as a free extension
 
-##### AC-005: Nested Entity Derives Its Parent From Placement
+##### AC-005: Create a Meeting With an Explicit Engagement Edge
 
-**Given** the agent creates a meeting under a parent engagement
-**When** they run `khub add meeting --parent initech-pov --call-type client --source recording --date 2026-06-19`
+**Given** the agent creates a meeting for a parent engagement
+**When** they run `khub add meeting --engagement initech-pov --call-type client --source recording --date 2026-06-19`
 **Then** the system shall:
-- [ ] Write the file under `projects/initech-pov/meetings/`
-- [ ] Mint a hierarchical id (`initech-pov/{slug}`)
-- [ ] Derive the `engagement` edge from the path, not a stored field
+- [ ] Write the file flat at `meetings/{slug}.md`
+- [ ] Mint a bare slug as the id
+- [ ] Store `engagement` as an explicit edge resolving to its union target (opportunity | project | build | partnership)
+
+##### AC-006: Explicit Id and Collision Suffix
+
+**Given** the agent supplies an explicit slug
+**When** they run `khub add client --id acme --name "Acme Corp"`
+**Then** the system shall:
+- [ ] Use `acme` as the id when unique within the type
+- [ ] Append a deterministic suffix on a within-type collision (e.g. `acme-2`)
+- [ ] Mint a slug (from `--id`, else the name or type) when `--id` is omitted
 
 #### Requirements (EARS)
 
@@ -107,13 +116,14 @@ The write surface over the core library: mint, read, edit, relate, and remove en
 | REQ-ENT001-02 | EARS-W | If a required field or relation is missing, then the system shall save the entity as `draft` and preserve the supplied fields |
 | REQ-ENT001-03 | EARS-W | If a relation names a non-existent target, then the system shall reject the write and write no file |
 | REQ-ENT001-04 | EARS-O | Where `--strict` is set, the system shall reject any undeclared field |
-| REQ-ENT001-05 | EARS-E | When an entity is created under `--parent`, the system shall mint a hierarchical id and derive the parent edge from placement |
+| REQ-ENT001-05 | EARS-E | When a meeting is created, the system shall store `engagement` as an explicit edge and write the entity flat (nesting deferred post-MVP) |
+| REQ-ENT001-06 | EARS-W | If an explicit `--id` collides within the type, then the system shall append a deterministic suffix |
 
 #### Business Rules
 
 | ID | Rule | Enforcement |
 |----|------|-------------|
-| ENT-001 | The id is a bare slug, unique per `(type, slug)`; nested ids are `{parent-slug}/{slug}` | Constraint |
+| ENT-001 | The id is a bare slug, unique per `(type, slug)` | Constraint |
 | ENT-002 | Referential integrity hard-fails on write; a relation must resolve | Validation |
 | ENT-003 | A well-formed but incomplete entity is saved as `draft`, never rejected | Validation |
 | ENT-004 | Undeclared fields are preserved unless `--strict` closes the schema | Validation |
@@ -139,7 +149,7 @@ The write surface over the core library: mint, read, edit, relate, and remove en
 
 #### Technical Notes
 
-- **Command:** `khub add <type>` — `--<field> <value>` (repeatable), `--id`, `--parent`, `--body` / `--body-file`, `--strict`
+- **Command:** `khub add <type>` — `--<field> <value>` (repeatable), `--id`, `--body` / `--body-file`, `--strict`
 - **Library verb:** `core.create(type, fields, parent)`
 - **Entities:** all 12 firm-ops types
 - **Invariant upheld:** relations are authoritative; Markdown is truth
@@ -148,16 +158,16 @@ The write surface over the core library: mint, read, edit, relate, and remove en
 #### Test Hints
 
 - **Unit:** slug minting, draft-vs-active gating, enum/pattern validation
-- **Integration:** referential-integrity hard-fail; nested placement and path-derived edge
+- **Integration:** referential-integrity hard-fail; explicit engagement edge on a flat meeting
 - **E2E:** `add opportunity` then `get` round-trips frontmatter and body
 
 ---
 
 ### STORY-ENT-002: Read an Entity
 
-**As an** Agent or Author
+**As an** Agent or Operator
 **I want to** print an entity's frontmatter and body, optionally with derived edges
-**So that** I can act on typed context, including the inverse and placement edges the schema computes
+**So that** I can act on typed context, including the inverse edges the schema computes
 
 #### Preconditions
 
@@ -174,14 +184,15 @@ The write surface over the core library: mint, read, edit, relate, and remove en
 - [ ] Print the frontmatter and the body
 - [ ] Resolve the id by slug, qualified `type/slug` only on ambiguity
 - [ ] Render a Rich view on a TTY or JSON when `--format json` is set
+- [ ] Emit the raw file content unchanged under `--format raw`
 
 ##### AC-002: Include Derived Edges
 
-**Given** an entity that has computed inverse and placement edges
+**Given** an entity that has computed inverse edges
 **When** the agent runs `khub get decision-0012 --edges`
 **Then** the system shall:
 - [ ] Include the stored forward edges (`supersedes`)
-- [ ] Include the derived inverse (`superseded_by`) and any placement-derived edges
+- [ ] Include the derived inverse (`superseded_by`)
 - [ ] Mark which edges are stored versus derived
 
 ##### AC-003: Unknown Id
@@ -205,7 +216,7 @@ The write surface over the core library: mint, read, edit, relate, and remove en
 | ID | Type | Requirement |
 |----|------|-------------|
 | REQ-ENT002-01 | EARS-E | When get runs on a resolvable id, the system shall print frontmatter and body |
-| REQ-ENT002-02 | EARS-O | Where `--edges` is set, the system shall include derived inverse and placement edges, marked as derived |
+| REQ-ENT002-02 | EARS-O | Where `--edges` is set, the system shall include derived inverse edges, marked as derived |
 | REQ-ENT002-03 | EARS-W | If the id does not resolve, then the system shall return a lookup error |
 | REQ-ENT002-04 | EARS-W | If a bare slug is ambiguous across types, then the system shall require a `type/slug` qualifier |
 
@@ -220,21 +231,21 @@ The write surface over the core library: mint, read, edit, relate, and remove en
 
 - **Command:** `khub get <id>` — `--format json\|table\|raw`, `--edges`
 - **Library verb:** `core.get(id, with_edges)`
-- **Entities:** any type; inverse/placement edges per Principle 4
-- **Invariant upheld:** relations are authoritative from three sources
+- **Entities:** any type; inverse edges per Principle 4
+- **Invariant upheld:** relations are authoritative from two sources
 - **Output:** Rich view, JSON, or raw file content
 
 #### Test Hints
 
 - **Unit:** id resolution, ambiguity detection
 - **Integration:** inverse-edge derivation (`supersedes` → `superseded_by`)
-- **E2E:** `get --edges` on a nested meeting shows the path-derived `engagement`
+- **E2E:** `get --edges` on a decision shows the derived `superseded_by`
 
 ---
 
 ### STORY-ENT-003: Edit an Entity
 
-**As an** Agent or Author
+**As an** Agent or Operator
 **I want to** change an entity's fields and re-validate
 **So that** edits produce a minimal git diff, bump `updated`, and can promote a draft to active
 
@@ -250,10 +261,10 @@ The write surface over the core library: mint, read, edit, relate, and remove en
 **Given** an entity exists
 **When** the agent runs `khub edit initech-pov stage prove`
 **Then** the system shall:
-- [ ] Validate the new value against the field's enum
+- [ ] Validate the new value against the field's enum (project stages)
 - [ ] Write the change, preserving key order and comments (minimal diff)
 - [ ] Bump `updated` to today
-- [ ] Display: "Updated opportunity 'initech-pov'"
+- [ ] Display: "Updated project 'initech-pov'"
 
 ##### AC-002: Edit Promotes a Draft to Active
 
@@ -262,7 +273,7 @@ The write surface over the core library: mint, read, edit, relate, and remove en
 **Then** the system shall:
 - [ ] Resolve the relation target
 - [ ] Re-validate completeness
-- [ ] Flip `status` from `draft` to `active` once all required are present
+- [ ] Clear the `draft` flag (set `draft: false`) once all required are present
 
 ##### AC-003: Invalid Enum Value
 
@@ -270,7 +281,7 @@ The write surface over the core library: mint, read, edit, relate, and remove en
 **When** the agent runs `khub edit initech-pov stage banana`
 **Then** the system shall:
 - [ ] Reject the edit
-- [ ] Display: "'banana' is not a valid stage (nurturing, discovery, proposal, negotiation, closed-won, closed-lost)"
+- [ ] Display: "'banana' is not a valid stage (diagnose, prove, scale, complete)"
 - [ ] Leave the file unchanged
 
 ##### AC-004: Unknown Field Under Strict
@@ -316,7 +327,7 @@ The write surface over the core library: mint, read, edit, relate, and remove en
 
 ### STORY-ENT-004: Link and Unlink Relations
 
-**As an** Agent or Author
+**As an** Agent or Operator
 **I want to** add and remove schema-checked relations between entities
 **So that** the typed graph stays authoritative and every edge resolves to a legal target
 
@@ -342,10 +353,10 @@ The write surface over the core library: mint, read, edit, relate, and remove en
 ##### AC-002: Illegal Predicate
 
 **Given** a predicate not declared for the source type
-**When** the agent runs `khub link initech-pov controls A.5.1`
+**When** the agent runs `khub link initech-pov supersedes adr-0007`
 **Then** the system shall:
 - [ ] Reject the link
-- [ ] Display: "Predicate 'controls' is not legal for type 'opportunity'"
+- [ ] Display: "Predicate 'supersedes' is not legal for type 'project'"
 
 ##### AC-003: Unresolvable Target
 
@@ -394,7 +405,7 @@ The write surface over the core library: mint, read, edit, relate, and remove en
 
 - **Command:** `khub link <id> <predicate> <target>` · `khub unlink <id> <predicate> <target>`
 - **Library verb:** `core.link(id, predicate, target)` / `core.unlink(...)`
-- **Entities:** any type; 19 firm-ops predicates
+- **Entities:** any type; 17 firm-ops predicates
 - **Invariant upheld:** relations are authoritative (Principle 4)
 - **Output:** confirmation; legal-predicate and target checks on every call
 
@@ -408,7 +419,7 @@ The write surface over the core library: mint, read, edit, relate, and remove en
 
 ### STORY-ENT-005: Remove an Entity
 
-**As an** Agent or Author
+**As an** Agent or Operator
 **I want to** delete an entity, guarded by inbound edges
 **So that** removal never silently breaks referential integrity across the graph
 
@@ -495,12 +506,12 @@ The firm-ops preset's 12 types are the authoring surface. Full capture lives in 
 | opportunity | Pipeline deal; converts to a project or build |
 | project | Post-sale consulting engagement (folder layout, shares path with build) |
 | build | Product/engineering engagement; `type: build` under the same `projects/` path |
-| meeting | Engagement touchpoint nested under its parent; `engagement` derived from placement |
+| meeting | Engagement touchpoint; `engagement` is an explicit union edge (flat layout) |
 | transcript | Raw Recorder capture; largest node population |
 | fragment | A partner's atomic note; matures through stages |
 | decision | Durable ADR-style record with a supersession chain |
 | case-study | Proven client outcome from a delivered engagement |
-| isms-doc | ISO 27001 ISMS artifact linked to Annex A controls |
+| isms-doc | Compliance/ISMS artifact |
 | partnership | BD relationship feeding opportunities and projects |
 | person | ENDGAME team member; the `owner`/`team` target |
 | client | Client organization behind the pipeline |
@@ -535,18 +546,18 @@ The firm-ops preset's 12 types are the authoring surface. Full capture lives in 
 |-----------|------|----------|-------------|
 | Type | Type | Yes | Const `meeting` |
 | Date | Date | Yes | Event date |
-| Engagement | Reference | Yes | Edge → opportunity \| project \| build \| partnership (path-derived) |
+| Engagement | Reference | Yes | Edge → opportunity \| project \| build \| partnership (explicit union edge) |
 | Call Type | Type | Yes | client, sales, partner, internal |
 | Source | Type | Yes | recording, manual |
 | Transcript | Reference | No | Edge → transcript |
 | Owner | Reference | No | Edge → person |
 
-### Lifecycle Status *(named enumeration)*
+### Lifecycle Flag *(`draft` boolean)*
 
 | Value | Description |
 |-------|-------------|
-| draft | Well-formed but incomplete; does not satisfy another entity's required relation |
-| active | All required fields and relations present; counts toward `check` completeness |
+| `draft: true` | Well-formed but incomplete; does not satisfy another entity's required relation |
+| `draft: false` | All required fields and relations present (default); counts toward `check` completeness |
 
 ### Opportunity Stage *(named enumeration)*
 
@@ -574,7 +585,7 @@ The firm-ops preset's 12 types are the authoring surface. Full capture lives in 
 |----|------|------------|
 | ENT-SHARED-001 | Referential integrity hard-fails on write; every relation must resolve | STORY-ENT-001, STORY-ENT-004 |
 | ENT-SHARED-002 | A well-formed but incomplete entity saves as `draft`; capture is never blocked | STORY-ENT-001, STORY-ENT-003 |
-| ENT-SHARED-003 | Forward edges store single-sided; inverse and placement edges are derived | STORY-ENT-002, STORY-ENT-004 |
+| ENT-SHARED-003 | Forward edges store single-sided; inverse edges are derived | STORY-ENT-002, STORY-ENT-004 |
 | ENT-SHARED-004 | Structural integrity is guaranteed; semantic truth is not — a schema-legal but false write validates | STORY-ENT-001, STORY-ENT-003 |
 
 ### Cross-Feature Dependencies
@@ -604,3 +615,4 @@ An entity must exist before it can be read, edited, linked, or removed. Edit and
 |-------|----------|--------|------|
 | Rename a slug (`khub rename`) | Deferred | Renaming with inbound-reference rewrite is named but unscheduled | 2026-06-20 |
 | Concurrency arbitration on simultaneous writes | Deferred | Out of v1 scope; git is the merge surface | 2026-06-20 |
+| Nested inventories and placement-derived edges (`--parent`) | Deferred | MVP flattens meetings to a root folder; nesting and path-derived parent edges are post-MVP | 2026-06-21 |

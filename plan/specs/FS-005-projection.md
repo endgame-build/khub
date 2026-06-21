@@ -1,16 +1,16 @@
 ---
 id: FS-005
 name: Projection
-priority: High
+priority: Critical
 dependencies: [FS-002]
-updated: 2026-06-20
+updated: 2026-06-21
 ---
 
 # Projection
 
 ## Overview
 
-The output surface that renders the typed graph into navigable artifacts. `reindex` regenerates the OKF `index.md` navigation; `backfill` adds missing frontmatter and dates from git; `viz` writes a self-contained Cytoscape HTML over the typed graph. `reindex` and `backfill` are HQ-parity requirements for the cutover — they reproduce what `kb.py reindex` and `kb.py backfill` do today. The SQLite projection and OKF-bundle export wait on the fast-follow.
+The output surface that renders the typed graph into navigable artifacts. `reindex` regenerates the OKF `index.md` navigation; `backfill` adds missing frontmatter and dates from git; `viz` writes a self-contained Cytoscape HTML over the typed graph. `reindex` and `backfill` are cutover requirements — they take over what `kb.py reindex` and `kb.py backfill` do today (functional, not byte-parity). The SQLite projection and OKF-bundle export wait on the fast-follow. `reindex` and `backfill` are cutover-critical, which sets this feature's Critical priority; `viz` is the lower-criticality member.
 
 **Primary Actor:** Operator
 
@@ -72,12 +72,12 @@ The output surface that renders the typed graph into navigable artifacts. `reind
 - [ ] Write a valid, empty OKF `index.md`
 - [ ] Display: "Reindexed 0 entities"
 
-##### AC-004: HQ Parity
+##### AC-004: HQ Cutover
 
 **Given** an HQ snapshot
 **When** the operator runs `khub reindex`
 **Then** the system shall:
-- [ ] Produce an `index.md` equivalent to `kb.py reindex` for the same tree
+- [ ] Produce a valid, current OKF `index.md` for the same tree
 
 #### Requirements (EARS)
 
@@ -86,7 +86,7 @@ The output surface that renders the typed graph into navigable artifacts. `reind
 | REQ-PRJ001-01 | EARS-E | When reindex runs, the system shall regenerate the OKF `index.md` from the graph and stamp the OKF version |
 | REQ-PRJ001-02 | EARS-O | Where `--dry-run` is set, the system shall print the diff and write nothing |
 | REQ-PRJ001-03 | EARS-U | The system shall derive the index from the graph, never from a stored copy |
-| REQ-PRJ001-04 | EARS-E | When run against an HQ snapshot, the system shall reach `kb.py reindex` parity |
+| REQ-PRJ001-04 | EARS-E | When run against an HQ snapshot, the system shall produce a valid, current OKF `index.md` |
 
 #### Business Rules
 
@@ -107,7 +107,7 @@ The output surface that renders the typed graph into navigable artifacts. `reind
 
 - **Unit:** grouping by type, cross-link generation
 - **Integration:** OKF-version stamping; dry-run diff
-- **E2E:** `reindex` on an HQ snapshot matches `kb.py reindex`
+- **E2E:** `reindex` on an HQ snapshot produces a valid OKF `index.md`
 
 ---
 
@@ -177,7 +177,7 @@ The output surface that renders the typed graph into navigable artifacts. `reind
 #### Technical Notes
 
 - **Command:** `khub backfill` — `--type <t>`, `--dry-run`
-- **Library verb:** `core.backfill(type)` reading `git log` via subprocess, writing via round-trip YAML
+- **Library verb:** `core.backfill(type)` reading `git log` via subprocess (shares the `git log` date helper with `stale`, FS-004), writing via round-trip YAML
 - **Entities:** any type
 - **Invariant upheld:** history derived from git; minimal-diff round-trip writes
 - **Output:** count of entities changed, or a dry-run list
@@ -186,7 +186,7 @@ The output surface that renders the typed graph into navigable artifacts. `reind
 
 - **Unit:** missing-field detection
 - **Integration:** git first/last-commit date extraction; round-trip preservation
-- **E2E:** `backfill` on an HQ snapshot matches `kb.py backfill` plus frontmatter insertion
+- **E2E:** `backfill` on an HQ snapshot writes missing dates and frontmatter
 
 ---
 
@@ -322,7 +322,7 @@ Projection reads the firm-ops graph and emits navigation and visualization artif
 |----|------|------------|
 | PRJ-SHARED-001 | Every projection is derived from the graph and regenerated on demand | STORY-PRJ-001, STORY-PRJ-003 |
 | PRJ-SHARED-002 | Writes preserve authored data; round-trip keeps key order and comments | STORY-PRJ-002 |
-| PRJ-SHARED-003 | `reindex` and `backfill` are HQ-parity requirements for the cutover | STORY-PRJ-001, STORY-PRJ-002 |
+| PRJ-SHARED-003 | `reindex` and `backfill` are cutover requirements (functional, not byte-parity) | STORY-PRJ-001, STORY-PRJ-002 |
 
 ### Cross-Feature Dependencies
 
