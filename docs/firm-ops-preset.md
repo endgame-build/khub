@@ -15,6 +15,7 @@ This document captures HQ's `hq.schema.yml` **as-is**. The khub v1 firm-ops pres
 - **9 of the 12 types.** Dropped (0 live entities): `build` (after the lifecycle change it differed from `project` only by `tech_stack`), `isms-doc`, and `decision`. Dropping `decision` also removes `supersedes` / the derived `superseded_by` / `affects` from firm-ops (the engine still supports derived inverses; firm-ops just no longer demonstrates them).
 - **10 firm-ops predicates, 14 total, no derived inverse** (HQ: 12 firm-ops / 17 total).
 - **Lifecycle:** `opportunity.stage` = the CRM "Sales" pipeline stages (`prospect`, `proposal-sent`, `won`, `signed`, `lost`); `project` and `partnership` carry `active: bool` (default true) instead of a stage enum; `person.role` = `consultant` / `engineer` / `manager` / `partner`.
+- **`meeting.date` is `datetime`** (HQ has `date`): HQ stores ISO datetimes there, and `datetime` accepts both date- and datetime-shaped values.
 - **Trimmed fields:** `airtable_id` everywhere; `confidence` and `last_confirmed` (CRM-derived); `opportunity.external_repo`. Integration routing keys (`notes_folder*`, `note_id`, `calendar_event_id`) are **kept** as first-class attributes.
 - **Cutover remaps** (expected migration, not schema breaks): `opportunity.stage`, `person.role`, and `partnership` (stage → `active`) are remapped on the live HQ files at cutover; `meeting`/`transcript` `created` is backfilled.
 
