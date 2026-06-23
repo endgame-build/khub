@@ -13,7 +13,7 @@ updated: 2026-06-21
 
 ## Objective
 
-Delivers the compiler — the verb that turns a resolved khub schema into its generated validation artifacts. It emits a LinkML schema from khub vocabulary, then generates Pydantic v2 models (validation, typed return objects) and JSON Schema (tools, editors) into `generated/`. LinkML stays a hidden backend so operators write only khub vocabulary; regeneration is deterministic and overwrites prior output; a malformed schema fails the compile atomically, writing no partial artifacts.
+Delivers the compiler — the verb that turns a resolved khub schema into its generated validation artifacts. It emits a LinkML schema from khub vocabulary, then generates Pydantic v2 models (validation, typed return objects) and JSON Schema (tools, editors) into `.khub/generated/`. LinkML stays a hidden backend so operators write only khub vocabulary; regeneration is deterministic and overwrites prior output; a malformed schema fails the compile atomically, writing no partial artifacts.
 
 ---
 
@@ -21,7 +21,7 @@ Delivers the compiler — the verb that turns a resolved khub schema into its ge
 
 | Story | AC | Criterion | Test Scenario |
 |-------|----|-----------|---------------|
-| STORY-SCH-003 | AC-001 | Compile a resolved schema: emit LinkML, generate Pydantic v2 and JSON Schema into `generated/`, marked derived and gitignored | TS-SCH-003-01 |
+| STORY-SCH-003 | AC-001 | Compile a resolved schema: emit LinkML, generate Pydantic v2 and JSON Schema into `.khub/generated/`, marked derived and gitignored | TS-SCH-003-01 |
 | STORY-SCH-003 | AC-002 | LinkML stays the hidden backend; khub vocabulary goes in and generated artifacts come out (round-trip), operators never write LinkML | TS-SCH-003-02 |
 | STORY-SCH-003 | AC-003 | A duplicate type or import cycle fails the compile with a located error and writes no artifacts | TS-SCH-003-03 |
 | STORY-SCH-003 | AC-004 | Two runs on an unchanged schema produce byte-identical artifacts; the second overwrites the first without drift | TS-SCH-003-04 |
@@ -32,10 +32,10 @@ Delivers the compiler — the verb that turns a resolved khub schema into its ge
 
 | Story | ID | Type | Requirement | Unit Test |
 |-------|----|------|-------------|-----------|
-| STORY-SCH-003 | REQ-SCH003-01 | EARS-E | When the compiler runs on a resolved schema, the system shall generate Pydantic and JSON Schema into `generated/` | TS-SCH-003-U02 |
+| STORY-SCH-003 | REQ-SCH003-01 | EARS-E | When the compiler runs on a resolved schema, the system shall generate Pydantic and JSON Schema into `.khub/generated/` | TS-SCH-003-U02 |
 | STORY-SCH-003 | REQ-SCH003-02 | EARS-U | The system shall keep LinkML as a hidden backend; operators write only khub vocabulary | TS-SCH-003-U01 |
 | STORY-SCH-003 | REQ-SCH003-03 | EARS-W | If the schema is malformed, then the system shall fail the compile and write no artifacts | TS-SCH-003-U03 |
-| STORY-SCH-003 | REQ-SCH003-04 | EARS-U | The system shall regenerate `generated/` deterministically from the schema | TS-SCH-003-U04 |
+| STORY-SCH-003 | REQ-SCH003-04 | EARS-U | The system shall regenerate `.khub/generated/` deterministically from the schema | TS-SCH-003-U04 |
 
 ---
 
@@ -43,12 +43,12 @@ Delivers the compiler — the verb that turns a resolved khub schema into its ge
 
 | Story | ID | Rule | Enforcement | Unit Test |
 |-------|----|------|-------------|-----------|
-| STORY-SCH-003 | SCH-007 | `generated/` is derived, gitignored, and never hand-edited | Constraint | TS-SCH-003-U05 |
+| STORY-SCH-003 | SCH-007 | `.khub/generated/` is derived, gitignored, and never hand-edited | Constraint | TS-SCH-003-U05 |
 | STORY-SCH-003 | SCH-008 | Validation, typed objects, and tool schemas all derive from the one compiled contract | Constraint | TS-SCH-003-U02 |
 | STORY-SCH-003 | SCH-008 | Pydantic v2 models use `extra="allow"` for open-schema writes | Constraint | TS-SCH-003-U06 |
 | STORY-SCH-003 | SCH-009 | A malformed schema fails the compile atomically; no partial artifacts | Constraint | TS-SCH-003-U03 |
 | STORY-SCH-003 | SCH-SHARED-001 | Operators write khub vocabulary; LinkML is a hidden generation backend | Constraint | TS-SCH-003-02 |
-| STORY-SCH-003 | SCH-SHARED-003 | `generated/` is derived and gitignored, regenerated from the schema | Constraint | TS-SCH-003-01 |
+| STORY-SCH-003 | SCH-SHARED-003 | `.khub/generated/` is derived and gitignored, regenerated from the schema | Constraint | TS-SCH-003-01 |
 
 ---
 
@@ -97,7 +97,7 @@ The compiler is a transform with two outcomes, not an entity workflow. The state
 
 | From | Action | To | Conditions |
 |------|--------|----|------------|
-| Resolved Schema | `core.compile(schema)` | Generated | Schema is well-formed; `generated/` overwritten deterministically |
+| Resolved Schema | `core.compile(schema)` | Generated | Schema is well-formed; `.khub/generated/` overwritten deterministically |
 | Resolved Schema | `core.compile(schema)` | Rejected | Duplicate type or import cycle; no artifacts written |
 
 ---
@@ -147,9 +147,9 @@ The compiler is a transform with two outcomes, not an entity workflow. The state
 
 - **LinkML hidden backend:** emit a LinkML schema from khub vocabulary, then generate Pydantic v2 and JSON Schema from it. Operators never see LinkML — khub vocabulary in, artifacts out (REQ-SCH003-02, SCH-SHARED-001). The round-trip test feeds authored `core.yaml` + preset with no LinkML keywords.
 - **Open-schema writes:** Pydantic v2 models are generated with `extra="allow"` so writes can carry undeclared fields (SCH-008). Test both directions as distinct cases — declared constraints still reject, and undeclared fields are tolerated (TS-000 Risks; TS-SCH-003-U06).
-- **Determinism:** pin the LinkML version; normalize and sort generation output before byte-diff; assert on a canonical form (TS-000 Risks). Two runs on an unchanged schema produce byte-identical `generated/` (REQ-SCH003-04). LinkML ordering/timestamps are the known flakiness source.
-- **`generated/` is derived:** gitignored, never hand-edited (SCH-007); each compile overwrites the prior output without drift.
-- **Atomic fail:** a duplicate type or import cycle fails the whole compile and leaves `generated/` untouched — no partial artifacts (SCH-009). Use a per-test temp output dir; assert nothing is written on failure.
+- **Determinism:** pin the LinkML version; normalize and sort generation output before byte-diff; assert on a canonical form (TS-000 Risks). Two runs on an unchanged schema produce byte-identical `.khub/generated/` (REQ-SCH003-04). LinkML ordering/timestamps are the known flakiness source.
+- **`.khub/generated/` is derived:** gitignored, never hand-edited (SCH-007); each compile overwrites the prior output without drift.
+- **Atomic fail:** a duplicate type or import cycle fails the whole compile and leaves `.khub/generated/` untouched — no partial artifacts (SCH-009). Use a per-test temp output dir; assert nothing is written on failure.
 - **Located errors:** assert on the located fields plus a message substring rather than the verbatim string (TS-000 Risks).
 - **Dependency:** consumes the `ResolvedSchema` from WPK-000-1. Tests resolve small khub-vocabulary fixtures, then compile into a `tmp_path` directory.
 
@@ -164,5 +164,5 @@ The compiler is a transform with two outcomes, not an entity workflow. The state
 - [ ] All 6 unit tests pass (TS-SCH-003-U01..U06)
 - [ ] Determinism asserted on a normalized/canonical form with the LinkML version pinned
 - [ ] `extra="allow"` tested both ways: declared constraints reject, undeclared fields tolerated
-- [ ] Malformed-schema compile writes no artifacts to the temp `generated/`
+- [ ] Malformed-schema compile writes no artifacts to the temp `.khub/generated/`
 - [ ] No regressions in existing tests

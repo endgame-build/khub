@@ -186,7 +186,7 @@ The only lifecycle the resolver introduces is the base block's `draft` flag, car
 - **Predicate from field name:** a relation's field name is its predicate; its `to:` value is the target — a single type, a list of types, or `any` (SCH-002, SCH-003). Resolve the target against the set of declared types.
 - **Universal edges:** `related`, `sources`, `references`, `depends_on` (all `to: any`, many) come from the base and are available on every type without redeclaration (STORY-SCH-002 AC-004).
 - **Located errors carry their location:** each rejection names the type, relation, and target. Tests assert the located fields plus a message substring rather than the exact string verbatim, keeping the spec's wording as the canonical example (see TS-000 Risks).
-- **No artifacts on rejection:** the resolver fails before the compiler runs; a malformed schema produces no `generated/` output (atomicity is completed by WPK-000-2).
+- **No artifacts on rejection:** the resolver fails before the compiler runs; a malformed schema produces no `.khub/generated/` output (atomicity is completed by WPK-000-2).
 - **Hidden backend:** operators see only khub vocabulary; raw LinkML smuggled into a declaration is rejected (SCH-001, SCH-SHARED-001).
 - **Out of scope here:** LinkML/Pydantic/JSON Schema generation (WPK-000-2); the real `core.yaml` base content and the firm-ops preset (WPK-000-3). This WPK uses small khub-vocabulary fixtures.
 

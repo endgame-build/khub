@@ -53,7 +53,7 @@ entities:
              relations: { client: {to: client, required: true}, owner: {to: person, required: true} } }
 ```
 
-khub compiles the resolved schema to LinkML, which generates the Pydantic models (validation) and JSON Schema (MCP tools, editors) into `generated/`. Operators and agents see only the khub vocabulary; LinkML is the generation backend.
+khub compiles the resolved schema to LinkML, which generates the Pydantic models (validation) and JSON Schema (MCP tools, editors) into `.khub/generated/`. Operators and agents see only the khub vocabulary; LinkML is the generation backend.
 
 ### Technology Choices
 
@@ -61,7 +61,7 @@ The concrete stack under the five layers. Each pick stays dependency-light and e
 
 | Concern | Choice | Why |
 |---------|--------|-----|
-| Schema | **khub schema** → **LinkML** (`linkml`, `linkml-runtime`) | authors write entities/attributes/relations; khub compiles to LinkML, which generates Pydantic v2 and JSON Schema into `generated/` |
+| Schema | **khub schema** → **LinkML** (`linkml`, `linkml-runtime`) | authors write entities/attributes/relations; khub compiles to LinkML, which generates Pydantic v2 and JSON Schema into `.khub/generated/` |
 | Validation | **Pydantic v2**, generated from LinkML | a fast core, precise errors that feed `validate`, typed objects as the library's return type |
 | Frontmatter | **`python-frontmatter`** to read, **`ruamel.yaml`** to write | round-trip writes preserve key order and comments, so `khub set` produces a minimal git diff |
 | In-memory graph (v1) | **`networkx`** adjacency index | `descendants`/`ancestors` give blast radius and supersession chains; cycle detection backs `check` |
@@ -85,7 +85,7 @@ Two eval tiers: deterministic golden-file tests cover the engine (the HQ functio
 
 ### Authoring and Integrity
 
-- **Identity.** Each entity's **id is its slug**: one bare, human-readable token (`auth`, `initech-pov`, `adr-0012`) that names the file or folder on disk and identifies the node in the graph. No type prefix. Uniqueness is per type, `(type, slug)`, with the file path as the globally-unique key; a deterministic suffix resolves within-type slug collisions. Typed relations resolve by their schema-known target type (`lives_in: api`); polymorphic (`any`-typed) relations take a bare slug too, qualified as `type/slug` only when a slug is ambiguous across types. An external identifier rides along as a non-authoritative `source_id` alias (the ingestion path). Renaming a slug is deferred.
+- **Identity.** Each entity's **id is its slug**: one bare, human-readable token (`auth`, `initech-pov`, `adr-0012`) that names the file or folder on disk and identifies the node in the graph. No type prefix. Uniqueness is per type, `(type, slug)`, with the file path as the globally-unique key; a deterministic suffix resolves within-type slug collisions. Typed relations resolve by their schema-known target type (`lives_in: api`); polymorphic (`any`-typed) relations take a bare slug too, qualified as `type/slug` only when a slug is ambiguous across types. An external identifier rides along as a non-authoritative `source_id` alias (the ingestion path). A preset may also declare integration routing keys (e.g. Recorder folder ids) as first-class attributes; the `source_id` alias is specifically for an external system's record id. Renaming a slug is deferred.
 - **Storage layout is per-type config.** A type stores its entities as individual files or as a single-file collection. A preset sets the layout per type; an engagement can override it.
 
   Inventory as files (one entity per file):
@@ -177,32 +177,29 @@ Everything stays private for now. `uvx` and `uv tool install` run from the priva
 
 ## v1 Scope
 
-Prove the **engine** on the real thing: cut **firm-hq** over to khub. The proving ground is HQ's live firm-operations corpus, roughly 380 entities across 12 types, already running the projection-and-validation pattern under `kb.py`. khub runs read-only against the same files, then takes over — a functional cutover, not byte-parity with `kb.py`. Markdown is truth, so the risk stays low: khub never owns the data, the `.md` files go untouched, and the incumbent keeps working until cutover.
+Prove the **engine** on the real thing: cut **firm-hq** over to khub. The proving ground is HQ's live firm-operations corpus, roughly 380 entities across 9 types, already running the projection-and-validation pattern under `kb.py`. khub runs read-only against the same files, then takes over — a functional cutover, not byte-parity with `kb.py`. Markdown is truth, so the risk stays low: khub never owns the data, the `.md` files go untouched, and the incumbent keeps working until cutover.
 
-**In:** the engine (schema-introspecting core library, in-memory `networkx` index, the integrity loop `validate`/`check`/`stale` + `log`, plus `reindex` and `backfill` for the HQ cutover); the full author and query command surface; `khub init`; the Claude Code skill; and the **firm-ops preset**, the LinkML port of `hq.schema.yml` (12 types, 17 relation predicates), captured in full in `firm-ops-preset.md`.
+**In:** the engine (schema-introspecting core library, in-memory `networkx` index, the integrity loop `validate`/`check`/`stale` + `log`, plus `reindex` and `backfill` for the HQ cutover); the full author and query command surface; `khub init`; the Claude Code skill; and the **firm-ops preset**, the LinkML port of `hq.schema.yml` (9 types, 14 relation predicates), captured in full in `firm-ops-preset.md`.
 
 **Out** (deferred and named): the engineering preset and any preset beyond firm-ops; the SQLite/graph projection and FTS search; `diff-preset` drift/promotion; hub↔engagement sync; the MCP server; facet and OKF-bundle ingestion (fast-follow #1); `rename`; concurrency arbitration.
 
 ### The v1 Proving Ground: HQ Firm-Ops
 
-The firm-ops schema is the real engine test. It exercises every mechanism the engine has, on real data and at real scale, plus several mechanisms a synthetic seed never would. The full entity, property, and relation capture lives in `firm-ops-preset.md`; the coverage map:
+The firm-ops schema is the real engine test. It exercises most of the engine's mechanisms on real data and at real scale, plus several a synthetic seed never would. The full entity, property, and relation capture lives in `firm-ops-preset.md`; the coverage map:
 
 | Engine mechanism | Where HQ exercises it |
 |------------------|------------------------|
-| enums, scalars, `source_id` alias | `stage`/`status`/`call_type`/`role`/`doc_kind` enums; `external_repo`/`website`; `crm_id`/`airtable_id`/`note_id` aliases |
+| enums, scalars, `source_id` alias | `stage`/`call_type`/`role`/`phase` enums; `external_repo`/`website`; `crm_id`/`note_id` aliases |
 | required relations → `check` completeness | `owner` (most types), `client` (engagements), `engagement` (meetings) |
-| self-referential edge | `supersedes` (decision → decision) |
-| blast radius (transitive) | `depends_on`, `affects` |
-| decision history and reach | `supersedes` chain (inverse derived); `affects` |
+| blast radius (transitive) | `depends_on` |
 | multi-predicate over one type-pair | `owner` vs `team` (both → person, a predicate cannot be inferred from the target type) |
-| union- and `any`-typed edges + `type/slug` | `engagement` (union → opportunity\|project\|build\|partnership); `affects`/`related`/`sources` (`any`) |
+| union- and `any`-typed edges + `type/slug` | `engagement` (union → opportunity\|project\|partnership); `related`/`sources`/`depends_on` (`any`) |
 | mixed storage layout | flat `clients/{slug}.md` vs folder `projects/{slug}/_index.md` |
-| path-shared types | `project` and `build` share `projects/{slug}/`, discriminated by `type` |
 | explicit union edge (nesting deferred) | `meeting` flat at `meetings/{slug}.md`; `engagement` an explicit union edge |
 | the `draft` flag (`draft: true\|false`) | added by khub over HQ's per-type `stage`/`status` |
 | real scale and mess | ~380 entities, plus reference docs with no frontmatter to skip cleanly |
 
-The one family HQ leaves uncovered is the intent/behavior **satisfies-gap**: a Requirement with no Capability. That spine is engineering-specific and arrives with the engineering preset. HQ's gap query is structural instead: orphans and missing required relations, both surfaced by `check`.
+The one family HQ leaves uncovered is the intent/behavior **satisfies-gap**: a Requirement with no Capability — engineering-specific, arriving with the engineering preset. Self-referential and derived-inverse edges (`supersedes`/`superseded_by`) also moved there when `decision` was folded out of firm-ops v1; the engine still supports them, exercised by the generic resolver/compiler tests. HQ's gap query is structural instead: orphans and missing required relations, both surfaced by `check`.
 
 ## The Engineering Preset: Target (Post-v1)
 

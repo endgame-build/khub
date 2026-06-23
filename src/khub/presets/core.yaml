@@ -1,0 +1,32 @@
+# core.yaml — the khub base block.
+#
+# Every entity inherits these attributes and relations at resolve time (merged,
+# never copied into the type's declaration). A type declares only its domain
+# delta and may override a base attribute by redeclaring it. In v1 core.yaml
+# holds ONLY the base block; entity types live in the preset (firm-ops.yaml).
+# `khub init` writes this block as a `base:` header into the engagement's
+# schema.yaml — it is supplied, not imported.
+#
+# Grammar:
+#   attributes: map keyed by name -> { type, required?, default?, enum?, pattern? }
+#               scalar `type` is one of text|number|date|datetime|bool|list (default text)
+#   relations:  map keyed by predicate -> { to, many?, required? }
+#               `to` is a type name, a list of type names, or `any`
+#               the field name IS the predicate; single by default, `many: true` for multi-valued
+
+base:
+  attributes:
+    type:        { type: text, required: true }    # discriminator — each entity kind pins its value
+    draft:       { type: bool, default: false }    # lifecycle flag (default published)
+    author:      { type: text }                    # the writer — person or agent
+    created:     { type: date, required: true }
+    updated:     { type: date }
+    title:       { type: text }                    # OKF
+    description: { type: text }                    # OKF
+    resource:    { type: text }                    # OKF — canonical URI / link-out
+    tags:        { type: list }
+  relations:
+    related:     { to: any, many: true }
+    sources:     { to: any, many: true }
+    references:  { to: any, many: true }
+    depends_on:  { to: any, many: true }

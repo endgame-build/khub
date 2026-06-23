@@ -6,7 +6,17 @@
 
 HQ is a reusable preset. The design memo already predicted this: *"firm-hq is the working precedent for the projection-and-validation pattern; khub generalizes it ... and is itself the kind of operational hub an HQ preset would produce."* HQ runs the same five-layer engine khub specifies, on a hand-rolled schema instead of LinkML. Porting it to khub means expressing `hq.schema.yml` as a LinkML ontology and swapping `kb.py` for the generic core library. The model below is the IP: the firm's judgment about how to model running a consulting firm.
 
-The preset's spine is the **opportunity → project/build** lifecycle (the deal becomes the work), wrapped by a **client/partnership/person directory**, fed by a **meeting/transcript activity stream**, and governed by **decision** and **isms-doc** records. Twelve entity types, seventeen relation predicates.
+The preset's spine is the **opportunity → project/build** lifecycle (the deal becomes the work), wrapped by a **client/partnership/person directory**, fed by a **meeting/transcript activity stream**, and governed by **decision** and **isms-doc** records. Twelve entity types, seventeen relation predicates (this captures HQ as-is; the khub v1 preset carries a refined subset — see **khub v1 Preset Scope** below).
+
+## khub v1 Preset Scope (Divergences From This HQ Capture)
+
+This document captures HQ's `hq.schema.yml` **as-is**. The khub v1 firm-ops preset (`src/khub/presets/firm-ops.yaml`) carries a deliberately refined subset, decided in review. The type and predicate tables below describe HQ; the khub preset is the subset here:
+
+- **9 of the 12 types.** Dropped (0 live entities): `build` (after the lifecycle change it differed from `project` only by `tech_stack`), `isms-doc`, and `decision`. Dropping `decision` also removes `supersedes` / the derived `superseded_by` / `affects` from firm-ops (the engine still supports derived inverses; firm-ops just no longer demonstrates them).
+- **10 firm-ops predicates, 14 total, no derived inverse** (HQ: 12 firm-ops / 17 total).
+- **Lifecycle:** `opportunity.stage` = the CRM "Sales" pipeline stages (`prospect`, `proposal-sent`, `won`, `signed`, `lost`); `project` and `partnership` carry `active: bool` (default true) instead of a stage enum; `person.role` = `consultant` / `engineer` / `manager` / `partner`.
+- **Trimmed fields:** `airtable_id` everywhere; `confidence` and `last_confirmed` (CRM-derived); `opportunity.external_repo`. Integration routing keys (`notes_folder*`, `note_id`, `calendar_event_id`) are **kept** as first-class attributes.
+- **Cutover remaps** (expected migration, not schema breaks): `opportunity.stage`, `person.role`, and `partnership` (stage → `active`) are remapped on the live HQ files at cutover; `meeting`/`transcript` `created` is backfilled.
 
 ## Engine, as HQ Runs It Today (Maps 1:1 to khub's Five Layers)
 
@@ -50,7 +60,7 @@ khub-core also provides an `author` attribute (the writer — person or agent), 
 | `references` | any | any | N | Soft link |
 | `depends_on` | any | any | N | Hard dependency |
 
-`related`, `sources`, `references`, `depends_on` are universal (`any → any`) and come from `core`, not the firm-ops preset; the rest are typed. Several typed edges take a **union** of target types — `engagement` (opportunity\|project\|build\|partnership), `source_project` and `related_projects` (project\|build) — which the khub vocabulary expresses with a list-valued `to:`. Note `partner` is declared `from: [opportunity, project, build]` in the edge vocabulary, yet the `client` node also carries it; capture reflects actual usage.
+`related`, `sources`, `references`, `depends_on` are universal (`any → any`) and come from `core`, not the firm-ops preset; the rest are typed. Several typed edges take a **union** of target types — `engagement` (opportunity\|project\|build\|partnership), `source_project` and `related_projects` (project\|build) — which the khub vocabulary expresses with a list-valued `to:`. Note `partner` is declared `from: [opportunity, project, build]` in the edge vocabulary, yet the `client` node also carries it; capture reflects actual usage. The **Card** column reads `1` (single, the khub default) or `N` (many); in khub vocabulary an `N` edge is written `many: true`, and a `1` edge omits `many`.
 
 ## Entities: Full Inventory
 
@@ -91,7 +101,7 @@ Identity: `projects/{slug}/CLAUDE.md`. The post-sale consulting engagement. Shar
 | `client` | string | ✓ | **→ client** |
 | `stage` | enum | ✓ | diagnose, prove, scale, complete |
 | `owner` | string | ✓ | **→ person** |
-| `external_repo` | string | ✓* | `^endgame-build/[a-z0-9-]+$` (required per frontmatter.md; absent on internal projects in the live graph) |
+| `external_repo` | string | | `^endgame-build/[a-z0-9-]+$` (optional in hq.schema.yml; frontmatter.md treats it as required, but it is absent on internal projects) |
 | `created` | date | ✓ | |
 | `updated` | date | ✓ | |
 | `source` | enum | | event, referral, outbound, inbound, northwind, existing-client |
@@ -119,7 +129,7 @@ Identity: `projects/{slug}/CLAUDE.md`. The "we build it" variant of project; sam
 | `client` | string | ✓ | **→ client** |
 | `stage` | enum | ✓ | scoping, building, delivered, maintaining, complete |
 | `owner` | string | ✓ | **→ person** |
-| `external_repo` | string | ✓ | `^endgame-build/[a-z0-9-]+$` |
+| `external_repo` | string | | `^endgame-build/[a-z0-9-]+$` (optional in hq.schema.yml) |
 | `created` | date | ✓ | |
 | `updated` | date | ✓ | |
 | `source` | enum | | event, referral, outbound, inbound, northwind, existing-client |
@@ -175,12 +185,12 @@ Identity: `transcripts/{slug}.md` (flat for MVP; `inbox/` remains a pre-routing 
 
 ### 6. fragment: Atomic Thought
 
-Identity: `fragments/{slug}.md`. A partner's personal note; the writer is the core `author` field in frontmatter. Matures through stages and may be promoted into a reference area.
+Identity: `fragments/{slug}.md`. A partner's personal note; the writer is the `owner` edge (→ person). Matures through stages and may be promoted into a reference area.
 
 | Field | Type | Req | Constraint / edge |
 |---|---|---|---|
 | `type` | const | ✓ | `fragment` |
-| `author` | string | ✓ | core base field (the writer); required on fragment |
+| `owner` | string | ✓ | **→ person** (the writer/accountable; HQ keys fragments on `owner`, not `author`) |
 | `stage` | enum | ✓ | raw, mature, synthesis, promoted |
 | `created` | date | ✓ | |
 | `updated` | date | | |

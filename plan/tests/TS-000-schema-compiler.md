@@ -9,11 +9,11 @@ updated: 2026-06-21
 
 ## Summary
 
-Tests the schema foundation: operators declare types in khub vocabulary (`base`, `entities`, `attributes`, `relations`, storage config), the resolver merges the base block, and the compiler emits LinkML, Pydantic v2, and JSON Schema into `generated/`. Coverage runs from vocabulary parsing through a clean firm-ops compile that validates a live HQ snapshot.
+Tests the schema foundation: operators declare types in khub vocabulary (`base`, `entities`, `attributes`, `relations`, storage config), the resolver merges the base block, and the compiler emits LinkML, Pydantic v2, and JSON Schema into `.khub/generated/`. Coverage runs from vocabulary parsing through a clean firm-ops compile that validates a live HQ snapshot.
 
 **Feature Spec:** FS-000: Schema & Compiler
 **Stories Covered:** 4
-**Test Scenarios:** 16 (plus 23 unit tests)
+**Test Scenarios:** 16 (plus 21 unit tests)
 
 ---
 
@@ -37,7 +37,7 @@ Tests the schema foundation: operators declare types in khub vocabulary (`base`,
 |--------|------|
 | Acceptance criteria | 100% of ACs from FS-000 (16 ACs) |
 | EARS requirements | 100% of REQ-SCH* requirements (16) |
-| Business rules | 100% of rule enforcement (SCH-001..012, SCH-SHARED-001..003) |
+| Business rules | 100% of rule enforcement (SCH-001..010, SCH-SHARED-001..003) |
 | Edge cases | Located errors, determinism, override precedence, atomic no-partial-write |
 
 ---
@@ -78,7 +78,7 @@ Tests the schema foundation: operators declare types in khub vocabulary (`base`,
 - [ ] a pattern mismatch is rejected
 - [ ] a single-valued relation given many targets is rejected, and a `many` relation accepts a list
 
-**Test Data:** entity with `stage: invalid-stage`, entity with malformed `airtable_id`, entity with two values on a `to: { card: 1 }` relation
+**Test Data:** entity with `stage: invalid-stage`, entity with malformed `airtable_id`, entity with two values on a single-valued relation (`owner: { to: person }`, no `many: true`)
 
 #### TS-SCH-001-03: Malformed Declaration — Unknown Relation Target
 
@@ -90,7 +90,7 @@ Tests the schema foundation: operators declare types in khub vocabulary (`base`,
 **Then:**
 - [ ] the schema is rejected with a located error
 - [ ] the message reads: `Type 'project' relation 'owner' targets unknown type 'persn'`
-- [ ] no artifacts are written to `generated/`
+- [ ] no artifacts are written to `.khub/generated/`
 
 **Test Data:** `project` declaration with a typo'd `to: persn` target
 
@@ -203,11 +203,11 @@ Tests the schema foundation: operators declare types in khub vocabulary (`base`,
 **When** the compiler runs
 **Then:**
 - [ ] a LinkML schema is emitted from the khub vocabulary
-- [ ] Pydantic v2 models for validation are generated into `generated/`
-- [ ] JSON Schema for tools and editors is generated into `generated/`
-- [ ] `generated/` is marked derived and gitignored
+- [ ] Pydantic v2 models for validation are generated into `.khub/generated/`
+- [ ] JSON Schema for tools and editors is generated into `.khub/generated/`
+- [ ] `.khub/generated/` is marked derived and gitignored
 
-**Test Data:** a resolved two-type schema; a clean `generated/` target directory
+**Test Data:** a resolved two-type schema; a clean `.khub/generated/` target directory
 
 #### TS-SCH-003-02: Operators See Only khub Vocabulary
 
@@ -232,7 +232,7 @@ Tests the schema foundation: operators declare types in khub vocabulary (`base`,
 **Then:**
 - [ ] the compile fails with a located error
 - [ ] the message reads `Duplicate type 'project'`
-- [ ] no artifacts are written to `generated/`
+- [ ] no artifacts are written to `.khub/generated/`
 
 > v1 has no imports (the base is a written `base:` header, not an imported dependency), so an import cycle is not reachable in v1. The duplicate-type case is the v1-active malformed-schema rejection; the `Import cycle through 'core'` guard applies only once preset-to-preset imports return post-v1.
 
@@ -247,7 +247,7 @@ Tests the schema foundation: operators declare types in khub vocabulary (`base`,
 **When** the compiler runs twice
 **Then:**
 - [ ] the generated artifacts are byte-identical across both runs
-- [ ] the second run overwrites the prior `generated/` output without drift
+- [ ] the second run overwrites the prior `.khub/generated/` output without drift
 
 **Test Data:** a fixed schema; two sequential compile invocations against the same target
 
@@ -259,16 +259,16 @@ Tests the schema foundation: operators declare types in khub vocabulary (`base`,
 | TS-SCH-003-U02 | Compiler | Generates Pydantic v2 and JSON Schema from the resolved contract | REQ-SCH003-01, SCH-008 |
 | TS-SCH-003-U03 | Compiler | Fails atomically on a malformed schema, writing no partial artifacts | REQ-SCH003-03, SCH-009 |
 | TS-SCH-003-U04 | Compiler | Produces identical output for identical input | REQ-SCH003-04 |
-| TS-SCH-003-U05 | Compiler | Treats `generated/` as derived and gitignored, never hand-edited | SCH-007 |
+| TS-SCH-003-U05 | Compiler | Treats `.khub/generated/` as derived and gitignored, never hand-edited | SCH-007 |
 | TS-SCH-003-U06 | Compiler | Emits Pydantic v2 models with `extra="allow"` for open-schema writes | SCH-008 |
 
 ---
 
 ### STORY-SCH-004: Author the Firm-Ops Preset
 
-**Spec:** As an Operator, I want to express `hq.schema.yml` as the khub firm-ops preset — 12 types, 17 relation predicates, the six porting notes resolved, So that the cutover seeds from a preset that compiles clean and validates the live HQ corpus
+**Spec:** As an Operator, I want to express `hq.schema.yml` as the khub firm-ops preset — 9 types, 14 relation predicates, the four porting notes resolved, So that the cutover seeds from a preset that compiles clean and validates the live HQ corpus
 
-#### TS-SCH-004-01: Declare All Twelve Types
+#### TS-SCH-004-01: Declare All Nine Types
 
 **Validates:** AC-001
 **Level:** Integration
@@ -276,13 +276,13 @@ Tests the schema foundation: operators declare types in khub vocabulary (`base`,
 **Given** the firm-ops capture in `docs/firm-ops-preset.md`
 **When** the operator writes `firm-ops.yaml`
 **Then:**
-- [ ] opportunity, project, build, meeting, transcript, fragment, decision, case-study, isms-doc, partnership, person, and client are declared
-- [ ] each type carries its attributes, enums (`stage`, `call_type`, `role`, `doc_kind`), and patterns
+- [ ] opportunity, project, meeting, transcript, fragment, case-study, partnership, person, and client are declared
+- [ ] each type carries its attributes, enums (`stage`, `call_type`, `role`), and patterns
 - [ ] each type's storage layout is set (file for client and meeting, folder for project)
 
-**Test Data:** `firm-ops.yaml` with all 12 type declarations; `core.yaml` imported
+**Test Data:** `firm-ops.yaml` with all 9 type declarations; `core.yaml` imported
 
-#### TS-SCH-004-02: Declare All Edges (16 Stored, 17 Total)
+#### TS-SCH-004-02: Declare All Edges (14 Stored, 14 Total)
 
 **Validates:** AC-002
 **Level:** Integration
@@ -290,14 +290,14 @@ Tests the schema foundation: operators declare types in khub vocabulary (`base`,
 **Given** the relation vocabulary
 **When** the operator declares relations
 **Then:**
-- [ ] the 16 stored predicates are declared with `from`, `to`, and cardinality (12 in `firm-ops.yaml`; the 4 universal edges inherited from `core`)
-- [ ] typed and union edges are declared (`owner → person`, `client → client`, `engagement → opportunity|project|build|partnership`), relying on `core` for the universal edges
+- [ ] the 14 stored predicates are declared with `from`, `to`, and cardinality (10 in `firm-ops.yaml`; the 4 universal edges inherited from `core`)
+- [ ] typed and union edges are declared, written predicate → target (`owner → person`; `client → client`, i.e. the `client` predicate targets the `client` type; `engagement → opportunity|project|partnership`), relying on `core` for the universal edges
 - [ ] required relations are marked (`owner`, `client`, `engagement`)
-- [ ] `superseded_by` is left derived (not stored), for 17 predicates total
+- [ ] no derived inverse is declared, for 14 predicates total
 
 **Test Data:** firm-ops relation declarations; the four universal predicates resolved from `core`
 
-#### TS-SCH-004-03: Resolve the Six Porting Notes
+#### TS-SCH-004-03: Resolve the Four Porting Notes
 
 **Validates:** AC-003
 **Level:** Integration
@@ -305,14 +305,12 @@ Tests the schema foundation: operators declare types in khub vocabulary (`base`,
 **Given** the divergences between `hq.schema.yml` and khub invariants
 **When** the operator ports the schema
 **Then:**
-- [ ] `superseded_by` is dropped and derived from `supersedes` (no stored inverse)
 - [ ] a boolean `draft` flag is added over HQ's per-type `stage`/`status`
-- [ ] `project` and `build` share the `projects/{slug}/_index.md` layout, discriminated by `type`
 - [ ] the `partner` edge `from`-list is tightened to include `client`
 - [ ] `meeting.engagement` stays an explicit stored edge and meetings flatten to `meetings/{slug}.md`
 - [ ] the slug stays the id, with external ids riding as `source_id` aliases
 
-**Test Data:** decision pair with `supersedes`; project + build sharing `projects/`; client carrying `partner`
+**Test Data:** client carrying `partner`; `meeting` carrying an explicit `engagement` union edge
 
 #### TS-SCH-004-04: Compile Clean and Validate HQ
 
@@ -332,11 +330,9 @@ Tests the schema foundation: operators declare types in khub vocabulary (`base`,
 
 | ID | Component | Behavior | Validates |
 |----|-----------|----------|-----------|
-| TS-SCH-004-U01 | Firm-ops preset | Declares all 12 types with their attributes, enums, and layouts | REQ-SCH004-01, SCH-010 |
-| TS-SCH-004-U02 | Firm-ops preset | Declares the 16 stored predicates with `from`, `to`, and cardinality (17 total) | REQ-SCH004-02 |
-| TS-SCH-004-U03 | Firm-ops preset | Derives `superseded_by` from `supersedes`, storing no inverse | SCH-011 |
-| TS-SCH-004-U04 | Firm-ops preset | Declares `project` and `build` under one `projects/{slug}/` layout, discriminated by `type` | SCH-012 |
-| TS-SCH-004-U05 | Firm-ops preset | Applies the six porting-note transforms | REQ-SCH004-03 |
+| TS-SCH-004-U01 | Firm-ops preset | Declares all 9 types with their attributes, enums, and layouts | REQ-SCH004-01, SCH-010 |
+| TS-SCH-004-U02 | Firm-ops preset | Declares the 14 stored predicates with `from`, `to`, and cardinality (14 total) | REQ-SCH004-02 |
+| TS-SCH-004-U05 | Firm-ops preset | Applies the four porting-note transforms | REQ-SCH004-03 |
 | TS-SCH-004-U06 | Firm-ops preset | Compiles clean and validates an HQ snapshot | REQ-SCH004-04 |
 
 ---
@@ -359,9 +355,9 @@ Tests the schema foundation: operators declare types in khub vocabulary (`base`,
 | STORY-SCH-003 | AC-002 | Operators see only khub vocabulary | TS-SCH-003-02 |
 | STORY-SCH-003 | AC-003 | Malformed schema (duplicate type; cycle post-v1) | TS-SCH-003-03 |
 | STORY-SCH-003 | AC-004 | Regeneration is deterministic | TS-SCH-003-04 |
-| STORY-SCH-004 | AC-001 | Declare all twelve types | TS-SCH-004-01 |
-| STORY-SCH-004 | AC-002 | Declare all edges (16 stored, 17 total) | TS-SCH-004-02 |
-| STORY-SCH-004 | AC-003 | Resolve the six porting notes | TS-SCH-004-03 |
+| STORY-SCH-004 | AC-001 | Declare all nine types | TS-SCH-004-01 |
+| STORY-SCH-004 | AC-002 | Declare all edges (14 stored, 14 total) | TS-SCH-004-02 |
+| STORY-SCH-004 | AC-003 | Resolve the four porting notes | TS-SCH-004-03 |
 | STORY-SCH-004 | AC-004 | Compile clean and validate HQ | TS-SCH-004-04 |
 
 ### EARS Requirements → Test Scenarios
@@ -376,13 +372,13 @@ Tests the schema foundation: operators declare types in khub vocabulary (`base`,
 | REQ-SCH002-02 | EARS-U | A type overrides a base attribute by redeclaring it | TS-SCH-002-02, TS-SCH-002-U02 |
 | REQ-SCH002-03 | EARS-W | Reject a schema that declares entities with no base block | TS-SCH-002-03, TS-SCH-002-U04 |
 | REQ-SCH002-04 | EARS-U | Universal `any → any` edges on every type without redeclaration | TS-SCH-002-04, TS-SCH-002-U05 |
-| REQ-SCH003-01 | EARS-E | Generate Pydantic and JSON Schema into `generated/` | TS-SCH-003-01, TS-SCH-003-U02 |
+| REQ-SCH003-01 | EARS-E | Generate Pydantic and JSON Schema into `.khub/generated/` | TS-SCH-003-01, TS-SCH-003-U02 |
 | REQ-SCH003-02 | EARS-U | Keep LinkML a hidden backend; operators write only khub vocabulary | TS-SCH-003-02, TS-SCH-003-U01 |
 | REQ-SCH003-03 | EARS-W | Fail the compile and write no artifacts when malformed | TS-SCH-003-03, TS-SCH-003-U03 |
-| REQ-SCH003-04 | EARS-U | Regenerate `generated/` deterministically | TS-SCH-003-04, TS-SCH-003-U04 |
-| REQ-SCH004-01 | EARS-U | Declare all 12 types with attributes, enums, layouts | TS-SCH-004-01, TS-SCH-004-U01 |
-| REQ-SCH004-02 | EARS-U | Declare the 16 stored predicates (17 total with derived) | TS-SCH-004-02, TS-SCH-004-U02 |
-| REQ-SCH004-03 | EARS-E | Resolve each of the six porting notes | TS-SCH-004-03, TS-SCH-004-U05 |
+| REQ-SCH003-04 | EARS-U | Regenerate `.khub/generated/` deterministically | TS-SCH-003-04, TS-SCH-003-U04 |
+| REQ-SCH004-01 | EARS-U | Declare all 9 types with attributes, enums, layouts | TS-SCH-004-01, TS-SCH-004-U01 |
+| REQ-SCH004-02 | EARS-U | Declare the 14 stored predicates (14 total, no derived) | TS-SCH-004-02, TS-SCH-004-U02 |
+| REQ-SCH004-03 | EARS-E | Resolve each of the four porting notes | TS-SCH-004-03, TS-SCH-004-U05 |
 | REQ-SCH004-04 | EARS-E | Compile clean and validate an HQ snapshot | TS-SCH-004-04, TS-SCH-004-U06 |
 
 ### Business Rules → Test Scenarios
@@ -395,15 +391,13 @@ Tests the schema foundation: operators declare types in khub vocabulary (`base`,
 | SCH-004 | Base block merged at resolve time, never copied into each type | Constraint | TS-SCH-002-01, TS-SCH-002-U01 |
 | SCH-005 | A type-level declaration overrides the base for that attribute | Constraint | TS-SCH-002-02, TS-SCH-002-U02 |
 | SCH-006 | Every entity carries `type` and the boolean `draft` flag | Validation | TS-SCH-002-U03 |
-| SCH-007 | `generated/` is derived, gitignored, never hand-edited | Constraint | TS-SCH-003-01, TS-SCH-003-U05 |
+| SCH-007 | `.khub/generated/` is derived, gitignored, never hand-edited | Constraint | TS-SCH-003-01, TS-SCH-003-U05 |
 | SCH-008 | Validation, typed objects, tool schemas derive from one compiled contract | Constraint | TS-SCH-003-U02, TS-SCH-003-U06 |
 | SCH-009 | A malformed schema fails the compile atomically; no partial artifacts | Constraint | TS-SCH-003-03, TS-SCH-003-U03 |
 | SCH-010 | The firm-ops preset is the LinkML port of `hq.schema.yml`, nothing omitted | Constraint | TS-SCH-004-01, TS-SCH-004-U01 |
-| SCH-011 | No stored inverse edge; `superseded_by` derives from `supersedes` | Constraint | TS-SCH-004-03, TS-SCH-004-U03 |
-| SCH-012 | `project` and `build` share `projects/{slug}/`, discriminated by `type` | Constraint | TS-SCH-004-03, TS-SCH-004-U04 |
 | SCH-SHARED-001 | Operators write khub vocabulary; LinkML is a hidden backend | Constraint | TS-SCH-001-U04, TS-SCH-003-02 |
 | SCH-SHARED-002 | The base block is the one source of standard fields and lifecycle | Constraint | TS-SCH-002-01, TS-SCH-004-U01 |
-| SCH-SHARED-003 | `generated/` is derived and gitignored, regenerated from the schema | Constraint | TS-SCH-003-01, TS-SCH-004-U06 |
+| SCH-SHARED-003 | `.khub/generated/` is derived and gitignored, regenerated from the schema | Constraint | TS-SCH-003-01, TS-SCH-004-U06 |
 
 ---
 
@@ -435,18 +429,18 @@ Tests the schema foundation: operators declare types in khub vocabulary (`base`,
 | Invalid | duplicate `project` type (cyclic imports are post-v1) | Atomic-fail, no partial artifacts (TS-SCH-003-03) |
 | Boundary | identical schema compiled twice | Byte-identical regeneration (TS-SCH-003-04) |
 
-#### Firm-Ops Entity (e.g. decision, project, build, client)
+#### Firm-Ops Entity (e.g. case-study, project, partnership, client)
 
 | Variant | Key Attributes | Purpose |
 |---------|---------------|---------|
-| Valid | decision with `supersedes`; project + build under `projects/{slug}/` | Porting-note transforms (TS-SCH-004-03) |
+| Valid | client carrying `partner`; `meeting.engagement` union resolves by slug | Porting-note transforms (TS-SCH-004-03) |
 | Invalid | `meeting` with a value outside the `call_type` enum; `partner` from an undeclared `from` type | Enum/`from`-list validation (TS-SCH-004-01, TS-SCH-004-03) |
 | Boundary | HQ snapshot carrying the predicted referential breaks | Validate-HQ-cleanly (TS-SCH-004-04) |
 
 ### Management
 
 - **Setup:** schema fixtures authored as small khub-vocabulary YAML files under a tests fixtures dir; the firm-ops case compiles `core.yaml` + `firm-ops.yaml`; the HQ snapshot is a read-only copy of a branch of `firm-hq`.
-- **Cleanup:** `generated/` written to a per-test temp directory and torn down after each test; no shared `generated/` between tests.
+- **Cleanup:** `.khub/generated/` written to a per-test temp directory and torn down after each test; no shared `.khub/generated/` between tests.
 - **Isolation:** each scenario resolves and compiles from its own fixture into its own temp output dir; the HQ snapshot is mounted read-only so validation never mutates source files.
 
 ---
@@ -468,7 +462,7 @@ Tests the schema foundation: operators declare types in khub vocabulary (`base`,
 | Service | Strategy | Rationale |
 |---------|----------|-----------|
 | LinkML generation | Real, not mocked | LinkML is the contract-under-test; mocking it would test nothing |
-| Filesystem `generated/` | Real temp dir (`tmp_path`) | Determinism and atomic-no-partial-write need real file output |
+| Filesystem `.khub/generated/` | Real temp dir (`tmp_path`) | Determinism and atomic-no-partial-write need real file output |
 | HQ corpus | Read-only snapshot fixture | Validates real data without touching the live repo or its integrations |
 | CRM / Recorder / Airtable | Not exercised | External ids ride as `source_id` aliases, not entities; outside schema-layer scope |
 
@@ -494,7 +488,7 @@ Tests the schema foundation: operators declare types in khub vocabulary (`base`,
 
 | Risk | Impact | Mitigation |
 |------|--------|------------|
-| LinkML → Pydantic/JSON Schema generation is non-deterministic (ordering, timestamps) | TS-SCH-003-04 flaky; drift in `generated/` | Pin the LinkML version; normalize and sort generation output before byte-diff; assert on a canonical form |
+| LinkML → Pydantic/JSON Schema generation is non-deterministic (ordering, timestamps) | TS-SCH-003-04 flaky; drift in `.khub/generated/` | Pin the LinkML version; normalize and sort generation output before byte-diff; assert on a canonical form |
 | HQ snapshot drifts from the porting-note predictions as the live repo changes | TS-SCH-004-04 surfaces unexpected breaks | Freeze the snapshot to a tagged branch; treat new breaks as a spec-update signal, not a test failure |
 | Located-error messages are asserted verbatim and brittle to wording changes | TS-SCH-001-03, TS-SCH-002-03, TS-SCH-003-03 break on cosmetic edits | Assert on the located fields (type, relation, target) plus a message substring, keeping the spec's exact text as the canonical example |
 | `extra="allow"` open-schema writes mask constraint regressions | TS-SCH-001-02 passes while real validation runs loose | Test both that declared constraints reject and that undeclared fields are tolerated, as distinct cases |

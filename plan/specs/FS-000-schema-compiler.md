@@ -10,7 +10,7 @@ updated: 2026-06-21
 
 ## Overview
 
-The schema layer is the foundation every other surface stands on: operators declare types in khub's own vocabulary — `base`, `entities`, `attributes`, `relations`, and storage config — and the compiler resolves that into LinkML, which generates the Pydantic models (validation) and JSON Schema (tools, editors) into `generated/`. The schema is the contract; surfaces introspect it at runtime and hardcode no per-type knowledge. The v1 deliverable is two authored files — `core.yaml` (the base block) and `firm-ops.yaml` (12 types, 17 relation predicates, the LinkML port of `hq.schema.yml`) — plus the compile pipeline that turns them into validation artifacts.
+The schema layer is the foundation every other surface stands on: operators declare types in khub's own vocabulary — `base`, `entities`, `attributes`, `relations`, and storage config — and the compiler resolves that into LinkML, which generates the Pydantic models (validation) and JSON Schema (tools, editors) into `.khub/generated/`. The schema is the contract; surfaces introspect it at runtime and hardcode no per-type knowledge. The v1 deliverable is two authored files — `core.yaml` (the base block) and `firm-ops.yaml` (9 types, 14 relation predicates, the LinkML port of `hq.schema.yml`) — plus the compile pipeline that turns them into validation artifacts.
 
 **Primary Actor:** Operator
 
@@ -217,9 +217,9 @@ The schema layer is the foundation every other surface stands on: operators decl
 **When** the compiler runs
 **Then** the system shall:
 - [ ] Emit a LinkML schema from the khub vocabulary
-- [ ] Generate Pydantic v2 models for validation into `generated/`
-- [ ] Generate JSON Schema for tools and editors into `generated/`
-- [ ] Mark `generated/` as derived and gitignored
+- [ ] Generate Pydantic v2 models for validation into `.khub/generated/`
+- [ ] Generate JSON Schema for tools and editors into `.khub/generated/`
+- [ ] Mark `.khub/generated/` as derived and gitignored
 
 ##### AC-002: Operators See Only khub Vocabulary
 
@@ -244,22 +244,22 @@ The schema layer is the foundation every other surface stands on: operators decl
 **When** the compiler runs twice
 **Then** the system shall:
 - [ ] Produce identical generated artifacts each run
-- [ ] Overwrite the prior `generated/` output without drift
+- [ ] Overwrite the prior `.khub/generated/` output without drift
 
 #### Requirements (EARS)
 
 | ID | Type | Requirement |
 |----|------|-------------|
-| REQ-SCH003-01 | EARS-E | When the compiler runs on a resolved schema, the system shall generate Pydantic and JSON Schema into `generated/` |
+| REQ-SCH003-01 | EARS-E | When the compiler runs on a resolved schema, the system shall generate Pydantic and JSON Schema into `.khub/generated/` |
 | REQ-SCH003-02 | EARS-U | The system shall keep LinkML as a hidden backend; operators write only khub vocabulary |
 | REQ-SCH003-03 | EARS-W | If the schema is malformed, then the system shall fail the compile and write no artifacts |
-| REQ-SCH003-04 | EARS-U | The system shall regenerate `generated/` deterministically from the schema |
+| REQ-SCH003-04 | EARS-U | The system shall regenerate `.khub/generated/` deterministically from the schema |
 
 #### Business Rules
 
 | ID | Rule | Enforcement |
 |----|------|-------------|
-| SCH-007 | `generated/` is derived, gitignored, and never hand-edited | Constraint |
+| SCH-007 | `.khub/generated/` is derived, gitignored, and never hand-edited | Constraint |
 | SCH-008 | Validation, typed objects, and tool schemas all derive from the one compiled contract | Constraint |
 | SCH-009 | A malformed schema fails the compile atomically; no partial artifacts | Constraint |
 
@@ -269,7 +269,7 @@ The schema layer is the foundation every other surface stands on: operators decl
 - **Library verb:** `core.compile(schema)` over `linkml` / `linkml-runtime`
 - **Tooling:** LinkML generation backend; Pydantic v2 `extra="allow"` for open-schema writes
 - **Invariant upheld:** the schema is the contract; surfaces introspect, never hardcode
-- **Output:** regenerated `generated/`, or a located compile error
+- **Output:** regenerated `.khub/generated/`, or a located compile error
 
 #### Test Hints
 
@@ -282,7 +282,7 @@ The schema layer is the foundation every other surface stands on: operators decl
 ### STORY-SCH-004: Author the Firm-Ops Preset
 
 **As an** Operator
-**I want to** express `hq.schema.yml` as the khub firm-ops preset — 12 types, 17 relation predicates, the six porting notes resolved
+**I want to** express `hq.schema.yml` as the khub firm-ops preset — 9 types, 14 relation predicates, the four porting notes resolved
 **So that** the cutover seeds from a preset that compiles clean and validates the live HQ corpus
 
 #### Preconditions
@@ -293,33 +293,31 @@ The schema layer is the foundation every other surface stands on: operators decl
 
 #### Acceptance Criteria
 
-##### AC-001: Declare All Twelve Types
+##### AC-001: Declare All Nine Types
 
 **Given** the firm-ops capture
 **When** the operator writes `firm-ops.yaml`
 **Then** the system shall:
-- [ ] Declare opportunity, project, build, meeting, transcript, fragment, decision, case-study, isms-doc, partnership, person, and client
-- [ ] Carry each type's attributes, enums (`stage`, `call_type`, `role`, `doc_kind`), and patterns
+- [ ] Declare opportunity, project, meeting, transcript, fragment, case-study, partnership, person, and client
+- [ ] Carry each type's attributes, enums (`stage`, `call_type`, `role`), and patterns
 - [ ] Set each type's storage layout (file for client and meeting, folder for project)
 
-##### AC-002: Declare All Edges (16 Stored, 17 Total)
+##### AC-002: Declare All Edges (14 Stored, 14 Total)
 
 **Given** the relation vocabulary
 **When** the operator declares relations
 **Then** the system shall:
-- [ ] Declare the 16 stored predicates with their `from`, `to`, and cardinality (12 in `firm-ops.yaml`; the 4 universal edges inherited from `core`)
-- [ ] Declare typed and union edges (`owner → person`, `client → client`, `engagement → opportunity|project|build|partnership`); rely on `core` for the universal edges (`related`, `sources`, `references`, `depends_on`)
+- [ ] Declare the 14 stored predicates with their `from`, `to`, and cardinality (10 in `firm-ops.yaml`; the 4 universal edges inherited from `core`)
+- [ ] Declare typed and union edges, written predicate → target (`owner → person`; `client → client`, i.e. the `client` predicate targets the `client` type; `engagement → opportunity|project|partnership`); rely on `core` for the universal edges (`related`, `sources`, `references`, `depends_on`)
 - [ ] Mark required relations (`owner`, `client`, `engagement`)
-- [ ] Leave `superseded_by` derived (AC-003), for 17 predicates total
+- [ ] Declare no derived inverse edge, for 14 predicates total
 
-##### AC-003: Resolve the Six Porting Notes
+##### AC-003: Resolve the Four Porting Notes
 
 **Given** the divergences between `hq.schema.yml` and khub invariants
 **When** the operator ports the schema
 **Then** the system shall:
-- [ ] Drop `superseded_by`, deriving it from `supersedes` (no stored inverse)
 - [ ] Add the boolean `draft` flag over HQ's per-type `stage`/`status`
-- [ ] Declare `project` and `build` under the same `projects/{slug}/_index.md` layout, discriminated by `type`
 - [ ] Tighten the `partner` edge `from`-list to include `client`
 - [ ] Keep `meeting.engagement` as an explicit stored edge and flatten meetings to `meetings/{slug}.md` (nesting deferred post-MVP)
 - [ ] Keep the slug as the id and ride external ids as `source_id` aliases
@@ -337,9 +335,9 @@ The schema layer is the foundation every other surface stands on: operators decl
 
 | ID | Type | Requirement |
 |----|------|-------------|
-| REQ-SCH004-01 | EARS-U | The firm-ops preset shall declare all 12 types with their attributes, enums, and layouts |
-| REQ-SCH004-02 | EARS-U | The firm-ops preset shall declare the 16 stored predicates with `from`, `to`, and cardinality (17 total, including the derived `superseded_by`) |
-| REQ-SCH004-03 | EARS-E | When the preset is ported, the system shall resolve each of the six porting notes |
+| REQ-SCH004-01 | EARS-U | The firm-ops preset shall declare all 9 types with their attributes, enums, and layouts |
+| REQ-SCH004-02 | EARS-U | The firm-ops preset shall declare the 14 stored predicates (10 firm-ops + 4 universal) with `from`, `to`, and cardinality (14 total, no derived inverse) |
+| REQ-SCH004-03 | EARS-E | When the preset is ported, the system shall resolve each of the four porting notes |
 | REQ-SCH004-04 | EARS-E | When compiled, the firm-ops preset shall generate clean validation artifacts and validate an HQ snapshot |
 
 #### Business Rules
@@ -347,12 +345,10 @@ The schema layer is the foundation every other surface stands on: operators decl
 | ID | Rule | Enforcement |
 |----|------|-------------|
 | SCH-010 | The firm-ops preset is the LinkML port of `hq.schema.yml`, nothing omitted | Constraint |
-| SCH-011 | No stored inverse edge; `superseded_by` derives from `supersedes` | Constraint |
-| SCH-012 | `project` and `build` share `projects/{slug}/`, discriminated by `type` | Constraint |
 
 #### Technical Notes
 
-- **Artifact:** `firm-ops.yaml` (12 types, 17 relation predicates); the base comes from `core.yaml`'s `base` block, written into the engagement by `khub init` (no `imports`)
+- **Artifact:** `firm-ops.yaml` (9 types, 14 relation predicates); the base comes from `core.yaml`'s `base` block, written into the engagement by `khub init` (no `imports`)
 - **Library verb:** authored content, compiled via STORY-SCH-003
 - **Source:** `docs/firm-ops-preset.md` (the capture)
 - **Invariant upheld:** relations authoritative; slug = id; the `draft` flag
@@ -361,7 +357,7 @@ The schema layer is the foundation every other surface stands on: operators decl
 #### Test Hints
 
 - **Unit:** each type's enum and pattern declarations
-- **Integration:** the six porting-note transformations
+- **Integration:** the four porting-note transformations
 - **E2E:** compile firm-ops and validate an HQ snapshot cleanly (functional cutover, not byte-parity with `kb.py`)
 
 ---
@@ -377,7 +373,7 @@ The schema layer's "entities" are the schema constructs themselves, not firm-ops
 | Schema | The authored contract: a base block plus entity types, in khub vocabulary |
 | Base Block | The attributes and relations every entity inherits at resolve time |
 | Type Declaration | One entity type's attributes, relations, and storage config |
-| Compiled Artifact | The generated LinkML, Pydantic, and JSON Schema under `generated/` |
+| Compiled Artifact | The generated LinkML, Pydantic, and JSON Schema under `.khub/generated/` |
 | Preset | A named, authored schema (firm-ops in v1) that `init` seeds from |
 
 #### Type Declaration
@@ -411,7 +407,7 @@ The schema layer's "entities" are the schema constructs themselves, not firm-ops
 | Value | Description |
 |-------|-------------|
 | typed | The edge targets a single named type; resolves by the schema-known target |
-| union | The edge targets a list of named types (e.g. `engagement → opportunity\|project\|build\|partnership`); resolves by the schema-known targets |
+| union | The edge targets a list of named types (e.g. `engagement → opportunity\|project\|partnership`); resolves by the schema-known targets |
 | any | A universal `any → any` edge; resolves by slug, qualified `type/slug` on ambiguity |
 
 ### Cascade Behaviors
@@ -420,7 +416,7 @@ The schema layer's "entities" are the schema constructs themselves, not firm-ops
 |--------------|----------|-----------|
 | Base block changes | Propagate to every type on the next resolve | The base is merged, not copied |
 | A type overrides a base attribute | The type's declaration wins for that attribute | Per-type delta over inherited default |
-| Schema changes | Regenerate `generated/`, overwriting the prior output | Generated artifacts are derived and disposable |
+| Schema changes | Regenerate `.khub/generated/`, overwriting the prior output | Generated artifacts are derived and disposable |
 | Schema declares entities with no base block | Reject the schema | No entity may lack `type` and the `draft` flag |
 
 ### Shared Business Rules
@@ -429,7 +425,7 @@ The schema layer's "entities" are the schema constructs themselves, not firm-ops
 |----|------|------------|
 | SCH-SHARED-001 | Operators write khub vocabulary; LinkML is a hidden generation backend | STORY-SCH-001, STORY-SCH-003 |
 | SCH-SHARED-002 | The base block is the one source of standard fields and the lifecycle | STORY-SCH-002, STORY-SCH-004 |
-| SCH-SHARED-003 | `generated/` is derived and gitignored, regenerated from the schema | STORY-SCH-003, STORY-SCH-004 |
+| SCH-SHARED-003 | `.khub/generated/` is derived and gitignored, regenerated from the schema | STORY-SCH-003, STORY-SCH-004 |
 
 ### Cross-Story Dependencies
 
@@ -452,3 +448,4 @@ Type declaration and base merge are the two halves of a resolved schema; compile
 | The engineering preset (intent/behavior spine) | Post-v1 | Built after firm-ops, by hand and via the promote-back flywheel | 2026-06-20 |
 | Preset imports / multi-preset composition | Deferred | v1 has no imports; the base is a written `base:` header, not an imported dependency; preset-to-preset composition is unscheduled | 2026-06-21 |
 | Nested storage layout (`nests_under`) and placement-derived edges | Deferred | v1 supports file and folder layouts only; nesting is post-MVP | 2026-06-21 |
+| Typed list items (an `items:` key) — list-of-number/date and object item shapes | Post-MVP | v1 `list` is untyped (compiles to `list[str]`); no firm-ops field needs a typed list, and object items (e.g. meeting `attendees`) are simplified for v1 | 2026-06-22 |

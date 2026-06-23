@@ -1,2 +1,17 @@
 _bmad/
 .claude/skills/bmad-*/
+
+# Python / uv
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+
+# khub generated artifacts — derived, regenerated, never committed (SCH-007)
+.khub/generated/
+
+# macOS
+.DS_Store
