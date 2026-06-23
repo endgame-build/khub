@@ -77,6 +77,34 @@ def test_deterministic_recompile(write_schema, core_base, tmp_path):
         assert (a / name).read_bytes() == (b / name).read_bytes(), f"{name} not deterministic"
 
 
+# pydantic is pessimistic about the aliased annotation on its first build pass and
+# warns, then model_rebuild() resolves it — the assertions below prove validation
+# is real (coerces + rejects), so the cosmetic warning is silenced.
+@pytest.mark.filterwarnings("ignore:.*is not a Python type.*")
+def test_field_named_like_a_type_works(write_schema, core_base, tmp_path):
+    """A field literally named like a Python datetime type (`date`) compiles and
+    genuinely validates as that type — the field-name/type clash is handled."""
+    import pydantic
+
+    preset = """
+entities:
+  log:
+    layout: file
+    attributes:
+      date: { type: date, required: true }
+"""
+    out = tmp_path / "gen"
+    compile_schema(write_schema(core=core_base, preset=preset), out)
+    Log = _import_models(out / "models.py").Log
+
+    # real validation: a string is coerced to a date...
+    entry = Log(type="log", created="2026-01-01", date="2026-02-02")
+    assert entry.date == datetime.date(2026, 2, 2)
+    # ...and a non-date is rejected (not silently accepted).
+    with pytest.raises(pydantic.ValidationError):
+        Log(type="log", created="2026-01-01", date="not-a-date")
+
+
 def test_duplicate_type_fails_atomically(write_schema, core_base, tmp_path):
     """TS-SCH-003-03: a duplicate type fails the compile with a located error and
     writes no artifacts."""

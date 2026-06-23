@@ -18,7 +18,11 @@ from typing import Any
 
 import yaml
 
-from khub.core.determinism import canonicalize_json_schema, canonicalize_pydantic
+from khub.core.determinism import (
+    canonicalize_json_schema,
+    canonicalize_pydantic,
+    deconflict_type_named_fields,
+)
 from khub.core.errors import LocatedError
 from khub.core.linkml_emit import to_linkml_dict
 from khub.core.resolve import load_yaml, resolve
@@ -70,7 +74,7 @@ def _generate(linkml_dict: dict[str, Any], dest: Path) -> None:
     linkml_path.write_text(yaml.safe_dump(linkml_dict, sort_keys=True))
 
     models = PydanticGenerator(str(linkml_path), extra_fields="allow").serialize()
-    (dest / "models.py").write_text(canonicalize_pydantic(models))
+    (dest / "models.py").write_text(canonicalize_pydantic(deconflict_type_named_fields(models)))
 
     json_schema = JsonSchemaGenerator(str(linkml_path)).serialize()
     (dest / "schema.json").write_text(canonicalize_json_schema(json_schema))

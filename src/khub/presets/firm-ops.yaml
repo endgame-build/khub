@@ -81,7 +81,7 @@ entities:
     path: meetings               # flattened for MVP (HQ nested */meetings/)
     attributes:
       created:   { required: false }   # HQ meetings carry no `created` — relax base-required (read-only validate can't backfill)
-      date:      { type: datetime, required: true }   # datetime, not date: HQ stores ISO datetimes here, and a field literally named `date` with a `date` range collides with Python's `date` type in the generated Pydantic
+      date:      { type: datetime, required: true }   # datetime: HQ stores ISO datetimes here (a data choice; the compiler also handles a date-named field on its own)
       call_type: { enum: [client, sales, partner, internal], required: true }
       source:    { enum: [recording, manual], required: true }
       note_id:   { type: text }
