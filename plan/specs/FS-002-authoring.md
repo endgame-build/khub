@@ -3,14 +3,14 @@ id: FS-002
 name: Authoring
 priority: Critical
 dependencies: [FS-001]
-updated: 2026-06-21
+updated: 2026-06-24
 ---
 
 # Authoring
 
 ## Overview
 
-The write surface over the core library: mint, read, edit, relate, and remove entities, with the schema and git as the only gates. Agent and human are symmetric writers of the same graph — no propose-then-approve step. Referential integrity hard-fails on write, while a missing required field saves the entity as a `draft` so capture is never blocked. Every command is a thin adapter over a core verb (`create`, `get`, `update`, `delete`, `link`).
+The write surface over the core library: mint, read, edit, relate, and remove entities, with the schema and git as the only gates. Agent and human are symmetric writers of the same graph — no propose-then-approve step. A file written by hand, outside these verbs, is gated the same way: `khub validate <file>` re-checks it against the schema (FS-004) — the per-file counterpart to graph-wide `khub check`. Referential integrity hard-fails on write, while a missing required field saves the entity as a `draft` so capture is never blocked. Every command is a thin adapter over a core verb (`create`, `get`, `update`, `delete`, `link`).
 
 **Primary Actor:** Agent
 
@@ -59,7 +59,7 @@ The write surface over the core library: mint, read, edit, relate, and remove en
 - [ ] Write one file at the type's layout path (`opportunities/{slug}/_index.md`)
 - [ ] Set `created` and `updated` to today
 - [ ] Set `draft: false` because all required fields and relations are present
-- [ ] Print the new id
+- [ ] Print the new id and the file path
 - [ ] Display: "Created opportunity '{slug}' (active)"
 
 ##### AC-002: Missing Required Field Saves as Draft
@@ -149,11 +149,12 @@ The write surface over the core library: mint, read, edit, relate, and remove en
 
 #### Technical Notes
 
-- **Command:** `khub add <type>` — `--<field> <value>` (repeatable), `--id`, `--body` / `--body-file`, `--strict`
+- **Command:** `khub add <type>` — `--<field> <value>` (repeatable), `--id`, `--body-file <path>` (`-` for stdin), `--strict`
+- **Body:** authored in the file, not argv. `add` writes frontmatter with an empty body and prints the path; `--body-file`/stdin covers the agent that pipes generated prose. Inline `--body <string>` is omitted — prose in argv is quoting-hostile.
 - **Library verb:** `core.create(type, fields, parent)`
 - **Entities:** all 12 firm-ops types
 - **Invariant upheld:** relations are authoritative; Markdown is truth
-- **Output:** the new id; `--format json` emits the written record
+- **Output:** the new id and file path; `--format json` emits the written record
 
 #### Test Hints
 
@@ -311,7 +312,7 @@ The write surface over the core library: mint, read, edit, relate, and remove en
 
 #### Technical Notes
 
-- **Command:** `khub edit <id> <field> <value>` — or `--<field> <value>`, `--body` / `--body-file`, `--strict`
+- **Command:** `khub edit <id> <field> <value>` — or `--<field> <value>`, `--body-file <path>` (`-` for stdin), `--strict`
 - **Library verb:** `core.update(id, changes)`
 - **Entities:** any type
 - **Invariant upheld:** Markdown is truth; minimal-diff writes via round-trip YAML
@@ -593,6 +594,7 @@ The firm-ops preset's 12 types are the authoring surface. Full capture lives in 
 | Entity | Source Feature | Usage |
 |--------|---------------|-------|
 | Schema | FS-001: Workspace & Schema | Every write introspects the compiled schema for fields, enums, and legal predicates |
+| Validate / check | FS-004: Integrity Loop | A hand-authored file is gated by `khub validate <file>`; graph-wide consistency is `khub check` |
 
 ### Cross-Story Dependencies
 
