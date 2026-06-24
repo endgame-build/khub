@@ -37,6 +37,8 @@
 #  - `created`: core makes it required, but HQ meeting/transcript have no `created`
 #    field, so they override it to optional (read-only HQ validation cannot backfill).
 
+version: "0.1.0"   # preset semver, stamped into workspace provenance at `khub init`
+
 entities:
 
   # ------------------------------------------------------------------ pipeline

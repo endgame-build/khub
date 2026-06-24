@@ -58,3 +58,36 @@ class LocatedError(Exception):
     @classmethod
     def duplicate_type(cls, type_: str) -> "LocatedError":
         return cls(code="duplicate_type", message=f"Duplicate type '{type_}'", type=type_)
+
+    # --- workspace (WPK-001-1 / WPK-001-2) -----------------------------------
+
+    @classmethod
+    def unknown_preset(cls, name: str, known: list[str]) -> "LocatedError":
+        return cls(
+            code="unknown_preset",
+            message=f"Unknown preset '{name}'. Known presets: {', '.join(known)}",
+            target=name,
+        )
+
+    @classmethod
+    def target_not_empty(cls, path: str) -> "LocatedError":
+        return cls(
+            code="target_not_empty",
+            message=f"Target {path} is not empty. Pass --force to scaffold anyway",
+            target=path,
+        )
+
+    @classmethod
+    def unknown_type(cls, name: str, preset: str, known: list[str]) -> "LocatedError":
+        return cls(
+            code="unknown_type",
+            message=f"No type '{name}' in the {preset} schema. Known types: {', '.join(known)}",
+            type=name,
+        )
+
+    @classmethod
+    def no_workspace(cls) -> "LocatedError":
+        return cls(
+            code="no_workspace",
+            message="No .khub workspace found. Run khub init <preset>",
+        )

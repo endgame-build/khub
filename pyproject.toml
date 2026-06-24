@@ -48,5 +48,5 @@ files = ["src/khub"]
 
 [[tool.mypy.overrides]]
 # Third-party modules without type stubs / py.typed markers.
-module = ["yaml", "linkml.*", "linkml_runtime.*", "ruamel.*"]
+module = ["yaml", "linkml.*", "linkml_runtime.*", "ruamel.*", "frontmatter"]
 ignore_missing_imports = true

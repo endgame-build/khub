@@ -65,3 +65,28 @@ def out_dir(tmp_path: Path) -> Path:
     d = tmp_path / "generated"
     d.mkdir()
     return d
+
+
+@pytest.fixture
+def fresh_ws(tmp_path: Path) -> Path:
+    """A scaffolded firm-ops workspace at tmp_path (entity tree still empty)."""
+    from khub.core.workspace import init_workspace
+
+    init_workspace("firm-ops", tmp_path)
+    return tmp_path
+
+
+@pytest.fixture
+def seed() -> Callable[..., None]:
+    """Write an entity .md with YAML frontmatter under a workspace root.
+
+    Usage: ``seed(root, "clients/acme.md", type="client", name="Acme", ...)``.
+    """
+    import yaml
+
+    def _seed(root: Path, relpath: str, **meta: object) -> None:
+        p = root / relpath
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text("---\n" + yaml.safe_dump(meta, sort_keys=False) + "---\n")
+
+    return _seed

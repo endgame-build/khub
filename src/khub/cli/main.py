@@ -5,6 +5,9 @@ from __future__ import annotations
 import typer
 
 from khub.cli.compile_cmd import compile_command
+from khub.cli.init_cmd import init_command
+from khub.cli.schema_cmd import schema_app
+from khub.cli.status_cmd import status_command
 
 app = typer.Typer(
     help="khub — schema-bound context management.",
@@ -20,6 +23,9 @@ def _root() -> None:
     # route as `khub <command>` rather than collapsing to the root.
 
 
+app.command(name="init")(init_command)
+app.add_typer(schema_app, name="schema")
+app.command(name="status")(status_command)
 app.command(name="compile")(compile_command)
 
 
