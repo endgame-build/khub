@@ -51,7 +51,7 @@ The write surface over the core library: mint, read, edit, relate, and remove en
 ##### AC-001: Create a Well-Formed Active Entity
 
 **Given** the agent supplies a known type with all required fields and resolvable relations
-**When** they run `khub add opportunity --client initech --owner noor --stage discovery`
+**When** they run `khub add opportunity --client initech --owner noor --stage prospect`
 **Then** the system shall:
 - [ ] Validate each declared field against its type, enum, and pattern
 - [ ] Resolve `client` and `owner` to existing targets
@@ -65,7 +65,7 @@ The write surface over the core library: mint, read, edit, relate, and remove en
 ##### AC-002: Missing Required Field Saves as Draft
 
 **Given** the agent omits a required field or relation
-**When** they run `khub add opportunity --stage discovery`
+**When** they run `khub add opportunity --stage prospect`
 **Then** the system shall:
 - [ ] Save the entity with `draft: true`
 - [ ] Preserve the supplied fields
@@ -75,7 +75,7 @@ The write surface over the core library: mint, read, edit, relate, and remove en
 ##### AC-003: Relation to a Non-Existent Target Is Rejected
 
 **Given** the agent names a relation target that does not resolve
-**When** they run `khub add opportunity --client ghost-co --owner noor --stage discovery`
+**When** they run `khub add opportunity --client ghost-co --owner noor --stage prospect`
 **Then** the system shall:
 - [ ] Reject the write (referential integrity hard-fail)
 - [ ] Display: "No client 'ghost-co' to satisfy relation 'client'"
@@ -84,7 +84,7 @@ The write surface over the core library: mint, read, edit, relate, and remove en
 ##### AC-004: Unknown Field Under Strict
 
 **Given** the agent passes a field the schema does not declare
-**When** they run `khub add opportunity --client initech --owner noor --stage discovery --vibe high --strict`
+**When** they run `khub add opportunity --client initech --owner noor --stage prospect --vibe high --strict`
 **Then** the system shall:
 - [ ] Reject the write under `--strict`
 - [ ] Display: "Unknown field 'vibe' rejected under --strict"
@@ -97,7 +97,7 @@ The write surface over the core library: mint, read, edit, relate, and remove en
 **Then** the system shall:
 - [ ] Write the file flat at `meetings/{slug}.md`
 - [ ] Mint a bare slug as the id
-- [ ] Store `engagement` as an explicit edge resolving to its union target (opportunity | project | build | partnership)
+- [ ] Store `engagement` as an explicit edge resolving to its union target (opportunity | project | partnership)
 
 ##### AC-006: Explicit Id and Collision Suffix
 
@@ -152,7 +152,7 @@ The write surface over the core library: mint, read, edit, relate, and remove en
 - **Command:** `khub add <type>` — `--<field> <value>` (repeatable), `--id`, `--body-file <path>` (`-` for stdin), `--strict`
 - **Body:** authored in the file, not argv. `add` writes frontmatter with an empty body and prints the path; `--body-file`/stdin covers the agent that pipes generated prose. Inline `--body <string>` is omitted — prose in argv is quoting-hostile.
 - **Library verb:** `core.create(type, fields, parent)`
-- **Entities:** all 12 firm-ops types
+- **Entities:** all 9 firm-ops types
 - **Invariant upheld:** relations are authoritative; Markdown is truth
 - **Output:** the new id and file path; `--format json` emits the written record
 
@@ -189,10 +189,10 @@ The write surface over the core library: mint, read, edit, relate, and remove en
 
 ##### AC-002: Include Derived Edges
 
-**Given** an entity that has computed inverse edges
-**When** the agent runs `khub get decision-0012 --edges`
+**Given** an entity whose schema declares a derived inverse of a stored predicate — firm-ops v1 declares none (it dropped `decision`), so this is exercised against a generic fixture type that stores `supersedes` and derives `superseded_by`; the engine computes inverses regardless of preset
+**When** the agent runs `khub get <node> --edges`
 **Then** the system shall:
-- [ ] Include the stored forward edges (`supersedes`)
+- [ ] Include the stored forward edge (`supersedes`)
 - [ ] Include the derived inverse (`superseded_by`)
 - [ ] Mark which edges are stored versus derived
 
@@ -240,7 +240,7 @@ The write surface over the core library: mint, read, edit, relate, and remove en
 
 - **Unit:** id resolution, ambiguity detection
 - **Integration:** inverse-edge derivation (`supersedes` → `superseded_by`)
-- **E2E:** `get --edges` on a decision shows the derived `superseded_by`
+- **E2E:** `get --edges` on a generic fixture node shows the derived `superseded_by` (firm-ops declares no native inverse)
 
 ---
 
@@ -260,12 +260,12 @@ The write surface over the core library: mint, read, edit, relate, and remove en
 ##### AC-001: Edit a Field
 
 **Given** an entity exists
-**When** the agent runs `khub edit initech-pov stage prove`
+**When** the agent runs `khub edit initech-deal stage proposal-sent`
 **Then** the system shall:
-- [ ] Validate the new value against the field's enum (project stages)
+- [ ] Validate the new value against the field's enum (opportunity stages)
 - [ ] Write the change, preserving key order and comments (minimal diff)
 - [ ] Bump `updated` to today
-- [ ] Display: "Updated project 'initech-pov'"
+- [ ] Display: "Updated opportunity 'initech-deal'"
 
 ##### AC-002: Edit Promotes a Draft to Active
 
@@ -279,16 +279,16 @@ The write surface over the core library: mint, read, edit, relate, and remove en
 ##### AC-003: Invalid Enum Value
 
 **Given** an entity with an enum field
-**When** the agent runs `khub edit initech-pov stage banana`
+**When** the agent runs `khub edit initech-deal stage banana`
 **Then** the system shall:
 - [ ] Reject the edit
-- [ ] Display: "'banana' is not a valid stage (diagnose, prove, scale, complete)"
+- [ ] Display: "'banana' is not a valid stage (prospect, proposal-sent, won, signed, lost)"
 - [ ] Leave the file unchanged
 
 ##### AC-004: Unknown Field Under Strict
 
 **Given** the agent edits an undeclared field
-**When** they run `khub edit initech-pov vibe high --strict`
+**When** they run `khub edit initech-deal vibe high --strict`
 **Then** the system shall:
 - [ ] Reject the edit under `--strict`
 - [ ] Without `--strict`, accept and preserve the extension
@@ -354,10 +354,10 @@ The write surface over the core library: mint, read, edit, relate, and remove en
 ##### AC-002: Illegal Predicate
 
 **Given** a predicate not declared for the source type
-**When** the agent runs `khub link initech-pov supersedes adr-0007`
+**When** the agent runs `khub link initech-pov engagement some-meeting`
 **Then** the system shall:
 - [ ] Reject the link
-- [ ] Display: "Predicate 'supersedes' is not legal for type 'project'"
+- [ ] Display: "Predicate 'engagement' is not legal for type 'project'"
 
 ##### AC-003: Unresolvable Target
 
@@ -406,7 +406,7 @@ The write surface over the core library: mint, read, edit, relate, and remove en
 
 - **Command:** `khub link <id> <predicate> <target>` · `khub unlink <id> <predicate> <target>`
 - **Library verb:** `core.link(id, predicate, target)` / `core.unlink(...)`
-- **Entities:** any type; 17 firm-ops predicates
+- **Entities:** any type; 14 predicates (10 firm-ops + 4 universal), no derived inverse
 - **Invariant upheld:** relations are authoritative (Principle 4)
 - **Output:** confirmation; legal-predicate and target checks on every call
 
@@ -500,19 +500,16 @@ The write surface over the core library: mint, read, edit, relate, and remove en
 
 ### Entities
 
-The firm-ops preset's 12 types are the authoring surface. Full capture lives in `docs/firm-ops-preset.md`; the representative attribute tables below cover the types the stories exercise.
+The firm-ops preset's 9 types are the authoring surface. Full capture lives in `docs/firm-ops-preset.md`; the representative attribute tables below cover the types the stories exercise. (`build`, `decision`, and `isms-doc` were dropped from firm-ops v1 — 0 live entities — so 9 types and 14 predicates, no derived inverse.)
 
 | Entity | Description |
 |--------|-------------|
-| opportunity | Pipeline deal; converts to a project or build |
-| project | Post-sale consulting engagement (folder layout, shares path with build) |
-| build | Product/engineering engagement; `type: build` under the same `projects/` path |
+| opportunity | Pipeline deal; converts to a project |
+| project | Post-sale consulting engagement (folder layout) |
 | meeting | Engagement touchpoint; `engagement` is an explicit union edge (flat layout) |
 | transcript | Raw Recorder capture; largest node population |
 | fragment | A partner's atomic note; matures through stages |
-| decision | Durable ADR-style record with a supersession chain |
 | case-study | Proven client outcome from a delivered engagement |
-| isms-doc | Compliance/ISMS artifact |
 | partnership | BD relationship feeding opportunities and projects |
 | person | ENDGAME team member; the `owner`/`team` target |
 | client | Client organization behind the pipeline |
@@ -529,7 +526,7 @@ The firm-ops preset's 12 types are the authoring surface. Full capture lives in 
 | Updated | Date | Yes | Last edit date |
 | Source | Type | No | Lead source enum |
 | Partner | Reference | No | Edge → partnership |
-| Confidence | Number | No | 0–1 |
+| CRM Id | Text | No | CRM deal id (confidence lives in CRM, not duplicated here) |
 
 #### person
 
@@ -546,8 +543,8 @@ The firm-ops preset's 12 types are the authoring surface. Full capture lives in 
 | Attribute | Type | Required | Description |
 |-----------|------|----------|-------------|
 | Type | Type | Yes | Const `meeting` |
-| Date | Date | Yes | Event date |
-| Engagement | Reference | Yes | Edge → opportunity \| project \| build \| partnership (explicit union edge) |
+| Date | Date/Time | Yes | Event date (HQ stores an ISO datetime) |
+| Engagement | Reference | Yes | Edge → opportunity \| project \| partnership (explicit union edge) |
 | Call Type | Type | Yes | client, sales, partner, internal |
 | Source | Type | Yes | recording, manual |
 | Transcript | Reference | No | Edge → transcript |
@@ -562,14 +559,15 @@ The firm-ops preset's 12 types are the authoring surface. Full capture lives in 
 
 ### Opportunity Stage *(named enumeration)*
 
+> The CRM "Sales" pipeline stages — the deal system of record (HQ opportunity files are remapped to these at cutover).
+
 | Value | Description |
 |-------|-------------|
-| nurturing | Early, pre-discovery |
-| discovery | Scoping the need |
-| proposal | Proposal issued |
-| negotiation | Terms in flight |
-| closed-won | Converted to a project or build |
-| closed-lost | Did not convert |
+| prospect | Early-stage lead in the pipeline |
+| proposal-sent | Proposal issued |
+| won | Deal won |
+| signed | Contract signed |
+| lost | Did not convert |
 
 ### Cascade Behaviors
 
