@@ -410,7 +410,7 @@ Query and traversal read the same firm-ops nodes and edges that authoring writes
 |----|------|------------|
 | QRY-SHARED-001 | All reads operate on the derived projection, rebuilt from Markdown; no result is stored | STORY-QRY-001, STORY-QRY-002, STORY-QRY-003, STORY-QRY-004 |
 | QRY-SHARED-002 | Inbound walks include derived inverse edges | STORY-QRY-002, STORY-QRY-004 |
-| QRY-SHARED-003 | All reads include `draft` entities in scope by default and carry each entity's `stale` (and `orphan`) flag; `--active` excludes drafts, `--draft` isolates them | STORY-QRY-001, STORY-QRY-002, STORY-QRY-003, STORY-QRY-004 |
+| QRY-SHARED-003 | All reads include `draft` entities in scope by default and carry each entity's `stale` (and `orphan`) flag; `--active` excludes drafts, `--draft` isolates them. `draft` is a manual publish flag (FS-002), orthogonal to completeness — `--missing` surfaces incompleteness regardless of draft state | STORY-QRY-001, STORY-QRY-002, STORY-QRY-003, STORY-QRY-004 |
 
 ### Cross-Feature Dependencies
 
@@ -418,6 +418,7 @@ Query and traversal read the same firm-ops nodes and edges that authoring writes
 |--------|---------------|-------|
 | Node / Edge | FS-002: Authoring | Authoring writes the entities and forward edges that every walk reads |
 | Schema | FS-001: Workspace & Schema | Predicate legality and target types come from the schema |
+| `draft` flag | FS-002: Authoring | Manual publish flag behind `--draft`/`--active`; orthogonal to the `--missing` completeness filter |
 
 ### Cross-Story Dependencies
 

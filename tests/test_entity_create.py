@@ -1,8 +1,9 @@
 """TS-ENT-001 — Create an Entity (WPK-002-1).
 
-Covers slug minting and collision, field/enum/pattern validation, the draft-vs-
-active completeness gate, the referential-integrity hard-fail (writes no file),
-strict-mode field filtering, and layout resolution (folder vs flat).
+Covers slug minting and collision, field/enum/pattern validation, the manual
+draft flag (default active; --draft to mark unpublished), the referential-
+integrity hard-fail (writes no file), strict-mode field filtering, and layout
+resolution (folder vs flat).
 """
 
 from __future__ import annotations
@@ -76,16 +77,20 @@ def test_field_validation_enum_and_pattern(fresh_ws: Path, seed: Seed) -> None:
 
 
 @pytest.mark.unit
-def test_completeness_gate(fresh_ws: Path, seed: Seed) -> None:
-    """TS-ENT-001-U03: all required → active; a gap → draft, preserving fields."""
+def test_draft_is_manual(fresh_ws: Path, seed: Seed) -> None:
+    """TS-ENT-001-U03: draft is the manual flag — default false even when required is missing."""
     _prereqs(fresh_ws, seed)
-    active = create(fresh_ws, "opportunity", {"client": "initech", "owner": "noor", "stage": "prospect"})
-    assert active.draft is False and active.missing == []
-    draft = create(fresh_ws, "opportunity", {"stage": "prospect"})
-    assert draft.draft is True
-    assert draft.missing == ["client", "owner"]
-    meta = frontmatter.load(str(draft.path)).metadata
-    assert meta["stage"] == "prospect" and meta["draft"] is True
+    # Missing required client/owner still saves, active by default (completeness is check's job).
+    active = create(fresh_ws, "opportunity", {"stage": "prospect"})
+    assert active.draft is False
+    meta = frontmatter.load(str(active.path)).metadata
+    assert meta["stage"] == "prospect" and meta["draft"] is False
+    # --draft (passed via the create flag) marks it unpublished.
+    drafted = create(
+        fresh_ws, "opportunity", {"client": "initech", "owner": "noor", "stage": "prospect"}, draft=True
+    )
+    assert drafted.draft is True
+    assert frontmatter.load(str(drafted.path)).metadata["draft"] is True
 
 
 @pytest.mark.unit
@@ -117,6 +122,15 @@ def test_strict_filter(fresh_ws: Path, seed: Seed) -> None:
         {"client": "initech", "owner": "noor", "stage": "prospect", "vibe": "high"},
     )
     assert frontmatter.load(str(loose.path)).metadata["vibe"] == "high"
+
+
+@pytest.mark.unit
+def test_empty_slug_is_rejected(fresh_ws: Path, seed: Seed) -> None:
+    """A source that slugifies to empty is refused, never written to a hidden path."""
+    _prereqs(fresh_ws, seed)
+    with pytest.raises(LocatedError) as err:
+        create(fresh_ws, "client", {"name": "!!!"})
+    assert err.value.code == "invalid_slug"
 
 
 @pytest.mark.unit
@@ -165,14 +179,28 @@ def test_cli_create_active(fresh_ws: Path, seed: Seed, monkeypatch) -> None:
 
 
 @pytest.mark.integration
-def test_cli_missing_required_saves_draft(fresh_ws: Path, seed: Seed, monkeypatch) -> None:
-    """TS-ENT-001-02: an omitted required relation degrades to a draft, never blocks."""
+def test_cli_missing_required_saves_active(fresh_ws: Path, seed: Seed, monkeypatch) -> None:
+    """TS-ENT-001-02: an omitted required relation never blocks capture; it saves active."""
     _prereqs(fresh_ws, seed)
     monkeypatch.chdir(fresh_ws)
     result = runner.invoke(app, ["add", "opportunity", "--stage", "prospect"])
     assert result.exit_code == 0
-    assert "Created opportunity 'opportunity' (draft: missing required client, owner)" in result.output
-    assert (fresh_ws / "opportunities" / "opportunity" / "_index.md").exists()
+    assert "Created opportunity 'opportunity' (active)" in result.output
+    written = fresh_ws / "opportunities" / "opportunity" / "_index.md"
+    assert written.exists()
+    assert frontmatter.load(str(written)).metadata["draft"] is False
+
+
+@pytest.mark.integration
+def test_cli_add_draft_flag(fresh_ws: Path, seed: Seed, monkeypatch) -> None:
+    """TS-ENT-001-02: --draft marks the new entity unpublished."""
+    _prereqs(fresh_ws, seed)
+    monkeypatch.chdir(fresh_ws)
+    result = runner.invoke(app, ["add", "opportunity", "--client", "initech", "--owner", "noor", "--stage", "prospect", "--draft"])
+    assert result.exit_code == 0
+    assert "Created opportunity 'opportunity' (draft)" in result.output
+    written = fresh_ws / "opportunities" / "opportunity" / "_index.md"
+    assert frontmatter.load(str(written)).metadata["draft"] is True
 
 
 @pytest.mark.integration

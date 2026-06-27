@@ -3,14 +3,14 @@ id: FS-004
 name: Integrity Loop
 priority: Critical
 dependencies: [FS-002]
-updated: 2026-06-21
+updated: 2026-06-27
 ---
 
 # Integrity Loop
 
 ## Overview
 
-The integrity loop keeps the graph clean without manual policing, and it is the v1 acceptance signal for the HQ cutover. `validate` checks per-entity well-formedness and referential integrity; `check` runs graph-wide over the active subgraph; `stale` flags entities past an `updated` threshold with dates backfilled from git; `log` renders git history at ontology altitude. khub guarantees structural integrity, never semantic truth — the backstop for a false-but-legal write is attributable git history, not a gate.
+The integrity loop keeps the graph clean without manual policing, and it is the v1 acceptance signal for the HQ cutover. `validate` checks per-entity well-formedness and referential integrity; `check` runs graph-wide over the active (published, `draft: false`) subgraph, computing required-completeness from the schema; `stale` flags entities past an `updated` threshold with dates backfilled from git; `log` renders git history at ontology altitude. `draft` is a manual publish flag (FS-002), not a completeness verdict — so a published entity can be incomplete and `check` reports it as active-but-incomplete; the published subgraph's completeness is *enforced by `check`*, not guaranteed by the flag. khub guarantees structural integrity, never semantic truth — the backstop for a false-but-legal write is attributable git history, not a gate.
 
 **Primary Actor:** Agent
 
@@ -120,7 +120,7 @@ The integrity loop keeps the graph clean without manual policing, and it is the 
 
 **As an** Agent or Operator
 **I want to** run a graph-wide integrity pass over the active subgraph
-**So that** required relations are complete, no entity is orphaned, no file is stray, and no edge cycles
+**So that** published entities are complete, no relation dangles, no entity is orphaned, no file is stray, and no edge cycles
 
 #### Preconditions
 
@@ -131,35 +131,45 @@ The integrity loop keeps the graph clean without manual policing, and it is the 
 
 ##### AC-001: Check a Sound Graph
 
-**Given** an active subgraph where every required relation resolves
+**Given** a published subgraph where every required relation resolves to a published target
 **When** the agent runs `khub check`
 **Then** the system shall:
 - [ ] Confirm every relation resolves
-- [ ] Confirm required relations are complete for `active` entities only
+- [ ] Confirm required-completeness for every `active` (`draft: false`) entity, computed from the schema
 - [ ] Confirm no orphans (entities with neither an inbound nor an outbound relation)
 - [ ] Confirm no stray files — files inside a type's layout path that do not parse as that type (reference markdown outside every type layout is skipped, not flagged)
 - [ ] Confirm no edge cycles
 - [ ] Display: "Graph check passed"
 - [ ] Exit 0
 
-##### AC-002: Drafts Do Not Satisfy Required Relations
+##### AC-002: Report Active-but-Incomplete Entities
+
+**Given** a published entity (`draft: false`) missing a required field or relation — created with `add` (active by default) or published with `edit <id> draft false` while incomplete
+**When** the agent runs `khub check`
+**Then** the system shall:
+- [ ] Compute completeness from the schema, never from the `draft` flag
+- [ ] Report the entity as active-but-incomplete, naming each missing required field and unresolved required relation
+- [ ] Exit non-zero
+
+##### AC-003: Drafts Do Not Satisfy Required Relations
 
 **Given** an active entity whose required relation points at a `draft`
 **When** the agent runs `khub check`
 **Then** the system shall:
 - [ ] Report the required relation as incomplete (a draft does not satisfy it)
-- [ ] Name the active entity and the missing-completeness predicate
+- [ ] Name the active entity and the unsatisfied predicate
 
-##### AC-003: Report Orphans and Stray Files
+##### AC-004: Report Orphans, Dangling Edges, and Stray Files
 
-**Given** an entity with no expected edge and a file outside any type layout
+**Given** an orphan entity, a relation whose target was removed (e.g. by `remove --force`), and a file outside any type layout
 **When** the agent runs `khub check`
 **Then** the system shall:
 - [ ] List orphan entities
+- [ ] List dangling edges (a relation whose target no longer resolves)
 - [ ] List stray files
 - [ ] Exit non-zero
 
-##### AC-004: Detect an Edge Cycle
+##### AC-005: Detect an Edge Cycle
 
 **Given** a cycle on a predicate that should be acyclic (e.g. `supersedes`)
 **When** the agent runs `khub check`
@@ -172,36 +182,44 @@ The integrity loop keeps the graph clean without manual policing, and it is the 
 | ID | Type | Requirement |
 |----|------|-------------|
 | REQ-INT002-01 | EARS-E | When check runs, the system shall verify relations resolve, required-completeness holds for active entities, and no cycles exist |
-| REQ-INT002-02 | EARS-S | While checking completeness, the system shall treat a `draft` target as not satisfying a required relation |
-| REQ-INT002-03 | EARS-W | If an orphan, stray file, or edge cycle is found, then the system shall report it and exit non-zero |
-| REQ-INT002-04 | EARS-U | The system shall evaluate completeness over the active subgraph only |
+| REQ-INT002-02 | EARS-W | If an active entity is missing a required field or relation, then the system shall report it as active-but-incomplete and exit non-zero |
+| REQ-INT002-03 | EARS-S | While checking completeness, the system shall treat a `draft` target as not satisfying a required relation |
+| REQ-INT002-04 | EARS-W | If an orphan, dangling edge, stray file, or edge cycle is found, then the system shall report it and exit non-zero |
+| REQ-INT002-05 | EARS-U | The system shall compute completeness from the schema over the active subgraph only, never inferring it from the `draft` flag |
 
 #### Business Rules
 
 | ID | Rule | Enforcement |
 |----|------|-------------|
-| INT-004 | Required-completeness is enforced over `active` entities only | Validation |
+| INT-004 | Required-completeness is enforced over `active` entities only, computed from the schema (never inferred from the `draft` flag) | Validation |
 | INT-005 | A `draft` does not satisfy another entity's required relation | Validation |
 | INT-006 | `check` is the structural gap query: orphans (entities with zero relations, in or out) and missing required relations | Validation |
 | INT-011 | A stray file sits inside a type's layout path but does not parse as that type; markdown outside every type layout is a reference doc, skipped not flagged | Validation |
+| INT-012 | An `active` entity missing a required field or relation is reported as active-but-incomplete; completeness is derived from the schema, not the `draft` flag | Validation |
 
-#### State Machine
+#### Completeness Model
+
+`draft` is a manual publish flag (FS-002); `check` derives required-completeness
+from the schema, not from the flag. The lifecycle transitions themselves live in
+FS-002 — here the flag only selects what `check` evaluates.
 
 ```
-┌─────────────┐
-│    draft    │  excluded from required-completeness
-└──────┬──────┘
-       │ edit fills required fields/relations
-       ▼
-┌─────────────┐
-│   active    │  counts toward check completeness;
-└─────────────┘  may satisfy another entity's required relation
+active (draft: false) ─▶ check computes required-completeness from the schema
+                         ├─ all required present, targets active   ─▶ pass
+                         └─ a required field/relation missing, or a
+                            target is a draft or removed            ─▶ FAIL
+
+draft  (draft: true)  ─▶ exempt from required-completeness;
+                         never satisfies another entity's required relation
 ```
 
-| From | Action | To | Conditions |
-|------|--------|----|------------|
-| draft | edit reaches completeness | active | all required fields and relations present |
-| active | a required relation target is removed | (check fails) | the relation no longer resolves |
+| Subject | Condition | `check` outcome |
+|---------|-----------|-----------------|
+| active | every required field present; every required relation resolves to an active target | pass |
+| active | a required field or relation is missing | fail — active-but-incomplete |
+| active | a required relation resolves to a draft | fail — incomplete (draft does not satisfy) |
+| active | a required relation target was removed | fail — dangling edge |
+| draft | any | exempt; cannot satisfy another entity's required relation |
 
 #### Technical Notes
 
@@ -213,8 +231,8 @@ The integrity loop keeps the graph clean without manual policing, and it is the 
 
 #### Test Hints
 
-- **Unit:** orphan detection, completeness over active-only
-- **Integration:** draft-does-not-satisfy; cycle detection on `supersedes`
+- **Unit:** orphan detection; completeness from the schema; active-but-incomplete detection
+- **Integration:** active-but-incomplete reporting; draft-does-not-satisfy; dangling edge after `remove --force`; cycle detection on `supersedes`
 - **E2E:** `check` on an HQ snapshot surfaces the firm-ops structural gaps
 
 ---
@@ -403,7 +421,8 @@ The integrity loop reads the firm-ops graph and emits report records. The report
 | Attribute | Type | Required | Description |
 |-----------|------|----------|-------------|
 | Relations Resolve | Yes/No | Yes | No dangling edge |
-| Required Complete | Yes/No | Yes | Active entities meet required relations |
+| Required Complete | Yes/No | Yes | Active entities meet required fields and relations, computed from the schema |
+| Incomplete | Collection | No | Active-but-incomplete entities, each with its missing required fields and relations |
 | Orphans | Collection | No | Entities missing an expected edge |
 | Stray Files | Collection | No | Files inside a type's layout that are not valid entities of that type |
 | Cycles | Collection | No | Edge cycles with participating ids |
@@ -427,6 +446,7 @@ The integrity loop reads the firm-ops graph and emits report records. The report
 
 | Relationship | Behavior | Rationale |
 |--------------|----------|-----------|
+| A published entity is missing a required field/relation | `check` reports active-but-incomplete | Completeness is enforced by `check`, derived from the schema, not the `draft` flag |
 | A required-relation target becomes `draft` | `check` reports incomplete | A draft does not satisfy a required relation |
 | A required-relation target is removed | `check` reports a dangling edge | Referential integrity broke |
 | A false-but-legal write | `validate` and `check` both pass | Structural integrity is guaranteed, not semantic truth; git revert is the backstop |
@@ -435,7 +455,7 @@ The integrity loop reads the firm-ops graph and emits report records. The report
 
 | ID | Rule | Applies To |
 |----|------|------------|
-| INT-SHARED-001 | Completeness is evaluated over the active subgraph only; drafts are excluded | STORY-INT-001, STORY-INT-002 |
+| INT-SHARED-001 | Completeness is evaluated over the active subgraph only, computed from the schema; drafts are excluded and a draft never satisfies a required relation | STORY-INT-001, STORY-INT-002 |
 | INT-SHARED-002 | History and staleness are derived from git, never hand-maintained | STORY-INT-003, STORY-INT-004 |
 | INT-SHARED-003 | khub guarantees structural integrity, not semantic correctness | STORY-INT-001, STORY-INT-002 |
 | INT-SHARED-004 | Orphan (zero relations) and stale are core projection properties, surfaced by default in `status` and `query`; `check`/`stale` gate on the same computation | STORY-INT-002, STORY-INT-003 |
@@ -446,6 +466,7 @@ The integrity loop reads the firm-ops graph and emits report records. The report
 |--------|---------------|-------|
 | Node / Edge | FS-002: Authoring | The entities and edges the loop validates and checks |
 | Schema | FS-001: Workspace & Schema | Required relations and field rules come from the schema |
+| `draft` flag | FS-002: Authoring | Manual publish flag; drafts are unpublished — exempt from completeness, never satisfy a required relation |
 
 ### Cross-Story Dependencies
 

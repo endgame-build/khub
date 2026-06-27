@@ -3,14 +3,14 @@ id: FS-002
 name: Authoring
 priority: Critical
 dependencies: [FS-001]
-updated: 2026-06-24
+updated: 2026-06-27
 ---
 
 # Authoring
 
 ## Overview
 
-The write surface over the core library: mint, read, edit, relate, and remove entities, with the schema and git as the only gates. Agent and human are symmetric writers of the same graph — no propose-then-approve step. A file written by hand, outside these verbs, is gated the same way: `khub validate <file>` re-checks it against the schema (FS-004) — the per-file counterpart to graph-wide `khub check`. Referential integrity hard-fails on write, while a missing required field saves the entity as a `draft` so capture is never blocked. Every command is a thin adapter over a core verb (`create`, `get`, `update`, `delete`, `link`).
+The write surface over the core library: mint, read, edit, relate, and remove entities, with the schema and git as the only gates. Agent and human are symmetric writers of the same graph — no propose-then-approve step. A file written by hand, outside these verbs, is gated the same way: `khub validate <file>` re-checks it against the schema (FS-004) — the per-file counterpart to graph-wide `khub check`. Referential integrity hard-fails on write, while a missing required field still saves the entity (active by default) so capture is never blocked. `draft` is a manual flag, set by `--draft` on create or by editing the field; completeness is a `check` concern, not a draft trigger. Every command is a thin adapter over a core verb (`create`, `get`, `update`, `delete`, `link`).
 
 **Primary Actor:** Agent
 
@@ -58,19 +58,26 @@ The write surface over the core library: mint, read, edit, relate, and remove en
 - [ ] Mint a bare slug as the id, unique within the type
 - [ ] Write one file at the type's layout path (`opportunities/{slug}/_index.md`)
 - [ ] Set `created` and `updated` to today
-- [ ] Set `draft: false` because all required fields and relations are present
+- [ ] Set `draft: false` by default (the manual flag is unset)
 - [ ] Print the new id and the file path
 - [ ] Display: "Created opportunity '{slug}' (active)"
 
-##### AC-002: Missing Required Field Saves as Draft
+##### AC-002: Missing Required Field Still Saves Active; `--draft` Sets the Flag
 
 **Given** the agent omits a required field or relation
 **When** they run `khub add opportunity --stage prospect`
 **Then** the system shall:
-- [ ] Save the entity with `draft: true`
+- [ ] Save the entity with `draft: false` (active by default; completeness is not a draft trigger)
 - [ ] Preserve the supplied fields
 - [ ] Not block capture
-- [ ] Display: "Created opportunity '{slug}' (draft: missing required client, owner)"
+- [ ] Display: "Created opportunity '{slug}' (active)"
+
+**And given** the agent wants to capture work-in-progress as unpublished
+**When** they run `khub add opportunity --stage prospect --draft`
+**Then** the system shall:
+- [ ] Save the entity with `draft: true`
+- [ ] Preserve the supplied fields
+- [ ] Display: "Created opportunity '{slug}' (draft)"
 
 ##### AC-003: Relation to a Non-Existent Target Is Rejected
 
@@ -112,12 +119,13 @@ The write surface over the core library: mint, read, edit, relate, and remove en
 
 | ID | Type | Requirement |
 |----|------|-------------|
-| REQ-ENT001-01 | EARS-E | When all required fields and relations are present, the system shall write the entity as `active` |
-| REQ-ENT001-02 | EARS-W | If a required field or relation is missing, then the system shall save the entity as `draft` and preserve the supplied fields |
-| REQ-ENT001-03 | EARS-W | If a relation names a non-existent target, then the system shall reject the write and write no file |
-| REQ-ENT001-04 | EARS-O | Where `--strict` is set, the system shall reject any undeclared field |
-| REQ-ENT001-05 | EARS-E | When a meeting is created, the system shall store `engagement` as an explicit edge and write the entity flat (nesting deferred post-MVP) |
-| REQ-ENT001-06 | EARS-W | If an explicit `--id` collides within the type, then the system shall append a deterministic suffix |
+| REQ-ENT001-01 | EARS-U | The system shall write `draft: false` by default, regardless of completeness |
+| REQ-ENT001-02 | EARS-W | If a required field or relation is missing, then the system shall still save the entity (active by default) and preserve the supplied fields; capture is never blocked |
+| REQ-ENT001-03 | EARS-O | Where `--draft` is set, the system shall write `draft: true` |
+| REQ-ENT001-04 | EARS-W | If a relation names a non-existent target, then the system shall reject the write and write no file |
+| REQ-ENT001-05 | EARS-O | Where `--strict` is set, the system shall reject any undeclared field |
+| REQ-ENT001-06 | EARS-E | When a meeting is created, the system shall store `engagement` as an explicit edge and write the entity flat (nesting deferred post-MVP) |
+| REQ-ENT001-07 | EARS-W | If an explicit `--id` collides within the type, then the system shall append a deterministic suffix |
 
 #### Business Rules
 
@@ -125,7 +133,7 @@ The write surface over the core library: mint, read, edit, relate, and remove en
 |----|------|-------------|
 | ENT-001 | The id is a bare slug, unique per `(type, slug)` | Constraint |
 | ENT-002 | Referential integrity hard-fails on write; a relation must resolve | Validation |
-| ENT-003 | A well-formed but incomplete entity is saved as `draft`, never rejected | Validation |
+| ENT-003 | An incomplete entity is still saved (active by default), never rejected; `draft` is a manual flag and completeness is a `check` concern | Validation |
 | ENT-004 | Undeclared fields are preserved unless `--strict` closes the schema | Validation |
 
 #### State Machine
@@ -134,22 +142,23 @@ The write surface over the core library: mint, read, edit, relate, and remove en
 ┌─────────────┐
 │   (create)  │
 └──────┬──────┘
-       │ required fields + relations present?
-       ├── yes ──► active
-       └── no  ──► draft
-                    │ edit fills the gap
+       │ --draft passed?
+       ├── no  ──► active (default)
+       └── yes ──► draft
+                    │ edit draft false (explicit publish)
                     └──────────► active
 ```
 
 | From | Action | To | Conditions |
 |------|--------|----|------------|
-| (create) | add with all required present | active | every required field and relation resolves |
-| (create) | add with a gap | draft | a required field or relation is missing |
-| draft | edit fills the missing field/relation | active | completeness reached |
+| (create) | add (no `--draft`) | active | default, regardless of completeness |
+| (create) | add `--draft` | draft | the flag is set explicitly |
+| draft | `edit <id> draft false` | active | explicit publish; no completeness recompute |
+| active | `edit <id> draft true` | draft | explicit unpublish |
 
 #### Technical Notes
 
-- **Command:** `khub add <type>` — `--<field> <value>` (repeatable), `--id`, `--body-file <path>` (`-` for stdin), `--strict`
+- **Command:** `khub add <type>` — `--<field> <value>` (repeatable), `--id`, `--body-file <path>` (`-` for stdin), `--draft`, `--strict`
 - **Body:** authored in the file, not argv. `add` writes frontmatter with an empty body and prints the path; `--body-file`/stdin covers the agent that pipes generated prose. Inline `--body <string>` is omitted — prose in argv is quoting-hostile.
 - **Library verb:** `core.create(type, fields, parent)`
 - **Entities:** all 9 firm-ops types
@@ -158,7 +167,7 @@ The write surface over the core library: mint, read, edit, relate, and remove en
 
 #### Test Hints
 
-- **Unit:** slug minting, draft-vs-active gating, enum/pattern validation
+- **Unit:** slug minting, `--draft` flag sets `draft: true` (default `false`), enum/pattern validation
 - **Integration:** referential-integrity hard-fail; explicit engagement edge on a flat meeting
 - **E2E:** `add opportunity` then `get` round-trips frontmatter and body
 
@@ -248,7 +257,7 @@ The write surface over the core library: mint, read, edit, relate, and remove en
 
 **As an** Agent or Operator
 **I want to** change an entity's fields and re-validate
-**So that** edits produce a minimal git diff, bump `updated`, and can promote a draft to active
+**So that** edits produce a minimal git diff, bump `updated`, and can publish a draft by editing the `draft` flag
 
 #### Preconditions
 
@@ -267,14 +276,18 @@ The write surface over the core library: mint, read, edit, relate, and remove en
 - [ ] Bump `updated` to today
 - [ ] Display: "Updated opportunity 'initech-deal'"
 
-##### AC-002: Edit Promotes a Draft to Active
+##### AC-002: Publish a Draft by Editing the `draft` Flag
 
-**Given** a draft entity missing one required relation
-**When** the agent runs `khub edit some-opp --owner noor`
+**Given** a draft entity
+**When** the agent runs `khub edit some-opp draft false`
 **Then** the system shall:
-- [ ] Resolve the relation target
-- [ ] Re-validate completeness
-- [ ] Clear the `draft` flag (set `draft: false`) once all required are present
+- [ ] Set `draft: false` (publish)
+- [ ] Bump `updated` to today
+
+**And given** a field edit such as `khub edit some-opp --owner noor`
+**Then** the system shall:
+- [ ] Apply the field change only
+- [ ] Leave `draft` untouched (no auto-promote, no completeness recompute)
 
 ##### AC-003: Invalid Enum Value
 
@@ -298,7 +311,7 @@ The write surface over the core library: mint, read, edit, relate, and remove en
 | ID | Type | Requirement |
 |----|------|-------------|
 | REQ-ENT003-01 | EARS-E | When a field is edited, the system shall re-validate, bump `updated`, and write a minimal diff |
-| REQ-ENT003-02 | EARS-E | When an edit fills the last missing required field, the system shall promote `draft` to `active` |
+| REQ-ENT003-02 | EARS-W | If the `draft` field is explicitly edited, then the system shall set the flag accordingly; no other edit changes `draft` and there is no auto-promote |
 | REQ-ENT003-03 | EARS-W | If the new value violates the field's type or enum, then the system shall reject the edit and leave the file unchanged |
 | REQ-ENT003-04 | EARS-O | Where `--strict` is set, the system shall reject edits to undeclared fields |
 
@@ -308,7 +321,7 @@ The write surface over the core library: mint, read, edit, relate, and remove en
 |----|------|-------------|
 | ENT-007 | Edits round-trip frontmatter, preserving key order and comments | Constraint |
 | ENT-008 | `updated` is bumped on every successful edit | Automation |
-| ENT-009 | Completeness is re-evaluated on edit, driving the draft↔active flip | Validation |
+| ENT-009 | `draft` changes only when the `draft` field is explicitly edited; no completeness recompute on edit | Validation |
 
 #### Technical Notes
 
@@ -322,7 +335,7 @@ The write surface over the core library: mint, read, edit, relate, and remove en
 
 - **Unit:** enum re-validation, `updated` bump
 - **Integration:** round-trip write preserves key order and comments
-- **E2E:** edit fills a draft's last required relation and flips it to active
+- **E2E:** `edit <id> draft false` publishes a draft; a field edit leaves `draft` untouched
 
 ---
 
@@ -554,8 +567,8 @@ The firm-ops preset's 9 types are the authoring surface. Full capture lives in `
 
 | Value | Description |
 |-------|-------------|
-| `draft: true` | Well-formed but incomplete; does not satisfy another entity's required relation |
-| `draft: false` | All required fields and relations present (default); counts toward `check` completeness |
+| `draft: true` | Unpublished / work-in-progress (manual); excluded from required-completeness and never satisfies another entity's required relation |
+| `draft: false` | Published (default); subject to `check` required-completeness |
 
 ### Opportunity Stage *(named enumeration)*
 
@@ -583,7 +596,7 @@ The firm-ops preset's 9 types are the authoring surface. Full capture lives in `
 | ID | Rule | Applies To |
 |----|------|------------|
 | ENT-SHARED-001 | Referential integrity hard-fails on write; every relation must resolve | STORY-ENT-001, STORY-ENT-004 |
-| ENT-SHARED-002 | A well-formed but incomplete entity saves as `draft`; capture is never blocked | STORY-ENT-001, STORY-ENT-003 |
+| ENT-SHARED-002 | An incomplete entity still saves (active by default); capture is never blocked; `draft` is manual and completeness is enforced by `check` | STORY-ENT-001, STORY-ENT-003 |
 | ENT-SHARED-003 | Forward edges store single-sided; inverse edges are derived | STORY-ENT-002, STORY-ENT-004 |
 | ENT-SHARED-004 | Structural integrity is guaranteed; semantic truth is not — a schema-legal but false write validates | STORY-ENT-001, STORY-ENT-003 |
 
@@ -592,7 +605,7 @@ The firm-ops preset's 9 types are the authoring surface. Full capture lives in `
 | Entity | Source Feature | Usage |
 |--------|---------------|-------|
 | Schema | FS-001: Workspace & Schema | Every write introspects the compiled schema for fields, enums, and legal predicates |
-| Validate / check | FS-004: Integrity Loop | A hand-authored file is gated by `khub validate <file>`; graph-wide consistency is `khub check` |
+| Validate / check | FS-004: Integrity Loop | A hand-authored file is gated by `khub validate <file>`; graph-wide consistency is `khub check`. `check` enforces required-completeness — an active entity missing a required field/relation is reported as active-but-incomplete; a draft is excluded and never satisfies another entity's required relation |
 
 ### Cross-Story Dependencies
 
@@ -600,12 +613,12 @@ The firm-ops preset's 9 types are the authoring surface. Full capture lives in `
 STORY-ENT-001 (Create an Entity)
     ├── STORY-ENT-002 (Read an Entity)
     ├── STORY-ENT-003 (Edit an Entity)
-    │       └── promotes draft → active
+    │       └── publishes a draft via an explicit draft edit
     ├── STORY-ENT-004 (Link and Unlink Relations)
     └── STORY-ENT-005 (Remove an Entity)
 ```
 
-An entity must exist before it can be read, edited, linked, or removed. Edit and link both feed the draft→active promotion; remove is guarded by the edges that link establishes.
+An entity must exist before it can be read, edited, linked, or removed. Publishing a draft is an explicit `edit <id> draft false`; `link`/`unlink` never touch `draft`. Remove is guarded by the edges that link establishes.
 
 ## Scope Changes
 

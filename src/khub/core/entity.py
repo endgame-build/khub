@@ -2,9 +2,14 @@
 
 ``create`` and ``get`` are the foundational pair: mint a typed entity as one
 Markdown file (slug minting, layout resolution, field/enum/pattern validation,
-referential-integrity hard-fail, the draft-vs-active completeness gate) and read
-one back (id resolution, ambiguity detection, read-time inverse-edge derivation).
-``update``/``link``/``unlink``/``delete`` extend this module in WPK-002-2/3.
+referential-integrity hard-fail) and read one back (id resolution, ambiguity
+detection, read-time inverse-edge derivation). ``update``/``link``/``unlink``/
+``delete`` extend this module in WPK-002-2/3.
+
+``draft`` is a manual publish flag (FS-002): ``add`` defaults it to
+``false``, ``--draft`` sets it, and ``edit <id> draft …`` toggles it. khub never
+derives it from completeness — capture is never blocked, and an active-but-
+incomplete entity is surfaced by ``check`` (FS-004), not by this flag.
 
 Every verb is schema-generic: it introspects the compiled schema at runtime and
 has no per-type code path. The schema and git are the only gates.
@@ -28,10 +33,6 @@ from khub.core.index import Index, build_index, resolve_target
 from khub.core.introspect import load_schema
 from khub.core.model import ResolvedAttribute, ResolvedSchema, ResolvedType
 
-# Fields khub manages itself — never user-supplied, never part of the "missing
-# required" report that drives the draft gate.
-_AUTO_FIELDS = {"type", "created", "updated", "draft"}
-
 _yaml = YAML()  # round-trip: preserves key order and comments on edit
 _yaml.default_flow_style = False
 # Never emit YAML anchors/aliases: two keys sharing a value (e.g. created==updated
@@ -48,7 +49,6 @@ class CreateResult:
     slug: str
     path: Path
     draft: bool
-    missing: list[str] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -123,12 +123,14 @@ def create(
     id_: str | None = None,
     strict: bool = False,
     body: str = "",
+    draft: bool = False,
 ) -> CreateResult:
     """Mint a new entity of ``type_`` from ``fields`` (raw ``--field value`` strings).
 
-    Validates each field, hard-fails (writing nothing) if a relation target does
-    not resolve, and degrades to ``draft`` rather than rejecting when a required
-    field or relation is missing.
+    Validates each field and hard-fails (writing nothing) if a relation target
+    does not resolve. ``draft`` is the manual publish flag (default ``false``);
+    a missing required field never blocks capture — `check` (FS-004) surfaces the
+    gap as active-but-incomplete.
     """
     resolved = load_schema(root)
     rtype = resolved.types.get(type_)
@@ -146,8 +148,9 @@ def create(
                 target_type = "/".join(rel.targets)
                 raise LocatedError.referential_integrity(target_type, value, predicate)
 
-    missing = _missing_required(rtype, attrs, rels)
-    is_draft = bool(missing)
+    # `draft` is manual: the --draft flag, or an explicit `draft` field, else false.
+    explicit = attrs.pop("draft", None)
+    is_draft = bool(explicit) if explicit is not None else draft
 
     slug = _mint_slug(_slug_source(type_, attrs, id_), type_, index)
     meta: dict[str, Any] = {
@@ -168,7 +171,7 @@ def create(
     path = entity_path(root, rtype, slug)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(_render_file(meta, body))
-    return CreateResult(type=type_, slug=slug, path=path, draft=is_draft, missing=missing)
+    return CreateResult(type=type_, slug=slug, path=path, draft=is_draft)
 
 
 def _partition(
@@ -207,20 +210,6 @@ def _validate_attr(attr: ResolvedAttribute, raw: str) -> Any:
     return raw
 
 
-def _missing_required(
-    rtype: ResolvedType, attrs: dict[str, Any], rels: dict[str, list[str]]
-) -> list[str]:
-    """The required fields and relations the user did not supply (auto fields excluded)."""
-    missing: list[str] = []
-    for name, attr in rtype.attributes.items():
-        if attr.required and name not in _AUTO_FIELDS and name not in attrs:
-            missing.append(name)
-    for predicate, rel in rtype.relations.items():
-        if rel.required and not rels.get(predicate):
-            missing.append(predicate)
-    return missing
-
-
 def _slug_source(type_: str, attrs: dict[str, Any], id_: str | None) -> str:
     """The string a slug is minted from: explicit id, else a name field, else the type."""
     if id_:
@@ -232,6 +221,8 @@ def _slug_source(type_: str, attrs: dict[str, Any], id_: str | None) -> str:
 def _mint_slug(source: str, type_: str, index: Index) -> str:
     """A bare slug unique within ``type_``; a within-type collision gets a -N suffix."""
     base = slugify(source)
+    if not base:  # an all-symbol/empty source would write a hidden, collision-blind file
+        raise LocatedError.invalid_slug(source)
     if (type_, base) not in index.nodes:
         return base
     n = 2
@@ -301,7 +292,11 @@ def _edges(
         for target in value if isinstance(value, list) else [value]:
             edges.append(Edge(predicate=predicate, target=str(target), derived=False))
     # Derived inverses: any stored edge declaring an `inverse` that resolves to us.
+    # The derived edge is qualified `type/slug` — the source type isn't recoverable
+    # from a bare slug (any type may declare the inverse), unlike a stored forward edge.
     for (etype, eslug), emeta in index.meta.items():
+        if (etype, eslug) == node:  # a self-reference is not its own inverse
+            continue
         for predicate, rel in resolved.types[etype].relations.items():
             if not rel.inverse:
                 continue
@@ -310,7 +305,7 @@ def _edges(
                 continue
             for target in value if isinstance(value, list) else [value]:
                 if node in resolve_target(rel, str(target), index.nodes, index.types_by_slug):
-                    edges.append(Edge(predicate=rel.inverse, target=eslug, derived=True))
+                    edges.append(Edge(predicate=rel.inverse, target=f"{etype}/{eslug}", derived=True))
     return edges
 
 
@@ -325,8 +320,11 @@ def update(
     strict: bool = False,
     body: str | None = None,
 ) -> UpdateResult:
-    """Edit ``id_``'s fields: re-validate, bump ``updated``, write a minimal diff,
-    and flip ``draft`` once completeness changes."""
+    """Edit ``id_``'s fields: re-validate, bump ``updated``, write a minimal diff.
+
+    ``draft`` moves only when the user edits it (`edit <id> draft true|false`);
+    no completeness recompute, no auto-promote.
+    """
     resolved = load_schema(root)
     index = build_index(root, resolved)
     type_, slug = resolve_id(index, id_)
@@ -351,10 +349,9 @@ def update(
     for key, raw in extras.items():
         cmap[key] = raw
     cmap["updated"] = date.today()
-    cmap["draft"] = bool(_missing_from_meta(rtype, dict(cmap), index))
 
     _write_doc(path, cmap, body_text if body is None else _normalize_body(body))
-    return UpdateResult(type=type_, slug=slug, path=path, draft=bool(cmap["draft"]))
+    return UpdateResult(type=type_, slug=slug, path=path, draft=bool(cmap.get("draft", False)))
 
 
 # --- link / unlink -----------------------------------------------------------
@@ -463,25 +460,6 @@ def _inbound_edges(
                 if node in resolve_target(rel, str(target), index.nodes, index.types_by_slug):
                     inbound.append(Inbound(source_type=etype, source_slug=eslug, predicate=predicate))
     return inbound
-
-
-def _missing_from_meta(rtype: ResolvedType, meta: dict[str, Any], index: Index) -> list[str]:
-    """Required fields/relations not satisfied by the entity's current metadata."""
-    missing: list[str] = []
-    for name, attr in rtype.attributes.items():
-        if attr.required and name not in _AUTO_FIELDS and not meta.get(name):
-            missing.append(name)
-    for predicate, rel in rtype.relations.items():
-        if not rel.required:
-            continue
-        value = meta.get(predicate)
-        targets = value if isinstance(value, list) else [value]
-        resolves = bool(value) and all(
-            resolve_target(rel, str(t), index.nodes, index.types_by_slug) for t in targets
-        )
-        if not resolves:
-            missing.append(predicate)
-    return missing
 
 
 # --- shared ------------------------------------------------------------------

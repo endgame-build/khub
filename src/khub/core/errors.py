@@ -107,6 +107,14 @@ class LocatedError(Exception):
         )
 
     @classmethod
+    def invalid_slug(cls, source: str) -> "LocatedError":
+        return cls(
+            code="invalid_slug",
+            message=f"Cannot mint a slug from '{source}'",
+            target=source,
+        )
+
+    @classmethod
     def strict_unknown_field(cls, field: str) -> "LocatedError":
         return cls(
             code="strict_unknown_field",

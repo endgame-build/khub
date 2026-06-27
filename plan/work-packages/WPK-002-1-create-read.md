@@ -13,7 +13,7 @@ updated: 2026-06-24
 
 ## Objective
 
-Delivers the two foundational authoring verbs — `khub add <type>` (`core.create`) and `khub get <id>` (`core.get`) — with the compiled schema and git as the only gates. `add` mints a typed entity as one Markdown file at its layout path; `get` reads it back, optionally with derived edges. Together they establish slug minting and collision suffixing, layout resolution (folder `_index.md` vs flat file), field/enum/pattern validation, the draft-vs-active completeness gate, the referential-integrity hard-fail that writes no file, id resolution with `type/slug` ambiguity handling, and read-time inverse-edge derivation that is never stored.
+Delivers the two foundational authoring verbs — `khub add <type>` (`core.create`) and `khub get <id>` (`core.get`) — with the compiled schema and git as the only gates. `add` mints a typed entity as one Markdown file at its layout path; `get` reads it back, optionally with derived edges. Together they establish slug minting and collision suffixing, layout resolution (folder `_index.md` vs flat file), field/enum/pattern validation, the manual `draft` flag (default active, `--draft` to mark unpublished), the referential-integrity hard-fail that writes no file, id resolution with `type/slug` ambiguity handling, and read-time inverse-edge derivation that is never stored.
 
 ---
 
@@ -21,8 +21,8 @@ Delivers the two foundational authoring verbs — `khub add <type>` (`core.creat
 
 | Story | AC | Criterion | Test Scenario |
 |-------|----|-----------|---------------|
-| STORY-ENT-001 | AC-001 | Create a well-formed active entity: validate each field against type/enum/pattern, resolve `client`/`owner`, mint a unique bare slug, write `opportunities/{slug}/_index.md`, set `created`+`updated` to today, set `draft: false`, print the id and path, display `Created opportunity '{slug}' (active)` | TS-ENT-001-01 |
-| STORY-ENT-001 | AC-002 | Missing required field saves as draft: `draft: true`, preserve the supplied fields, never block capture, display `Created opportunity '{slug}' (draft: missing required client, owner)` | TS-ENT-001-02 |
+| STORY-ENT-001 | AC-001 | Create an active entity by default: validate each field against type/enum/pattern, resolve `client`/`owner`, mint a unique bare slug, write `opportunities/{slug}/_index.md`, set `created`+`updated` to today, set `draft: false`, print the id and path, display `Created opportunity '{slug}' (active)` | TS-ENT-001-01 |
+| STORY-ENT-001 | AC-002 | Missing required field still saves active and never blocks capture: `draft: false` by default, preserve the supplied fields, display `Created opportunity '{slug}' (active)`; `--draft` instead sets `draft: true` and displays `Created opportunity '{slug}' (draft)` | TS-ENT-001-02 |
 | STORY-ENT-001 | AC-003 | Relation to a non-existent target is rejected (referential-integrity hard-fail): display `No client 'ghost-co' to satisfy relation 'client'`, write no file | TS-ENT-001-03 |
 | STORY-ENT-001 | AC-004 | Unknown field under `--strict`: reject, display `Unknown field 'vibe' rejected under --strict`; without `--strict`, accept and preserve `vibe` as a free extension | TS-ENT-001-04 |
 | STORY-ENT-001 | AC-005 | Create a meeting with an explicit engagement edge: write flat at `meetings/{slug}.md`, mint a bare slug, store `engagement` as an explicit edge resolving to its union target (opportunity \| project \| partnership) | TS-ENT-001-05 |
@@ -38,8 +38,8 @@ Delivers the two foundational authoring verbs — `khub add <type>` (`core.creat
 
 | Story | ID | Type | Requirement | Unit Test |
 |-------|----|------|-------------|-----------|
-| STORY-ENT-001 | REQ-ENT001-01 | EARS-E | When all required fields and relations are present, the system shall write the entity as `active` | TS-ENT-001-U03 |
-| STORY-ENT-001 | REQ-ENT001-02 | EARS-W | If a required field or relation is missing, then the system shall save the entity as `draft` and preserve the supplied fields | TS-ENT-001-U03 |
+| STORY-ENT-001 | REQ-ENT001-01 | EARS-U | The system shall write the entity as `active` (`draft: false`) by default, regardless of whether required fields and relations are present | TS-ENT-001-U03 |
+| STORY-ENT-001 | REQ-ENT001-02 | EARS-O | Where `--draft` is set, the system shall save the entity as `draft` (`draft: true`) and preserve the supplied fields | TS-ENT-001-U03 |
 | STORY-ENT-001 | REQ-ENT001-03 | EARS-W | If a relation names a non-existent target, then the system shall reject the write and write no file | TS-ENT-001-U04 |
 | STORY-ENT-001 | REQ-ENT001-04 | EARS-O | Where `--strict` is set, the system shall reject any undeclared field | TS-ENT-001-U05 |
 | STORY-ENT-001 | REQ-ENT001-05 | EARS-E | When a meeting is created, the system shall store `engagement` as an explicit edge and write the entity flat | TS-ENT-001-U07 |
@@ -57,12 +57,12 @@ Delivers the two foundational authoring verbs — `khub add <type>` (`core.creat
 |-------|----|------|-------------|-----------|
 | STORY-ENT-001 | ENT-001 | The id is a bare slug, unique per `(type, slug)` | Constraint | TS-ENT-001-U01 |
 | STORY-ENT-001 | ENT-002 | Referential integrity hard-fails on write; a relation must resolve | Validation | TS-ENT-001-U04 |
-| STORY-ENT-001 | ENT-003 | A well-formed but incomplete entity is saved as `draft`, never rejected | Validation | TS-ENT-001-U03 |
+| STORY-ENT-001 | ENT-003 | `draft` is a manual flag (default `false`); an incomplete entity is saved active, never rejected and never auto-drafted | Validation | TS-ENT-001-U03 |
 | STORY-ENT-001 | ENT-004 | Undeclared fields are preserved unless `--strict` closes the schema | Validation | TS-ENT-001-U05 |
 | STORY-ENT-002 | ENT-005 | Derived edges are computed at read time, never stored | Constraint | TS-ENT-002-U03 |
 | STORY-ENT-002 | ENT-006 | A bare slug resolves only when unique across types | Validation | TS-ENT-002-U02 |
 | STORY-ENT-001 | ENT-SHARED-001 | Referential integrity hard-fails on write; every relation must resolve | Validation | TS-ENT-001-U04 |
-| STORY-ENT-001 | ENT-SHARED-002 | A well-formed but incomplete entity saves as `draft`; capture is never blocked | Validation | TS-ENT-001-U03 |
+| STORY-ENT-001 | ENT-SHARED-002 | An incomplete entity saves active by default (`--draft` to mark unpublished); capture is never blocked | Validation | TS-ENT-001-U03 |
 | STORY-ENT-002 | ENT-SHARED-003 | Forward edges store single-sided; inverse edges are derived | Constraint | TS-ENT-002-U03 |
 | STORY-ENT-001 | ENT-SHARED-004 | Structural integrity is guaranteed; semantic truth is not (a schema-legal but false write validates) | Constraint | TS-ENT-001-01 |
 
@@ -127,8 +127,8 @@ Delivers the two foundational authoring verbs — `khub add <type>` (`core.creat
 
 | Value | Description |
 |-------|-------------|
-| `draft: true` | Well-formed but incomplete; does not satisfy another entity's required relation |
-| `draft: false` | All required fields and relations present (default); counts toward `check` completeness |
+| `draft: true` | Manually marked unpublished via `--draft`; a draft never satisfies another entity's required relation |
+| `draft: false` | Active (default); completeness is decoupled from draft and enforced by `check` (FS-004) |
 
 ### Opportunity Stage *(named enumeration)*
 
@@ -152,18 +152,18 @@ Delivers the two foundational authoring verbs — `khub add <type>` (`core.creat
 ┌─────────────┐
 │   (create)  │
 └──────┬──────┘
-       │ required fields + relations present?
-       ├── yes ──► active
-       └── no  ──► draft
-                    │ edit fills the gap (WPK-002-2)
+       │ --draft flag?
+       ├── no  ──► active  (default)
+       └── yes ──► draft
+                    │ edit <id> draft false (WPK-002-2)
                     └──────────► active
 ```
 
 | From | Action | To | Conditions |
 |------|--------|----|------------|
-| (create) | `add` with all required present | active | every required field and relation resolves |
-| (create) | `add` with a gap | draft | a required field or relation is missing |
-| draft | edit fills the missing field/relation | active | completeness reached (realized by `khub edit`, WPK-002-2) |
+| (create) | `add` (default) | active | `draft: false` regardless of completeness |
+| (create) | `add --draft` | draft | the `--draft` flag is set |
+| draft | `edit <id> draft false` | active | manual toggle (realized by `khub edit`, WPK-002-2) |
 
 ---
 
@@ -182,12 +182,13 @@ Delivers the two foundational authoring verbs — `khub add <type>` (`core.creat
 | type | string (positional) | Yes | Schema type to mint (e.g. `opportunity`, `meeting`, `client`) |
 | --\<field\> \<value\> | repeatable | No | Field/relation values (e.g. `--client initech`, `--stage prospect`) |
 | --id | string | No | Explicit slug; deterministic suffix on within-type collision |
+| --draft | flag | No | Mark the entity unpublished (`draft: true`); default is active |
 | --body-file | path (`-` for stdin) | No | Body authored in the file/piped, not argv (inline `--body` omitted) |
 | --strict | flag | No | Reject any undeclared field |
 | --format | enum(text, json) | No | `text` confirmation (default); `json` emits the written record |
 
-- **Writes:** one file at the type's layout path (`opportunities/{slug}/_index.md` folder, `meetings/{slug}.md` flat); frontmatter with an empty body; `created`+`updated` set to today.
-- **Output (success):** the new id and file path; `Created <type> '{slug}' (active)` or `Created <type> '{slug}' (draft: missing required <fields>)`.
+- **Writes:** one file at the type's layout path (`opportunities/{slug}/_index.md` folder, `meetings/{slug}.md` flat); frontmatter with an empty body; `created`+`updated` set to today; `draft: false` by default, `draft: true` under `--draft`.
+- **Output (success):** the new id and file path; `Created <type> '{slug}' (active)` or, under `--draft`, `Created <type> '{slug}' (draft)`.
 - **Errors:**
 
 | Exit | Code | Condition |
@@ -225,7 +226,7 @@ Delivers the two foundational authoring verbs — `khub add <type>` (`core.creat
 | Variant | Key Attributes | Purpose |
 |---------|---------------|---------|
 | Valid | resolvable `client`/`owner`, `stage` in enum | Happy-path active create (TS-ENT-001-01) |
-| Invalid | required `client`/`owner` omitted | Draft degradation (TS-ENT-001-02) |
+| Boundary | required `client`/`owner` omitted, default vs `--draft` | Saves active by default; `--draft` marks unpublished (TS-ENT-001-02) |
 | Invalid | `client` names a non-existent `ghost-co` | Referential-integrity hard-fail, no file (TS-ENT-001-03) |
 | Boundary | extra undeclared field `vibe`, with/without `--strict` | Strict-mode rejection vs free extension (TS-ENT-001-04) |
 
@@ -266,7 +267,7 @@ Delivers the two foundational authoring verbs — `khub add <type>` (`core.creat
 ## Implementation Notes
 
 - Both commands are thin adapters over a core verb (`core.create`, `core.get`); the compiled schema and git are the only gates. The schema is introspected at runtime (WPK-001-2 layer) for fields, enums, patterns, and legal relations — never hardcoded.
-- `add` order of operations: validate each field (type/enum/pattern) → resolve relations (referential-integrity hard-fail **before any byte is written**, no file) → completeness gate (all required present → `draft: false`/active; a missing required field/relation → `draft: true`, preserve supplied fields, never block capture) → mint the slug (from `--id`, else name/type; unique per `(type, slug)`; deterministic suffix on collision pinned to a within-type count, not directory scan order) → resolve the layout path (folder `_index.md` vs flat file) → write frontmatter with an empty body, `created`+`updated` to today, print id + path.
+- `add` order of operations: validate each field (type/enum/pattern) → resolve relations (referential-integrity hard-fail **before any byte is written**, no file) → set the manual `draft` flag (`draft: false` by default, `draft: true` only under `--draft`; never derived from completeness; a missing required field/relation preserves supplied fields and never blocks capture) → mint the slug (from `--id`, else name/type; unique per `(type, slug)`; deterministic suffix on collision pinned to a within-type count, not directory scan order) → resolve the layout path (folder `_index.md` vs flat file) → write frontmatter with an empty body, `created`+`updated` to today, print id + path.
 - Body is authored in the file, not argv: `add` writes an empty body; `--body-file`/stdin (`-`) covers the agent piping generated prose. Inline `--body <string>` is omitted (quoting-hostile).
 - The hard-fail "writes no file" contract is the only guard against a half-written entity — verify it by snapshotting the full directory listing before the call and asserting byte-for-byte identity after, independent of exit code.
 - `get` resolves the id by bare slug, requiring a `type/slug` qualifier only on cross-type ambiguity. Inverse edges (`superseded_by`) are derived at read time, marked derived, and never persisted — assert the inverse appears in `get --edges` output **and** is absent from the target entity's stored frontmatter on disk.

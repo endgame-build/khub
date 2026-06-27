@@ -41,6 +41,7 @@ def add_command(
     ctx: typer.Context,
     type_: str = typer.Argument(..., metavar="TYPE", help="The entity type to create."),
     id_: str = typer.Option(None, "--id", help="Explicit slug (else minted from name/type)."),
+    draft: bool = typer.Option(False, "--draft", help="Mark the entity unpublished (default: active)."),
     strict: bool = typer.Option(False, "--strict", help="Reject fields the schema does not declare."),
     body_file: str = typer.Option(None, "--body-file", help="Read the body from a file ('-' for stdin)."),
     fmt: str = typer.Option("text", "--format", help="text or json (emits the written record)."),
@@ -50,7 +51,7 @@ def add_command(
     body = _read_body(body_file)
     try:
         root = find_workspace(Path.cwd())
-        result = create(root, type_, fields, id_=id_, strict=strict, body=body)
+        result = create(root, type_, fields, id_=id_, strict=strict, body=body, draft=draft)
     except LocatedError as err:
         typer.echo(err.message, err=True)
         raise typer.Exit(1) from None
@@ -219,12 +220,8 @@ def _read_body(body_file: str | None) -> str:
 
 
 def _created_message(result: CreateResult) -> str:
-    if result.draft:
-        return (
-            f"Created {result.type} '{result.slug}' "
-            f"(draft: missing required {', '.join(result.missing)})"
-        )
-    return f"Created {result.type} '{result.slug}' (active)"
+    state = "draft" if result.draft else "active"
+    return f"Created {result.type} '{result.slug}' ({state})"
 
 
 def _create_record(root: Path, result: CreateResult) -> dict[str, Any]:
@@ -233,7 +230,6 @@ def _create_record(root: Path, result: CreateResult) -> dict[str, Any]:
         "type": result.type,
         "path": str(result.path.relative_to(root)),
         "draft": result.draft,
-        "missing": result.missing,
     }
 
 

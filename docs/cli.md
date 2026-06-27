@@ -20,7 +20,7 @@ Read commands include `draft` entities in scope and surface each entity's `orpha
 khub validates the **schema-declared subset** of an entity and leaves everything else alone:
 
 1. **Declared fields are enforced.** Any present field the schema knows is checked against its type, enum, pattern, and cardinality. A malformed value, or a relation to a non-existent target, is rejected on write.
-2. **`required` is a completeness gate, not a capture block.** A missing required field or relation does not reject the write; it saves the entity as a draft (`draft: true`). Capture is never blocked. `check` enforces required-completeness over the `active` subgraph.
+2. **`required` is a completeness gate, not a capture block.** A missing required field or relation does not reject the write; the entity is still saved (active by default — `draft` is a manual publish flag, FS-002). Capture is never blocked. `check` enforces required-completeness over the `active` subgraph and reports an active-but-incomplete entity.
 3. **Extensions are free.** Any key the schema does not declare is accepted with any value, validated against nothing, and preserved on round-trip (Pydantic `extra="allow"` over the generated model).
 4. **`--strict` closes the schema.** `validate --strict` (and `add`/`edit --strict`) rejects unknown keys, for when a closed contract is wanted.
 
@@ -40,7 +40,7 @@ khub validates the **schema-declared subset** of an entity and leaves everything
 
 | Command | Args and options | Does | Tier |
 |---|---|---|---|
-| `khub add <type>` | `--<field> <value>` (repeatable; schema or extension), `--id <slug>`, `--body <text>` / `--body-file <path>`, `--strict` | mint a slug, write a well-formed (possibly `draft`) entity; print its id | v1 |
+| `khub add <type>` | `--<field> <value>` (repeatable; schema or extension), `--id <slug>`, `--draft`, `--body-file <path>`, `--strict` | mint a slug, write a well-formed entity (active by default; `--draft` marks it unpublished); print its id | v1 |
 | `khub get <id>` | `--format json\|table\|raw`, `--edges` | print an entity; `--edges` includes derived inverse edges | v1 |
 | `khub edit <id> <field> <value>` | or `--<field> <value>` (repeatable), `--body` / `--body-file`, `--strict` | edit fields, bump `updated`, re-validate | v1 |
 | `khub remove <id>` | `--force` | delete an entity; refuses while an inbound edge resolves to it, unless `--force` | v1 |

@@ -187,8 +187,8 @@ The agent's surface onto khub. The agent is khub's primary consumer, so the CLI 
 **Given** an agent has a result to record
 **When** it maps intent to a command
 **Then** the system shall expose:
-- [ ] `add` to mint an entity (saved `draft` when incomplete)
-- [ ] `edit` to change fields and promote a draft
+- [ ] `add` to mint an entity (active by default; `--draft` to capture as unpublished)
+- [ ] `edit` to change fields and publish/unpublish (set the `draft` flag)
 - [ ] `link` / `unlink` for relations
 - [ ] `remove` for deletion, guarded by inbound edges
 
@@ -205,7 +205,8 @@ The agent's surface onto khub. The agent is khub's primary consumer, so the CLI 
 **Given** an agent has incomplete information
 **When** it runs `add` without a required field
 **Then** the system shall:
-- [ ] Save a `draft` rather than reject, per the authoring rules
+- [ ] Save the entity rather than reject — capture is never blocked
+- [ ] Write it active by default (the agent passes `--draft` to mark it unpublished); `check` surfaces the gap as active-but-incomplete
 
 #### Requirements (EARS)
 
@@ -213,7 +214,7 @@ The agent's surface onto khub. The agent is khub's primary consumer, so the CLI 
 |----|------|-------------|
 | REQ-SKL003-01 | EARS-U | The skill shall map write intent onto `add`, `edit`, `link`, `unlink`, and `remove` |
 | REQ-SKL003-02 | EARS-U | The skill shall write through the same gates as a human, with no approval step |
-| REQ-SKL003-03 | EARS-E | When required fields are missing, the skill's `add` shall save a `draft` |
+| REQ-SKL003-03 | EARS-E | When required fields are missing, the skill's `add` shall still save the entity (capture is never blocked), active by default; `--draft` marks it unpublished |
 
 #### Business Rules
 
@@ -231,7 +232,7 @@ The agent's surface onto khub. The agent is khub's primary consumer, so the CLI 
 #### Test Hints
 
 - **Unit:** intent → write-command resolution
-- **Integration:** draft-on-incomplete via the skill
+- **Integration:** capture-never-blocked via the skill (incomplete `add` still saves, active by default; `--draft` marks unpublished)
 - **E2E:** an agent captures a fragment, then links it
 
 ---

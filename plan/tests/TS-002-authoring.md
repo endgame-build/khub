@@ -2,14 +2,14 @@
 id: TS-002
 name: Authoring Test Spec
 spec: plan/specs/FS-002-authoring.md
-updated: 2026-06-24
+updated: 2026-06-27
 ---
 
 # Authoring — Test Spec
 
 ## Summary
 
-Tests the write surface over the core library — `add`, `get`, `edit`, `link`/`unlink`, and `remove` as thin adapters over `core.create`, `get`, `update`, `link`/`unlink`, and `delete`, with the compiled schema and git as the only gates. Coverage runs from slug minting and field validation, through the two write invariants that define the feature — referential integrity hard-fails on write while a missing required field degrades to `draft` rather than blocking capture — to the read-time derivation of inverse edges and the inbound-edge guard on removal.
+Tests the write surface over the core library — `add`, `get`, `edit`, `link`/`unlink`, and `remove` as thin adapters over `core.create`, `get`, `update`, `link`/`unlink`, and `delete`, with the compiled schema and git as the only gates. Coverage runs from slug minting and field validation, through the two write invariants that define the feature — referential integrity hard-fails on write while a missing required field still saves active, since capture is never blocked and `draft` is a manual flag — to the read-time derivation of inverse edges and the inbound-edge guard on removal.
 
 **Feature Spec:** FS-002: Authoring
 **Stories Covered:** 5
@@ -21,15 +21,15 @@ Tests the write surface over the core library — `add`, `get`, `edit`, `link`/`
 
 ### Approach
 
-**Philosophy:** Hybrid — every command is a thin adapter over a core verb, so the discrete rules (slug minting, enum/pattern validation, draft-vs-active gating, predicate legality, cardinality, inbound-edge detection) are unit-testable against the compiled schema in isolation, but the guarantees that matter — referential integrity hard-fails before any byte is written, an incomplete entity still lands as a `draft`, an edit round-trips frontmatter to a minimal diff, an inverse edge is computed at read time and never stored — only hold when a real entity is written to and read back from a real filesystem inside a real workspace. Unit tests pin the rules; integration tests prove the command surface, the hard-fail/no-file contract, and JSON parity; E2E proves the round-trips that cross verbs (`add` → `get`, `edit` promotes a draft, `link` → derived inverse, `remove --force` → `check` surfaces the break).
+**Philosophy:** Hybrid — every command is a thin adapter over a core verb, so the discrete rules (slug minting, enum/pattern validation, the manual `draft` flag, predicate legality, cardinality, inbound-edge detection) are unit-testable against the compiled schema in isolation, but the guarantees that matter — referential integrity hard-fails before any byte is written, an incomplete entity still saves active and a `draft` flag is set only by hand, an edit round-trips frontmatter to a minimal diff, an inverse edge is computed at read time and never stored — only hold when a real entity is written to and read back from a real filesystem inside a real workspace. Unit tests pin the rules; integration tests prove the command surface, the hard-fail/no-file contract, and JSON parity; E2E proves the round-trips that cross verbs (`add` → `get`, `edit <id> draft false` publishes a draft, `link` → derived inverse, `remove --force` → `check` surfaces the break).
 
 **Test Pyramid:**
 
 | Level | Share | Scope |
 |-------|-------|-------|
-| Unit | ~60% | Slug minting + collision suffix, field/enum/pattern validation, draft/active completeness gate, referential-integrity check, strict-mode field filter, layout resolution, id + ambiguity resolution, inverse-edge derivation, round-trip write, `updated` bump, predicate legality, cardinality, inbound-edge detection |
-| Integration | ~30% | Command surface for all five verbs, hard-fail-writes-no-file contract, draft degradation, `--strict` rejection, illegal-predicate/unresolvable-target rejection, cardinality refusal, inbound-edge refusal, `--force` override, `--format json` shape and parity, located error messages |
-| E2E | ~10% | `add opportunity` → `get` round-trips frontmatter and body; `edit` fills a draft's last required relation and flips it active; `link` then a derived inverse shows on the target; `remove` a referenced client is refused, then `--force` plus `check` reports the dangling edge |
+| Unit | ~60% | Slug minting + collision suffix, field/enum/pattern validation, manual `draft` flag (default false, `--draft` sets true), referential-integrity check, strict-mode field filter, layout resolution, id + ambiguity resolution, inverse-edge derivation, round-trip write, `updated` bump, predicate legality, cardinality, inbound-edge detection |
+| Integration | ~30% | Command surface for all five verbs, hard-fail-writes-no-file contract, incomplete `add` saves active, `--draft` flag, `--strict` rejection, illegal-predicate/unresolvable-target rejection, cardinality refusal, inbound-edge refusal, `--force` override, `--format json` shape and parity, located error messages |
+| E2E | ~10% | `add opportunity` → `get` round-trips frontmatter and body; a field edit leaves `draft` untouched, then `edit <id> draft false` publishes; `link` then a derived inverse shows on the target; `remove` a referenced client is refused, then `--force` plus `check` reports the dangling edge |
 
 ### Coverage Targets
 
@@ -38,7 +38,7 @@ Tests the write surface over the core library — `add`, `get`, `edit`, `link`/`
 | Acceptance criteria | 100% of ACs from FS-002 (23 ACs across 5 stories) |
 | EARS requirements | 100% of REQ-ENT* requirements (23) |
 | Business rules | 100% of rule enforcement (ENT-001..014, ENT-SHARED-001..004) |
-| Edge cases | Hard-fail writes no file, missing-required degrades to draft, within-type slug collision, ambiguous bare slug, derived inverse never stored, single-valued cardinality, folder-layout deletion, forced removal leaving dangling edges |
+| Edge cases | Hard-fail writes no file, missing-required saves active (draft is manual), within-type slug collision, ambiguous bare slug, derived inverse never stored, single-valued cardinality, folder-layout deletion, forced removal leaving dangling edges |
 
 ---
 
@@ -63,13 +63,13 @@ Tests the write surface over the core library — `add`, `get`, `edit`, `link`/`
 - [ ] a bare slug is minted as the id, unique within the `opportunity` type
 - [ ] one file is written at the type's layout path (`opportunities/{slug}/_index.md`)
 - [ ] `created` and `updated` are set to today
-- [ ] `draft` is set to `false` because every required field and relation is present
+- [ ] `draft` is `false` by default (the flag is not passed)
 - [ ] the new id and the file path are printed
 - [ ] the system displays `Created opportunity '{slug}' (active)`
 
 **Test Data:** firm-ops workspace with existing `client/initech` and `person/noor`; a valid `opportunity` type declaring a `stage` enum and required `client`/`owner` relations
 
-#### TS-ENT-001-02: Missing Required Field Saves as Draft
+#### TS-ENT-001-02: Missing Required Field Saves Active; --draft Sets the Flag
 
 **Validates:** AC-002
 **Level:** Integration
@@ -77,12 +77,13 @@ Tests the write surface over the core library — `add`, `get`, `edit`, `link`/`
 **Given** the agent omits a required field or relation
 **When** they run `khub add opportunity --stage prospect`
 **Then:**
-- [ ] the entity is saved with `draft: true`
+- [ ] the entity is saved with `draft: false` (active by default; a missing required field does not auto-set draft)
 - [ ] the supplied fields (`stage`) are preserved
 - [ ] capture is not blocked (the file is written)
-- [ ] the system displays `Created opportunity '{slug}' (draft: missing required client, owner)`
+- [ ] the system displays `Created opportunity '{slug}' (active)`
+- [ ] re-running the same call with `--draft` instead saves `draft: true` and displays `Created opportunity '{slug}' (draft)`
 
-**Test Data:** firm-ops workspace; `add` invocation omitting the required `client` and `owner` relations
+**Test Data:** firm-ops workspace; `add` invocation omitting the required `client` and `owner` relations, run once without and once with `--draft`
 
 #### TS-ENT-001-03: Relation to a Non-Existent Target Is Rejected
 
@@ -146,7 +147,7 @@ Tests the write surface over the core library — `add`, `get`, `edit`, `link`/`
 |----|-----------|----------|-----------|
 | TS-ENT-001-U01 | Slug minter | Mints a bare slug from `--id`, else the name or type, unique within the type | REQ-ENT001-01, ENT-001 |
 | TS-ENT-001-U02 | Field validator | Validates each declared field against its type, enum, and pattern | REQ-ENT001-01 |
-| TS-ENT-001-U03 | Completeness gate | Writes `active` when all required present; degrades to `draft` preserving fields when a required field/relation is missing | REQ-ENT001-01, REQ-ENT001-02, ENT-003 |
+| TS-ENT-001-U03 | Draft flag | Defaults `draft` to false even when a required field/relation is missing (saved active); `--draft` sets it true | REQ-ENT001-01, REQ-ENT001-02, ENT-003 |
 | TS-ENT-001-U04 | Referential-integrity checker | Hard-fails the write and emits no file when a relation target does not resolve | REQ-ENT001-03, ENT-002 |
 | TS-ENT-001-U05 | Strict-mode filter | Rejects an undeclared field under `--strict`; preserves it as a free extension otherwise | REQ-ENT001-04, ENT-004 |
 | TS-ENT-001-U06 | Collision suffixer | Appends a deterministic suffix (`acme-2`) on a within-type `(type, slug)` collision | REQ-ENT001-06, ENT-001 |
@@ -228,7 +229,7 @@ Tests the write surface over the core library — `add`, `get`, `edit`, `link`/`
 
 ### STORY-ENT-003: Edit an Entity
 
-**Spec:** As an Agent or Operator, I want to change an entity's fields and re-validate, So that edits produce a minimal git diff, bump `updated`, and can promote a draft to active
+**Spec:** As an Agent or Operator, I want to change an entity's fields and re-validate, So that edits produce a minimal git diff, bump `updated`, and let me publish a draft by hand with `edit <id> draft false`
 
 #### TS-ENT-003-01: Edit a Field
 
@@ -245,7 +246,7 @@ Tests the write surface over the core library — `add`, `get`, `edit`, `link`/`
 
 **Test Data:** `opportunity/initech-deal` with a `stage` enum (`prospect, proposal-sent, won, signed, lost`) and an `updated` date earlier than today
 
-#### TS-ENT-003-02: Edit Promotes a Draft to Active
+#### TS-ENT-003-02: A Field Edit Leaves Draft Untouched; Explicit `draft false` Publishes
 
 **Validates:** AC-002
 **Level:** E2E
@@ -253,9 +254,12 @@ Tests the write surface over the core library — `add`, `get`, `edit`, `link`/`
 **Given** a draft entity missing one required relation
 **When** the agent runs `khub edit some-opp --owner noor`
 **Then:**
-- [ ] the relation target (`person/noor`) resolves
-- [ ] completeness is re-validated
-- [ ] the `draft` flag is cleared (`draft: false`) once all required are present
+- [ ] the relation target (`person/noor`) resolves and the edit is written
+- [ ] the `draft` flag is left untouched (`draft: true` — a field edit never auto-promotes)
+
+**And When** the agent then runs `khub edit some-opp draft false`
+**Then:**
+- [ ] the `draft` flag is set to `false` by hand, publishing the entity
 
 **Test Data:** an `opportunity/some-opp` saved as `draft: true` missing only `owner`; an existing `person/noor`
 
@@ -293,7 +297,7 @@ Tests the write surface over the core library — `add`, `get`, `edit`, `link`/`
 | TS-ENT-003-U01 | Enum re-validator | Rejects an out-of-enum value and leaves the file unchanged | REQ-ENT003-03 |
 | TS-ENT-003-U02 | `updated` bumper | Bumps `updated` to today on every successful edit | REQ-ENT003-01, ENT-008 |
 | TS-ENT-003-U03 | Round-trip writer | Preserves key order and comments, writing a minimal diff | REQ-ENT003-01, ENT-007 |
-| TS-ENT-003-U04 | Completeness re-evaluator | Clears the `draft` flag when an edit fills the last missing required field/relation | REQ-ENT003-02, ENT-009 |
+| TS-ENT-003-U04 | Manual draft setter | A field edit never flips `draft`; `edit <id> draft true|false` sets it by hand | REQ-ENT003-02, ENT-009 |
 | TS-ENT-003-U05 | Strict-mode editor | Rejects an edit to an undeclared field under `--strict`; preserves the extension otherwise | REQ-ENT003-04, ENT-004 |
 
 ---
@@ -459,7 +463,7 @@ Tests the write surface over the core library — `add`, `get`, `edit`, `link`/`
 | Story | AC | Description | Test Scenarios |
 |-------|----|-------------|----------------|
 | STORY-ENT-001 | AC-001 | Create a well-formed active entity | TS-ENT-001-01 |
-| STORY-ENT-001 | AC-002 | Missing required field saves as draft | TS-ENT-001-02 |
+| STORY-ENT-001 | AC-002 | Missing required field saves active; `--draft` sets the flag | TS-ENT-001-02 |
 | STORY-ENT-001 | AC-003 | Relation to a non-existent target is rejected | TS-ENT-001-03 |
 | STORY-ENT-001 | AC-004 | Unknown field under strict | TS-ENT-001-04 |
 | STORY-ENT-001 | AC-005 | Create a meeting with an explicit engagement edge | TS-ENT-001-05 |
@@ -469,7 +473,7 @@ Tests the write surface over the core library — `add`, `get`, `edit`, `link`/`
 | STORY-ENT-002 | AC-003 | Unknown id | TS-ENT-002-03 |
 | STORY-ENT-002 | AC-004 | Ambiguous slug | TS-ENT-002-04 |
 | STORY-ENT-003 | AC-001 | Edit a field | TS-ENT-003-01 |
-| STORY-ENT-003 | AC-002 | Edit promotes a draft to active | TS-ENT-003-02 |
+| STORY-ENT-003 | AC-002 | A field edit leaves draft untouched; explicit `draft false` publishes | TS-ENT-003-02 |
 | STORY-ENT-003 | AC-003 | Invalid enum value | TS-ENT-003-03 |
 | STORY-ENT-003 | AC-004 | Unknown field under strict | TS-ENT-003-04 |
 | STORY-ENT-004 | AC-001 | Add a relation | TS-ENT-004-01 |
@@ -487,7 +491,7 @@ Tests the write surface over the core library — `add`, `get`, `edit`, `link`/`
 | Requirement | Type | Description | Test Scenarios |
 |-------------|------|-------------|----------------|
 | REQ-ENT001-01 | EARS-E | All required present → write the entity as `active` | TS-ENT-001-01, TS-ENT-001-U01, TS-ENT-001-U02, TS-ENT-001-U03 |
-| REQ-ENT001-02 | EARS-W | Required field/relation missing → save as `draft`, preserve fields | TS-ENT-001-02, TS-ENT-001-U03 |
+| REQ-ENT001-02 | EARS-W | Required field/relation missing → still save active (draft is manual), preserve fields; `--draft` sets the flag | TS-ENT-001-02, TS-ENT-001-U03 |
 | REQ-ENT001-03 | EARS-W | Relation names a non-existent target → reject, write no file | TS-ENT-001-03, TS-ENT-001-U04 |
 | REQ-ENT001-04 | EARS-O | `--strict` → reject any undeclared field | TS-ENT-001-04, TS-ENT-001-U05 |
 | REQ-ENT001-05 | EARS-E | Meeting created → store `engagement` explicit edge, write flat | TS-ENT-001-05, TS-ENT-001-U07 |
@@ -497,7 +501,7 @@ Tests the write surface over the core library — `add`, `get`, `edit`, `link`/`
 | REQ-ENT002-03 | EARS-W | Id does not resolve → lookup error | TS-ENT-002-03, TS-ENT-002-U05 |
 | REQ-ENT002-04 | EARS-W | Bare slug ambiguous across types → require `type/slug` qualifier | TS-ENT-002-04, TS-ENT-002-U02 |
 | REQ-ENT003-01 | EARS-E | Field edited → re-validate, bump `updated`, minimal diff | TS-ENT-003-01, TS-ENT-003-U02, TS-ENT-003-U03 |
-| REQ-ENT003-02 | EARS-E | Edit fills last missing required → promote `draft` to `active` | TS-ENT-003-02, TS-ENT-003-U04 |
+| REQ-ENT003-02 | EARS-E | `edit <id> draft true|false` → set the flag by hand; a field edit never touches it | TS-ENT-003-02, TS-ENT-003-U04 |
 | REQ-ENT003-03 | EARS-W | New value violates type/enum → reject, leave file unchanged | TS-ENT-003-03, TS-ENT-003-U01 |
 | REQ-ENT003-04 | EARS-O | `--strict` → reject edits to undeclared fields | TS-ENT-003-04, TS-ENT-003-U05 |
 | REQ-ENT004-01 | EARS-E | `link` → verify predicate legal, target resolves, cardinality holds | TS-ENT-004-01, TS-ENT-004-U01, TS-ENT-004-U02 |
@@ -516,20 +520,20 @@ Tests the write surface over the core library — `add`, `get`, `edit`, `link`/`
 |------|-------------|-------------|----------------|
 | ENT-001 | The id is a bare slug, unique per `(type, slug)` | Constraint | TS-ENT-001-06, TS-ENT-001-U01, TS-ENT-001-U06 |
 | ENT-002 | Referential integrity hard-fails on write; a relation must resolve | Validation | TS-ENT-001-03, TS-ENT-001-U04 |
-| ENT-003 | A well-formed but incomplete entity is saved as `draft`, never rejected | Validation | TS-ENT-001-02, TS-ENT-001-U03 |
+| ENT-003 | A well-formed but incomplete entity saves active, never rejected; `draft` is a manual flag | Validation | TS-ENT-001-02, TS-ENT-001-U03 |
 | ENT-004 | Undeclared fields are preserved unless `--strict` closes the schema | Validation | TS-ENT-001-04, TS-ENT-001-U05, TS-ENT-003-U05 |
 | ENT-005 | Derived edges are computed at read time, never stored | Constraint | TS-ENT-002-02, TS-ENT-002-U03 |
 | ENT-006 | A bare slug resolves only when unique across types | Validation | TS-ENT-002-04, TS-ENT-002-U02 |
 | ENT-007 | Edits round-trip frontmatter, preserving key order and comments | Constraint | TS-ENT-003-01, TS-ENT-003-U03 |
 | ENT-008 | `updated` is bumped on every successful edit | Automation | TS-ENT-003-01, TS-ENT-003-U02 |
-| ENT-009 | Completeness is re-evaluated on edit, driving the draft↔active flip | Validation | TS-ENT-003-02, TS-ENT-003-U04 |
+| ENT-009 | `draft` is set only by hand via `edit <id> draft true|false`; an edit never auto-flips it | Validation | TS-ENT-003-02, TS-ENT-003-U04 |
 | ENT-010 | A predicate must be schema-legal for the source type | Validation | TS-ENT-004-02, TS-ENT-004-U01 |
 | ENT-011 | Forward edges are stored single-sided; inverses are derived, never stored | Constraint | TS-ENT-004-01, TS-ENT-004-04, TS-ENT-004-U03, TS-ENT-004-U05 |
 | ENT-012 | Cardinality is enforced from the schema (single versus many) | Validation | TS-ENT-004-05, TS-ENT-004-U02 |
 | ENT-013 | Removal is refused while any inbound edge resolves, unless forced | Validation | TS-ENT-005-02, TS-ENT-005-U01, TS-ENT-005-U02 |
 | ENT-014 | A forced removal surfaces resulting breakage through `check`, not a silent fix | Constraint | TS-ENT-005-03, TS-ENT-005-U04 |
 | ENT-SHARED-001 | Referential integrity hard-fails on write; every relation must resolve | Validation | TS-ENT-001-03, TS-ENT-004-03 |
-| ENT-SHARED-002 | A well-formed but incomplete entity saves as `draft`; capture is never blocked | Validation | TS-ENT-001-02, TS-ENT-003-02 |
+| ENT-SHARED-002 | A well-formed but incomplete entity saves active; capture is never blocked and `draft` is manual | Validation | TS-ENT-001-02, TS-ENT-003-02 |
 | ENT-SHARED-003 | Forward edges store single-sided; inverse edges are derived | Constraint | TS-ENT-002-02, TS-ENT-004-01 |
 | ENT-SHARED-004 | Structural integrity is guaranteed; semantic truth is not (a schema-legal but false write validates) | Constraint | TS-ENT-001-01, TS-ENT-003-01 |
 
@@ -544,12 +548,12 @@ Tests the write surface over the core library — `add`, `get`, `edit`, `link`/`
 | Variant | Key Attributes | Purpose |
 |---------|---------------|---------|
 | Valid | resolvable `client`/`owner`, `stage` in enum | Happy-path active create (TS-ENT-001-01) |
-| Invalid | required `client`/`owner` omitted | Draft degradation (TS-ENT-001-02) |
+| Invalid | required `client`/`owner` omitted | Incomplete saves active; `--draft` sets the flag (TS-ENT-001-02) |
 | Invalid | `client` names a non-existent `ghost-co` | Referential-integrity hard-fail, no file (TS-ENT-001-03) |
 | Boundary | extra undeclared field `vibe`, with/without `--strict` | Strict-mode rejection vs free extension on create (TS-ENT-001-04) |
 | Valid | `initech-deal` with `stage` in enum, `updated` earlier than today | Edit a field; strict-mode edit (TS-ENT-003-01, TS-ENT-003-04) |
 | Invalid | `initech-deal` `stage` set to `banana` | Out-of-enum rejection, file unchanged (TS-ENT-003-03) |
-| Boundary | `some-opp` saved `draft: true`, missing only `owner` | Draft→active promotion on edit (TS-ENT-003-02) |
+| Boundary | `some-opp` saved `draft: true`, missing only `owner` | Field edit leaves draft set; explicit `draft false` publishes (TS-ENT-003-02) |
 
 #### meeting
 
@@ -628,9 +632,9 @@ Tests the write surface over the core library — `add`, `get`, `edit`, `link`/`
 
 | Phase | Tests | Gate | Target |
 |-------|-------|------|--------|
-| 1. Unit | Slug minting + collision, field/enum/pattern validation, completeness gate, referential-integrity check, strict filter, layout resolution, id/ambiguity resolution, inverse derivation, round-trip write, `updated` bump, predicate legality, cardinality, inbound-edge detection | Block PR | < 30s |
-| 2. Integration | Five-verb command surface, hard-fail-no-file, draft degradation, `--strict` rejection, illegal-predicate/unresolvable-target/cardinality refusal, inbound-edge refusal, `--force`, `--format json` parity, located error messages | Block PR | < 2min |
-| 3. E2E | `add` → `get` round-trip; `edit` flips a draft to active; `link` → derived inverse on the target; `remove` referenced client refused then `--force` + `check` reports the break | Block merge | < 5min |
+| 1. Unit | Slug minting + collision, field/enum/pattern validation, manual draft flag, referential-integrity check, strict filter, layout resolution, id/ambiguity resolution, inverse derivation, round-trip write, `updated` bump, predicate legality, cardinality, inbound-edge detection | Block PR | < 30s |
+| 2. Integration | Five-verb command surface, hard-fail-no-file, incomplete `add` saves active + `--draft` flag, `--strict` rejection, illegal-predicate/unresolvable-target/cardinality refusal, inbound-edge refusal, `--force`, `--format json` parity, located error messages | Block PR | < 2min |
+| 3. E2E | `add` → `get` round-trip; a field edit leaves draft set then `edit <id> draft false` publishes; `link` → derived inverse on the target; `remove` referenced client refused then `--force` + `check` reports the break | Block merge | < 5min |
 
 ### CI Triggers
 

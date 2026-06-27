@@ -94,7 +94,8 @@ def test_inverse_edge_derived_and_marked(inverse_ws: Path) -> None:
     target = get(inverse_ws, "node-b", edges=True)
     assert target.edges is not None
     derived = [e for e in target.edges if e.derived]
-    assert any(e.predicate == "superseded_by" and e.target == "node-a" for e in derived)
+    # Derived edges are qualified type/slug (the source type isn't in a bare slug).
+    assert any(e.predicate == "superseded_by" and e.target == "doc/node-a" for e in derived)
     # Never persisted: the inverse is absent from node-b's stored frontmatter.
     assert "superseded_by" not in frontmatter.load(str(inverse_ws / "docs" / "node-b.md")).metadata
 
@@ -131,7 +132,7 @@ def test_cli_get_edges_includes_derived(inverse_ws: Path, monkeypatch) -> None:
     result = runner.invoke(app, ["get", "node-b", "--edges", "--format", "json"])
     assert result.exit_code == 0
     edges = json.loads(result.output)["edges"]
-    assert {"predicate": "superseded_by", "target": "node-a", "derived": True} in edges
+    assert {"predicate": "superseded_by", "target": "doc/node-a", "derived": True} in edges
 
 
 @pytest.mark.integration

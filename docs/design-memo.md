@@ -99,12 +99,12 @@ Two eval tiers: deterministic golden-file tests cover the engine (the HQ functio
   - `[inventory_name]/_index.[json|jsonl|gjson|yaml]`
 
   An inventory sits at the knowledge root. (Nesting an inventory under a parent item's folder, and deriving the parent edge from that placement, is post-MVP; for v1 the parent relation is an explicit frontmatter edge.)
-- **Write rules.** Referential integrity hard-fails on write: a relation to a non-existent target is rejected. An incomplete but well-formed entity is saved as a `draft`, so capture is never blocked.
-- **Lifecycle.** Every entity carries a boolean `draft` flag (`draft: true|false`, default `false`). khub writes `draft: true` when a required field or relation is missing; a complete entity is `draft: false`. `check` enforces required-relation completeness over the active (non-draft) subgraph only: a `draft` does not satisfy another entity's required relation.
+- **Write rules.** Referential integrity hard-fails on write: a relation to a non-existent target is rejected. A missing required field or relation does not block capture — the entity is still written; completeness is enforced by `check`, not at write time.
+- **Lifecycle.** Every entity carries a boolean `draft` flag (`draft: true|false`, default `false`) — a manual publish switch, not a completeness verdict. `add` writes `draft: false` by default, `--draft` marks an entity unpublished, and `edit <id> draft true|false` toggles it; no verb auto-promotes or auto-demotes. Completeness is computed from the schema and enforced by `check`, never inferred from this flag — so a published entity can be incomplete (`check` reports it active-but-incomplete) and a draft can be complete. A draft is unpublished: excluded from required-completeness, and it never satisfies another entity's required relation. (FS-002.)
 - **Standard fields.** Beyond `type` and the `draft` flag, an entity may carry OKF's optional `title`, `description`, and `resource` (the canonical URI of the underlying asset, khub's link-out), plus `author` (the writer — person or agent), `tags`, and `created`/`updated`. Per-type fields and relations come from the schema. The firm-ops preset adds `owner` (→ person) as its own accountability edge, distinct from the core `author`.
 - **The integrity loop** keeps the graph clean without manual policing. Draft status, orphan, and stale are core projection properties — every read includes drafts in scope and carries each entity's `stale`/`orphan` flag by default; `check`/`stale` gate on the same computation. The v1 acceptance signals:
   - `khub validate`: per-entity well-formedness against the schema, plus referential integrity.
-  - `khub check`: graph-wide. Relations resolve, required relations complete for `active` entities, no orphans (entities with no inbound or outbound relation), and no stray files (a file inside a type's layout that is not a valid entity of that type; reference docs outside the type layouts are skipped).
+  - `khub check`: graph-wide over the active (`draft: false`) subgraph. Relations resolve, required-completeness holds for `active` entities (computed from the schema; an active-but-incomplete entity is reported), a `draft` does not satisfy a required relation, no orphans (entities with no inbound or outbound relation), no dangling edges, and no stray files (a file inside a type's layout that is not a valid entity of that type; reference docs outside the type layouts are skipped).
   - `khub stale`: entities whose `updated` is past a threshold; dates backfilled from `git log`.
   - `khub log`: git history rendered at ontology altitude (entities and relations, not files), for orientation without a gate.
 
@@ -117,7 +117,7 @@ The CLI is a thin, schema-introspecting adapter over the core library's verbs: c
 | Workspace | `khub init <preset>` | scaffold a workspace from a preset | v1 |
 | | `khub schema [types \| show <type> \| edges]` | introspect the active schema: types, fields, enums, edges, required relations | v1 |
 | | `khub status` | counts per type, draft vs active, orphan and stale counts, OKF-conformance flag | v1 |
-| Author | `khub add <type> [--field v …]` | mint a slug, write a well-formed (possibly `draft`) entity | v1 |
+| Author | `khub add <type> [--field v …]` | mint a slug, write a well-formed entity (active by default; `--draft` to mark unpublished) | v1 |
 | | `khub get <id>` | print an entity: frontmatter and body | v1 |
 | | `khub edit <id> <field> <value>` | edit a field, bump `updated`, re-validate | v1 |
 | | `khub link <id> <predicate> <target>` | add a schema-checked relation: legal predicate, target resolves, cardinality holds | v1 |

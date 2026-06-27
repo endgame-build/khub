@@ -13,7 +13,7 @@ updated: 2026-06-24
 
 ## Objective
 
-Delivers the mutation verbs over an existing entity — `khub edit <id>` (`core.update`) and `khub link`/`khub unlink` (`core.link`/`core.unlink`) — with the compiled schema and git as the only gates. Edits round-trip frontmatter to a minimal git diff, bump `updated`, re-validate completeness, and promote a draft to active when the last required gap is filled. Link and unlink add and remove schema-checked relations — predicate legality, target resolution, and cardinality enforced — storing forward edges single-sided on the source while leaving inverse edges to derive.
+Delivers the mutation verbs over an existing entity — `khub edit <id>` (`core.update`) and `khub link`/`khub unlink` (`core.link`/`core.unlink`) — with the compiled schema and git as the only gates. Edits round-trip frontmatter to a minimal git diff and bump `updated`; the `draft` flag is set by hand via `edit <id> draft true|false` and a field edit never touches it. Link and unlink add and remove schema-checked relations — predicate legality, target resolution, and cardinality enforced — storing forward edges single-sided on the source while leaving inverse edges to derive, never touching `draft`.
 
 ---
 
@@ -22,7 +22,7 @@ Delivers the mutation verbs over an existing entity — `khub edit <id>` (`core.
 | Story | AC | Criterion | Test Scenario |
 |-------|----|-----------|---------------|
 | STORY-ENT-003 | AC-001 | Edit a field: validate the new value against the field's enum (opportunity stages), write preserving key order and comments (minimal diff), bump `updated` to today, display `Updated opportunity 'initech-deal'` | TS-ENT-003-01 |
-| STORY-ENT-003 | AC-002 | Edit promotes a draft to active: resolve the relation target, re-validate completeness, clear the `draft` flag (`draft: false`) once all required are present | TS-ENT-003-02 |
+| STORY-ENT-003 | AC-002 | Manually toggle the draft flag: `edit <id> draft false` sets `draft: false` and `edit <id> draft true` sets `draft: true`; a field edit never changes `draft`, and there is no auto-promote or auto-degrade | TS-ENT-003-02 |
 | STORY-ENT-003 | AC-003 | Invalid enum value: reject the edit, display `'banana' is not a valid stage (prospect, proposal-sent, won, signed, lost)`, leave the file unchanged | TS-ENT-003-03 |
 | STORY-ENT-003 | AC-004 | Unknown field under `--strict`: reject the edit under `--strict`; without `--strict`, accept and preserve the extension | TS-ENT-003-04 |
 | STORY-ENT-004 | AC-001 | Add a relation: check the predicate is declared for the source type, resolve the target by its schema-known type, enforce cardinality (single vs many), store the edge single-sided on the source, display `Linked initech-pov --partner--> northwind` | TS-ENT-004-01 |
@@ -38,7 +38,7 @@ Delivers the mutation verbs over an existing entity — `khub edit <id>` (`core.
 | Story | ID | Type | Requirement | Unit Test |
 |-------|----|------|-------------|-----------|
 | STORY-ENT-003 | REQ-ENT003-01 | EARS-E | When a field is edited, the system shall re-validate, bump `updated`, and write a minimal diff | TS-ENT-003-U03 |
-| STORY-ENT-003 | REQ-ENT003-02 | EARS-E | When an edit fills the last missing required field, the system shall promote `draft` to `active` | TS-ENT-003-U04 |
+| STORY-ENT-003 | REQ-ENT003-02 | EARS-E | When `edit <id> draft true|false` runs, the system shall set the `draft` flag to that value and never derive it from completeness | TS-ENT-003-U04 |
 | STORY-ENT-003 | REQ-ENT003-03 | EARS-W | If the new value violates the field's type or enum, then the system shall reject the edit and leave the file unchanged | TS-ENT-003-U01 |
 | STORY-ENT-003 | REQ-ENT003-04 | EARS-O | Where `--strict` is set, the system shall reject edits to undeclared fields | TS-ENT-003-U05 |
 | STORY-ENT-004 | REQ-ENT004-01 | EARS-E | When link runs, the system shall verify the predicate is legal, the target resolves, and cardinality holds | TS-ENT-004-U01 |
@@ -55,13 +55,13 @@ Delivers the mutation verbs over an existing entity — `khub edit <id>` (`core.
 |-------|----|------|-------------|-----------|
 | STORY-ENT-003 | ENT-007 | Edits round-trip frontmatter, preserving key order and comments | Constraint | TS-ENT-003-U03 |
 | STORY-ENT-003 | ENT-008 | `updated` is bumped on every successful edit | Automation | TS-ENT-003-U02 |
-| STORY-ENT-003 | ENT-009 | Completeness is re-evaluated on edit, driving the draft↔active flip | Validation | TS-ENT-003-U04 |
+| STORY-ENT-003 | ENT-009 | `draft` is toggled only by hand (`edit <id> draft true|false`); a field edit never touches it, and there is no auto-promote or auto-degrade | Validation | TS-ENT-003-U04 |
 | STORY-ENT-004 | ENT-010 | A predicate must be schema-legal for the source type | Validation | TS-ENT-004-U01 |
 | STORY-ENT-004 | ENT-011 | Forward edges are stored single-sided; inverses are derived, never stored | Constraint | TS-ENT-004-U03 |
 | STORY-ENT-004 | ENT-012 | Cardinality is enforced from the schema (single versus many) | Validation | TS-ENT-004-U02 |
 | STORY-ENT-003 | ENT-004 | Undeclared fields are preserved unless `--strict` closes the schema | Validation | TS-ENT-003-U05 |
 | STORY-ENT-004 | ENT-SHARED-001 | Referential integrity hard-fails on write; every relation must resolve | Validation | TS-ENT-004-03 |
-| STORY-ENT-003 | ENT-SHARED-002 | A well-formed but incomplete entity saves as `draft`; capture is never blocked | Validation | TS-ENT-003-U04 |
+| STORY-ENT-003 | ENT-SHARED-002 | An incomplete entity saves active by default (`--draft` to mark unpublished); capture is never blocked | Validation | TS-ENT-003-U04 |
 | STORY-ENT-004 | ENT-SHARED-003 | Forward edges store single-sided; inverse edges are derived | Constraint | TS-ENT-004-U03 |
 | STORY-ENT-003 | ENT-SHARED-004 | Structural integrity is guaranteed; semantic truth is not (a schema-legal but false write validates) | Constraint | TS-ENT-003-01 |
 
@@ -82,7 +82,7 @@ Delivers the mutation verbs over an existing entity — `khub edit <id>` (`core.
 | Created | Date | Yes | Mint date |
 | Updated | Date | Yes | Last edit date |
 
-> Folder layout: `opportunities/{slug}/_index.md`. The enum-edit worked example (`initech-deal`) and the draft→active promotion (`some-opp`) are both opportunities.
+> Folder layout: `opportunities/{slug}/_index.md`. The enum-edit worked example (`initech-deal`) and the manual draft toggle (`some-opp`) are both opportunities.
 
 ### project
 
@@ -143,8 +143,8 @@ Delivers the mutation verbs over an existing entity — `khub edit <id>` (`core.
 
 | Value | Description |
 |-------|-------------|
-| `draft: true` | Well-formed but incomplete; does not satisfy another entity's required relation |
-| `draft: false` | All required fields and relations present (default); counts toward `check` completeness |
+| `draft: true` | Manually marked unpublished via `edit <id> draft true`; a draft never satisfies another entity's required relation |
+| `draft: false` | Active (default); completeness is decoupled from draft and enforced by `check` (FS-004) |
 
 > **Standard Data Types:** Identifier, Reference, Text, Number, Currency, Date, Date/Time, Yes/No, Status, Type, Collection
 
@@ -154,21 +154,24 @@ Delivers the mutation verbs over an existing entity — `khub edit <id>` (`core.
 
 ```
 ┌─────────┐
-│  draft  │  (missing one required field/relation)
+│  draft  │  (manually marked unpublished)
 └────┬────┘
-     │ edit fills the missing field/relation
+     │ edit <id> draft false
      ▼
 ┌─────────┐
 │ active  │  (draft: false)
 └─────────┘
+   │ edit <id> draft true
+   └──────► draft
 ```
 
 | From | Action | To | Conditions |
 |------|--------|----|------------|
-| draft | `edit` / `link` fills the last missing required field/relation | active | completeness reached; `draft` cleared to `false` |
-| active | `edit` a field to a valid value | active | re-validates, bumps `updated`, minimal diff |
+| draft | `edit <id> draft false` | active | manual toggle; `draft` set to `false` |
+| active | `edit <id> draft true` | draft | manual toggle; `draft` set to `true` |
+| active | `edit` a field to a valid value | active | re-validates, bumps `updated`, minimal diff; `draft` untouched |
 
-> The create-time gating that first sets `draft` lives in WPK-002-1; this work package owns the draft→active promotion on edit.
+> The create-time `--draft` flag lives in WPK-002-1; this work package owns manual draft toggling via edit. A field edit never touches `draft`, and link/unlink never touch it.
 
 ---
 
@@ -232,7 +235,7 @@ Delivers the mutation verbs over an existing entity — `khub edit <id>` (`core.
 | Valid | `initech-deal` with a `stage` enum (`prospect, proposal-sent, won, signed, lost`) and an `updated` date earlier than today | Edit a field (TS-ENT-003-01) |
 | Invalid | `initech-deal` `stage` set to `banana` | Out-of-enum rejection, file unchanged (TS-ENT-003-03) |
 | Boundary | `initech-deal` with undeclared field `vibe`, with/without `--strict` | Strict-mode edit rejection vs free extension (TS-ENT-003-04) |
-| Boundary | `some-opp` saved `draft: true`, missing only `owner` | Draft→active promotion on edit (TS-ENT-003-02) |
+| Boundary | `some-opp` saved `draft: true` | Manual draft toggle via `edit <id> draft false` (TS-ENT-003-02) |
 
 ### project
 
@@ -245,7 +248,7 @@ Delivers the mutation verbs over an existing entity — `khub edit <id>` (`core.
 
 | Variant | Key Attributes | Purpose |
 |---------|---------------|---------|
-| Valid | `noor` resolvable | Relation target for edit promotion and `owner` (TS-ENT-003-02) |
+| Valid | `noor` resolvable | Resolvable `owner` target for the link cases |
 | Valid | `dana` resolvable | Second `owner` candidate for the cardinality case (TS-ENT-004-05) |
 | Missing | `ghost` resolves to nothing | Unresolvable-target rejection on link (TS-ENT-004-03) |
 
@@ -262,7 +265,7 @@ Delivers the mutation verbs over an existing entity — `khub edit <id>` (`core.
 - Both commands are thin adapters over a core verb (`core.update`, `core.link`, `core.unlink`); the compiled schema and git are the only gates. Predicate legality, cardinality, and enums are read from the schema, never hardcoded.
 - Minimal-diff writes go through round-trip YAML (ruamel.yaml): preserve key order and comments. Assert the **raw file-text diff** is confined to the changed key and the `updated` line — a serializer swap can pass a values-only check while wrecking git-diff quality.
 - `updated` is bumped on every successful edit; a rejected edit (invalid enum, strict violation) leaves the file byte-unchanged.
-- Completeness is re-evaluated on edit: clearing `draft` (`draft: false`) when the edit fills the last missing required field/relation drives the draft→active flip.
+- `draft` is a manual flag: only `edit <id> draft true|false` changes it. A field edit never touches `draft`, and link/unlink never touch it — there is no auto-promote or auto-degrade. Completeness is decoupled from draft and enforced by `check` (FS-004).
 - `link` order: predicate legality (declared for the source type) → target resolves by its schema-known type (referential integrity) → cardinality (single vs many). Forward edges are stored single-sided on the source; inverses are never stored. `unlink` removes the forward edge and lets the derived inverse recompute.
 - Single-valued cardinality (AC-005) leaves the reject-vs-replace choice open in the spec. Assert the invariant — no second value silently lands — plus the located message; confirm the chosen branch before pinning a single behavior.
 - Located error messages are brittle to wording: assert on the variable fields (slug, field, predicate, type) plus a message substring, keeping the spec's exact text as the canonical example.
@@ -276,6 +279,6 @@ Delivers the mutation verbs over an existing entity — `khub edit <id>` (`core.
 - [ ] All 6 business rules enforced (ENT-007 through ENT-012), plus ENT-004 and shared ENT-SHARED-001..004 where they apply
 - [ ] All 19 test scenarios pass (TS-ENT-003-01 through -04 + U01–U05; TS-ENT-004-01 through -05 + U01–U05)
 - [ ] Minimal-diff edit confines the raw file-text diff to the changed key and the `updated` line
-- [ ] `edit` fills a draft's last required relation and flips it active (E2E)
+- [ ] `edit <id> draft false` flips a draft to active and `edit <id> draft true` flips it back; a field edit leaves `draft` untouched (E2E)
 - [ ] `link` stores the edge single-sided; the derived inverse shows on the target yet is absent from its stored frontmatter (E2E)
 - [ ] No regressions in existing tests

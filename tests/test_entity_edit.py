@@ -1,7 +1,7 @@
 """TS-ENT-003 — Edit an Entity (WPK-002-2).
 
 Covers enum re-validation, the ``updated`` bump, minimal-diff round-trips
-(key order + comments preserved), the draft→active promotion on completeness,
+(key order + comments preserved), manual draft toggling (no auto-promote),
 and strict-mode field rejection.
 """
 
@@ -117,15 +117,23 @@ def test_create_then_edit_is_minimal_diff(fresh_ws: Path, seed: Seed) -> None:
 
 
 @pytest.mark.unit
-def test_completeness_promotes_draft(fresh_ws: Path, seed: Seed) -> None:
-    """TS-ENT-003-U04: filling the last required relation clears draft."""
+def test_field_edit_does_not_touch_draft(fresh_ws: Path, seed: Seed) -> None:
+    """TS-ENT-003-U04: a field edit never flips draft — no auto-promote."""
     _prereqs(fresh_ws, seed)
-    path = _deal(fresh_ws, seed, draft=True, owner=None)
-    # Remove the owner key so the seed leaves it genuinely absent.
-    text = path.read_text().replace("owner: null\n", "").replace("owner:\n", "")
-    path.write_text(text)
-    result = update(fresh_ws, "initech-deal", {"owner": "noor"})
-    assert result.draft is False
+    path = _deal(fresh_ws, seed, draft=True)
+    result = update(fresh_ws, "initech-deal", {"stage": "won"})
+    assert result.draft is True
+    assert frontmatter.load(str(path)).metadata["draft"] is True
+
+
+@pytest.mark.unit
+def test_edit_toggles_draft(fresh_ws: Path, seed: Seed) -> None:
+    """TS-ENT-003-U04: `edit <id> draft true|false` sets the flag by hand."""
+    _prereqs(fresh_ws, seed)
+    path = _deal(fresh_ws, seed, draft=False)
+    update(fresh_ws, "initech-deal", {"draft": "true"})
+    assert frontmatter.load(str(path)).metadata["draft"] is True
+    update(fresh_ws, "initech-deal", {"draft": "false"})
     assert frontmatter.load(str(path)).metadata["draft"] is False
 
 
@@ -160,8 +168,8 @@ def test_cli_edit_field(fresh_ws: Path, seed: Seed, monkeypatch) -> None:
 
 
 @pytest.mark.e2e
-def test_cli_edit_promotes_draft(fresh_ws: Path, seed: Seed, monkeypatch) -> None:
-    """TS-ENT-003-02: an edit that fills the last required relation flips draft to active."""
+def test_cli_edit_publishes_draft(fresh_ws: Path, seed: Seed, monkeypatch) -> None:
+    """TS-ENT-003-02: a field edit leaves draft alone; `edit <id> draft false` publishes."""
     _prereqs(fresh_ws, seed)
     seed(
         fresh_ws,
@@ -173,10 +181,15 @@ def test_cli_edit_promotes_draft(fresh_ws: Path, seed: Seed, monkeypatch) -> Non
         stage="prospect",
         client="initech",
     )
+    path = fresh_ws / "opportunities" / "some-opp" / "_index.md"
     monkeypatch.chdir(fresh_ws)
-    result = runner.invoke(app, ["edit", "some-opp", "--owner", "noor"])
+    # A field edit fills owner but does NOT auto-promote.
+    runner.invoke(app, ["edit", "some-opp", "--owner", "noor"])
+    assert frontmatter.load(str(path)).metadata["draft"] is True
+    # Publishing is an explicit, manual step.
+    result = runner.invoke(app, ["edit", "some-opp", "draft", "false"])
     assert result.exit_code == 0
-    meta = frontmatter.load(str(fresh_ws / "opportunities" / "some-opp" / "_index.md")).metadata
+    meta = frontmatter.load(str(path)).metadata
     assert meta["draft"] is False and meta["owner"] == "noor"
 
 
