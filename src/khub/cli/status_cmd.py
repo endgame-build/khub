@@ -19,9 +19,7 @@ from rich.table import Table
 from khub.cli._render import want_json
 from khub.core.errors import LocatedError
 from khub.core.locate import find_workspace
-from khub.core.project import project
-from khub.core.resolve import load_yaml
-from khub.core.workspace import DEFAULT_STALE_DAYS
+from khub.core.project import project, stale_days
 
 
 def status_command(
@@ -34,12 +32,7 @@ def status_command(
         typer.echo(err.message, err=True)
         raise typer.Exit(1) from None
 
-    cfg = load_yaml(root / ".khub" / "config.yaml")
-    defaults = cfg.get("defaults")
-    if defaults is None:  # a bare/null `defaults:` block is still a valid config
-        defaults = {}
-    stale_days = int(defaults.get("stale_days", DEFAULT_STALE_DAYS))
-    proj = project(root, stale_days=stale_days, now=date.today())
+    proj = project(root, stale_days=stale_days(root), now=date.today())
     data = {
         "counts": proj.counts,
         "total": proj.total,

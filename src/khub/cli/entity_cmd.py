@@ -47,7 +47,7 @@ def add_command(
     fmt: str = typer.Option("text", "--format", help="text or json (emits the written record)."),
 ) -> None:
     """Create an entity: khub add opportunity --client initech --owner noor --stage prospect."""
-    fields = _parse_fields(ctx.args)
+    fields = parse_fields(ctx.args)
     body = _read_body(body_file)
     try:
         root = find_workspace(Path.cwd())
@@ -166,7 +166,7 @@ def remove_command(
 # --- helpers -----------------------------------------------------------------
 
 
-def _parse_fields(extra: list[str]) -> dict[str, str]:
+def parse_fields(extra: list[str]) -> dict[str, str]:
     """Parse leftover ``--field value`` / ``--field=value`` args into a field map.
 
     A ``--call-type client`` arrives as ``{'call_type': 'client'}`` — CLI dashes

@@ -14,7 +14,9 @@ from khub.cli.entity_cmd import (
     remove_command,
     unlink_command,
 )
+from khub.cli.graph_cmd import history_command, impact_command, neighbors_command
 from khub.cli.init_cmd import init_command
+from khub.cli.query_cmd import query_command
 from khub.cli.schema_cmd import schema_app
 from khub.cli.status_cmd import status_command
 
@@ -42,6 +44,10 @@ app.command(name="edit", context_settings=DYNAMIC_FIELDS)(edit_command)
 app.command(name="link")(link_command)
 app.command(name="unlink")(unlink_command)
 app.command(name="remove")(remove_command)
+app.command(name="query", context_settings=DYNAMIC_FIELDS)(query_command)
+app.command(name="neighbors")(neighbors_command)
+app.command(name="impact")(impact_command)
+app.command(name="history")(history_command)
 
 
 def main() -> None:

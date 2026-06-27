@@ -18,6 +18,7 @@ from typing import Any
 from khub.core.index import resolve_target, scan_type
 from khub.core.introspect import load_schema
 from khub.core.model import ResolvedType
+from khub.core.resolve import load_yaml
 
 
 @dataclass(frozen=True)
@@ -71,7 +72,7 @@ def project(root: Path, *, stale_days: int, now: date) -> Projection:
             draft += 1
         else:
             active += 1
-        if _is_stale(meta, now=now, stale_days=stale_days):
+        if is_stale(meta, now=now, stale_days=stale_days):
             stale += 1
         for predicate, rel in rtype.relations.items():
             value = meta.get(predicate)
@@ -98,7 +99,24 @@ def project(root: Path, *, stale_days: int, now: date) -> Projection:
     )
 
 
-def _is_stale(meta: dict[str, Any], *, now: date, stale_days: int) -> bool:
+def stale_days(root: Path) -> int:
+    """The workspace's ``stale_days`` threshold, read from ``.khub/config.yaml``.
+
+    Shared by ``status`` and the FS-003 reads so the stale flag means the same
+    everywhere. Tolerates a null ``defaults:`` block, a null/blank ``stale_days:``
+    value, and a quoted number; falls back to the default for any absent/empty value.
+    """
+    from khub.core.workspace import DEFAULT_STALE_DAYS
+
+    cfg = load_yaml(root / ".khub" / "config.yaml")
+    defaults = cfg.get("defaults") or {}
+    raw = defaults.get("stale_days")
+    if raw is None or raw == "":
+        return DEFAULT_STALE_DAYS
+    return int(raw)
+
+
+def is_stale(meta: dict[str, Any], *, now: date, stale_days: int) -> bool:
     raw = meta.get("updated")
     if raw is None:
         raw = meta.get("created")

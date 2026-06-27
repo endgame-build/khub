@@ -1,0 +1,166 @@
+"""Entity filtering — ``khub query`` (WPK-003-1, FS-003).
+
+ANDs a set of filters (type, frontmatter field, tag, ``--has``/``--missing``
+predicate presence, orphan/stale flags, draft scope) over the entity index and
+the resolved edge graph. Filters read frontmatter and derived edges only, never
+body prose (QRY-001). An empty result is a success, not an error (QRY-002). Every
+match carries its ``orphan`` and ``stale`` flags by default (QRY-009), computed
+identically to ``khub status`` (the graph for orphan, ``core.project.is_stale``
+for stale). A field naming an undeclared attribute/relation of the filtered type
+is a located error (QRY-001).
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from datetime import date
+from pathlib import Path
+from typing import Any
+
+import networkx as nx
+
+from khub.core.errors import LocatedError
+from khub.core.graph import build_graph
+from khub.core.index import build_index
+from khub.core.introspect import load_schema
+from khub.core.model import ResolvedSchema
+from khub.core.project import is_stale, stale_days
+
+
+@dataclass(frozen=True)
+class Match:
+    """One entity passing every filter, with its derived health flags."""
+
+    type: str
+    slug: str
+    draft: bool
+    orphan: bool
+    stale: bool
+
+
+@dataclass(frozen=True)
+class QueryFilters:
+    """The ANDed filter set parsed from the CLI."""
+
+    type: str | None = None
+    fields: dict[str, str] = field(default_factory=dict)
+    tag: str | None = None
+    has: str | None = None
+    missing: str | None = None
+    orphan: bool = False
+    stale: bool = False
+    draft_only: bool = False
+    active_only: bool = False
+    limit: int | None = None
+
+
+def query(root: Path, filters: QueryFilters, *, now: date) -> list[Match]:
+    """Return the entities passing every filter, each annotated orphan/stale."""
+    resolved = load_schema(root)
+    index = build_index(root, resolved)
+    g = build_graph(index)
+    days = stale_days(root)
+
+    _validate_filter_names(resolved, root, filters)
+
+    matches: list[Match] = []
+    for node in sorted(index.nodes):
+        type_, slug = node
+        if filters.type and type_ != filters.type:
+            continue
+        meta = index.meta[node]
+        orphan = g.in_degree(node) == 0 and g.out_degree(node) == 0
+        stale = is_stale(meta, now=now, stale_days=days)
+        if not _passes(node, meta, g, filters, orphan=orphan, stale=stale):
+            continue
+        matches.append(
+            Match(type=type_, slug=slug, draft=bool(meta.get("draft")), orphan=orphan, stale=stale)
+        )
+    if filters.limit is not None:
+        matches = matches[: filters.limit]
+    return matches
+
+
+def _validate_filter_names(resolved: ResolvedSchema, root: Path, filters: QueryFilters) -> None:
+    """Reject a field or ``--has``/``--missing`` predicate the schema does not declare.
+
+    Type-scoped when ``--type`` is set (the located error names that type); otherwise
+    a name must be declared on at least one type, else it is a typo that would
+    silently match nothing (``--stagee`` returning an empty set as if a success).
+    """
+    preds = [p for p in (filters.has, filters.missing) if p is not None]
+    if filters.type is not None:
+        rtype = resolved.types.get(filters.type)
+        if rtype is None:
+            from khub.core.locate import provenance
+
+            preset = provenance(root).get("preset") or "the"
+            raise LocatedError.unknown_type(filters.type, preset, sorted(resolved.types))
+        for fname in filters.fields:
+            if fname not in rtype.attributes and fname not in rtype.relations:
+                raise LocatedError.unknown_filter_field(fname, filters.type)
+        for pred in preds:
+            if pred not in rtype.relations:
+                raise LocatedError.unknown_filter_field(pred, filters.type)
+        return
+    attrs = {a for t in resolved.types.values() for a in t.attributes}
+    rels = {r for t in resolved.types.values() for r in t.relations}
+    for fname in filters.fields:
+        if fname not in attrs and fname not in rels:
+            raise LocatedError.unknown_filter_field(fname, "any")
+    for pred in preds:
+        if pred not in rels:
+            raise LocatedError.unknown_filter_field(pred, "any")
+
+
+def _passes(
+    node: tuple[str, str],
+    meta: dict[str, Any],
+    g: nx.MultiDiGraph,
+    f: QueryFilters,
+    *,
+    orphan: bool,
+    stale: bool,
+) -> bool:
+    """Whether one entity passes every active filter (read-only over frontmatter)."""
+    is_draft = bool(meta.get("draft"))
+    if f.active_only and is_draft:
+        return False
+    if f.draft_only and not is_draft:
+        return False
+    for fname, fval in f.fields.items():
+        if not _field_matches(meta.get(fname), fval):
+            return False
+    if f.tag is not None and not _field_matches(meta.get("tags"), f.tag):
+        return False
+    # --has / --missing test the *resolved* edge: an edge only exists in the graph
+    # when its value resolved to a node, so an unresolvable target counts as missing.
+    if f.has is not None and not _has_edge(g, node, f.has):
+        return False
+    if f.missing is not None and _has_edge(g, node, f.missing):
+        return False
+    if f.orphan and not orphan:
+        return False
+    if f.stale and not stale:
+        return False
+    return True
+
+
+def _has_edge(g: nx.MultiDiGraph, node: tuple[str, str], predicate: str) -> bool:
+    """Whether ``node`` has a resolvable outbound edge for ``predicate``."""
+    return any(pred == predicate for _, _, pred in g.out_edges(node, keys=False, data="predicate"))
+
+
+def _field_matches(value: Any, wanted: str) -> bool:
+    """Whether a frontmatter value matches a CLI filter string.
+
+    A bool matches case-insensitively (so ``--active true`` works against YAML
+    ``True``); a list (many-valued relation or list attribute) matches on
+    membership (``--team noor`` against ``team: [noor, bob]``, never substring);
+    any other scalar matches by string equality.
+    """
+    if isinstance(value, bool):
+        return str(value).lower() == wanted.lower()
+    if isinstance(value, list):
+        return any(str(v) == wanted for v in value)
+    return str(value) == wanted

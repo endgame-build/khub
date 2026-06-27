@@ -144,6 +144,17 @@ class LocatedError(Exception):
     def lookup_error(cls, id_: str) -> "LocatedError":
         return cls(code="lookup_error", message=f"No entity '{id_}' found", target=id_)
 
+    # --- query (WPK-003-1) ---------------------------------------------------
+
+    @classmethod
+    def unknown_filter_field(cls, field: str, type_: str) -> "LocatedError":
+        return cls(
+            code="filter_error",
+            message=f"No field '{field}' on type '{type_}'",
+            type=type_,
+            target=field,
+        )
+
     @classmethod
     def ambiguous_slug(cls, slug: str, candidates: list[str]) -> "LocatedError":
         listed = ", ".join(candidates)

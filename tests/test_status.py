@@ -86,6 +86,11 @@ def test_status_tolerates_null_and_string_config(seeded: Path, monkeypatch) -> N
         "name: hq\npreset: firm-ops\ndefaults:\n  stale_days: \"120\"\n"
     )
     assert runner.invoke(app, ["status", "--format", "json"]).exit_code == 0
+    # a present-but-null `stale_days:` value falls back to the default, not int(None)
+    (seeded / ".khub" / "config.yaml").write_text(
+        "name: hq\npreset: firm-ops\ndefaults:\n  stale_days:\n"
+    )
+    assert runner.invoke(app, ["status", "--format", "json"]).exit_code == 0
 
 
 @pytest.mark.integration
