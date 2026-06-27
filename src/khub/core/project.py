@@ -4,11 +4,8 @@ A minimal, derived-at-runtime view of the entity tree behind ``khub status``:
 per-type counts, the draft/active split, orphan (zero edges in or out), stale
 (older than ``stale_days``), and the OKF-conformance flag. Counts are never
 stored (WS-006); orphan and stale are core projection properties meant to be
-computed identically for status, query, and check (WS-008).
-
-# ponytail: full in-memory scan, fine for a v1 firm corpus. When FS-003/FS-004
-# need incremental queries, lift this to a persistent index (networkx is already
-# a dependency for that fuller graph) — the Projection shape can stay.
+computed identically for status, query, and check (WS-008). The entity scan and
+edge resolution live in ``core.index``, shared with the authoring verbs (FS-002).
 """
 
 from __future__ import annotations
@@ -18,10 +15,9 @@ from datetime import date, datetime
 from pathlib import Path
 from typing import Any
 
-import frontmatter
-
+from khub.core.index import resolve_target, scan_type
 from khub.core.introspect import load_schema
-from khub.core.model import ResolvedRelation, ResolvedType
+from khub.core.model import ResolvedType
 
 
 @dataclass(frozen=True)
@@ -57,7 +53,7 @@ def project(root: Path, *, stale_days: int, now: date) -> Projection:
     nodes: set[tuple[str, str]] = set()
     types_by_slug: dict[str, set[str]] = {}
     for tname, rtype in resolved.types.items():
-        entities = _scan_type(root, rtype)
+        entities = scan_type(root, rtype)
         counts[tname] = len(entities)
         for slug, meta in entities:
             nodes.add((tname, slug))
@@ -82,7 +78,7 @@ def project(root: Path, *, stale_days: int, now: date) -> Projection:
             if not value:
                 continue
             for target in value if isinstance(value, list) else [value]:
-                resolved_to = _resolve_target(rel, str(target), nodes, types_by_slug)
+                resolved_to = resolve_target(rel, str(target), nodes, types_by_slug)
                 others = resolved_to - {node}
                 if others:
                     has_out.add(node)
@@ -102,19 +98,6 @@ def project(root: Path, *, stale_days: int, now: date) -> Projection:
     )
 
 
-def _resolve_target(
-    rel: ResolvedRelation,
-    target: str,
-    nodes: set[tuple[str, str]],
-    types_by_slug: dict[str, set[str]],
-) -> set[tuple[str, str]]:
-    """The nodes a relation value resolves to: any-type for universal edges,
-    a declared target type otherwise."""
-    if rel.kind == "any":
-        return {(t, target) for t in types_by_slug.get(target, ())}
-    return {(t, target) for t in rel.targets if (t, target) in nodes}
-
-
 def _is_stale(meta: dict[str, Any], *, now: date, stale_days: int) -> bool:
     raw = meta.get("updated")
     if raw is None:
@@ -124,24 +107,6 @@ def _is_stale(meta: dict[str, Any], *, now: date, stale_days: int) -> bool:
     ts = _as_date(raw)
     # A present-but-unparseable date is surfaced as stale, not silently dropped.
     return ts is None or (now - ts).days > stale_days
-
-
-def _scan_type(root: Path, rtype: ResolvedType) -> list[tuple[str, dict[str, Any]]]:
-    if not rtype.storage.path:
-        return []
-    base = root / rtype.storage.path
-    if not base.exists():
-        return []
-    out: list[tuple[str, dict[str, Any]]] = []
-    if rtype.storage.layout == "folder":
-        for idx in sorted(base.glob("*/_index.md")):
-            out.append((idx.parent.name, frontmatter.load(str(idx)).metadata))
-    else:
-        for f in sorted(base.glob("*.md")):
-            if f.name == "_index.md":
-                continue
-            out.append((f.stem, frontmatter.load(str(f)).metadata))
-    return out
 
 
 def _as_date(value: Any) -> date | None:

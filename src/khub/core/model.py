@@ -43,6 +43,7 @@ class ResolvedRelation:
     kind: Literal["typed", "union", "any"]
     many: bool = False
     required: bool = False
+    inverse: str | None = None
 
 
 @dataclass(frozen=True)

@@ -39,11 +39,14 @@ class AttrDecl(_Strict):
 
 class RelationDecl(_Strict):
     """A relation declaration. ``to`` is a single type, a list of types (union),
-    or the literal ``any``. The field name (the map key) is the predicate."""
+    or the literal ``any``. The field name (the map key) is the predicate.
+    ``inverse`` names the read-time derived edge on the target (never stored);
+    firm-ops declares none."""
 
     to: str | list[str]
     many: bool = False
     required: bool = False
+    inverse: str | None = None
 
 
 class TypeDecl(_Strict):

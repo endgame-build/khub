@@ -123,20 +123,23 @@ def _relation(type_name: str, predicate: str, rd: RelationDecl, declared: set[st
     to = rd.to
     if to == "any":
         return ResolvedRelation(
-            predicate=predicate, targets=("any",), kind="any", many=rd.many, required=rd.required
+            predicate=predicate, targets=("any",), kind="any",
+            many=rd.many, required=rd.required, inverse=rd.inverse,
         )
     if isinstance(to, list):
         for target in to:
             if target not in declared:
                 raise LocatedError.unknown_target(type_name, predicate, target)
         return ResolvedRelation(
-            predicate=predicate, targets=tuple(to), kind="union", many=rd.many, required=rd.required
+            predicate=predicate, targets=tuple(to), kind="union",
+            many=rd.many, required=rd.required, inverse=rd.inverse,
         )
     # single typed target
     if to not in declared:
         raise LocatedError.unknown_target(type_name, predicate, to)
     return ResolvedRelation(
-        predicate=predicate, targets=(to,), kind="typed", many=rd.many, required=rd.required
+        predicate=predicate, targets=(to,), kind="typed",
+        many=rd.many, required=rd.required, inverse=rd.inverse,
     )
 
 

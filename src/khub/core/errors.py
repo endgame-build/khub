@@ -91,3 +91,88 @@ class LocatedError(Exception):
             code="no_workspace",
             message="No .khub workspace found. Run khub init <preset>",
         )
+
+    # --- authoring (WPK-002-*) -----------------------------------------------
+
+    @classmethod
+    def referential_integrity(
+        cls, target_type: str, target: str, predicate: str, *, noun: str = "relation"
+    ) -> "LocatedError":
+        return cls(
+            code="referential_integrity",
+            message=f"No {target_type} '{target}' to satisfy {noun} '{predicate}'",
+            type=target_type,
+            relation=predicate,
+            target=target,
+        )
+
+    @classmethod
+    def strict_unknown_field(cls, field: str) -> "LocatedError":
+        return cls(
+            code="strict_unknown_field",
+            message=f"Unknown field '{field}' rejected under --strict",
+            target=field,
+        )
+
+    @classmethod
+    def enum_violation(cls, value: str, field: str, allowed: tuple[str, ...]) -> "LocatedError":
+        return cls(
+            code="enum_violation",
+            message=f"'{value}' is not a valid {field} ({', '.join(allowed)})",
+            relation=field,
+            target=value,
+        )
+
+    @classmethod
+    def pattern_violation(cls, value: str, field: str, pattern: str) -> "LocatedError":
+        return cls(
+            code="pattern_violation",
+            message=f"'{value}' does not match the pattern for {field} ({pattern})",
+            relation=field,
+            target=value,
+        )
+
+    @classmethod
+    def lookup_error(cls, id_: str) -> "LocatedError":
+        return cls(code="lookup_error", message=f"No entity '{id_}' found", target=id_)
+
+    @classmethod
+    def ambiguous_slug(cls, slug: str, candidates: list[str]) -> "LocatedError":
+        listed = ", ".join(candidates)
+        return cls(
+            code="ambiguity_error",
+            message=f"Slug '{slug}' is ambiguous: {listed}. Qualify as type/slug",
+            target=slug,
+        )
+
+    @classmethod
+    def illegal_predicate(cls, predicate: str, type_: str) -> "LocatedError":
+        return cls(
+            code="illegal_predicate",
+            message=f"Predicate '{predicate}' is not legal for type '{type_}'",
+            type=type_,
+            relation=predicate,
+        )
+
+    @classmethod
+    def cardinality_violation(cls, predicate: str) -> "LocatedError":
+        return cls(
+            code="cardinality_violation",
+            message=f"Predicate '{predicate}' is single-valued; use edit to replace",
+            relation=predicate,
+        )
+
+    @classmethod
+    def inbound_edge_refusal(
+        cls, type_: str, slug: str, count: int
+    ) -> "LocatedError":
+        plural = "edge" if count == 1 else "edges"
+        return cls(
+            code="inbound_edge_refusal",
+            message=(
+                f"Refusing to remove {type_} '{slug}': {count} inbound {plural} "
+                f"resolve to it. Pass --force to override"
+            ),
+            type=type_,
+            target=slug,
+        )
