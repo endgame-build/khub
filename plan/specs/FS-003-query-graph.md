@@ -3,7 +3,7 @@ id: FS-003
 name: Query & Graph
 priority: High
 dependencies: [FS-002]
-updated: 2026-06-21
+updated: 2026-06-27
 ---
 
 # Query & Graph
@@ -49,9 +49,9 @@ The read and traversal surface — the agent's primary retrieval path into typed
 ##### AC-001: Filter by Type and Field
 
 **Given** a firm-ops workspace with opportunities
-**When** the agent runs `khub query --type opportunity --stage discovery --format json`
+**When** the agent runs `khub query --type opportunity --stage prospect --format json`
 **Then** the system shall:
-- [ ] Return only `opportunity` entities at stage `discovery`
+- [ ] Return only `opportunity` entities at stage `prospect`
 - [ ] Annotate each match with its `orphan` and `stale` flags by default
 - [ ] Emit each match as JSON when `--format json` is set
 - [ ] Apply `--limit` when given
@@ -67,7 +67,7 @@ The read and traversal surface — the agent's primary retrieval path into typed
 ##### AC-003: Empty Result
 
 **Given** no entity matches the filter
-**When** the agent runs `khub query --type build --stage delivered`
+**When** the agent runs `khub query --type opportunity --stage lost`
 **Then** the system shall:
 - [ ] Return an empty set, not an error
 - [ ] Display: "No entities match" on a TTY
@@ -147,7 +147,7 @@ The read and traversal surface — the agent's primary retrieval path into typed
 ##### AC-003: Isolated Entity
 
 **Given** an entity with no resolvable edges
-**When** the agent runs `khub neighbors lone-fragment`
+**When** the agent runs `khub neighbors lonely-client`
 **Then** the system shall:
 - [ ] Return an empty neighbor set
 - [ ] Display: "No neighbors"
@@ -217,8 +217,8 @@ The read and traversal surface — the agent's primary retrieval path into typed
 
 ##### AC-002: Reverse Closure (Ancestors)
 
-**Given** an entity reached by an `affects` chain
-**When** the agent runs `khub impact some-component --predicate affects --reverse`
+**Given** an entity reached by a `references` chain
+**When** the agent runs `khub impact some-component --predicate references --reverse`
 **Then** the system shall:
 - [ ] Walk ancestors (what reaches this node) instead of descendants
 - [ ] Return the upstream set
@@ -259,7 +259,7 @@ The read and traversal surface — the agent's primary retrieval path into typed
 
 - **Command:** `khub impact <id>` — `--predicate <p=depends_on>`, `--reverse`, `--format tree\|json`
 - **Library verb:** `core.impact(id, predicate, reverse)` via `networkx` descendants/ancestors
-- **Entities:** any type; `depends_on`, `affects`
+- **Entities:** any type; `depends_on` (default), `references` (firm-ops v1 dropped the HQ-only `affects`)
 - **Invariant upheld:** the graph is derived; blast radius is computed on demand
 - **Output:** tree or JSON closure
 
@@ -276,6 +276,8 @@ The read and traversal surface — the agent's primary retrieval path into typed
 **As an** Agent
 **I want to** follow the supersession chain from a decision
 **So that** I can read decision lineage without scanning files
+
+> **Preset note:** firm-ops v1 declares no `decision` type and no `supersedes` / derived `superseded_by` predicates — all dropped, 0 live entities. The `history` walk is an engine capability over any self-referential edge; firm-ops v1 demonstrates none natively, so the examples below describe a generic fixture chain (the engine follows supersession regardless of preset). See `docs/firm-ops-preset.md`.
 
 #### Preconditions
 
@@ -336,7 +338,7 @@ The read and traversal surface — the agent's primary retrieval path into typed
 
 - **Command:** `khub history <id>` — `--predicate <p=supersedes>`, `--limit`, `--format`
 - **Library verb:** `core.history(id, predicate)` over the supersession edge
-- **Entities:** decision (and any self-referential edge)
+- **Entities:** any self-referential edge (firm-ops v1 declares none; the engine supports it generically)
 - **Invariant upheld:** relations are authoritative; inverse derived
 - **Output:** ordered chain as table or JSON
 
@@ -365,7 +367,7 @@ Query and traversal read the same firm-ops nodes and edges that authoring writes
 
 | Attribute | Type | Required | Description |
 |-----------|------|----------|-------------|
-| Predicate | Text | Yes | The relation name (one of 17 in firm-ops) |
+| Predicate | Text | Yes | The relation name (one of 14 in firm-ops) |
 | Source | Reference | Yes | The node the edge is stored on |
 | Target | Reference | Yes | The resolved target node |
 | Direction | Type | Yes | Outbound (stored) or inbound (including derived inverse) |
