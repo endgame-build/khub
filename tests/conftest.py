@@ -82,11 +82,20 @@ def seed() -> Callable[..., None]:
 
     Usage: ``seed(root, "clients/acme.md", type="client", name="Acme", ...)``.
     """
-    import yaml
+    import io
+
+    from ruamel.yaml import YAML
+
+    yaml = YAML(typ="safe")
+    yaml.default_flow_style = False
+    yaml.representer.sort_base_mapping_type_on_output = False  # sort_keys=False
+    yaml.width = 4096
 
     def _seed(root: Path, relpath: str, **meta: object) -> None:
         p = root / relpath
         p.parent.mkdir(parents=True, exist_ok=True)
-        p.write_text("---\n" + yaml.safe_dump(meta, sort_keys=False) + "---\n")
+        buf = io.StringIO()
+        yaml.dump(meta, buf)
+        p.write_text("---\n" + buf.getvalue() + "---\n")
 
     return _seed

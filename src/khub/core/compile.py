@@ -9,6 +9,7 @@ partial artifacts.
 
 from __future__ import annotations
 
+import io
 import os
 import shutil
 import tempfile
@@ -16,7 +17,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-import yaml
+from ruamel.yaml import YAML
 
 from khub.core.determinism import (
     canonicalize_json_schema,
@@ -28,6 +29,13 @@ from khub.core.linkml_emit import to_linkml_dict
 from khub.core.resolve import load_yaml, resolve
 
 ARTIFACTS = ("schema.linkml.yaml", "models.py", "schema.json")
+
+# typ="safe" sorts mapping keys on output (matches the old yaml.safe_dump
+# sort_keys=True), so schema.linkml.yaml stays deterministic; wide width keeps
+# long scalars on one line.
+_yaml = YAML(typ="safe")
+_yaml.default_flow_style = False
+_yaml.width = 4096
 
 
 @dataclass(frozen=True)
@@ -71,7 +79,9 @@ def _generate(linkml_dict: dict[str, Any], dest: Path) -> None:
     from linkml.generators.pydanticgen import PydanticGenerator
 
     linkml_path = dest / "schema.linkml.yaml"
-    linkml_path.write_text(yaml.safe_dump(linkml_dict, sort_keys=True))
+    buf = io.StringIO()
+    _yaml.dump(linkml_dict, buf)
+    linkml_path.write_text(buf.getvalue())
 
     models = PydanticGenerator(str(linkml_path), extra_fields="allow").serialize()
     (dest / "models.py").write_text(canonicalize_pydantic(deconflict_type_named_fields(models)))

@@ -11,12 +11,13 @@ fresh workspace and force-seeds over a live corpus (the HQ cutover).
 from __future__ import annotations
 
 import hashlib
+import io
 import shutil
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-import yaml
+from ruamel.yaml import YAML
 
 from khub.core.compile import compile_schema
 from khub.core.errors import LocatedError
@@ -24,6 +25,19 @@ from khub.core.resolve import load_yaml
 
 PRESETS_DIR = Path(__file__).resolve().parent.parent / "presets"
 DEFAULT_STALE_DAYS = 90
+
+# Authored order is meaningful here (base before entities, declared entity order),
+# so keep emission in insertion order — the old yaml.safe_dump(sort_keys=False).
+_yaml = YAML(typ="safe")
+_yaml.default_flow_style = False
+_yaml.representer.sort_base_mapping_type_on_output = False
+_yaml.width = 4096
+
+
+def _dump_yaml(data: Any) -> str:
+    buf = io.StringIO()
+    _yaml.dump(data, buf)
+    return buf.getvalue()
 
 
 @dataclass(frozen=True)
@@ -96,7 +110,7 @@ def init_workspace(
         khub.mkdir(parents=True, exist_ok=True)
         schema_path = khub / "schema.yaml"
         header = f"# khub-preset: {preset}@{version}\n"
-        schema_path.write_text(header + yaml.safe_dump(merged, sort_keys=False))
+        schema_path.write_text(header + _dump_yaml(merged))
 
         compile_schema(schema_path, khub / "generated")
 
@@ -108,7 +122,7 @@ def init_workspace(
             "source": str(preset_source) if preset_source else None,
             "defaults": {"format": "text", "stale_days": DEFAULT_STALE_DAYS},
         }
-        (khub / "config.yaml").write_text(yaml.safe_dump(config, sort_keys=False))
+        (khub / "config.yaml").write_text(_dump_yaml(config))
 
         _append_gitignore(target / ".gitignore", ".khub/generated/")
 
