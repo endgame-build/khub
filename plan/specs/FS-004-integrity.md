@@ -171,7 +171,7 @@ The integrity loop keeps the graph clean without manual policing, and it is the 
 
 ##### AC-005: Detect an Edge Cycle
 
-**Given** a cycle on a predicate that should be acyclic (e.g. `supersedes`)
+**Given** a cycle on a predicate that should be acyclic (e.g. `depends_on`)
 **When** the agent runs `khub check`
 **Then** the system shall:
 - [ ] Report the cycle with the participating ids
@@ -232,7 +232,7 @@ draft  (draft: true)  ─▶ exempt from required-completeness;
 #### Test Hints
 
 - **Unit:** orphan detection; completeness from the schema; active-but-incomplete detection
-- **Integration:** active-but-incomplete reporting; draft-does-not-satisfy; dangling edge after `remove --force`; cycle detection on `supersedes`
+- **Integration:** active-but-incomplete reporting; draft-does-not-satisfy; dangling edge after `remove --force`; cycle detection on `depends_on`
 - **E2E:** `check` on an HQ snapshot surfaces the firm-ops structural gaps
 
 ---
@@ -320,6 +320,8 @@ draft  (draft: true)  ─▶ exempt from required-completeness;
 **As an** Agent or Operator
 **I want to** read git history described in entities and relations, not files
 **So that** I can orient on what changed without a gate, distinct from the supersession chain
+
+> **Preset note:** firm-ops v1 declares no `decision` type and no `supersedes` predicate (both HQ-only, dropped). `log` runs against any firm-ops entity — AC-001 and AC-002 use `project/initech-pov`. AC-003's contrast with a populated supersession chain uses a generic fixture, since firm-ops demonstrates no `supersedes` natively; the `log` (git history) vs `history` (graph chain) distinction holds at the command level regardless of preset. See `docs/firm-ops-preset.md`.
 
 #### Preconditions
 
@@ -439,7 +441,7 @@ The integrity loop reads the firm-ops graph and emits report records. The report
 | Relation | On Type | Drives Completeness |
 |----------|---------|---------------------|
 | owner | most types | An active entity needs a resolvable owner |
-| client | opportunity, project, build, case-study | An active engagement needs a client |
+| client | opportunity, project, case-study | An active engagement needs a client |
 | engagement | meeting | A meeting needs its engagement (explicit edge) |
 
 ### Cascade Behaviors
