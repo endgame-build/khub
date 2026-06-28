@@ -70,7 +70,41 @@ def resolve_target(
     types_by_slug: dict[str, set[str]],
 ) -> set[tuple[str, str]]:
     """The nodes a relation value resolves to: any-type for universal edges,
-    a declared target type otherwise."""
+    a declared target type otherwise.
+
+    A qualified ``type/slug`` value resolves to that exact node (the form ``link``
+    accepts on an ambiguous slug); a bare slug resolves by slug — across every type
+    for a universal (``any``) edge, within the declared targets for a typed edge.
+    """
+    if "/" in target:
+        t, s = target.split("/", 1)
+        if (t, s) not in nodes:
+            return set()
+        # A qualified id still honors the edge's declared targets: a typed/union edge
+        # rejects a node of a disallowed type; a universal (any) edge accepts any.
+        return {(t, s)} if rel.kind == "any" or t in rel.targets else set()
     if rel.kind == "any":
         return {(t, target) for t in types_by_slug.get(target, ())}
     return {(t, target) for t in rel.targets if (t, target) in nodes}
+
+
+def stray_nodes(index: Index) -> set[tuple[str, str]]:
+    """Scanned files whose internal ``type`` does not match their layout type.
+
+    A file inside a type's layout that does not parse as that type is a stray
+    (INT-011); reference markdown outside every layout is never scanned, so it is
+    skipped, not flagged. Derived from the existing scan — no second walk.
+    """
+    return {node for node, m in index.meta.items() if m.get("type") != node[0]}
+
+
+def filter_index(index: Index, drop: set[tuple[str, str]]) -> Index:
+    """A view of ``index`` with ``drop`` nodes removed from nodes, slugs, and meta."""
+    if not drop:
+        return index
+    nodes = index.nodes - drop
+    types_by_slug: dict[str, set[str]] = {}
+    for tname, slug in nodes:
+        types_by_slug.setdefault(slug, set()).add(tname)
+    meta = {n: m for n, m in index.meta.items() if n not in drop}
+    return Index(resolved=index.resolved, nodes=nodes, types_by_slug=types_by_slug, meta=meta)

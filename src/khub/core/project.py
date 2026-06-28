@@ -116,15 +116,34 @@ def stale_days(root: Path) -> int:
     return int(raw)
 
 
-def is_stale(meta: dict[str, Any], *, now: date, stale_days: int) -> bool:
+def effective_date(meta: dict[str, Any], *, git_date: date | None = None) -> tuple[date | None, str]:
+    """The date staleness is judged against, with its provenance.
+
+    Precedence: the ``updated`` field, then a git last-commit date (when supplied),
+    then ``created``. The single staleness definition shared by ``status``/``query``
+    (which pass no ``git_date``) and ``khub stale`` (which backfills git when
+    ``updated`` is absent) — INT-SHARED-004. A present-but-unparseable value yields
+    ``(None, <source>)`` so the caller can still see where it came from.
+    """
     raw = meta.get("updated")
-    if raw is None:
-        raw = meta.get("created")
-    if raw is None:
+    if raw is not None:
+        return _as_date(raw), "updated"
+    if git_date is not None:
+        return git_date, "git log"
+    raw = meta.get("created")
+    if raw is not None:
+        return _as_date(raw), "created"
+    return None, "none"
+
+
+def is_stale(
+    meta: dict[str, Any], *, now: date, stale_days: int, git_date: date | None = None
+) -> bool:
+    date_, source = effective_date(meta, git_date=git_date)
+    if source == "none":
         return False  # no timestamp to judge against
-    ts = _as_date(raw)
     # A present-but-unparseable date is surfaced as stale, not silently dropped.
-    return ts is None or (now - ts).days > stale_days
+    return date_ is None or (now - date_).days > stale_days
 
 
 def _as_date(value: Any) -> date | None:
