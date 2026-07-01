@@ -10,7 +10,7 @@ updated: 2026-06-21
 
 ## Overview
 
-Stands up a khub workspace and exposes the active schema to every other surface. `khub init` scaffolds a seeded fork from a preset, flattening `core` and the chosen preset into one editable `.khub/schema.yaml` and invoking the FS-000 compiler; `khub schema` and `khub status` read that workspace back. This is the workspace foundation, one layer above the schema: nothing authors, queries, or checks until a workspace exists and the schema can be introspected. The firm-ops preset (12 types, 17 relation predicates) is the v1 proving ground.
+Stands up a khub workspace and exposes the active schema to every other surface. `khub init` scaffolds a seeded fork from a preset, flattening `core` and the chosen preset into one editable `.khub/schema.yaml` and invoking the FS-000 compiler; `khub schema` and `khub status` read that workspace back. This is the workspace foundation, one layer above the schema: nothing authors, queries, or checks until a workspace exists and the schema can be introspected. The firm-ops preset (9 types, 14 relation predicates) is the v1 proving ground.
 
 **Primary Actor:** Operator
 
@@ -118,7 +118,7 @@ Stands up a khub workspace and exposes the active schema to every other surface.
 
 - **Unit:** preset resolution, `core`+preset merge, provenance stamping
 - **Integration:** LinkML compile to Pydantic + JSON Schema; gitignore write
-- **E2E:** `init firm-ops` then `schema types` returns the 12 firm-ops types
+- **E2E:** `init firm-ops` then `schema types` returns the 9 firm-ops types
 
 ---
 
@@ -127,6 +127,8 @@ Stands up a khub workspace and exposes the active schema to every other surface.
 **As an** Agent or Operator
 **I want to** read the effective schema — types, fields, enums, relations, and storage layout
 **So that** every surface introspects the contract at runtime and never hardcodes per-type knowledge
+
+> **Preset note:** firm-ops v1 declares no derived inverse — dropping `decision` removed `supersedes` / `superseded_by`. `schema edges` therefore returns 14 predicates, all stored. The `derived` marker is a real output field the engine sets when a preset declares an inverse (exercised against a generic fixture in TS-003), but no firm-ops edge sets it. See `docs/firm-ops-preset.md`.
 
 #### Preconditions
 
@@ -168,8 +170,8 @@ Stands up a khub workspace and exposes the active schema to every other surface.
 **Given** a valid workspace
 **When** the agent runs `khub schema edges`
 **Then** the system shall:
-- [ ] Return all 17 predicates (16 stored + the derived `superseded_by`) with their `from`, `to`, and cardinality
-- [ ] Distinguish typed, union, and universal (`any → any`) edges, and mark which are derived
+- [ ] Return all 14 predicates (all stored; firm-ops declares no derived inverse) with their `from`, `to`, and cardinality
+- [ ] Distinguish typed, union, and universal (`any → any`) edges, and mark which are derived (firm-ops v1 declares none)
 - [ ] Mark which predicates are required relations
 
 #### Requirements (EARS)
@@ -200,7 +202,7 @@ Stands up a khub workspace and exposes the active schema to every other surface.
 
 - **Unit:** type lookup, enum extraction, required-relation flagging
 - **Integration:** JSON shape parity between `schema` and `schema show`
-- **E2E:** `schema edges` over firm-ops returns 17 predicates
+- **E2E:** `schema edges` over firm-ops returns 14 predicates
 
 ---
 
@@ -293,7 +295,7 @@ Stands up a khub workspace and exposes the active schema to every other surface.
 | Workspace | A seeded fork: `.khub/` config and flattened schema plus the entity tree |
 | Preset | The canonical operational setup (firm-ops in v1); merged into the workspace at init |
 | Schema | The effective contract: types, attributes, relations, and storage layout, compiled to LinkML |
-| Type | One entity type declared by the schema (12 in firm-ops) |
+| Type | One entity type declared by the schema (9 in firm-ops) |
 
 #### Workspace
 

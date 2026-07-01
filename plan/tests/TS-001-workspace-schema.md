@@ -9,7 +9,7 @@ updated: 2026-06-23
 
 ## Summary
 
-Tests the workspace layer one level above the schema: `khub init` flattens `core` and a named preset into one `.khub/schema.yaml`, invokes the FS-000 compiler, stamps provenance, and lays down the entity tree without touching existing entity files; `khub schema` and `khub status` then read that workspace back, deriving everything from the compiled contract at runtime. Coverage runs from preset resolution and provenance stamping through a clean firm-ops scaffold that introspects to 12 types and 17 predicates.
+Tests the workspace layer one level above the schema: `khub init` flattens `core` and a named preset into one `.khub/schema.yaml`, invokes the FS-000 compiler, stamps provenance, and lays down the entity tree without touching existing entity files; `khub schema` and `khub status` then read that workspace back, deriving everything from the compiled contract at runtime. Coverage runs from preset resolution and provenance stamping through a clean firm-ops scaffold that introspects to 9 types and 14 predicates.
 
 **Feature Spec:** FS-001: Workspace & Schema
 **Stories Covered:** 3
@@ -29,7 +29,7 @@ Tests the workspace layer one level above the schema: `khub init` flattens `core
 |-------|-------|-------|
 | Unit | ~60% | Preset resolution, core+preset flatten, provenance stamping, config defaults, type/enum lookup, required-relation flagging, per-type counting, draft/active split, orphan/stale derivation, OKF flag |
 | Integration | ~30% | Init command flow (compile + gitignore write), schema/status command surface, `--format json` shape and parity, error rejection (unknown preset/type, non-empty target, no workspace) |
-| E2E | ~10% | `init firm-ops` then `schema types` returns the 12 types; `schema edges` returns 17 predicates; force-seed over a live corpus modifies 0 entity files; `status` after `init` shows initialized-but-empty |
+| E2E | ~10% | `init firm-ops` then `schema types` returns the 9 types; `schema edges` returns 14 predicates; force-seed over a live corpus modifies 0 entity files; `status` after `init` shows initialized-but-empty |
 
 ### Coverage Targets
 
@@ -38,7 +38,7 @@ Tests the workspace layer one level above the schema: `khub init` flattens `core
 | Acceptance criteria | 100% of ACs from FS-001 (12 ACs) |
 | EARS requirements | 100% of REQ-WS* requirements (13) |
 | Business rules | 100% of rule enforcement (WS-001..009, WS-SHARED-001..002) |
-| Edge cases | Non-destructive force-seed, empty workspace, no workspace resolved, unknown preset/type, derived `superseded_by` edge, self-containment after init |
+| Edge cases | Non-destructive force-seed, empty workspace, no workspace resolved, unknown preset/type, the `derived` edge marker (firm-ops declares none), self-containment after init |
 
 ---
 
@@ -66,7 +66,7 @@ Tests the workspace layer one level above the schema: `khub init` flattens `core
 - [ ] `.khub/generated/` is added to the workspace `.gitignore`
 - [ ] the entity tree is laid down per each type's storage layout
 - [ ] the system displays `Initialized firm-ops workspace at ./hq`
-- [ ] a follow-up `khub schema types` returns the 12 firm-ops types
+- [ ] a follow-up `khub schema types` returns the 9 firm-ops types
 
 **Test Data:** firm-ops preset fixture (`core.yaml` + `firm-ops.yaml` with a declared semver); empty target directory `./hq`
 
@@ -132,6 +132,8 @@ Tests the workspace layer one level above the schema: `khub init` flattens `core
 
 **Spec:** As an Agent or Operator, I want to read the effective schema — types, fields, enums, relations, and storage layout, So that every surface introspects the contract at runtime and never hardcodes per-type knowledge
 
+> **Preset note:** firm-ops v1 declares no derived inverse (`decision` / `supersedes` / `superseded_by` dropped), so `schema edges` returns 14 predicates, all stored. The `derived` output marker is exercised against a generic self-referential fixture in TS-003; here every firm-ops edge is non-derived. See `docs/firm-ops-preset.md`.
+
 #### TS-WS-002-01: Show the Full Effective Schema
 
 **Validates:** AC-001
@@ -183,11 +185,11 @@ Tests the workspace layer one level above the schema: `khub init` flattens `core
 **Given** a valid workspace
 **When** the agent runs `khub schema edges`
 **Then:**
-- [ ] all 17 predicates (16 stored + the derived `superseded_by`) are returned with `from`, `to`, and cardinality
-- [ ] typed, union, and universal (`any → any`) edges are distinguished, and the derived edge is marked
+- [ ] all 14 predicates (all stored; firm-ops declares no derived inverse) are returned with `from`, `to`, and cardinality
+- [ ] typed, union, and universal (`any → any`) edges are distinguished; every firm-ops edge is marked non-derived
 - [ ] the required relations are marked
 
-**Test Data:** scaffolded firm-ops workspace whose compiled schema carries 16 stored predicates plus the derived `superseded_by`
+**Test Data:** scaffolded firm-ops workspace whose compiled schema carries 14 stored predicates and no derived inverse
 
 #### Unit Tests
 
@@ -198,7 +200,7 @@ Tests the workspace layer one level above the schema: `khub init` flattens `core
 | TS-WS-002-U03 | Schema introspector | Flags required relations from the schema, not from data | REQ-WS002-02, WS-005 |
 | TS-WS-002-U04 | Schema introspector | Raises a lookup error listing known types for an unknown type | REQ-WS002-03 |
 | TS-WS-002-U05 | Schema introspector | Derives all output from `.khub/schema.yaml` at runtime with no per-type code path | REQ-WS002-01, WS-004 |
-| TS-WS-002-U06 | Edge introspector | Returns 17 predicates (16 stored + derived `superseded_by`), distinguishing typed/union/universal and marking the derived edge | AC-004 |
+| TS-WS-002-U06 | Edge introspector | Returns 14 predicates (all stored), distinguishing typed/union/universal and emitting the `derived` marker (false for every firm-ops edge) | AC-004 |
 | TS-WS-002-U07 | Output formatter | Emits machine-readable JSON when `--format json` is set, parity with the Rich-table fields | REQ-WS002-04 |
 
 ---
@@ -287,7 +289,7 @@ Tests the workspace layer one level above the schema: `khub init` flattens `core
 | STORY-WS-002 | AC-001 | Show the full effective schema | TS-WS-002-01 |
 | STORY-WS-002 | AC-002 | View a single type | TS-WS-002-02 |
 | STORY-WS-002 | AC-003 | Unknown type | TS-WS-002-03 |
-| STORY-WS-002 | AC-004 | List the relation vocabulary (17 predicates) | TS-WS-002-04 |
+| STORY-WS-002 | AC-004 | List the relation vocabulary (14 predicates) | TS-WS-002-04 |
 | STORY-WS-003 | AC-001 | Summarize a healthy workspace | TS-WS-003-01 |
 | STORY-WS-003 | AC-002 | Status on an empty workspace | TS-WS-003-02 |
 | STORY-WS-003 | AC-003 | No workspace found | TS-WS-003-03 |
@@ -352,7 +354,7 @@ Tests the workspace layer one level above the schema: `khub init` flattens `core
 
 | Variant | Key Attributes | Purpose |
 |---------|---------------|---------|
-| Valid | flattened firm-ops schema: 12 types, 16 stored + 1 derived (`superseded_by`) predicates | Full schema, single type, edges (TS-WS-002-01, -02, -04) |
+| Valid | flattened firm-ops schema: 9 types, 14 stored predicates (no derived inverse) | Full schema, single type, edges (TS-WS-002-01, -02, -04) |
 | Invalid | lookup for a type (`widget`) the schema never declares | Unknown-type lookup error (TS-WS-002-03) |
 | Boundary | `opportunity` with a `stage` enum and required `client`/`owner` relations | Required-relation flagging (TS-WS-002-02) |
 
@@ -403,7 +405,7 @@ Tests the workspace layer one level above the schema: `khub init` flattens `core
 |-------|-------|------|--------|
 | 1. Unit | Preset resolution, flatten, provenance stamping, config defaults, type/enum lookup, counting, orphan/stale, OKF flag | Block PR | < 30s |
 | 2. Integration | Init compile + gitignore write, schema/status command surface, `--format json` shape and parity, error rejection | Block PR | < 2min |
-| 3. E2E | `init firm-ops` → `schema types` (12 types); `schema edges` (17 predicates); force-seed 0 files modified; `status` after `init` empty | Block merge | < 5min |
+| 3. E2E | `init firm-ops` → `schema types` (9 types); `schema edges` (14 predicates); force-seed 0 files modified; `status` after `init` empty | Block merge | < 5min |
 
 ### CI Triggers
 
@@ -417,7 +419,7 @@ Tests the workspace layer one level above the schema: `khub init` flattens `core
 
 | Risk | Impact | Mitigation |
 |------|--------|------------|
-| Type and predicate counts (12 types, 17 predicates / 16 stored + `superseded_by`) are asserted verbatim against the firm-ops preset, which FS-000 still describes as 9 types / 14 predicates | TS-WS-001-01, TS-WS-002-04 drift if the preset evolves or the two specs are reconciled | Read the counts from the compiled schema as the source of truth and assert the count plus the named set; treat a mismatch as a spec-reconciliation signal, not a silent test edit |
+| Type and predicate counts (9 types, 14 predicates, all stored) are asserted verbatim against the firm-ops preset (now aligned with FS-000) | TS-WS-001-01, TS-WS-002-04 drift if the preset evolves | Read the counts from the compiled schema as the source of truth and assert the count plus the named set; treat a mismatch as a spec-reconciliation signal, not a silent test edit |
 | Located error messages (unknown preset, non-empty target, unknown type, no workspace) are asserted verbatim and brittle to wording | TS-WS-001-02/03, TS-WS-002-03, TS-WS-003-03 break on cosmetic edits | Assert on the variable fields (preset name, path, type name) plus a message substring, keeping the spec's exact text as the canonical example |
 | Force-seed over a live corpus could overwrite an entity file under a regression | TS-WS-001-04 is the only guard on data loss during the cutover | Snapshot every entity `.md` hash before init and assert byte-identical after; assert the `0 entity files modified` count independently of the hashes |
 | Rich-table rendering varies by terminal width and version, making TTY-branch assertions flaky | TS-WS-002-02, TS-WS-003-01 flake on the table branch | Assert structured fields via the JSON branch for content; assert only that the TTY branch renders a table (presence, not layout) using a fixed-width captured console |

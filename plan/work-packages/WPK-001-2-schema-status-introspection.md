@@ -13,7 +13,9 @@ updated: 2026-06-23
 
 ## Objective
 
-Delivers the two read-side surfaces that orient every other tool: `khub schema` (with `schema types`, `schema show <type>`, `schema edges`) and `khub status`. Both derive everything from the compiled `.khub/schema.yaml` and the graph projection at runtime — no per-type code path, no stored counts. Schema introspection returns each type's fields, enums, required flags, relations, and storage layout, plus the full relation vocabulary (16 stored predicates and the derived `superseded_by`); status returns per-type counts, the draft/active split, orphan and stale counts, and an OKF-conformance flag. Rich table on a TTY, JSON otherwise.
+Delivers the two read-side surfaces that orient every other tool: `khub schema` (with `schema types`, `schema show <type>`, `schema edges`) and `khub status`. Both derive everything from the compiled `.khub/schema.yaml` and the graph projection at runtime — no per-type code path, no stored counts. Schema introspection returns each type's fields, enums, required flags, relations, and storage layout, plus the full relation vocabulary (14 predicates, all stored — firm-ops declares no derived inverse); status returns per-type counts, the draft/active split, orphan and stale counts, and an OKF-conformance flag. Rich table on a TTY, JSON otherwise.
+
+> **Preset note:** firm-ops v1 declares no derived inverse — `decision` and its `supersedes` / `superseded_by` were dropped. `schema edges` returns 14 predicates, all stored; the `derived` output marker exists (an engine capability, exercised via a generic fixture in TS-003) but no firm-ops edge sets it. See `docs/firm-ops-preset.md`.
 
 ---
 
@@ -24,7 +26,7 @@ Delivers the two read-side surfaces that orient every other tool: `khub schema` 
 | STORY-WS-002 | AC-001 | Show the full effective schema: every type with fields, enums, required flags, relations; each type's storage layout/format/nesting; provenance (source preset and version); valid JSON under `--format json` | TS-WS-002-01 |
 | STORY-WS-002 | AC-002 | View a single type: `opportunity` fields, `stage` enum values, required fields, relations (`client`, `owner`, `partner`); `client` and `owner` marked required; Rich table on TTY, JSON otherwise | TS-WS-002-02 |
 | STORY-WS-002 | AC-003 | Unknown type returns a lookup error, displays `No type 'widget' in the firm-ops schema`, and lists the known types | TS-WS-002-03 |
-| STORY-WS-002 | AC-004 | List the relation vocabulary: all 17 predicates (16 stored + derived `superseded_by`) with `from`/`to`/cardinality; distinguish typed, union, and universal edges and mark the derived one; mark required relations | TS-WS-002-04 |
+| STORY-WS-002 | AC-004 | List the relation vocabulary: all 14 predicates (all stored; firm-ops declares no derived inverse) with `from`/`to`/cardinality; distinguish typed, union, and universal edges and mark which are derived (none in firm-ops v1); mark required relations | TS-WS-002-04 |
 | STORY-WS-003 | AC-001 | Summarize a healthy workspace: per-type counts, draft vs active counts, orphan and stale counts, OKF-conformance flag; Rich table on TTY | TS-WS-003-01 |
 | STORY-WS-003 | AC-002 | Status on an empty workspace returns zero counts for every type and displays `Workspace initialized; no entities yet` | TS-WS-003-02 |
 | STORY-WS-003 | AC-003 | No workspace found returns a resolution error and displays `No .khub workspace found. Run khub init <preset>` | TS-WS-003-03 |
@@ -75,7 +77,7 @@ Delivers the two read-side surfaces that orient every other tool: `khub schema` 
 
 | Attribute | Type | Required | Description |
 |-----------|------|----------|-------------|
-| Name | Text | Yes | Type identifier (e.g. `opportunity`; 12 in firm-ops) |
+| Name | Text | Yes | Type identifier (e.g. `opportunity`; 9 in firm-ops) |
 | Fields | Collection | Yes | Declared attributes with required flags |
 | Enums | Collection | No | Named enumerations on fields (e.g. `stage`) |
 | Relations | Collection | No | Outgoing relations, with required relations flagged |
@@ -86,12 +88,12 @@ Delivers the two read-side surfaces that orient every other tool: `khub schema` 
 
 | Attribute | Type | Required | Description |
 |-----------|------|----------|-------------|
-| Predicate | Text | Yes | Relation name (e.g. `client`, `owner`, `partner`, `superseded_by`) |
+| Predicate | Text | Yes | Relation name (e.g. `client`, `owner`, `partner`, `depends_on`) |
 | From | Reference | Yes | Source type(s) — typed, union, or universal (`any`) |
 | To | Reference | Yes | Target type(s) |
 | Cardinality | Text | Yes | Cardinality (one/many) |
 | Required | Yes/No | No | Whether the relation is required |
-| Derived | Yes/No | No | Whether the predicate is derived (e.g. `superseded_by`) vs stored |
+| Derived | Yes/No | No | Whether the predicate is a derived inverse vs stored (firm-ops v1 declares none) |
 
 ### Storage Layout *(named enumeration)*
 
@@ -116,7 +118,7 @@ Delivers the two read-side surfaces that orient every other tool: `khub schema` 
 
 ## State Transitions
 
-Not applicable — `khub schema` and `khub status` are read-only surfaces. `status` reports the draft/active/superseded counts derived from the projection; it does not transition entity state. The entity lifecycle is owned by authoring features outside this work package.
+Not applicable — `khub schema` and `khub status` are read-only surfaces. `status` reports the draft/active counts derived from the projection; it does not transition entity state. The entity lifecycle is owned by authoring features outside this work package.
 
 ---
 
@@ -137,7 +139,7 @@ Not applicable — `khub schema` and `khub status` are read-only surfaces. `stat
 | --format | enum(text, json) | No | Rich table on a TTY (default); `json` emits machine-readable output |
 
 - **Reads:** `.khub/schema.yaml`, `.khub/generated/`
-- **Output (success):** Rich table on a TTY, JSON otherwise. `schema show opportunity` returns fields, the `stage` enum, required fields, and relations with `client`/`owner` marked required. `schema edges` returns all 17 predicates (16 stored + derived `superseded_by`) with `from`/`to`/cardinality, distinguishing typed/union/universal and marking the derived edge and required relations.
+- **Output (success):** Rich table on a TTY, JSON otherwise. `schema show opportunity` returns fields, the `stage` enum, required fields, and relations with `client`/`owner` marked required. `schema edges` returns all 14 predicates (all stored) with `from`/`to`/cardinality, distinguishing typed/union/universal and marking which are derived (none in firm-ops v1) and required relations.
 - **Errors:**
 
 | Exit | Code | Condition |
@@ -170,7 +172,7 @@ Not applicable — `khub schema` and `khub status` are read-only surfaces. `stat
 
 | Variant | Key Attributes | Purpose |
 |---------|---------------|---------|
-| Valid | flattened firm-ops schema: 12 types, 16 stored + 1 derived (`superseded_by`) predicates | Full schema, single type, edges (TS-WS-002-01, -02, -04) |
+| Valid | flattened firm-ops schema: 9 types, 14 stored predicates (no derived inverse) | Full schema, single type, edges (TS-WS-002-01, -02, -04) |
 | Invalid | lookup for a type (`widget`) the schema never declares | Unknown-type lookup error (TS-WS-002-03) |
 | Boundary | `opportunity` with a `stage` enum and required `client`/`owner` relations | Required-relation flagging (TS-WS-002-02) |
 
@@ -187,8 +189,8 @@ Not applicable — `khub schema` and `khub status` are read-only surfaces. `stat
 ## Implementation Notes
 
 - Both surfaces are pure reads. Schema introspection derives everything from the compiled `.khub/schema.yaml` at runtime (WS-004 / WS-SHARED-001) — no per-type code path. Status counts come from the graph projection, never stored values (WS-006).
-- `schema edges` returns 17 predicates (16 stored + the derived `superseded_by`), distinguishing typed, union, and universal (`any → any`) edges and marking the derived one. Required relations are flagged from the schema, not inferred from data (WS-005).
-- Counts as source of truth: read type and predicate counts from the compiled schema, not literals (FS-000 still describes firm-ops as 9 types / 14 predicates). Assert the count plus the named set; treat a mismatch as a spec-reconciliation signal, not a silent test edit.
+- `schema edges` returns 14 predicates (all stored), distinguishing typed, union, and universal (`any → any`) edges; every firm-ops edge is non-derived. Required relations are flagged from the schema, not inferred from data (WS-005).
+- Counts as source of truth: read type and predicate counts from the compiled schema, not literals (the compiled firm-ops schema is 9 types / 14 predicates, matching FS-000). Assert the count plus the named set; treat a mismatch as a spec-reconciliation signal, not a silent test edit.
 - Orphan and stale are core projection properties, computed identically for `status`, `query`, and `check` (WS-008). The OKF-conformance flag reports whether the workspace would project to a valid OKF bundle — every entity carries `type`, relations resolve, an `index.md` generates (WS-007) — the conditions `export --okf` requires.
 - Output branches: Rich table on a TTY, JSON otherwise; `--format json` forces machine-readable output with field parity to the table. Assert structured content via the JSON branch; assert only table presence (not layout) on the TTY branch.
 - Self-containment (WS-SHARED-002): both commands resolve from `.khub/` alone with the hub/preset fixture removed.
