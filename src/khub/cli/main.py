@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import typer
 
+from khub.cli.backfill_cmd import backfill_command
 from khub.cli.compile_cmd import compile_command
 from khub.cli.entity_cmd import (
     DYNAMIC_FIELDS,
@@ -18,6 +19,7 @@ from khub.cli.gitlog_cmd import log_command, stale_command
 from khub.cli.graph_cmd import history_command, impact_command, neighbors_command
 from khub.cli.init_cmd import init_command
 from khub.cli.integrity_cmd import check_command, validate_command
+from khub.cli.projection_cmd import reindex_command, viz_command
 from khub.cli.query_cmd import query_command
 from khub.cli.schema_cmd import schema_app
 from khub.cli.status_cmd import status_command
@@ -54,6 +56,9 @@ app.command(name="validate")(validate_command)
 app.command(name="check")(check_command)
 app.command(name="stale")(stale_command)
 app.command(name="log")(log_command)
+app.command(name="reindex")(reindex_command)
+app.command(name="viz")(viz_command)
+app.command(name="backfill")(backfill_command)
 
 
 def main() -> None:

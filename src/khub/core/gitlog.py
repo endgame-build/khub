@@ -76,6 +76,25 @@ def last_commit_date(root: Path, relpath: str) -> date | None:
     return date.fromisoformat(out)
 
 
+def first_commit_date(root: Path, relpath: str) -> date | None:
+    """The committer date of the *first* commit touching ``relpath``, or None if untracked.
+
+    ``backfill`` (FS-005) derives ``created`` from the first commit — the read
+    ``stale``/``log`` never needed, so it extends the shared helper here. ``git log``
+    lists newest-first, so the oldest commit is the last line; committer date (``%cd``)
+    matches ``last_commit_date`` and ``log``.
+
+    # ponytail: lines[-1] is the oldest commit on a linear history (the common cutover
+    # case). A merge with non-monotonic committer dates could reorder the tail; lift to
+    # `git log --diff-filter=A` (the add commit) if a merge-heavy history mis-dates `created`.
+    """
+    res = _git(root, "log", "--format=%cd", "--date=short", "--", relpath)
+    lines = res.stdout.strip().splitlines()
+    if res.returncode != 0 or not lines:
+        return None
+    return date.fromisoformat(lines[-1])
+
+
 # --- stale -------------------------------------------------------------------
 
 
