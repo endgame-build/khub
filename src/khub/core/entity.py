@@ -17,6 +17,7 @@ has no per-type code path. The schema and git are the only gates.
 
 from __future__ import annotations
 
+import math
 import re
 import shutil
 from dataclasses import dataclass, field
@@ -204,7 +205,7 @@ def _validate_attr(attr: ResolvedAttribute, raw: str) -> Any:
     if attr.base_type == "bool":
         return _to_bool(raw)
     if attr.base_type == "number":
-        return _to_number(raw)
+        return _to_number(raw, attr.name)
     if attr.base_type == "list":
         return [v.strip() for v in raw.split(",")]
     return raw
@@ -522,8 +523,20 @@ def _to_bool(raw: str) -> bool:
     return raw.strip().lower() in {"true", "yes", "1", "on"}
 
 
-def _to_number(raw: str) -> int | float:
+def _to_number(raw: str, field: str) -> int | float:
+    """Coerce ``raw`` to a finite int/float, or raise a located error.
+
+    Mirrors the write gate to what ``validate`` accepts (integrity._is_number): a
+    non-numeric string raises a located error instead of a bare ValueError traceback,
+    and ``inf``/``nan`` are rejected here rather than written and later flagged by validate.
+    """
     try:
-        return int(raw)
+        value: int | float = int(raw)
     except ValueError:
-        return float(raw)
+        try:
+            value = float(raw)
+        except ValueError:
+            raise LocatedError.number_violation(raw, field) from None
+    if not math.isfinite(value):
+        raise LocatedError.number_violation(raw, field)
+    return value

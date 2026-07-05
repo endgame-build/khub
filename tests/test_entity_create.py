@@ -77,6 +77,21 @@ def test_field_validation_enum_and_pattern(fresh_ws: Path, seed: Seed) -> None:
 
 
 @pytest.mark.unit
+def test_number_field_rejects_non_numeric_and_nonfinite(fresh_ws: Path) -> None:
+    """Review #3: a bad number raises a located error, not a bare ValueError; inf/nan rejected.
+
+    The write gate accepts exactly what `validate` accepts (a finite number), so a value
+    is never written that a later `validate` would flag.
+    """
+    for bad in ("abc", "inf", "nan", "1e999"):  # non-numeric, and parseable-but-not-finite
+        with pytest.raises(LocatedError) as err:
+            create(fresh_ws, "fragment", {"stage": "raw", "confidence": bad})
+        assert err.value.code == "number_violation"
+    ok = create(fresh_ws, "fragment", {"stage": "raw", "confidence": "0.8"})  # a finite number coerces
+    assert frontmatter.load(str(ok.path)).metadata["confidence"] == 0.8
+
+
+@pytest.mark.unit
 def test_draft_is_manual(fresh_ws: Path, seed: Seed) -> None:
     """TS-ENT-001-U03: draft is the manual flag — default false even when required is missing."""
     _prereqs(fresh_ws, seed)

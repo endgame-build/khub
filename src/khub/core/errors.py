@@ -141,6 +141,15 @@ class LocatedError(Exception):
         )
 
     @classmethod
+    def number_violation(cls, value: str, field: str) -> "LocatedError":
+        return cls(
+            code="number_violation",
+            message=f"'{value}' is not a valid number for {field}",
+            relation=field,
+            target=value,
+        )
+
+    @classmethod
     def lookup_error(cls, id_: str) -> "LocatedError":
         return cls(code="lookup_error", message=f"No entity '{id_}' found", target=id_)
 
