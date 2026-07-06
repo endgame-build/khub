@@ -150,11 +150,15 @@ def test_empty_slug_is_rejected(fresh_ws: Path, seed: Seed) -> None:
 
 @pytest.mark.unit
 def test_collision_suffix_is_deterministic(fresh_ws: Path, seed: Seed) -> None:
-    """TS-ENT-001-U06: a within-type collision appends -2, then -3."""
+    """TS-ENT-001-U06: a within-type minted collision appends -2, then -3.
+
+    Minted (non-explicit) slugs auto-suffix; an explicit --id collision instead
+    refuses (see test_explicit_id_collision_raises).
+    """
     _prereqs(fresh_ws, seed)
-    first = create(fresh_ws, "client", {"name": "Acme"}, id_="acme")
-    second = create(fresh_ws, "client", {"name": "Acme"}, id_="acme")
-    third = create(fresh_ws, "client", {"name": "Acme"}, id_="acme")
+    first = create(fresh_ws, "client", {"name": "Acme"})
+    second = create(fresh_ws, "client", {"name": "Acme"})
+    third = create(fresh_ws, "client", {"name": "Acme"})
     assert (first.slug, second.slug, third.slug) == ("acme", "acme-2", "acme-3")
 
 
@@ -258,12 +262,15 @@ def test_cli_meeting_flat_with_engagement(fresh_ws: Path, seed: Seed, monkeypatc
 
 @pytest.mark.integration
 def test_cli_explicit_id_and_collision(fresh_ws: Path, seed: Seed, monkeypatch) -> None:
-    """TS-ENT-001-06: explicit --id is used, collides to acme-2, mints from name when omitted."""
+    """TS-ENT-001-06: explicit --id is used; a collision refuses; name mints when omitted."""
     _prereqs(fresh_ws, seed)
     monkeypatch.chdir(fresh_ws)
     first = runner.invoke(app, ["add", "client", "--id", "acme", "--name", "Acme Corp"])
     assert first.exit_code == 0 and (fresh_ws / "clients" / "acme.md").exists()
+    # An explicit --id collision refuses (never auto-suffixes), leaving no acme-2.
     second = runner.invoke(app, ["add", "client", "--id", "acme", "--name", "Acme Corp"])
-    assert second.exit_code == 0 and (fresh_ws / "clients" / "acme-2.md").exists()
+    assert second.exit_code == 1
+    assert "Slug 'acme' is already taken in client" in second.output
+    assert not (fresh_ws / "clients" / "acme-2.md").exists()
     minted = runner.invoke(app, ["add", "client", "--name", "Beta Corp"])
     assert minted.exit_code == 0 and (fresh_ws / "clients" / "beta-corp.md").exists()

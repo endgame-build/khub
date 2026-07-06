@@ -13,11 +13,20 @@ incomplete entity is surfaced by ``check`` (FS-004), not by this flag.
 
 Every verb is schema-generic: it introspects the compiled schema at runtime and
 has no per-type code path. The schema and git are the only gates.
+
+The write gate is deliberately strict about corruption an author would never see
+until later: ``type`` is pinned to the layout type (a user field cannot clobber
+the discriminator); a slug is length-capped and minted with an O_EXCL write so a
+concurrent add cannot lose one; an explicit ``--id`` collision refuses rather than
+silently suffixing; date/bool/number fields are validated to exactly what
+``validate`` accepts (via ``khub.core.values``); a bare relation target that
+resolves to more than one node, or to the source itself, is refused with a clean
+error. The edit path tolerates a BOM / leading blank lines so any file the reader
+can show, the editor can also write.
 """
 
 from __future__ import annotations
 
-import math
 import re
 import shutil
 from dataclasses import dataclass, field
@@ -32,7 +41,12 @@ from ruamel.yaml import YAML
 from khub.core.errors import LocatedError
 from khub.core.index import Index, build_index, resolve_target
 from khub.core.introspect import load_schema
-from khub.core.model import ResolvedAttribute, ResolvedSchema, ResolvedType
+from khub.core.model import ResolvedAttribute, ResolvedRelation, ResolvedSchema, ResolvedType
+from khub.core.values import as_bool, is_bool, is_dateish, is_number
+
+# The longest slug we mint or accept; an over-long --id would otherwise crash at
+# path.write_text with an OSError (filename too long) instead of a located error.
+_MAX_SLUG = 100
 
 _yaml = YAML()  # round-trip: preserves key order and comments on edit
 _yaml.default_flow_style = False
@@ -64,12 +78,18 @@ class UpdateResult:
 
 @dataclass(frozen=True)
 class LinkResult:
-    """The outcome of a link/unlink, for the confirmation line."""
+    """The outcome of a link/unlink, for the confirmation line.
+
+    ``changed`` is False when the edge already existed (link) or was already absent
+    (unlink), so no file was rewritten — the CLI uses it to distinguish a real
+    mutation from a no-op.
+    """
 
     type: str
     slug: str
     predicate: str
     target: str
+    changed: bool
 
 
 @dataclass(frozen=True)
@@ -141,19 +161,17 @@ def create(
     index = build_index(root, resolved)
     attrs, rels, extras = _partition(rtype, fields, strict=strict)
 
-    # Referential integrity hard-fails before any byte is written.
+    # Referential integrity (and bare-target ambiguity) hard-fail before any byte
+    # is written.
     for predicate, values in rels.items():
         rel = rtype.relations[predicate]
         for value in values:
-            if not resolve_target(rel, value, index.nodes, index.types_by_slug):
-                target_type = "/".join(rel.targets)
-                raise LocatedError.referential_integrity(target_type, value, predicate)
+            _resolve_write_target(rel, value, index, predicate)
 
     # `draft` is manual: the --draft flag, or an explicit `draft` field, else false.
     explicit = attrs.pop("draft", None)
     is_draft = bool(explicit) if explicit is not None else draft
 
-    slug = _mint_slug(_slug_source(type_, attrs, id_), type_, index)
     meta: dict[str, Any] = {
         "type": type_,
         "created": date.today(),
@@ -169,9 +187,22 @@ def create(
             meta[predicate] = rels[predicate] if rel.many else rels[predicate][0]
     meta.update(extras)
 
-    path = entity_path(root, rtype, slug)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(_render_file(meta, body))
+    # Slug + O_EXCL write. An explicit --id collision refuses (never auto-suffixes);
+    # a minted slug retries on the next -N suffix if a concurrent add reached it first.
+    if id_ is not None:
+        slug = _explicit_slug(id_, type_, index)
+        path = entity_path(root, rtype, slug)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            _write_new(path, meta, body)
+        except FileExistsError:
+            raise LocatedError(
+                code="slug_taken",
+                message=f"Slug '{slug}' is already taken in {type_}; choose another --id",
+            ) from None
+    else:
+        base = _slug_base(_slug_source(type_, attrs))
+        slug, path = _mint_and_write(root, rtype, base, type_, index, meta, body)
     return CreateResult(type=type_, slug=slug, path=path, draft=is_draft)
 
 
@@ -183,10 +214,29 @@ def _partition(
     rels: dict[str, list[str]] = {}
     extras: dict[str, Any] = {}
     for key, raw in fields.items():
+        # The discriminator is set by the command, not the caller: a user `type`
+        # field disagreeing with the layout type would silently mis-file the entity.
+        if key == "type" and raw != rtype.name:
+            raise LocatedError(
+                code="type_field_forbidden",
+                message=f"The 'type' field is set by the command ({rtype.name}); it cannot be overridden",
+            )
         if key in rtype.attributes:
             attrs[key] = _validate_attr(rtype.attributes[key], raw)
         elif key in rtype.relations:
-            rels[key] = [v.strip() for v in raw.split(",")] if raw else []
+            rel = rtype.relations[key]
+            values = [v.strip() for v in raw.split(",") if v.strip()] if raw else []
+            # A blank value has no meaning as an edge — refuse it (unlink removes);
+            # a comma-list on a single-valued relation used to drop its tail silently —
+            # refuse it with the same cardinality error `link` raises.
+            if not values:
+                raise LocatedError(
+                    code="empty_relation_value",
+                    message=f"Empty value for relation '{key}'; use unlink to remove an edge",
+                )
+            if not rel.many and len(values) > 1:
+                raise LocatedError.cardinality_violation(key)
+            rels[key] = values
         elif strict:
             raise LocatedError.strict_unknown_field(key)
         else:
@@ -206,30 +256,107 @@ def _validate_attr(attr: ResolvedAttribute, raw: str) -> Any:
         return _to_bool(raw)
     if attr.base_type == "number":
         return _to_number(raw, attr.name)
+    if attr.base_type in ("date", "datetime"):
+        # Mirror the number gate: reject a value `validate` would flag (e.g. an
+        # impossible 2026-13-45) at write time, not after it has landed on disk.
+        if not is_dateish(raw):
+            raise LocatedError(
+                code="date_violation",
+                message=f"'{raw}' is not a valid {attr.base_type} for {attr.name}",
+            )
+        return _as_dateobj(raw)
     if attr.base_type == "list":
         return [v.strip() for v in raw.split(",")]
     return raw
 
 
-def _slug_source(type_: str, attrs: dict[str, Any], id_: str | None) -> str:
-    """The string a slug is minted from: explicit id, else a name field, else the type."""
-    if id_:
-        return id_
-    name = attrs.get("name")
-    return str(name) if name else type_
+def _as_dateobj(raw: str) -> Any:
+    """An ISO string as a date/datetime object, so YAML stores it unquoted.
+
+    ``add`` writes its ``created``/``updated`` defaults as date objects
+    (``created: 2026-07-06``); a user-supplied string kept as ``str`` would
+    serialize quoted (``updated: '2026-01-01'``) — same value, noisier diff.
+    """
+    from datetime import date, datetime
+
+    for parse in (date.fromisoformat, datetime.fromisoformat):
+        try:
+            return parse(raw)
+        except ValueError:
+            continue
+    return raw  # unreachable behind is_dateish; keep the value rather than crash
 
 
-def _mint_slug(source: str, type_: str, index: Index) -> str:
-    """A bare slug unique within ``type_``; a within-type collision gets a -N suffix."""
+def _slug_source(type_: str, attrs: dict[str, Any]) -> str:
+    """The string a minted slug derives from: a name, else a title, else the type.
+
+    firm-ops meetings/fragments carry no ``name``, so the title fallback keeps their
+    slugs meaningful instead of collapsing every one to the bare type name.
+    """
+    for key in ("name", "title"):
+        value = attrs.get(key)
+        if value:
+            return str(value)
+    return type_
+
+
+def _slug_base(source: str) -> str:
+    """A minted slug's base: slugified, non-empty, and within the length cap."""
     base = slugify(source)
     if not base:  # an all-symbol/empty source would write a hidden, collision-blind file
         raise LocatedError.invalid_slug(source)
-    if (type_, base) not in index.nodes:
-        return base
-    n = 2
-    while (type_, f"{base}-{n}") in index.nodes:
-        n += 1
-    return f"{base}-{n}"
+    if len(base) > _MAX_SLUG:
+        raise LocatedError(
+            code="invalid_slug",
+            message=f"Slug '{base[:40]}…' exceeds {_MAX_SLUG} characters",
+        )
+    return base
+
+
+def _explicit_slug(id_: str, type_: str, index: Index) -> str:
+    """An explicit --id's slug: slugified, capped, and unique — a collision refuses.
+
+    Unlike a minted slug, an explicit id is not auto-suffixed: the caller named it,
+    so a within-type collision is an error to surface, not a slug to invent.
+    """
+    base = _slug_base(id_)
+    if (type_, base) in index.nodes:
+        raise LocatedError(
+            code="slug_taken",
+            message=f"Slug '{base}' is already taken in {type_}; choose another --id",
+        )
+    return base
+
+
+def _mint_and_write(
+    root: Path,
+    rtype: ResolvedType,
+    base: str,
+    type_: str,
+    index: Index,
+    meta: dict[str, Any],
+    body: str,
+) -> tuple[str, Path]:
+    """Pick the first free ``base``/``base-N`` slug and write it with O_EXCL.
+
+    The index gives a cheap first guess; the exclusive create is the real gate, so a
+    second add racing to the same slug loses the O_EXCL and retries the next suffix
+    instead of clobbering the winner.
+    """
+    n, slug = 1, base
+    while True:
+        if (type_, slug) in index.nodes:
+            n += 1
+            slug = f"{base}-{n}"
+            continue
+        path = entity_path(root, rtype, slug)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            _write_new(path, meta, body)
+            return slug, path
+        except FileExistsError:
+            n += 1
+            slug = f"{base}-{n}"
 
 
 def slugify(text: str) -> str:
@@ -337,8 +464,12 @@ def update(
     for predicate, values in rels.items():
         rel = rtype.relations[predicate]
         for value in values:
-            if not resolve_target(rel, value, index.nodes, index.types_by_slug):
-                raise LocatedError.referential_integrity("/".join(rel.targets), value, predicate)
+            matches = _resolve_write_target(rel, value, index, predicate)
+            if (type_, slug) in matches:  # same self-edge gate as `link`
+                raise LocatedError(
+                    code="self_link",
+                    message=f"Cannot link '{id_}' to itself via '{predicate}'",
+                )
 
     path = entity_path(root, rtype, slug)
     cmap, body_text = _read_doc(path)
@@ -349,17 +480,26 @@ def update(
         cmap[predicate] = values if rel.many else values[0]
     for key, raw in extras.items():
         cmap[key] = raw
-    cmap["updated"] = date.today()
+    # Auto-bump `updated`, unless the user backdated it explicitly in this edit
+    # (reconciling an import): their value wins over today.
+    if "updated" not in attrs and "updated" not in extras:
+        cmap["updated"] = date.today()
 
     _write_doc(path, cmap, body_text if body is None else _normalize_body(body))
-    return UpdateResult(type=type_, slug=slug, path=path, draft=bool(cmap.get("draft", False)))
+    # as_bool, not truthiness: a hand-authored draft: "false" must report active,
+    # matching how check/query/status read the same flag.
+    return UpdateResult(type=type_, slug=slug, path=path, draft=as_bool(cmap.get("draft", False)))
 
 
 # --- link / unlink -----------------------------------------------------------
 
 
 def link(root: Path, id_: str, predicate: str, target: str) -> LinkResult:
-    """Add a schema-checked edge ``predicate → target`` on the source entity."""
+    """Add a schema-checked edge ``predicate → target`` on the source entity.
+
+    A no-op link (the edge already exists) leaves the file untouched and returns
+    ``changed=False``.
+    """
     resolved = load_schema(root)
     index = build_index(root, resolved)
     type_, slug = resolve_id(index, id_)
@@ -367,29 +507,40 @@ def link(root: Path, id_: str, predicate: str, target: str) -> LinkResult:
     rel = rtype.relations.get(predicate)
     if rel is None:
         raise LocatedError.illegal_predicate(predicate, type_)
-    if not resolve_target(rel, target, index.nodes, index.types_by_slug):
-        raise LocatedError.referential_integrity(
-            "/".join(rel.targets), target, predicate, noun="predicate"
+    matches = _resolve_write_target(rel, target, index, predicate, noun="predicate")
+    if (type_, slug) in matches:  # a self-edge connects nothing; the graph skips it
+        raise LocatedError(
+            code="self_link",
+            message=f"Cannot link '{id_}' to itself via '{predicate}'",
         )
 
     path = entity_path(root, rtype, slug)
     cmap, body = _read_doc(path)
     existing = cmap.get(predicate)
+    changed = False
     if rel.many:
-        values = list(existing) if existing else []
+        values = _as_list(existing)  # a scalar many-value reads as [value], never char-split
         if target not in values:
             values.append(target)
+            changed = True
         cmap[predicate] = values
     else:
         if existing not in (None, "", target):
             raise LocatedError.cardinality_violation(predicate)
+        if existing != target:
+            changed = True
         cmap[predicate] = target
-    _write_doc(path, cmap, body)
-    return LinkResult(type=type_, slug=slug, predicate=predicate, target=target)
+    if changed:  # no spurious rewrite when the edge already existed
+        _write_doc(path, cmap, body)
+    return LinkResult(type=type_, slug=slug, predicate=predicate, target=target, changed=changed)
 
 
 def unlink(root: Path, id_: str, predicate: str, target: str) -> LinkResult:
-    """Remove the edge ``predicate → target`` from the source; inverses recompute."""
+    """Remove the edge ``predicate → target`` from the source; inverses recompute.
+
+    A no-op unlink (no such edge) leaves the file untouched and returns
+    ``changed=False``.
+    """
     resolved = load_schema(root)
     index = build_index(root, resolved)
     type_, slug = resolve_id(index, id_)
@@ -402,19 +553,21 @@ def unlink(root: Path, id_: str, predicate: str, target: str) -> LinkResult:
     cmap, body = _read_doc(path)
     existing = cmap.get(predicate)
     changed = False
-    if rel.many and existing and target in existing:
-        remaining = [v for v in existing if v != target]
-        if remaining:
-            cmap[predicate] = remaining
-        else:
-            del cmap[predicate]
-        changed = True
+    if rel.many:
+        values = _as_list(existing)  # a scalar many-value reads as [value], never char-split
+        if target in values:
+            remaining = [v for v in values if v != target]
+            if remaining:
+                cmap[predicate] = remaining
+            else:
+                del cmap[predicate]
+            changed = True
     elif existing == target:
         del cmap[predicate]
         changed = True
     if changed:  # a no-op unlink leaves the file untouched (no spurious rewrite)
         _write_doc(path, cmap, body)
-    return LinkResult(type=type_, slug=slug, predicate=predicate, target=target)
+    return LinkResult(type=type_, slug=slug, predicate=predicate, target=target, changed=changed)
 
 
 # --- delete ------------------------------------------------------------------
@@ -481,6 +634,46 @@ def _render_file(meta: dict[str, Any], body: str) -> str:
     return f"---\n{stream.getvalue()}---\n{_normalize_body(body)}"
 
 
+def _write_new(path: Path, meta: dict[str, Any], body: str) -> None:
+    """Write a brand-new entity file exclusively (O_EXCL): fail if the slug exists.
+
+    The exclusive create is the atomic slug-uniqueness gate — the index check is only
+    a hint, so a concurrent add racing to the same path raises FileExistsError here
+    rather than silently overwriting the first writer.
+    """
+    with path.open("x", encoding="utf-8") as fh:
+        fh.write(_render_file(meta, body))
+
+
+def _as_list(value: Any) -> list[Any]:
+    """A stored many-relation value as a list: [] if blank, itself if a list, else [value].
+
+    A many-relation authored as a scalar (``related: alice``) must be read as
+    ``['alice']`` before mutation — iterating the string would split it into characters.
+    """
+    if not value:
+        return []
+    return list(value) if isinstance(value, list) else [value]
+
+
+def _resolve_write_target(
+    rel: ResolvedRelation, target: str, index: Index, predicate: str, *, noun: str = "relation"
+) -> set[tuple[str, str]]:
+    """The nodes a write-time relation value resolves to, gated for the write verbs.
+
+    An unresolvable target hard-fails (referential integrity); a bare slug that hits
+    more than one node is ambiguous and must be qualified as ``type/slug`` (a qualified
+    id already resolves to exactly one). Returns the match set so ``link`` can spot a
+    self-edge.
+    """
+    matches = resolve_target(rel, target, index.nodes, index.types_by_slug)
+    if not matches:
+        raise LocatedError.referential_integrity("/".join(rel.targets), target, predicate, noun=noun)
+    if "/" not in target and len(matches) > 1:
+        raise LocatedError.ambiguous_slug(target, sorted(f"{t}/{s}" for t, s in matches))
+    return matches
+
+
 def _normalize_body(body: str) -> str:
     """A non-empty body ends in exactly one newline; an empty body stays empty."""
     if not body:
@@ -503,13 +696,22 @@ def _write_doc(path: Path, cmap: Any, body: str) -> None:
 
 
 def _split_frontmatter(text: str) -> tuple[str, str]:
-    """Split ``---\\n<yaml>\\n---\\n<body>`` into its YAML text and its body remainder."""
+    """Split ``---\\n<yaml>\\n---\\n<body>`` into its YAML text and its body remainder.
+
+    Tolerates a leading UTF-8 BOM and blank lines before the fence — the same leniency
+    python-frontmatter (the read path) has — so any file khub can display, it can also
+    edit. The fence itself stays strict.
+    """
+    text = text.lstrip("\ufeff")  # a BOM the read path silently accepts
     lines = text.split("\n")
-    if not lines or lines[0] != "---":
+    start = 0
+    while start < len(lines) and lines[start].strip() == "":
+        start += 1  # skip leading blank lines the read path also skips
+    if start >= len(lines) or lines[start] != "---":
         raise LocatedError(code="malformed_entity", message=f"No frontmatter fence in {text[:20]!r}")
-    for i in range(1, len(lines)):
+    for i in range(start + 1, len(lines)):
         if lines[i] == "---":
-            return "\n".join(lines[1:i]) + "\n", "\n".join(lines[i + 1 :])
+            return "\n".join(lines[start + 1 : i]) + "\n", "\n".join(lines[i + 1 :])
     raise LocatedError(code="malformed_entity", message="Unterminated frontmatter")
 
 
@@ -520,23 +722,30 @@ def _preset(root: Path) -> str:
 
 
 def _to_bool(raw: str) -> bool:
-    return raw.strip().lower() in {"true", "yes", "1", "on"}
+    """Coerce a bool-ish string the way ``validate`` reads it, or raise a located error.
+
+    Re-uses the shared predicates so the write gate accepts exactly the BOOLISH set
+    ``validate`` accepts — 'banana' is rejected here, not silently stored as False.
+    """
+    if not is_bool(raw):
+        raise LocatedError(
+            code="bool_violation",
+            message=f"'{raw}' is not a valid boolean (true/false, yes/no, 1/0, on/off)",
+        )
+    return as_bool(raw)
 
 
 def _to_number(raw: str, field: str) -> int | float:
     """Coerce ``raw`` to a finite int/float, or raise a located error.
 
-    Mirrors the write gate to what ``validate`` accepts (integrity._is_number): a
-    non-numeric string raises a located error instead of a bare ValueError traceback,
-    and ``inf``/``nan`` are rejected here rather than written and later flagged by validate.
+    Delegates the finite-number check to ``values.is_number`` (the same gate
+    ``validate`` uses) and keeps the located-error wrapping: a non-numeric or
+    non-finite string raises here instead of a bare ValueError traceback, and never
+    lands on disk for a later ``validate`` to flag.
     """
-    try:
-        value: int | float = int(raw)
-    except ValueError:
-        try:
-            value = float(raw)
-        except ValueError:
-            raise LocatedError.number_violation(raw, field) from None
-    if not math.isfinite(value):
+    if not is_number(raw):
         raise LocatedError.number_violation(raw, field)
-    return value
+    try:
+        return int(raw)
+    except ValueError:
+        return float(raw)

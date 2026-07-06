@@ -122,7 +122,9 @@ def test_cli_get_prints_frontmatter_body_and_formats(fresh_ws: Path, monkeypatch
     assert raw_out.output == raw
 
     json_out = runner.invoke(app, ["get", "initech-pov", "--format", "json"])
-    assert json.loads(json_out.output)["id"] == "initech-pov"
+    record = json.loads(json_out.output)
+    assert record["id"] == "project/initech-pov"  # id is qualified type/slug
+    assert record["type"] == "project" and record["slug"] == "initech-pov"
 
 
 @pytest.mark.integration
