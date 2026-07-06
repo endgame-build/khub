@@ -641,8 +641,6 @@ name = "khub"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
-    { name = "linkml" },
-    { name = "linkml-runtime" },
     { name = "networkx" },
     { name = "pydantic" },
     { name = "python-frontmatter" },
@@ -651,8 +649,16 @@ dependencies = [
     { name = "typer" },
 ]
 
+[package.optional-dependencies]
+compile = [
+    { name = "linkml" },
+    { name = "linkml-runtime" },
+]
+
 [package.dev-dependencies]
 dev = [
+    { name = "linkml" },
+    { name = "linkml-runtime" },
     { name = "mypy" },
     { name = "pytest" },
     { name = "ruff" },
@@ -660,8 +666,8 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "linkml", specifier = "==1.11.1" },
-    { name = "linkml-runtime", specifier = "==1.11.1" },
+    { name = "linkml", marker = "extra == 'compile'", specifier = "==1.11.1" },
+    { name = "linkml-runtime", marker = "extra == 'compile'", specifier = "==1.11.1" },
     { name = "networkx" },
     { name = "pydantic", specifier = ">=2" },
     { name = "python-frontmatter" },
@@ -669,9 +675,12 @@ requires-dist = [
     { name = "ruamel-yaml" },
     { name = "typer" },
 ]
+provides-extras = ["compile"]
 
 [package.metadata.requires-dev]
 dev = [
+    { name = "linkml", specifier = "==1.11.1" },
+    { name = "linkml-runtime", specifier = "==1.11.1" },
     { name = "mypy" },
     { name = "pytest" },
     { name = "ruff" },

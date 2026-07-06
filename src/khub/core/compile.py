@@ -74,9 +74,20 @@ def compile_schema(
 
 
 def _generate(linkml_dict: dict[str, Any], dest: Path) -> None:
-    # Local imports: the heavy LinkML backend is only needed at compile time.
-    from linkml.generators.jsonschemagen import JsonSchemaGenerator
-    from linkml.generators.pydanticgen import PydanticGenerator
+    # Local imports: the heavy LinkML backend is only needed at compile time, and
+    # ships as the optional `compile` extra — a default install runs every other
+    # verb without it.
+    try:
+        from linkml.generators.jsonschemagen import JsonSchemaGenerator
+        from linkml.generators.pydanticgen import PydanticGenerator
+    except ImportError:
+        raise LocatedError(
+            code="compile_extra_missing",
+            message=(
+                "khub compile needs the LinkML backend, which ships as an extra: "
+                "install khub[compile] (e.g. `uv tool install 'khub[compile]'`)"
+            ),
+        ) from None
 
     linkml_path = dest / "schema.linkml.yaml"
     buf = io.StringIO()

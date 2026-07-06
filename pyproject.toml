@@ -5,16 +5,22 @@ description = "khub — schema-bound, agent-facing context management."
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
-    # linkml / linkml-runtime are pinned to exact versions after the first
-    # `uv sync` resolves them — determinism (TS-SCH-003-04) needs a fixed generator.
-    "linkml==1.11.1",
-    "linkml-runtime==1.11.1",
     "pydantic>=2",
     "typer",
     "rich",
     "ruamel.yaml",
     "python-frontmatter",
     "networkx",
+]
+
+[project.optional-dependencies]
+# LinkML is compile-time only (`khub compile`); no runtime path imports it or its
+# generated artifacts. Quarantined as an extra so a default install skips its
+# ~77-package tail — `khub compile` asks for `khub[compile]` when absent.
+# Pinned exactly: determinism (TS-SCH-003-04) needs a fixed generator.
+compile = [
+    "linkml==1.11.1",
+    "linkml-runtime==1.11.1",
 ]
 
 [project.scripts]
@@ -28,7 +34,9 @@ build-backend = "hatchling.build"
 packages = ["src/khub"]
 
 [dependency-groups]
-dev = ["pytest", "ruff", "mypy"]
+# Dev keeps the compile extra installed so the compile/emit tests always run;
+# the pins mirror [project.optional-dependencies].compile exactly.
+dev = ["pytest", "ruff", "mypy", "linkml==1.11.1", "linkml-runtime==1.11.1"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

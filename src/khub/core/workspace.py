@@ -49,6 +49,9 @@ class InitResult:
     version: str
     name: str
     source: str | None = None
+    # False when the LinkML backend (the optional `compile` extra) was absent and
+    # generated artifacts were skipped — `khub compile` regenerates them later.
+    compiled: bool = True
     # Measured (not assumed): how many pre-existing entity files init changed or
     # removed. The cutover guarantee (AC-004) is that this is 0; a non-zero value
     # is a loud signal the non-destructive guarantee was violated.
@@ -112,7 +115,16 @@ def init_workspace(
         header = f"# khub-preset: {preset}@{version}\n"
         schema_path.write_text(header + _dump_yaml(merged))
 
-        compile_schema(schema_path, khub / "generated")
+        compiled = True
+        try:
+            compile_schema(schema_path, khub / "generated")
+        except LocatedError as err:
+            if err.code != "compile_extra_missing":
+                raise
+            # No LinkML backend (the optional `compile` extra). The generated
+            # artifacts have no runtime consumer, so init proceeds without them;
+            # `khub compile` regenerates once the extra is installed.
+            compiled = False
 
         ws_name = name or target.resolve().name or "workspace"
         config = {
@@ -120,7 +132,9 @@ def init_workspace(
             "preset": preset,
             "version": version,
             "source": str(preset_source) if preset_source else None,
-            "defaults": {"format": "text", "stale_days": DEFAULT_STALE_DAYS},
+            # `stale_days` drives the status/query staleness flag; no `format` default
+            # is written — nothing reads it (format is a per-type schema facet).
+            "defaults": {"stale_days": DEFAULT_STALE_DAYS},
         }
         (khub / "config.yaml").write_text(_dump_yaml(config))
 
@@ -146,6 +160,7 @@ def init_workspace(
         version=version,
         name=ws_name,
         source=str(preset_source) if preset_source else None,
+        compiled=compiled,
         entity_files_modified=modified,
         seeded_over_corpus=seeded_over_corpus,
     )
