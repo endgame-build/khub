@@ -68,8 +68,14 @@ def to_linkml_dict(resolved: ResolvedSchema) -> dict[str, Any]:
 
         for name, rel in rtype.relations.items():
             if name in resolved.base_relations:
-                continue  # universal edge, inherited
-            attributes[name] = _relation_slot(rel)
+                if rel != resolved.base_relations[name]:
+                    # An overridden base edge (different cardinality/targets) must be
+                    # emitted, mirroring the attribute-override path — otherwise the
+                    # override is silently dropped and the base cardinality wins.
+                    slot_usage[name] = _relation_override_slot(rel)
+                # else inherited from EntityBase — not re-listed
+            else:
+                attributes[name] = _relation_slot(rel)
 
         cls: dict[str, Any] = {"is_a": "EntityBase", "slot_usage": slot_usage}
         if attributes:
@@ -117,6 +123,12 @@ def _override_slot(attr: ResolvedAttribute) -> dict[str, Any]:
     if attr.pattern:
         slot["pattern"] = attr.pattern
     return slot
+
+
+def _relation_override_slot(rel: ResolvedRelation) -> dict[str, Any]:
+    """A base-relation override as ``slot_usage``: pin cardinality explicitly so the
+    override wins over the base slot's inherited ``multivalued``/``required``."""
+    return {"required": rel.required, "multivalued": rel.many}
 
 
 def _relation_slot(rel: ResolvedRelation) -> dict[str, Any]:

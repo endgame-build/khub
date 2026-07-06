@@ -20,7 +20,6 @@ history, not a gate, is the backstop.
 
 from __future__ import annotations
 
-import math
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -29,10 +28,22 @@ from typing import Any
 import networkx as nx
 
 from khub.core.entity import _read_doc, _write_doc, entity_path
+from khub.core.errors import LocatedError
 from khub.core.graph import _predicate_digraph, build_graph
 from khub.core.index import build_index, filter_index, resolve_target, stray_nodes
 from khub.core.introspect import load_schema
 from khub.core.model import ResolvedAttribute, ResolvedSchema, ResolvedType
+
+# The write gate and the integrity gate check the same values via one module, so a
+# value the write path accepts is exactly a value validate accepts (draft included).
+# Re-bound as module attributes (not bare import-aliases) so `backfill` can keep
+# importing `_present` from here, with these predicates now sharing one source.
+from khub.core.values import as_bool, is_bool, is_dateish, is_number, present
+
+_present = present
+_is_bool = is_bool
+_is_number = is_number
+_is_dateish = is_dateish
 
 # ponytail: `depends_on` is the acyclic-by-contract predicate (the "hard
 # dependency" edge), so cycle detection runs over it. Lift to a per-predicate
@@ -97,6 +108,26 @@ def validate(
         count += 1
         rtype = resolved.types[type_]
         errors.extend(_validate_entity(rtype, type_, slug, valid.meta[node], valid, strict=strict))
+
+    # A file inside a layout that could not be parsed is a frontmatter error, not a
+    # silent skip — one bad file is reported, never a raised ParserError.
+    malformed_errors = _malformed_errors(resolved, index.malformed, target)
+    errors.extend(malformed_errors)
+
+    # A target that selects nothing is a typo (`--stagee`) returning a false-clean pass,
+    # EXCEPT a bare target naming a declared type — a type with zero entities is a
+    # legitimate count-0 run.
+    if target is not None and count == 0 and not malformed_errors:
+        is_declared_type = "/" not in target and target in resolved.types
+        if not is_declared_type:
+            raise LocatedError(
+                code="validate_target",
+                message=(
+                    f"No entity or type matches validate target '{target}'; "
+                    "use a type (e.g. client) or a type/slug (e.g. client/acme)"
+                ),
+                target=target,
+            )
     return ValidateReport(count=count, errors=errors, fixed=fixed)
 
 
@@ -108,6 +139,37 @@ def _in_target(node: tuple[str, str], target: str | None) -> bool:
     if "/" in target:
         return f"{type_}/{slug}" == target
     return type_ == target
+
+
+def _malformed_errors(
+    resolved: ResolvedSchema, malformed: list[Path], target: str | None
+) -> list[FieldError]:
+    """A ``frontmatter`` error per unparseable file, located to its layout type/slug."""
+    errors: list[FieldError] = []
+    for relpath in malformed:
+        type_, slug = _malformed_identity(resolved, relpath)
+        if not _in_target((type_, slug), target):
+            continue
+        errors.append(
+            FieldError(type_, slug, "frontmatter", f"could not parse frontmatter of {relpath}")
+        )
+    return errors
+
+
+def _malformed_identity(resolved: ResolvedSchema, relpath: Path) -> tuple[str, str]:
+    """The (type, slug) a malformed file belongs to, derived from its layout path."""
+    for tname, rtype in resolved.types.items():
+        base = rtype.storage.path
+        if not base:
+            continue
+        try:
+            rel = relpath.relative_to(base)
+        except ValueError:
+            continue
+        if rtype.storage.layout == "folder":
+            return tname, rel.parts[0] if rel.parts else relpath.stem
+        return tname, relpath.stem
+    return "", str(relpath)
 
 
 def _validate_entity(
@@ -177,13 +239,26 @@ def _relation_errors(
     for target in values:
         if not _present(target):
             continue
-        if not resolve_target(rel, str(target), index.nodes, index.types_by_slug):
+        matches = resolve_target(rel, str(target), index.nodes, index.types_by_slug)
+        if not matches:
             errors.append(
                 FieldError(
                     type_,
                     slug,
                     predicate,
                     f"no {'/'.join(rel.targets)} '{target}' to satisfy relation '{predicate}'",
+                )
+            )
+        elif "/" not in str(target) and len(matches) > 1:
+            # A stored bare slug resolving to >1 node is ambiguous — the write path
+            # rejects it, but a hand-authored file bypasses that gate; qualify it.
+            candidates = ", ".join(sorted(f"{t}/{s}" for t, s in matches))
+            errors.append(
+                FieldError(
+                    type_,
+                    slug,
+                    predicate,
+                    f"'{target}' is ambiguous — qualify as type/slug (candidates: {candidates})",
                 )
             )
     return errors
@@ -262,10 +337,18 @@ class CheckReport:
     dangling: list[Dangling]
     strays: list[str]
     cycles: list[list[str]]
+    malformed: list[str] = field(default_factory=list)
 
     @property
     def passed(self) -> bool:
-        return not (self.incomplete or self.orphans or self.dangling or self.strays or self.cycles)
+        return not (
+            self.incomplete
+            or self.orphans
+            or self.dangling
+            or self.strays
+            or self.cycles
+            or self.malformed
+        )
 
 
 def check(root: Path) -> CheckReport:
@@ -273,7 +356,8 @@ def check(root: Path) -> CheckReport:
 
     Strays are dropped from the working index up front, so every downstream check —
     edge resolution, degree, completeness — sees only real entities: an edge that
-    points at a stray dangles instead of silently resolving to a non-entity.
+    points at a stray dangles instead of silently resolving to a non-entity. A file
+    that could not be parsed is a malformed entry, not a node, and fails the check.
     """
     resolved = load_schema(root)
     index = build_index(root, resolved)
@@ -289,7 +373,9 @@ def check(root: Path) -> CheckReport:
         for (t, s) in entity_nodes
         if graph.in_degree((t, s)) == 0 and graph.out_degree((t, s)) == 0
     ]
-    cycles = _cycles(graph)
+    # build_graph skips self-edges, so a stored self-reference on the acyclic predicate
+    # never reaches nx.simple_cycles — detect it directly as a one-node cycle.
+    cycles = _cycles(graph) + _self_cycles(resolved, valid, entity_nodes)
     stray_paths = sorted(
         str(entity_path(root, resolved.types[t], s).relative_to(root)) for (t, s) in strays
     )
@@ -299,6 +385,7 @@ def check(root: Path) -> CheckReport:
         dangling=dangling,
         strays=stray_paths,
         cycles=cycles,
+        malformed=[str(p) for p in index.malformed],
     )
 
 
@@ -316,7 +403,7 @@ def _incomplete(
     for node in nodes:
         type_, slug = node
         meta = index.meta[node]
-        if meta.get("draft"):
+        if as_bool(meta.get("draft", False)):
             continue  # drafts are exempt from required-completeness
         rtype = resolved.types[type_]
         missing_fields = [
@@ -335,7 +422,7 @@ def _incomplete(
             resolved_to = _resolved_nodes(rel, value, index)
             if not resolved_to:
                 continue  # present but unresolvable → dangling, not incomplete
-            if not any(not index.meta[t].get("draft") for t in resolved_to):
+            if not any(not as_bool(index.meta[t].get("draft", False)) for t in resolved_to):
                 missing_relations.append(predicate)  # all targets are drafts
         if missing_fields or missing_relations:
             out.append(Incomplete(type_, slug, missing_fields, missing_relations))
@@ -368,61 +455,32 @@ def _cycles(graph: nx.MultiDiGraph) -> list[list[str]]:
     return [[f"{t}/{s}" for (t, s) in cycle] for cycle in nx.simple_cycles(sub)]
 
 
+def _self_cycles(
+    resolved: ResolvedSchema, index: Any, nodes: list[tuple[str, str]]
+) -> list[list[str]]:
+    """One-node cycles: a stored acyclic-predicate value resolving to the entity itself.
+
+    ``build_graph`` skips self-edges, so a self-referential ``depends_on`` never reaches
+    the graph cycle detector — surface it here as a single-node cycle ``[[id]]``.
+    """
+    out: list[list[str]] = []
+    for node in nodes:
+        type_, slug = node
+        rel = resolved.types[type_].relations.get(_ACYCLIC_PREDICATE)
+        if rel is None:
+            continue
+        value = index.meta[node].get(_ACYCLIC_PREDICATE)
+        if not _present(value):
+            continue
+        for target in value if isinstance(value, list) else [value]:
+            if node in resolve_target(rel, str(target), index.nodes, index.types_by_slug):
+                out.append([f"{type_}/{slug}"])
+                break
+    return out
+
+
 def _resolved_nodes(rel: Any, value: Any, index: Any) -> set[tuple[str, str]]:
     nodes: set[tuple[str, str]] = set()
     for target in value if isinstance(value, list) else [value]:
         nodes |= resolve_target(rel, str(target), index.nodes, index.types_by_slug)
     return nodes
-
-
-# --- value predicates --------------------------------------------------------
-
-
-def _present(value: Any) -> bool:
-    """Whether a required value is actually supplied (not blank/empty)."""
-    if value is None:
-        return False
-    if isinstance(value, str):
-        return value.strip() != ""
-    if isinstance(value, list):
-        return len(value) > 0
-    return True
-
-
-def _is_bool(value: Any) -> bool:
-    return isinstance(value, bool) or (
-        isinstance(value, str) and value.strip().lower() in {"true", "false", "yes", "no", "1", "0", "on", "off"}
-    )
-
-
-def _is_number(value: Any) -> bool:
-    if isinstance(value, bool):
-        return False
-    if isinstance(value, (int, float)):
-        return math.isfinite(value)
-    if isinstance(value, str):
-        try:
-            return math.isfinite(float(value))  # reject inf/nan: a finite number is meant
-        except ValueError:
-            return False
-    return False
-
-
-def _is_dateish(value: Any) -> bool:
-    """Strict ISO date/datetime check (validation gate, not the lenient staleness read).
-
-    ``project._as_date`` slices to the first 10 chars for staleness display, which would
-    pass ``2026-01-01 junk``; validating a field demands the whole value parse.
-    """
-    from datetime import date, datetime
-
-    if isinstance(value, (date, datetime)):
-        return True
-    text = str(value)
-    for parse in (date.fromisoformat, datetime.fromisoformat):
-        try:
-            parse(text)
-            return True
-        except ValueError:
-            continue
-    return False

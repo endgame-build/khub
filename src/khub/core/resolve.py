@@ -98,7 +98,7 @@ def _attr(name: str, ad: AttrDecl, *, overridden: bool) -> ResolvedAttribute:
     return ResolvedAttribute(
         name=name,
         base_type=ad.type or "text",
-        required=ad.required,
+        required=bool(ad.required),  # None (undeclared) means not required here
         pattern=ad.pattern,
         enum=tuple(ad.enum) if ad.enum else None,
         default=ad.default,
@@ -107,14 +107,16 @@ def _attr(name: str, ad: AttrDecl, *, overridden: bool) -> ResolvedAttribute:
 
 
 def _override_attr(name: str, base_attr: ResolvedAttribute, ad: AttrDecl) -> ResolvedAttribute:
-    # The type-level declaration wins; an omitted `type` inherits the base's type.
+    # The type-level declaration wins, but an override that only tightens one facet
+    # (e.g. `updated: { required: true }`) must not silently drop the base's
+    # required/pattern/enum/default — inherit each the override does not redeclare.
     return ResolvedAttribute(
         name=name,
         base_type=ad.type or base_attr.base_type,
-        required=ad.required,
-        pattern=ad.pattern,
-        enum=tuple(ad.enum) if ad.enum else None,
-        default=ad.default,
+        required=base_attr.required if ad.required is None else ad.required,
+        pattern=ad.pattern if ad.pattern is not None else base_attr.pattern,
+        enum=tuple(ad.enum) if ad.enum else base_attr.enum,
+        default=ad.default if ad.default is not None else base_attr.default,
         overridden_from_base=True,
     )
 

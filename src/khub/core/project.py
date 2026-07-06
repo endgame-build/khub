@@ -15,10 +15,10 @@ from datetime import date, datetime
 from pathlib import Path
 from typing import Any
 
-from khub.core.index import resolve_target, scan_type
+from khub.core.index import build_index, filter_index, resolve_target, stray_nodes
 from khub.core.introspect import load_schema
-from khub.core.model import ResolvedType
 from khub.core.resolve import load_yaml
+from khub.core.values import as_bool
 
 
 @dataclass(frozen=True)
@@ -32,6 +32,8 @@ class Projection:
     orphan: int
     stale: int
     okf_conformant: bool
+    stray: int = 0
+    malformed: int = 0
 
 
 def project(root: Path, *, stale_days: int, now: date) -> Projection:
@@ -42,44 +44,39 @@ def project(root: Path, *, stale_days: int, now: date) -> Projection:
     self-reference does not rescue an otherwise-isolated entity from orphanhood.
     OKF conformance requires typed/union relation targets to resolve to a node of
     a declared target type; universal (``to: any``) edges may point anywhere.
+
+    Strays (a file whose internal ``type`` mismatches its layout) and malformed
+    files are excluded from the entity counts — matching the integrity verbs — and
+    reported as their own ``stray``/``malformed`` totals instead.
     """
     resolved = load_schema(root)
-    counts: dict[str, int] = {}
+    index = build_index(root, resolved)
+    strays = stray_nodes(index)
+    valid = filter_index(index, strays)  # strays are not entities of their layout
+
+    counts: dict[str, int] = {tname: 0 for tname in resolved.types}
+    for tname, _slug in valid.nodes:
+        counts[tname] += 1
+
     draft = active = stale = 0
-    all_have_type = True
     broken_ref = False
-
-    # Pass 1: scan every entity, indexing nodes by (type, slug) and by slug.
-    scanned: list[tuple[str, str, dict[str, Any], ResolvedType]] = []
-    nodes: set[tuple[str, str]] = set()
-    types_by_slug: dict[str, set[str]] = {}
-    for tname, rtype in resolved.types.items():
-        entities = scan_type(root, rtype)
-        counts[tname] = len(entities)
-        for slug, meta in entities:
-            nodes.add((tname, slug))
-            types_by_slug.setdefault(slug, set()).add(tname)
-            scanned.append((tname, slug, meta, rtype))
-
-    # Pass 2: resolve edges, count drafts, derive staleness.
     has_out: set[tuple[str, str]] = set()
     has_in: set[tuple[str, str]] = set()
-    for tname, slug, meta, rtype in scanned:
-        node = (tname, slug)
-        if not meta.get("type"):
-            all_have_type = False
-        if meta.get("draft"):
+    for node in valid.nodes:
+        tname, _slug = node
+        meta = valid.meta[node]
+        if as_bool(meta.get("draft", False)):
             draft += 1
         else:
             active += 1
         if is_stale(meta, now=now, stale_days=stale_days):
             stale += 1
-        for predicate, rel in rtype.relations.items():
+        for predicate, rel in resolved.types[tname].relations.items():
             value = meta.get(predicate)
             if not value:
                 continue
             for target in value if isinstance(value, list) else [value]:
-                resolved_to = resolve_target(rel, str(target), nodes, types_by_slug)
+                resolved_to = resolve_target(rel, str(target), valid.nodes, valid.types_by_slug)
                 others = resolved_to - {node}
                 if others:
                     has_out.add(node)
@@ -87,7 +84,7 @@ def project(root: Path, *, stale_days: int, now: date) -> Projection:
                 if rel.kind != "any" and not resolved_to:
                     broken_ref = True
 
-    orphan = sum(1 for n in nodes if n not in has_out and n not in has_in)
+    orphan = sum(1 for n in valid.nodes if n not in has_out and n not in has_in)
     return Projection(
         counts=counts,
         total=sum(counts.values()),
@@ -95,7 +92,12 @@ def project(root: Path, *, stale_days: int, now: date) -> Projection:
         active=active,
         orphan=orphan,
         stale=stale,
-        okf_conformant=all_have_type and not broken_ref,
+        # OKF conformance means the tree would export as a valid bundle: every file
+        # in a layout is a typed entity (no strays, no malformed) and every
+        # typed/union edge resolves.
+        okf_conformant=not broken_ref and not strays and not index.malformed,
+        stray=len(strays),
+        malformed=len(index.malformed),
     )
 
 

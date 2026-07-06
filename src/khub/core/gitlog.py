@@ -3,10 +3,10 @@
 Two reads round out the integrity loop, both derived from git, never from
 hand-kept state:
 
-- ``stale``: entities whose effective date is past a threshold (default 30 days),
-  oldest first. The effective date is the ``updated`` field when present, else the
-  last-commit date read from ``git log`` (read, never written — INT-008). A non-git
-  workspace falls back to ``updated`` alone.
+- ``stale``: entities whose effective date is past a threshold (default: the
+  workspace's ``stale_days``), oldest first. The effective date is the ``updated``
+  field when present, else the last-commit date read from ``git log`` (read, never
+  written — INT-008). A non-git workspace falls back to ``updated`` alone.
 - ``log``: ``git log`` rendered at ontology altitude — each commit's changed files
   mapped to entity ids and the relation predicates touched, never raw file paths.
   ``log <id>`` filters to one entity. A no-git workspace is a no-op success.
@@ -28,7 +28,7 @@ import frontmatter
 from khub.core.entity import entity_path, resolve_id
 from khub.core.index import build_index, filter_index, stray_nodes
 from khub.core.introspect import load_schema
-from khub.core.project import effective_date
+from khub.core.project import effective_date, stale_days
 
 # ASCII control bytes as field/record separators in the git format string: they
 # never appear in a commit hash or ISO date, so parsing stays unambiguous even
@@ -36,8 +36,10 @@ from khub.core.project import effective_date
 _REC = "\x1e"  # record separator: one per commit
 _FLD = "\x1f"  # field separator: hash | date within the commit header
 
-DEFAULT_DAYS = 30  # INT-007: the staleness threshold default (distinct from the
-# workspace `stale_days`, which drives the status/query flag)
+# INT-007 previously kept a private 30-day default here, distinct from the workspace
+# `stale_days`. The divergence was inert — the CLI always passed the configured
+# `stale_days`, so the 30-day literal surfaced only to direct library callers. Unified:
+# a `None` threshold now resolves to the one source, `project.stale_days(root)`.
 
 
 # --- git helpers (read-only) -------------------------------------------------
@@ -117,17 +119,19 @@ class StaleReport:
     git_available: bool
 
 
-def stale(root: Path, *, days: int = DEFAULT_DAYS, now: date) -> StaleReport:
+def stale(root: Path, *, days: int | None = None, now: date) -> StaleReport:
     """Entities whose effective date is more than ``days`` old, oldest first.
 
-    The effective date is ``updated`` when present, else the git last-commit date
-    (read-only). Entities with neither are skipped (no date to judge). Sort is by
-    age descending — the oldest entity first.
+    ``days`` defaults to ``None``, which resolves to the workspace's ``stale_days`` —
+    the single threshold source shared with ``status``/``query``. The effective date
+    is ``updated`` when present, else the git last-commit date (read-only). Entities
+    with neither are skipped (no date to judge). Sort is by age descending.
     """
     resolved = load_schema(root)
     index = build_index(root, resolved)
     valid = filter_index(index, stray_nodes(index))  # strays are not entities
     git_ok = has_git_history(root)
+    threshold = stale_days(root) if days is None else days
 
     entries: list[StaleEntry] = []
     for type_, slug in sorted(valid.nodes):
@@ -141,7 +145,7 @@ def stale(root: Path, *, days: int = DEFAULT_DAYS, now: date) -> StaleReport:
         if eff is None:
             continue
         age = (now - eff).days
-        if age > days:
+        if age > threshold:
             entries.append(StaleEntry(type_, slug, eff, age, source))
     entries.sort(key=lambda e: (e.age, e.type, e.slug), reverse=True)
     return StaleReport(entries=entries, git_available=git_ok)

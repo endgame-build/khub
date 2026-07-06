@@ -11,7 +11,7 @@ one scan instead of re-walking the tree per call.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -22,12 +22,18 @@ from khub.core.model import ResolvedRelation, ResolvedSchema, ResolvedType
 
 @dataclass(frozen=True)
 class Index:
-    """A scanned view of the entity tree: nodes, slug→types, and per-node metadata."""
+    """A scanned view of the entity tree: nodes, slug→types, and per-node metadata.
+
+    ``malformed`` holds the workspace-relative paths of files inside a layout that
+    could not be parsed as frontmatter — one bad file becomes a reported entry, never
+    a raised ``ParserError`` that bricks every command.
+    """
 
     resolved: ResolvedSchema
     nodes: set[tuple[str, str]]
     types_by_slug: dict[str, set[str]]
     meta: dict[tuple[str, str], dict[str, Any]]
+    malformed: list[Path] = field(default_factory=list)
 
 
 def build_index(root: Path, resolved: ResolvedSchema) -> Index:
@@ -35,32 +41,68 @@ def build_index(root: Path, resolved: ResolvedSchema) -> Index:
     nodes: set[tuple[str, str]] = set()
     types_by_slug: dict[str, set[str]] = {}
     meta: dict[tuple[str, str], dict[str, Any]] = {}
+    malformed: list[Path] = []
     for tname, rtype in resolved.types.items():
-        for slug, m in scan_type(root, rtype):
+        pairs, bad = scan_type(root, rtype)
+        for slug, m in pairs:
             node = (tname, slug)
             nodes.add(node)
             types_by_slug.setdefault(slug, set()).add(tname)
             meta[node] = m
-    return Index(resolved=resolved, nodes=nodes, types_by_slug=types_by_slug, meta=meta)
+        malformed.extend(bad)
+    malformed_rel = sorted(p.relative_to(root) for p in malformed)
+    return Index(
+        resolved=resolved,
+        nodes=nodes,
+        types_by_slug=types_by_slug,
+        meta=meta,
+        malformed=malformed_rel,
+    )
 
 
-def scan_type(root: Path, rtype: ResolvedType) -> list[tuple[str, dict[str, Any]]]:
-    """The ``(slug, frontmatter)`` pairs stored for one type, by layout."""
+def scan_type(root: Path, rtype: ResolvedType) -> tuple[list[tuple[str, dict[str, Any]]], list[Path]]:
+    """The ``(slug, frontmatter)`` pairs stored for one type, plus its malformed files.
+
+    Each file is parsed under a tight guard: a single unparseable file (unclosed
+    bracket, a tab in the frontmatter) becomes a malformed entry instead of raising —
+    so validate/check/query/status/get never crash on one bad file.
+    """
     if not rtype.storage.path:
-        return []
+        return [], []
     base = root / rtype.storage.path
     if not base.exists():
-        return []
+        return [], []
     out: list[tuple[str, dict[str, Any]]] = []
+    malformed: list[Path] = []
     if rtype.storage.layout == "folder":
         for idx in sorted(base.glob("*/_index.md")):
-            out.append((idx.parent.name, frontmatter.load(str(idx)).metadata))
+            parsed = _load_frontmatter(idx)
+            if parsed is None:
+                malformed.append(idx)
+            else:
+                out.append((idx.parent.name, parsed))
     else:
         for f in sorted(base.glob("*.md")):
             if f.name == "_index.md":
                 continue
-            out.append((f.stem, frontmatter.load(str(f)).metadata))
-    return out
+            parsed = _load_frontmatter(f)
+            if parsed is None:
+                malformed.append(f)
+            else:
+                out.append((f.stem, parsed))
+    return out, malformed
+
+
+def _load_frontmatter(path: Path) -> dict[str, Any] | None:
+    """Parse one entity file's frontmatter, or None if it cannot be parsed.
+
+    The guard is tight — only the load call is wrapped — so a genuine bug elsewhere
+    still surfaces; only a malformed *file* is absorbed into the ``malformed`` list.
+    """
+    try:
+        return frontmatter.load(str(path)).metadata
+    except Exception:  # noqa: BLE001 — one bad file must not brick the whole scan
+        return None
 
 
 def resolve_target(
@@ -107,4 +149,11 @@ def filter_index(index: Index, drop: set[tuple[str, str]]) -> Index:
     for tname, slug in nodes:
         types_by_slug.setdefault(slug, set()).add(tname)
     meta = {n: m for n, m in index.meta.items() if n not in drop}
-    return Index(resolved=index.resolved, nodes=nodes, types_by_slug=types_by_slug, meta=meta)
+    # Malformed files are not nodes, so dropping strays never touches them.
+    return Index(
+        resolved=index.resolved,
+        nodes=nodes,
+        types_by_slug=types_by_slug,
+        meta=meta,
+        malformed=index.malformed,
+    )

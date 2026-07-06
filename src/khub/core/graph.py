@@ -26,8 +26,13 @@ from typing import cast
 
 import networkx as nx
 
+from pathlib import Path
+
 from khub.core.entity import resolve_id
-from khub.core.index import Index, resolve_target
+from khub.core.errors import LocatedError
+from khub.core.index import Index, build_index, filter_index, resolve_target, stray_nodes
+from khub.core.introspect import load_schema
+from khub.core.model import ResolvedSchema
 
 
 @dataclass(frozen=True)
@@ -206,6 +211,75 @@ def history(
         superseded_by = f"{prev[0]}/{prev[1]}" if prev else None
         links.append(HistoryLink(type=node[0], slug=node[1], superseded_by=superseded_by))
     return links
+
+
+def walk_neighbors(
+    root: Path,
+    id_: str,
+    *,
+    predicate: str | None = None,
+    direction: str = "both",
+    depth: int = 1,
+) -> list[Neighbor]:
+    """Root-taking entry for the CLI: load, index, and walk in one call.
+
+    A named ``--predicate`` no type declares is a located error; ``None`` (no filter)
+    stays valid.
+    """
+    resolved = load_schema(root)
+    index = _walk_index(root, resolved)
+    if predicate is not None:
+        _require_predicate(resolved, predicate)
+    return neighbors(index, id_, predicate=predicate, direction=direction, depth=depth)
+
+
+def walk_impact(
+    root: Path, id_: str, *, predicate: str = "depends_on", reverse: bool = False
+) -> list[ImpactNode]:
+    """Root-taking entry for the CLI: load, index, and walk in one call.
+
+    An explicit or default predicate no type declares is a located error, so
+    ``impact`` on a preset without that edge fails cleanly instead of returning a
+    lone source node.
+    """
+    resolved = load_schema(root)
+    index = _walk_index(root, resolved)
+    _require_predicate(resolved, predicate)
+    return impact(index, id_, predicate=predicate, reverse=reverse)
+
+
+def walk_history(
+    root: Path, id_: str, *, predicate: str = "supersedes", limit: int | None = None
+) -> list[HistoryLink]:
+    """Root-taking entry for the CLI: load, index, and walk in one call.
+
+    The default ``supersedes`` predicate is absent on a preset (e.g. firm-ops) that
+    declares no supersession — a located error, not a silent one-node chain.
+    """
+    resolved = load_schema(root)
+    index = _walk_index(root, resolved)
+    _require_predicate(resolved, predicate)
+    return history(index, id_, predicate=predicate, limit=limit)
+
+
+def _walk_index(root: Path, resolved: ResolvedSchema) -> Index:
+    """The index the walks see: strays filtered, like every other verb."""
+    index = build_index(root, resolved)
+    return filter_index(index, stray_nodes(index))
+
+
+def _require_predicate(resolved: ResolvedSchema, predicate: str) -> None:
+    """Raise unless some type in the schema declares ``predicate`` (universal edges included)."""
+    declared = {p for t in resolved.types.values() for p in t.relations}
+    if predicate not in declared:
+        raise LocatedError(
+            code="unknown_predicate",
+            message=(
+                f"No predicate '{predicate}' in the schema. "
+                f"Declared predicates: {', '.join(sorted(declared))}"
+            ),
+            relation=predicate,
+        )
 
 
 def _first_successor(

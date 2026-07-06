@@ -21,10 +21,11 @@ import networkx as nx
 
 from khub.core.errors import LocatedError
 from khub.core.graph import build_graph
-from khub.core.index import build_index
+from khub.core.index import build_index, filter_index, stray_nodes
 from khub.core.introspect import load_schema
 from khub.core.model import ResolvedSchema
 from khub.core.project import is_stale, stale_days
+from khub.core.values import as_bool
 
 
 @dataclass(frozen=True)
@@ -57,7 +58,8 @@ class QueryFilters:
 def query(root: Path, filters: QueryFilters, *, now: date) -> list[Match]:
     """Return the entities passing every filter, each annotated orphan/stale."""
     resolved = load_schema(root)
-    index = build_index(root, resolved)
+    scanned = build_index(root, resolved)
+    index = filter_index(scanned, stray_nodes(scanned))  # strays are not entities
     g = build_graph(index)
     days = stale_days(root)
 
@@ -74,7 +76,13 @@ def query(root: Path, filters: QueryFilters, *, now: date) -> list[Match]:
         if not _passes(node, meta, g, filters, orphan=orphan, stale=stale):
             continue
         matches.append(
-            Match(type=type_, slug=slug, draft=bool(meta.get("draft")), orphan=orphan, stale=stale)
+            Match(
+                type=type_,
+                slug=slug,
+                draft=as_bool(meta.get("draft", False)),
+                orphan=orphan,
+                stale=stale,
+            )
         )
     if filters.limit is not None:
         matches = matches[: filters.limit]
@@ -123,7 +131,7 @@ def _passes(
     stale: bool,
 ) -> bool:
     """Whether one entity passes every active filter (read-only over frontmatter)."""
-    is_draft = bool(meta.get("draft"))
+    is_draft = as_bool(meta.get("draft", False))
     if f.active_only and is_draft:
         return False
     if f.draft_only and not is_draft:

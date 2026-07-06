@@ -101,8 +101,9 @@ def test_config_carries_provenance_and_defaults(tmp_path: Path, preset_source: P
     assert cfg["preset"] == "note"
     assert cfg["version"] == "9.9.9"
     assert cfg["name"] == "acme"
-    assert cfg["defaults"]["format"] == "text"
+    # `defaults` carries stale_days only — no `format` default is written (nothing reads it).
     assert "stale_days" in cfg["defaults"]
+    assert "format" not in cfg["defaults"]
 
 
 @pytest.mark.unit

@@ -12,14 +12,35 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+from ruamel.yaml.error import YAMLError
+
 from khub.core.errors import LocatedError
 from khub.core.model import ResolvedRelation, ResolvedSchema, ResolvedType
 from khub.core.resolve import resolve
 
 
 def load_schema(root: Path) -> ResolvedSchema:
-    """Resolve the workspace's flattened ``.khub/schema.yaml``."""
-    return resolve([root / ".khub" / "schema.yaml"])
+    """Resolve the workspace's flattened ``.khub/schema.yaml``.
+
+    A missing or unparseable ``schema.yaml`` becomes a located ``schema_error`` naming
+    the file and the underlying failure — the CLI catches ``LocatedError`` cleanly, so
+    a corrupt schema reports an error line instead of a raw ``FileNotFoundError`` /
+    ``ParserError`` traceback. Resolver-level located errors (missing base, unknown
+    target) pass through untouched.
+    """
+    schema_path = root / ".khub" / "schema.yaml"
+    try:
+        return resolve([schema_path])
+    except FileNotFoundError as exc:
+        raise LocatedError(
+            code="schema_error",
+            message=f"Cannot read schema {schema_path}: file not found",
+        ) from exc
+    except YAMLError as exc:
+        raise LocatedError(
+            code="schema_error",
+            message=f"Cannot parse schema {schema_path}: {exc}",
+        ) from exc
 
 
 def types_list(resolved: ResolvedSchema) -> list[str]:

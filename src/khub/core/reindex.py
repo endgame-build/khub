@@ -133,8 +133,16 @@ def cross_links(
 
 
 def _entity_link(root: Path, resolved: ResolvedSchema, type_: str, slug: str) -> str:
-    """The entity's path relative to the workspace root (where ``index.md`` lives)."""
-    return str(entity_path(root, resolved.types[type_], slug).relative_to(root))
+    """The entity's path relative to the workspace root (where ``index.md`` lives).
+
+    A path carrying a space or parenthesis breaks a plain ``(path)`` Markdown link, so
+    it is wrapped in angle brackets ``<...>`` (the CommonMark escape); a clean path is
+    left as-is so the common case stays unadorned.
+    """
+    link = str(entity_path(root, resolved.types[type_], slug).relative_to(root))
+    if any(ch in link for ch in " ()"):
+        return f"<{link}>"
+    return link
 
 
 def _label(meta: dict[str, Any], slug: str) -> str:

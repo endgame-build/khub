@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, field_validator
 
 ScalarType = Literal["text", "number", "date", "datetime", "bool", "list"]
 
@@ -31,7 +31,9 @@ class AttrDecl(_Strict):
     override (it is inherited from the base) or when ``enum`` is given."""
 
     type: ScalarType | None = None
-    required: bool = False
+    # None = not declared: an override inherits the base's required, while an
+    # explicit `required: false` is distinguishable and wins over the base.
+    required: bool | None = None
     default: Any = None
     enum: list[str] | None = None
     pattern: str | None = None
@@ -50,13 +52,27 @@ class RelationDecl(_Strict):
 
 
 class TypeDecl(_Strict):
-    """One entity type's storage config plus its attribute/relation deltas."""
+    """One entity type's storage config plus its attribute/relation deltas.
+
+    ``format`` is pinned to ``md`` in v1: the scan globs only ``*.md``, so any other
+    format would write a write-only, invisible entity. Reject it at schema-validation
+    time rather than silently.
+    """
 
     layout: Literal["file", "folder"]
     path: str | None = None
     format: str = "md"
     attributes: dict[str, AttrDecl] = {}
     relations: dict[str, RelationDecl] = {}
+
+    @field_validator("format")
+    @classmethod
+    def _only_md(cls, value: str) -> str:
+        if value != "md":
+            raise ValueError(
+                f"format '{value}' is not yet implemented; only 'md' is supported in v1"
+            )
+        return value
 
 
 class BaseBlock(_Strict):
@@ -71,4 +87,3 @@ class SchemaFile(_Strict):
 
     base: BaseBlock | None = None
     entities: dict[str, TypeDecl] = {}
-    imports: list[str] = []  # reserved for post-v1 preset composition; unused in v1
