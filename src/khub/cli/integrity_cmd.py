@@ -10,18 +10,17 @@ canonical examples asserted in the spec.
 from __future__ import annotations
 
 import json
-from pathlib import Path
 from typing import Any
 
 import typer
 
-from khub.cli._render import want_json
+from khub.cli._render import resolve_root, want_json
 from khub.core.errors import LocatedError
 from khub.core.integrity import CheckReport, ValidateReport, check, validate
-from khub.core.locate import find_workspace
 
 
 def validate_command(
+    ctx: typer.Context,
     target: str = typer.Argument(None, metavar="TARGET", help="A type or type/slug; default: all."),
     strict: bool = typer.Option(False, "--strict", help="Close the schema: reject undeclared keys."),
     fix: bool = typer.Option(False, "--fix", help="Backfill a missing `updated` from git (v1 scope)."),
@@ -29,7 +28,7 @@ def validate_command(
 ) -> None:
     """Validate entities: khub validate [TARGET] [--strict] [--fix]."""
     try:
-        root = find_workspace(Path.cwd())
+        root = resolve_root(ctx)
         report = validate(root, target, strict=strict, fix=fix)
     except LocatedError as err:
         typer.echo(err.message, err=True)
@@ -63,11 +62,12 @@ def _emit_validate(report: ValidateReport, fmt: str) -> None:
 
 
 def check_command(
+    ctx: typer.Context,
     fmt: str = typer.Option("text", "--format", help="text (Rich on a TTY) or json."),
 ) -> None:
     """Check the active graph: completeness, orphans, dangling edges, strays, cycles."""
     try:
-        root = find_workspace(Path.cwd())
+        root = resolve_root(ctx)
         report = check(root)
     except LocatedError as err:
         typer.echo(err.message, err=True)
@@ -93,6 +93,9 @@ def _emit_check(report: CheckReport, fmt: str) -> None:
         typer.echo(f"orphan {o}")
     for s in report.strays:
         typer.echo(f"stray file {s}")
+    # getattr-guarded so this works before/after core adds CheckReport.malformed.
+    for m in getattr(report, "malformed", []):
+        typer.echo(f"malformed file {m}")
     for cycle in report.cycles:
         typer.echo(f"cycle {' -> '.join(cycle)}")
 
@@ -116,5 +119,7 @@ def _check_payload(report: CheckReport) -> dict[str, Any]:
             for d in report.dangling
         ],
         "strays": report.strays,
+        # getattr-guarded so this works before/after core adds CheckReport.malformed.
+        "malformed": getattr(report, "malformed", []),
         "cycles": report.cycles,
     }

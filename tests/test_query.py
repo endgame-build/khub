@@ -164,7 +164,9 @@ def test_cli_query_type_and_field(qws: Path, monkeypatch) -> None:
     out = runner.invoke(app, ["query", "--type", "opportunity", "--stage", "prospect", "--format", "json"])
     assert out.exit_code == 0, out.output
     data = json.loads(out.output)
-    assert [d["id"] for d in data] == ["op-prospect"]
+    # the JSON id is now the qualified type/slug, with type/slug also carried separately
+    assert [d["id"] for d in data] == ["opportunity/op-prospect"]
+    assert data[0]["type"] == "opportunity" and data[0]["slug"] == "op-prospect"
     assert "orphan" in data[0] and "stale" in data[0]
     capped = runner.invoke(app, ["query", "--type", "opportunity", "--limit", "2", "--format", "json"])
     assert len(json.loads(capped.output)) == 2
@@ -175,9 +177,9 @@ def test_cli_query_missing_and_has(qws: Path, monkeypatch) -> None:
     """TS-QRY-001-02 (AC-002): `--missing owner` is the gap; `--has owner` the inverse."""
     monkeypatch.chdir(qws)
     missing = runner.invoke(app, ["query", "--type", "project", "--missing", "owner", "--format", "json"])
-    assert [d["id"] for d in json.loads(missing.output)] == ["no-owner"]
+    assert [d["id"] for d in json.loads(missing.output)] == ["project/no-owner"]
     has = runner.invoke(app, ["query", "--type", "project", "--has", "owner", "--format", "json"])
-    assert [d["id"] for d in json.loads(has.output)] == ["has-owner"]
+    assert [d["id"] for d in json.loads(has.output)] == ["project/has-owner"]
 
 
 @pytest.mark.integration

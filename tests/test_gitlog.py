@@ -89,15 +89,19 @@ def stale_ws(fresh_ws: Path, seed: Seed) -> Path:
 
 @pytest.mark.unit
 def test_stale_default_threshold(stale_ws: Path) -> None:
-    """TS-INT-003-U01 (REQ-INT003-01, INT-007): past-30-days returned, fresh excluded."""
-    slugs = {e.slug for e in stale(stale_ws, now=NOW).entries}
+    """TS-INT-003-U01 (REQ-INT003-01): a 30-day window returns the past set, fresh excluded.
+
+    The bare `days` default now resolves to the workspace stale_days (one source,
+    INT-007 unified); this row pins the 30-day window explicitly.
+    """
+    slugs = {e.slug for e in stale(stale_ws, days=30, now=NOW).entries}
     assert slugs == {"older-note", "old-note", "mid-note"}  # fresh-note within 30 days
 
 
 @pytest.mark.unit
 def test_stale_sorted_oldest_first(stale_ws: Path) -> None:
     """TS-INT-003-U02 (REQ-INT003-01): the stale set is sorted oldest first."""
-    order = [e.slug for e in stale(stale_ws, now=NOW).entries]
+    order = [e.slug for e in stale(stale_ws, days=30, now=NOW).entries]
     assert order == ["older-note", "old-note", "mid-note"]
 
 
@@ -234,8 +238,9 @@ def test_log_window_limit_and_since(log_ws: Path) -> None:
 def test_cli_log_altitude(log_ws: Path, monkeypatch) -> None:
     """TS-INT-004-01 (AC-001): the rendered change names entity and relation, not a path."""
     monkeypatch.chdir(log_ws)
-    data = json.loads(runner.invoke(app, ["log", "--format", "json"]).output)
-    pov = [e for e in data if e["slug"] == "initech-pov"]
+    payload = json.loads(runner.invoke(app, ["log", "--format", "json"]).output)
+    assert payload["git_available"] is True  # one JSON shape in every state
+    pov = [e for e in payload["entries"] if e["slug"] == "initech-pov"]
     assert any("owner" in e["relations"] for e in pov)
     out = runner.invoke(app, ["log"], env={"FORCE_COLOR": "1"}).output
     assert "initech-pov" in out
@@ -246,7 +251,8 @@ def test_cli_log_altitude(log_ws: Path, monkeypatch) -> None:
 def test_cli_log_per_entity(log_ws: Path, monkeypatch) -> None:
     """TS-INT-004-02 (AC-002): log <id> returns only that entity's commits, in order."""
     monkeypatch.chdir(log_ws)
-    data = json.loads(runner.invoke(app, ["log", "initech-pov", "--format", "json"]).output)
+    payload = json.loads(runner.invoke(app, ["log", "initech-pov", "--format", "json"]).output)
+    data = payload["entries"]
     assert data and all(e["slug"] == "initech-pov" for e in data)
 
 
@@ -287,7 +293,8 @@ def test_log_is_git_not_supersession(supersedes_ws: Path) -> None:
 def test_cli_log_distinct_from_history(supersedes_ws: Path, monkeypatch) -> None:
     """TS-INT-004-03 (AC-003): log <record> returns git commits, not the supersedes chain."""
     monkeypatch.chdir(supersedes_ws)
-    data = json.loads(runner.invoke(app, ["log", "decision-0012", "--format", "json"]).output)
+    payload = json.loads(runner.invoke(app, ["log", "decision-0012", "--format", "json"]).output)
+    data = payload["entries"]
     assert data and all(e["slug"] == "decision-0012" for e in data)
     assert all("decision-0008" not in json.dumps(e) for e in data)  # the chain is absent
 
@@ -303,10 +310,18 @@ def test_log_no_git_returns_none(stale_ws: Path) -> None:
 
 @pytest.mark.integration
 def test_cli_log_no_git(stale_ws: Path, monkeypatch) -> None:
-    """TS-INT-004-04 (AC-004): the absence is reported and exits 0 (a no-op success)."""
+    """TS-INT-004-04 (AC-004): the absence is reported and exits 0 (a no-op success).
+
+    On a non-TTY pipe (the runner default, no --format) the no-op stays valid JSON:
+    an empty payload flagged git_available=false, not the bare human notice.
+    """
     monkeypatch.chdir(stale_ws)
     out = runner.invoke(app, ["log"])
-    assert out.exit_code == 0 and "No git history available" in out.output
+    assert out.exit_code == 0
+    assert json.loads(out.output) == {"entries": [], "git_available": False}
+    # the human notice is the TTY branch
+    tty = runner.invoke(app, ["log"], env={"FORCE_COLOR": "1"})
+    assert tty.exit_code == 0 and "No git history available" in tty.output
 
 
 # --- review-fix regressions --------------------------------------------------

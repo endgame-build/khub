@@ -10,24 +10,24 @@ strings asserted in the spec.
 from __future__ import annotations
 
 import webbrowser
-from pathlib import Path
 
 import typer
 
+from khub.cli._render import resolve_root
 from khub.core.errors import LocatedError
-from khub.core.locate import find_workspace
 from khub.core.reindex import reindex
 from khub.core.viz import DEFAULT_OUT, viz
 
 
 def reindex_command(
+    ctx: typer.Context,
     dry_run: bool = typer.Option(
         False, "--dry-run", help="Print the diff against the current index.md and write nothing."
     ),
 ) -> None:
     """Regenerate the OKF index.md from the graph: khub reindex [--dry-run]."""
     try:
-        root = find_workspace(Path.cwd())
+        root = resolve_root(ctx)
         result = reindex(root, dry_run=dry_run)
     except LocatedError as err:
         typer.echo(err.message, err=True)
@@ -44,13 +44,14 @@ def reindex_command(
 
 
 def viz_command(
+    ctx: typer.Context,
     out: str = typer.Option(DEFAULT_OUT, "--out", help="Output path for the HTML (default viz.html)."),
     open_: bool = typer.Option(False, "--open", help="Open the written file in the default browser."),
     type_: str = typer.Option(None, "--type", help="Render only that type and its incident edges."),
 ) -> None:
     """Render the typed graph to a self-contained Cytoscape HTML: khub viz [--out F] [--open] [--type T]."""
     try:
-        root = find_workspace(Path.cwd())
+        root = resolve_root(ctx)
         result = viz(root, out=out, type_filter=type_)
     except LocatedError as err:
         typer.echo(err.message, err=True)

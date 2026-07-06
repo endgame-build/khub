@@ -11,17 +11,15 @@ from __future__ import annotations
 
 import json
 from datetime import date
-from pathlib import Path
 from typing import Any
 
 import typer
 from rich.console import Console
 from rich.table import Table
 
-from khub.cli._render import want_json
+from khub.cli._render import resolve_root, want_json
 from khub.cli.entity_cmd import DYNAMIC_FIELDS, parse_fields
 from khub.core.errors import LocatedError
-from khub.core.locate import find_workspace
 from khub.core.query import Match, QueryFilters, query
 
 __all__ = ["query_command", "DYNAMIC_FIELDS"]
@@ -54,7 +52,7 @@ def query_command(
         limit=limit,
     )
     try:
-        root = find_workspace(Path.cwd())
+        root = resolve_root(ctx)
         matches = query(root, filters, now=date.today())
     except LocatedError as err:
         typer.echo(err.message, err=True)
@@ -77,7 +75,14 @@ def _emit(matches: list[Match], fmt: str) -> None:
 
 
 def _record(m: Match) -> dict[str, Any]:
-    return {"id": m.slug, "type": m.type, "draft": m.draft, "orphan": m.orphan, "stale": m.stale}
+    return {
+        "id": f"{m.type}/{m.slug}",
+        "type": m.type,
+        "slug": m.slug,
+        "draft": m.draft,
+        "orphan": m.orphan,
+        "stale": m.stale,
+    }
 
 
 def _table(records: list[dict[str, Any]]) -> Table:

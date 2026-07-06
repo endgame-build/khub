@@ -194,12 +194,12 @@ class LocatedError(Exception):
     def inbound_edge_refusal(
         cls, type_: str, slug: str, count: int
     ) -> "LocatedError":
-        plural = "edge" if count == 1 else "edges"
+        phrase = "edge resolves" if count == 1 else "edges resolve"
         return cls(
             code="inbound_edge_refusal",
             message=(
-                f"Refusing to remove {type_} '{slug}': {count} inbound {plural} "
-                f"resolve to it. Pass --force to override"
+                f"Refusing to remove {type_} '{slug}': {count} inbound {phrase} "
+                f"to it. Pass --force to override"
             ),
             type=type_,
             target=slug,

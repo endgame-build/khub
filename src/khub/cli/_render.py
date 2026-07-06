@@ -8,11 +8,25 @@ field-parity contract the agent reads; the table is the human view.
 from __future__ import annotations
 
 import json
+from pathlib import Path
 from typing import Any, Callable
 
 import typer
 from rich.console import Console
 from rich.table import Table
+
+from khub.core.locate import find_workspace
+
+
+def resolve_root(ctx: typer.Context) -> Path:
+    """The workspace root, honoring a ``--workspace/-C`` override on the root context.
+
+    The root callback stores the ``--workspace`` value on ``ctx.obj``; Typer propagates
+    it to every (including nested) subcommand context, so commands resolve against the
+    override when given and the working directory otherwise.
+    """
+    override = ctx.obj
+    return find_workspace(Path(override) if override else Path.cwd())
 
 
 def want_json(fmt: str) -> bool:

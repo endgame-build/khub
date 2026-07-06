@@ -12,36 +12,38 @@ a friendly line; an unresolvable id surfaces the shared located lookup error.
 from __future__ import annotations
 
 import json
-from pathlib import Path
 from typing import Any
 
 import typer
 from rich.console import Console
 from rich.table import Table
 
-from khub.cli._render import want_json
+from khub.cli._render import resolve_root, want_json
 from khub.core.errors import LocatedError
-from khub.core.graph import HistoryLink, ImpactNode, Neighbor, history, impact, neighbors
-from khub.core.index import build_index
-from khub.core.introspect import load_schema
-from khub.core.locate import find_workspace
+from khub.core.graph import (
+    HistoryLink,
+    ImpactNode,
+    Neighbor,
+    walk_history,
+    walk_impact,
+    walk_neighbors,
+)
 
 
 def neighbors_command(
+    ctx: typer.Context,
     id_: str = typer.Argument(..., metavar="ID", help="A bare slug, or type/slug on ambiguity."),
     predicate: str = typer.Option(None, "--predicate", help="Restrict adjacency to one predicate."),
     in_: bool = typer.Option(False, "--in", help="Inbound edges only (incl. derived inverses)."),
     out_: bool = typer.Option(False, "--out", help="Outbound (stored) edges only."),
-    both: bool = typer.Option(False, "--both", help="Both directions (the default)."),
     depth: int = typer.Option(1, "--depth", help="Bounded multi-hop adjacency over all predicates."),
     fmt: str = typer.Option("text", "--format", help="text (Rich table on a TTY) or json."),
 ) -> None:
     """Walk one-hop neighbors: khub neighbors initech-pov [--predicate client --in]."""
     direction = "in" if in_ else "out" if out_ else "both"
     try:
-        root = find_workspace(Path.cwd())
-        index = build_index(root, load_schema(root))
-        result = neighbors(index, id_, predicate=predicate, direction=direction, depth=depth)
+        root = resolve_root(ctx)
+        result = walk_neighbors(root, id_, predicate=predicate, direction=direction, depth=depth)
     except LocatedError as err:
         typer.echo(err.message, err=True)
         raise typer.Exit(1) from None
@@ -56,6 +58,7 @@ def neighbors_command(
 
 
 def impact_command(
+    ctx: typer.Context,
     id_: str = typer.Argument(..., metavar="ID", help="A bare slug, or type/slug on ambiguity."),
     predicate: str = typer.Option("depends_on", "--predicate", help="The edge to walk the closure over."),
     reverse: bool = typer.Option(False, "--reverse", help="Walk ancestors (what reaches this node)."),
@@ -63,9 +66,8 @@ def impact_command(
 ) -> None:
     """Compute blast radius: khub impact node-a [--reverse] [--predicate <p>]."""
     try:
-        root = find_workspace(Path.cwd())
-        index = build_index(root, load_schema(root))
-        result = impact(index, id_, predicate=predicate, reverse=reverse)
+        root = resolve_root(ctx)
+        result = walk_impact(root, id_, predicate=predicate, reverse=reverse)
     except LocatedError as err:
         typer.echo(err.message, err=True)
         raise typer.Exit(1) from None
@@ -83,6 +85,7 @@ def impact_command(
 
 
 def history_command(
+    ctx: typer.Context,
     id_: str = typer.Argument(..., metavar="ID", help="A bare slug, or type/slug on ambiguity."),
     predicate: str = typer.Option("supersedes", "--predicate", help="The self-referential edge to follow."),
     limit: int = typer.Option(None, "--limit", help="Cap to the N most recent links."),
@@ -90,9 +93,8 @@ def history_command(
 ) -> None:
     """Trace supersession lineage: khub history decision-0012 [--limit 3]."""
     try:
-        root = find_workspace(Path.cwd())
-        index = build_index(root, load_schema(root))
-        result = history(index, id_, predicate=predicate, limit=limit)
+        root = resolve_root(ctx)
+        result = walk_history(root, id_, predicate=predicate, limit=limit)
     except LocatedError as err:
         typer.echo(err.message, err=True)
         raise typer.Exit(1) from None

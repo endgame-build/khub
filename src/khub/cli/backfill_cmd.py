@@ -8,16 +8,15 @@ canonical strings asserted in the spec.
 
 from __future__ import annotations
 
-from pathlib import Path
-
 import typer
 
+from khub.cli._render import resolve_root
 from khub.core.backfill import BackfillReport, backfill
 from khub.core.errors import LocatedError
-from khub.core.locate import find_workspace
 
 
 def backfill_command(
+    ctx: typer.Context,
     type_: str = typer.Option(
         None, "--type", help="Add missing per-type frontmatter scaffolding for that type."
     ),
@@ -27,7 +26,7 @@ def backfill_command(
 ) -> None:
     """Backfill missing dates and frontmatter: khub backfill [--type T] [--dry-run]."""
     try:
-        root = find_workspace(Path.cwd())
+        root = resolve_root(ctx)
         report = backfill(root, type_, dry_run=dry_run)
     except LocatedError as err:
         typer.echo(err.message, err=True)

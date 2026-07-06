@@ -18,6 +18,7 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
+from khub.cli._render import resolve_root, want_json
 from khub.core.entity import (
     CreateResult,
     EntityView,
@@ -31,7 +32,6 @@ from khub.core.entity import (
     update,
 )
 from khub.core.errors import LocatedError
-from khub.core.locate import find_workspace
 
 # Shared context settings for commands that take dynamic --field value pairs.
 DYNAMIC_FIELDS = {"allow_extra_args": True, "ignore_unknown_options": True}
@@ -50,7 +50,7 @@ def add_command(
     fields = parse_fields(ctx.args)
     body = _read_body(body_file)
     try:
-        root = find_workspace(Path.cwd())
+        root = resolve_root(ctx)
         result = create(root, type_, fields, id_=id_, strict=strict, body=body, draft=draft)
     except LocatedError as err:
         typer.echo(err.message, err=True)
@@ -64,13 +64,14 @@ def add_command(
 
 
 def get_command(
+    ctx: typer.Context,
     id_: str = typer.Argument(..., metavar="ID", help="A bare slug, or type/slug on ambiguity."),
     edges: bool = typer.Option(False, "--edges", help="Include stored and derived edges."),
     fmt: str = typer.Option("text", "--format", help="json, table, raw, or text (Rich on a TTY)."),
 ) -> None:
     """Read an entity's frontmatter and body, optionally with derived edges."""
     try:
-        root = find_workspace(Path.cwd())
+        root = resolve_root(ctx)
         view = get(root, id_, edges=edges)
     except LocatedError as err:
         typer.echo(err.message, err=True)
@@ -78,12 +79,12 @@ def get_command(
 
     if fmt == "raw":
         typer.echo(view.raw, nl=False)
-    elif fmt == "json":
+    elif want_json(fmt):
+        # Downgrade like every other command: JSON on a pipe or under --format json,
+        # so a `--format table` piped to a tool no longer leaks a Rich box-table.
         typer.echo(json.dumps(_get_record(root, view), default=str))
-    elif fmt == "table" or Console().is_terminal:
-        Console().print(_entity_table(view))
     else:
-        typer.echo(json.dumps(_get_record(root, view), default=str))
+        Console().print(_entity_table(view))
 
 
 def edit_command(
@@ -94,10 +95,10 @@ def edit_command(
     fmt: str = typer.Option("text", "--format", help="text or json (emits the updated record)."),
 ) -> None:
     """Edit an entity: khub edit initech-deal stage proposal-sent  (or --field value)."""
-    fields = _parse_edit(ctx.args)
+    fields = parse_fields(ctx.args)
     body = None if body_file is None else _read_body(body_file)
     try:
-        root = find_workspace(Path.cwd())
+        root = resolve_root(ctx)
         result = update(root, id_, fields, strict=strict, body=body)
     except LocatedError as err:
         typer.echo(err.message, err=True)
@@ -110,42 +111,51 @@ def edit_command(
 
 
 def link_command(
+    ctx: typer.Context,
     id_: str = typer.Argument(..., metavar="ID"),
     predicate: str = typer.Argument(..., metavar="PREDICATE"),
     target: str = typer.Argument(..., metavar="TARGET"),
 ) -> None:
     """Add a relation: khub link initech-pov partner northwind."""
     try:
-        root = find_workspace(Path.cwd())
+        root = resolve_root(ctx)
         result = link(root, id_, predicate, target)
     except LocatedError as err:
         typer.echo(err.message, err=True)
         raise typer.Exit(1) from None
+    if not result.changed:  # the edge already existed — idempotent success (exit 0)
+        typer.echo("Edge already present")
+        return
     typer.echo(_edge_message("Linked", result))
 
 
 def unlink_command(
+    ctx: typer.Context,
     id_: str = typer.Argument(..., metavar="ID"),
     predicate: str = typer.Argument(..., metavar="PREDICATE"),
     target: str = typer.Argument(..., metavar="TARGET"),
 ) -> None:
     """Remove a relation: khub unlink initech-pov partner northwind."""
     try:
-        root = find_workspace(Path.cwd())
+        root = resolve_root(ctx)
         result = unlink(root, id_, predicate, target)
     except LocatedError as err:
         typer.echo(err.message, err=True)
         raise typer.Exit(1) from None
+    if not result.changed:  # no such edge — idempotent no-op success (exit 0)
+        typer.echo(f"No edge {result.predicate} -> {result.target} on {result.slug}")
+        return
     typer.echo(_edge_message("Unlinked", result))
 
 
 def remove_command(
+    ctx: typer.Context,
     id_: str = typer.Argument(..., metavar="ID", help="A bare slug, or type/slug on ambiguity."),
     force: bool = typer.Option(False, "--force", help="Delete despite inbound edges (leaves them dangling)."),
 ) -> None:
     """Remove an entity, guarded by inbound edges: khub remove old-fragment [--force]."""
     try:
-        root = find_workspace(Path.cwd())
+        root = resolve_root(ctx)
         result = delete(root, id_, force=force)
     except LocatedError as err:
         typer.echo(err.message, err=True)
@@ -167,30 +177,13 @@ def remove_command(
 
 
 def parse_fields(extra: list[str]) -> dict[str, str]:
-    """Parse leftover ``--field value`` / ``--field=value`` args into a field map.
+    """Parse leftover args into a field map — the one parser for add/edit/query.
 
-    A ``--call-type client`` arrives as ``{'call_type': 'client'}`` — CLI dashes
-    become schema underscores.
+    Accepts three shapes interchangeably: ``--field value``, ``--field=value``, and a
+    bare ``field value`` positional pair (so ``edit initech-deal stage proposal-sent``
+    works). CLI dashes become schema underscores, so ``--call-type client`` arrives as
+    ``{'call_type': 'client'}``.
     """
-    fields: dict[str, str] = {}
-    i = 0
-    while i < len(extra):
-        token = extra[i]
-        if not token.startswith("--"):
-            raise typer.BadParameter(f"Expected --field, got '{token}'")
-        key = token[2:]
-        if "=" in key:
-            key, value = key.split("=", 1)
-        else:
-            i += 1
-            value = extra[i] if i < len(extra) else ""
-        fields[key.replace("-", "_")] = value
-        i += 1
-    return fields
-
-
-def _parse_edit(extra: list[str]) -> dict[str, str]:
-    """Parse edit args, accepting both ``field value`` pairs and ``--field value``."""
     fields: dict[str, str] = {}
     i = 0
     while i < len(extra):
@@ -201,11 +194,15 @@ def _parse_edit(extra: list[str]) -> dict[str, str]:
                 key, value = key.split("=", 1)
             else:
                 i += 1
-                value = extra[i] if i < len(extra) else ""
+                if i >= len(extra):  # a trailing key with no value is a usage error,
+                    raise typer.BadParameter(f"Field '{key}' has no value")
+                value = extra[i]
         else:
             key = token
             i += 1
-            value = extra[i] if i < len(extra) else ""
+            if i >= len(extra):  # not a silent empty-string field (stray token)
+                raise typer.BadParameter(f"Field '{key}' has no value")
+            value = extra[i]
         fields[key.replace("-", "_")] = value
         i += 1
     return fields
@@ -226,8 +223,9 @@ def _created_message(result: CreateResult) -> str:
 
 def _create_record(root: Path, result: CreateResult) -> dict[str, Any]:
     return {
-        "id": result.slug,
+        "id": f"{result.type}/{result.slug}",
         "type": result.type,
+        "slug": result.slug,
         "path": str(result.path.relative_to(root)),
         "draft": result.draft,
     }
@@ -235,8 +233,9 @@ def _create_record(root: Path, result: CreateResult) -> dict[str, Any]:
 
 def _update_record(root: Path, result: UpdateResult) -> dict[str, Any]:
     return {
-        "id": result.slug,
+        "id": f"{result.type}/{result.slug}",
         "type": result.type,
+        "slug": result.slug,
         "path": str(result.path.relative_to(root)),
         "draft": result.draft,
     }
@@ -248,8 +247,9 @@ def _edge_message(verb: str, result: LinkResult) -> str:
 
 def _get_record(root: Path, view: EntityView) -> dict[str, Any]:
     record: dict[str, Any] = {
-        "id": view.slug,
+        "id": f"{view.type}/{view.slug}",
         "type": view.type,
+        "slug": view.slug,
         "path": str(view.path.relative_to(root)),
         "frontmatter": view.meta,
         "body": view.body,

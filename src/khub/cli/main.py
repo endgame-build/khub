@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import typer
 
 from khub.cli.backfill_cmd import backfill_command
@@ -31,11 +33,36 @@ app = typer.Typer(
 )
 
 
+def _version_callback(value: bool) -> None:
+    """Print the khub version and exit (eager, so it short-circuits any command)."""
+    if not value:
+        return
+    from importlib.metadata import PackageNotFoundError
+    from importlib.metadata import version as _pkg_version
+
+    try:
+        ver = _pkg_version("khub")
+    except PackageNotFoundError:
+        from khub import __version__ as ver
+    typer.echo(ver)
+    raise typer.Exit()
+
+
 @app.callback()
-def _root() -> None:
+def _root(
+    ctx: typer.Context,
+    workspace: Path | None = typer.Option(
+        None, "-C", "--workspace", help="Operate on this workspace instead of the working directory."
+    ),
+    version: bool | None = typer.Option(
+        None, "--version", callback=_version_callback, is_eager=True, help="Print the khub version and exit."
+    ),
+) -> None:
     """khub — schema-bound context management."""
-    # A no-op group callback so subcommands (compile, and future init/schema/...)
-    # route as `khub <command>` rather than collapsing to the root.
+    # Stash the (optional) --workspace override; every command resolves the root via
+    # cli._render.resolve_root(), which reads it back off ctx.obj (Click propagates it
+    # to subcommands). A no-op otherwise, so `khub <command>` routes as before.
+    ctx.obj = workspace
 
 
 app.command(name="init")(init_command)

@@ -6,7 +6,7 @@ khub gives an AI agent typed, validated, queryable context — structured memory
 
 One generic engine: every entity is one Markdown file with YAML frontmatter, held in git. A [LinkML](https://linkml.io) ontology is the contract — types, attributes, and legal relations. A Python core library provides schema-validated CRUD and graph queries; a generic `khub` CLI and a Claude Code skill are thin, schema-driven surfaces over it. The graph is a projection rebuilt from the Markdown on demand — no database is ever the source of truth.
 
-Built on top of the [Open Knowledge Format (OKF)](https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/main/okf/SPEC.md). khub's Markdown entities are OKF concepts; on top, khub adds a typed schema, a graph, and extra serialization formats (YAML, JSON, JSONL, collections) that OKF does not have. Any workspace exports to a conformant OKF bundle.
+Built on top of the [Open Knowledge Format (OKF)](https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/main/okf/SPEC.md). khub's Markdown entities are OKF concepts; on top, khub adds a typed schema and a graph. Extra serialization formats (YAML, JSON, JSONL, collections) that OKF lacks are planned, not yet implemented — v1 stores every entity as Markdown. Any workspace exports to a conformant OKF bundle.
 
 **The schema is the operational setup.** It configures what a given hub is *for*. Canonical ontology presets — one per domain (building and maintaining a system, consulting, research, operations) — are the reusable IP. Each engagement gets its own repo seeded from a preset, where agents and humans co-author entities and extend the schema as the work demands.
 

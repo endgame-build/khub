@@ -12,27 +12,31 @@ from __future__ import annotations
 
 import json
 from datetime import date
-from pathlib import Path
 from typing import Any
 
 import typer
 from rich.console import Console
 from rich.table import Table
 
-from khub.cli._render import want_json
+from khub.cli._render import resolve_root, want_json
 from khub.core.errors import LocatedError
 from khub.core.gitlog import LogEntry, StaleEntry, log, stale
-from khub.core.locate import find_workspace
+from khub.core.project import stale_days
 
 
 def stale_command(
-    days: int = typer.Option(30, "--days", help="Staleness threshold in days (default 30)."),
+    ctx: typer.Context,
+    days: int | None = typer.Option(
+        None, "--days", help="Staleness threshold in days; default: the workspace's stale_days."
+    ),
     fmt: str = typer.Option("text", "--format", help="text (Rich table on a TTY) or json."),
 ) -> None:
     """List entities past the `updated` threshold, oldest first: khub stale [--days N]."""
     try:
-        root = find_workspace(Path.cwd())
-        report = stale(root, days=days, now=date.today())
+        root = resolve_root(ctx)
+        # --days omitted → the workspace's configured stale_days is the threshold.
+        threshold = days if days is not None else stale_days(root)
+        report = stale(root, days=threshold, now=date.today())
     except LocatedError as err:
         typer.echo(err.message, err=True)
         raise typer.Exit(1) from None
@@ -52,6 +56,7 @@ def stale_command(
 
 
 def log_command(
+    ctx: typer.Context,
     id_: str = typer.Argument(None, metavar="ID", help="A bare slug or type/slug; default: all."),
     limit: int = typer.Option(None, "--limit", help="Cap the number of rendered commits."),
     since: str = typer.Option(None, "--since", help="Only commits on/after this date."),
@@ -59,19 +64,26 @@ def log_command(
 ) -> None:
     """Render git history at ontology altitude: khub log [ID] [--limit N] [--since DATE]."""
     try:
-        root = find_workspace(Path.cwd())
+        root = resolve_root(ctx)
         entries = log(root, id_, limit=limit, since=since)
     except LocatedError as err:
         typer.echo(err.message, err=True)
         raise typer.Exit(1) from None
 
     if entries is None:  # no git history is a reported no-op success (exit 0)
-        typer.echo("No git history available")
+        # JSON stays valid on a pipe: an empty payload flagged git_available=false,
+        # never the bare human notice (which is not parseable JSON).
+        if want_json(fmt):
+            typer.echo(json.dumps({"entries": [], "git_available": False}))
+        else:
+            typer.echo("No git history available")
         return
 
     records = [_log_record(e) for e in entries]
     if want_json(fmt):
-        typer.echo(json.dumps(records))
+        # One JSON shape in every state: {"entries": [...], "git_available": bool} —
+        # a consumer never has to branch between an object and a bare array.
+        typer.echo(json.dumps({"entries": records, "git_available": True}))
     elif not entries:
         typer.echo("No matching history")
     else:

@@ -8,12 +8,16 @@ Tiers: **v1** ships in the first release; **fast-follow** lands shortly after (m
 
 | Option | Meaning |
 |---|---|
-| `-C, --workspace <path>` | Operate on this workspace. Default: the nearest `.khub/` above the working directory. |
+| `-C, --workspace <path>` | Operate on this workspace instead of the working directory. Default: the nearest `.khub/` above the working directory. Given a path, khub resolves the nearest `.khub/` at or above it. |
 | `--format <json\|table>` | Output shape for read commands. Default: table on a TTY, json otherwise. Some commands add `ids`, `raw`, or `tree`. |
-| `-q, --quiet` / `-v, --verbose` | Quieter or louder logging. |
-| `--version`, `--help` | Version and help. |
+| `--version` | Print the khub version and exit. |
+| `--help` | Show help. |
 
 Read commands include `draft` entities in scope and surface each entity's `orphan`/`stale` flag by default; `--active`/`--draft` and `--orphan`/`--stale` narrow the set.
+
+### JSON record shape
+
+Every JSON record that identifies an entity carries the qualified `id` = `"type/slug"` plus separate `type` and `slug` keys — uniform across `query`, `add`, `get`, `edit`, `neighbors`, `impact`, `history`, `stale`, `log`, and the `validate`/`check` error rows. For example, `khub get initech-pov --format json` emits `{"id": "opportunity/initech-pov", "type": "opportunity", "slug": "initech-pov", …}`. (`check`'s `orphans` and `strays` are lists of already-qualified strings.)
 
 ## Validation and open schema
 
@@ -24,11 +28,30 @@ khub validates the **schema-declared subset** of an entity and leaves everything
 3. **Extensions are free.** Any key the schema does not declare is accepted with any value, validated against nothing, and preserved on round-trip (Pydantic `extra="allow"` over the generated model).
 4. **`--strict` closes the schema.** `validate --strict` (and `add`/`edit --strict`) rejects unknown keys, for when a closed contract is wanted.
 
+### Write semantics
+
+The write verbs (`add`, `edit`, `link`, `unlink`, `remove`) reject malformed input before touching a file:
+
+- **A comma-list on a single-valued relation is rejected** — pass one target; a many-valued relation takes the list.
+- **An ambiguous bare target is rejected** — when a slug names entities of two types, qualify it as `type/slug`.
+- **Malformed dates and booleans are rejected** on write (a non-ISO date, a non-boolean for a `bool` field).
+- **A self-link is rejected** — an entity cannot link to itself.
+- **An explicit `--id` that collides** with an existing entity of the type is rejected (minting auto-suffixes; an explicit id does not).
+- **An over-long slug is rejected.**
+
+`link` and `unlink` are idempotent and report the no-op rather than pretend to act:
+
+- `link <id> <pred> <target>` when the edge already exists prints `Edge already present` (exit 0).
+- `unlink <id> <pred> <target>` when there is no such edge prints `No edge <pred> -> <target> on <slug>` (exit 0).
+
+A single malformed entity file (a broken frontmatter fence, unparseable YAML) no longer crashes the read commands. `validate` reports it as an error and `check` reports it as a `malformed` entry (text and JSON), and the rest of the workspace still resolves.
+
 ## Workspace
 
 | Command | Args and options | Returns / does | Tier |
 |---|---|---|---|
-| `khub init <preset> [path=.]` | `--preset-source <git\|path>`, `--name <name>`, `--force` | scaffold a workspace from a preset (the seeded fork) | v1 |
+| `khub init <preset> [path=.]` | `--preset-source <path>`, `--name <name>`, `--force`, `--format <text\|json>` (json emits resolved provenance) | scaffold a workspace from a preset (the seeded fork) | v1 |
+| `khub compile` | `--schema <path=.khub/schema.yaml>`, `--out <dir=.khub/generated>` | compile the schema into LinkML + Pydantic v2 + JSON Schema under `.khub/generated/` | v1 |
 | `khub schema` | `--format` | the full effective schema: types, fields, enums, relations, layout/format/nesting per type, and provenance (source preset + version) | v1 |
 | `khub schema types` | `--format` | type list (view of the above) | v1 |
 | `khub schema show <type>` | `--format` | one type's fields, enums, required, relations, layout (view) | v1 |
@@ -58,7 +81,7 @@ khub validates the **schema-declared subset** of an entity and leaves everything
 
 | Command | Args and options | Walk / family | Tier |
 |---|---|---|---|
-| `khub neighbors <id>` | `--predicate <p>`, `--in` / `--out` / `--both` (default both), `--depth <n=1>`, `--format` | one-hop adjacency | v1 |
+| `khub neighbors <id>` | `--predicate <p>`, `--in` / `--out` (default both), `--depth <n=1>`, `--format` | one-hop adjacency | v1 |
 | `khub impact <id>` | `--predicate <p>` (default `depends_on`), `--reverse`, `--format tree\|json` | transitive forward (blast radius), `--reverse` for ancestors | v1 |
 | `khub history <id>` | `--predicate <p>` (default `supersedes`), `--limit <n>`, `--format` | the supersession chain (decision history) | v1 |
 | `khub path <from> <to>` | `--predicate <p>`, `--format` | shortest path between two entities | fast-follow |
@@ -69,8 +92,8 @@ khub validates the **schema-declared subset** of an entity and leaves everything
 |---|---|---|---|
 | `khub validate [target=all]` | `--strict`, `--fix` (v1: date backfill only), `--format` | per-entity well-formedness and referential integrity over the declared subset (default: whole workspace) | v1 |
 | `khub check` | `--format` | graph-wide: relations resolve, required-completeness for `active`, no orphans (zero relations), no stray files (non-entities inside a type layout; reference docs outside type layouts are skipped), no edge cycles | v1 |
-| `khub stale` | `--days <n=30>`, `--format` | entities past an `updated` threshold; dates backfilled from `git log` | v1 |
-| `khub log [id]` | `--limit <n>`, `--since <date>`, `--format` | git history at ontology altitude (who changed what, when); distinct from `history` | v1 |
+| `khub stale` | `--days <n>` (default: the workspace `stale_days`, 90 in firm-ops), `--format` | entities past an `updated` threshold; dates backfilled from `git log` | v1 |
+| `khub log [id]` | `--limit <n>`, `--since <date>`, `--format` | git history at ontology altitude (who changed what, when); distinct from `history`. `--format json` always emits one shape: `{"entries": [...], "git_available": true|false}` (a no-git workspace is `entries: []`, `git_available: false` — never a bare notice) | v1 |
 
 ## Projection and output
 
