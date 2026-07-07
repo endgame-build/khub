@@ -23,8 +23,7 @@ from datetime import date
 from pathlib import Path
 from typing import Any
 
-import frontmatter
-
+from khub.core import formats
 from khub.core.entity import entity_path, resolve_id
 from khub.core.index import build_index, filter_index, stray_nodes
 from khub.core.introspect import load_schema
@@ -263,11 +262,11 @@ def _rel_value(value: Any) -> Any:
 
 
 def _frontmatter_at(root: Path, rev: str, relpath: str) -> dict[str, Any]:
-    """The frontmatter of ``relpath`` at ``rev``; empty if absent or unparseable."""
+    """The metadata of ``relpath`` at ``rev``; empty if absent or unparseable."""
     res = _git(root, "show", f"{rev}:{relpath}")
     if res.returncode != 0:
         return {}
     try:
-        return dict(frontmatter.loads(res.stdout).metadata)
+        return formats.parse(res.stdout, formats.fmt_of(relpath))[0]
     except Exception:  # noqa: BLE001 — a malformed blob is "no relations changed"
         return {}

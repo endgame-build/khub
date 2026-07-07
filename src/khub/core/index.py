@@ -15,8 +15,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-import frontmatter
-
+from khub.core.formats import load_meta
 from khub.core.model import ResolvedRelation, ResolvedSchema, ResolvedType
 
 
@@ -74,39 +73,33 @@ def scan_type(root: Path, rtype: ResolvedType) -> tuple[list[tuple[str, dict[str
         return [], []
     out: list[tuple[str, dict[str, Any]]] = []
     malformed: list[Path] = []
-    # is_file(): glob also matches directories named *.md (real corpora have them);
+    ext = rtype.storage.fmt
+    # is_file(): glob also matches directories named *.<ext> (real corpora have them);
     # a directory is not a malformed file — it is simply not an entity.
+    # ponytail: the scan globs only the declared format; an off-format file in the
+    # layout is invisible (exactly as a .json file in an md layout is today). Lift to
+    # a multi-ext glob with off-format-as-stray if a format migration ever strands
+    # files — and note a migration also renames paths, going dark in gitlog history
+    # (no --follow); the future migration verb owns both halves.
     if rtype.storage.layout == "folder":
-        for idx in sorted(base.glob("*/_index.md")):
+        for idx in sorted(base.glob(f"*/_index.{ext}")):
             if not idx.is_file():
                 continue
-            parsed = _load_frontmatter(idx)
+            parsed = load_meta(idx)
             if parsed is None:
                 malformed.append(idx)
             else:
                 out.append((idx.parent.name, parsed))
     else:
-        for f in sorted(base.glob("*.md")):
-            if f.name == "_index.md" or not f.is_file():
+        for f in sorted(base.glob(f"*.{ext}")):
+            if f.name == f"_index.{ext}" or not f.is_file():
                 continue
-            parsed = _load_frontmatter(f)
+            parsed = load_meta(f)
             if parsed is None:
                 malformed.append(f)
             else:
                 out.append((f.stem, parsed))
     return out, malformed
-
-
-def _load_frontmatter(path: Path) -> dict[str, Any] | None:
-    """Parse one entity file's frontmatter, or None if it cannot be parsed.
-
-    The guard is tight — only the load call is wrapped — so a genuine bug elsewhere
-    still surfaces; only a malformed *file* is absorbed into the ``malformed`` list.
-    """
-    try:
-        return frontmatter.load(str(path)).metadata
-    except Exception:  # noqa: BLE001 — one bad file must not brick the whole scan
-        return None
 
 
 def resolve_target(

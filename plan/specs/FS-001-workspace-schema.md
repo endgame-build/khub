@@ -3,7 +3,7 @@ id: FS-001
 name: Workspace & Schema
 priority: Critical
 dependencies: [FS-000]
-updated: 2026-06-21
+updated: 2026-07-07
 ---
 
 # Workspace & Schema
@@ -374,4 +374,5 @@ Init creates the workspace and the schema; introspection and status both read th
 | Schema drift report (`khub schema --diff`) | Fast-follow | Hub↔engagement sync is post-v1; v1 owns the flattened schema outright | 2026-06-20 |
 | Promote-back / `diff-preset` | Deferred | Layered subtree sync is named but unscheduled | 2026-06-20 |
 | Serialization formats (`format: json\|jsonl\|gjson\|yaml` per entity file) | Deferred | Specified in the design-memo storage grammar and the format table above; v1 pins `format: md` (meta-schema `_only_md` validator). Scan glob + validator whitelist are the unlock; `entity_path` is already fmt-aware | 2026-07-07 |
+| Serialization formats — per-entity `format: json\|yaml` | **Shipped** (TS-FMT-001/002) | Meta-schema whitelist + format-aware scan + `core/formats.py` dispatch; prose rides in a reserved `body` field on non-md documents. `jsonl` (collection-only) and `gjson` (undefined) stay deferred with collections — see `docs/collections-design.md` | 2026-07-07 |
 | Collections (whole-inventory `[inventory_name].[jsonl\|yaml]` files, row-level entities) | Deferred | In the design-memo storage grammar but needs real design: row-level identity/addressing, git attribution at entity altitude, write locking, body-less entities | 2026-07-07 |

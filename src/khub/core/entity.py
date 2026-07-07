@@ -31,13 +31,10 @@ import re
 import shutil
 from dataclasses import dataclass, field
 from datetime import date
-from io import StringIO
 from pathlib import Path
 from typing import Any
 
-import frontmatter
-from ruamel.yaml import YAML
-
+from khub.core import formats
 from khub.core.errors import LocatedError
 from khub.core.index import Index, build_index, resolve_target
 from khub.core.introspect import load_schema
@@ -47,14 +44,6 @@ from khub.core.values import as_bool, is_bool, is_dateish, is_number
 # The longest slug we mint or accept; an over-long --id would otherwise crash at
 # path.write_text with an OSError (filename too long) instead of a located error.
 _MAX_SLUG = 100
-
-_yaml = YAML()  # round-trip: preserves key order and comments on edit
-_yaml.default_flow_style = False
-# Never emit YAML anchors/aliases: two keys sharing a value (e.g. created==updated
-# on a fresh entity) must each serialize in full, not collapse to &id/*id — anchors
-# leak into raw reads and break the minimal-diff guarantee on the first edit.
-_yaml.representer.ignore_aliases = lambda *_: True
-
 
 @dataclass(frozen=True)
 class CreateResult:
@@ -160,6 +149,7 @@ def create(
 
     index = build_index(root, resolved)
     attrs, rels, extras = _partition(rtype, fields, strict=strict)
+    body = _md_normalized(body, rtype)
 
     # Referential integrity (and bare-target ambiguity) hard-fail before any byte
     # is written.
@@ -220,6 +210,15 @@ def _partition(
             raise LocatedError(
                 code="type_field_forbidden",
                 message=f"The 'type' field is set by the command ({rtype.name}); it cannot be overridden",
+            )
+        # On a json/yaml type `body` is the prose channel (the reserved key the
+        # reader pops); written as a field it would be clobbered by the next
+        # render. md keeps `body` as an ordinary frontmatter field.
+        if key == "body" and rtype.storage.fmt != "md":
+            raise LocatedError(
+                code="body_field_reserved",
+                message=f"'body' is reserved on a {rtype.storage.fmt} entity; "
+                "pass --body/--body-file for prose",
             )
         if key in rtype.attributes:
             attrs[key] = _validate_attr(rtype.attributes[key], raw)
@@ -375,14 +374,14 @@ def get(root: Path, id_: str, *, edges: bool = False) -> EntityView:
     rtype = resolved.types[type_]
     path = entity_path(root, rtype, slug)
     raw = path.read_text()
-    post = frontmatter.loads(raw)
-    view_edges = _edges(index, resolved, type_, slug, dict(post.metadata)) if edges else None
+    meta, body = formats.parse(raw, formats.fmt_of(path))
+    view_edges = _edges(index, resolved, type_, slug, meta) if edges else None
     return EntityView(
         type=type_,
         slug=slug,
         path=path,
-        meta=dict(post.metadata),
-        body=post.content,
+        meta=meta,
+        body=body,
         raw=raw,
         edges=view_edges,
     )
@@ -485,7 +484,7 @@ def update(
     if "updated" not in attrs and "updated" not in extras:
         cmap["updated"] = date.today()
 
-    _write_doc(path, cmap, body_text if body is None else _normalize_body(body))
+    _write_doc(path, cmap, body_text if body is None else _md_normalized(body, rtype))
     # as_bool, not truthiness: a hand-authored draft: "false" must report active,
     # matching how check/query/status read the same flag.
     return UpdateResult(type=type_, slug=slug, path=path, draft=as_bool(cmap.get("draft", False)))
@@ -627,13 +626,6 @@ def entity_path(root: Path, rtype: ResolvedType, slug: str) -> Path:
     return base / f"{slug}.{rtype.storage.fmt}"
 
 
-def _render_file(meta: dict[str, Any], body: str) -> str:
-    """Serialize frontmatter + body to file text (empty body → just frontmatter)."""
-    stream = StringIO()
-    _yaml.dump(meta, stream)
-    return f"---\n{stream.getvalue()}---\n{_normalize_body(body)}"
-
-
 def _write_new(path: Path, meta: dict[str, Any], body: str) -> None:
     """Write a brand-new entity file exclusively (O_EXCL): fail if the slug exists.
 
@@ -642,7 +634,7 @@ def _write_new(path: Path, meta: dict[str, Any], body: str) -> None:
     rather than silently overwriting the first writer.
     """
     with path.open("x", encoding="utf-8") as fh:
-        fh.write(_render_file(meta, body))
+        fh.write(formats.render(meta, body, formats.fmt_of(path)))
 
 
 def _as_list(value: Any) -> list[Any]:
@@ -674,45 +666,30 @@ def _resolve_write_target(
     return matches
 
 
-def _normalize_body(body: str) -> str:
-    """A non-empty body ends in exactly one newline; an empty body stays empty."""
-    if not body:
-        return ""
-    return body if body.endswith("\n") else body + "\n"
+def _md_normalized(body: str, rtype: ResolvedType) -> str:
+    """Newly supplied md prose ends in a newline (file-format nicety).
+
+    Applied only where NEW body text enters (create, edit --body) and only for
+    md — a round-tripped body is written byte-for-byte (minimal diff, ENT-007),
+    and a non-md ``body`` field stores the string verbatim.
+    """
+    if rtype.storage.fmt == "md" and body and not body.endswith("\n"):
+        return body + "\n"
+    return body
 
 
 def _read_doc(path: Path) -> tuple[Any, str]:
-    """Round-trip-load a file's frontmatter (order + comments preserved) and its body."""
-    yaml_text, body = _split_frontmatter(path.read_text())
-    cmap = _yaml.load(yaml_text)
-    return (cmap if cmap is not None else {}), body
+    """Round-trip-load a document (order + comments preserved) and its body.
+
+    Kept under this name — ``integrity._fix_updated`` and ``backfill._apply``
+    import it; the per-format dispatch lives in ``core.formats``.
+    """
+    return formats.read_doc(path)
 
 
 def _write_doc(path: Path, cmap: Any, body: str) -> None:
     """Re-serialize a round-trip map and the (unchanged) body — a minimal diff."""
-    stream = StringIO()
-    _yaml.dump(cmap, stream)
-    path.write_text(f"---\n{stream.getvalue()}---\n{body}")
-
-
-def _split_frontmatter(text: str) -> tuple[str, str]:
-    """Split ``---\\n<yaml>\\n---\\n<body>`` into its YAML text and its body remainder.
-
-    Tolerates a leading UTF-8 BOM and blank lines before the fence — the same leniency
-    python-frontmatter (the read path) has — so any file khub can display, it can also
-    edit. The fence itself stays strict.
-    """
-    text = text.lstrip("\ufeff")  # a BOM the read path silently accepts
-    lines = text.split("\n")
-    start = 0
-    while start < len(lines) and lines[start].strip() == "":
-        start += 1  # skip leading blank lines the read path also skips
-    if start >= len(lines) or lines[start] != "---":
-        raise LocatedError(code="malformed_entity", message=f"No frontmatter fence in {text[:20]!r}")
-    for i in range(start + 1, len(lines)):
-        if lines[i] == "---":
-            return "\n".join(lines[start + 1 : i]) + "\n", "\n".join(lines[i + 1 :])
-    raise LocatedError(code="malformed_entity", message="Unterminated frontmatter")
+    path.write_text(formats.render(cmap, body, formats.fmt_of(path)))
 
 
 def _preset(root: Path) -> str:

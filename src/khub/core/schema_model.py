@@ -15,7 +15,9 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic import BaseModel, ConfigDict, field_validator, model_validator
+
+from khub.core.formats import PER_ITEM
 
 ScalarType = Literal["text", "number", "date", "datetime", "bool", "list"]
 
@@ -54,9 +56,10 @@ class RelationDecl(_Strict):
 class TypeDecl(_Strict):
     """One entity type's storage config plus its attribute/relation deltas.
 
-    ``format`` is pinned to ``md`` in v1: the scan globs only ``*.md``, so any other
-    format would write a write-only, invisible entity. Reject it at schema-validation
-    time rather than silently.
+    ``format`` is whitelisted to the per-item formats the scan and write paths
+    implement (md, json, yaml). ``jsonl`` is collection-only and ``gjson`` is
+    named in the grammar but undefined — both are rejected here rather than
+    producing write-only, invisible entities.
     """
 
     layout: Literal["file", "folder"]
@@ -67,12 +70,26 @@ class TypeDecl(_Strict):
 
     @field_validator("format")
     @classmethod
-    def _only_md(cls, value: str) -> str:
-        if value != "md":
+    def _known_format(cls, value: str) -> str:
+        if value not in PER_ITEM:  # the one whitelist source (core.formats)
             raise ValueError(
-                f"format '{value}' is not yet implemented; only 'md' is supported in v1"
+                f"format '{value}' is not supported for a file/folder layout; "
+                "use md, json, or yaml (jsonl is collection-only, gjson is deferred)"
             )
         return value
+
+    @model_validator(mode="after")
+    def _body_reserved_off_md(self) -> "TypeDecl":
+        # On a json/yaml type the `body` key is the prose channel: a field so
+        # named would be popped out of meta on every read (unqueryable, failing
+        # `required` despite being on disk) and clobbered on write. Reject it
+        # here rather than silently reshaping data.
+        if self.format != "md" and ("body" in self.attributes or "body" in self.relations):
+            raise ValueError(
+                f"'body' is reserved on a {self.format} type (it is the prose channel); "
+                "rename the field or use format: md"
+            )
+        return self
 
 
 class BaseBlock(_Strict):

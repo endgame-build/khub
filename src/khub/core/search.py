@@ -17,8 +17,7 @@ import sqlite3
 from dataclasses import dataclass
 from pathlib import Path
 
-import frontmatter
-
+from khub.core import formats
 from khub.core.entity import entity_path
 from khub.core.errors import LocatedError
 from khub.core.index import Index, build_index, filter_index, stray_nodes
@@ -80,16 +79,19 @@ def _build_fts(conn: sqlite3.Connection, root: Path, index: Index, *, type_: str
     for tname, slug in sorted(index.nodes):
         if type_ is not None and tname != type_:
             continue
-        path = entity_path(root, index.resolved.types[tname], slug)
+        rtype = index.resolved.types[tname]
+        path = entity_path(root, rtype, slug)
         try:
-            # utf-8 pinned: frontmatter.load (the scan) decodes utf-8, so a locale
-            # default here would index mojibake tokens the scan never saw.
+            # utf-8 pinned: the scan decodes utf-8, so a locale default here would
+            # index mojibake tokens the scan never saw; replace only softens a
+            # mid-command rewrite race (a scanned node is valid strict utf-8).
             text = path.read_text(encoding="utf-8", errors="replace")
         except OSError:
-            continue
-        meta = index.meta[(tname, slug)]
+            continue  # deleted between scan and read — skip, never a brick
+        meta, body = formats.parse(text, rtype.storage.fmt)  # loud on race corruption
         title = str(meta.get("title") or meta.get("name") or slug)
-        rows.append((title, frontmatter.loads(text).content, tname, slug, str(path.relative_to(root))))
+        body = formats.fts_body(meta, body, rtype.storage.fmt)
+        rows.append((title, body, tname, slug, str(path.relative_to(root))))
     conn.executemany("INSERT INTO fts VALUES (?,?,?,?,?)", rows)
 
 

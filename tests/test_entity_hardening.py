@@ -16,7 +16,8 @@ from typing import Callable
 import frontmatter
 import pytest
 
-from khub.core.entity import _split_frontmatter, create, link, unlink, update
+from khub.core.entity import create, link, unlink, update
+from khub.core.formats import _split_frontmatter
 from khub.core.errors import LocatedError
 
 Seed = Callable[..., None]

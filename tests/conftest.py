@@ -78,11 +78,14 @@ def fresh_ws(tmp_path: Path) -> Path:
 
 @pytest.fixture
 def seed() -> Callable[..., None]:
-    """Write an entity .md with YAML frontmatter under a workspace root.
+    """Write an entity file under a workspace root, dispatched on the suffix.
 
     Usage: ``seed(root, "clients/acme.md", type="client", name="Acme", ...)``.
+    ``.md`` writes YAML frontmatter; ``.json``/``.yaml`` write the bare document
+    (the non-md per-item formats).
     """
     import io
+    import json as jsonlib
 
     from ruamel.yaml import YAML
 
@@ -94,8 +97,14 @@ def seed() -> Callable[..., None]:
     def _seed(root: Path, relpath: str, **meta: object) -> None:
         p = root / relpath
         p.parent.mkdir(parents=True, exist_ok=True)
+        if relpath.endswith(".json"):
+            p.write_text(jsonlib.dumps(meta, indent=2, default=str) + "\n")
+            return
         buf = io.StringIO()
         yaml.dump(meta, buf)
-        p.write_text("---\n" + buf.getvalue() + "---\n")
+        if relpath.endswith(".yaml"):
+            p.write_text(buf.getvalue())
+        else:
+            p.write_text("---\n" + buf.getvalue() + "---\n")
 
     return _seed

@@ -21,6 +21,7 @@ from ruamel.yaml import YAML
 
 from khub.core.compile import compile_schema
 from khub.core.errors import LocatedError
+from khub.core.formats import PER_ITEM
 from khub.core.resolve import load_yaml
 
 PRESETS_DIR = Path(__file__).resolve().parent.parent / "presets"
@@ -166,16 +167,30 @@ def init_workspace(
     )
 
 
+# Entity-capable suffixes (PER_ITEM + .jsonl ahead of collections). Vendor/VCS
+# trees are skipped — hashing every package.json in a node_modules would turn
+# the cutover snapshot into a full-tree sweep.
+_ENTITY_SUFFIXES = tuple(f".{fmt}" for fmt in sorted(PER_ITEM)) + (".jsonl",)
+_SKIP_PARTS = frozenset({".khub", ".git", ".venv", "node_modules"})
+
+
 def _entity_hashes(target: Path) -> dict[str, str]:
-    """Content hashes of entity ``.md`` files (outside ``.khub/``), keyed by relpath."""
+    """Content hashes of entity-suffixed files, keyed by relpath.
+
+    Broader than the old md-only sweep (so the cutover guarantee measures
+    json/yaml corpora too) — which also broadens ``seeded_over_corpus`` to
+    "the target holds any entity-suffixed file". Per-suffix globs keep the
+    name filtering in C.
+    """
     if not target.exists():
         return {}
-    return {
-        str(p.relative_to(target)): hashlib.sha256(p.read_bytes()).hexdigest()
-        for p in target.rglob("*.md")
-        # is_file(): rglob also matches directories named *.md (real corpora have them)
-        if p.is_file() and ".khub" not in p.parts
-    }
+    out: dict[str, str] = {}
+    for ext in _ENTITY_SUFFIXES:
+        for p in target.rglob(f"*{ext}"):
+            # is_file(): rglob also matches directories named *.md (real corpora have them)
+            if p.is_file() and not _SKIP_PARTS.intersection(p.parts):
+                out[str(p.relative_to(target))] = hashlib.sha256(p.read_bytes()).hexdigest()
+    return out
 
 
 def _append_gitignore(gitignore: Path, line: str) -> None:

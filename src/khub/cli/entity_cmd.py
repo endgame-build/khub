@@ -43,12 +43,13 @@ def add_command(
     id_: str = typer.Option(None, "--id", help="Explicit slug (else minted from name/type)."),
     draft: bool = typer.Option(False, "--draft", help="Mark the entity unpublished (default: active)."),
     strict: bool = typer.Option(False, "--strict", help="Reject fields the schema does not declare."),
+    body_text: str = typer.Option(None, "--body", help="Body prose as a string."),
     body_file: str = typer.Option(None, "--body-file", help="Read the body from a file ('-' for stdin)."),
     fmt: str = typer.Option("text", "--format", help="text or json (emits the written record)."),
 ) -> None:
     """Create an entity: khub add opportunity --client initech --owner noor --stage prospect."""
     fields = parse_fields(ctx.args)
-    body = _read_body(body_file)
+    body = _pick_body(body_text, body_file) or ""
     try:
         root = resolve_root(ctx)
         result = create(root, type_, fields, id_=id_, strict=strict, body=body, draft=draft)
@@ -91,12 +92,13 @@ def edit_command(
     ctx: typer.Context,
     id_: str = typer.Argument(..., metavar="ID", help="A bare slug, or type/slug on ambiguity."),
     strict: bool = typer.Option(False, "--strict", help="Reject fields the schema does not declare."),
+    body_text: str = typer.Option(None, "--body", help="Replace the body with this string ('' clears it)."),
     body_file: str = typer.Option(None, "--body-file", help="Replace the body from a file ('-' for stdin)."),
     fmt: str = typer.Option("text", "--format", help="text or json (emits the updated record)."),
 ) -> None:
     """Edit an entity: khub edit initech-deal stage proposal-sent  (or --field value)."""
     fields = parse_fields(ctx.args)
-    body = None if body_file is None else _read_body(body_file)
+    body = _pick_body(body_text, body_file)
     try:
         root = resolve_root(ctx)
         result = update(root, id_, fields, strict=strict, body=body)
@@ -208,9 +210,18 @@ def parse_fields(extra: list[str]) -> dict[str, str]:
     return fields
 
 
-def _read_body(body_file: str | None) -> str:
+def _pick_body(body_text: str | None, body_file: str | None) -> str | None:
+    """The body from ``--body`` or ``--body-file`` — one source, never both.
+
+    None means "no body supplied" (add writes empty, edit keeps the current body);
+    ``--body ""`` is an explicit empty body (edit clears it).
+    """
+    if body_text is not None and body_file is not None:
+        raise typer.BadParameter("Pass --body or --body-file, not both")
+    if body_text is not None:
+        return body_text
     if body_file is None:
-        return ""
+        return None
     if body_file == "-":
         return sys.stdin.read()
     return Path(body_file).read_text()

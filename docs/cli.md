@@ -46,6 +46,10 @@ The write verbs (`add`, `edit`, `link`, `unlink`, `remove`) reject malformed inp
 
 A single malformed entity file (a broken frontmatter fence, unparseable YAML) no longer crashes the read commands. `validate` reports it as an error and `check` reports it as a `malformed` entry (text and JSON), and the rest of the workspace still resolves.
 
+### Entity formats
+
+A type stores its entities as `md` (the default: YAML frontmatter + prose body), `json`, or `yaml` — per-type schema config (`format:` next to `layout:`/`path:`). A json/yaml entity is a single mapping: pure metadata, with prose carried in a reserved `body` field — `--body`/`--body-file` write it, `get` returns it as the body, an empty body writes no key, and the key never appears in `frontmatter` output or query filters. `search` indexes non-md entities over the body field plus every scalar string field. `jsonl` is collection-only and `gjson` is deferred; the schema rejects both (see `docs/collections-design.md`).
+
 ## Workspace
 
 | Command | Args and options | Returns / does | Tier |
@@ -63,9 +67,9 @@ A single malformed entity file (a broken frontmatter fence, unparseable YAML) no
 
 | Command | Args and options | Does | Tier |
 |---|---|---|---|
-| `khub add <type>` | `--<field> <value>` (repeatable; schema or extension), `--id <slug>`, `--draft`, `--body-file <path>`, `--strict` | mint a slug, write a well-formed entity (active by default; `--draft` marks it unpublished); print its id | v1 |
+| `khub add <type>` | `--<field> <value>` (repeatable; schema or extension), `--id <slug>`, `--draft`, `--body <text>`, `--body-file <path>` (`-` for stdin; not both), `--strict` | mint a slug, write a well-formed entity (active by default; `--draft` marks it unpublished); print its id | v1 |
 | `khub get <id>` | `--format json\|table\|raw`, `--edges` | print an entity; `--edges` includes derived inverse edges | v1 |
-| `khub edit <id> <field> <value>` | or `--<field> <value>` (repeatable), `--body` / `--body-file`, `--strict` | edit fields, bump `updated`, re-validate | v1 |
+| `khub edit <id> <field> <value>` | or `--<field> <value>` (repeatable), `--body <text>` (`''` clears) / `--body-file` (not both), `--strict` | edit fields, bump `updated`, re-validate | v1 |
 | `khub remove <id>` | `--force` | delete an entity; refuses while an inbound edge resolves to it, unless `--force` | v1 |
 | `khub link <id> <predicate> <target>` | | add a schema-checked relation | v1 |
 | `khub unlink <id> <predicate> <target>` | | remove a relation | v1 |
