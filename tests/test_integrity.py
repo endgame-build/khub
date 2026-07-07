@@ -455,3 +455,40 @@ def test_validate_value_zero_not_skipped(fresh_ws: Path, seed: Seed) -> None:
          depends_on=[0], created="2026-01-01")
     errs = {(e.id, e.field) for e in validate(fresh_ws).errors}
     assert ("fragment/f", "depends_on") in errs  # 0 resolves to nothing → referential error
+
+
+# --- check: orphan gate is strict-only (HQ-port finding) -----------------------
+
+
+@pytest.fixture
+def orphan_only_ws(clean_ws: Path) -> Path:
+    """A sound graph plus one fully disconnected entity (a dormant client)."""
+    entity.create(clean_ws, "client", {"name": "Dormant Co"}, id_="dormant-co")
+    return clean_ws
+
+
+@pytest.mark.unit
+def test_orphans_informational_by_default(orphan_only_ws: Path) -> None:
+    """A disconnected entity is reported but does not fail the default gate."""
+    report = check(orphan_only_ws)
+    assert "client/dormant-co" in report.orphans
+    assert report.passed
+
+
+@pytest.mark.unit
+def test_orphans_fail_under_strict(orphan_only_ws: Path) -> None:
+    """--strict makes a fully connected graph a gate requirement."""
+    report = check(orphan_only_ws, strict=True)
+    assert "client/dormant-co" in report.orphans
+    assert not report.passed
+
+
+@pytest.mark.integration
+def test_cli_check_strict_gates_orphans(orphan_only_ws: Path, monkeypatch) -> None:
+    """Default exit 0 with the orphan listed; --strict exits 1 on the same tree."""
+    monkeypatch.chdir(orphan_only_ws)
+    ok = runner.invoke(app, ["check", "--format", "json"])
+    assert ok.exit_code == 0
+    assert "client/dormant-co" in json.loads(ok.output)["orphans"]
+    strict = runner.invoke(app, ["check", "--strict", "--format", "json"])
+    assert strict.exit_code == 1

@@ -338,12 +338,16 @@ class CheckReport:
     strays: list[str]
     cycles: list[list[str]]
     malformed: list[str] = field(default_factory=list)
+    # Orphans are informational by default — a fully disconnected entity can be
+    # legitimate (a dormant client whose engagements were archived). ``strict``
+    # makes a fully connected graph a gate requirement.
+    strict: bool = False
 
     @property
     def passed(self) -> bool:
         return not (
             self.incomplete
-            or self.orphans
+            or (self.orphans if self.strict else [])
             or self.dangling
             or self.strays
             or self.cycles
@@ -351,7 +355,7 @@ class CheckReport:
         )
 
 
-def check(root: Path) -> CheckReport:
+def check(root: Path, *, strict: bool = False) -> CheckReport:
     """Walk the active subgraph for completeness, orphans, dangling, strays, cycles.
 
     Strays are dropped from the working index up front, so every downstream check —
@@ -386,6 +390,7 @@ def check(root: Path) -> CheckReport:
         strays=stray_paths,
         cycles=cycles,
         malformed=[str(p) for p in index.malformed],
+        strict=strict,
     )
 
 

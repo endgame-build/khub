@@ -63,12 +63,15 @@ def _emit_validate(report: ValidateReport, fmt: str) -> None:
 
 def check_command(
     ctx: typer.Context,
+    strict: bool = typer.Option(
+        False, "--strict", help="Fail the gate on orphans too (default: informational)."
+    ),
     fmt: str = typer.Option("text", "--format", help="text (Rich on a TTY) or json."),
 ) -> None:
     """Check the active graph: completeness, orphans, dangling edges, strays, cycles."""
     try:
         root = resolve_root(ctx)
-        report = check(root)
+        report = check(root, strict=strict)
     except LocatedError as err:
         typer.echo(err.message, err=True)
         raise typer.Exit(1) from None
@@ -82,6 +85,8 @@ def _emit_check(report: CheckReport, fmt: str) -> None:
         typer.echo(json.dumps(_check_payload(report)))
         return
     if report.passed:
+        for o in report.orphans:
+            typer.echo(f"orphan {o} (informational)")
         typer.echo("Graph check passed")
         return
     for inc in report.incomplete:

@@ -91,7 +91,7 @@ A single malformed entity file (a broken frontmatter fence, unparseable YAML) no
 | Command | Args and options | Does | Tier |
 |---|---|---|---|
 | `khub validate [target=all]` | `--strict`, `--fix` (v1: date backfill only), `--format` | per-entity well-formedness and referential integrity over the declared subset (default: whole workspace) | v1 |
-| `khub check` | `--format` | graph-wide: relations resolve, required-completeness for `active`, no orphans (zero relations), no stray files (non-entities inside a type layout; reference docs outside type layouts are skipped), no edge cycles | v1 |
+| `khub check` | `--strict`, `--format` | graph-wide: relations resolve, required-completeness for `active`, no stray files (non-entities inside a type layout; reference docs outside type layouts are skipped), no edge cycles. Orphans (zero relations) are always reported but fail the gate only under `--strict` — a fully disconnected entity can be legitimate (a dormant client whose engagements were archived) | v1 |
 | `khub stale` | `--days <n>` (default: the workspace `stale_days`, 90 in firm-ops), `--format` | entities past an `updated` threshold; dates backfilled from `git log` | v1 |
 | `khub log [id]` | `--limit <n>`, `--since <date>`, `--format` | git history at ontology altitude (who changed what, when); distinct from `history`. `--format json` always emits one shape: `{"entries": [...], "git_available": true|false}` (a no-git workspace is `entries: []`, `git_available: false` — never a bare notice) | v1 |
 
