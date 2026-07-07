@@ -285,3 +285,13 @@ def test_cli_force_seed_modifies_no_entities(tmp_path: Path) -> None:
     assert result.exit_code == 0, result.output
     assert "Initialized firm-ops workspace; 0 entity files modified" in result.output
     assert corpus.read_bytes() == before
+
+
+@pytest.mark.unit
+def test_force_seed_tolerates_directory_named_md(
+    tmp_path: Path, preset_source: Path
+) -> None:
+    """HQ-port regression: rglob("*.md") matches directories; init must not crash."""
+    (tmp_path / "archive" / "docs" / "data-backup.md").mkdir(parents=True)
+    result = init_workspace("note", tmp_path, preset_source=preset_source, force=True)
+    assert result.entity_files_modified == 0

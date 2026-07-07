@@ -173,7 +173,8 @@ def _entity_hashes(target: Path) -> dict[str, str]:
     return {
         str(p.relative_to(target)): hashlib.sha256(p.read_bytes()).hexdigest()
         for p in target.rglob("*.md")
-        if ".khub" not in p.parts
+        # is_file(): rglob also matches directories named *.md (real corpora have them)
+        if p.is_file() and ".khub" not in p.parts
     }
 
 

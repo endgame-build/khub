@@ -373,3 +373,22 @@ def test_walks_exclude_strays(fresh_ws: Path, seed: Seed) -> None:
     seed(fresh_ws, "clients/bob.md", type="person", name="Bob", **RECENT)
     hits = walk_neighbors(fresh_ws, "frag")
     assert all(n.slug != "bob" for n in hits)
+
+
+# --- HQ-port regression: a directory named *.md is not a file ------------------
+
+
+@pytest.mark.unit
+def test_directory_named_md_is_invisible_to_scan(fresh_ws: Path, seed: Seed) -> None:
+    """A directory matching the layout glob is skipped: not an entity, not malformed."""
+    seed(fresh_ws, "clients/real.md", type="client", name="Real", **RECENT)
+    (fresh_ws / "clients" / "weird.md").mkdir()  # dir matching the file-layout glob
+    opp_dir = fresh_ws / "opportunities" / "ghost"
+    opp_dir.mkdir(parents=True)
+    (opp_dir / "_index.md").mkdir()  # dir matching the folder-layout glob
+    proj = project(fresh_ws, stale_days=90, now=NOW)
+    assert proj.malformed == 0
+    assert proj.counts["client"] == 1
+    assert proj.counts.get("opportunity", 0) == 0
+    report = validate(fresh_ws)
+    assert report.ok

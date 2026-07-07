@@ -74,8 +74,12 @@ def scan_type(root: Path, rtype: ResolvedType) -> tuple[list[tuple[str, dict[str
         return [], []
     out: list[tuple[str, dict[str, Any]]] = []
     malformed: list[Path] = []
+    # is_file(): glob also matches directories named *.md (real corpora have them);
+    # a directory is not a malformed file — it is simply not an entity.
     if rtype.storage.layout == "folder":
         for idx in sorted(base.glob("*/_index.md")):
+            if not idx.is_file():
+                continue
             parsed = _load_frontmatter(idx)
             if parsed is None:
                 malformed.append(idx)
@@ -83,7 +87,7 @@ def scan_type(root: Path, rtype: ResolvedType) -> tuple[list[tuple[str, dict[str
                 out.append((idx.parent.name, parsed))
     else:
         for f in sorted(base.glob("*.md")):
-            if f.name == "_index.md":
+            if f.name == "_index.md" or not f.is_file():
                 continue
             parsed = _load_frontmatter(f)
             if parsed is None:
