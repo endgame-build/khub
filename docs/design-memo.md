@@ -184,7 +184,7 @@ Prove the **engine** on the real thing: cut **firm-hq** over to khub. The provin
 
 **In:** the engine (schema-introspecting core library, in-memory `networkx` index, the integrity loop `validate`/`check`/`stale` + `log`, plus `reindex` and `backfill` for the HQ cutover); the full author and query command surface; `khub init`; the Claude Code skill; and the **firm-ops preset**, the LinkML port of `hq.schema.yml` (9 types, 14 relation predicates), captured in full in `firm-ops-preset.md`.
 
-**Out** (deferred and named): the engineering preset and any preset beyond firm-ops; the SQLite/graph projection and FTS search; `diff-preset` drift/promotion; hub↔engagement sync; the MCP server; facet and OKF-bundle ingestion (fast-follow #1); `rename`; concurrency arbitration.
+**Out** (deferred and named): the engineering preset and any preset beyond firm-ops; the SQLite/graph projection and FTS search; `diff-preset` drift/promotion; hub↔engagement sync; the MCP server; facet and OKF-bundle ingestion (fast-follow #1); `rename`; concurrency arbitration; extra serialization formats and collections (the `[json|jsonl|gjson|yaml]` storage-grammar forms above — per-item non-md entity files, and whole-inventory collection files with row-level entities; v1 pins `format: md` via the meta-schema validator).
 
 ### The v1 Proving Ground: HQ Firm-Ops
 
