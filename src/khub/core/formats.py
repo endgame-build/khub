@@ -33,11 +33,13 @@ from ruamel.yaml import YAML
 
 from khub.core.errors import LocatedError
 
-# Formats legal for file/folder (per-item) layouts — the single source the
-# meta-schema whitelist (schema_model._known_format) checks against. jsonl is
-# collection-only (a one-line jsonl file is json wearing the wrong extension);
-# gjson is named in the grammar but undefined — both stay schema-rejected.
+# The format/layout compatibility matrix's two sides — the single source the
+# meta-schema validator (schema_model) checks against. jsonl is collection-only
+# (a one-line jsonl file is json wearing the wrong extension); md is per-item
+# only (prose files don't hold rows); gjson is named in the grammar but
+# undefined — rejected everywhere until designed.
 PER_ITEM = frozenset({"md", "json", "yaml"})
+COLLECTION = frozenset({"json", "jsonl", "yaml"})
 
 _BODY_KEY = "body"
 
@@ -67,6 +69,11 @@ def parse(text: str, fmt: str) -> tuple[dict[str, Any], str]:
     if fmt == "md":
         post = frontmatter.loads(text)
         return dict(post.metadata), post.content
+    if fmt not in PER_ITEM:  # a collection fmt reaching the per-item parser is a wiring bug
+        raise LocatedError(
+            code="malformed_entity",
+            message=f"'{fmt}' is not a per-item format; collections load via load_collection",
+        )
     data = _load_mapping(text, fmt, _yaml_safe)
     return data, _pop_body(data, fmt)
 
@@ -161,7 +168,7 @@ def _load_mapping(text: str, fmt: str, yaml_inst: YAML) -> Any:
     both formats — never coerced to ``{}``.
     """
     if fmt == "json":
-        data = json.loads(text) if text.strip() else {}
+        data = json.loads(text, object_pairs_hook=_reject_dup_keys) if text.strip() else {}
     else:
         loaded = yaml_inst.load(text)
         data = loaded if loaded is not None else {}
@@ -173,7 +180,7 @@ def _load_mapping(text: str, fmt: str, yaml_inst: YAML) -> Any:
     return data
 
 
-def _pop_body(data: dict[str, Any], fmt: str) -> str:
+def _pop_body(data: dict[str, Any], fmt: str, *, ctx: str = "") -> str:
     """Extract the reserved ``body`` key: a string (or null = empty), else malformed."""
     raw = data.pop(_BODY_KEY, None)
     if raw is None:
@@ -182,8 +189,115 @@ def _pop_body(data: dict[str, Any], fmt: str) -> str:
         return raw
     raise LocatedError(
         code="malformed_entity",
-        message=f"The reserved 'body' key of a {fmt} entity must be a string, got {type(raw).__name__}",
+        message=f"{ctx}the reserved 'body' key of a {fmt} entity must be a string, "
+        f"got {type(raw).__name__}",
     )
+
+
+# --- collections (layout: collection — one file, row-level entities) ----------
+
+
+def load_collection(text: str, fmt: str) -> dict[str, Any]:
+    """Raw rows keyed by slug from one collection file; raises on ANY bad row.
+
+    v1 malformed contract is whole-file: a non-mapping row, a missing/invalid
+    jsonl ``slug`` key, a duplicate slug, or a non-string ``body`` makes the
+    entire file malformed — khub never partially loads (or rewrites) a file it
+    cannot fully round-trip. An empty/whitespace-only text is zero rows.
+    # ponytail: per-row fault isolation (bad line ≠ bad file) is the named
+    # upgrade when a real corpus hits a 500-row file with one typo.
+
+    Rows are returned at storage altitude: the ``body`` key (validated
+    string-or-null) stays inside each row; ``split_row`` strips it for meta.
+    jsonl rows carry their slug in a reserved ``slug`` key (popped here);
+    yaml/json collections are mappings keyed by slug.
+    """
+    if fmt == "jsonl":
+        rows: dict[str, Any] = {}
+        for n, line in enumerate(text.splitlines(), start=1):
+            if not line.strip():
+                continue
+            row = json.loads(line)
+            if not isinstance(row, dict):
+                raise LocatedError(
+                    code="malformed_entity",
+                    message=f"jsonl row {n} is not an object ({type(row).__name__})",
+                )
+            slug = row.pop("slug", None)
+            if not isinstance(slug, str) or not slug:
+                raise LocatedError(
+                    code="malformed_entity",
+                    message=f"jsonl row {n} is missing its reserved string 'slug' key",
+                )
+            if slug in rows:
+                raise LocatedError(
+                    code="malformed_entity", message=f"duplicate slug '{slug}' at jsonl row {n}"
+                )
+            rows[slug] = row
+    else:
+        data = _load_mapping(text, fmt, _yaml_rt)
+        rows = {}
+        for key, row in data.items():
+            if not isinstance(key, str) or not key:
+                raise LocatedError(
+                    code="malformed_entity", message=f"collection key {key!r} is not a slug string"
+                )
+            if not isinstance(row, dict):
+                raise LocatedError(
+                    code="malformed_entity",
+                    message=f"row '{key}' is not a mapping ({type(row).__name__})",
+                )
+            inner = row.pop("slug", None)  # an agreeing inner slug never reaches meta
+            if inner is not None and inner != key:
+                raise LocatedError(
+                    code="malformed_entity",
+                    message=f"row '{key}' carries a disagreeing slug key '{inner}'",
+                )
+            rows[key] = row
+    for slug, row in rows.items():
+        _pop_body(dict(row), fmt, ctx=f"row '{slug}': ")  # validate, discard the copy
+    return rows
+
+
+def dump_collection(rows: dict[str, Any], fmt: str) -> str:
+    """Serialize rows back to the collection file's native shape.
+
+    jsonl re-emits one compact object per line (``slug`` first) — untouched
+    rows of khub-written files are byte-identical; yaml keeps the ruamel
+    round-trip map, so comments on untouched rows survive.
+    """
+    if fmt == "jsonl":
+        lines = [
+            json.dumps({"slug": slug, **row}, ensure_ascii=False, default=_json_scalar)
+            for slug, row in rows.items()
+        ]
+        return "\n".join(lines) + ("\n" if lines else "")
+    if fmt == "json":
+        return json.dumps(rows, indent=2, ensure_ascii=False, default=_json_scalar) + "\n"
+    stream = StringIO()
+    _yaml_rt.dump(rows, stream)
+    return stream.getvalue()
+
+
+def render_row(slug: str, row: dict[str, Any], fmt: str) -> str:
+    """One row's stored serialization — ``get --format raw`` for a collection row."""
+    return dump_collection({slug: row}, fmt)
+
+
+def split_row(row: dict[str, Any], fmt: str) -> tuple[dict[str, Any], str]:
+    """A raw row as ``(meta, body)`` — the reserved key stripped, the row untouched."""
+    meta = dict(row)
+    return meta, _pop_body(meta, fmt)
+
+
+def _reject_dup_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    """object_pairs_hook: a duplicate key in a json mapping is malformed, never last-wins."""
+    out: dict[str, Any] = {}
+    for key, value in pairs:
+        if key in out:
+            raise LocatedError(code="malformed_entity", message=f"duplicate key '{key}'")
+        out[key] = value
+    return out
 
 
 def _json_scalar(value: Any) -> str:

@@ -15,7 +15,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from khub.core.formats import load_meta
+from khub.core.formats import load_collection, load_meta, split_row
 from khub.core.model import ResolvedRelation, ResolvedSchema, ResolvedType
 
 
@@ -66,6 +66,8 @@ def scan_type(root: Path, rtype: ResolvedType) -> tuple[list[tuple[str, dict[str
     bracket, a tab in the frontmatter) becomes a malformed entry instead of raising —
     so validate/check/query/status/get never crash on one bad file.
     """
+    if rtype.storage.layout == "collection":
+        return _scan_collection(root, rtype)
     if not rtype.storage.path:
         return [], []
     base = root / rtype.storage.path
@@ -100,6 +102,32 @@ def scan_type(root: Path, rtype: ResolvedType) -> tuple[list[tuple[str, dict[str
             else:
                 out.append((f.stem, parsed))
     return out, malformed
+
+
+def _scan_collection(
+    root: Path, rtype: ResolvedType
+) -> tuple[list[tuple[str, dict[str, Any]]], list[Path]]:
+    """One collection file as ``(slug, meta)`` rows, or one malformed entry.
+
+    A missing or empty file is zero entities, never malformed (the analog of a
+    type's missing directory). Rows may omit ``type`` — the schema binding
+    injects it; a present-and-disagreeing ``type`` makes the row a stray, same
+    predicate as a per-item file. Any bad row makes the WHOLE file malformed
+    (v1 contract — khub never partially loads a file it cannot round-trip).
+    """
+    cpath = root / rtype.collection_relpath
+    if not cpath.is_file():
+        return [], []
+    try:
+        rows = load_collection(cpath.read_text(encoding="utf-8"), rtype.storage.fmt)
+        out: list[tuple[str, dict[str, Any]]] = []
+        for slug, row in rows.items():
+            meta, _ = split_row(row, rtype.storage.fmt)
+            meta.setdefault("type", rtype.name)
+            out.append((slug, meta))
+        return out, []
+    except Exception:  # noqa: BLE001 — one bad collection must not brick the whole scan
+        return [], [cpath]
 
 
 def resolve_target(

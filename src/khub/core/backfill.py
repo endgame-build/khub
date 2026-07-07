@@ -14,7 +14,7 @@ with the first-commit read those reads never needed (``core.gitlog.first_commit_
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -54,11 +54,17 @@ class BackfillChange:
 
 @dataclass(frozen=True)
 class BackfillReport:
-    """The set of changes plus whether git was available and whether anything was written."""
+    """The set of changes plus whether git was available and whether anything was written.
+
+    ``skipped_collections`` names the collection types date-backfill passed over:
+    a shared file's commit dates are not per-row dates (row-diff attribution is
+    the named fast-follow — docs/collections-design.md).
+    """
 
     changes: list[BackfillChange]
     git_available: bool
     dry_run: bool
+    skipped_collections: list[str] = field(default_factory=list)
 
     @property
     def dated_entities(self) -> int:
@@ -88,19 +94,28 @@ def backfill(root: Path, type_: str | None = None, *, dry_run: bool = False) -> 
     git_ok = has_git_history(root)
 
     changes: list[BackfillChange] = []
+    skipped: set[str] = set()
     for node in sorted(index.nodes):
         t, slug = node
         rtype = resolved.types[t]
+        if rtype.storage.layout == "collection":
+            skipped.add(t)  # a file date is not a row date; reported, never silent
+            continue
         meta = index.meta[node]
         path = entity_path(root, rtype, slug)
         additions = _additions(root, path, rtype, meta, type_ == t, git_ok)
         if not additions:
             continue
-        for field, (value, source) in additions.items():
-            changes.append(BackfillChange(t, slug, field, "" if value is None else str(value), source))
+        for fname, (value, source) in additions.items():
+            changes.append(BackfillChange(t, slug, fname, "" if value is None else str(value), source))
         if not dry_run:
             _apply(path, {f: v for f, (v, _) in additions.items()})
-    return BackfillReport(changes=changes, git_available=git_ok, dry_run=dry_run)
+    return BackfillReport(
+        changes=changes,
+        git_available=git_ok,
+        dry_run=dry_run,
+        skipped_collections=sorted(skipped),
+    )
 
 
 def _additions(
@@ -146,6 +161,6 @@ def _apply(path: Path, additions: dict[str, Any]) -> None:
     overwritten (PRJ-003).
     """
     cmap, body = _read_doc(path)
-    for field, value in additions.items():
-        cmap[field] = value
+    for fname, value in additions.items():
+        cmap[fname] = value
     _write_doc(path, cmap, body)

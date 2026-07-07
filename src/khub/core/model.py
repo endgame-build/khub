@@ -14,9 +14,13 @@ from typing import Any, Literal
 
 @dataclass(frozen=True)
 class StorageConfig:
-    """khub-only storage metadata — never enters LinkML validation."""
+    """khub-only storage metadata — never enters LinkML validation.
 
-    layout: Literal["file", "folder"]
+    ``collection`` layout: one file holds every entity of the type as a row;
+    ``path`` names that file (default ``{type}.{fmt}``) instead of a directory.
+    """
+
+    layout: Literal["file", "folder", "collection"]
     path: str | None = None
     fmt: str = "md"
 
@@ -54,6 +58,15 @@ class ResolvedType:
     storage: StorageConfig
     attributes: dict[str, ResolvedAttribute] = field(default_factory=dict)
     relations: dict[str, ResolvedRelation] = field(default_factory=dict)
+
+    @property
+    def collection_relpath(self) -> str:
+        """The one workspace-relative path of a collection type's inventory file.
+
+        The single source of the default-path rule (``path`` else ``{name}.{fmt}``) —
+        scan, write, integrity, and gitlog all address the file through here.
+        """
+        return self.storage.path or f"{self.name}.{self.storage.fmt}"
 
 
 @dataclass(frozen=True)

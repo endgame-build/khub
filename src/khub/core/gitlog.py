@@ -135,9 +135,16 @@ def stale(root: Path, *, days: int | None = None, now: date) -> StaleReport:
     entries: list[StaleEntry] = []
     for type_, slug in sorted(valid.nodes):
         meta = valid.meta[(type_, slug)]
-        # Only reach for git when `updated` is absent — avoids a subprocess per dated entity.
+        # Only reach for git when `updated` is absent — avoids a subprocess per dated
+        # entity. A collection row never takes the file's commit date: any row's edit
+        # bumps it, so attributing it would make every other row read never-stale — a
+        # dated lie, not an approximation. An undated row is skipped instead.
         git_date = None
-        if git_ok and meta.get("updated") is None:
+        if (
+            git_ok
+            and meta.get("updated") is None
+            and resolved.types[type_].storage.layout != "collection"
+        ):
             path = entity_path(root, resolved.types[type_], slug)
             git_date = last_commit_date(root, str(path.relative_to(root)))
         eff, source = effective_date(meta, git_date=git_date)
@@ -190,18 +197,26 @@ def log(
     if not has_git_history(root):
         return None
 
-    path_to_node = {
-        str(entity_path(root, resolved.types[t], s).relative_to(root)): (t, s)
-        for t, s in valid.nodes
-    }
+    # One path maps to ONE node for file/folder layouts and to every row of a
+    # collection — a commit touching the inventory is attributed per changed row.
+    path_to_nodes: dict[str, list[tuple[str, str]]] = {}
+    for t, s in valid.nodes:
+        rel = str(entity_path(root, resolved.types[t], s).relative_to(root))
+        path_to_nodes.setdefault(rel, []).append((t, s))
     target_rel = (
         str(entity_path(root, resolved.types[target[0]], target[1]).relative_to(root))
         if target
         else None
     )
 
+    # A row-targeted log cannot give git's --max-count the limit: commits touching
+    # only OTHER rows of the shared file would consume the budget and starve the
+    # target ("no history" for an entity with history). Walk unbounded, cap entries.
+    target_is_row = (
+        target is not None and resolved.types[target[0]].storage.layout == "collection"
+    )
     args = ["log", f"--format={_REC}%h{_FLD}%cI", "--name-only"]
-    if limit is not None:
+    if limit is not None and not target_is_row:
         args.append(f"--max-count={limit}")
     if since is not None:
         args.append(f"--since={since}")
@@ -217,10 +232,18 @@ def log(
         commit, when = lines[0].split(_FLD)
         files = [ln for ln in lines[1:] if ln.strip()]
         for relpath in files:
-            node = path_to_node.get(relpath)
-            if node is None or (target is not None and node != target):
+            nodes = path_to_nodes.get(relpath)
+            if nodes is None:
                 continue
-            rtype = resolved.types[node[0]]
+            rtype = resolved.types[nodes[0][0]]
+            if rtype.storage.layout == "collection":
+                entries.extend(
+                    _collection_entries(root, commit, when, relpath, rtype, nodes, target)
+                )
+                continue
+            node = nodes[0]
+            if target is not None and node != target:
+                continue
             entries.append(
                 LogEntry(
                     commit=commit,
@@ -230,7 +253,57 @@ def log(
                     relations=_relations_changed(root, commit, relpath, rtype),
                 )
             )
-    return _since_exact(entries, since)
+    entries = _since_exact(entries, since)
+    if limit is not None and target_is_row:
+        entries = entries[:limit]
+    return entries
+
+
+def _collection_entries(
+    root: Path,
+    commit: str,
+    when: str,
+    relpath: str,
+    rtype: Any,
+    nodes: list[tuple[str, str]],
+    target: tuple[str, str] | None,
+) -> list[LogEntry]:
+    """One LogEntry per row whose value changed in ``commit`` — row-correct history.
+
+    Diffs the collection blob at ``commit`` vs its parent by slug (the same
+    two-``git show`` cost the per-file path pays). Rows no longer in the current
+    index are skipped, matching the per-file behavior for deleted entities; an
+    unparseable blob at either rev contributes no rows for that commit.
+    """
+    new = _rows_at(root, commit, relpath, rtype.storage.fmt)
+    old = _rows_at(root, f"{commit}^", relpath, rtype.storage.fmt)
+    known = {s for (_, s) in nodes}
+    out: list[LogEntry] = []
+    for slug in sorted(set(new) | set(old)):
+        if slug not in known or new.get(slug) == old.get(slug):
+            continue
+        node = (rtype.name, slug)
+        if target is not None and node != target:
+            continue
+        n_row, o_row = new.get(slug) or {}, old.get(slug) or {}
+        rels = [
+            pred
+            for pred in rtype.relations
+            if _rel_value(n_row.get(pred)) != _rel_value(o_row.get(pred))
+        ]
+        out.append(LogEntry(commit=commit, type=rtype.name, slug=slug, date=when, relations=rels))
+    return out
+
+
+def _rows_at(root: Path, rev: str, relpath: str, fmt: str) -> dict[str, Any]:
+    """The collection's raw rows at ``rev``; empty if absent or unparseable."""
+    res = _git(root, "show", f"{rev}:{relpath}")
+    if res.returncode != 0:
+        return {}
+    try:
+        return formats.load_collection(res.stdout, fmt)
+    except Exception:  # noqa: BLE001 — a malformed blob contributes no row entries
+        return {}
 
 
 def _since_exact(entries: list[LogEntry], since: str | None) -> list[LogEntry]:

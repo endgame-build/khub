@@ -101,6 +101,11 @@ def _emit_check(report: CheckReport, fmt: str) -> None:
     # getattr-guarded so this works before/after core adds CheckReport.malformed.
     for m in getattr(report, "malformed", []):
         typer.echo(f"malformed file {m}")
+    if report.suppressed_dangling:
+        typer.echo(
+            f"({report.suppressed_dangling} dangling edges suppressed pending the "
+            "malformed collection fix)"
+        )
     for cycle in report.cycles:
         typer.echo(f"cycle {' -> '.join(cycle)}")
 
@@ -127,4 +132,5 @@ def _check_payload(report: CheckReport) -> dict[str, Any]:
         # getattr-guarded so this works before/after core adds CheckReport.malformed.
         "malformed": getattr(report, "malformed", []),
         "cycles": report.cycles,
+        "suppressed_dangling": report.suppressed_dangling,
     }

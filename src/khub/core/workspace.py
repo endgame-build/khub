@@ -142,9 +142,14 @@ def init_workspace(
         _append_gitignore(target / ".gitignore", ".khub/generated/")
 
         # Lay down one directory per type's storage path (file and folder layouts
-        # both just need the dir); never create an entity .md.
-        for decl in entities.values():
-            if decl.get("path"):
+        # need the dir; a collection's path names a FILE — create only its parent,
+        # never the file: a missing collection is legitimately zero entities).
+        for name, decl in entities.items():
+            if decl.get("layout") == "collection":
+                cpath = target / (decl.get("path") or f"{name}.{decl.get('format', '')}")
+                if cpath.parent != target:
+                    cpath.parent.mkdir(parents=True, exist_ok=True)
+            elif decl.get("path"):
                 (target / decl["path"]).mkdir(parents=True, exist_ok=True)
     except BaseException:
         # Keep init atomic: drop the partial .khub/ we just created.

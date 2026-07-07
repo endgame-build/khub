@@ -53,7 +53,7 @@ def _emit(hits: list[SearchHit], fmt: str) -> None:
 
 
 def _record(h: SearchHit) -> dict[str, Any]:
-    return {
+    record = {
         "id": f"{h.type}/{h.slug}",
         "type": h.type,
         "slug": h.slug,
@@ -62,6 +62,9 @@ def _record(h: SearchHit) -> dict[str, Any]:
         "snippet": h.snippet,
         "path": h.path,
     }
+    if h.locator:  # collection rows only — per-item records stay byte-identical
+        record["locator"] = h.locator
+    return record
 
 
 def _table(records: list[dict[str, Any]]) -> Table:

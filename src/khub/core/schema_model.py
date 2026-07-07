@@ -13,11 +13,12 @@ output that validates entity frontmatter.)
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, model_validator
 
-from khub.core.formats import PER_ITEM
+from khub.core.formats import COLLECTION, PER_ITEM
 
 ScalarType = Literal["text", "number", "date", "datetime", "bool", "list"]
 
@@ -56,31 +57,53 @@ class RelationDecl(_Strict):
 class TypeDecl(_Strict):
     """One entity type's storage config plus its attribute/relation deltas.
 
-    ``format`` is whitelisted to the per-item formats the scan and write paths
-    implement (md, json, yaml). ``jsonl`` is collection-only and ``gjson`` is
-    named in the grammar but undefined — both are rejected here rather than
-    producing write-only, invisible entities.
+    The format/layout matrix (whitelists sourced from ``core.formats``):
+    ``file``/``folder`` take md, json, or yaml (one entity per file);
+    ``collection`` takes json, jsonl, or yaml (one file, row-level entities;
+    ``path`` names the file, and the format may be derived from its suffix).
+    ``gjson`` is named in the grammar but undefined — rejected everywhere.
     """
 
-    layout: Literal["file", "folder"]
+    layout: Literal["file", "folder", "collection"]
     path: str | None = None
     format: str = "md"
     attributes: dict[str, AttrDecl] = {}
     relations: dict[str, RelationDecl] = {}
 
-    @field_validator("format")
-    @classmethod
-    def _known_format(cls, value: str) -> str:
-        if value not in PER_ITEM:  # the one whitelist source (core.formats)
+    @model_validator(mode="after")
+    def _storage_matrix(self) -> "TypeDecl":
+        if self.layout == "collection":
+            suffix = Path(self.path).suffix.lstrip(".") if self.path else ""
+            # model_fields_set distinguishes an authored `format: md` (rejected —
+            # md is never a collection format) from the field default (derivable
+            # from the path suffix).
+            explicit = "format" in self.model_fields_set
+            fmt = self.format if explicit else suffix
+            if not fmt:
+                raise ValueError(
+                    "a collection type needs format: json|jsonl|yaml "
+                    "(or a path carrying that extension)"
+                )
+            if fmt not in COLLECTION:
+                raise ValueError(
+                    f"format '{fmt}' is not a collection format; use json, jsonl, or yaml "
+                    "(md is per-item only)"
+                )
+            if explicit and suffix and suffix != fmt:
+                raise ValueError(f"path suffix '.{suffix}' disagrees with format '{fmt}'")
+            self.format = fmt
+            for reserved in ("slug", "type"):
+                if reserved in self.attributes or reserved in self.relations:
+                    raise ValueError(
+                        f"'{reserved}' is a reserved row key on a collection type "
+                        "(row identity / the schema binding); rename the field"
+                    )
+        elif self.format not in PER_ITEM:
             raise ValueError(
-                f"format '{value}' is not supported for a file/folder layout; "
+                f"format '{self.format}' is not supported for a file/folder layout; "
                 "use md, json, or yaml (jsonl is collection-only, gjson is deferred)"
             )
-        return value
-
-    @model_validator(mode="after")
-    def _body_reserved_off_md(self) -> "TypeDecl":
-        # On a json/yaml type the `body` key is the prose channel: a field so
+        # On any non-md type the `body` key is the prose channel: a field so
         # named would be popped out of meta on every read (unqueryable, failing
         # `required` despite being on disk) and clobbered on write. Reject it
         # here rather than silently reshaping data.

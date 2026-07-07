@@ -50,6 +50,11 @@ def _emit(report: BackfillReport) -> None:
     # backfilled" line above is never the whole story when files were in fact changed.
     if report.scaffolded_entities:
         typer.echo(f"Scaffolded frontmatter on {report.scaffolded_entities} entities")
+    if report.skipped_collections:
+        typer.echo(
+            f"Skipped collection types ({', '.join(report.skipped_collections)}): "
+            "row-level git dates land with row-diff attribution"
+        )
 
 
 def _by_entity(report: BackfillReport) -> list[tuple[str, list[str]]]:

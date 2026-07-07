@@ -1,12 +1,10 @@
-# Collections — the designed-but-deferred row model
+# Collections — the row model
 
-Status: **design record, no code** (2026-07-07). Single-file collections — one
-`[inventory].[json|jsonl|yaml]` file holding every entity of a type as a row —
-are specified in the design-memo storage grammar (design-memo.md:89-101) and
-deferred in FS-001's Scope Changes. This record fixes the row-model contract so
-the implementation never invents semantics ad hoc. Per-entity `json`/`yaml`
-formats shipped separately (`core/formats.py`, TS-FMT-001/002); collections
-build on that module.
+Status: **shipped 2026-07-07** (TS-COL-001; same-day as the per-entity formats
+it builds on). This record was written first as the design contract and now
+documents the implemented behavior; deviations would be bugs. Single-file
+collections — one `[inventory].[json|jsonl|yaml]` file holding every entity of
+a type as a row — per the design-memo storage grammar (design-memo.md:89-101).
 
 The framing invariant: the `Index` (`core/index.py`) is the format seam. Every
 graph semantic — draft, edges, derived inverses, orphans, required-completeness,
@@ -23,8 +21,9 @@ write atomicity).
   by name").
 - **jsonl rows carry a reserved `slug` key** (same charset/length rules as
   minted slugs), popped at scan so `validate --strict` never sees it,
-  re-inserted first on write. A duplicate jsonl slug: first occurrence wins
-  (document order, deterministic), later duplicates are malformed rows.
+  re-inserted first on write. A duplicate slug — jsonl, or a duplicate mapping
+  key in yaml/json — makes the whole file malformed (v1); "first occurrence
+  wins" is the per-row-fault-isolation fast-follow's rule, not v1's.
 - `slug` and `type` become **reserved field names** — a type declaring an
   attribute or relation so named fails the compile (firm-ops declares neither).
 - Minting retries the `-N` suffix against a **fresh read under the write lock**
@@ -62,9 +61,11 @@ concept body.
 
 One code path for every collection mutation (create/edit/link/unlink/delete):
 
-1. Exclusive `fcntl.flock` on a sidecar `.khub/locks/<type>.lock` — **never on
-   the data file** (`os.replace` swaps the inode, so a data-file lock would
-   guard a dead inode after the first writer's replace).
+1. Exclusive `fcntl.flock` on a sidecar `.khub/generated/locks/<type>.lock`
+   (under `generated/` so it inherits the gitignore and the deletable-anytime
+   contract in every workspace, old or new) — **never on the data file**
+   (`os.replace` swaps the inode, so a data-file lock would guard a dead inode
+   after the first writer's replace).
 2. Fresh read of the collection under the lock; re-run the slug-uniqueness gate
    against that read (mint: first free `base`/`base-N`; explicit id: refuse).
 3. Mutate the row; serialize; write to a temp file in the same directory;
@@ -113,11 +114,13 @@ repo:
 ```
 
 - Compatibility matrix replaces the flat whitelist: `file`/`folder` →
-  {md, json, yaml}; `collection` → {json, jsonl, yaml}.
+  {md, json, yaml}; `collection` → {json, jsonl, yaml}. `format` may be
+  omitted when `path` carries the extension (derived); a disagreement between
+  the two is a compile error.
 - `init` creates **no** collection file — a missing or empty file means zero
   entities, never malformed (the analog of `scan_type`'s missing-directory
-  return). The init scaffold loop must branch: `mkdir` only the parent
-  (today's loop would create a *directory* named `repos.jsonl`).
+  return). The scaffold loop creates only the parent directory, and
+  `.khub/locks/` joins `.khub/generated/` in the gitignore.
 - `workspace._entity_hashes` already snapshots `.jsonl` (shipped with formats),
   so the cutover guarantee measures collection corpora from day one.
 

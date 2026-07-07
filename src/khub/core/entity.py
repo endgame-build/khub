@@ -27,12 +27,13 @@ can show, the editor can also write.
 
 from __future__ import annotations
 
+import os
 import re
 import shutil
 from dataclasses import dataclass, field
 from datetime import date
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from khub.core import formats
 from khub.core.errors import LocatedError
@@ -47,12 +48,17 @@ _MAX_SLUG = 100
 
 @dataclass(frozen=True)
 class CreateResult:
-    """The outcome of a create: where it landed and whether it is a draft."""
+    """The outcome of a create: where it landed and whether it is a draft.
+
+    ``locator`` (``path#slug``) is set only for a collection row — ``path``
+    alone addresses a per-item entity, so file/folder records stay unchanged.
+    """
 
     type: str
     slug: str
     path: Path
     draft: bool
+    locator: str | None = None
 
 
 @dataclass(frozen=True)
@@ -63,6 +69,7 @@ class UpdateResult:
     slug: str
     path: Path
     draft: bool
+    locator: str | None = None
 
 
 @dataclass(frozen=True)
@@ -111,7 +118,11 @@ class Edge:
 
 @dataclass(frozen=True)
 class EntityView:
-    """A read of one entity: its frontmatter, body, and optionally its edges."""
+    """A read of one entity: its frontmatter, body, and optionally its edges.
+
+    For a collection row, ``raw`` is the row's stored serialization (never the
+    whole file) and ``locator`` addresses it as ``path#slug``.
+    """
 
     type: str
     slug: str
@@ -120,6 +131,7 @@ class EntityView:
     body: str
     raw: str
     edges: list[Edge] | None = None
+    locator: str | None = None
 
 
 # --- create ------------------------------------------------------------------
@@ -177,6 +189,17 @@ def create(
             meta[predicate] = rels[predicate] if rel.many else rels[predicate][0]
     meta.update(extras)
 
+    if rtype.storage.layout == "collection":
+        base = _slug_base(id_) if id_ is not None else _slug_base(_slug_source(type_, attrs))
+        slug = _create_row(root, rtype, type_, meta, body, base, explicit=id_ is not None)
+        return CreateResult(
+            type=type_,
+            slug=slug,
+            path=entity_path(root, rtype, slug),
+            draft=is_draft,
+            locator=_locator(root, rtype, slug),
+        )
+
     # Slug + O_EXCL write. An explicit --id collision refuses (never auto-suffixes);
     # a minted slug retries on the next -N suffix if a concurrent add reached it first.
     if id_ is not None:
@@ -194,6 +217,48 @@ def create(
         base = _slug_base(_slug_source(type_, attrs))
         slug, path = _mint_and_write(root, rtype, base, type_, index, meta, body)
     return CreateResult(type=type_, slug=slug, path=path, draft=is_draft)
+
+
+def _create_row(
+    root: Path,
+    rtype: ResolvedType,
+    type_: str,
+    meta: dict[str, Any],
+    body: str,
+    base: str,
+    *,
+    explicit: bool,
+) -> str:
+    """Insert one new row into a collection; returns the (minted or explicit) slug.
+
+    Uniqueness is gated by the fresh in-lock read, not the index: an explicit
+    ``--id`` collision refuses (never auto-suffixes) and a minted slug takes the
+    first free ``base``/``base-N``. The row omits ``type`` (the collection's
+    schema binding supplies it at scan) and carries prose in the reserved
+    ``body`` key.
+    """
+    row = {k: v for k, v in meta.items() if k != "type"}
+    if body:
+        row["body"] = body
+
+    def mutate(rows: dict[str, Any]) -> tuple[bool, str]:
+        if explicit:
+            if base in rows:
+                raise LocatedError(
+                    code="slug_taken",
+                    message=f"Slug '{base}' is already taken in {type_}; choose another --id",
+                )
+            rows[base] = row
+            return True, base
+        n, slug = 1, base
+        while slug in rows:
+            n += 1
+            slug = f"{base}-{n}"
+        rows[slug] = row
+        return True, slug
+
+    slug: str = _mutate_collection(root, rtype, mutate)
+    return slug
 
 
 def _partition(
@@ -373,8 +438,17 @@ def get(root: Path, id_: str, *, edges: bool = False) -> EntityView:
     type_, slug = resolve_id(index, id_)
     rtype = resolved.types[type_]
     path = entity_path(root, rtype, slug)
-    raw = path.read_text()
-    meta, body = formats.parse(raw, formats.fmt_of(path))
+    if rtype.storage.layout == "collection":
+        rows = formats.load_collection(path.read_text(encoding="utf-8"), rtype.storage.fmt)
+        row = rows.get(slug)
+        if row is None:  # indexed a moment ago; the row vanished mid-command
+            raise LocatedError.lookup_error(id_)
+        meta, body = formats.split_row(row, rtype.storage.fmt)
+        meta.setdefault("type", type_)  # the binding supplies it, as at scan
+        raw = formats.render_row(slug, row, rtype.storage.fmt)  # the row, never the file
+    else:
+        raw = path.read_text()
+        meta, body = formats.parse(raw, formats.fmt_of(path))
     view_edges = _edges(index, resolved, type_, slug, meta) if edges else None
     return EntityView(
         type=type_,
@@ -384,6 +458,7 @@ def get(root: Path, id_: str, *, edges: bool = False) -> EntityView:
         body=body,
         raw=raw,
         edges=view_edges,
+        locator=_locator(root, rtype, slug),
     )
 
 
@@ -471,19 +546,42 @@ def update(
                 )
 
     path = entity_path(root, rtype, slug)
-    cmap, body_text = _read_doc(path)
-    for name, value in attrs.items():
-        cmap[name] = value
-    for predicate, values in rels.items():
-        rel = rtype.relations[predicate]
-        cmap[predicate] = values if rel.many else values[0]
-    for key, raw in extras.items():
-        cmap[key] = raw
-    # Auto-bump `updated`, unless the user backdated it explicitly in this edit
-    # (reconciling an import): their value wins over today.
-    if "updated" not in attrs and "updated" not in extras:
-        cmap["updated"] = date.today()
 
+    def apply(cmap: Any) -> None:
+        for name, value in attrs.items():
+            cmap[name] = value
+        for predicate, values in rels.items():
+            rel = rtype.relations[predicate]
+            cmap[predicate] = values if rel.many else values[0]
+        for key, raw in extras.items():
+            cmap[key] = raw
+        # Auto-bump `updated`, unless the user backdated it explicitly in this edit
+        # (reconciling an import): their value wins over today.
+        if "updated" not in attrs and "updated" not in extras:
+            cmap["updated"] = date.today()
+
+    if rtype.storage.layout == "collection":
+
+        def mutate(rows: dict[str, Any]) -> tuple[bool, bool]:
+            row = rows.get(slug)
+            if row is None:
+                raise LocatedError.lookup_error(id_)
+            apply(row)
+            if body is not None:
+                if body:
+                    row["body"] = body
+                else:
+                    row.pop("body", None)  # --body '' clears (empty body writes no key)
+            return True, as_bool(row.get("draft", False))
+
+        new_draft: bool = _mutate_collection(root, rtype, mutate)
+        return UpdateResult(
+            type=type_, slug=slug, path=path, draft=new_draft,
+            locator=_locator(root, rtype, slug),
+        )
+
+    cmap, body_text = _read_doc(path)
+    apply(cmap)
     _write_doc(path, cmap, body_text if body is None else _md_normalized(body, rtype))
     # as_bool, not truthiness: a hand-authored draft: "false" must report active,
     # matching how check/query/status read the same flag.
@@ -513,24 +611,24 @@ def link(root: Path, id_: str, predicate: str, target: str) -> LinkResult:
             message=f"Cannot link '{id_}' to itself via '{predicate}'",
         )
 
-    path = entity_path(root, rtype, slug)
-    cmap, body = _read_doc(path)
-    existing = cmap.get(predicate)
-    changed = False
-    if rel.many:
-        values = _as_list(existing)  # a scalar many-value reads as [value], never char-split
-        if target not in values:
-            values.append(target)
-            changed = True
-        cmap[predicate] = values
-    else:
-        if existing not in (None, "", target):
-            raise LocatedError.cardinality_violation(predicate)
-        if existing != target:
-            changed = True
-        cmap[predicate] = target
-    if changed:  # no spurious rewrite when the edge already existed
-        _write_doc(path, cmap, body)
+    def apply(cmap: Any) -> bool:
+        existing = cmap.get(predicate)
+        changed = False
+        if rel.many:
+            values = _as_list(existing)  # a scalar many-value reads as [value], never char-split
+            if target not in values:
+                values.append(target)
+                changed = True
+            cmap[predicate] = values
+        else:
+            if existing not in (None, "", target):
+                raise LocatedError.cardinality_violation(predicate)
+            if existing != target:
+                changed = True
+            cmap[predicate] = target
+        return changed
+
+    changed = _apply_edge_mutation(root, rtype, slug, id_, apply)
     return LinkResult(type=type_, slug=slug, predicate=predicate, target=target, changed=changed)
 
 
@@ -548,25 +646,54 @@ def unlink(root: Path, id_: str, predicate: str, target: str) -> LinkResult:
     if rel is None:
         raise LocatedError.illegal_predicate(predicate, type_)
 
+    def apply(cmap: Any) -> bool:
+        existing = cmap.get(predicate)
+        changed = False
+        if rel.many:
+            values = _as_list(existing)  # a scalar many-value reads as [value], never char-split
+            if target in values:
+                remaining = [v for v in values if v != target]
+                if remaining:
+                    cmap[predicate] = remaining
+                else:
+                    del cmap[predicate]
+                changed = True
+        elif existing == target:
+            del cmap[predicate]
+            changed = True
+        return changed
+
+    changed = _apply_edge_mutation(root, rtype, slug, id_, apply)
+    return LinkResult(type=type_, slug=slug, predicate=predicate, target=target, changed=changed)
+
+
+def _apply_edge_mutation(
+    root: Path, rtype: ResolvedType, slug: str, id_: str, apply: Callable[[Any], bool]
+) -> bool:
+    """Run one link/unlink mutation against per-item or collection storage.
+
+    Per-item: round-trip read, apply, write only when changed (no spurious
+    rewrite). Collection: the same mutation on the row inside the locked
+    read-modify-write; an unchanged row skips the file write the same way.
+    """
+    if rtype.storage.layout == "collection":
+
+        def mutate(rows: dict[str, Any]) -> tuple[bool, bool]:
+            row = rows.get(slug)
+            if row is None:
+                raise LocatedError.lookup_error(id_)
+            changed = apply(row)
+            return changed, changed
+
+        result: bool = _mutate_collection(root, rtype, mutate)
+        return result
+
     path = entity_path(root, rtype, slug)
     cmap, body = _read_doc(path)
-    existing = cmap.get(predicate)
-    changed = False
-    if rel.many:
-        values = _as_list(existing)  # a scalar many-value reads as [value], never char-split
-        if target in values:
-            remaining = [v for v in values if v != target]
-            if remaining:
-                cmap[predicate] = remaining
-            else:
-                del cmap[predicate]
-            changed = True
-    elif existing == target:
-        del cmap[predicate]
-        changed = True
-    if changed:  # a no-op unlink leaves the file untouched (no spurious rewrite)
+    changed = apply(cmap)
+    if changed:
         _write_doc(path, cmap, body)
-    return LinkResult(type=type_, slug=slug, predicate=predicate, target=target, changed=changed)
+    return changed
 
 
 # --- delete ------------------------------------------------------------------
@@ -589,6 +716,16 @@ def delete(root: Path, id_: str, *, force: bool = False) -> DeleteResult:
 
     # ponytail: forced delete leaves dangling inbound edges on disk; `khub check`
     # (FS-004) surfaces them. Wire the surfacing to a real check run when FS-004 lands.
+    if rtype.storage.layout == "collection":
+
+        def mutate(rows: dict[str, Any]) -> tuple[bool, None]:
+            if slug not in rows:
+                raise LocatedError.lookup_error(id_)
+            del rows[slug]  # an emptied collection keeps its (empty) file
+            return True, None
+
+        _mutate_collection(root, rtype, mutate)
+        return DeleteResult(type=type_, slug=slug, removed=True, inbound=inbound)
     base = root / (rtype.storage.path or rtype.name)
     if rtype.storage.layout == "folder":
         shutil.rmtree(base / slug)
@@ -619,11 +756,76 @@ def _inbound_edges(
 
 
 def entity_path(root: Path, rtype: ResolvedType, slug: str) -> Path:
-    """The on-disk path for ``slug`` of ``rtype``: ``_index`` under a folder, else flat."""
+    """The on-disk path for ``slug`` of ``rtype``: ``_index`` under a folder, flat
+    for a file layout, the shared inventory file for a collection (rows have no
+    path of their own — ``path#slug`` is the row locator)."""
+    if rtype.storage.layout == "collection":
+        return _collection_file(root, rtype)
     base = root / (rtype.storage.path or rtype.name)
     if rtype.storage.layout == "folder":
         return base / slug / f"_index.{rtype.storage.fmt}"
     return base / f"{slug}.{rtype.storage.fmt}"
+
+
+def _collection_file(root: Path, rtype: ResolvedType) -> Path:
+    """A collection type's one file (the shared default-path rule lives on the model)."""
+    return root / rtype.collection_relpath
+
+
+def _locator(root: Path, rtype: ResolvedType, slug: str) -> str | None:
+    """The row address ``path#slug`` for a collection row; None for per-item layouts."""
+    if rtype.storage.layout != "collection":
+        return None
+    return f"{_collection_file(root, rtype).relative_to(root)}#{slug}"
+
+
+def _mutate_collection(
+    root: Path, rtype: ResolvedType, mutate: Callable[[dict[str, Any]], tuple[bool, Any]]
+) -> Any:
+    """The one write path for every collection mutation.
+
+    Exclusive flock on a sidecar (``.khub/generated/locks/<type>.lock`` — under
+    ``generated/`` so it inherits the gitignore and the deletable-anytime
+    contract; never the data file, since ``os.replace`` swaps the inode and a
+    lock on the collection itself would guard a dead inode after the first
+    writer's replace), fresh in-lock read (the O_EXCL replacement; the
+    pre-built index is only a hint), mutate, then write-temp + fsync + rename —
+    a crash never leaves a torn file. ``mutate`` returns ``(write, result)``:
+    ``write=False`` skips the rewrite (idempotent no-op) and ``result`` is
+    passed through to the caller. A malformed collection refuses the write:
+    khub never rewrites a file it cannot fully round-trip. Cross-host
+    concurrency stays deferred — git is the merge surface (FS-002).
+    # ponytail: fcntl flock is POSIX-only; an msvcrt shim lands if Windows ever matters.
+    """
+    import fcntl
+
+    path = _collection_file(root, rtype)
+    lock_dir = root / ".khub" / "generated" / "locks"
+    lock_dir.mkdir(parents=True, exist_ok=True)
+    with (lock_dir / f"{rtype.name}.lock").open("w") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        try:
+            text = path.read_text(encoding="utf-8") if path.exists() else ""
+            try:
+                rows = formats.load_collection(text, rtype.storage.fmt)
+            except Exception as err:  # noqa: BLE001 — any parse failure is the same refusal
+                raise LocatedError(
+                    code="malformed_entity",
+                    message=f"Refusing to write {path.name}: cannot round-trip it ({err})",
+                ) from None
+            write, result = mutate(rows)
+            if not write:  # no-op: leave the file untouched (no spurious rewrite)
+                return result
+            path.parent.mkdir(parents=True, exist_ok=True)
+            tmp = path.with_name(path.name + ".tmp")
+            with tmp.open("w", encoding="utf-8") as fh:
+                fh.write(formats.dump_collection(rows, rtype.storage.fmt))
+                fh.flush()
+                os.fsync(fh.fileno())
+            os.replace(tmp, path)
+            return result
+        finally:
+            fcntl.flock(lock, fcntl.LOCK_UN)
 
 
 def _write_new(path: Path, meta: dict[str, Any], body: str) -> None:

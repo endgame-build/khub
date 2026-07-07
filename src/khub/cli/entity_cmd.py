@@ -233,23 +233,29 @@ def _created_message(result: CreateResult) -> str:
 
 
 def _create_record(root: Path, result: CreateResult) -> dict[str, Any]:
-    return {
+    record = {
         "id": f"{result.type}/{result.slug}",
         "type": result.type,
         "slug": result.slug,
         "path": str(result.path.relative_to(root)),
         "draft": result.draft,
     }
+    if result.locator:  # collection rows only — per-item records stay byte-identical
+        record["locator"] = result.locator
+    return record
 
 
 def _update_record(root: Path, result: UpdateResult) -> dict[str, Any]:
-    return {
+    record = {
         "id": f"{result.type}/{result.slug}",
         "type": result.type,
         "slug": result.slug,
         "path": str(result.path.relative_to(root)),
         "draft": result.draft,
     }
+    if result.locator:  # collection rows only — per-item records stay byte-identical
+        record["locator"] = result.locator
+    return record
 
 
 def _edge_message(verb: str, result: LinkResult) -> str:
@@ -265,6 +271,8 @@ def _get_record(root: Path, view: EntityView) -> dict[str, Any]:
         "frontmatter": view.meta,
         "body": view.body,
     }
+    if view.locator:  # collection rows only — per-item records stay byte-identical
+        record["locator"] = view.locator
     if view.edges is not None:
         record["edges"] = [
             {"predicate": e.predicate, "target": e.target, "derived": e.derived}

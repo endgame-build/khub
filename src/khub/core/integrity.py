@@ -144,11 +144,22 @@ def _in_target(node: tuple[str, str], target: str | None) -> bool:
 def _malformed_errors(
     resolved: ResolvedSchema, malformed: list[Path], target: str | None
 ) -> list[FieldError]:
-    """A ``frontmatter`` error per unparseable file, located to its layout type/slug."""
+    """A ``frontmatter`` error per unparseable file, located to its layout type/slug.
+
+    A malformed COLLECTION file matches any target of its type: `validate
+    repo/acme` must report "the inventory is broken", not misdiagnose the row
+    id as a typo (the row exists — it is unreadable).
+    """
     errors: list[FieldError] = []
     for relpath in malformed:
         type_, slug = _malformed_identity(resolved, relpath)
-        if not _in_target((type_, slug), target):
+        whole_type = (
+            type_ in resolved.types
+            and resolved.types[type_].storage.layout == "collection"
+            and target is not None
+            and target.split("/")[0] == type_
+        )
+        if not _in_target((type_, slug), target) and not whole_type:
             continue
         errors.append(
             FieldError(type_, slug, "frontmatter", f"could not parse frontmatter of {relpath}")
@@ -159,6 +170,10 @@ def _malformed_errors(
 def _malformed_identity(resolved: ResolvedSchema, relpath: Path) -> tuple[str, str]:
     """The (type, slug) a malformed file belongs to, derived from its layout path."""
     for tname, rtype in resolved.types.items():
+        if rtype.storage.layout == "collection":
+            if str(relpath) == rtype.collection_relpath:  # the file IS the whole inventory
+                return tname, relpath.stem
+            continue
         base = rtype.storage.path
         if not base:
             continue
@@ -284,6 +299,12 @@ def _fix_updated(root: Path, resolved: ResolvedSchema, target: str | None) -> li
         if not _in_target(node, target):
             continue
         type_, slug = node
+        if resolved.types[type_].storage.layout == "collection":
+            # A collection file's commit date is not a row's date — attributing it
+            # would be wrong for every row but the last-touched one. Rows get
+            # `updated` from add/edit; row-diff date attribution is the named
+            # fast-follow (docs/collections-design.md).
+            continue
         if valid.meta[node].get("updated"):
             continue
         path = entity_path(root, resolved.types[type_], slug)
@@ -342,6 +363,9 @@ class CheckReport:
     # legitimate (a dormant client whose engagements were archived). ``strict``
     # makes a fully connected graph a gate requirement.
     strict: bool = False
+    # Dangling reports suppressed because their target type's collection file is
+    # malformed — derivative noise rolled into the malformed finding.
+    suppressed_dangling: int = 0
 
     @property
     def passed(self) -> bool:
@@ -372,6 +396,25 @@ def check(root: Path, *, strict: bool = False) -> CheckReport:
 
     incomplete = _incomplete(resolved, valid, entity_nodes)
     dangling = _dangling(resolved, valid, entity_nodes)
+    # A malformed COLLECTION file removes every row of its type at once, so each
+    # edge into that type would dangle derivatively — suppress those and count
+    # them: the actionable error is "fix the file", not N dangles burying it.
+    # `check` still fails on the malformed entry itself.
+    malformed_set = {str(p) for p in index.malformed}
+    broken_types = {
+        t
+        for t, rt in resolved.types.items()
+        if rt.storage.layout == "collection" and rt.collection_relpath in malformed_set
+    }
+    suppressed = 0
+    if broken_types:
+        kept: list[Dangling] = []
+        for d in dangling:
+            if _derivative_dangle(resolved, d, broken_types):
+                suppressed += 1
+            else:
+                kept.append(d)
+        dangling = kept
     orphans = [
         f"{t}/{s}"
         for (t, s) in entity_nodes
@@ -380,9 +423,7 @@ def check(root: Path, *, strict: bool = False) -> CheckReport:
     # build_graph skips self-edges, so a stored self-reference on the acyclic predicate
     # never reaches nx.simple_cycles — detect it directly as a one-node cycle.
     cycles = _cycles(graph) + _self_cycles(resolved, valid, entity_nodes)
-    stray_paths = sorted(
-        str(entity_path(root, resolved.types[t], s).relative_to(root)) for (t, s) in strays
-    )
+    stray_paths = sorted({_stray_locator(root, resolved, t, s) for (t, s) in strays})
     return CheckReport(
         incomplete=incomplete,
         orphans=orphans,
@@ -391,7 +432,32 @@ def check(root: Path, *, strict: bool = False) -> CheckReport:
         cycles=cycles,
         malformed=[str(p) for p in index.malformed],
         strict=strict,
+        suppressed_dangling=suppressed,
     )
+
+
+def _derivative_dangle(resolved: ResolvedSchema, d: Dangling, broken: set[str]) -> bool:
+    """Whether a dangle is derivative of a malformed collection (suppress) or real (keep).
+
+    Suppress only when the target provably points into a broken type: a
+    qualified ``type/slug`` naming it, or a bare slug whose EVERY declared home
+    is broken. A union edge with a healthy alternative target type is kept —
+    the dangle might be a genuinely missing entity of the healthy type, and
+    hiding it until the collection is repaired would mislead. ``any``-kind bare
+    slugs are likewise kept (their home is unknowable while the file is down).
+    """
+    rel = resolved.types[d.type].relations[d.predicate]
+    if "/" in d.target:
+        return d.target.split("/", 1)[0] in broken
+    return rel.kind != "any" and set(rel.targets) <= broken
+
+
+def _stray_locator(root: Path, resolved: ResolvedSchema, type_: str, slug: str) -> str:
+    """A stray's address: its file path, or ``path#slug`` for a collection row
+    (N stray rows in one file must not collapse into N copies of the same path)."""
+    rtype = resolved.types[type_]
+    rel = str(entity_path(root, rtype, slug).relative_to(root))
+    return f"{rel}#{slug}" if rtype.storage.layout == "collection" else rel
 
 
 def _incomplete(
