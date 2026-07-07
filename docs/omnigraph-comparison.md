@@ -31,7 +31,7 @@ The strongest overlap is the positioning. Omnigraph's own description of what it
 | Axis | Omnigraph | khub |
 |---|---|---|
 | Source of truth | Lance columnar datasets on object storage are the truth | Markdown in git is the truth; the graph is derived and disposable |
-| Retrieval | vector ANN, BM25, RRF, and an embeddings pipeline with provider config, built in | frontmatter filtering and networkx traversal; FTS is a fast-follow; vectors are absent from the design |
+| Retrieval | vector ANN, BM25, RRF, and an embeddings pipeline with provider config, built in | frontmatter filtering, networkx traversal, and BM25 full-text (`khub search`, FTS5 in-memory, shipped 2026-07-07); vectors are absent from the design |
 | Scale and deployment | Axum server, S3, hundreds of agents, columnar analytics, cluster control plane | in-memory networkx, one repo, roughly 380 entities, no server |
 | Multimodal | `Blob` and `Vector` scalars store documents, images, and video as data | text Markdown only |
 | Security | Cedar policy engine, server-side on every mutation, hashed bearer tokens, server-resolved actor | no policy engine; repo access, git attribution, and `git revert` |

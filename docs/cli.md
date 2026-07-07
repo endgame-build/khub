@@ -2,7 +2,7 @@
 
 The CLI is a thin, schema-introspecting adapter over the core library's verbs (create, get, update, delete, link, query). It hardcodes no per-type knowledge; it reads the active schema at runtime. Every read command emits `--format json` for an agent or a Rich table for a human. The Claude Code skill maps agent intent onto these same commands, and the MCP server (post-v1) exposes the same verbs as tools.
 
-Tiers: **v1** ships in the first release; **fast-follow** lands shortly after (mostly the SQLite/FTS projection and ingestion); **deferred** is named but unscheduled.
+Tiers: **v1** ships in the first release; **fast-follow** lands shortly after (mostly ingestion and the persisted SQLite projection); **deferred** is named but unscheduled.
 
 ## Global options
 
@@ -17,7 +17,7 @@ Read commands include `draft` entities in scope and surface each entity's `orpha
 
 ### JSON record shape
 
-Every JSON record that identifies an entity carries the qualified `id` = `"type/slug"` plus separate `type` and `slug` keys — uniform across `query`, `add`, `get`, `edit`, `neighbors`, `impact`, `history`, `stale`, `log`, and the `validate`/`check` error rows. For example, `khub get initech-pov --format json` emits `{"id": "opportunity/initech-pov", "type": "opportunity", "slug": "initech-pov", …}`. (`check`'s `orphans` and `strays` are lists of already-qualified strings.)
+Every JSON record that identifies an entity carries the qualified `id` = `"type/slug"` plus separate `type` and `slug` keys — uniform across `query`, `search`, `add`, `get`, `edit`, `neighbors`, `impact`, `history`, `stale`, `log`, and the `validate`/`check` error rows. For example, `khub get initech-pov --format json` emits `{"id": "opportunity/initech-pov", "type": "opportunity", "slug": "initech-pov", …}`. (`check`'s `orphans` and `strays` are lists of already-qualified strings.)
 
 ## Validation and open schema
 
@@ -75,7 +75,7 @@ A single malformed entity file (a broken frontmatter fence, unparseable YAML) no
 | Command | Args and options | Does | Tier |
 |---|---|---|---|
 | `khub query` | `--type <t>`, `--draft` / `--active`, `--orphan`, `--stale`, `--<field> <value>`, `--tag <tag>`, `--has <pred>`, `--missing <pred>`, `--limit <n>`, `--format json\|table\|ids` | filter entities by frontmatter; includes drafts and carries `orphan`/`stale` flags by default; `--missing` surfaces gaps | v1 |
-| `khub search <text>` | `--type <t>`, `--limit <n>`, `--format` | full-text over body and prose | fast-follow (FTS) |
+| `khub search <text>` | `--type <t>`, `--limit <n=20>`, `--format text\|json\|ids` | full-text over title and body (SQLite FTS5, BM25-ranked, in-memory projection built per call — never stale). Raw MATCH syntax passes through: terms, `"phrases"`, `OR`, `NEAR`, `prefix*`. Records add `title`, `score` (lower = better), `snippet`, `path` to the uniform id keys — no `draft`/`orphan`/`stale` flags and no narrowing options on this command | fast-follow — shipped 2026-07-07 |
 
 ## Traversal
 

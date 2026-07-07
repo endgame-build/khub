@@ -28,7 +28,7 @@ Both are first-class, symmetric writers of the same graph through the same libra
 | 1 | Source of truth | Markdown + YAML frontmatter, git |
 | 2 | Ontology | khub schema (entities/attributes/relations), compiled to LinkML |
 | 3 | Core library | Python: validate / create / get / update / delete / link / query |
-| 4 | Graph projection | In-memory index (v1); SQLite (nodes/edges + FTS) as fast-follow; no graph engine in v1 |
+| 4 | Graph projection | In-memory index (v1); FTS5 search shipped 2026-07-07 (in-memory, per-invocation); persisted SQLite (nodes/edges) as fast-follow; no graph engine in v1 |
 | 5 | Access | Generic CLI (`khub`) + Claude Code skill (MCP later) |
 
 The core library is the only place logic lives. The CLI, skill, and any future MCP server are thin, schema-introspecting adapters over it. Adding or changing a type is an edit to the ontology, with no surface code changes.
@@ -65,7 +65,7 @@ The concrete stack under the five layers. Each pick stays dependency-light and e
 | Validation | **Pydantic v2**, generated from LinkML | a fast core, precise errors that feed `validate`, typed objects as the library's return type |
 | Frontmatter | **`python-frontmatter`** to read, **`ruamel.yaml`** to write | round-trip writes preserve key order and comments, so `khub set` produces a minimal git diff |
 | In-memory graph (v1) | **`networkx`** adjacency index | `descendants`/`ancestors` give blast radius and supersession chains; cycle detection backs `check` |
-| Projection (fast-follow) | **SQLite** + **FTS5** (stdlib `sqlite3`) | `nodes`/`edges` tables and full-text search, zero new dependency; HQ already proves the shape |
+| Projection (fast-follow) | **SQLite** + **FTS5** (stdlib `sqlite3`) | full-text search shipped 2026-07-07 (`khub search`, in-memory per invocation, zero new dependency); persisted `nodes`/`edges` tables remain fast-follow; HQ already proved the shape |
 | Graph engine (if ever) | embedded graph engine (oxigraph or a kuzu fork) | considered and deferred; kuzu was archived Oct 2025 (Apple acqui-hire), so a fork or oxigraph would be the path — and a server stays unjustified while the corpus is small |
 | CLI | **Typer** + **Rich** | type-driven commands, `--format json` for the agent, trees and tables for a human |
 | Git history | `git` over `subprocess` | `log` and `stale` read history; git is present, so no library dependency |
@@ -128,7 +128,7 @@ The CLI is a thin, schema-introspecting adapter over the core library's verbs: c
 | | `khub impact <id> [--predicate p]` | blast radius: transitive closure over an edge | v1 |
 | | `khub history <id>` | supersession chain and edit history | v1 |
 | | `khub path <from> <to>` | shortest path between two entities | fast-follow |
-| | `khub search <text>` | full-text search | fast-follow |
+| | `khub search <text>` | full-text search (FTS5, in-memory per invocation) | fast-follow — shipped 2026-07-07 |
 | Integrity | `khub validate [path]` | per-entity well-formedness and referential integrity (default: whole workspace) | v1 |
 | | `khub check` | graph-wide: relations resolve, required relations complete, no orphans, no stray files, no edge cycles | v1 |
 | | `khub stale [--days N]` | entities past an `updated` threshold; dates backfilled from `git log` | v1 |
@@ -234,7 +234,7 @@ khub records the **durable nodes**; live execution lives in the specialist tool 
 ## Open Questions (Non-Blocking)
 
 1. **"Operational setup" depth.** v1 reads the schema as ontology-level setup (types, relations, integrity, queries). Whether a schema should also configure operational procedures (workflows, agent routines) is a later question.
-2. **Projection engine.** In-memory for v1; SQLite (nodes/edges + FTS) is the fast-follow past the performance budget; a graph engine only much later, if ever.
+2. **Projection engine.** In-memory for v1 — including `khub search`'s per-invocation FTS5 index (shipped 2026-07-07); a persisted SQLite projection (nodes/edges, cached FTS) is the fast-follow past the performance budget; a graph engine only much later, if ever.
 3. **id ↔ facet alignment.** khub mints its own slugs and aliases facet ids via `source_id`; which facet layer ingestion seeds from is settled at ingestion-build time.
 
 ## Next Step

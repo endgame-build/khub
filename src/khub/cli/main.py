@@ -24,6 +24,7 @@ from khub.cli.integrity_cmd import check_command, validate_command
 from khub.cli.projection_cmd import reindex_command, viz_command
 from khub.cli.query_cmd import query_command
 from khub.cli.schema_cmd import schema_app
+from khub.cli.search_cmd import search_command
 from khub.cli.status_cmd import status_command
 
 app = typer.Typer(
@@ -76,6 +77,7 @@ app.command(name="link")(link_command)
 app.command(name="unlink")(unlink_command)
 app.command(name="remove")(remove_command)
 app.command(name="query", context_settings=DYNAMIC_FIELDS)(query_command)
+app.command(name="search")(search_command)
 app.command(name="neighbors")(neighbors_command)
 app.command(name="impact")(impact_command)
 app.command(name="history")(history_command)

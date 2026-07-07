@@ -165,6 +165,21 @@ class LocatedError(Exception):
         )
 
     @classmethod
+    def fts_unavailable(cls, detail: str) -> "LocatedError":
+        return cls(
+            code="fts_unavailable",
+            message=f"SQLite FTS5 is unavailable in this Python build ({detail})",
+        )
+
+    @classmethod
+    def bad_search_query(cls, text: str, detail: str) -> "LocatedError":
+        return cls(
+            code="bad_search_query",
+            message=f"Invalid search query '{text}' ({detail}). Quote phrases: '\"exact phrase\"'",
+            target=text,
+        )
+
+    @classmethod
     def ambiguous_slug(cls, slug: str, candidates: list[str]) -> "LocatedError":
         listed = ", ".join(candidates)
         return cls(

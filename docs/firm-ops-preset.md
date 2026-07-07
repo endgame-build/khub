@@ -341,12 +341,12 @@ v1 builds khub and cuts firm-hq over to it: install khub, seed from the firm-ops
 - Integration automation: `notes-export.py`, `crm.py`, `airtable.py`, `meetings-triage`, the GitHub workflows. These are HQ's ingestion and sync, outside the generic engine. They keep running and call khub's library where they now call `kb.py`.
 - Reference areas (`identity/`, `engagement/`, `security/` templates) stay plain markdown, with no engine needed.
 
-**What the cutover needs (v1 delivers the first three; search waits on the fast-follow):**
+**What the cutover needs (v1 delivers the first three; search shipped 2026-07-07):**
 
 - **The firm-ops preset.** The LinkML port of `hq.schema.yml` (12 types, 17 relation predicates) from this capture. In v1.
 - **`index.md` regeneration.** HQ's `kb.py reindex` keeps the nav page current; `khub reindex` reproduces it. In v1.
 - **Date backfill from git.** HQ's `kb.py backfill` maps to `khub backfill`, extended to insert missing frontmatter. In v1.
-- **SQLite + FTS search.** HQ runs `fts5` today; khub's in-memory v1 has no full-text search. Cutover is still full — `kb.py` is retired — with `khub query` (frontmatter) and ripgrep covering search until the SQLite/FTS fast-follow lands.
+- **SQLite + FTS search.** Shipped 2026-07-07: `khub search <text>` — FTS5 over title + full body, BM25-ranked, built in-memory per invocation (never stale, nothing persisted). Replaces HQ's `.hq-graph.sqlite` `fts` table with better recall (full body vs first 500 chars).
 
 **Migration steps (one-time):**
 
@@ -358,7 +358,7 @@ v1 builds khub and cuts firm-hq over to it: install khub, seed from the firm-ops
 6. Repoint the integration scripts from `kb.py` calls to khub's library.
 7. Retire `kb.py`, `build-graph.py`, `hq.schema.yml`; delete `.hq-graph.sqlite` (regenerated).
 
-**Status gate:** v1 fully cuts HQ over — `validate`/`check`/`query`/`reindex`/`backfill` running read-only against the live files first, then taking over — and retires `kb.py`, `build-graph.py`, and `hq.schema.yml`. FTS search lands as a post-cutover fast-follow; `khub query` and ripgrep cover search in the interim. This capture is the input to step 1.
+**Status gate:** v1 fully cuts HQ over — `validate`/`check`/`query`/`reindex`/`backfill` running read-only against the live files first, then taking over — and retires `kb.py`, `build-graph.py`, and `hq.schema.yml`. FTS search landed post-cutover (`khub search`, 2026-07-07). This capture is the input to step 1.
 
 ## Porting Notes: HQ Schema → khub LinkML Preset
 

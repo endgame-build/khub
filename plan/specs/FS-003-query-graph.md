@@ -3,14 +3,14 @@ id: FS-003
 name: Query & Graph
 priority: High
 dependencies: [FS-002]
-updated: 2026-06-27
+updated: 2026-07-07
 ---
 
 # Query & Graph
 
 ## Overview
 
-The read and traversal surface — the agent's primary retrieval path into typed context. `query` filters entities by frontmatter; `neighbors`, `impact`, and `history` walk the in-memory `networkx` index for one-hop adjacency, blast radius, and supersession chains. The graph is a derived projection, rebuilt from the Markdown on demand, so every walk reflects the live tree. Full-text `search` waits on the SQLite/FTS fast-follow.
+The read and traversal surface — the agent's primary retrieval path into typed context. `query` filters entities by frontmatter; `neighbors`, `impact`, and `history` walk the in-memory `networkx` index for one-hop adjacency, blast radius, and supersession chains. The graph is a derived projection, rebuilt from the Markdown on demand, so every walk reflects the live tree. Full-text `search` follows the same grain: an in-memory SQLite FTS5 index over title + full body, built per invocation (shipped 2026-07-07) — no persisted `.db`, so no staleness.
 
 **Primary Actor:** Agent
 
@@ -440,4 +440,5 @@ Filtering finds an entry node; neighbors walks one hop from it; impact and histo
 | Story | Moved To | Reason | Date |
 |-------|----------|--------|------|
 | Full-text search (`khub search`) | Fast-follow | Needs the SQLite/FTS5 projection; the in-memory v1 index has no full-text | 2026-06-20 |
+| Full-text search (`khub search`) | **Shipped** (TS-SRCH-001) | Landed as an in-memory-per-invocation FTS5 projection — no persisted `.db` needed at current scale | 2026-07-07 |
 | Shortest path (`khub path <from> <to>`) | Fast-follow | Pathfinding lands with the materialized projection | 2026-06-20 |
