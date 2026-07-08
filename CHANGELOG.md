@@ -1,8 +1,16 @@
 # Changelog
 
-Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); khub is pre-release, so everything newer than the v1 engine sits under Unreleased until the first tag.
+Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); khub is pre-release.
 
-## [Unreleased]
+## [0.2.0] — 2026-07-08
+
+### Docs — 2026-07-08: reference set and truth pass
+
+- New user docs: `getting-started.md` (a worked firm-ops walkthrough, every command verified against a live run), `concepts.md` (the mental model), `schema.md` (the base block, layout × format, extending a schema).
+- `firm-ops-preset.md` rebuilt from the shipped preset (9 types, 14 predicates); the drifted `build`/`decision`/`isms-doc` and the HQ cutover narrative are gone.
+- `cli.md` reconciled against the code: lock path fix, `add`/`edit` `--format`, dropped the unshipped rows, corrected the search and orphans/strays wording.
+- README gains a quickstart and a presets section; the planned Claude Code skill reads as planned.
+- Design records de-polluted (spec IDs and release-tier framing removed) and brand-voiced (em-dash purge).
 
 ### Added — 2026-07-08: single-file collections (`layout: collection`)
 

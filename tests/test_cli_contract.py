@@ -42,9 +42,11 @@ def seeded(fresh_ws: Path, seed: Seed) -> Path:
 
 @pytest.mark.integration
 def test_version_flag_prints_version() -> None:
+    from importlib.metadata import version as pkg_version
+
     result = runner.invoke(app, ["--version"])
     assert result.exit_code == 0, result.output
-    assert result.output.strip() == "0.1.0"
+    assert result.output.strip() == pkg_version("khub")
 
 
 @pytest.mark.integration
