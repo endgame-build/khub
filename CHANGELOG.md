@@ -2,6 +2,16 @@
 
 Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); khub is pre-release.
 
+## [0.4.1] — 2026-07-08
+
+### Fixed — `khub init` skill/wire tails (post-release review)
+
+- `--format json` stays a single JSON document: the skill install captures npx output instead of letting it precede the JSON on stdout.
+- `khub init` no longer exits with a traceback when a tail fails on a completed scaffold: the skill install catches `OSError` (Windows `npx.cmd`, broken PATH) and the wire tail catches `OSError` (read-only `CLAUDE.md`) in addition to `LocatedError`.
+- `khub init` gitignores the per-machine skill directories (`.claude/skills/`, `.agents/skills/`) it drops into the workspace; `skills-lock.json` stays tracked.
+- The skill-install failure line goes to stderr, and its recovery hint (and the docs) install both skills: `npx skills add … -s khub -s setup`.
+- Plugin manifest version corrected to `1.1.0` (the `0.4.0` in v0.4.0 was a downgrade below the `1.0.0` shipped at v0.3.0, which would skip the plugin update).
+
 ## [0.4.0] — 2026-07-08
 
 ### Added — agnostic skill install, folded into `khub init`
@@ -14,7 +24,7 @@ Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelo
 
 ### Distribution
 
-- Install commands across the docs move to the pinned form `…@v0.4.0`; the plugin manifest tracks the CLI version.
+- Install commands across the docs move to the pinned form `…@v0.4.0`.
 
 ## [0.3.0] — 2026-07-08
 

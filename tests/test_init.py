@@ -328,7 +328,7 @@ def test_install_skill_runs_npx_in_root(tmp_path: Path, monkeypatch) -> None:
 
     calls: list[tuple[list[str], Path]] = []
 
-    def fake_run(cmd: list[str], cwd: Path = None):  # type: ignore[assignment]
+    def fake_run(cmd: list[str], cwd: Path = None, **_k: object):  # type: ignore[assignment]
         calls.append((cmd, cwd))
         return types.SimpleNamespace(returncode=0)
 
@@ -356,15 +356,43 @@ def test_install_skill_reports_failure(tmp_path: Path, monkeypatch) -> None:
     assert skillmod.install_skill(tmp_path).action == "failed"
 
 
-@pytest.fixture
-def _no_network_skill(monkeypatch):
-    """Stub the npx skill install for CLI tests: record calls, never touch the network."""
+@pytest.mark.unit
+def test_install_skill_survives_exec_error(tmp_path: Path, monkeypatch) -> None:
+    """subprocess exec failure (Windows .cmd, broken PATH) is failed, never raised."""
     from khub.core import skill as skillmod
 
-    calls: list[Path] = []
+    def boom(*_a: object, **_k: object) -> object:
+        raise OSError("cannot spawn npx")
 
-    def fake_run(cmd: list[str], cwd: Path = None):  # type: ignore[assignment]
-        calls.append(cwd)
+    monkeypatch.setattr(skillmod.shutil, "which", lambda _: "/opt/npx")
+    monkeypatch.setattr(skillmod.subprocess, "run", boom)
+    assert skillmod.install_skill(tmp_path).action == "failed"  # no traceback
+
+
+@pytest.mark.unit
+def test_install_skill_gitignores_artifacts(tmp_path: Path, monkeypatch) -> None:
+    """A successful install gitignores the per-machine skill dirs, not skills-lock.json."""
+    from khub.core import skill as skillmod
+
+    monkeypatch.setattr(skillmod.shutil, "which", lambda _: "/opt/npx")
+    monkeypatch.setattr(
+        skillmod.subprocess, "run", lambda *_a, **_k: types.SimpleNamespace(returncode=0)
+    )
+    skillmod.install_skill(tmp_path)
+    ignored = (tmp_path / ".gitignore").read_text().splitlines()
+    assert ".claude/skills/" in ignored and ".agents/skills/" in ignored
+    assert "skills-lock.json" not in ignored
+
+
+@pytest.fixture
+def _no_network_skill(monkeypatch):
+    """Stub the npx skill install for CLI tests: record (cwd, capture_output), no network."""
+    from khub.core import skill as skillmod
+
+    calls: list[tuple[Path, bool]] = []
+
+    def fake_run(cmd: list[str], cwd: Path = None, capture_output: bool = False, **_k: object):  # type: ignore[assignment]
+        calls.append((cwd, capture_output))
         return types.SimpleNamespace(returncode=0)
 
     monkeypatch.setattr(skillmod.shutil, "which", lambda _: "/opt/npx")
@@ -382,7 +410,7 @@ def test_init_wires_and_installs_skill(
     assert result.exit_code == 0, result.output
     assert (ws / "CLAUDE.md").exists()  # wire ran
     assert "installed khub agent skill" in result.output
-    assert _no_network_skill == [ws]  # npx run once, in the new workspace
+    assert _no_network_skill == [(ws, False)]  # npx run once in the workspace; not captured (text mode)
 
 
 @pytest.mark.integration
@@ -417,13 +445,36 @@ def test_init_no_wire_skips_wiring(
 def test_init_json_carries_wire_and_skill(
     tmp_path: Path, preset_source: Path, _no_network_skill: list
 ) -> None:
-    """--format json folds the wire outcomes and skill action into the payload."""
+    """--format json folds wire + skill into the payload, and stdout stays pure JSON."""
     ws = tmp_path / "ws"
     result = runner.invoke(
         app,
         ["init", "note", str(ws), "--preset-source", str(preset_source), "--format", "json"],
     )
     assert result.exit_code == 0, result.output
-    payload = json.loads(result.output)
+    payload = json.loads(result.output)  # whole stdout parses — no npx noise ahead of it
     assert payload["skill"]["action"] == "installed"
     assert [o["path"] for o in payload["wire"]]  # at least CLAUDE.md wired
+    assert _no_network_skill == [(ws, True)]  # json mode captures npx output (quiet)
+
+
+@pytest.mark.integration
+def test_init_wire_failure_is_best_effort(
+    tmp_path: Path, preset_source: Path, monkeypatch, _no_network_skill: list
+) -> None:
+    """A wire that raises during init does not unwind the scaffold: exit 0, error surfaced."""
+    def boom(_root: Path, **_k: object) -> object:
+        raise LocatedError(code="schema_error", message="schema went missing")
+
+    # init_cmd imports wire lazily from khub.core.wire, so patch it at the source.
+    monkeypatch.setattr("khub.core.wire.wire", boom)
+    ws = tmp_path / "ws"
+    result = runner.invoke(
+        app,
+        ["init", "note", str(ws), "--preset-source", str(preset_source), "--format", "json"],
+    )
+    assert result.exit_code == 0, result.output  # scaffold survived the wire failure
+    payload = json.loads(result.output)
+    assert payload["wire_error"] == "schema went missing"
+    assert "wire" not in payload  # no outcomes recorded when wire raised
+    assert payload["skill"]["action"] == "installed"  # skill tail still ran

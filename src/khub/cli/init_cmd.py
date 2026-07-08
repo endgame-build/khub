@@ -55,7 +55,10 @@ def init_command(
             wire_result = wire(result.path)
         except LocatedError as err:
             wire_error = err.message
-    skill_outcome = None if no_skill else install_skill(result.path)
+        except OSError as err:  # e.g. a read-only CLAUDE.md; report, don't unwind
+            wire_error = str(err)
+    # In json mode capture npx output so it never precedes the JSON document.
+    skill_outcome = None if no_skill else install_skill(result.path, quiet=(fmt == "json"))
 
     if fmt == "json":
         payload = dataclasses.asdict(result)
@@ -86,7 +89,8 @@ def init_command(
     if wire_error is not None:
         typer.echo(f"wire skipped: {wire_error}", err=True)
     if skill_outcome is not None:
-        typer.echo(_skill_line(skill_outcome))
+        # A failure is an error stream; installed/skipped are informational (stdout).
+        typer.echo(_skill_line(skill_outcome), err=(skill_outcome.action == "failed"))
 
 
 def _skill_line(outcome: SkillOutcome) -> str:
@@ -95,4 +99,4 @@ def _skill_line(outcome: SkillOutcome) -> str:
         return "installed khub agent skill (npx skills)"
     if outcome.action == "skipped-no-npx":
         return "skill install skipped: npx not found (install Node, or run `npx skills add …`)"
-    return f"skill install failed: run `npx skills add {SKILLS_SOURCE} -s khub` by hand"
+    return f"skill install failed: run `npx skills add {SKILLS_SOURCE} -s khub -s setup` by hand"

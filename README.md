@@ -26,7 +26,7 @@ Full command surface and JSON contracts: [`docs/cli.md`](docs/cli.md). Feature h
 khub is a `khub` console script (Python 3.11+). Install it, then seed a workspace from a preset:
 
 ```bash
-uv tool install git+ssh://git@github.com/endgame-build/knowledge-hub@v0.4.0   # or clone + uv sync
+uv tool install git+ssh://git@github.com/endgame-build/knowledge-hub@v0.4.1   # or clone + uv sync
 khub init firm-ops ./my-hub          # scaffold .khub/, wire CLAUDE.md, install the agent skill
 cd my-hub
 ```
@@ -70,7 +70,7 @@ The `khub` skill maps agent intent onto the read and write verbs; `/khub:setup` 
 The skill is not Claude-only. For Cursor, Codex, Gemini CLI, and ~70 other agents, install it with [`npx skills`](https://skills.sh) (the same convention `khub init` uses under the hood):
 
 ```
-npx skills add git@github.com:endgame-build/knowledge-hub.git -s khub
+npx skills add git@github.com:endgame-build/knowledge-hub.git -s khub -s setup
 ```
 
 **Status:** v1 engine shipped and proven on a live corpus (the firm-hq cutover: 250+ entities, the incumbent scripts retired). Design rationale in [`docs/design-memo.md`](docs/design-memo.md); the collections row model in [`docs/collections-design.md`](docs/collections-design.md).
