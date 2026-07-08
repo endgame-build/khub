@@ -17,6 +17,8 @@ The agent's surface onto khub. The agent is khub's primary consumer, so the CLI 
 **Depends on:** FS-002: Authoring, FS-003: Query & Graph
 
 > **Update (2026-07-08):** The skill ships from the `knowledge-hub` repo as its own single-plugin Claude Code marketplace, installable via `claude plugins add` then `/plugin install khub@khub` — not through the atelier marketplace named in STORY-SKL-001 AC-002. `search` shipped in 0.2.0, so it belongs to the retrieval surface (STORY-SKL-002's fast-follow note no longer applies). A companion `/khub:setup` skill installs the CLI and runs the new `khub wire` command, which links the schema into `CLAUDE.md` so an agent reasons in the ontology even without the CLI.
+>
+> **Update (0.4.0, 2026-07-08):** The skill is no longer Claude-only. It adopts the open Agent Skills convention: `.claude-plugin/marketplace.json` declares the `khub` and `setup` skills, and `npx skills` (Vercel's skills.sh CLI, ~70 agents) installs them from the private repo over SSH. `khub init` installs the skill this way as a best-effort tail of scaffolding, so a fresh workspace is agent-ready in one command.
 
 ---
 

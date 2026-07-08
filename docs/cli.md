@@ -56,7 +56,7 @@ A type stores its entities as `md` (the default: YAML frontmatter + prose body),
 
 | Command | Args and options | Returns / does |
 |---|---|---|
-| `khub init <preset> [path=.]` | `--preset-source <path>`, `--name <name>`, `--force`, `--format <text\|json>` (json emits resolved provenance) | scaffold a workspace from a preset (the seeded fork) |
+| `khub init <preset> [path=.]` | `--preset-source <path>`, `--name <name>`, `--force`, `--no-wire`, `--no-skill`, `--format <text\|json>` (json emits resolved provenance) | scaffold a workspace from a preset (the seeded fork), then wire it into `CLAUDE.md` and install the agent skill via `npx skills` (best-effort; needs `npx`). `--no-wire` / `--no-skill` skip either tail |
 | `khub compile` | `--schema <path=.khub/schema.yaml>`, `--out <dir=.khub/generated>` | compile the schema into LinkML + Pydantic v2 + JSON Schema under `.khub/generated/` |
 | `khub schema` | `--format` | the full effective schema: types, fields, enums, relations, layout/format/nesting per type, and provenance (source preset + version) |
 | `khub schema types` | `--format` | type list (view of the above) |
@@ -107,5 +107,7 @@ A type stores its entities as `md` (the default: YAML frontmatter + prose body),
 | `khub viz` | `--out <file.html=viz.html>`, `--open`, `--type <t>` | self-contained Cytoscape HTML over the typed graph |
 | `khub backfill` | `--type <t>`, `--dry-run` | add missing frontmatter and dates from `git log` |
 | `khub wire` | `--agents`, `--dry-run` | inject a managed khub block into `CLAUDE.md` (and `AGENTS.md` with `--agents`): a `@.khub/schema.yaml` import plus the command surface, so an agent reasons in the workspace ontology even without running khub. Idempotent, minimal-diff |
+
+`khub init` runs `wire` as a tail. It also installs the agent skill by shelling out to `npx skills` (Vercel's skills.sh CLI), which drops the skill into whichever coding agent is present (Claude Code, Cursor, Codex, and others) and writes a `skills-lock.json`. To install the skill into an existing workspace without re-scaffolding: `npx skills add git@github.com:endgame-build/knowledge-hub.git -s khub`.
 
 *Planned verbs (not yet shipped): `path`, `build`, `export --okf`, `diff-preset`, `rename`. See the repo for status.*

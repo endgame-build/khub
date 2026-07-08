@@ -2,6 +2,20 @@
 
 Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); khub is pre-release.
 
+## [0.4.0] — 2026-07-08
+
+### Added — agnostic skill install, folded into `khub init`
+
+`khub init` now sets a workspace up for agents in one step. After scaffolding it wires the schema into `CLAUDE.md` and installs the khub agent skill:
+
+- The skill installs through Vercel's `npx skills` (the skills.sh CLI), which lands it in whichever coding agent is present (Claude Code, Cursor, Codex, and ~70 more) and writes a `skills-lock.json`. Same convention Neon's `neon init` uses.
+- Both tails are best-effort: no `npx` on `PATH` prints `skill install skipped` and the scaffold still succeeds. `--no-wire` / `--no-skill` turn off either tail.
+- `.claude-plugin/marketplace.json` declares the `khub` and `setup` skills, so `npx skills add git@github.com:endgame-build/knowledge-hub.git` discovers them from the private repo over SSH.
+
+### Distribution
+
+- Install commands across the docs move to the pinned form `…@v0.4.0`; the plugin manifest tracks the CLI version.
+
 ## [0.3.0] — 2026-07-08
 
 ### Added — `khub wire`

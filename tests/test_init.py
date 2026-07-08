@@ -10,6 +10,8 @@ firm-ops preset. Counts are read from the compiled schema, never literals
 
 from __future__ import annotations
 
+import json
+import types
 from pathlib import Path
 
 import pytest
@@ -196,7 +198,7 @@ def test_cli_nonempty_target_message(tmp_path: Path) -> None:
 def test_cli_scaffold_firm_ops(tmp_path: Path) -> None:
     """TS-WS-001-01 (AC-001): a clean firm-ops scaffold compiles and confirms."""
     target = tmp_path / "hq"
-    result = runner.invoke(app, ["init", "firm-ops", str(target)])
+    result = runner.invoke(app, ["init", "firm-ops", str(target), "--no-wire", "--no-skill"])
     assert result.exit_code == 0, result.output
     assert f"Initialized firm-ops workspace at {target}" in result.output
     for artifact in ("schema.linkml.yaml", "models.py", "schema.json"):
@@ -265,8 +267,10 @@ def test_name_falls_back_when_blank(tmp_path: Path, preset_source: Path) -> None
 def test_reinit_empty_workspace_is_not_a_cutover(tmp_path: Path) -> None:
     """Re-running --force on an entity-empty workspace is not reported as a corpus cutover."""
     target = tmp_path / "hq"
-    runner.invoke(app, ["init", "firm-ops", str(target)])
-    result = runner.invoke(app, ["init", "firm-ops", str(target), "--force"])
+    runner.invoke(app, ["init", "firm-ops", str(target), "--no-wire", "--no-skill"])
+    result = runner.invoke(
+        app, ["init", "firm-ops", str(target), "--force", "--no-wire", "--no-skill"]
+    )
     assert result.exit_code == 0, result.output
     assert "entity files modified" not in result.output
     assert f"Initialized firm-ops workspace at {target}" in result.output
@@ -281,7 +285,9 @@ def test_cli_force_seed_modifies_no_entities(tmp_path: Path) -> None:
     corpus.parent.mkdir(parents=True)
     corpus.write_text("---\ntype: client\nname: Acme\ncreated: 2025-01-01\n---\n")
     before = corpus.read_bytes()
-    result = runner.invoke(app, ["init", "firm-ops", str(target), "--force"])
+    result = runner.invoke(
+        app, ["init", "firm-ops", str(target), "--force", "--no-wire", "--no-skill"]
+    )
     assert result.exit_code == 0, result.output
     assert "Initialized firm-ops workspace; 0 entity files modified" in result.output
     assert corpus.read_bytes() == before
@@ -295,3 +301,129 @@ def test_force_seed_tolerates_directory_named_md(
     (tmp_path / "archive" / "docs" / "data-backup.md").mkdir(parents=True)
     result = init_workspace("note", tmp_path, preset_source=preset_source, force=True)
     assert result.entity_files_modified == 0
+
+
+# --- init tail: wire + agnostic skill install via npx skills --------------------
+
+
+@pytest.mark.unit
+def test_install_skill_skipped_without_npx(tmp_path: Path, monkeypatch) -> None:
+    """No npx on PATH → skipped-no-npx, and subprocess is never invoked."""
+    from khub.core import skill as skillmod
+
+    monkeypatch.setattr(skillmod.shutil, "which", lambda _: None)
+
+    def forbid(*_a: object, **_k: object) -> object:  # would be a real network clone
+        raise AssertionError("subprocess.run must not run when npx is absent")
+
+    monkeypatch.setattr(skillmod.subprocess, "run", forbid)
+    outcome = skillmod.install_skill(tmp_path)
+    assert outcome.action == "skipped-no-npx"
+
+
+@pytest.mark.unit
+def test_install_skill_runs_npx_in_root(tmp_path: Path, monkeypatch) -> None:
+    """npx present → run `npx skills add <source> -s khub -s setup` with cwd=root."""
+    from khub.core import skill as skillmod
+
+    calls: list[tuple[list[str], Path]] = []
+
+    def fake_run(cmd: list[str], cwd: Path = None):  # type: ignore[assignment]
+        calls.append((cmd, cwd))
+        return types.SimpleNamespace(returncode=0)
+
+    monkeypatch.setattr(skillmod.shutil, "which", lambda _: "/opt/npx")
+    monkeypatch.setattr(skillmod.subprocess, "run", fake_run)
+    outcome = skillmod.install_skill(tmp_path)
+
+    assert outcome.action == "installed"
+    (cmd, cwd), = calls
+    assert cwd == tmp_path
+    assert cmd[:4] == ["npx", "-y", "skills", "add"]
+    assert skillmod.SKILLS_SOURCE in cmd
+    assert cmd.count("--skill") == 2 and "khub" in cmd and "setup" in cmd
+
+
+@pytest.mark.unit
+def test_install_skill_reports_failure(tmp_path: Path, monkeypatch) -> None:
+    """A non-zero npx exit is reported as failed, never raised."""
+    from khub.core import skill as skillmod
+
+    monkeypatch.setattr(skillmod.shutil, "which", lambda _: "/opt/npx")
+    monkeypatch.setattr(
+        skillmod.subprocess, "run", lambda *_a, **_k: types.SimpleNamespace(returncode=1)
+    )
+    assert skillmod.install_skill(tmp_path).action == "failed"
+
+
+@pytest.fixture
+def _no_network_skill(monkeypatch):
+    """Stub the npx skill install for CLI tests: record calls, never touch the network."""
+    from khub.core import skill as skillmod
+
+    calls: list[Path] = []
+
+    def fake_run(cmd: list[str], cwd: Path = None):  # type: ignore[assignment]
+        calls.append(cwd)
+        return types.SimpleNamespace(returncode=0)
+
+    monkeypatch.setattr(skillmod.shutil, "which", lambda _: "/opt/npx")
+    monkeypatch.setattr(skillmod.subprocess, "run", fake_run)
+    return calls
+
+
+@pytest.mark.integration
+def test_init_wires_and_installs_skill(
+    tmp_path: Path, preset_source: Path, _no_network_skill: list
+) -> None:
+    """A bare `init` scaffolds, wires CLAUDE.md, and installs the skill (cwd=workspace)."""
+    ws = tmp_path / "ws"
+    result = runner.invoke(app, ["init", "note", str(ws), "--preset-source", str(preset_source)])
+    assert result.exit_code == 0, result.output
+    assert (ws / "CLAUDE.md").exists()  # wire ran
+    assert "installed khub agent skill" in result.output
+    assert _no_network_skill == [ws]  # npx run once, in the new workspace
+
+
+@pytest.mark.integration
+def test_init_no_skill_skips_install(
+    tmp_path: Path, preset_source: Path, _no_network_skill: list
+) -> None:
+    """--no-skill wires but never invokes npx."""
+    ws = tmp_path / "ws"
+    result = runner.invoke(
+        app, ["init", "note", str(ws), "--preset-source", str(preset_source), "--no-skill"]
+    )
+    assert result.exit_code == 0, result.output
+    assert (ws / "CLAUDE.md").exists()
+    assert _no_network_skill == []
+
+
+@pytest.mark.integration
+def test_init_no_wire_skips_wiring(
+    tmp_path: Path, preset_source: Path, _no_network_skill: list
+) -> None:
+    """--no-wire leaves no CLAUDE.md."""
+    ws = tmp_path / "ws"
+    result = runner.invoke(
+        app,
+        ["init", "note", str(ws), "--preset-source", str(preset_source), "--no-wire", "--no-skill"],
+    )
+    assert result.exit_code == 0, result.output
+    assert not (ws / "CLAUDE.md").exists()
+
+
+@pytest.mark.integration
+def test_init_json_carries_wire_and_skill(
+    tmp_path: Path, preset_source: Path, _no_network_skill: list
+) -> None:
+    """--format json folds the wire outcomes and skill action into the payload."""
+    ws = tmp_path / "ws"
+    result = runner.invoke(
+        app,
+        ["init", "note", str(ws), "--preset-source", str(preset_source), "--format", "json"],
+    )
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["skill"]["action"] == "installed"
+    assert [o["path"] for o in payload["wire"]]  # at least CLAUDE.md wired

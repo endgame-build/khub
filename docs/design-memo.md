@@ -167,8 +167,8 @@ The schema header stamps provenance (`# khub-preset: engineering@1.0.0`). The en
 khub ships as a Python package and runs through `uv`. The zero-install path mirrors `npx`, straight from the private repo over git:
 
 ```
-uvx --from git+ssh://git@github.com/endgame-build/knowledge-hub@v0.3.0 khub init firm-ops ./my-hub
-uv tool install git+ssh://git@github.com/endgame-build/knowledge-hub@v0.3.0   # install once, then reuse
+uvx --from git+ssh://git@github.com/endgame-build/knowledge-hub@v0.4.0 khub init firm-ops ./my-hub
+uv tool install git+ssh://git@github.com/endgame-build/knowledge-hub@v0.4.0   # install once, then reuse
 khub init engineering ./acme-hub
 ```
 
@@ -176,7 +176,7 @@ Everything stays private for now. `uvx` and `uv tool install` run from the priva
 
 **Engine and presets.** For now the engine and presets are collocated in this single private repo. The engine is generic plumbing; the presets are the IP, so they will most likely split into their own private repo later, pulled into `init` through `khub init --preset-source <private>`. Open-core (a public engine with private presets) stays a later option.
 
-**Skill.** khub ships its Claude Code skill from this repo as its own single-plugin marketplace: `claude plugins add` the repo, install `khub@khub`, then `/khub:setup` installs the CLI and runs `khub wire`. The skill is the agent's surface over the same CLI verbs; `khub wire` links the schema into a project's `CLAUDE.md` so an agent reasons in the ontology even without the CLI.
+**Skill.** khub ships its agent skill from this repo two ways. For Claude Code, the repo is its own single-plugin marketplace: `claude plugins add` the repo, install `khub@khub`, then `/khub:setup` installs the CLI and sets up the project. For every other agent (Cursor, Codex, Gemini CLI, and ~70 more), the skill installs through Vercel's `npx skills`, the same convention Neon's `neon init` uses and the same call `khub init` makes under the hood. The skill is the agent's surface over the CLI verbs; `khub wire` links the schema into a project's `CLAUDE.md` so an agent reasons in the ontology even without the CLI.
 
 ## The Proving Ground
 

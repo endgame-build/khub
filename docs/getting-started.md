@@ -9,7 +9,7 @@ khub is a `khub` console script and needs Python 3.11+. Two ways in.
 Install it as a tool (the repo is private, so this needs SSH access to the org; HTTPS with a token works too):
 
 ```bash
-uv tool install git+ssh://git@github.com/endgame-build/knowledge-hub@v0.3.0
+uv tool install git+ssh://git@github.com/endgame-build/knowledge-hub@v0.4.0
 ```
 
 Or clone and run from the checkout:
@@ -35,11 +35,15 @@ khub init firm-ops ./my-hub
 
 ```
 Initialized firm-ops workspace at my-hub
+created CLAUDE.md
+installed khub agent skill (npx skills)
 ```
 
 ```bash
 cd my-hub
 ```
+
+`init` does three things in one step: it scaffolds the tree, wires the schema into `CLAUDE.md` (next section), and installs the khub agent skill into whichever coding agent it detects. The skill install shells out to `npx skills` and needs `npx`; without it, init prints `skill install skipped` and the scaffold still succeeds. Pass `--no-skill` or `--no-wire` to turn off either tail.
 
 init wrote a `.khub/` control directory and one folder per entity type:
 
@@ -59,17 +63,25 @@ my-hub/
 
 ## Wire it into your agent's context
 
-Run `khub wire` once so any agent working in this repo reasons in the same model. It writes a managed block to `CLAUDE.md` that imports the schema (`@.khub/schema.yaml`) and lists the command surface, so the ontology loads into context before an agent runs a single khub command.
+`init` already wrote a managed block to `my-hub/CLAUDE.md`. The block imports the schema (`@.khub/schema.yaml`) and lists the command surface, so any agent working in this repo loads the ontology into context before it runs a single khub command. When the schema changes, re-run the wiring in place:
 
 ```bash
 khub wire
 ```
 
 ```
-created CLAUDE.md
+updated CLAUDE.md
 ```
 
-Re-run it whenever the schema changes; the block updates in place. Add `--agents` to mirror it into `AGENTS.md`.
+Add `--agents` to mirror the block into `AGENTS.md`.
+
+`init` also installed the khub agent skill. To add it to another agent, or into an existing workspace you cloned rather than scaffolded, install it directly with [`npx skills`](https://skills.sh) (Cursor, Codex, and others land in `.agents/skills/`; Claude Code in `.claude/skills/`):
+
+```bash
+npx skills add git@github.com:endgame-build/knowledge-hub.git -s khub
+```
+
+That writes a `skills-lock.json` at the project root. Commit it so teammates install the same skill version; the installed skill directories are per-machine, so add them to `.gitignore`.
 
 ## Author your first entities
 

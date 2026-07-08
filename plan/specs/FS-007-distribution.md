@@ -17,6 +17,8 @@ How khub ships and runs. khub is a Python package (3.11+) exposed as a `khub` co
 **Depends on:** FS-000: Schema & Compiler, FS-001: Workspace & Schema
 
 > **Update (2026-07-08):** Distribution stays on the pinned git install (`uv tool install git+ssh://…@v0.3.0`, `uvx --from …@v0.3.0`). No private PyPI exists and khub stays private, so the bare `uvx khub` shorthand remains deferred (STORY-DST-002 AC-002). `RELEASING.md` records the tag-based release flow.
+>
+> **Update (0.4.0, 2026-07-08):** The agent skill ships alongside the CLI through the open Agent Skills convention (`npx skills` / skills.sh), installing from the same private repo over SSH — no public repo, no CI mirror. The skill install is a best-effort tail of `khub init` (skipped when `npx` is absent). Pins move to `…@v0.4.0`.
 
 ---
 
