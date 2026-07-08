@@ -23,6 +23,8 @@ uv run khub --help    # prefix every command below with `uv run`
 
 The rest of this guide writes `khub …`. If you cloned, read that as `uv run khub …`; the output is the same.
 
+From inside Claude Code, `/plugin install khub@khub` then `/khub:setup` installs and wires khub for you; see the [README](../README.md#use-it-from-claude-code).
+
 ## Seed a workspace
 
 `init` scaffolds a workspace from a preset. The `firm-ops` preset is the HQ operations ontology: nine entity types (client, project, person, opportunity, meeting, and more) with typed relations between them.

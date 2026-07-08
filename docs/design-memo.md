@@ -6,7 +6,7 @@
 
 khub is **structured, schema-bound context management for analytical and operational work**, a semantic, ontology-aligned context hub for agents. It gives an AI agent typed, validated, queryable context (structured memory it navigates and writes back to) instead of unstructured documents stuffed into a context window.
 
-One generic engine: every entity is one Markdown file with YAML frontmatter, held in git. A khub schema defines the entity types, their attributes, and legal relations, and compiles to LinkML for validation. A Python core library provides schema-validated CRUD and graph queries. A generic CLI (`khub`), and a planned Claude Code skill, are thin, schema-driven surfaces over that library. khub is an Open Knowledge Format (OKF) implementation and extension: its Markdown entities are OKF concepts, and khub adds a typed schema, a graph, and the serialization formats and collections OKF lacks on top of its Markdown-only model. Any workspace projects to a conformant OKF bundle.
+One generic engine: every entity is one Markdown file with YAML frontmatter, held in git. A khub schema defines the entity types, their attributes, and legal relations, and compiles to LinkML for validation. A Python core library provides schema-validated CRUD and graph queries. A generic CLI (`khub`) and a Claude Code skill are thin, schema-driven surfaces over that library. khub is an Open Knowledge Format (OKF) implementation and extension: its Markdown entities are OKF concepts, and khub adds a typed schema, a graph, and the serialization formats and collections OKF lacks on top of its Markdown-only model. Any workspace projects to a conformant OKF bundle.
 
 **The schema is the operational setup.** It configures what a given hub is *for*. The engine knows nothing about engineering, consulting, or research; the schema does. Swap the schema, and the same engine becomes a different operational hub.
 
@@ -71,7 +71,7 @@ The concrete stack under the five layers. Each pick stays dependency-light and e
 | Git history | `git` over `subprocess` | `log` and `stale` read history; git is present, so no library dependency |
 | Tooling | **uv**, **Ruff**, **mypy**, **pytest** | a golden-corpus test runs khub against an HQ snapshot and asserts it validates and checks cleanly (functional cutover, not byte-parity with `kb.py`) |
 
-Python 3.11+, shipped as a `khub` console script (`uv tool install`). A Claude Code skill, a thin `SKILL.md` over the same commands, is planned, as is an MCP server exposing the same verbs, its tools generated from the LinkML/Pydantic models so they validate for free.
+Python 3.11+, shipped as a `khub` console script (`uv tool install`). A Claude Code skill, a thin `SKILL.md` over the same commands, ships from this repo as a plugin; an MCP server exposing the same verbs is planned, its tools generated from the LinkML/Pydantic models so they validate for free.
 
 Two eval tiers: deterministic golden-file tests cover the engine (the HQ functional-cutover test above), and an OKF-style fuzzy goldens-eval scores the LLM ingestion layer: precision and recall over extracted types and edges, gated on `khub check`.
 
@@ -110,7 +110,7 @@ Two eval tiers: deterministic golden-file tests cover the engine (the HQ functio
 
 ### Command Surface
 
-The CLI is a thin, schema-introspecting adapter over the core library's verbs: create, get, update, delete, link, query. Every read command emits `--format json` for the agent or a Rich table for a human. The planned Claude Code skill will map agent intent onto these same commands as the agent's retrieval surface: `query`, `get`, the graph walks (`neighbors`/`impact`/`history`), and `search`.
+The CLI is a thin, schema-introspecting adapter over the core library's verbs: create, get, update, delete, link, query. Every read command emits `--format json` for the agent or a Rich table for a human. The Claude Code skill maps agent intent onto these same commands as the agent's retrieval surface: `query`, `get`, the graph walks (`neighbors`/`impact`/`history`), and `search`.
 
 | Group | Command | Does |
 |-------|---------|------|
@@ -176,7 +176,7 @@ Everything stays private for now. `uvx` and `uv tool install` run from the priva
 
 **Engine and presets.** For now the engine and presets are collocated in this single private repo. The engine is generic plumbing; the presets are the IP, so they will most likely split into their own private repo later, pulled into `init` through `khub init --preset-source <private>`. Open-core (a public engine with private presets) stays a later option.
 
-**Skill.** The Claude Code skill ships through the acme/marketplace plugin marketplace alongside facet and forge, separate from the CLI.
+**Skill.** khub ships its Claude Code skill from this repo as its own single-plugin marketplace: `claude plugins add` the repo, install `khub@khub`, then `/khub:setup` installs the CLI and runs `khub wire`. The skill is the agent's surface over the same CLI verbs; `khub wire` links the schema into a project's `CLAUDE.md` so an agent reasons in the ontology even without the CLI.
 
 ## The Proving Ground
 

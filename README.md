@@ -4,7 +4,7 @@
 
 khub gives an AI agent typed, validated, queryable context (structured memory it can navigate and write back to) instead of unstructured documents stuffed into a context window.
 
-One generic engine: entities live in git as Markdown with YAML frontmatter (the default), as `.json`/`.yaml` documents, or as rows of a single-file collection (`repos.jsonl`), per-type schema config. A [LinkML](https://linkml.io) ontology is the contract: types, attributes, and legal relations. A Python core library provides schema-validated CRUD and graph queries; a generic `khub` CLI (and a planned Claude Code skill) are thin, schema-driven surfaces over it. The graph is a projection rebuilt from the Markdown on demand; no database is ever the source of truth.
+One generic engine: entities live in git as Markdown with YAML frontmatter (the default), as `.json`/`.yaml` documents, or as rows of a single-file collection (`repos.jsonl`), per-type schema config. A [LinkML](https://linkml.io) ontology is the contract: types, attributes, and legal relations. A Python core library provides schema-validated CRUD and graph queries; a generic `khub` CLI and a Claude Code skill are thin, schema-driven surfaces over it. The graph is a projection rebuilt from the Markdown on demand; no database is ever the source of truth.
 
 Built on top of the [Open Knowledge Format (OKF)](https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/main/okf/SPEC.md). khub's Markdown entities are OKF concepts; on top, khub adds a typed schema, a graph, and the serialization formats and collections OKF lacks. Any workspace projects to a conformant OKF bundle.
 
@@ -17,6 +17,7 @@ Built on top of the [Open Knowledge Format (OKF)](https://github.com/GoogleCloud
 - **Gate** — `validate` (per-entity well-formedness) and `check` (graph-wide completeness, dangling edges, strays, cycles; orphans informational unless `--strict`); `stale` and `log` read git at entity altitude, row-accurate even inside collections.
 - **Project** — `reindex` (OKF `index.md`), `viz` (Cytoscape HTML), `backfill` (git-derived dates and scaffolding).
 - **Store** — per-type `layout` (file / folder / collection) × `format` (md / json / yaml; collections take json / jsonl / yaml). Non-md entities carry prose in a reserved `body` field; collection writes are lock-serialized and crash-atomic.
+- **Wire** — `wire`: link the schema into a project's `CLAUDE.md` (a `@.khub/schema.yaml` import plus the command surface), so an agent reasons in the ontology with or without the CLI.
 
 Full command surface and JSON contracts: [`docs/cli.md`](docs/cli.md). Feature history: [`CHANGELOG.md`](CHANGELOG.md).
 
@@ -53,5 +54,17 @@ Every read command takes `--format json` for an agent and prints a Rich table fo
 A preset is a canonical ontology for one domain: its entity types, attributes, and legal relations. `khub init` merges `core.yaml` (the `base` block every entity carries: `type`, `created`/`updated`, `tags`, the OKF fields, the `any → any` edges) with the named preset into an engagement's `.khub/schema.yaml`, which agents and humans then extend as the work demands.
 
 **`firm-ops` ships today**: the HQ operations ontology (client, project, person, opportunity, meeting, and more); see [`docs/firm-ops-preset.md`](docs/firm-ops-preset.md). Engineering, consulting, and research presets are planned. New to khub? Start with [`docs/getting-started.md`](docs/getting-started.md).
+
+## Use it from Claude Code
+
+khub ships as a Claude Code plugin from this repo, so an agent can install and drive it:
+
+```
+/plugin marketplace add git@github.com:endgame-build/knowledge-hub.git
+/plugin install khub@khub
+/khub:setup      # installs the CLI, then runs khub wire
+```
+
+The `khub` skill maps agent intent onto the read and write verbs; `/khub:setup` bootstraps the CLI and wires the current project.
 
 **Status:** v1 engine shipped and proven on a live corpus (the firm-hq cutover: 250+ entities, the incumbent scripts retired). Design rationale in [`docs/design-memo.md`](docs/design-memo.md); the collections row model in [`docs/collections-design.md`](docs/collections-design.md).
