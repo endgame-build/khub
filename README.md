@@ -25,7 +25,7 @@ Full command surface and JSON contracts: [`docs/cli.md`](docs/cli.md). Feature h
 khub is a `khub` console script (Python 3.11+). Install it, then seed a workspace from a preset:
 
 ```bash
-uv tool install git+https://github.com/endgame-build/knowledge-hub   # or: clone + uv sync
+uv tool install git+ssh://git@github.com/endgame-build/knowledge-hub@v0.3.0   # or clone + uv sync
 khub init firm-ops ./my-hub          # scaffold .khub/ and the entity tree
 cd my-hub
 ```

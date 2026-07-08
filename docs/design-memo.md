@@ -167,8 +167,8 @@ The schema header stamps provenance (`# khub-preset: engineering@1.0.0`). The en
 khub ships as a Python package and runs through `uv`. The zero-install path mirrors `npx`, straight from the private repo over git:
 
 ```
-uvx --from git+ssh://git@github.com/endgame-build/knowledge-hub khub init firm-ops ./my-hub
-uv tool install git+ssh://git@github.com/endgame-build/knowledge-hub      # install once, then reuse
+uvx --from git+ssh://git@github.com/endgame-build/knowledge-hub@v0.3.0 khub init firm-ops ./my-hub
+uv tool install git+ssh://git@github.com/endgame-build/knowledge-hub@v0.3.0   # install once, then reuse
 khub init engineering ./acme-hub
 ```
 

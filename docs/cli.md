@@ -106,5 +106,6 @@ A type stores its entities as `md` (the default: YAML frontmatter + prose body),
 | `khub reindex` | `--dry-run` | regenerate the OKF `index.md` navigation from the graph |
 | `khub viz` | `--out <file.html=viz.html>`, `--open`, `--type <t>` | self-contained Cytoscape HTML over the typed graph |
 | `khub backfill` | `--type <t>`, `--dry-run` | add missing frontmatter and dates from `git log` |
+| `khub wire` | `--agents`, `--dry-run` | inject a managed khub block into `CLAUDE.md` (and `AGENTS.md` with `--agents`): a `@.khub/schema.yaml` import plus the command surface, so an agent reasons in the workspace ontology even without running khub. Idempotent, minimal-diff |
 
 *Planned verbs (not yet shipped): `path`, `build`, `export --okf`, `diff-preset`, `rename`. See the repo for status.*

@@ -9,6 +9,8 @@ __pycache__/
 .mypy_cache/
 .ruff_cache/
 *.egg-info/
+dist/
+build/
 
 # khub generated artifacts — derived, regenerated, never committed (SCH-007)
 .khub/generated/

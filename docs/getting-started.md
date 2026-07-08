@@ -6,10 +6,10 @@ This walkthrough builds a tiny firm-ops hub from nothing (one client, one person
 
 khub is a `khub` console script and needs Python 3.11+. Two ways in.
 
-Install it as a tool (the repo is private, so this needs SSH access to the org):
+Install it as a tool (the repo is private, so this needs SSH access to the org; HTTPS with a token works too):
 
 ```bash
-uv tool install git+ssh://git@github.com/endgame-build/knowledge-hub
+uv tool install git+ssh://git@github.com/endgame-build/knowledge-hub@v0.3.0
 ```
 
 Or clone and run from the checkout:
@@ -54,6 +54,20 @@ my-hub/
 ```
 
 `schema.yaml` is the operational setup. It declares what a client, a person, and a project *are*: their fields, which are required, and the legal relations between types. Extend it as the work demands; for now the preset defaults are enough.
+
+## Wire it into your agent's context
+
+Run `khub wire` once so any agent working in this repo reasons in the same model. It writes a managed block to `CLAUDE.md` that imports the schema (`@.khub/schema.yaml`) and lists the command surface, so the ontology loads into context before an agent runs a single khub command.
+
+```bash
+khub wire
+```
+
+```
+created CLAUDE.md
+```
+
+Re-run it whenever the schema changes; the block updates in place. Add `--agents` to mirror it into `AGENTS.md`.
 
 ## Author your first entities
 

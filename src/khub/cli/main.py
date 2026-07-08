@@ -26,6 +26,7 @@ from khub.cli.query_cmd import query_command
 from khub.cli.schema_cmd import schema_app
 from khub.cli.search_cmd import search_command
 from khub.cli.status_cmd import status_command
+from khub.cli.wire_cmd import wire_command
 
 app = typer.Typer(
     help="khub — schema-bound context management.",
@@ -88,6 +89,7 @@ app.command(name="log")(log_command)
 app.command(name="reindex")(reindex_command)
 app.command(name="viz")(viz_command)
 app.command(name="backfill")(backfill_command)
+app.command(name="wire")(wire_command)
 
 
 def main() -> None:

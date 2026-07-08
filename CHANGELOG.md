@@ -2,6 +2,21 @@
 
 Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); khub is pre-release.
 
+## [0.3.0] — 2026-07-08
+
+### Added — `khub wire`
+
+Wire a workspace into an agent's context. `khub wire` injects an idempotent, marker-delimited block into `CLAUDE.md` (`--agents` mirrors it into `AGENTS.md`):
+
+- A Claude Code `@.khub/schema.yaml` import, so an agent reasons in the workspace ontology even without running the CLI, plus the active preset and the declared types.
+- The command surface, for when khub is installed.
+- Schema-generic and minimal-diff: the block reflects the live schema and re-running replaces it in place. `--dry-run` prints without writing; outside a workspace it errors and suggests `khub init`.
+
+### Distribution
+
+- A khub Claude Code plugin ships from this repo as a single-plugin marketplace: `claude plugins add` the repo, install `khub@khub`, then `/khub:setup` installs the CLI (`uv tool install …@v0.3.0`) and runs `khub wire`.
+- Install commands across the docs standardize on the pinned form `…@v0.3.0`. A `RELEASING.md` records the release checklist.
+
 ## [0.2.0] — 2026-07-08
 
 ### Docs — 2026-07-08: reference set and truth pass
