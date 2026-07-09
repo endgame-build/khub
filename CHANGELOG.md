@@ -2,6 +2,23 @@
 
 Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); khub is pre-release.
 
+## [Unreleased]
+
+### Added
+
+- MIT `LICENSE`; `pyproject.toml` gains `license`, `authors`, `keywords`, `classifiers`, and `[project.urls]`; a `py.typed` marker ships the package's types to downstream consumers.
+- CI workflow (ruff + mypy + pytest across Python 3.11–3.13) and a tag-triggered release workflow (test, `uv build`, GitHub Release; no PyPI while the repo is private).
+- `CONTRIBUTING.md`, issue and pull-request templates, and a dependabot config.
+- `docs/README.md`, a Diátaxis index over the existing docs. The README gains license/Python badges and a "why not a folder / database / RAG store" comparison.
+
+### Removed
+
+- Stale internal notes (`docs/internal/omnigraph-comparison.md`, `audit-2026-07-05.md`) and the superseded planning specs (`plan/specs/FS-006`, `FS-007`): they described the removed LinkML compiler and called the shipped engine "design stage."
+
+### Fixed
+
+- Lingering compiler references in `core/errors.py`; the design-memo command table now marks never-shipped verbs (`path`, `build`, `export --okf`, `diff-preset`, `rename`) as planned; the `khub:setup` skill pins `@v0.6.0`.
+
 ## [0.6.0] — 2026-07-09
 
 ### Removed — LinkML / `khub compile`

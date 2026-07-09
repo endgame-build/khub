@@ -1,5 +1,8 @@
 # khub
 
+![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)
+![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)
+
 **Schema-bound, agent-facing context management.**
 
 khub gives an AI agent typed, validated, queryable context (structured memory it can navigate and write back to) instead of unstructured documents stuffed into a context window.
@@ -19,7 +22,7 @@ Built on top of the [Open Knowledge Format (OKF)](https://github.com/GoogleCloud
 - **Store** — per-type `layout` (file / folder / collection) × `format` (md / json / yaml; collections take json / jsonl / yaml). Non-md entities carry prose in a reserved `body` field; collection writes are lock-serialized and crash-atomic.
 - **Wire** — `wire`: link the schema into a project's `CLAUDE.md` (a `@.khub/schema.yaml` import plus the command surface), so an agent reasons in the ontology with or without the CLI.
 
-Full command surface and JSON contracts: [`docs/cli.md`](docs/cli.md). Feature history: [`CHANGELOG.md`](CHANGELOG.md).
+Full command surface and JSON contracts: [`docs/cli.md`](docs/cli.md). Feature history: [`CHANGELOG.md`](CHANGELOG.md). All documentation: [`docs/`](docs/).
 
 ## Quickstart
 
@@ -51,6 +54,16 @@ Every read command takes `--format json` for an agent and prints a Rich table fo
 
 **Interactive or headless.** On a terminal, a write verb with a missing input opens a wizard: `khub init` picks a preset, `khub add` walks the schema and picks relation targets from a list, `khub edit`/`link`/`remove` pick the entity and field. Agents never see a prompt: `--agent`, `--format json`, a pipe, or CI turns every missing input back into the usual error, and every prompted value has a flag, so anything the wizard does reproduces headlessly.
 
+## Why not a folder of Markdown, a database, or a RAG store?
+
+| Instead of… | What you give up |
+|---|---|
+| A folder of Markdown / Obsidian | No schema, no typed relations, no integrity gate: nothing rejects a broken or dangling reference, and an agent can't walk the graph. |
+| A database | Truth stops being git — no diff, no PR review, no plain-text portability — and the schema lives in migrations instead of one readable file. |
+| A vector / RAG store | Retrieval is fuzzy and lossy: no exact relations to traverse, no completeness gate, and writes don't round-trip. |
+
+khub keeps git as the source of truth, then adds a typed schema and a derived graph on top: exact reads, validated writes, and an integrity gate an agent can rely on.
+
 ## Presets
 
 A preset is a canonical ontology for one domain: its entity types, attributes, and legal relations. `khub init` merges `core.yaml` (the `base` block every entity carries: `type`, `created`/`updated`, `tags`, the OKF fields, the `any → any` edges) with the named preset into an engagement's `.khub/schema.yaml`, which agents and humans then extend as the work demands.
@@ -76,3 +89,7 @@ npx skills add git@github.com:endgame-build/khub.git -s khub -s setup
 ```
 
 **Status:** v1 engine shipped and proven on a live corpus (the firm-hq cutover: the incumbent scripts retired). Design rationale in [`docs/design-memo.md`](docs/design-memo.md); the collections row model in [`docs/collections-design.md`](docs/collections-design.md).
+
+## License
+
+MIT — see [`LICENSE`](LICENSE).

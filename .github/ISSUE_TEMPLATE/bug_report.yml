@@ -1,0 +1,25 @@
+name: Bug report
+description: Something in khub behaves incorrectly
+labels: ["bug"]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you ran, what you expected, and what you got. Include the exact command and any error output.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: khub version
+      description: Output of `khub --version`.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: The smallest schema/commands that reproduce the problem.
+    validations:
+      required: false

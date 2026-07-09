@@ -4,6 +4,20 @@ version = "0.6.0"
 description = "khub — schema-bound, agent-facing context management."
 readme = "README.md"
 requires-python = ">=3.11"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Ilya Pukhalski", email = "ilya@pukhalski.com" }]
+keywords = ["knowledge-graph", "agents", "schema", "markdown", "cli", "context-management", "okf"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Libraries",
+    "Topic :: Scientific/Engineering :: Information Analysis",
+    "Typing :: Typed",
+]
 dependencies = [
     "pydantic>=2",
     "typer",
@@ -16,6 +30,12 @@ dependencies = [
 
 [project.scripts]
 khub = "khub.cli.main:main"
+
+[project.urls]
+Homepage = "https://github.com/endgame-build/khub"
+Repository = "https://github.com/endgame-build/khub"
+Documentation = "https://github.com/endgame-build/khub/tree/main/docs"
+Changelog = "https://github.com/endgame-build/khub/blob/main/CHANGELOG.md"
 
 [build-system]
 requires = ["hatchling"]

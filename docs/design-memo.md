@@ -129,7 +129,7 @@ The CLI is a thin, schema-introspecting adapter over the core library's verbs: c
 | | `khub neighbors <id> [--predicate p] [--in\|--out]` | one-hop edges in either direction |
 | | `khub impact <id> [--predicate p]` | blast radius: transitive closure over an edge |
 | | `khub history <id>` | supersession chain and edit history |
-| | `khub path <from> <to>` | shortest path between two entities |
+| | `khub path <from> <to>` | shortest path between two entities *(planned)* |
 | | `khub search <text>` | full-text search (FTS5, in-memory per invocation) |
 | Integrity | `khub validate [path]` | per-entity well-formedness and referential integrity (default: whole workspace) |
 | | `khub check` | graph-wide: relations resolve, required relations complete, no orphans, no stray files, no edge cycles |
@@ -138,10 +138,12 @@ The CLI is a thin, schema-introspecting adapter over the core library's verbs: c
 | Projection | `khub reindex` | regenerate the OKF `index.md` navigation from the graph |
 | | `khub backfill [--type T]` | add missing frontmatter and dates from `git log` |
 | | `khub viz` | self-contained Cytoscape HTML over the typed graph |
-| | `khub build` | materialize the SQLite projection |
-| | `khub export --okf [path]` | render the workspace to a conformant OKF bundle |
-| | `khub diff-preset` | drift against the canonical preset, and promote-back |
-| | `khub rename <id> <new-slug>` | rename a slug and rewrite inbound references |
+| | `khub build` | materialize the SQLite projection *(planned)* |
+| | `khub export --okf [path]` | render the workspace to a conformant OKF bundle *(planned)* |
+| | `khub diff-preset` | drift against the canonical preset, and promote-back *(planned)* |
+| | `khub rename <id> <new-slug>` | rename a slug and rewrite inbound references *(planned)* |
+
+*Verbs marked *(planned)* are not yet shipped; see [`cli.md`](cli.md) for the live surface.*
 
 ## Deployment Model: Seeded Fork
 

@@ -94,7 +94,7 @@ A type stores its entities as `md` (the default: YAML frontmatter + prose body),
 |---|---|---|
 | `khub neighbors <id>` | `--predicate <p>`, `--in` / `--out` (default both), `--depth <n=1>`, `--format` | one-hop adjacency |
 | `khub impact <id>` | `--predicate <p>` (default `depends_on`), `--reverse`, `--format tree\|json` | transitive forward (blast radius), `--reverse` for ancestors |
-| `khub history <id>` | `--predicate <p>` (default `supersedes`), `--limit <n>`, `--format` | the supersession chain (decision history) |
+| `khub history <id>` | `--predicate <p>` (default `supersedes`), `--limit <n>`, `--format` | the supersession chain (decision history); `supersedes` is a schema-general default that the firm-ops preset does not declare |
 
 ## Integrity
 

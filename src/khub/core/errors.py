@@ -1,4 +1,4 @@
-"""Located errors raised by the resolver and compiler.
+"""Located errors raised by the resolver.
 
 Each error carries the located fields (``type``, ``relation``, ``target``) so
 tests assert on structure plus a message substring, keeping the spec's exact
@@ -53,7 +53,7 @@ class LocatedError(Exception):
             target=construct,
         )
 
-    # --- compiler (WPK-000-2) ------------------------------------------------
+    # --- duplicate type (WPK-000-2) ------------------------------------------
 
     @classmethod
     def duplicate_type(cls, type_: str) -> "LocatedError":
