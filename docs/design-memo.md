@@ -1,4 +1,4 @@
-# Knowledge Hub (khub): Design Memo
+# khub: Design Memo
 
 **Status:** khub is structured, schema-bound context management for analytical and operational work, a domain-agnostic engine where the schema is the operational setup. The engine is proven on firm-hq's live firm-ops corpus.
 
@@ -167,8 +167,8 @@ The schema header stamps provenance (`# khub-preset: engineering@1.0.0`). The en
 khub ships as a Python package and runs through `uv`. The zero-install path mirrors `npx`, straight from the private repo over git:
 
 ```
-uvx --from git+ssh://git@github.com/endgame-build/knowledge-hub@v0.4.1 khub init firm-ops ./my-hub
-uv tool install git+ssh://git@github.com/endgame-build/knowledge-hub@v0.4.1   # install once, then reuse
+uvx --from git+ssh://git@github.com/endgame-build/khub@v0.4.1 khub init firm-ops ./my-hub
+uv tool install git+ssh://git@github.com/endgame-build/khub@v0.4.1   # install once, then reuse
 khub init engineering ./acme-hub
 ```
 

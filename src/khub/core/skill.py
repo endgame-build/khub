@@ -23,7 +23,7 @@ from pathlib import Path
 # The private repo is the skill source; the git URL form installs over SSH — the
 # same access ``uv tool install`` already needs — where the ``owner/repo``
 # shorthand would need a token.
-SKILLS_SOURCE = "git@github.com:endgame-build/knowledge-hub.git"
+SKILLS_SOURCE = "git@github.com:endgame-build/khub.git"
 
 # npx drops the skill into per-machine agent directories; keep them out of git.
 # The committable artifact is ``skills-lock.json``, which pins the skill versions.

@@ -54,7 +54,7 @@ How khub ships and runs. khub is a Python package (3.11+) exposed as a `khub` co
 ##### AC-001: Install Once, Reuse
 
 **Given** an operator with `uv` and repo access
-**When** they run `uv tool install git+ssh://git@github.com/endgame-build/knowledge-hub`
+**When** they run `uv tool install git+ssh://git@github.com/endgame-build/khub`
 **Then** the system shall:
 - [ ] Install the `khub` console script on PATH
 - [ ] Bundle the engine and the canonical presets
@@ -94,7 +94,7 @@ How khub ships and runs. khub is a Python package (3.11+) exposed as a `khub` co
 
 #### Technical Notes
 
-- **Command:** `uv tool install git+ssh://git@github.com/endgame-build/knowledge-hub`
+- **Command:** `uv tool install git+ssh://git@github.com/endgame-build/khub`
 - **Entry point:** `khub` console script over the Typer CLI
 - **Invariant upheld:** the workspace is self-contained after init (FS-001)
 - **Output:** a `khub` binary on PATH
@@ -123,7 +123,7 @@ How khub ships and runs. khub is a Python package (3.11+) exposed as a `khub` co
 ##### AC-001: Scaffold in One Command
 
 **Given** an operator with `uv` and repo access
-**When** they run `uvx --from git+ssh://git@github.com/endgame-build/knowledge-hub khub init firm-ops ./my-hub`
+**When** they run `uvx --from git+ssh://git@github.com/endgame-build/khub khub init firm-ops ./my-hub`
 **Then** the system shall:
 - [ ] Fetch and run khub without a prior install
 - [ ] Execute the `init` exactly as the installed CLI would
@@ -161,7 +161,7 @@ How khub ships and runs. khub is a Python package (3.11+) exposed as a `khub` co
 
 #### Technical Notes
 
-- **Command:** `uvx --from git+ssh://git@github.com/endgame-build/knowledge-hub khub <args>`
+- **Command:** `uvx --from git+ssh://git@github.com/endgame-build/khub khub <args>`
 - **Invariant upheld:** Markdown is truth; `uvx` owns only execution, never the data
 - **Output:** the invoked command's result (e.g. a scaffolded workspace)
 

@@ -20,7 +20,7 @@ Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelo
 
 - The skill installs through Vercel's `npx skills` (the skills.sh CLI), which lands it in whichever coding agent is present (Claude Code, Cursor, Codex, and ~70 more) and writes a `skills-lock.json`. Same convention Neon's `neon init` uses.
 - Both tails are best-effort: no `npx` on `PATH` prints `skill install skipped` and the scaffold still succeeds. `--no-wire` / `--no-skill` turn off either tail.
-- `.claude-plugin/marketplace.json` declares the `khub` and `setup` skills, so `npx skills add git@github.com:endgame-build/knowledge-hub.git` discovers them from the private repo over SSH.
+- `.claude-plugin/marketplace.json` declares the `khub` and `setup` skills, so `npx skills add git@github.com:endgame-build/khub.git` discovers them from the private repo over SSH.
 
 ### Distribution
 

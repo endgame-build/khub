@@ -11,8 +11,8 @@ khub ships from git tags (no PyPI while the repo is private). A release is a ver
 Consumers install a pinned tag over git (SSH key, or HTTPS with a token):
 
 ```bash
-uv tool install git+ssh://git@github.com/endgame-build/knowledge-hub@vX.Y.Z
-uvx --from git+ssh://git@github.com/endgame-build/knowledge-hub@vX.Y.Z khub init firm-ops ./my-hub
+uv tool install git+ssh://git@github.com/endgame-build/khub@vX.Y.Z
+uvx --from git+ssh://git@github.com/endgame-build/khub@vX.Y.Z khub init firm-ops ./my-hub
 ```
 
 The khub Claude Code plugin pins the same tag in `plugin/skills/setup/SKILL.md`; bump it there when you cut a release so `/khub:setup` installs the matching version.

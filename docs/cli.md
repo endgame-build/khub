@@ -1,4 +1,4 @@
-# Knowledge Hub CLI (`khub`)
+# khub CLI
 
 The CLI is a thin, schema-introspecting adapter over the core library's verbs (create, get, update, delete, link, query). It hardcodes no per-type knowledge; it reads the active schema at runtime. Every read command emits `--format json` for an agent or a Rich table for a human. The Claude Code skill maps agent intent onto these same commands, and the MCP server (post-v1) exposes the same verbs as tools.
 
@@ -108,6 +108,6 @@ A type stores its entities as `md` (the default: YAML frontmatter + prose body),
 | `khub backfill` | `--type <t>`, `--dry-run` | add missing frontmatter and dates from `git log` |
 | `khub wire` | `--agents`, `--dry-run` | inject a managed khub block into `CLAUDE.md` (and `AGENTS.md` with `--agents`): a `@.khub/schema.yaml` import plus the command surface, so an agent reasons in the workspace ontology even without running khub. Idempotent, minimal-diff |
 
-`khub init` runs `wire` as a tail. It also installs the agent skill by shelling out to `npx skills` (Vercel's skills.sh CLI), which drops the skill into whichever coding agent is present (Claude Code, Cursor, Codex, and others) and writes a `skills-lock.json`. To install the skill into an existing workspace without re-scaffolding: `npx skills add git@github.com:endgame-build/knowledge-hub.git -s khub -s setup`.
+`khub init` runs `wire` as a tail. It also installs the agent skill by shelling out to `npx skills` (Vercel's skills.sh CLI), which drops the skill into whichever coding agent is present (Claude Code, Cursor, Codex, and others) and writes a `skills-lock.json`. To install the skill into an existing workspace without re-scaffolding: `npx skills add git@github.com:endgame-build/khub.git -s khub -s setup`.
 
 *Planned verbs (not yet shipped): `path`, `build`, `export --okf`, `diff-preset`, `rename`. See the repo for status.*

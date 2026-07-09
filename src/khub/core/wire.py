@@ -55,7 +55,7 @@ def build_block(preset: str, version: str, types: list[str]) -> str:
             BEGIN,
             "## khub workspace",
             "",
-            "This repository is a [khub](https://github.com/endgame-build/knowledge-hub) "
+            "This repository is a [khub](https://github.com/endgame-build/khub) "
             "workspace: its domain is modeled as typed entities and typed relations, and the "
             "schema is the contract. Reason in that model.",
             "",
@@ -78,7 +78,7 @@ def build_block(preset: str, version: str, types: list[str]) -> str:
             "- Every read takes `--format json` for machine-readable output.",
             "",
             "Not installed? Run `/khub:setup`, or "
-            "`uv tool install git+ssh://git@github.com/endgame-build/knowledge-hub`.",
+            "`uv tool install git+ssh://git@github.com/endgame-build/khub`.",
             END,
         ]
     )
