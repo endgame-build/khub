@@ -2,6 +2,17 @@
 
 Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); khub is pre-release.
 
+## [0.5.0] — 2026-07-09
+
+### Added — interactive CLI for humans (questionary)
+
+Write verbs run a wizard on a terminal when an input is missing; agents and scripts are untouched.
+
+- `khub init` picks a preset, prompts the directory, and confirms the wire/skill tails (with an agent multiselect). `khub add`/`edit` walk the type's schema, offering enums as menus and relations as picks from existing entities. `khub link`/`get`/`remove` and a bare `khub query` pick entities/types from lists.
+- New global `--agent`: never prompt (agents cannot use interactivity). khub also stays silent under `--format json`, on a pipe/redirect (non-TTY), and in CI. Output format is unchanged by `--agent`.
+- Every prompted value has a flag, so an interactive result reproduces headlessly; the wizard marks required fields but never blocks capture.
+- Built on questionary (inline prompts on prompt_toolkit); it loads lazily, off the path of every agent invocation. Typer and Rich are unchanged. Full-screen TUI frameworks (Textual) were assessed and rejected for wizards; Textual is reserved for a future `khub tui` browser.
+
 ## [0.4.1] — 2026-07-08
 
 ### Fixed — `khub init` skill/wire tails (post-release review)

@@ -9,7 +9,7 @@ khub is a `khub` console script and needs Python 3.11+. Two ways in.
 Install it as a tool (the repo is private, so this needs SSH access to the org; HTTPS with a token works too):
 
 ```bash
-uv tool install git+ssh://git@github.com/endgame-build/khub@v0.4.1
+uv tool install git+ssh://git@github.com/endgame-build/khub@v0.5.0
 ```
 
 Or clone and run from the checkout:
@@ -22,6 +22,8 @@ uv run khub --help    # prefix every command below with `uv run`
 ```
 
 The rest of this guide writes `khub …`. If you cloned, read that as `uv run khub …`; the output is the same.
+
+This walkthrough passes every value as a flag so it copies and pastes. On your own terminal you can drop the flags: `khub init`, `khub add project`, or `khub edit` run a wizard that picks the preset, walks the schema, and offers existing entities as relation targets. Pass `--agent` (or pipe the output, or set `--format json`) to turn the wizard off; that is how an agent drives khub.
 
 From inside Claude Code, `/plugin install khub@khub` then `/khub:setup` installs and wires khub for you; see the [README](../README.md#use-it-from-claude-code).
 

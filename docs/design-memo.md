@@ -112,6 +112,8 @@ Two eval tiers: deterministic golden-file tests cover the engine (the HQ functio
 
 The CLI is a thin, schema-introspecting adapter over the core library's verbs: create, get, update, delete, link, query. Every read command emits `--format json` for the agent or a Rich table for a human. The Claude Code skill maps agent intent onto these same commands as the agent's retrieval surface: `query`, `get`, the graph walks (`neighbors`/`impact`/`history`), and `search`.
 
+**One seam serves both humans and agents.** A human running a write verb on a terminal with a value missing gets a wizard (pick a preset, walk a type's fields, pick a relation target from existing entities); an agent passes flags and never sees a prompt. A single gate decides it (prompt a human at a real terminal; stay silent for `--agent`, machine output, or CI), and one function constructs the prompter, so the two modes share a single code path and every prompted value has a flag equivalent. Interactivity lives at the CLI surface; the core verbs stay pure and the wizard reads the same `type_view` the flags do, so it carries no per-type code and never blocks capture. The prompts use questionary (inline select/confirm/text on prompt_toolkit), imported lazily so an agent invocation never pays for it; Typer and Rich are unchanged. Full-screen TUI frameworks (Textual, pytermgui) are the wrong shape for a wizard that must fall back to flags and compose with pipes, so Textual is held for a later full-screen `khub tui` graph browser instead.
+
 | Group | Command | Does |
 |-------|---------|------|
 | Workspace | `khub init <preset>` | scaffold a workspace from a preset |
@@ -167,8 +169,8 @@ The schema header stamps provenance (`# khub-preset: engineering@1.0.0`). The en
 khub ships as a Python package and runs through `uv`. The zero-install path mirrors `npx`, straight from the private repo over git:
 
 ```
-uvx --from git+ssh://git@github.com/endgame-build/khub@v0.4.1 khub init firm-ops ./my-hub
-uv tool install git+ssh://git@github.com/endgame-build/khub@v0.4.1   # install once, then reuse
+uvx --from git+ssh://git@github.com/endgame-build/khub@v0.5.0 khub init firm-ops ./my-hub
+uv tool install git+ssh://git@github.com/endgame-build/khub@v0.5.0   # install once, then reuse
 khub init engineering ./acme-hub
 ```
 

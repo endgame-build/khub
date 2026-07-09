@@ -7,11 +7,18 @@ The CLI is a thin, schema-introspecting adapter over the core library's verbs (c
 | Option | Meaning |
 |---|---|
 | `-C, --workspace <path>` | Operate on this workspace instead of the working directory. Default: the nearest `.khub/` above the working directory. Given a path, khub resolves the nearest `.khub/` at or above it. |
+| `--agent` | Agent mode: never prompt. A missing input becomes the usual error. Output format is unchanged. |
 | `--format <json\|table>` | Output shape for read commands. Default: table on a TTY, json otherwise. Some commands add `ids`, `raw`, or `tree`. |
 | `--version` | Print the khub version and exit. |
 | `--help` | Show help. |
 
 Read commands include `draft` entities in scope and surface each entity's `orphan`/`stale` flag by default; `--active`/`--draft` and `--orphan`/`--stale` narrow the set.
+
+### Interactive prompts
+
+On a terminal, a write verb run with a missing input opens a wizard instead of erroring: `khub init` picks a preset and confirms the wire/skill tails; `khub add`/`edit` walk the type's fields, offering enums as menus and relations as picks from existing entities; `khub link`/`get`/`remove` pick the entity, predicate, and target from lists. A wizard fills only what a flag left empty, and it never blocks capture: required fields are marked but stay skippable.
+
+khub never prompts an agent: with `--agent`, with `--format json`, when stdin/stdout is not a TTY (a pipe, a redirect), or under CI, a missing input is the same error it has always been. Every prompted value has a flag, so any interactive result reproduces headlessly.
 
 ### JSON record shape
 

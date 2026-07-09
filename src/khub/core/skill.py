@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import shutil
 import subprocess
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -38,8 +39,8 @@ class SkillOutcome:
     command: list[str]
 
 
-def _command() -> list[str]:
-    return [
+def _command(agents: Sequence[str] | None = None) -> list[str]:
+    cmd = [
         "npx",
         "-y",
         "skills",
@@ -51,19 +52,26 @@ def _command() -> list[str]:
         "setup",
         "--yes",
     ]
+    for agent in agents or ():
+        cmd += ["--agent", agent]
+    return cmd
 
 
-def install_skill(root: Path, *, quiet: bool = False) -> SkillOutcome:
+def install_skill(
+    root: Path, *, agents: Sequence[str] | None = None, quiet: bool = False
+) -> SkillOutcome:
     """Install the khub skill into the agent(s) detected under ``root``. Never raises.
 
     Runs ``npx skills add`` with ``cwd=root`` so the skill and its
     ``skills-lock.json`` land in the workspace, then gitignores the per-machine
-    skill directories. ``quiet`` captures npx's output instead of inheriting the
-    terminal, for machine-readable callers whose stdout must stay clean.
+    skill directories. ``agents`` narrows the install to named coding agents (the
+    interactive wizard's multiselect); ``None`` keeps npx's auto-detect. ``quiet``
+    captures npx's output instead of inheriting the terminal, for machine-readable
+    callers whose stdout must stay clean.
     """
     from khub.core.workspace import _append_gitignore
 
-    cmd = _command()
+    cmd = _command(agents)
     if shutil.which("npx") is None:
         return SkillOutcome(action="skipped-no-npx", command=cmd)
     try:

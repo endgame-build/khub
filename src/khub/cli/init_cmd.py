@@ -14,13 +14,19 @@ from pathlib import Path
 
 import typer
 
+from khub.cli import interact
 from khub.core.errors import LocatedError
 from khub.core.skill import SKILLS_SOURCE, SkillOutcome
 
+# A short convenience list for the wizard's agent multiselect; empty picks (or headless)
+# fall back to npx's own auto-detect. Not exhaustive — skills.sh supports ~70 agents.
+_COMMON_AGENTS = ["claude-code", "cursor", "codex", "gemini-cli", "opencode"]
+
 
 def init_command(
-    preset: str = typer.Argument(..., help="Named preset to seed from (e.g. firm-ops)."),
-    path: Path = typer.Argument(Path("."), help="Target directory (default: .)."),
+    ctx: typer.Context,
+    preset: str | None = typer.Argument(None, help="Named preset to seed from (e.g. firm-ops)."),
+    path: Path | None = typer.Argument(None, help="Target directory (default: .)."),
     preset_source: Path = typer.Option(
         None, "--preset-source", help="Where to resolve the preset if not packaged with khub."
     ),
@@ -34,10 +40,38 @@ def init_command(
         "text", "--format", help="text confirmation (default); json emits resolved provenance."
     ),
 ) -> None:
-    """Scaffold a workspace from a preset, then wire it and install the agent skill."""
+    """Scaffold a workspace from a preset, then wire it and install the agent skill.
+
+    On a TTY, a missing preset/path launches a wizard and the wire/skill tails are
+    confirmed; an agent (``--agent``), a pipe, or ``--format json`` never prompts.
+    """
     from khub.core.skill import install_skill
     from khub.core.wire import wire
-    from khub.core.workspace import init_workspace  # heavy (compile path); imported lazily
+    from khub.core.workspace import (  # heavy (compile path); imported lazily
+        init_workspace,
+        known_presets,
+    )
+
+    prompter = interact.make_prompter(ctx.obj, fmt)
+
+    # Resolve the inputs: a provided flag wins; else prompt on a TTY; else the headless default.
+    if preset is None:
+        if prompter is None:
+            typer.echo("Missing argument 'PRESET' (e.g. firm-ops).", err=True)
+            raise typer.Exit(2)
+        preset = prompter.select("Preset", choices=sorted(known_presets()))
+    if path is None:
+        path = prompter.path("Directory", default=".") if prompter is not None else Path(".")
+
+    # Tail choices: a --no-* flag forces skip; else confirm on a TTY; else default on.
+    do_wire = not no_wire and (prompter.confirm("Wire the schema into CLAUDE.md?") if prompter else True)
+    do_skill = not no_skill and (prompter.confirm("Install the khub agent skill?") if prompter else True)
+    agents = None
+    if do_skill and prompter is not None:
+        picks = prompter.checkbox(
+            "Install into which agents? (none = auto-detect)", _COMMON_AGENTS
+        )
+        agents = picks or None
 
     try:
         result = init_workspace(
@@ -50,7 +84,7 @@ def init_command(
     # Best-effort tails: a wire/skill hiccup does not unwind the scaffold above.
     wire_result = None
     wire_error = None
-    if not no_wire:
+    if do_wire:
         try:
             wire_result = wire(result.path)
         except LocatedError as err:
@@ -58,7 +92,9 @@ def init_command(
         except OSError as err:  # e.g. a read-only CLAUDE.md; report, don't unwind
             wire_error = str(err)
     # In json mode capture npx output so it never precedes the JSON document.
-    skill_outcome = None if no_skill else install_skill(result.path, quiet=(fmt == "json"))
+    skill_outcome = (
+        install_skill(result.path, agents=agents, quiet=(fmt == "json")) if do_skill else None
+    )
 
     if fmt == "json":
         payload = dataclasses.asdict(result)

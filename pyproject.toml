@@ -1,6 +1,6 @@
 [project]
 name = "khub"
-version = "0.4.1"
+version = "0.5.0"
 description = "khub — schema-bound, agent-facing context management."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -11,6 +11,7 @@ dependencies = [
     "ruamel.yaml",
     "python-frontmatter",
     "networkx",
+    "questionary>=2.1.1",
 ]
 
 [project.optional-dependencies]

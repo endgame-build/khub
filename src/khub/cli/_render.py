@@ -21,17 +21,27 @@ from khub.core.locate import find_workspace
 def resolve_root(ctx: typer.Context) -> Path:
     """The workspace root, honoring a ``--workspace/-C`` override on the root context.
 
-    The root callback stores the ``--workspace`` value on ``ctx.obj``; Typer propagates
-    it to every (including nested) subcommand context, so commands resolve against the
-    override when given and the working directory otherwise.
+    The root callback stores a ``CliState`` (carrying the ``--workspace`` value) on
+    ``ctx.obj``; Typer propagates it to every (including nested) subcommand context, so
+    commands resolve against the override when given and the working directory otherwise.
     """
-    override = ctx.obj
+    state = ctx.obj
+    override = state.workspace if state is not None else None
     return find_workspace(Path(override) if override else Path.cwd())
+
+
+def is_tty() -> bool:
+    """True when stdout is an interactive terminal — the one human/machine signal.
+
+    Both the output gate (``want_json``) and the prompt gate (``interact.can_prompt``)
+    key off this, so a pipe or a redirect flips both to machine behavior together.
+    """
+    return Console().is_terminal
 
 
 def want_json(fmt: str) -> bool:
     """JSON is the output when ``--format json`` is set or the stream is not a TTY."""
-    return fmt == "json" or not Console().is_terminal
+    return fmt == "json" or not is_tty()
 
 
 def emit(data: Any, fmt: str, build_table: Callable[[Any], Table]) -> None:

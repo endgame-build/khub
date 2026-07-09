@@ -26,7 +26,7 @@ Full command surface and JSON contracts: [`docs/cli.md`](docs/cli.md). Feature h
 khub is a `khub` console script (Python 3.11+). Install it, then seed a workspace from a preset:
 
 ```bash
-uv tool install git+ssh://git@github.com/endgame-build/khub@v0.4.1   # or clone + uv sync
+uv tool install git+ssh://git@github.com/endgame-build/khub@v0.5.0   # or clone + uv sync
 khub init firm-ops ./my-hub          # scaffold .khub/, wire CLAUDE.md, install the agent skill
 cd my-hub
 ```
@@ -48,6 +48,8 @@ khub check                       # graph-wide: relations resolve, nothing dangli
 ```
 
 Every read command takes `--format json` for an agent and prints a Rich table for a human.
+
+**Interactive or headless.** On a terminal, a write verb with a missing input opens a wizard: `khub init` picks a preset, `khub add` walks the schema and picks relation targets from a list, `khub edit`/`link`/`remove` pick the entity and field. Agents never see a prompt: `--agent`, `--format json`, a pipe, or CI turns every missing input back into the usual error, and every prompted value has a flag, so anything the wizard does reproduces headlessly.
 
 ## Presets
 
