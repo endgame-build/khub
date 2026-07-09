@@ -182,7 +182,7 @@ Everything stays private for now. `uvx` and `uv tool install` run from the priva
 
 ## The Proving Ground
 
-The **engine** is proven on the real thing: **firm-hq** cut over to khub. The proving ground is HQ's live firm-operations corpus, roughly 380 entities across 9 types, already running the projection-and-validation pattern under `kb.py`. khub runs read-only against the same files, then takes over: a functional cutover proven against the live corpus. Markdown is truth, so the risk stays low: khub never owns the data, the `.md` files go untouched, and the incumbent keeps working until cutover.
+The **engine** is proven on the real thing: **firm-hq** cut over to khub. The proving ground is HQ's live firm-operations corpus, already running the projection-and-validation pattern under `kb.py`. khub runs read-only against the same files, then takes over: a functional cutover proven against the live corpus. Markdown is truth, so the risk stays low: khub never owns the data, the `.md` files go untouched, and the incumbent keeps working until cutover.
 
 The cutover exercises the whole engine: the schema-introspecting core library, the in-memory `networkx` index, the integrity loop (`validate`/`check`/`stale` + `log`), plus `reindex` and `backfill` for the HQ migration; the full author and query command surface; `khub init`; and the **firm-ops preset**, the port of `hq.schema.yml` (9 types, 14 relation predicates), captured in full in `firm-ops-preset.md`.
 
@@ -202,7 +202,7 @@ The firm-ops schema is the real engine test. It exercises most of the engine's m
 | mixed storage layout | flat `clients/{slug}.md` vs folder `projects/{slug}/_index.md` |
 | explicit union edge (nesting not yet supported) | `meeting` flat at `meetings/{slug}.md`; `engagement` an explicit union edge |
 | the `draft` flag (`draft: true\|false`) | added by khub over HQ's per-type `stage`/`status` |
-| real scale and mess | ~380 entities, plus reference docs with no frontmatter to skip cleanly |
+| real scale and mess | the live HQ corpus, plus reference docs with no frontmatter to skip cleanly |
 
 The one family HQ leaves uncovered is the intent/behavior **satisfies-gap**: a Requirement with no Capability (engineering-specific, arriving with the engineering preset). Self-referential and derived-inverse edges (`supersedes`/`superseded_by`) also moved there when `decision` was folded out of firm-ops; the engine still supports them, exercised by the generic resolver tests. HQ's gap query is structural instead: orphans and missing required relations, both surfaced by `check`.
 
