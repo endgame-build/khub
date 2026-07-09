@@ -1,9 +1,9 @@
 """The resolved-schema in-memory model (post base-merge) — WPK-000-1.
 
-Separates (a) validation-relevant parts (attributes, relations) that become
-LinkML from (b) khub-only storage config (``layout``/``path``/``format``) that
-LinkML cannot model. Populated by ``core.resolve``; consumed by
-``core.linkml_emit``.
+The single in-memory contract every surface reads: attributes (scalars/enums)
+and relations (typed/union/any edges), plus khub storage config
+(``layout``/``path``/``format``). Populated by ``core.resolve``; consumed by
+introspection, validation, and the graph/query layers.
 """
 
 from __future__ import annotations

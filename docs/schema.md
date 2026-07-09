@@ -2,7 +2,7 @@
 
 **How a khub workspace is configured: author it once, extend it as the work demands.**
 
-A schema is authored in khub's own YAML vocabulary, not raw LinkML. It has two parts: a `base` block every entity inherits, and `entities`, the domain types. `khub init` merges the hub's `core.yaml` (the base) with a preset's `<preset>.yaml` into one self-contained, editable `.khub/schema.yaml`. You edit that one file; it carries no runtime tie to the hub. The schema is the contract every command reads at runtime. See [`concepts.md`](concepts.md) for why.
+A schema is authored in khub's own YAML vocabulary. It has two parts: a `base` block every entity inherits, and `entities`, the domain types. `khub init` merges the hub's `core.yaml` (the base) with a preset's `<preset>.yaml` into one self-contained, editable `.khub/schema.yaml`. You edit that one file; it carries no runtime tie to the hub. The schema is the contract every command reads at runtime. See [`concepts.md`](concepts.md) for why.
 
 ## The base block
 
@@ -45,7 +45,7 @@ entities:
 
 ## Storage config
 
-Three keys set where and how a type's entities live on disk. khub reads them; LinkML never sees them.
+Three keys set where and how a type's entities live on disk. khub reads them directly.
 
 - `layout` — `file` (one entity per file, `{path}/{slug}.md`), `folder` (one entity per folder, `{path}/{slug}/_index.md`), or `collection` (every entity of the type is a row in ONE file).
 - `format` — `md` (the default: YAML frontmatter + prose body), `json`, or `yaml`. Collections take `json | jsonl | yaml`. A non-md entity is a single mapping; prose rides in a reserved `body` field.
@@ -53,12 +53,12 @@ Three keys set where and how a type's entities live on disk. khub reads them; Li
 
 The [CLI reference](cli.md) covers the on-disk contract for entity formats and collections in full.
 
-## Compile and extend
+## Extend
 
-After editing `.khub/schema.yaml`, run `khub compile`. It resolves the schema, emits LinkML, and generates Pydantic v2 + JSON Schema into `.khub/generated/` (gitignored, regenerated, deterministic). Adding a type, changing an enum, or overriding a type's layout is the entire override mechanism: no surface code changes, because every command introspects the compiled schema at runtime.
+Editing `.khub/schema.yaml` takes effect on the next command, with no build step, because every command resolves and introspects the schema at runtime. Adding a type, changing an enum, or overriding a type's layout is the entire override mechanism, and no surface code changes.
 
 Inspect the effective schema with `khub schema` (full), `khub schema types`, `khub schema show <type>`, and `khub schema edges`. For a complete worked schema, read the [firm-ops preset](firm-ops-preset.md).
 
 ## Open schema and `--strict`
 
-khub enforces the schema-declared subset and leaves the rest alone. A declared field is checked against its type, enum, pattern, and cardinality; a relation to a non-existent target is rejected on write. Any key the schema does not declare is accepted, validated against nothing, and preserved on round-trip (the generated model is `extra="allow"`). `--strict` (on `validate`, `add`, and `edit`) closes the schema and rejects unknown keys, for when you want a closed contract.
+khub enforces the schema-declared subset and leaves the rest alone. A declared field is checked against its type, enum, pattern, and cardinality; a relation to a non-existent target is rejected on write. Any key the schema does not declare is accepted, validated against nothing, and preserved verbatim on round-trip. `--strict` (on `validate`, `add`, and `edit`) closes the schema and rejects unknown keys, for when you want a closed contract.

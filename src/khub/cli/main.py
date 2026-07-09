@@ -7,7 +7,6 @@ from pathlib import Path
 import typer
 
 from khub.cli.backfill_cmd import backfill_command
-from khub.cli.compile_cmd import compile_command
 from khub.cli.entity_cmd import (
     DYNAMIC_FIELDS,
     add_command,
@@ -76,7 +75,6 @@ def _root(
 app.command(name="init")(init_command)
 app.add_typer(schema_app, name="schema")
 app.command(name="status")(status_command)
-app.command(name="compile")(compile_command)
 app.command(name="add", context_settings=DYNAMIC_FIELDS)(add_command)
 app.command(name="get")(get_command)
 app.command(name="edit", context_settings=DYNAMIC_FIELDS)(edit_command)

@@ -6,8 +6,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Schema-bound, agent-facing context management. Entities live in git as Markdown
 (YAML frontmatter + body), as `.json`/`.yaml` documents, or as rows of a
-single-file collection. A khub schema (authored in khub's own vocabulary,
-compiled to LinkML) is the contract; the core library does schema-validated CRUD
+single-file collection. A khub schema (authored in khub's own vocabulary) is the
+contract; the core library does schema-validated CRUD
 and graph queries; the CLI is a thin adapter over it.
 
 Read before non-trivial work: `docs/design-memo.md` (rationale + invariants),
@@ -16,7 +16,7 @@ Read before non-trivial work: `docs/design-memo.md` (rationale + invariants),
 ## Commands
 
 ```bash
-uv sync                        # dev group already pins LinkML, so compile tests run
+uv sync                        # install dev deps
 uv run pytest                  # full suite
 uv run pytest -m unit          # markers: unit | integration | e2e
 uv run pytest tests/test_query.py::test_name   # single test
@@ -37,8 +37,6 @@ schema-introspecting adapter with zero per-type code.**
    collection row). No database is ever the source of truth.
 2. **Ontology** — `core/resolve.py` merges the `base` block into every type and
    parses khub-vocabulary YAML into a `ResolvedSchema` (`core/model.py`).
-   `core/compile.py` → LinkML (`core/linkml_emit.py`) → Pydantic v2
-   (`extra="allow"`) + JSON Schema, written to `.khub/generated/` (gitignored).
 3. **Core library** (`core/`) — the write verbs (`entity.py`), integrity
    (`integrity.py`), graph walks (`graph.py`), query/search (`query.py`,
    `search.py`), git-derived history (`gitlog.py`), projection (`reindex.py`,
@@ -73,16 +71,9 @@ bug; push it into the schema or the generic core path.
 
 ## YAML — always `ruamel.yaml`, never PyYAML
 
-See `.claude/rules/yaml.md`. PyYAML is not a declared dependency (only reaches the
-env transitively via linkml); `ruamel.yaml` is the declared library. Canonical
-loaders/dumpers: `core/resolve.py` (safe load), `core/compile.py` (sorted, deterministic),
+See `.claude/rules/yaml.md`. PyYAML is not a declared dependency; `ruamel.yaml` is
+the declared library. Canonical loaders/dumpers: `core/resolve.py` (safe load),
 `core/workspace.py` (order-preserving).
-
-## LinkML is compile-time only
-
-Nothing at runtime imports linkml or the generated artifacts. It's an optional
-extra (`khub[compile]`, ~77-package tail) used only by `khub compile`. Keep it out
-of the runtime import path. Pins are exact for generator determinism.
 
 ## Presets
 

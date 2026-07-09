@@ -30,7 +30,7 @@ khub validates the **schema-declared subset** of an entity and leaves everything
 
 1. **Declared fields are enforced.** Any present field the schema knows is checked against its type, enum, pattern, and cardinality. A malformed value, or a relation to a non-existent target, is rejected on write.
 2. **`required` is a completeness gate, not a capture block.** A missing required field or relation does not reject the write; the entity is still saved; active by default. Capture is never blocked. `check` enforces required-completeness over the `active` subgraph and reports an active-but-incomplete entity.
-3. **Extensions are free.** Any key the schema does not declare is accepted with any value, validated against nothing, and preserved on round-trip (Pydantic `extra="allow"` over the generated model).
+3. **Extensions are free.** Any key the schema does not declare is accepted with any value, validated against nothing, and preserved verbatim on round-trip.
 4. **`--strict` closes the schema.** `validate --strict` (and `add`/`edit --strict`) rejects unknown keys, for when a closed contract is wanted.
 
 ### Write semantics
@@ -64,7 +64,6 @@ A type stores its entities as `md` (the default: YAML frontmatter + prose body),
 | Command | Args and options | Returns / does |
 |---|---|---|
 | `khub init <preset> [path=.]` | `--preset-source <path>`, `--name <name>`, `--force`, `--no-wire`, `--no-skill`, `--format <text\|json>` (json emits resolved provenance) | scaffold a workspace from a preset (the seeded fork), then wire it into `CLAUDE.md` and install the agent skill via `npx skills` (best-effort; needs `npx`). `--no-wire` / `--no-skill` skip either tail |
-| `khub compile` | `--schema <path=.khub/schema.yaml>`, `--out <dir=.khub/generated>` | compile the schema into LinkML + Pydantic v2 + JSON Schema under `.khub/generated/` |
 | `khub schema` | `--format` | the full effective schema: types, fields, enums, relations, layout/format/nesting per type, and provenance (source preset + version) |
 | `khub schema types` | `--format` | type list (view of the above) |
 | `khub schema show <type>` | `--format` | one type's fields, enums, required, relations, layout (view) |

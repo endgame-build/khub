@@ -26,7 +26,7 @@ write atomicity).
   wins" is the rule for per-row fault isolation, which is planned but not yet
   implemented.
 - `slug` and `type` become **reserved field names**: a type declaring an
-  attribute or relation so named fails the compile (firm-ops declares neither).
+  attribute or relation so named is rejected when the schema resolves (firm-ops declares neither).
 - Minting retries the `-N` suffix against a **fresh read under the write lock**
   (the O_EXCL replacement); an explicit `--id` collision refuses (`slug_taken`),
   never auto-suffixes. Both unchanged in spirit.
@@ -117,7 +117,7 @@ repo:
 - Compatibility matrix replaces the flat whitelist: `file`/`folder` →
   {md, json, yaml}; `collection` → {json, jsonl, yaml}. `format` may be
   omitted when `path` carries the extension (derived); a disagreement between
-  the two is a compile error.
+  the two is a schema error.
 - `init` creates **no** collection file: a missing or empty file means zero
   entities, never malformed (the analog of `scan_type`'s missing-directory
   return). The scaffold loop creates only the parent directory, and

@@ -2,6 +2,17 @@
 
 Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); khub is pre-release.
 
+## [0.6.0] — 2026-07-09
+
+### Removed — LinkML / `khub compile`
+
+Dropped the entire LinkML compile path: the `khub compile` command, `core/compile.py`, `core/linkml_emit.py`, `core/determinism.py`, the `khub[compile]` optional extra (linkml, ~77 packages), and the generated artifacts (`.khub/generated/{schema.linkml.yaml,models.py,schema.json}`).
+
+- **Why:** those artifacts had zero runtime consumers. Validation, CRUD, query, and `check` all run natively on the resolved schema (`core/resolve.py` + `core/schema_model.py` + runtime field/relation checks), never on the generated Pydantic. LinkML was an unused compile target and the heaviest dependency.
+- **No behavior change:** every command works exactly as before; `khub init` no longer prints "Generated artifacts skipped" and no longer writes `.khub/generated/` (that path now holds only collection lock files, created on demand). The test suite runs ~3× faster without the linkml import.
+- **The contract is the khub schema** (authored YAML, resolved in memory). If JSON Schema or typed models are ever needed (an MCP server, editor integration), khub will emit them natively from the resolved schema.
+- Docs reframed to match (README, design-memo, concepts, schema, cli, getting-started).
+
 ## [0.5.0] — 2026-07-09
 
 ### Added — interactive CLI for humans (questionary)

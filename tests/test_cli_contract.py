@@ -203,21 +203,6 @@ def test_schema_commands_clean_error_on_corrupt_schema(
 
 
 @pytest.mark.integration
-def test_compile_honors_workspace_and_missing_schema(
-    fresh_ws: Path, tmp_path_factory: pytest.TempPathFactory, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """`compile -C <ws>` resolves the workspace's schema; a missing file is a clean error."""
-    elsewhere = tmp_path_factory.mktemp("elsewhere")
-    monkeypatch.chdir(elsewhere)
-    ok = runner.invoke(app, ["-C", str(fresh_ws), "compile"])
-    assert ok.exit_code == 0, ok.output
-    (fresh_ws / ".khub" / "schema.yaml").unlink()
-    missing = runner.invoke(app, ["-C", str(fresh_ws), "compile"])
-    assert missing.exit_code == 1
-    assert "Traceback" not in (missing.output or "")
-
-
-@pytest.mark.integration
 def test_stray_field_token_is_a_usage_error(fresh_ws: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """A trailing field token with no value errors instead of becoming a silent ''-filter."""
     monkeypatch.chdir(fresh_ws)

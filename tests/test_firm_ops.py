@@ -1,20 +1,17 @@
 """STORY-SCH-004 — the firm-ops preset, end to end.
 
 Covers TS-SCH-004-01 (9 types), -02 (predicates), -03 (porting notes), and -04
-(compile clean + validate via the remap-then-validate cutover demonstrator on a
-synthetic HQ-shaped fixture — no real firm data).
+(the remap-then-validate cutover demonstrator on a synthetic HQ-shaped fixture,
+checked against the resolved schema — no real firm data).
 """
 
 from __future__ import annotations
 
-import importlib.util
-import re
 from pathlib import Path
 
 import pytest
 
 from khub.core import resolve
-from khub.core.compile import compile_schema
 
 PRESETS = Path(__file__).resolve().parents[1] / "src" / "khub" / "presets"
 CORE = PRESETS / "core.yaml"
@@ -30,24 +27,9 @@ FIRM_OPS_PREDICATES = {
 }
 
 
-def _camel(name: str) -> str:
-    return "".join(p.capitalize() for p in re.split(r"[-_]", name) if p)
-
-
 @pytest.fixture(scope="module")
 def firm_ops_schema():
     return resolve([CORE, FIRM_OPS])
-
-
-@pytest.fixture(scope="module")
-def firm_ops_models(tmp_path_factory):
-    out = tmp_path_factory.mktemp("gen")
-    compile_schema([CORE, FIRM_OPS], out)
-    spec = importlib.util.spec_from_file_location("firmops_models", out / "models.py")
-    assert spec and spec.loader
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    return mod
 
 
 def test_declares_nine_types(firm_ops_schema):
@@ -132,24 +114,10 @@ def _referential_breaks(entities: dict, schema) -> list[tuple[str, str, str]]:
     return sorted(breaks)
 
 
-def test_remap_then_validate(firm_ops_schema, firm_ops_models):
-    """TS-SCH-004-04: after the cutover remap, the synthetic corpus validates
-    against the generated models, surfacing only the predicted referential break."""
-    import pydantic
-
+def test_remap_then_validate(firm_ops_schema):
+    """TS-SCH-004-04: after the cutover remap, the only referential break in the
+    synthetic corpus is the planted one (validated against the resolved schema)."""
     remapped = {slug: _remap(e) for slug, e in OLD_HQ.items()}
-
-    # 1. Per-entity validation against the generated Pydantic models is clean.
-    pydantic_breaks: list[tuple[str, str]] = []
-    for slug, e in remapped.items():
-        model = getattr(firm_ops_models, _camel(e["type"]))
-        try:
-            model(**e)
-        except pydantic.ValidationError as exc:
-            pydantic_breaks.append((slug, str(exc)))
-    assert pydantic_breaks == [], pydantic_breaks
-
-    # 2. The only referential break is the planted one (the predicted kind).
     assert _referential_breaks(remapped, firm_ops_schema) == [
         ("ghost-mtg", "engagement", "does-not-exist")
     ]

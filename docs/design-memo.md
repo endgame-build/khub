@@ -6,7 +6,7 @@
 
 khub is **structured, schema-bound context management for analytical and operational work**, a semantic, ontology-aligned context hub for agents. It gives an AI agent typed, validated, queryable context (structured memory it navigates and writes back to) instead of unstructured documents stuffed into a context window.
 
-One generic engine: every entity is one Markdown file with YAML frontmatter, held in git. A khub schema defines the entity types, their attributes, and legal relations, and compiles to LinkML for validation. A Python core library provides schema-validated CRUD and graph queries. A generic CLI (`khub`) and a Claude Code skill are thin, schema-driven surfaces over that library. khub is an Open Knowledge Format (OKF) implementation and extension: its Markdown entities are OKF concepts, and khub adds a typed schema, a graph, and the serialization formats and collections OKF lacks on top of its Markdown-only model. Any workspace projects to a conformant OKF bundle.
+One generic engine: every entity is one Markdown file with YAML frontmatter, held in git. A khub schema defines the entity types, their attributes, and legal relations, and is resolved in memory for validation. A Python core library provides schema-validated CRUD and graph queries. A generic CLI (`khub`) and a Claude Code skill are thin, schema-driven surfaces over that library. khub is an Open Knowledge Format (OKF) implementation and extension: its Markdown entities are OKF concepts, and khub adds a typed schema, a graph, and the serialization formats and collections OKF lacks on top of its Markdown-only model. Any workspace projects to a conformant OKF bundle.
 
 **The schema is the operational setup.** It configures what a given hub is *for*. The engine knows nothing about engineering, consulting, or research; the schema does. Swap the schema, and the same engine becomes a different operational hub.
 
@@ -26,7 +26,7 @@ Both are first-class, symmetric writers of the same graph through the same libra
 | # | Layer | Tech |
 |---|-------|------|
 | 1 | Source of truth | Markdown + YAML frontmatter, git |
-| 2 | Ontology | khub schema (entities/attributes/relations), compiled to LinkML |
+| 2 | Ontology | khub schema (entities/attributes/relations), resolved in memory |
 | 3 | Core library | Python: validate / create / get / update / delete / link / query |
 | 4 | Graph projection | In-memory index; in-memory per-invocation FTS5 search; persisted SQLite (nodes/edges) planned; no graph engine |
 | 5 | Access | Generic CLI (`khub`) + Claude Code skill (MCP later) |
@@ -35,7 +35,7 @@ The core library is the only place logic lives. The CLI, skill, and any future M
 
 ### Schema
 
-The schema is authored in khub's own vocabulary, not raw LinkML. A `base` block holds the attributes and relations every entity carries (`type`, `draft`, `author`, `created`/`updated`, `tags`, the OKF fields, the `any → any` edges); khub merges it into every entity at resolve time, so a type declares only its domain delta and may override a base attribute by redeclaring it. `entities` hold the types, each with `attributes` (scalars and enums), `relations` (typed edges, `to:` a single type, a list of types, or `any`), and storage config (`layout`/`format`; nesting is not yet supported). The base is not a declared dependency: `khub init` writes the `base` block as a header into the engagement's `schema.yaml`, alongside the preset's entities.
+The schema is authored in khub's own vocabulary. A `base` block holds the attributes and relations every entity carries (`type`, `draft`, `author`, `created`/`updated`, `tags`, the OKF fields, the `any → any` edges); khub merges it into every entity at resolve time, so a type declares only its domain delta and may override a base attribute by redeclaring it. `entities` hold the types, each with `attributes` (scalars and enums), `relations` (typed edges, `to:` a single type, a list of types, or `any`), and storage config (`layout`/`format`; nesting is not yet supported). The base is not a declared dependency: `khub init` writes the `base` block as a header into the engagement's `schema.yaml`, alongside the preset's entities.
 
 ```yaml
 # core.yaml
@@ -53,7 +53,7 @@ entities:
              relations: { client: {to: client, required: true}, owner: {to: person, required: true} } }
 ```
 
-khub compiles the resolved schema to LinkML, which generates the Pydantic models (validation) and JSON Schema (MCP tools, editors) into `.khub/generated/`. Operators and agents see only the khub vocabulary; LinkML is the generation backend.
+khub validates natively from the resolved schema (a hand-written Pydantic meta-schema plus runtime field and relation checks). If an MCP server or editor integration later needs JSON Schema or typed models, khub emits them directly from the resolved schema; there is no separate compilation backend.
 
 ### Technology Choices
 
@@ -61,8 +61,8 @@ The concrete stack under the five layers. Each pick stays dependency-light and e
 
 | Concern | Choice | Why |
 |---------|--------|-----|
-| Schema | **khub schema** → **LinkML** (`linkml`, `linkml-runtime`) | authors write entities/attributes/relations; khub compiles to LinkML, which generates Pydantic v2 and JSON Schema into `.khub/generated/` |
-| Validation | **Pydantic v2**, generated from LinkML | a fast core, precise errors that feed `validate`, typed objects as the library's return type |
+| Schema | khub YAML → `ResolvedSchema` (the native resolver) | authors write entities/attributes/relations; the resolver merges the base and produces the in-memory contract every surface reads |
+| Validation | native (`schema_model.py` meta-schema + runtime field/relation checks) | precise errors that feed `validate`; no generated code |
 | Frontmatter | **`python-frontmatter`** to read, **`ruamel.yaml`** to write | round-trip writes preserve key order and comments, so `khub set` produces a minimal git diff |
 | In-memory graph | **`networkx`** adjacency index | `descendants`/`ancestors` give blast radius and supersession chains; cycle detection backs `check` |
 | Projection | **SQLite** + **FTS5** (stdlib `sqlite3`) | full-text search (`khub search`, in-memory per invocation, zero new dependency); persisted `nodes`/`edges` tables planned; HQ already proved the shape |
@@ -71,7 +71,7 @@ The concrete stack under the five layers. Each pick stays dependency-light and e
 | Git history | `git` over `subprocess` | `log` and `stale` read history; git is present, so no library dependency |
 | Tooling | **uv**, **Ruff**, **mypy**, **pytest** | a golden-corpus test runs khub against an HQ snapshot and asserts it validates and checks cleanly (functional cutover, not byte-parity with `kb.py`) |
 
-Python 3.11+, shipped as a `khub` console script (`uv tool install`). A Claude Code skill, a thin `SKILL.md` over the same commands, ships from this repo as a plugin; an MCP server exposing the same verbs is planned, its tools generated from the LinkML/Pydantic models so they validate for free.
+Python 3.11+, shipped as a `khub` console script (`uv tool install`). A Claude Code skill, a thin `SKILL.md` over the same commands, ships from this repo as a plugin; an MCP server exposing the same verbs is planned, its tool schemas emitted natively from the resolved schema.
 
 Two eval tiers: deterministic golden-file tests cover the engine (the HQ functional-cutover test above), and an OKF-style fuzzy goldens-eval scores the LLM ingestion layer: precision and recall over extracted types and edges, gated on `khub check`.
 
@@ -154,7 +154,7 @@ engagement-repo/
   .khub/
     config.yaml        # workspace config: preset provenance + version, source, command defaults (format, stale_days)
     schema.yaml        # core + preset flattened; the one file you edit
-    generated/         # linkml + pydantic + json-schema, regenerated, gitignored
+    generated/         # collection locks, gitignored
   clients/             # entity type folders live at the workspace root, one per type,
   projects/            #   each laid out per the type's storage config (see Authoring and
     <slug>/_index.md   #   Integrity): flat `clients/{slug}.md` or folder `projects/{slug}/_index.md`
@@ -169,8 +169,8 @@ The schema header stamps provenance (`# khub-preset: engineering@1.0.0`). The en
 khub ships as a Python package and runs through `uv`. The zero-install path mirrors `npx`, straight from the private repo over git:
 
 ```
-uvx --from git+ssh://git@github.com/endgame-build/khub@v0.5.0 khub init firm-ops ./my-hub
-uv tool install git+ssh://git@github.com/endgame-build/khub@v0.5.0   # install once, then reuse
+uvx --from git+ssh://git@github.com/endgame-build/khub@v0.6.0 khub init firm-ops ./my-hub
+uv tool install git+ssh://git@github.com/endgame-build/khub@v0.6.0   # install once, then reuse
 khub init engineering ./acme-hub
 ```
 
@@ -184,7 +184,7 @@ Everything stays private for now. `uvx` and `uv tool install` run from the priva
 
 The **engine** is proven on the real thing: **firm-hq** cut over to khub. The proving ground is HQ's live firm-operations corpus, roughly 380 entities across 9 types, already running the projection-and-validation pattern under `kb.py`. khub runs read-only against the same files, then takes over, a functional cutover, not byte-parity with `kb.py`. Markdown is truth, so the risk stays low: khub never owns the data, the `.md` files go untouched, and the incumbent keeps working until cutover.
 
-The cutover exercises the whole engine: the schema-introspecting core library, the in-memory `networkx` index, the integrity loop (`validate`/`check`/`stale` + `log`), plus `reindex` and `backfill` for the HQ migration; the full author and query command surface; `khub init`; and the **firm-ops preset**, the LinkML port of `hq.schema.yml` (9 types, 14 relation predicates), captured in full in `firm-ops-preset.md`.
+The cutover exercises the whole engine: the schema-introspecting core library, the in-memory `networkx` index, the integrity loop (`validate`/`check`/`stale` + `log`), plus `reindex` and `backfill` for the HQ migration; the full author and query command surface; `khub init`; and the **firm-ops preset**, the port of `hq.schema.yml` (9 types, 14 relation predicates), captured in full in `firm-ops-preset.md`.
 
 Not yet built, and named: the engineering preset and any preset beyond firm-ops; the persisted SQLite/graph projection; `diff-preset` drift/promotion; hub↔engagement sync; the MCP server; facet and OKF-bundle ingestion; `rename`; concurrency arbitration.
 
@@ -204,7 +204,7 @@ The firm-ops schema is the real engine test. It exercises most of the engine's m
 | the `draft` flag (`draft: true\|false`) | added by khub over HQ's per-type `stage`/`status` |
 | real scale and mess | ~380 entities, plus reference docs with no frontmatter to skip cleanly |
 
-The one family HQ leaves uncovered is the intent/behavior **satisfies-gap**: a Requirement with no Capability (engineering-specific, arriving with the engineering preset). Self-referential and derived-inverse edges (`supersedes`/`superseded_by`) also moved there when `decision` was folded out of firm-ops; the engine still supports them, exercised by the generic resolver/compiler tests. HQ's gap query is structural instead: orphans and missing required relations, both surfaced by `check`.
+The one family HQ leaves uncovered is the intent/behavior **satisfies-gap**: a Requirement with no Capability (engineering-specific, arriving with the engineering preset). Self-referential and derived-inverse edges (`supersedes`/`superseded_by`) also moved there when `decision` was folded out of firm-ops; the engine still supports them, exercised by the generic resolver tests. HQ's gap query is structural instead: orphans and missing required relations, both surfaced by `check`.
 
 ## The Engineering Preset
 
@@ -230,7 +230,7 @@ khub records the **durable nodes**; live execution lives in the specialist tool 
 
 - **facet** seeds structural entities and supplies the ingestion format; the overlap is only the ingestion path. Coupling stays loose: khub reads facet output with no runtime dependency.
 - **forge / beads / GitHub** own live delivery execution (work packages, sprint state, tickets). khub records the durable spec/epic/story/decision/incident nodes and links out by `resource`.
-- **firm-hq** is the working precedent for the projection-and-validation pattern; khub generalizes it (LinkML contract, schema-introspected checks, no graph engine) and is itself the kind of operational hub an HQ preset would produce.
+- **firm-hq** is the working precedent for the projection-and-validation pattern; khub generalizes it (schema-introspected checks, no graph engine) and is itself the kind of operational hub an HQ preset would produce.
 - **OKF (Open Knowledge Format)** is the vendor-neutral substrate khub speaks (Google, v0.1: a git tree of `.md` concepts with a required `type`, cross-links, `index.md`, `log.md`). khub's Markdown entities are conformant OKF concepts, so khub is an OKF implementation and extension: it adds a typed schema, typed relations, a `draft` flag, and the graph. Extra serialization formats and collections (which OKF lacks) go further: per-entity `json`/`yaml` (a single mapping; prose rides in a reserved `body` field) and single-file collections (`layout: collection`, `format: json|jsonl|yaml`, row-level entities; `docs/collections-design.md` holds the row-model contract). `gjson` remains named-but-undefined; the schema rejects it. Markdown entities carry the extras as OKF-tolerated frontmatter; any workspace projects to a conformant OKF bundle. khub adopts OKF's optional `title`, `description`, and `resource` fields and emits OKF `index.md` (stamped `okf_version`) from `reindex`. Reading external OKF bundles permissively as drafts is a planned consume-side path alongside facet ingestion (schema-validated and one-directional; khub is record-of and writes nothing back to the source). It does not adopt OKF's conventional body sections; relations stay typed in frontmatter. The `status` OKF-conformance flag reports whether the workspace would project to a valid OKF bundle, the conditions `export --okf` requires (every entity carries `type`, relations resolve, an `index.md` generates), rather than whether the on-disk tree is already all-Markdown.
 
 ## Open Questions (Non-Blocking)

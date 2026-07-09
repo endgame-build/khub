@@ -1,7 +1,6 @@
 """Shared pytest fixtures for the khub test suite.
 
-Each scenario resolves/compiles from its own fixture into its own temp output
-dir (compile-into-temp isolation); the HQ snapshot is mounted read-only.
+Each scenario resolves from its own fixture; the HQ snapshot is mounted read-only.
 """
 
 from __future__ import annotations

@@ -14,7 +14,7 @@ khub reads the frontmatter, builds an in-memory graph on demand, answers your qu
 
 ## The schema is the contract
 
-The schema declares the entity types, their attributes, and the legal relations, and compiles to LinkML → Pydantic + JSON Schema. Every surface (the CLI today, the planned skill and MCP server) reads that schema at runtime and hardcodes no per-type knowledge. Adding a type or changing a relation is a schema edit, not a code change.
+The schema declares the entity types, their attributes, and the legal relations. Every surface (the CLI today, the planned skill and MCP server) reads that schema at runtime and hardcodes no per-type knowledge. Adding a type or changing a relation is a schema edit, not a code change.
 
 ## Relations are single-sided; inverses are derived
 

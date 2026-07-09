@@ -201,8 +201,6 @@ def test_cli_scaffold_firm_ops(tmp_path: Path) -> None:
     result = runner.invoke(app, ["init", "firm-ops", str(target), "--no-wire", "--no-skill"])
     assert result.exit_code == 0, result.output
     assert f"Initialized firm-ops workspace at {target}" in result.output
-    for artifact in ("schema.linkml.yaml", "models.py", "schema.json"):
-        assert (target / ".khub" / "generated" / artifact).exists()
     head = (target / ".khub" / "schema.yaml").read_text().splitlines()[0]
     assert head.startswith("# khub-preset: firm-ops@")
 
@@ -217,14 +215,16 @@ def test_entity_less_preset_rejected(tmp_path: Path, preset_source: Path) -> Non
 
 
 @pytest.mark.unit
-def test_failed_compile_leaves_no_partial_khub(
+def test_failed_init_leaves_no_partial_khub(
     tmp_path: Path, preset_source: Path, monkeypatch
 ) -> None:
-    """A non-LocatedError during compile cleans up the partial .khub it created."""
-    def boom(*_a: object, **_k: object) -> None:
-        raise RuntimeError("linkml exploded")
+    """A failure mid-scaffold cleans up the partial .khub it created."""
+    import khub.core.workspace as wsmod
 
-    monkeypatch.setattr("khub.core.workspace.compile_schema", boom)
+    def boom(*_a: object, **_k: object) -> None:
+        raise RuntimeError("mid-init failure")
+
+    monkeypatch.setattr(wsmod, "_append_gitignore", boom)
     ws = tmp_path / "ws"
     with pytest.raises(RuntimeError):
         init_workspace("note", ws, preset_source=preset_source)
@@ -245,13 +245,13 @@ def test_entity_files_modified_is_measured(
     entity = ws / "notes" / "a.md"
     entity.write_text("---\ntype: note\n---\noriginal\n")
 
-    real_compile = wsmod.compile_schema
+    real_append = wsmod._append_gitignore
 
-    def tampering(schema: object, out: object):  # simulate a regression clobbering a file
+    def tampering(gitignore, line):  # simulate a regression clobbering a file mid-init
         entity.write_text("TAMPERED")
-        return real_compile(schema, out)
+        return real_append(gitignore, line)
 
-    monkeypatch.setattr(wsmod, "compile_schema", tampering)
+    monkeypatch.setattr(wsmod, "_append_gitignore", tampering)
     result = init_workspace("note", ws, preset_source=preset_source, force=True)
     assert result.entity_files_modified == 1
 

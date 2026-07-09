@@ -1,6 +1,6 @@
 # Getting started with khub
 
-This walkthrough builds a tiny firm-ops hub from nothing (one client, one person, one project), then queries it, walks its graph, and gates it. Everything lands in git as Markdown; a compiled schema checks every write. By the end you have seen the two rules that matter most: a relation to a missing target is rejected on the spot, while a missing field is captured anyway and flagged later.
+This walkthrough builds a tiny firm-ops hub from nothing (one client, one person, one project), then queries it, walks its graph, and gates it. Everything lands in git as Markdown; the schema checks every write. By the end you have seen the two rules that matter most: a relation to a missing target is rejected on the spot, while a missing field is captured anyway and flagged later.
 
 ## Install
 
@@ -9,7 +9,7 @@ khub is a `khub` console script and needs Python 3.11+. Two ways in.
 Install it as a tool (the repo is private, so this needs SSH access to the org; HTTPS with a token works too):
 
 ```bash
-uv tool install git+ssh://git@github.com/endgame-build/khub@v0.5.0
+uv tool install git+ssh://git@github.com/endgame-build/khub@v0.6.0
 ```
 
 Or clone and run from the checkout:
@@ -53,8 +53,7 @@ init wrote a `.khub/` control directory and one folder per entity type:
 my-hub/
 ├── .khub/
 │   ├── config.yaml            # workspace name, preset, stale_days
-│   ├── schema.yaml            # the effective schema: the contract every write is checked against
-│   └── generated/             # LinkML + Pydantic + JSON Schema, compiled from schema.yaml
+│   └── schema.yaml            # the effective schema: the contract every write is checked against
 ├── clients/
 ├── identity/team/             # person entities live here
 ├── projects/

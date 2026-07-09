@@ -21,7 +21,6 @@ from khub.core.gitlog import stale
 from khub.core.graph import walk_history, walk_impact, walk_neighbors
 from khub.core.integrity import check, validate
 from khub.core.introspect import load_schema
-from khub.core.linkml_emit import to_linkml_dict
 from khub.core.project import project
 from khub.core.query import QueryFilters, query
 from khub.core.reindex import _entity_link
@@ -258,8 +257,8 @@ def test_reindex_wraps_problematic_link_path(tmp_path: Path, write_schema, core_
 
 
 @pytest.mark.unit
-def test_overridden_base_relation_emitted(write_schema, core_base) -> None:
-    """A type narrowing a base (any/many) edge emits the override, not the base default."""
+def test_overridden_base_relation_resolved(write_schema, core_base) -> None:
+    """A type narrowing a base (any/many) edge overrides the base default in the resolved model."""
     preset = (
         "entities:\n"
         "  person: { layout: file }\n"
@@ -267,10 +266,9 @@ def test_overridden_base_relation_emitted(write_schema, core_base) -> None:
         "      related: { to: person, many: false }\n"
     )
     schema = resolve(write_schema(core=core_base, preset=preset))
-    team = to_linkml_dict(schema)["classes"]["Team"]
-    assert "related" in team["slot_usage"]              # the override is emitted
-    assert team["slot_usage"]["related"]["multivalued"] is False  # base many:true overridden
-    assert "related" not in team.get("attributes", {})  # not re-listed as a new slot
+    related = schema.types["team"].relations["related"]
+    assert related.many is False           # base many:true overridden
+    assert related.targets == ("person",)  # base any narrowed to person
 
 
 # --- Fix #12: an attribute override inherits base pattern/enum/default ----------

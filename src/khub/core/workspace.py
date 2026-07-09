@@ -1,8 +1,8 @@
 """Workspace scaffolder — WPK-001-1.
 
 ``init_workspace`` flattens ``core`` and a named preset into one editable
-``.khub/schema.yaml``, invokes the FS-000 compiler, stamps provenance, writes
-``config.yaml``, gitignores the generated artifacts, and lays down the entity
+``.khub/schema.yaml``, stamps provenance, writes ``config.yaml``, gitignores
+``.khub/generated/`` (the runtime collection locks), and lays down the entity
 tree. It owns only ``.khub/`` and the (empty) type directories — it never writes
 or overwrites an entity ``.md`` (WS-003), so the same command green-fields a
 fresh workspace and force-seeds over a live corpus (the HQ cutover).
@@ -19,7 +19,6 @@ from typing import Any
 
 from ruamel.yaml import YAML
 
-from khub.core.compile import compile_schema
 from khub.core.errors import LocatedError
 from khub.core.formats import PER_ITEM
 from khub.core.resolve import load_yaml
@@ -50,9 +49,6 @@ class InitResult:
     version: str
     name: str
     source: str | None = None
-    # False when the LinkML backend (the optional `compile` extra) was absent and
-    # generated artifacts were skipped — `khub compile` regenerates them later.
-    compiled: bool = True
     # Measured (not assumed): how many pre-existing entity files init changed or
     # removed. The cutover guarantee (AC-004) is that this is 0; a non-zero value
     # is a loud signal the non-destructive guarantee was violated.
@@ -116,17 +112,6 @@ def init_workspace(
         header = f"# khub-preset: {preset}@{version}\n"
         schema_path.write_text(header + _dump_yaml(merged))
 
-        compiled = True
-        try:
-            compile_schema(schema_path, khub / "generated")
-        except LocatedError as err:
-            if err.code != "compile_extra_missing":
-                raise
-            # No LinkML backend (the optional `compile` extra). The generated
-            # artifacts have no runtime consumer, so init proceeds without them;
-            # `khub compile` regenerates once the extra is installed.
-            compiled = False
-
         ws_name = name or target.resolve().name or "workspace"
         config = {
             "name": ws_name,
@@ -166,7 +151,6 @@ def init_workspace(
         version=version,
         name=ws_name,
         source=str(preset_source) if preset_source else None,
-        compiled=compiled,
         entity_files_modified=modified,
         seeded_over_corpus=seeded_over_corpus,
     )

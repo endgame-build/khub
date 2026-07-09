@@ -114,11 +114,6 @@ def init_command(
         )
     else:
         typer.echo(f"Initialized {result.preset} workspace at {result.path}")
-    if not result.compiled:
-        typer.echo(
-            "Generated artifacts skipped (no LinkML backend); "
-            "install khub[compile] and run `khub compile`"
-        )
     if wire_result is not None:
         for outcome in wire_result.outcomes:
             typer.echo(f"{outcome.action} {outcome.path.name}")

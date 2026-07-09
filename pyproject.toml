@@ -1,6 +1,6 @@
 [project]
 name = "khub"
-version = "0.5.0"
+version = "0.6.0"
 description = "khub — schema-bound, agent-facing context management."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -14,16 +14,6 @@ dependencies = [
     "questionary>=2.1.1",
 ]
 
-[project.optional-dependencies]
-# LinkML is compile-time only (`khub compile`); no runtime path imports it or its
-# generated artifacts. Quarantined as an extra so a default install skips its
-# ~77-package tail — `khub compile` asks for `khub[compile]` when absent.
-# Pinned exactly: determinism (TS-SCH-003-04) needs a fixed generator.
-compile = [
-    "linkml==1.11.1",
-    "linkml-runtime==1.11.1",
-]
-
 [project.scripts]
 khub = "khub.cli.main:main"
 
@@ -35,16 +25,14 @@ build-backend = "hatchling.build"
 packages = ["src/khub"]
 
 [dependency-groups]
-# Dev keeps the compile extra installed so the compile/emit tests always run;
-# the pins mirror [project.optional-dependencies].compile exactly.
-dev = ["pytest", "ruff", "mypy", "linkml==1.11.1", "linkml-runtime==1.11.1"]
+dev = ["pytest", "ruff", "mypy"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 markers = [
     "unit: fast, isolated unit tests (vocabulary, base-merge, mapping)",
-    "integration: resolve -> compile flow, generated artifacts, located errors",
-    "e2e: full firm-ops compile + HQ snapshot validation",
+    "integration: resolve flow, CRUD, graph, located errors",
+    "e2e: full firm-ops scaffold + HQ snapshot validation",
 ]
 
 [tool.ruff]
@@ -57,5 +45,5 @@ files = ["src/khub"]
 
 [[tool.mypy.overrides]]
 # Third-party modules without type stubs / py.typed markers.
-module = ["yaml", "linkml.*", "linkml_runtime.*", "ruamel.*", "frontmatter", "networkx", "networkx.*"]
+module = ["yaml", "ruamel.*", "frontmatter", "networkx", "networkx.*"]
 ignore_missing_imports = true
