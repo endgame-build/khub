@@ -79,14 +79,14 @@ One file holds every entity of a type as a row (`format: json|jsonl|yaml`; `path
 
 - Row identity: yaml/json collections are mappings keyed by slug; jsonl rows carry a reserved `slug` key. Duplicate slugs are malformed in all three formats (json via a duplicate-key-rejecting parse, never last-wins). `slug`/`type`/`body` are reserved row keys, rejected as schema field names on collection types.
 - Every verb and gate works on rows. `add`/`get`/`edit`/`search` records add `locator: "path#slug"`; `get --format raw` prints only the row.
-- Writes: one locked read-modify-write path — exclusive flock on `.khub/generated/locks/<type>.lock`, fresh in-lock uniqueness gate (the O_EXCL replacement), temp + fsync + atomic rename. No-op link/unlink never rewrite the file.
-- Malformed contract (v1): any bad row makes the whole file malformed — no rows load, writes to the type refuse, derivative dangling reports are suppressed into a counted `suppressed_dangling` on `check`. Missing/empty file = zero entities.
+- Writes: one locked read-modify-write path: exclusive flock on `.khub/generated/locks/<type>.lock`, fresh in-lock uniqueness gate (the O_EXCL replacement), temp + fsync + atomic rename. No-op link/unlink never rewrite the file.
+- Malformed contract (v1): any bad row makes the whole file malformed: no rows load, writes to the type refuse, derivative dangling reports are suppressed into a counted `suppressed_dangling` on `check`. Missing/empty file = zero entities.
 - Git at row altitude: `log` attributes a commit to the rows whose values changed (blob diff per commit); `stale` judges a row only on its own `updated` (never the file's commit date); `backfill` skips collection types and reports it.
 - Contract: `docs/collections-design.md`.
 
 ### Added — 2026-07-07: per-entity serialization formats (`format: json|yaml`)
 
-A type may store entities as `.json`/`.yaml` documents instead of md — a single mapping, pure metadata.
+A type may store entities as `.json`/`.yaml` documents instead of md: a single mapping, pure metadata.
 
 - Prose rides in a reserved `body` field (string or null): `--body`/`--body-file` write it, `get` returns it as the body, the key never reaches frontmatter output or query filters. New `--body <text>` flag on `add`/`edit` alongside `--body-file`.
 - `core/formats.py` is the one serialization strategy module (scan, verbs, gitlog, and search all dispatch through it); md keeps its fence semantics byte-for-byte.
@@ -94,7 +94,7 @@ A type may store entities as `.json`/`.yaml` documents instead of md — a singl
 
 ### Added — 2026-07-07: full-text search (`khub search`)
 
-The `build-graph.py` replacement's missing half — BM25-ranked FTS5 over title + full body, built `:memory:` per invocation (stdlib sqlite3, zero new deps, derived and never stale).
+The `build-graph.py` replacement's missing half: BM25-ranked FTS5 over title + full body, built `:memory:` per invocation (stdlib sqlite3, zero new deps, derived and never stale).
 
 - Raw MATCH syntax passes through (`"phrases"`, `OR`, `NEAR`, `prefix*`); malformed expressions are located errors. `--type` prunes at index-build time; non-md entities index their `body` field plus every scalar string field.
 - Real-corpus recall: 75 hits for `modernization` on the HQ port vs 29 from the retired 500-char `.hq-graph.sqlite` index, ~250 ms end to end.

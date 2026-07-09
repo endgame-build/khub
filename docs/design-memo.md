@@ -19,7 +19,7 @@ The product is two things at once:
 
 The **agent is the primary consumer**. khub exists to be the structured context an agent operates from: it reads typed context to act, and writes its results back as typed entities. The **human** authors the schema (the operational setup) and the seed context, and reviews.
 
-Both are first-class, symmetric writers of the same graph through the same library, with no propose-then-approve gate. The gate is the schema and git, not a human in the loop. Because the agent is a named user, the CLI and the Claude Code skill ship together; the skill is a required surface, not an afterthought.
+Both are first-class, symmetric writers of the same graph through the same library, with no propose-then-approve gate: the schema and git are the gate. Because the agent is a named user, the CLI and the Claude Code skill ship together, and the skill is a required surface.
 
 ## The Engine
 
@@ -46,7 +46,7 @@ base:
   relations:  { related: {to: any, many: true}, sources: {to: any, many: true},
                 references: {to: any, many: true}, depends_on: {to: any, many: true} }
 
-# firm-ops.yaml  (the base is written in by `khub init`, not imported)
+# firm-ops.yaml  (the base is written in by `khub init`, so schema.yaml is self-contained)
 entities:
   client:  { layout: file,   attributes: { name: {required: true}, industry: {} } }
   project: { layout: folder, attributes: { stage: {enum: [diagnose, prove, scale, complete], required: true} },
@@ -69,7 +69,7 @@ The concrete stack under the five layers. Each pick stays dependency-light and e
 | Graph engine (if ever) | embedded graph engine (oxigraph or a kuzu fork) | considered and not adopted; kuzu was archived Oct 2025 (Apple acqui-hire), so a fork or oxigraph would be the path, and a server stays unjustified while the corpus is small |
 | CLI | **Typer** + **Rich** | type-driven commands, `--format json` for the agent, trees and tables for a human |
 | Git history | `git` over `subprocess` | `log` and `stale` read history; git is present, so no library dependency |
-| Tooling | **uv**, **Ruff**, **mypy**, **pytest** | a golden-corpus test runs khub against an HQ snapshot and asserts it validates and checks cleanly (functional cutover, not byte-parity with `kb.py`) |
+| Tooling | **uv**, **Ruff**, **mypy**, **pytest** | a golden-corpus test runs khub against an HQ snapshot and asserts it validates and checks cleanly (a functional cutover, judged on its own output) |
 
 Python 3.11+, shipped as a `khub` console script (`uv tool install`). A Claude Code skill, a thin `SKILL.md` over the same commands, ships from this repo as a plugin; an MCP server exposing the same verbs is planned, its tool schemas emitted natively from the resolved schema.
 
@@ -81,7 +81,7 @@ Two eval tiers: deterministic golden-file tests cover the engine (the HQ functio
 2. **The graph is a derived projection,** rebuilt from the Markdown on demand. No graph database is ever the source of truth. History (`khub log`) is derived from git the same way.
 3. **The schema is the contract.** Surfaces introspect the schema at runtime and never hardcode per-type knowledge.
 4. **Relations are authoritative, from two sources.** A relation feeds the graph from an explicit role-named field the schema marks as an edge (the field name is the predicate, the value is the target), or from the derived inverse of such a field. Forward fields are stored single-sided on one entity; inverse edges are computed, never stored. (Deriving a parent edge from nested placement is not yet supported; a parent relation is an explicit edge.) Inline body links are navigational only.
-5. **Structural integrity is not semantic truth.** khub guarantees an entity is well-formed and every relation resolves; it does not guarantee an assertion is correct. A schema-legal but false write validates. The backstop is attributable git history and `git revert`, not a gate.
+5. **Structural integrity is not semantic truth.** khub guarantees an entity is well-formed and every relation resolves; it does not guarantee an assertion is correct. A schema-legal but false write validates. The backstop is attributable git history and `git revert`.
 
 ### Authoring and Integrity
 
@@ -99,14 +99,14 @@ Two eval tiers: deterministic golden-file tests cover the engine (the HQ functio
   - `[inventory_name]/_index.[json|jsonl|gjson|yaml]`
 
   An inventory sits at the workspace root. (Nesting an inventory under a parent item's folder, and deriving the parent edge from that placement, is not yet supported; the parent relation is an explicit frontmatter edge.)
-- **Write rules.** Referential integrity hard-fails on write: a relation to a non-existent target is rejected. A missing required field or relation does not block capture: the entity is still written; completeness is enforced by `check`, not at write time.
-- **Lifecycle.** Every entity carries a boolean `draft` flag (`draft: true|false`, default `false`), a manual publish switch, not a completeness verdict. `add` writes `draft: false` by default, `--draft` marks an entity unpublished, and `edit <id> draft true|false` toggles it; no verb auto-promotes or auto-demotes. Completeness is computed from the schema and enforced by `check`, never inferred from this flag, so a published entity can be incomplete (`check` reports it active-but-incomplete) and a draft can be complete. A draft is unpublished: excluded from required-completeness, and it never satisfies another entity's required relation.
+- **Write rules.** Referential integrity hard-fails on write: a relation to a non-existent target is rejected. A missing required field or relation does not block capture: the entity is still written; completeness is enforced later by `check`.
+- **Lifecycle.** Every entity carries a boolean `draft` flag (`draft: true|false`, default `false`), a manual publish switch the author sets. `add` writes `draft: false` by default, `--draft` marks an entity unpublished, and `edit <id> draft true|false` toggles it; no verb auto-promotes or auto-demotes. Completeness is computed from the schema and enforced by `check`, never inferred from this flag, so a published entity can be incomplete (`check` reports it active-but-incomplete) and a draft can be complete. A draft is unpublished: excluded from required-completeness, and it never satisfies another entity's required relation.
 - **Standard fields.** Beyond `type` and the `draft` flag, an entity may carry OKF's optional `title`, `description`, and `resource` (the canonical URI of the underlying asset, khub's link-out), plus `author` (the writer, person or agent), `tags`, and `created`/`updated`. Per-type fields and relations come from the schema. The firm-ops preset adds `owner` (→ person) as its own accountability edge, distinct from the core `author`.
 - **The integrity loop** keeps the graph clean without manual policing. Draft status, orphan, and stale are core projection properties: every read includes drafts in scope and carries each entity's `stale`/`orphan` flag by default; `check`/`stale` gate on the same computation. The acceptance signals:
   - `khub validate`: per-entity well-formedness against the schema, plus referential integrity.
   - `khub check`: graph-wide over the active (`draft: false`) subgraph. Relations resolve, required-completeness holds for `active` entities (computed from the schema; an active-but-incomplete entity is reported), a `draft` does not satisfy a required relation, no orphans (entities with no inbound or outbound relation), no dangling edges, and no stray files (a file inside a type's layout that is not a valid entity of that type; reference docs outside the type layouts are skipped).
   - `khub stale`: entities whose `updated` is past a threshold; dates backfilled from `git log`.
-  - `khub log`: git history rendered at ontology altitude (entities and relations, not files), for orientation without a gate.
+  - `khub log`: git history rendered at ontology altitude (entities and relations), for orientation without a gate.
 
 ### Command Surface
 
@@ -182,7 +182,7 @@ Everything stays private for now. `uvx` and `uv tool install` run from the priva
 
 ## The Proving Ground
 
-The **engine** is proven on the real thing: **firm-hq** cut over to khub. The proving ground is HQ's live firm-operations corpus, roughly 380 entities across 9 types, already running the projection-and-validation pattern under `kb.py`. khub runs read-only against the same files, then takes over, a functional cutover, not byte-parity with `kb.py`. Markdown is truth, so the risk stays low: khub never owns the data, the `.md` files go untouched, and the incumbent keeps working until cutover.
+The **engine** is proven on the real thing: **firm-hq** cut over to khub. The proving ground is HQ's live firm-operations corpus, roughly 380 entities across 9 types, already running the projection-and-validation pattern under `kb.py`. khub runs read-only against the same files, then takes over: a functional cutover proven against the live corpus. Markdown is truth, so the risk stays low: khub never owns the data, the `.md` files go untouched, and the incumbent keeps working until cutover.
 
 The cutover exercises the whole engine: the schema-introspecting core library, the in-memory `networkx` index, the integrity loop (`validate`/`check`/`stale` + `log`), plus `reindex` and `backfill` for the HQ migration; the full author and query command surface; `khub init`; and the **firm-ops preset**, the port of `hq.schema.yml` (9 types, 14 relation predicates), captured in full in `firm-ops-preset.md`.
 

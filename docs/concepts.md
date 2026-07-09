@@ -14,11 +14,11 @@ khub reads the frontmatter, builds an in-memory graph on demand, answers your qu
 
 ## The schema is the contract
 
-The schema declares the entity types, their attributes, and the legal relations. Every surface (the CLI today, the planned skill and MCP server) reads that schema at runtime and hardcodes no per-type knowledge. Adding a type or changing a relation is a schema edit, not a code change.
+The schema declares the entity types, their attributes, and the legal relations. Every surface (the CLI and skill today, the planned MCP server) reads that schema at runtime and hardcodes no per-type knowledge. Adding a type or changing a relation is a schema edit the surfaces pick up at runtime.
 
 ## Relations are single-sided; inverses are derived
 
-A relation is a role-named frontmatter field the schema marks as an edge. The field name is the predicate; the value is the target: `owner: dana-lee` is one edge, `owner`, pointing at `dana-lee`. You store the forward edge on one entity. The inverse (who owns this?) is computed at read time, never written. Inline links in the body are navigational, not edges.
+A relation is a role-named frontmatter field the schema marks as an edge. The field name is the predicate; the value is the target: `owner: dana-lee` is one edge, `owner`, pointing at `dana-lee`. You store the forward edge on one entity. The inverse (who owns this?) is computed at read time, never written. Inline links in the body are navigational only; typed edges live in frontmatter.
 
 ## validate vs check
 
@@ -30,7 +30,7 @@ This is the distinction that trips people up. `validate` is per-entity: is this 
 
 ## Structural integrity is not semantic truth
 
-khub guarantees an entity is well-formed and every relation resolves. It does not guarantee an assertion is correct. A schema-legal but false write validates cleanly; khub checks shape, not fact. The backstop is attributable git history and `git revert`, not a gate.
+khub guarantees an entity is well-formed and every relation resolves. It does not guarantee an assertion is correct. A schema-legal but false write validates cleanly; khub checks shape, whether a write conforms to the schema. The backstop is attributable git history and `git revert`.
 
 ---
 

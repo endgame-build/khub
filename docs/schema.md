@@ -16,7 +16,7 @@ A type is an entry under `entities`, keyed by its name. It carries `attributes`,
 
 `attributes:` is a map keyed by name → `{ type?, required?, default?, enum?, pattern? }`. `type` is one of `text | number | date | datetime | bool | list` (default `text`). `enum` is a list of allowed values. `pattern` is a regex the value must match.
 
-`relations:` is a map keyed by predicate → `{ to, many?, required? }`. The field name *is* the predicate. `to` names a single type, a list of type names (a union edge), or `any` (polymorphic). A relation is single-valued by default; `many: true` makes it multi-valued. `required: true` makes it a completeness requirement, enforced by `khub check`, not at write time.
+`relations:` is a map keyed by predicate → `{ to, many?, required? }`. The field name *is* the predicate. `to` names a single type, a list of type names (a union edge), or `any` (polymorphic). A relation is single-valued by default; `many: true` makes it multi-valued. `required: true` makes it a completeness requirement, enforced by `khub check` over the active graph.
 
 A real snippet from the firm-ops preset shows the shape:
 

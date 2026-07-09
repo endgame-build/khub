@@ -75,4 +75,4 @@ The skill is not Claude-only. For Cursor, Codex, Gemini CLI, and ~70 other agent
 npx skills add git@github.com:endgame-build/khub.git -s khub -s setup
 ```
 
-**Status:** v1 engine shipped and proven on a live corpus (the firm-hq cutover: 250+ entities, the incumbent scripts retired). Design rationale in [`docs/design-memo.md`](docs/design-memo.md); the collections row model in [`docs/collections-design.md`](docs/collections-design.md).
+**Status:** v1 engine shipped and proven on a live corpus (the firm-hq cutover: roughly 380 entities, the incumbent scripts retired). Design rationale in [`docs/design-memo.md`](docs/design-memo.md); the collections row model in [`docs/collections-design.md`](docs/collections-design.md).

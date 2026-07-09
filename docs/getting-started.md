@@ -274,7 +274,7 @@ orphan person/sam-rivera (informational)
 Graph check passed
 ```
 
-`check` passes. Sam is still an orphan (zero relations), but an orphan is informational, not a failure: a valid entity that no edge touches is allowed (a dormant contact, a note not yet linked). It fails the gate only under `--strict`.
+`check` passes. Sam is still an orphan (zero relations), but an orphan is informational: a valid entity that no edge touches is allowed (a dormant contact, a note not yet linked). It fails the gate only under `--strict`.
 
 That is the division of labor. `validate` judges one entity's well-formedness; `check` judges the whole graph: relations resolve, required fields are filled across the active set, no strays, no cycles. Run `validate` as you write and `check` before you commit.
 

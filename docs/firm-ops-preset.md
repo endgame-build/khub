@@ -114,7 +114,7 @@ Layout: file (`fragments/{slug}.md`). An atomic thought or note that matures thr
 | Attribute | Type | Notes |
 |---|---|---|
 | `stage` | enum, required | `raw`, `mature`, `synthesis`, `promoted` |
-| `promoted_to` | text | a `resource` link-out to a reference area, not an edge |
+| `promoted_to` | text | a plain-text `resource` link-out to a reference area |
 | `confidence` | number | |
 
 Relations: `owner` → person (required). The writer, keyed on `owner` rather than `author`.
@@ -178,7 +178,7 @@ Relations: `partner` → partnership.
 The firm-hq capture carried three more types that the shipped preset drops, each with zero live entities:
 
 - **`build`** — a product/engineering engagement. After the lifecycle refinement it differed from `project` only by a `tech_stack` field.
-- **`decision`** — an ADR-style durable record. Dropping it also removed firm-ops's self-referential `supersedes` edge and its derived `superseded_by` inverse. The engine still supports derived inverses generically; firm-ops just no longer demonstrates them.
+- **`decision`** — an ADR-style durable record. Dropping it also removed firm-ops's self-referential `supersedes` edge and its derived `superseded_by` inverse. The engine still supports derived inverses generically; firm-ops no longer demonstrates them.
 - **`isms-doc`** — a compliance artifact.
 
 Add any of them back with a schema edit when the firm starts writing those entities.

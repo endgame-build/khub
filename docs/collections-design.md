@@ -88,7 +88,7 @@ mapping key → the **whole file** is one `malformed` entry: no rows load, write
 verbs targeting the type refuse (khub never rewrites a file it cannot
 round-trip), and derivative dangling reports for edges targeting that type are
 suppressed and rolled into the malformed finding (the actionable error is "fix
-the file", not 200 dangles burying it). `check` still exits non-zero.
+the file", rather than 200 dangles burying it). `check` still exits non-zero.
 Per-row fault isolation (bad line ≠ bad file, identity by locator) is the named
 upgrade when a real corpus hits a 500-row file with one typo.
 
