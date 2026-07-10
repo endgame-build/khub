@@ -2,7 +2,7 @@
 
 Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); khub is pre-release.
 
-## [Unreleased]
+## [0.7.0] — 2026-07-10
 
 ### Added
 
@@ -21,7 +21,7 @@ Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelo
 
 ### Fixed
 
-- Lingering compiler references in `core/errors.py`; the design-memo command table now marks never-shipped verbs (`path`, `build`, `export --okf`, `diff-preset`, `rename`) as planned; the `khub:setup` skill pins `@v0.6.0`.
+- Lingering compiler references in `core/errors.py`; the design-memo command table now marks never-shipped verbs (`path`, `build`, `export --okf`, `diff-preset`, `rename`) as planned; the `khub:setup` skill pins `@v0.7.0`.
 
 ## [0.6.0] — 2026-07-09
 
