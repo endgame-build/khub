@@ -12,6 +12,8 @@ The CLI is a thin, schema-introspecting adapter over the core library's verbs (c
 | `--version` | Print the khub version and exit. |
 | `--help` | Show help. |
 
+`-C/--workspace`, `--agent`, and `--version` are parsed before the command name — put them first (`khub --agent -C <path> <command>`), the git convention. `--format` and the other per-command options follow the command as usual.
+
 Read commands include `draft` entities in scope and surface each entity's `orphan`/`stale` flag by default; `--active`/`--draft` and `--orphan`/`--stale` narrow the set.
 
 ### Interactive prompts
