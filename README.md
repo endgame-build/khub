@@ -20,7 +20,7 @@ Built on top of the [Open Knowledge Format (OKF)](https://github.com/GoogleCloud
 - **Gate** — `validate` (per-entity well-formedness) and `check` (graph-wide completeness, dangling edges, strays, cycles; orphans informational unless `--strict`); `stale` and `log` read git at entity altitude, row-accurate even inside collections.
 - **Project** — `reindex` (OKF `index.md`), `viz` (Cytoscape HTML), `backfill` (git-derived dates and scaffolding).
 - **Store** — per-type `layout` (file / folder / collection) × `format` (md / json / yaml; collections take json / jsonl / yaml). Non-md entities carry prose in a reserved `body` field; collection writes are lock-serialized and crash-atomic.
-- **Wire** — `wire`: link the schema into a project's `CLAUDE.md` (a `@.khub/schema.yaml` import plus the command surface), so an agent reasons in the ontology with or without the CLI.
+- **Wire** — `wire`: link the schema into a project's agent files. Bare `wire` updates whichever of `CLAUDE.md` / `AGENTS.md` exist; `--target claude|agents|both` creates one. `CLAUDE.md` gets a `@.khub/schema.yaml` import, `AGENTS.md` a schema pointer, both with the command surface — so an agent reasons in the ontology with or without the CLI.
 
 Full command surface and JSON contracts: [`docs/cli.md`](docs/cli.md). Feature history: [`CHANGELOG.md`](CHANGELOG.md). All documentation: [`docs/`](docs/).
 
@@ -30,7 +30,7 @@ khub is a `khub` console script (Python 3.11+). Install it, then seed a workspac
 
 ```bash
 uv tool install git+ssh://git@github.com/endgame-build/khub@v0.6.0   # or clone + uv sync
-khub init firm-ops ./my-hub          # scaffold .khub/, wire CLAUDE.md, install the agent skill
+khub init firm-ops ./my-hub          # scaffold .khub/, wire CLAUDE.md + AGENTS.md, install the agent skill
 cd my-hub
 ```
 

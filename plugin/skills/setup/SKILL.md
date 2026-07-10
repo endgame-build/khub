@@ -27,7 +27,7 @@ If `uv` or Python 3.11+ is missing, report the prerequisite error and stop; inst
 
 ## 2. Set up the project
 
-**No workspace yet** (no `.khub/` at or above the working directory)? Scaffold one. `khub init` seeds the tree, wires the schema into `CLAUDE.md`, and installs the agent skill in one step:
+**No workspace yet** (no `.khub/` at or above the working directory)? Scaffold one. `khub init` seeds the tree, wires the schema into your agent files (`CLAUDE.md` + `AGENTS.md`), and installs the agent skill in one step:
 
 ```bash
 khub init firm-ops ./my-hub && cd my-hub
@@ -39,7 +39,7 @@ khub init firm-ops ./my-hub && cd my-hub
 khub wire
 ```
 
-`wire` injects a managed block into `CLAUDE.md` that imports the schema (`@.khub/schema.yaml`) and lists the command surface, so an agent reasons in the ontology even without running khub. Re-run it after the schema changes; the block updates in place. Add `--agents` to mirror it into `AGENTS.md`.
+`wire` injects a managed block into the workspace's agent files (`CLAUDE.md` imports the schema via `@.khub/schema.yaml`; `AGENTS.md` points at the schema file) plus the command surface, so an agent reasons in the ontology even without running khub. Bare `wire` updates whichever files exist; `khub wire --target claude|agents|both` creates a specific one. Re-run after the schema changes; the block updates in place.
 
 ## Next
 

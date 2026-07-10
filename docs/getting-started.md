@@ -38,6 +38,7 @@ khub init firm-ops ./my-hub
 ```
 Initialized firm-ops workspace at my-hub
 created CLAUDE.md
+created AGENTS.md
 installed khub agent skill (npx skills)
 ```
 
@@ -45,7 +46,7 @@ installed khub agent skill (npx skills)
 cd my-hub
 ```
 
-`init` does three things in one step: it scaffolds the tree, wires the schema into `CLAUDE.md` (next section), and installs the khub agent skill into whichever coding agent it detects. The skill install shells out to `npx skills` and needs `npx`; without it, init prints `skill install skipped` and the scaffold still succeeds. Pass `--no-skill` or `--no-wire` to turn off either tail.
+`init` does three things in one step: it scaffolds the tree, wires the schema into your agent files (`CLAUDE.md` and `AGENTS.md`; next section), and installs the khub agent skill into whichever coding agent it detects. The skill install shells out to `npx skills` and needs `npx`; without it, init prints `skill install skipped` and the scaffold still succeeds. Pass `--no-skill` or `--no-wire` to turn off either tail.
 
 init wrote a `.khub/` control directory and one folder per entity type:
 
@@ -64,7 +65,7 @@ my-hub/
 
 ## Wire it into your agent's context
 
-`init` already wrote a managed block to `my-hub/CLAUDE.md`. The block imports the schema (`@.khub/schema.yaml`) and lists the command surface, so any agent working in this repo loads the ontology into context before it runs a single khub command. When the schema changes, re-run the wiring in place:
+`init` already wrote a managed block to `my-hub/CLAUDE.md` and `my-hub/AGENTS.md`. In `CLAUDE.md` the block imports the schema (`@.khub/schema.yaml`, a Claude Code directive); in `AGENTS.md` (the cross-agent standard, which has no import) it points at the schema file to read. Both list the command surface, so any agent working in this repo loads the ontology into context before it runs a single khub command. When the schema changes, re-run the wiring in place:
 
 ```bash
 khub wire
@@ -72,9 +73,10 @@ khub wire
 
 ```
 updated CLAUDE.md
+updated AGENTS.md
 ```
 
-Add `--agents` to mirror the block into `AGENTS.md`.
+Bare `khub wire` updates whichever agent files already exist. `khub wire --target claude|agents|both` creates a specific one (`CLAUDE.md` gets the import, `AGENTS.md` the pointer).
 
 `init` also installed the khub agent skill. To add it to another agent, or into an existing workspace you cloned rather than scaffolded, install it directly with [`npx skills`](https://skills.sh) (Cursor, Codex, and others land in `.agents/skills/`; Claude Code in `.claude/skills/`):
 

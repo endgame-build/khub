@@ -63,7 +63,7 @@ A type stores its entities as `md` (the default: YAML frontmatter + prose body),
 
 | Command | Args and options | Returns / does |
 |---|---|---|
-| `khub init <preset> [path=.]` | `--preset-source <path>`, `--name <name>`, `--force`, `--no-wire`, `--no-skill`, `--format <text\|json>` (json emits resolved provenance) | scaffold a workspace from a preset (the seeded fork), then wire it into `CLAUDE.md` and install the agent skill via `npx skills` (best-effort; needs `npx`). `--no-wire` / `--no-skill` skip either tail |
+| `khub init <preset> [path=.]` | `--preset-source <path>`, `--name <name>`, `--force`, `--no-wire`, `--no-skill`, `--format <text\|json>` (json emits resolved provenance) | scaffold a workspace from a preset (the seeded fork), then wire it into the selected agent files (`CLAUDE.md` + `AGENTS.md` by default) and install the agent skill via `npx skills` (best-effort; needs `npx`). `--no-wire` / `--no-skill` skip either tail |
 | `khub schema` | `--format` | the full effective schema: types, fields, enums, relations, layout/format/nesting per type, and provenance (source preset + version) |
 | `khub schema types` | `--format` | type list (view of the above) |
 | `khub schema show <type>` | `--format` | one type's fields, enums, required, relations, layout (view) |
@@ -112,7 +112,7 @@ A type stores its entities as `md` (the default: YAML frontmatter + prose body),
 | `khub reindex` | `--dry-run` | regenerate the OKF `index.md` navigation from the graph |
 | `khub viz` | `--out <file.html=viz.html>`, `--open`, `--type <t>` | self-contained Cytoscape HTML over the typed graph |
 | `khub backfill` | `--type <t>`, `--dry-run` | add missing frontmatter and dates from `git log` |
-| `khub wire` | `--agents`, `--dry-run` | inject a managed khub block into `CLAUDE.md` (and `AGENTS.md` with `--agents`): a `@.khub/schema.yaml` import plus the command surface, so an agent reasons in the workspace ontology even without running khub. Idempotent, minimal-diff |
+| `khub wire` | `--target <claude\|agents\|both>`, `--dry-run` | inject a managed khub block into the workspace's agent files. Bare `wire` updates whichever of `CLAUDE.md` / `AGENTS.md` already exist (creates none; hints if neither); `--target` creates a specific file. `CLAUDE.md` gets a `@.khub/schema.yaml` import; `AGENTS.md` (no import directive) gets a schema pointer. Both carry the command surface, so an agent reasons in the workspace ontology even without running khub. Idempotent, minimal-diff |
 
 `khub init` runs `wire` as a tail. It also installs the agent skill by shelling out to `npx skills` (Vercel's skills.sh CLI), which drops the skill into whichever coding agent is present (Claude Code, Cursor, Codex, and others) and writes a `skills-lock.json`. To install the skill into an existing workspace without re-scaffolding: `npx skills add git@github.com:endgame-build/khub.git -s khub -s setup`.
 

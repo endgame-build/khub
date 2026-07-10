@@ -18,7 +18,7 @@ Never hardcode a type or a field. Read the live schema:
 - `khub schema --format json` — every type with its fields, enums, required flags, and relations.
 - `khub schema show <type> --format json` — one type's shape; build an `add`/`edit` from it.
 
-The schema lives at `.khub/schema.yaml`; the active preset (firm-ops ships today) is recorded in `.khub/config.yaml`. `khub wire` links the schema into `CLAUDE.md`, so the ontology may already be in your context.
+The schema lives at `.khub/schema.yaml`; the active preset (firm-ops ships today) is recorded in `.khub/config.yaml`. `khub wire` links the schema into the agent context files (`CLAUDE.md`, `AGENTS.md`), so the ontology may already be in your context.
 
 ## Retrieve
 

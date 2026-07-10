@@ -101,19 +101,20 @@ def _inject(monkeypatch, fake: FakePrompter) -> None:
 
 @pytest.mark.e2e
 def test_init_wizard_scaffolds_and_wires(tmp_path: Path, monkeypatch) -> None:
-    """Bare `khub init` on a TTY: select preset, prompt path, confirm wire, decline skill."""
+    """Bare `khub init` on a TTY: select preset, prompt path, confirm wire, pick agent, decline skill."""
     ws = tmp_path / "hub"
     fake = FakePrompter(
-        selects=["firm-ops"],       # ? Preset
-        paths=[str(ws)],            # ? Directory
-        confirms=[True, False],     # wire? yes ; skill? no (no npx touched)
+        selects=["firm-ops"],           # ? Preset
+        paths=[str(ws)],                # ? Directory
+        confirms=[True, False],         # wire? yes ; skill? no (no npx touched)
+        checkboxes=[["claude-code"]],   # ? which agents → CLAUDE.md
     )
     _inject(monkeypatch, fake)
 
     result = runner.invoke(app, ["init"])  # no preset, no path → wizard fills both
     assert result.exit_code == 0, result.output
     assert (ws / ".khub" / "schema.yaml").exists()   # scaffolded from the picked preset
-    assert (ws / "CLAUDE.md").exists()               # wire confirmed
+    assert (ws / "CLAUDE.md").exists()               # wire confirmed, claude-code picked
     assert "installed khub agent skill" not in result.output  # skill declined
 
 

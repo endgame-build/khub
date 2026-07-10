@@ -92,6 +92,14 @@ class LocatedError(Exception):
             message="No .khub workspace found. Run khub init <preset>",
         )
 
+    @classmethod
+    def bad_target(cls, value: str) -> "LocatedError":
+        return cls(
+            code="bad_target",
+            message=f"Unknown --target '{value}'. Choose claude, agents, or both",
+            target=value,
+        )
+
     # --- authoring (WPK-002-*) -----------------------------------------------
 
     @classmethod

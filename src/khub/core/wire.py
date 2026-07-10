@@ -1,16 +1,19 @@
-"""``khub wire`` — link a khub workspace into CLAUDE.md (and optionally AGENTS.md).
+"""``khub wire`` — link a khub workspace into agent context files (CLAUDE.md / AGENTS.md).
 
 Injects an idempotent, marker-delimited block that does two things:
 
-1. Links the schema into the agent's context with a Claude Code ``@.khub/schema.yaml``
-   import, so an agent reasons in the workspace's ontology even if it never runs
-   the khub CLI. The block also names the active preset and the declared types.
+1. Links the schema into the agent's context. ``CLAUDE.md`` gets a Claude Code
+   ``@.khub/schema.yaml`` import (loaded into context every session); ``AGENTS.md``
+   (the cross-agent standard, which has no import directive) gets a plain pointer to
+   read the schema file. The block also names the active preset and the declared types.
 2. Documents the khub command surface, for when the CLI is available.
 
-Schema-generic: the block is built from the workspace at call time (the active
-preset from ``.khub/config.yaml`` and the declared types from the resolved
-schema), with no per-type code path. Re-running replaces the block in place, so
-the write stays a minimal, idempotent diff.
+Bare ``wire`` updates whichever context files already exist and creates none;
+``--target`` (claude/agents/both) targets a specific file, creating it if missing.
+Schema-generic: the block is built from the workspace at call time (the active preset
+from ``.khub/config.yaml`` and the declared types from the resolved schema), with no
+per-type code path. Re-running replaces the block in place, so the write stays a
+minimal, idempotent diff.
 """
 
 from __future__ import annotations
@@ -35,21 +38,39 @@ class WireOutcome:
 
 @dataclass(frozen=True)
 class WireResult:
-    """The block written and the per-file outcomes."""
+    """A dry-run preview of the target blocks and the per-file outcomes."""
 
-    block: str
+    preview: str
     outcomes: list[WireOutcome]
 
 
-def build_block(preset: str, version: str, types: list[str]) -> str:
-    """The managed CLAUDE.md block (markers included, no trailing newline).
+def build_block(
+    preset: str, version: str, types: list[str], *, import_supported: bool = True
+) -> str:
+    """The managed context-file block (markers included, no trailing newline).
 
-    The ``@.khub/schema.yaml`` line is a Claude Code import: resolved relative to
-    the CLAUDE.md it sits in, it loads the ontology into context every session.
-    It stays on its own line and outside any code fence so the import fires.
+    With ``import_supported`` (CLAUDE.md), the ontology is pulled in by a Claude Code
+    ``@.khub/schema.yaml`` import: resolved relative to the file it sits in, it loads the
+    ontology into context every session, and stays on its own line outside any code fence
+    so the import fires. Without it (AGENTS.md and other agents, which have no import
+    directive), the block points the agent at the schema file to read instead.
     """
     stamp = f"{preset}@{version}" if version else (preset or "custom")
     type_list = ", ".join(f"`{t}`" for t in types) if types else "none declared yet"
+    if import_supported:
+        link = [
+            "The ontology is imported below, so it loads into context even without running the "
+            "khub CLI:",
+            "",
+            "@.khub/schema.yaml",
+            "",
+        ]
+    else:
+        link = [
+            "The ontology is defined in the schema file below; read it to work in this model, "
+            "even without running the khub CLI:",
+            "",
+        ]
     return "\n".join(
         [
             BEGIN,
@@ -59,11 +80,7 @@ def build_block(preset: str, version: str, types: list[str]) -> str:
             "workspace: its domain is modeled as typed entities and typed relations, and the "
             "schema is the contract. Reason in that model.",
             "",
-            "The ontology is imported below, so it loads into context even without running the "
-            "khub CLI:",
-            "",
-            "@.khub/schema.yaml",
-            "",
+            *link,
             f"Schema file: [`.khub/schema.yaml`](.khub/schema.yaml). Preset: `{stamp}`. "
             f"Entity types: {type_list}.",
             "",
@@ -102,22 +119,33 @@ def _upsert(text: str, block: str) -> str:
     return merged if merged.endswith("\n") else merged + "\n"
 
 
-def wire(root: Path, *, agents: bool = False, dry_run: bool = False) -> WireResult:
-    """Wire the workspace at ``root`` into CLAUDE.md (and AGENTS.md if ``agents``).
+def wire(
+    root: Path, *, claude: bool = False, agents: bool = False, dry_run: bool = False
+) -> WireResult:
+    """Wire the workspace at ``root`` into agent context files.
 
-    Reads the active preset and declared types, builds the block, and writes each
-    target unless the content is unchanged (or ``dry_run`` is set). Idempotent.
+    With ``claude``/``agents`` set, those files are the targets and are created if
+    missing. With neither set, the targets are whichever of ``CLAUDE.md`` / ``AGENTS.md``
+    already exist (updated in place; none created). Writes each target unless the content
+    is unchanged (or ``dry_run`` is set). Idempotent.
     """
     prov = provenance(root)
     resolved = load_schema(root)
-    block = build_block(prov["preset"], prov["version"], types_list(resolved))
+    types = types_list(resolved)
+    claude_block = build_block(prov["preset"], prov["version"], types, import_supported=True)
+    agents_block = build_block(prov["preset"], prov["version"], types, import_supported=False)
+    candidates = [(root / "CLAUDE.md", claude_block), (root / "AGENTS.md", agents_block)]
 
-    targets = [root / "CLAUDE.md"]
-    if agents:
-        targets.append(root / "AGENTS.md")
+    if claude or agents:
+        chosen = {"CLAUDE.md": claude, "AGENTS.md": agents}
+        targets = [(p, b) for p, b in candidates if chosen[p.name]]
+    else:
+        targets = [(p, b) for p, b in candidates if p.exists()]
 
     outcomes: list[WireOutcome] = []
-    for path in targets:
+    previews: list[str] = []
+    for path, block in targets:
+        previews.append(f"# {path.name}\n{block}")
         old = path.read_text(encoding="utf-8") if path.exists() else None
         new = _upsert(old or "", block)
         if old is None:
@@ -129,4 +157,4 @@ def wire(root: Path, *, agents: bool = False, dry_run: bool = False) -> WireResu
         if not dry_run and action != "unchanged":
             path.write_text(new, encoding="utf-8")
         outcomes.append(WireOutcome(path=path, action=action))
-    return WireResult(block=block, outcomes=outcomes)
+    return WireResult(preview="\n\n".join(previews), outcomes=outcomes)

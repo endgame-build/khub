@@ -1,9 +1,10 @@
 """``khub init`` — operator trigger for ``core.init_workspace`` (WPK-001-1). Thin wiring.
 
-After scaffolding, ``init`` wires the workspace into ``CLAUDE.md`` and installs the
-khub agent skill (agnostically, via ``npx skills``), so a fresh workspace is
-agent-ready in one command. Both tails are best-effort and independently skippable
-(``--no-wire`` / ``--no-skill``); neither unwinds a successful scaffold.
+After scaffolding, ``init`` wires the workspace into the selected agent context files
+(``CLAUDE.md`` / ``AGENTS.md``, both by default) and installs the khub agent skill
+(agnostically, via ``npx skills``), so a fresh workspace is agent-ready in one command.
+Both tails are best-effort and independently skippable (``--no-wire`` / ``--no-skill``);
+neither unwinds a successful scaffold.
 """
 
 from __future__ import annotations
@@ -23,6 +24,15 @@ from khub.core.skill import SKILLS_SOURCE, SkillOutcome
 _COMMON_AGENTS = ["claude-code", "cursor", "codex", "gemini-cli", "opencode"]
 
 
+def _wire_targets(picks: list[str] | None) -> tuple[bool, bool]:
+    """Which agent files ``init`` seeds, as ``(claude, agents)``. Explicit picks map
+    ``claude-code`` → CLAUDE.md and any other agent → AGENTS.md; no selection (None/empty)
+    seeds both."""
+    if not picks:
+        return True, True
+    return ("claude-code" in picks, any(a != "claude-code" for a in picks))
+
+
 def init_command(
     ctx: typer.Context,
     preset: str | None = typer.Argument(None, help="Named preset to seed from (e.g. firm-ops)."),
@@ -32,7 +42,9 @@ def init_command(
     ),
     name: str = typer.Option(None, "--name", help="Workspace name (default: the target dir name)."),
     force: bool = typer.Option(False, "--force", help="Scaffold into a non-empty target."),
-    no_wire: bool = typer.Option(False, "--no-wire", help="Skip wiring the schema into CLAUDE.md."),
+    no_wire: bool = typer.Option(
+        False, "--no-wire", help="Skip wiring the schema into the agent files."
+    ),
     no_skill: bool = typer.Option(
         False, "--no-skill", help="Skip installing the agent skill via npx skills."
     ),
@@ -64,12 +76,12 @@ def init_command(
         path = prompter.path("Directory", default=".") if prompter is not None else Path(".")
 
     # Tail choices: a --no-* flag forces skip; else confirm on a TTY; else default on.
-    do_wire = not no_wire and (prompter.confirm("Wire the schema into CLAUDE.md?") if prompter else True)
+    do_wire = not no_wire and (prompter.confirm("Wire the schema into your agent files?") if prompter else True)
     do_skill = not no_skill and (prompter.confirm("Install the khub agent skill?") if prompter else True)
     agents = None
-    if do_skill and prompter is not None:
+    if (do_wire or do_skill) and prompter is not None:
         picks = prompter.checkbox(
-            "Install into which agents? (none = auto-detect)", _COMMON_AGENTS
+            "Set up which agents? (none = both files / auto-detect)", _COMMON_AGENTS
         )
         agents = picks or None
 
@@ -85,11 +97,12 @@ def init_command(
     wire_result = None
     wire_error = None
     if do_wire:
+        want_claude, want_agents = _wire_targets(agents)
         try:
-            wire_result = wire(result.path)
+            wire_result = wire(result.path, claude=want_claude, agents=want_agents)
         except LocatedError as err:
             wire_error = err.message
-        except OSError as err:  # e.g. a read-only CLAUDE.md; report, don't unwind
+        except OSError as err:  # e.g. a read-only agent file; report, don't unwind
             wire_error = str(err)
     # In json mode capture npx output so it never precedes the JSON document.
     skill_outcome = (

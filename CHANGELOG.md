@@ -11,6 +11,10 @@ Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelo
 - `CONTRIBUTING.md`, issue and pull-request templates, and a dependabot config.
 - `docs/README.md`, a Diátaxis index over the existing docs. The README gains license/Python badges and a "why not a folder / database / RAG store" comparison.
 
+### Changed
+
+- `khub wire` is agent-agnostic. Bare `wire` updates whichever agent files already exist (`CLAUDE.md` gets the `@.khub/schema.yaml` import; `AGENTS.md` gets a plain schema pointer, since non-Claude agents can't resolve the import); `khub wire --target claude|agents|both` creates a specific file (replaces the old `--agents` bool). `khub init` seeds the agent files for the selected agents — both `CLAUDE.md` + `AGENTS.md` when nothing is selected (including non-interactive/`--agent` runs). Fixes `AGENTS.md` previously receiving a Claude-only `@import` it couldn't read.
+
 ### Removed
 
 - Stale internal notes (`docs/internal/omnigraph-comparison.md`, `audit-2026-07-05.md`) and the superseded planning specs (`plan/specs/FS-006`, `FS-007`): they described the removed LinkML compiler and called the shipped engine "design stage."
