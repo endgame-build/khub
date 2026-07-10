@@ -9,7 +9,7 @@ khub is a `khub` console script and needs Python 3.11+. Two ways in.
 Install it as a tool (the repo is private, so this needs SSH access to the org; HTTPS with a token works too):
 
 ```bash
-uv tool install git+ssh://git@github.com/endgame-build/khub@v0.7.0
+uv tool install git+ssh://git@github.com/endgame-build/khub@v0.7.1
 ```
 
 Or clone and run from the checkout:

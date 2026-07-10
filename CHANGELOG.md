@@ -2,6 +2,12 @@
 
 Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); khub is pre-release.
 
+## [0.7.1] — 2026-07-10
+
+### Fixed
+
+- CI: `test_neighbors_rejects_removed_both_flag` asserted a Rich-rendered flag string that wraps differently across terminals, so it passed locally but failed under GitHub Actions — it now checks Click's exit code (the actual contract). v0.7.0's release workflow failed on this test; 0.7.1 is the first release that builds green. Install pins bumped to `@v0.7.1`.
+
 ## [0.7.0] — 2026-07-10
 
 ### Added
