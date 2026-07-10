@@ -1,0 +1,93 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1320 470" font-family="ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif">
+  <defs>
+    <marker id="ah" markerWidth="9" markerHeight="9" refX="6.5" refY="3" orient="auto">
+      <path d="M0,0 L7,3 L0,6 Z" fill="#94a3b8"/>
+    </marker>
+    <marker id="ahd" markerWidth="10" markerHeight="10" refX="7" refY="3.2" orient="auto">
+      <path d="M0,0 L8,3.2 L0,6.4 Z" fill="#475569"/>
+    </marker>
+  </defs>
+
+  <!-- outer card -->
+  <rect x="1" y="1" width="1318" height="468" rx="16" fill="#ffffff" stroke="#e5e7eb" stroke-width="1.5"/>
+
+  <!-- ================= eyebrow titles ================= -->
+  <g font-size="12" fill="#64748b" letter-spacing="1.5" font-weight="600">
+    <text x="63" y="62">AGENT</text>
+    <text x="386" y="62">SCHEMA-BOUND GRAPH</text>
+    <text x="1003" y="62">HOW EACH TYPE IS STORED</text>
+  </g>
+
+  <!-- ================= panel 1 : agent ================= -->
+  <rect x="48" y="78" width="190" height="310" rx="14" fill="#eef2ff" stroke="#c7d2fe" stroke-width="1.5"/>
+  <rect x="126" y="184" width="34" height="26" rx="6" fill="#ffffff" stroke="#6366f1" stroke-width="1.5"/>
+  <text x="143" y="202" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" fill="#6366f1">&gt;_</text>
+  <text x="143" y="258" text-anchor="middle" font-size="22" font-weight="700" fill="#3730a3">Agent</text>
+  <text x="143" y="283" text-anchor="middle" font-size="12" fill="#6366f1" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">CLI · MCP · Skill</text>
+
+  <!-- arrow 1 : agent -> graph -->
+  <line x1="242" y1="233" x2="374" y2="233" stroke="#475569" stroke-width="2" marker-end="url(#ahd)"/>
+  <text x="308" y="221" text-anchor="middle" font-size="10.5" fill="#475569" font-weight="500">capture · link · query</text>
+
+  <!-- ================= panel 2 : graph ================= -->
+  <rect x="378" y="78" width="480" height="310" rx="14" fill="#f8fafc" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="5 5"/>
+
+  <!-- edges (under nodes) -->
+  <g stroke="#94a3b8" stroke-width="1.6" fill="none">
+    <line x1="554" y1="163" x2="636" y2="163" marker-end="url(#ah)"/>   <!-- Req -> Comp -->
+    <line x1="466" y1="281" x2="486" y2="189" marker-end="url(#ah)"/>   <!-- UseCase -> Req -->
+    <line x1="614" y1="281" x2="688" y2="189" marker-end="url(#ah)"/>   <!-- ADR -> Comp -->
+    <line x1="734" y1="281" x2="722" y2="189" marker-end="url(#ah)"/>   <!-- BizRule -> Comp -->
+  </g>
+  <g font-size="11" font-style="italic" fill="#64748b">
+    <text x="596" y="153" text-anchor="middle">satisfies</text>
+    <text x="430" y="236" text-anchor="middle">realizes</text>
+    <text x="586" y="250" text-anchor="middle">decides</text>
+    <text x="774" y="236" text-anchor="middle">constrains</text>
+  </g>
+
+  <!-- nodes -->
+  <g font-size="14" font-weight="600" fill="#0f172a" text-anchor="middle">
+    <rect x="446" y="141" width="108" height="44" rx="10" fill="#ffffff" stroke="#10b981" stroke-width="1.75"/>
+    <text x="500" y="168">Requirement</text>
+
+    <rect x="640" y="141" width="120" height="44" rx="10" fill="#ffffff" stroke="#3b82f6" stroke-width="1.75"/>
+    <text x="700" y="168">Component</text>
+
+    <rect x="403" y="281" width="118" height="44" rx="10" fill="#ffffff" stroke="#14b8a6" stroke-width="1.75"/>
+    <text x="462" y="308">Use Case</text>
+
+    <rect x="562" y="281" width="96" height="44" rx="10" fill="#ffffff" stroke="#f59e0b" stroke-width="1.75"/>
+    <text x="610" y="308">ADR</text>
+
+    <rect x="682" y="281" width="112" height="44" rx="10" fill="#ffffff" stroke="#ec4899" stroke-width="1.75"/>
+    <text x="738" y="308">Business Rule</text>
+  </g>
+
+  <text x="618" y="372" text-anchor="middle" font-size="10" font-style="italic" fill="#94a3b8">derived in memory · never persisted</text>
+
+  <!-- arrow 2 : graph -> storage -->
+  <line x1="862" y1="233" x2="994" y2="233" stroke="#475569" stroke-width="2" marker-end="url(#ahd)"/>
+  <text x="928" y="221" text-anchor="middle" font-size="10.5" fill="#475569" font-weight="500">on disk as</text>
+
+  <!-- ================= panel 3 : storage ================= -->
+  <rect x="998" y="78" width="302" height="310" rx="14" fill="#f8fafc" stroke="#cbd5e1" stroke-width="1.5"/>
+  <g font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" fill="#0f172a">
+    <text x="1018" y="126">adr/0001-postgres.md</text>
+    <text x="1018" y="182">components/api.md</text>
+    <text x="1018" y="238">requirements.jsonl</text>
+    <text x="1018" y="294">use-cases/uc-12.md</text>
+    <text x="1018" y="350">business-rules.yaml</text>
+  </g>
+  <!-- pills : layout · format -->
+  <g font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="10" font-weight="600" text-anchor="middle">
+    <rect x="1210" y="112" width="72" height="18" rx="9" fill="#dbeafe"/><text x="1246" y="125" fill="#1e40af">folder·md</text>
+    <rect x="1210" y="168" width="72" height="18" rx="9" fill="#dbeafe"/><text x="1246" y="181" fill="#1e40af">folder·md</text>
+    <rect x="1208" y="224" width="74" height="18" rx="9" fill="#ede9fe"/><text x="1245" y="237" fill="#5b21b6">coll·jsonl</text>
+    <rect x="1210" y="280" width="72" height="18" rx="9" fill="#dbeafe"/><text x="1246" y="293" fill="#1e40af">folder·md</text>
+    <rect x="1210" y="336" width="72" height="18" rx="9" fill="#ccfbf1"/><text x="1246" y="349" fill="#0f766e">coll·yaml</text>
+  </g>
+
+  <!-- ================= caption ================= -->
+  <text x="660" y="430" text-anchor="middle" font-size="12" fill="#475569">One khub schema — the graph is derived in memory; the files on the right are the source of truth.</text>
+</svg>

@@ -7,6 +7,8 @@
 
 khub gives an AI agent typed, validated, queryable context (structured memory it can navigate and write back to) instead of unstructured documents stuffed into a context window.
 
+![khub: an agent captures into a schema-bound graph that lives on disk as heterogeneous git storage](docs/img/architecture.svg)
+
 One generic engine: entities live in git as Markdown with YAML frontmatter (the default), as `.json`/`.yaml` documents, or as rows of a single-file collection (`repos.jsonl`), per-type schema config. The khub schema is the contract: types, attributes, and legal relations, authored in YAML and resolved in memory. A Python core library provides schema-validated CRUD and graph queries; a generic `khub` CLI and a Claude Code skill are thin, schema-driven surfaces over it. The graph is a projection rebuilt from the Markdown on demand; no database is ever the source of truth.
 
 Built on top of the [Open Knowledge Format (OKF)](https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/main/okf/SPEC.md). khub's Markdown entities are OKF concepts; on top, khub adds a typed schema, a graph, and the serialization formats and collections OKF lacks. Any workspace projects to a conformant OKF bundle.
