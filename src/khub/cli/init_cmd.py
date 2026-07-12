@@ -16,6 +16,7 @@ from pathlib import Path
 import typer
 
 from khub.cli import interact
+from khub.cli._render import guard
 from khub.core.errors import LocatedError
 from khub.core.skill import SKILLS_SOURCE, SkillOutcome
 
@@ -33,6 +34,7 @@ def _wire_targets(picks: list[str] | None) -> tuple[bool, bool]:
     return ("claude-code" in picks, any(a != "claude-code" for a in picks))
 
 
+@guard
 def init_command(
     ctx: typer.Context,
     preset: str | None = typer.Argument(None, help="Named preset to seed from (e.g. firm-ops)."),
@@ -85,13 +87,7 @@ def init_command(
         )
         agents = picks or None
 
-    try:
-        result = init_workspace(
-            preset, path, preset_source=preset_source, name=name, force=force
-        )
-    except LocatedError as err:
-        typer.echo(err.message, err=True)
-        raise typer.Exit(1) from None
+    result = init_workspace(preset, path, preset_source=preset_source, name=name, force=force)
 
     # Best-effort tails: a wire/skill hiccup does not unwind the scaffold above.
     wire_result = None

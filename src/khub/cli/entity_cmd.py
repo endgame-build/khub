@@ -20,7 +20,7 @@ from rich.console import Console
 from rich.table import Table
 
 from khub.cli import interact
-from khub.cli._render import resolve_root, want_json
+from khub.cli._render import emit, guard, resolve_root
 from khub.core.entity import (
     CreateResult,
     EntityView,
@@ -34,6 +34,7 @@ from khub.core.entity import (
     update,
 )
 from khub.core.errors import LocatedError
+from khub.core.index import list_refs
 from khub.core.introspect import load_schema, type_view, types_list
 from khub.core.locate import provenance
 from khub.core.model import ResolvedSchema
@@ -42,6 +43,7 @@ from khub.core.model import ResolvedSchema
 DYNAMIC_FIELDS = {"allow_extra_args": True, "ignore_unknown_options": True}
 
 
+@guard
 def add_command(
     ctx: typer.Context,
     type_: str | None = typer.Argument(None, metavar="TYPE", help="The entity type to create."),
@@ -77,19 +79,16 @@ def add_command(
         if not prompter.confirm(f"Create {type_}?"):
             raise typer.Abort()
 
-    try:
-        result = create(root, type_, fields, id_=id_, strict=strict, body=body, draft=draft)
-    except LocatedError as err:
-        typer.echo(err.message, err=True)
-        raise typer.Exit(1) from None
+    result = create(root, type_, fields, id_=id_, strict=strict, body=body, draft=draft)
 
     if fmt == "json":
-        typer.echo(json.dumps(_create_record(root, result), default=str))
+        typer.echo(json.dumps(_ref_record(root, result), default=str))
     else:
         typer.echo(str(result.path.relative_to(root)))
         typer.echo(_created_message(result))
 
 
+@guard
 def get_command(
     ctx: typer.Context,
     id_: str | None = typer.Argument(None, metavar="ID", help="A bare slug, or type/slug on ambiguity."),
@@ -98,28 +97,21 @@ def get_command(
 ) -> None:
     """Read an entity's frontmatter and body, optionally with derived edges."""
     prompter = interact.make_prompter(ctx.obj, fmt)
-    try:
-        root = resolve_root(ctx)
-        if id_ is None:
-            if prompter is None:
-                typer.echo("Missing argument 'ID'.", err=True)
-                raise typer.Exit(2)
-            id_ = _pick_entity(prompter, root, load_schema(root))
-        view = get(root, id_, edges=edges)
-    except LocatedError as err:
-        typer.echo(err.message, err=True)
-        raise typer.Exit(1) from None
+    root = resolve_root(ctx)
+    if id_ is None:
+        if prompter is None:
+            typer.echo("Missing argument 'ID'.", err=True)
+            raise typer.Exit(2)
+        id_ = _pick_entity(prompter, root, load_schema(root))
+    view = get(root, id_, edges=edges)
 
     if fmt == "raw":
         typer.echo(view.raw, nl=False)
-    elif want_json(fmt):
-        # Downgrade like every other command: JSON on a pipe or under --format json,
-        # so a `--format table` piped to a tool no longer leaks a Rich box-table.
-        typer.echo(json.dumps(_get_record(root, view), default=str))
-    else:
-        Console().print(_entity_table(view))
+        return
+    emit(_get_record(root, view), fmt, lambda: Console().print(_entity_table(view)))
 
 
+@guard
 def edit_command(
     ctx: typer.Context,
     id_: str | None = typer.Argument(None, metavar="ID", help="A bare slug, or type/slug on ambiguity."),
@@ -161,18 +153,15 @@ def edit_command(
             raise typer.Abort()
         fields = {name: value}
 
-    try:
-        result = update(root, id_, fields, strict=strict, body=body)
-    except LocatedError as err:
-        typer.echo(err.message, err=True)
-        raise typer.Exit(1) from None
+    result = update(root, id_, fields, strict=strict, body=body)
 
     if fmt == "json":
-        typer.echo(json.dumps(_update_record(root, result), default=str))
+        typer.echo(json.dumps(_ref_record(root, result), default=str))
     else:
         typer.echo(f"Updated {result.type} '{result.slug}'")
 
 
+@guard
 def link_command(
     ctx: typer.Context,
     id_: str | None = typer.Argument(None, metavar="ID"),
@@ -181,19 +170,16 @@ def link_command(
 ) -> None:
     """Add a relation: khub link initech-pov partner northwind."""
     prompter = interact.make_prompter(ctx.obj, "text")
-    try:
-        root = resolve_root(ctx)
-        id_, predicate, target = _edge_args(prompter, root, id_, predicate, target)
-        result = link(root, id_, predicate, target)
-    except LocatedError as err:
-        typer.echo(err.message, err=True)
-        raise typer.Exit(1) from None
+    root = resolve_root(ctx)
+    id_, predicate, target = _edge_args(prompter, root, id_, predicate, target)
+    result = link(root, id_, predicate, target)
     if not result.changed:  # the edge already existed — idempotent success (exit 0)
         typer.echo("Edge already present")
         return
     typer.echo(_edge_message("Linked", result))
 
 
+@guard
 def unlink_command(
     ctx: typer.Context,
     id_: str | None = typer.Argument(None, metavar="ID"),
@@ -202,19 +188,16 @@ def unlink_command(
 ) -> None:
     """Remove a relation: khub unlink initech-pov partner northwind."""
     prompter = interact.make_prompter(ctx.obj, "text")
-    try:
-        root = resolve_root(ctx)
-        id_, predicate, target = _edge_args(prompter, root, id_, predicate, target)
-        result = unlink(root, id_, predicate, target)
-    except LocatedError as err:
-        typer.echo(err.message, err=True)
-        raise typer.Exit(1) from None
+    root = resolve_root(ctx)
+    id_, predicate, target = _edge_args(prompter, root, id_, predicate, target)
+    result = unlink(root, id_, predicate, target)
     if not result.changed:  # no such edge — idempotent no-op success (exit 0)
         typer.echo(f"No edge {result.predicate} -> {result.target} on {result.slug}")
         return
     typer.echo(_edge_message("Unlinked", result))
 
 
+@guard
 def remove_command(
     ctx: typer.Context,
     id_: str | None = typer.Argument(None, metavar="ID", help="A bare slug, or type/slug on ambiguity."),
@@ -222,19 +205,15 @@ def remove_command(
 ) -> None:
     """Remove an entity, guarded by inbound edges: khub remove old-fragment [--force]."""
     prompter = interact.make_prompter(ctx.obj, "text")
-    try:
-        root = resolve_root(ctx)
-        if id_ is None:
-            if prompter is None:
-                typer.echo("Missing argument 'ID'.", err=True)
-                raise typer.Exit(2)
-            id_ = _pick_entity(prompter, root, load_schema(root))
-            if not prompter.confirm(f"Remove {id_}?", default=False):
-                raise typer.Abort()
-        result = delete(root, id_, force=force)
-    except LocatedError as err:
-        typer.echo(err.message, err=True)
-        raise typer.Exit(1) from None
+    root = resolve_root(ctx)
+    if id_ is None:
+        if prompter is None:
+            typer.echo("Missing argument 'ID'.", err=True)
+            raise typer.Exit(2)
+        id_ = _pick_entity(prompter, root, load_schema(root))
+        if not prompter.confirm(f"Remove {id_}?", default=False):
+            raise typer.Abort()
+    result = delete(root, id_, force=force)
 
     if result.removed:
         typer.echo(f"Removed {result.type} '{result.slug}'")
@@ -251,15 +230,9 @@ def remove_command(
 # --- interactive helpers -----------------------------------------------------
 
 
-def _index_nodes(root: Path, resolved: ResolvedSchema) -> list[tuple[str, str]]:
-    from khub.core.index import build_index
-
-    return sorted(build_index(root, resolved).nodes)
-
-
 def _all_ids(root: Path, resolved: ResolvedSchema) -> list[str]:
     """Every entity as ``type/slug`` — the interactive entity pick-list."""
-    return [f"{t}/{s}" for t, s in _index_nodes(root, resolved)]
+    return [f"{t}/{s}" for t, s in list_refs(root, resolved)]
 
 
 def _target_lister(root: Path, resolved: ResolvedSchema) -> interact.TargetLister:
@@ -268,7 +241,7 @@ def _target_lister(root: Path, resolved: ResolvedSchema) -> interact.TargetListe
     Built from the same scanned index the write-path validator checks against, so the
     pick-list and the referential-integrity gate stay consistent.
     """
-    nodes = _index_nodes(root, resolved)
+    nodes = list_refs(root, resolved)
 
     def list_targets(to_types: Sequence[str]) -> list[str]:
         wanted = set(to_types)
@@ -390,21 +363,9 @@ def _created_message(result: CreateResult) -> str:
     return f"Created {result.type} '{result.slug}' ({state})"
 
 
-def _create_record(root: Path, result: CreateResult) -> dict[str, Any]:
-    record = {
-        "id": f"{result.type}/{result.slug}",
-        "type": result.type,
-        "slug": result.slug,
-        "path": str(result.path.relative_to(root)),
-        "draft": result.draft,
-    }
-    if result.locator:  # collection rows only — per-item records stay byte-identical
-        record["locator"] = result.locator
-    return record
-
-
-def _update_record(root: Path, result: UpdateResult) -> dict[str, Any]:
-    record = {
+def _ref_record(root: Path, result: CreateResult | UpdateResult) -> dict[str, Any]:
+    """The ``type/slug`` reference record ``add`` and ``edit`` emit — one builder."""
+    record: dict[str, Any] = {
         "id": f"{result.type}/{result.slug}",
         "type": result.type,
         "slug": result.slug,

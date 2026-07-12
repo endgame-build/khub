@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import typer
 
-from khub.cli._render import resolve_root
+from khub.cli._render import guard, resolve_root
 from khub.core.errors import LocatedError
 from khub.core.wire import wire
 
@@ -19,6 +19,7 @@ def _resolve_target(target: str | None) -> tuple[bool, bool]:
     return mapping[target]
 
 
+@guard
 def wire_command(
     ctx: typer.Context,
     target: str | None = typer.Option(
@@ -31,13 +32,9 @@ def wire_command(
 ) -> None:
     """Wire the workspace into agent context files (CLAUDE.md gets a ``@.khub/schema.yaml``
     import; AGENTS.md gets a schema pointer). Bare ``wire`` updates whichever already exist."""
-    try:
-        root = resolve_root(ctx)
-        claude, agents = _resolve_target(target)
-        result = wire(root, claude=claude, agents=agents, dry_run=dry_run)
-    except LocatedError as err:
-        typer.echo(err.message, err=True)
-        raise typer.Exit(1) from None
+    root = resolve_root(ctx)
+    claude, agents = _resolve_target(target)
+    result = wire(root, claude=claude, agents=agents, dry_run=dry_run)
 
     if not result.outcomes:
         typer.echo(

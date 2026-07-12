@@ -18,8 +18,7 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
-from khub.cli._render import resolve_root, want_json
-from khub.core.errors import LocatedError
+from khub.cli._render import emit, guard, resolve_root
 from khub.core.graph import (
     HistoryLink,
     ImpactNode,
@@ -30,6 +29,7 @@ from khub.core.graph import (
 )
 
 
+@guard
 def neighbors_command(
     ctx: typer.Context,
     id_: str = typer.Argument(..., metavar="ID", help="A bare slug, or type/slug on ambiguity."),
@@ -41,22 +41,21 @@ def neighbors_command(
 ) -> None:
     """Walk one-hop neighbors: khub neighbors initech-pov [--predicate client --in]."""
     direction = "in" if in_ else "out" if out_ else "both"
-    try:
-        root = resolve_root(ctx)
-        result = walk_neighbors(root, id_, predicate=predicate, direction=direction, depth=depth)
-    except LocatedError as err:
-        typer.echo(err.message, err=True)
-        raise typer.Exit(1) from None
+    root = resolve_root(ctx)
+    result = walk_neighbors(root, id_, predicate=predicate, direction=direction, depth=depth)
 
     records = [_neighbor_record(n) for n in result]
-    if want_json(fmt):
-        typer.echo(json.dumps(records))
-    elif not result:
+    emit(records, fmt, lambda: _neighbors_human(records))
+
+
+def _neighbors_human(records: list[dict[str, Any]]) -> None:
+    if not records:
         typer.echo("No neighbors")
     else:
         Console().print(_neighbor_table(records))
 
 
+@guard
 def impact_command(
     ctx: typer.Context,
     id_: str = typer.Argument(..., metavar="ID", help="A bare slug, or type/slug on ambiguity."),
@@ -65,12 +64,8 @@ def impact_command(
     fmt: str = typer.Option("text", "--format", help="tree (depth-marked, the TTY default) or json."),
 ) -> None:
     """Compute blast radius: khub impact node-a [--reverse] [--predicate <p>]."""
-    try:
-        root = resolve_root(ctx)
-        result = walk_impact(root, id_, predicate=predicate, reverse=reverse)
-    except LocatedError as err:
-        typer.echo(err.message, err=True)
-        raise typer.Exit(1) from None
+    root = resolve_root(ctx)
+    result = walk_impact(root, id_, predicate=predicate, reverse=reverse)
 
     # JSON on an explicit request or any pipe (agent contract); the depth tree is
     # the human view on a TTY, and `--format tree` forces it even on a pipe.
@@ -84,6 +79,7 @@ def impact_command(
         typer.echo("  " * n.depth + f"{n.type}/{n.slug}")
 
 
+@guard
 def history_command(
     ctx: typer.Context,
     id_: str = typer.Argument(..., metavar="ID", help="A bare slug, or type/slug on ambiguity."),
@@ -92,17 +88,15 @@ def history_command(
     fmt: str = typer.Option("text", "--format", help="text (Rich table on a TTY) or json."),
 ) -> None:
     """Trace supersession lineage: khub history decision-0012 [--limit 3]."""
-    try:
-        root = resolve_root(ctx)
-        result = walk_history(root, id_, predicate=predicate, limit=limit)
-    except LocatedError as err:
-        typer.echo(err.message, err=True)
-        raise typer.Exit(1) from None
+    root = resolve_root(ctx)
+    result = walk_history(root, id_, predicate=predicate, limit=limit)
 
     records = [_history_record(link) for link in result]
-    if want_json(fmt):
-        typer.echo(json.dumps(records))
-    elif len(result) <= 1:  # supersedes nothing — only the source record
+    emit(records, fmt, lambda: _history_human(records))
+
+
+def _history_human(records: list[dict[str, Any]]) -> None:
+    if len(records) <= 1:  # supersedes nothing — only the source record
         typer.echo("No supersession history")
     else:
         Console().print(_history_table(records))

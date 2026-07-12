@@ -7,7 +7,6 @@ empty workspace reports the initialized-but-empty line.
 
 from __future__ import annotations
 
-import json
 from datetime import date
 from typing import Any
 
@@ -15,24 +14,18 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
-from khub.cli._render import resolve_root, want_json
-from khub.core.errors import LocatedError
+from khub.cli._render import emit, guard, resolve_root
 from khub.core.project import project, stale_days
 
 
+@guard
 def status_command(
     ctx: typer.Context,
     fmt: str = typer.Option("text", "--format", help="text (Rich table on a TTY) or json."),
 ) -> None:
     """Summarize the workspace: counts, draft/active, orphan/stale, OKF conformance."""
-    try:
-        root = resolve_root(ctx)
-        # Inside the guard: a corrupt schema.yaml raises a located schema_error
-        # here, which must render as a clean line, not a traceback.
-        proj = project(root, stale_days=stale_days(root), now=date.today())
-    except LocatedError as err:
-        typer.echo(err.message, err=True)
-        raise typer.Exit(1) from None
+    root = resolve_root(ctx)
+    proj = project(root, stale_days=stale_days(root), now=date.today())
 
     data: dict[str, Any] = {
         "counts": proj.counts,
@@ -49,11 +42,11 @@ def status_command(
         if val is not None:
             data[extra] = val
 
-    # JSON on a pipe or when asked (the agent contract); a Rich table on a TTY,
-    # with the friendly empty-state line for the operator.
-    if want_json(fmt):
-        typer.echo(json.dumps(data, default=str))
-    elif proj.total == 0:
+    emit(data, fmt, lambda: _human(proj.total, data))
+
+
+def _human(total: int, data: dict[str, Any]) -> None:
+    if total == 0:
         typer.echo("Workspace initialized; no entities yet")
     else:
         Console().print(_status_table(data))

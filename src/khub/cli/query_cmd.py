@@ -9,7 +9,6 @@ still bind). Rich table on a TTY, JSON otherwise, bare ids under ``--format ids`
 
 from __future__ import annotations
 
-import json
 from datetime import date
 from typing import Any
 
@@ -18,15 +17,15 @@ from rich.console import Console
 from rich.table import Table
 
 from khub.cli import interact
-from khub.cli._render import resolve_root, want_json
+from khub.cli._render import emit, guard, resolve_root
 from khub.cli.entity_cmd import DYNAMIC_FIELDS, parse_fields
-from khub.core.errors import LocatedError
 from khub.core.introspect import load_schema, types_list
 from khub.core.query import Match, QueryFilters, query
 
 __all__ = ["query_command", "DYNAMIC_FIELDS"]
 
 
+@guard
 def query_command(
     ctx: typer.Context,
     type_: str = typer.Option(None, "--type", help="Restrict to one entity type."),
@@ -43,34 +42,30 @@ def query_command(
     """Filter entities: khub query --type opportunity --stage prospect --format json."""
     prompter = interact.make_prompter(ctx.obj, fmt)
     fields = parse_fields(ctx.args)
-    try:
-        root = resolve_root(ctx)
-        # A bare interactive query offers a type filter; (all) keeps the full set.
-        no_filters = not any(
-            [type_, tag, has, missing, orphan, stale, draft, active, limit, fields]
+    root = resolve_root(ctx)
+    # A bare interactive query offers a type filter; (all) keeps the full set.
+    no_filters = not any(
+        [type_, tag, has, missing, orphan, stale, draft, active, limit, fields]
+    )
+    if prompter is not None and no_filters:
+        choice = prompter.select(
+            "Filter by type", choices=["(all)", *sorted(types_list(load_schema(root)))]
         )
-        if prompter is not None and no_filters:
-            choice = prompter.select(
-                "Filter by type", choices=["(all)", *sorted(types_list(load_schema(root)))]
-            )
-            if choice != "(all)":
-                type_ = choice
-        filters = QueryFilters(
-            type=type_,
-            fields=fields,
-            tag=tag,
-            has=has,
-            missing=missing,
-            orphan=orphan,
-            stale=stale,
-            draft_only=draft,
-            active_only=active,
-            limit=limit,
-        )
-        matches = query(root, filters, now=date.today())
-    except LocatedError as err:
-        typer.echo(err.message, err=True)
-        raise typer.Exit(1) from None
+        if choice != "(all)":
+            type_ = choice
+    filters = QueryFilters(
+        type=type_,
+        fields=fields,
+        tag=tag,
+        has=has,
+        missing=missing,
+        orphan=orphan,
+        stale=stale,
+        draft_only=draft,
+        active_only=active,
+        limit=limit,
+    )
+    matches = query(root, filters, now=date.today())
     _emit(matches, fmt)
 
 
@@ -80,9 +75,11 @@ def _emit(matches: list[Match], fmt: str) -> None:
             typer.echo(m.slug)
         return
     records = [_record(m) for m in matches]
-    if want_json(fmt):
-        typer.echo(json.dumps(records))
-    elif not matches:
+    emit(records, fmt, lambda: _human(records))
+
+
+def _human(records: list[dict[str, Any]]) -> None:
+    if not records:
         typer.echo("No entities match")
     else:
         Console().print(_table(records))

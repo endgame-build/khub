@@ -59,6 +59,15 @@ def build_index(root: Path, resolved: ResolvedSchema) -> Index:
     )
 
 
+def list_refs(root: Path, resolved: ResolvedSchema) -> list[tuple[str, str]]:
+    """Every entity as sorted ``(type, slug)`` pairs — the enumeration verb.
+
+    Backed by the same scan the write-path validator checks against, so a
+    pick-list built from it and the referential-integrity gate stay consistent.
+    """
+    return sorted(build_index(root, resolved).nodes)
+
+
 def scan_type(root: Path, rtype: ResolvedType) -> tuple[list[tuple[str, dict[str, Any]]], list[Path]]:
     """The ``(slug, frontmatter)`` pairs stored for one type, plus its malformed files.
 

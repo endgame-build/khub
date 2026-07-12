@@ -7,20 +7,19 @@ otherwise, bare slugs under ``--format ids``.
 
 from __future__ import annotations
 
-import json
 from typing import Any
 
 import typer
 from rich.console import Console
 from rich.table import Table
 
-from khub.cli._render import resolve_root, want_json
-from khub.core.errors import LocatedError
+from khub.cli._render import emit, guard, resolve_root
 from khub.core.search import SearchHit, search
 
 __all__ = ["search_command"]
 
 
+@guard
 def search_command(
     ctx: typer.Context,
     text: str = typer.Argument(..., help='FTS5 MATCH text: terms, "phrases", OR, NEAR, prefix*.'),
@@ -29,12 +28,8 @@ def search_command(
     fmt: str = typer.Option("text", "--format", help="text (Rich table on a TTY), json, or ids."),
 ) -> None:
     """Full-text search: khub search modernization --type transcript --format json."""
-    try:
-        root = resolve_root(ctx)
-        hits = search(root, text, type_=type_, limit=limit)
-    except LocatedError as err:
-        typer.echo(err.message, err=True)
-        raise typer.Exit(1) from None
+    root = resolve_root(ctx)
+    hits = search(root, text, type_=type_, limit=limit)
     _emit(hits, fmt)
 
 
@@ -44,9 +39,11 @@ def _emit(hits: list[SearchHit], fmt: str) -> None:
             typer.echo(h.slug)
         return
     records = [_record(h) for h in hits]
-    if want_json(fmt):
-        typer.echo(json.dumps(records))
-    elif not hits:
+    emit(records, fmt, lambda: _human(records))
+
+
+def _human(records: list[dict[str, Any]]) -> None:
+    if not records:
         typer.echo("No entities match")
     else:
         Console().print(_table(records))

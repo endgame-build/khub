@@ -1,21 +1,44 @@
-"""Shared output helper — WPK-001-2.
+"""Shared adapter seams — WPK-001-2.
 
-`khub schema` and `khub status` render a Rich table on a TTY and machine-readable
-JSON otherwise (or whenever ``--format json`` is set). The JSON branch is the
-field-parity contract the agent reads; the table is the human view.
+Every command routes through the same two seams:
+
+- :func:`guard` — the single error boundary. A :class:`LocatedError` raised
+  anywhere in a command body renders as its message on stderr and exits 1 —
+  never a traceback, never a per-command catch block.
+- :func:`emit` — the single output dispatch. One JSON document under
+  ``--format json`` or on any pipe (the field-parity contract the agent reads);
+  the command's human view on a TTY.
 """
 
 from __future__ import annotations
 
+import functools
 import json
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any, Callable, ParamSpec, TypeVar
 
 import typer
 from rich.console import Console
-from rich.table import Table
 
+from khub.core.errors import LocatedError
 from khub.core.locate import find_workspace
+
+_P = ParamSpec("_P")
+_R = TypeVar("_R")
+
+
+def guard(fn: Callable[_P, _R]) -> Callable[_P, _R]:
+    """Decorate a command function with the LocatedError → stderr + exit 1 boundary."""
+
+    @functools.wraps(fn)
+    def wrapper(*args: _P.args, **kwargs: _P.kwargs) -> _R:
+        try:
+            return fn(*args, **kwargs)
+        except LocatedError as err:
+            typer.echo(err.message, err=True)
+            raise typer.Exit(1) from None
+
+    return wrapper
 
 
 def resolve_root(ctx: typer.Context) -> Path:
@@ -44,9 +67,9 @@ def want_json(fmt: str) -> bool:
     return fmt == "json" or not is_tty()
 
 
-def emit(data: Any, fmt: str, build_table: Callable[[Any], Table]) -> None:
-    """Print ``data`` as JSON (json format or non-TTY) or a Rich table (TTY)."""
+def emit(data: Any, fmt: str, human: Callable[[], None]) -> None:
+    """Print ``data`` as one JSON document (json format or non-TTY) or run the human view."""
     if want_json(fmt):
         typer.echo(json.dumps(data, default=str))
     else:
-        Console().print(build_table(data))
+        human()

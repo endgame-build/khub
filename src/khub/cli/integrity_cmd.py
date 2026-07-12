@@ -9,16 +9,15 @@ canonical examples asserted in the spec.
 
 from __future__ import annotations
 
-import json
 from typing import Any
 
 import typer
 
-from khub.cli._render import resolve_root, want_json
-from khub.core.errors import LocatedError
+from khub.cli._render import emit, guard, resolve_root
 from khub.core.integrity import CheckReport, ValidateReport, check, validate
 
 
+@guard
 def validate_command(
     ctx: typer.Context,
     target: str = typer.Argument(None, metavar="TARGET", help="A type or type/slug; default: all."),
@@ -27,32 +26,26 @@ def validate_command(
     fmt: str = typer.Option("text", "--format", help="text (Rich on a TTY) or json."),
 ) -> None:
     """Validate entities: khub validate [TARGET] [--strict] [--fix]."""
-    try:
-        root = resolve_root(ctx)
-        report = validate(root, target, strict=strict, fix=fix)
-    except LocatedError as err:
-        typer.echo(err.message, err=True)
-        raise typer.Exit(1) from None
+    root = resolve_root(ctx)
+    report = validate(root, target, strict=strict, fix=fix)
     _emit_validate(report, fmt)
     if not report.ok:
         raise typer.Exit(1)
 
 
 def _emit_validate(report: ValidateReport, fmt: str) -> None:
-    if want_json(fmt):
-        typer.echo(
-            json.dumps(
-                {
-                    "count": report.count,
-                    "errors": [
-                        {"id": e.id, "type": e.type, "slug": e.slug, "field": e.field, "reason": e.reason}
-                        for e in report.errors
-                    ],
-                    "fixed": report.fixed,
-                }
-            )
-        )
-        return
+    payload = {
+        "count": report.count,
+        "errors": [
+            {"id": e.id, "type": e.type, "slug": e.slug, "field": e.field, "reason": e.reason}
+            for e in report.errors
+        ],
+        "fixed": report.fixed,
+    }
+    emit(payload, fmt, lambda: _validate_human(report))
+
+
+def _validate_human(report: ValidateReport) -> None:
     if report.ok:
         typer.echo(f"Validated {report.count} entities; 0 errors")
         return
@@ -61,6 +54,7 @@ def _emit_validate(report: ValidateReport, fmt: str) -> None:
     typer.echo(f"Validated {report.count} entities; {len(report.errors)} errors")
 
 
+@guard
 def check_command(
     ctx: typer.Context,
     strict: bool = typer.Option(
@@ -69,21 +63,18 @@ def check_command(
     fmt: str = typer.Option("text", "--format", help="text (Rich on a TTY) or json."),
 ) -> None:
     """Check the active graph: completeness, orphans, dangling edges, strays, cycles."""
-    try:
-        root = resolve_root(ctx)
-        report = check(root, strict=strict)
-    except LocatedError as err:
-        typer.echo(err.message, err=True)
-        raise typer.Exit(1) from None
+    root = resolve_root(ctx)
+    report = check(root, strict=strict)
     _emit_check(report, fmt)
     if not report.passed:
         raise typer.Exit(1)
 
 
 def _emit_check(report: CheckReport, fmt: str) -> None:
-    if want_json(fmt):
-        typer.echo(json.dumps(_check_payload(report)))
-        return
+    emit(_check_payload(report), fmt, lambda: _check_human(report))
+
+
+def _check_human(report: CheckReport) -> None:
     if report.passed:
         for o in report.orphans:
             typer.echo(f"orphan {o} (informational)")

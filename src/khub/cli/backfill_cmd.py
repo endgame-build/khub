@@ -10,11 +10,11 @@ from __future__ import annotations
 
 import typer
 
-from khub.cli._render import resolve_root
+from khub.cli._render import guard, resolve_root
 from khub.core.backfill import BackfillReport, backfill
-from khub.core.errors import LocatedError
 
 
+@guard
 def backfill_command(
     ctx: typer.Context,
     type_: str = typer.Option(
@@ -25,12 +25,8 @@ def backfill_command(
     ),
 ) -> None:
     """Backfill missing dates and frontmatter: khub backfill [--type T] [--dry-run]."""
-    try:
-        root = resolve_root(ctx)
-        report = backfill(root, type_, dry_run=dry_run)
-    except LocatedError as err:
-        typer.echo(err.message, err=True)
-        raise typer.Exit(1) from None
+    root = resolve_root(ctx)
+    report = backfill(root, type_, dry_run=dry_run)
     _emit(report)
 
 
