@@ -23,3 +23,7 @@ jobs:
       - run: uv run ruff check src tests
       - run: uv run mypy
       - run: uv run pytest
+      - name: CLI reference is current
+        run: |
+          uv run typer --app app khub.cli.main utils docs --name khub --output docs/cli-reference.md
+          git diff --exit-code docs/cli-reference.md

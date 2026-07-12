@@ -2,6 +2,8 @@
 
 The CLI is a thin, schema-introspecting adapter over the core library's verbs (create, get, update, delete, link, query). It hardcodes no per-type knowledge; it reads the active schema at runtime. Every read command emits `--format json` for an agent or a Rich table for a human. The Claude Code skill maps agent intent onto these same commands, and the MCP server (post-v1) exposes the same verbs as tools.
 
+> **Two CLI docs.** This page is the hand-written contract — JSON output shapes, exit codes, and the schema-driven `--<field>` options. The mechanical flag surface (every command with its declared flags and defaults) is generated from the Typer app into [`cli-reference.md`](./cli-reference.md) and checked for drift in CI. The generated page cannot see the dynamic `--<field>` options on `add`/`edit`/`query` — those live here.
+
 ## Global options
 
 | Option | Meaning |
