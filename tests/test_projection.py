@@ -376,7 +376,8 @@ def scaffold_ws(fresh_ws: Path, seed: Seed) -> Path:
     entity.create(fresh_ws, "person", {"name": "Noor", "role": "partner"}, id_="noor")
     entity.create(fresh_ws, "client", {"name": "Initech"}, id_="initech")
     entity.create(
-        fresh_ws, "opportunity", {"stage": "prospect", "client": "initech", "owner": "noor"},
+        fresh_ws, "opportunity",
+        {"name": "Initech Deal", "stage": "prospect", "client": "initech", "owner": "noor"},
         id_="initech-deal",
     )
     seed(fresh_ws, "opportunities/legacy-deal/_index.md", type="opportunity", client="initech")

@@ -46,6 +46,7 @@ entities:
     layout: folder
     path: opportunities
     attributes:
+      name:   { type: text, required: true }   # deal name = slug source (like client/person; base `title` also mints)
       stage:  { enum: [prospect, proposal-sent, won, signed, lost], required: true }   # CRM "Sales" pipeline stages (deal system of record)
       source: { enum: [event, referral, outbound, inbound, northwind, existing-client] }
       crm_id:     { type: text, pattern: '^[0-9]+$' }   # CRM deal id (confidence lives in CRM, not duplicated here)

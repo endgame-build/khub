@@ -31,7 +31,8 @@ def seed_clean(root: Path) -> None:
     entity.create(root, "person", {"name": "Noor", "role": "partner", "mood": "good"}, id_="noor")
     entity.create(root, "client", {"name": "Initech"}, id_="initech")
     entity.create(
-        root, "opportunity", {"stage": "prospect", "client": "initech", "owner": "noor"},
+        root, "opportunity",
+        {"name": "Initech Deal", "stage": "prospect", "client": "initech", "owner": "noor"},
         id_="initech-deal",
     )
     entity.create(
