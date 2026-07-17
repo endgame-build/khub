@@ -163,6 +163,8 @@ Relations: `provider` → repo \| external-system (required, union).
 
 The authoritative spec is linked via `resource`. The body carries what a spec cannot: idempotency rules, auth model, versioning policy, known consumer assumptions.
 
+Contracts are born in their provider's spoke and synced into the hub; vendor contracts are the hand-authored exception. See [Authorship](#authorship-hub-spoke-synced-spoke-resident).
+
 ### external-system
 
 Layout: file (`external-systems/{slug}.md`). A third-party dependency agents must not guess about: vendor APIs, PMS integrations, payment providers.
@@ -172,6 +174,28 @@ Layout: file (`external-systems/{slug}.md`). A third-party dependency agents mus
 | `title` | required | |
 
 Relations: `consumes` → contract (many) — for surfaces we expose to the vendor, such as webhooks. A vendor API we call is a contract whose `provider` is the external system.
+
+## Authorship: hub, spoke-synced, spoke-resident
+
+Every entity has exactly one authoring home. The litmus test for spoke authorship: does exactly one spoke naturally own it, can CI next to the code keep it honest, and does it still mean something across repos? All three yes → spoke-authored and synced to the hub. Cross-repo meaning missing → spoke-authored but spoke-resident. Single ownership missing → hub-authored.
+
+| Class | Types | Mechanics |
+|---|---|---|
+| Hub-authored | capability, feature, work-package, requirement, adr (system scope), pdr, external-system, vendor contracts | authored in place; no sync |
+| Spoke-authored, hub-synced | contract (born in its provider repo) — the only synced type | copied up by a sync with `synced_from` provenance; hub `validate`/`check` run on ingest |
+| Spoke-authored, spoke-resident | repo-local decisions (TDRs), insights — future build-spoke preset | never synced; promoted to hub entities by hand when they graduate to system scope |
+
+One rule keeps the classes stable: **vocabulary is hub-owned; spokes claim against it.** Capabilities are many-realized, so spoke-minted capabilities would fragment the map (three teams minting "reservations", "reservation-mgmt", "booking"). Spokes reference hub capability slugs; the claims travel, the vocabulary never does.
+
+Contracts are the only entities that cross the boundary upward — a spoke is authoritative for its public surface, and the contract is that surface. Repo rows and feature/test specs stay hub-authored; repo interiors (TDRs, insights) stay home.
+
+### The contract lifecycle
+
+A contract entity is born in its provider's spoke — `docs/contracts/<slug>.md` in this same `contract` schema, spec file as sibling — from `proposed` onward. The provider team flips status, writes the semantics prose, and evolves the spec behind contract tests and breaking-change gates. The hub's `contracts/` inventory is a synced projection of those files: the sync stamps provenance, derives `provider` from the repo of origin, and refuses slug collisions across spokes rather than dedupe-renaming (a silently renamed contract breaks consumer edges). `consumes` edges stay on hub `repos.jsonl` rows, so the blast-radius query resolves against one node, and a spoke deleting a still-consumed contract surfaces as dangling edges at the next hub `check` — the cross-repo breaking-change tripwire.
+
+Two exceptions are hand-authored in hub `contracts/`, distinguishable by the absent `synced_from`: vendor contracts (no spoke exists; the spec is a vendored snapshot under `specs/contract/`, pinned deliberately — the vendor drifting is their event), and the rare design-first contract whose provider repo does not exist yet (create the repo first where possible; the proposed contract should be its first commit).
+
+`specs/contract/` holds hub-side draft specs and vendor snapshots only; a living spec for an implemented contract lives in its provider repo, and Backstage or any other catalog is a read-side projection of this graph, never a source.
 
 ## Design note: what was deliberately left out
 

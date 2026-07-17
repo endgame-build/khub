@@ -42,8 +42,16 @@
 #    `verifies` edge. Qualifier-named sibling dirs (specs/feature, specs/test)
 #    follow the decisions/{architecture,product} scheme: dirs by domain,
 #    types by term.
+#  - Authorship model (docs/build-hub-preset.md#authorship): contract entities
+#    are BORN in their provider's spoke (docs/contracts/<slug>.md, same schema)
+#    and synced into hub contracts/ with `synced_from` provenance; vendor
+#    contracts are the hand-authored exception. specs/contract/ holds hub-side
+#    drafts and vendor snapshots only. Vocabulary types (capability) are never
+#    spoke-minted — spokes claim against hub slugs.
 #  - The spoke preset (per-code-repo) is deferred; spoke→hub references are
 #    plain-text hub slugs anyway (cross-workspace edges can't be checked in v1).
+#    Its sharpened v1 scope: contract template, spoke-resident decision (TDR)
+#    + insight. Contract is the ONLY spoke→hub synced type.
 
 version: "0.1.0"
 
