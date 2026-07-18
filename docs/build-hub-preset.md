@@ -183,7 +183,7 @@ Every entity has exactly one authoring home. The litmus test for spoke authorshi
 |---|---|---|
 | Hub-authored | capability, feature, work-package, requirement, adr (system scope), pdr, external-system, vendor contracts | authored in place; no sync |
 | Spoke-authored, hub-synced | contract (born in its provider repo) — the only synced type | copied up by a sync with `synced_from` provenance; hub `validate`/`check` run on ingest |
-| Spoke-authored, spoke-resident | repo-local decisions (TDRs), insights — future build-spoke preset | never synced; promoted to hub entities by hand when they graduate to system scope |
+| Spoke-authored, spoke-resident | repo-local decisions (TDRs) — see [`build-spoke-preset.md`](build-spoke-preset.md) | never synced; promoted to hub entities by hand when they graduate to system scope |
 
 One rule keeps the classes stable: **vocabulary is hub-owned; spokes claim against it.** Capabilities are many-realized, so spoke-minted capabilities would fragment the map (three teams minting "reservations", "reservation-mgmt", "booking"). Spokes reference hub capability slugs; the claims travel, the vocabulary never does.
 
@@ -202,7 +202,7 @@ Two exceptions are hand-authored in hub `contracts/`, distinguishable by the abs
 The type list was cut against the doc types that stay alive in real engagement hubs (umbrella, hooli, vandelay). These did not make it, each with the same profile — only ever written once, as generated pipeline output, then frozen:
 
 - **stakeholder**, **term/glossary**, **environment**, **risk**, **milestone**, **persona**, **pattern** — zero hand-maintained instances anywhere. Add any of them back with a schema edit the day the engagement starts writing them.
-- **The spoke preset** (per-code-repo types) is deferred. Spoke→hub references are plain-text hub slugs regardless, since cross-workspace edges cannot be integrity-checked in v1.
+- **The spoke side** lives in its own preset — [`build-spoke-preset.md`](build-spoke-preset.md). Spoke→hub references are plain-text hub slugs, since cross-workspace edges cannot be integrity-checked in v1.
 - **The product brief** stays a plain file in the hub repo; singletons do not need a schema type.
 
 ## See also
