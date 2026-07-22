@@ -175,7 +175,7 @@ def test_cli_unknown_preset_message(tmp_path: Path) -> None:
     target.mkdir()
     result = runner.invoke(app, ["init", "bogus", str(target)])
     assert result.exit_code == 1
-    assert "Unknown preset 'bogus'. Known presets: firm-ops" in result.output
+    assert "Unknown preset 'bogus'. Known presets: build-hub, build-spoke, firm-ops" in result.output
     assert list(target.iterdir()) == []
 
 

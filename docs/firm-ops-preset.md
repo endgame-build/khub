@@ -1,6 +1,6 @@
 # Firm-ops preset
 
-**The operating graph of a consulting and delivery firm.** `firm-ops` models a firm as it runs: pipeline deals become delivery engagements, engagements generate meetings and transcripts, delivery yields case studies; and behind all of it sit the people, clients, and partnerships that carry the work. It is the port of firm-hq's hand-rolled schema, and the one preset that ships today.
+**The operating graph of a consulting and delivery firm.** `firm-ops` models a firm as it runs: pipeline deals become delivery engagements, engagements generate meetings and transcripts, delivery yields case studies; and behind all of it sit the people, clients, and partnerships that carry the work. It is the port of firm-hq's hand-rolled schema.
 
 `khub init firm-ops ./my-hub` seeds a workspace from it. For a hands-on first run, start with [`getting-started.md`](getting-started.md); to author or extend the types yourself, see [`schema.md`](schema.md).
 

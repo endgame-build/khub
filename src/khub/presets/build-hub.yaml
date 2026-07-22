@@ -1,0 +1,197 @@
+# build-hub.yaml — the khub build-hub preset (the system-level hub of a build project).
+#
+# 12 entity types; 10 relation predicates in 18 declarations (+ the 4 universal
+# edges inherited from core). The hub holds knowledge meaningful only ACROSS
+# repos: what the system is (capability, repo, contract, external-system), why
+# it is shaped this way (adr, pdr), what must hold (requirement), and what to
+# build (feature, work-package, feature-spec, test-spec, solution-spec).
+# Anything a pipeline
+# regenerates (facet views, knowledge-graph jsonl, OpenAPI specs) is linked out
+# via `resource` — never duplicated as entities.
+#
+# Authoring decisions worth review:
+#  - Evidence base: the doc types alive across real hubs (umbrella, hooli,
+#    vandelay). Ceremonial inventories (stakeholder map, risk register, glossary,
+#    traceability matrix, environments) only ever existed as frozen one-shot
+#    pipeline output — deliberately NOT types. Add back via schema edit if the
+#    engagement starts writing them.
+#  - capability = what the system does (durable functional map, facet UCAP
+#    join); feature = a bounded change to it (work container); work-package =
+#    an executable slice of a feature.
+#  - adr / pdr are SEPARATE types with a symmetric shape (status + supersedes +
+#    affects). `superseded` is never stored — it is the computed inverse of the
+#    inbound `supersedes` edge.
+#  - Split-by-churn contract edges: `provider` lives ON the contract (required
+#    and near-immutable, so `check` catches unowned contracts); `consumes`
+#    lives on each consumer — the repo row or external-system file its owner
+#    already edits. `consumed_by` is computed at read time.
+#  - status enums are coarse (planned/active/done/dropped) so syncing from the
+#    execution tracker (beads/Jira) stays a trivial mapping; khub is the
+#    spec-of-record, the tracker owns fine-grained execution state.
+#  - repo is a jsonl collection row; slug = git basename (facet merge-kg's
+#    `codebase` join key). `repo` is org/name, loosely pattern-pinned — an
+#    engagement tightens the pattern to its org in .khub/schema.yaml.
+#  - facet_id on capability/contract is a non-authoritative alias joining the
+#    generated inventories (UCAP-XXX, OAPI-XXX).
+#  - No status field declares a `default`: `add` applies no schema defaults
+#    (verified against the engine — only draft/created/updated are verb-filled),
+#    so a default on a required field would promise an auto-fill that never
+#    happens. Status is always an explicit statement; a missing one is exactly
+#    what `check` reports.
+#  - feature-spec / test-spec mirror forge's FS/TS pair as hub entities (the
+#    alive spec corpus in real engagements); the FS→TS pairing is the
+#    `verifies` edge. Qualifier-named sibling dirs (specs/feature, specs/test,
+#    specs/solution) follow the decisions/{architecture,product} scheme: dirs
+#    by domain, types by term.
+#  - solution-spec has RFC SEMANTICS: a point-in-time multi-component design
+#    (proposed/accepted/rejected, superseded by the next one), never a living
+#    architecture document — RFCs age well because they don't pretend to be
+#    current. Accepted choices distill into adrs, surfaces into contracts;
+#    `affects` fans out to the repos/contracts/capabilities it connects.
+#  - Authorship model (docs/build-hub-preset.md#authorship): contract entities
+#    are BORN in their provider's spoke (docs/contracts/<slug>.md, same schema)
+#    and synced into hub contracts/ with `synced_from` provenance; vendor
+#    contracts are the hand-authored exception. specs/contract/ holds hub-side
+#    drafts and vendor snapshots only. Vocabulary types (capability) are never
+#    spoke-minted — spokes claim against hub slugs.
+#  - Implementation status is DERIVED, never marked: the tracker flips
+#    work-package status on PR merge; feature.requirements (obligation) +
+#    work-package.repo (routing) make "implemented, and where" a traversal.
+#    requirement.realized_in is the stored backstop for reality outside the
+#    work spine (brownfield bootstrap, hotfixes); derivation audits the claim.
+#  - facet bootstrap: facet_id on capability / requirement / adr /
+#    solution-spec / contract is the import traceability spine. Legacy import
+#    is a ONE-TIME curated promotion (facet output -> hub entities); facet
+#    reruns feed a reconcile report, never an overwrite. pdr carries no
+#    facet_id — facet has no product-decision concept.
+#  - The per-code-repo counterpart is build-spoke.yaml (contract born there +
+#    resident tdr). Contract is the ONLY spoke→hub synced type;
+#    spoke→hub references are plain-text hub slugs (cross-workspace edges
+#    can't be checked in v1).
+
+version: "0.1.0"
+
+entities:
+
+  # ------------------------------------------------------------- system map
+  capability:
+    layout: file
+    path: capabilities
+    attributes:
+      title:    { required: true }   # override core OKF title -> required (slug source)
+      facet_id: { type: text }       # UCAP-XXX — joins the facet-synthesis inventory
+
+  # ------------------------------------------------------------------- work
+  feature:
+    layout: file
+    path: features
+    attributes:
+      title:  { required: true }
+      status: { enum: [planned, active, done, dropped], required: true }
+    relations:
+      capabilities: { to: capability, many: true }    # placement: where in the system map
+      requirements: { to: requirement, many: true }   # obligation: what this change satisfies
+
+  work-package:
+    layout: file
+    path: work-packages
+    attributes:
+      title:  { required: true }
+      status: { enum: [planned, active, done, dropped], required: true }
+    relations:
+      feature: { to: feature, required: true }
+      repo:    { to: repo }   # where the slice lands — one repo; a slice spanning repos gets split
+
+  feature-spec:
+    layout: file
+    path: specs/feature
+    attributes:
+      title: { required: true }
+    relations:
+      feature: { to: feature, required: true }   # the feature this spec elaborates
+
+  test-spec:
+    layout: file
+    path: specs/test
+    attributes:
+      title: { required: true }
+    relations:
+      verifies: { to: feature-spec, required: true }   # the forge FS→TS pairing
+
+  solution-spec:
+    layout: file
+    path: specs/solution
+    attributes:
+      title:    { required: true }
+      status:   { enum: [proposed, accepted, rejected], required: true }
+      facet_id: { type: text }       # TDR-NN — as-built design imported at bootstrap
+    relations:
+      supersedes: { to: solution-spec }     # the next design supersedes this one
+      affects:    { to: any, many: true }   # the components it connects: repos, contracts, capabilities, features
+
+  # ----------------------------------------------------------- requirements
+  requirement:
+    layout: file
+    path: requirements
+    attributes:
+      title:    { required: true }
+      kind:     { enum: [functional, quality, constraint, business-rule], required: true }
+      facet_id: { type: text }       # EARS-/NFR-/CONST-XXX — import traceability
+    relations:
+      capabilities: { to: capability, many: true }
+      realized_in:  { to: repo, many: true }   # stored backstop: reality outside the work spine
+    # requirement prose (EARS-friendly) lives in the body
+
+  # -------------------------------------------------------------- decisions
+  adr:
+    layout: file
+    path: decisions/architecture
+    attributes:
+      title:    { required: true }
+      status:   { enum: [proposed, accepted, rejected], required: true }
+      facet_id: { type: text }       # ADR-/TDD-XXX — import traceability
+    relations:
+      supersedes: { to: adr }             # superseded = computed inverse, never stored
+      affects:    { to: any, many: true } # blast radius: capabilities, repos, contracts, ...
+
+  pdr:
+    layout: file
+    path: decisions/product
+    attributes:
+      title:  { required: true }
+      status: { enum: [proposed, accepted, rejected], required: true }
+    relations:
+      supersedes: { to: pdr }
+      affects:    { to: any, many: true }
+
+  # --------------------------------------------------------------- topology
+  repo:
+    layout: collection
+    path: repos.jsonl                # format derived from the path suffix
+    attributes:
+      repo:   { type: text, required: true, pattern: '^[a-z0-9._-]+/[a-z0-9._-]+$' }
+      status: { enum: [active, archived], required: true }
+    relations:
+      capabilities: { to: capability, many: true }
+      consumes:     { to: contract, many: true }   # churny side of the contract edge
+
+  contract:
+    layout: file
+    path: contracts
+    attributes:
+      title:    { required: true }
+      kind:     { enum: [api, events, data], required: true }   # protocol lives in the linked spec
+      status:   { enum: [proposed, active, deprecated], required: true }
+      facet_id: { type: text }       # OAPI-XXX / AAPI-XXX — joins facet-contract output
+    relations:
+      provider: { to: [repo, external-system], required: true }   # near-immutable side
+    # the spec itself is linked via `resource`; the body carries what a spec
+    # can't: idempotency rules, auth model, versioning policy
+
+  external-system:
+    layout: file
+    path: external-systems
+    attributes:
+      title: { required: true }
+    relations:
+      consumes: { to: contract, many: true }   # e.g. webhooks we emit to a vendor
