@@ -2,7 +2,7 @@
 
 Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); khub is pre-release.
 
-## [Unreleased]
+## [0.8.0] — 2026-07-24
 
 ### Added
 
@@ -26,7 +26,7 @@ Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelo
 - **Presets are directories** — `src/khub/presets/<name>/schema.yaml` (+ `templates/*.yaml`);
   `--preset-source` uses the same convention. BREAKING for flat `<name>.yaml` preset sources.
 
-- **`build-hub` preset rewritten to the converged 16-type ontology (preset 0.2.0)** — the
+- **`build-hub` preset rewritten to the converged ontology (preset 0.2.0)** — the
   paved-road-hub convergence (2026-07-24). Layout moves to two knowledge roots
   (`knowledge/{product,architecture}` durable truth · root `specs/` delivery state). New
   governance types: `domain` (body = blueprint narration; `depends_on` narrowed to

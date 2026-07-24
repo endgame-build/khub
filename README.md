@@ -32,7 +32,7 @@ Full command surface and JSON contracts: [`docs/cli.md`](docs/cli.md). Feature h
 khub is a `khub` console script (Python 3.11+). Install it, then seed a workspace from a preset:
 
 ```bash
-uv tool install git+ssh://git@github.com/endgame-build/khub@v0.7.1   # or clone + uv sync
+uv tool install git+ssh://git@github.com/endgame-build/khub@v0.8.0   # or clone + uv sync
 khub init firm-ops ./my-hub          # scaffold .khub/ (+ templates, singletons), wire agent files, install the skill
 cd my-hub
 ```
