@@ -40,6 +40,9 @@ _TOP_KEYS = {"title", "sections"}
 # Leading list numbering on a heading ("1.", "3)", "2.1"), stripped before matching.
 _NUMBERING = re.compile(r"^\d+([.)]\d*)*[.)]?\s+")
 _H2 = re.compile(r"^##\s+(.*)$", re.MULTILINE)
+# Fenced code blocks — a `## heading` inside one is content, not structure, and
+# must never satisfy a required section.
+_FENCE = re.compile(r"^(```|~~~).*?^\1[^\S\n]*$", re.MULTILINE | re.DOTALL)
 
 
 @dataclass(frozen=True)
@@ -118,8 +121,8 @@ def load_template(root: Path, type_: str) -> BodyTemplate | None:
 
 
 def body_h2s(body: str) -> list[str]:
-    """The body's H2 headings, in order, numbering stripped."""
-    return [_NUMBERING.sub("", h.strip()) for h in _H2.findall(body)]
+    """The body's H2 headings, in order, numbering stripped; fenced code ignored."""
+    return [_NUMBERING.sub("", h.strip()) for h in _H2.findall(_FENCE.sub("", body))]
 
 
 def missing_heading(template: BodyTemplate, body: str) -> str | None:

@@ -148,7 +148,14 @@ def _body_structure_errors(
     for type_, rtype in resolved.types.items():
         if rtype.storage.fmt != "md" or rtype.storage.layout == "collection":
             continue
-        tpl = load_template(root, type_)
+        # A broken template must not abort the run: validate's contract is to
+        # collect every finding. Report it once, on the type, and move on.
+        try:
+            tpl = load_template(root, type_)
+        except Exception as err:  # noqa: BLE001 — LocatedError or a raw YAML parse error
+            reason = getattr(err, "message", None) or str(err)
+            errors.append(FieldError(type=type_, slug="*", field="template", reason=reason))
+            continue
         if tpl is None:
             continue
         for node in sorted(valid.nodes):
@@ -157,7 +164,14 @@ def _body_structure_errors(
             path = entity_path(root, rtype, node[1])
             try:
                 _, body = _read_doc(path)
-            except Exception:  # noqa: BLE001 — unparseable files are reported elsewhere
+            except Exception:  # noqa: BLE001 — frontmatter parsed (the node exists) but the
+                # full read failed; scan did NOT flag this file, so stay loud here.
+                errors.append(
+                    FieldError(
+                        type=type_, slug=node[1], field="body",
+                        reason="body could not be read for the structure check",
+                    )
+                )
                 continue
             missing = missing_heading(tpl, body)
             if missing is not None:

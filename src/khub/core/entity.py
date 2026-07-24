@@ -165,8 +165,13 @@ def create(
     attrs, rels, extras = _partition(rtype, fields, strict=strict)
     # Template seeding: an md type with a workspace template and no explicit body
     # starts from the scaffold (--no-template / use_template=False opts out).
+    # A broken template never blocks capture — seed nothing and let `validate`
+    # report the template itself.
     if use_template and not body.strip() and rtype.storage.fmt == "md":
-        tpl = load_template(root, type_)
+        try:
+            tpl = load_template(root, type_)
+        except Exception:  # noqa: BLE001 — validate carries the template finding
+            tpl = None
         if tpl is not None:
             body = tpl.render()
     body = _md_normalized(body, rtype)

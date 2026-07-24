@@ -218,6 +218,34 @@ def test_validate_reports_missing_section(ws: Path) -> None:
     assert "Details" in err.reason
 
 
+def test_validate_collects_broken_template_as_finding(ws: Path) -> None:
+    """A malformed template is a finding, never an aborted run (review #1)."""
+    create(ws, "note", {"title": "Fine"})
+    (ws / ".khub" / "templates" / "note.yaml").write_text("- heading: [unclosed\n")
+    report = validate(ws)
+    assert not report.ok
+    err = next(e for e in report.errors if e.field == "template")
+    assert err.type == "note"
+
+
+def test_add_never_blocked_by_broken_template(ws: Path) -> None:
+    """Capture never blocked: a broken template seeds nothing (review #2)."""
+    (ws / ".khub" / "templates" / "note.yaml").write_text(
+        "sections:\n  - heading: Summary\n    optional: true\n"
+    )
+    result = create(ws, "note", {"title": "Still writes"})
+    assert result.path.is_file()
+    assert "## Summary" not in result.path.read_text()
+
+
+def test_fenced_heading_never_satisfies_a_section() -> None:
+    """A ## line inside a code fence is content, not structure (review #3)."""
+    tpl = BodyTemplate(type="t", sections=(Section("Config"),))
+    body = "## Intro\n\n```md\n## Config\n```\n"
+    assert missing_heading(tpl, body) == "Config"
+    assert missing_heading(tpl, body + "\n## Config\n") is None
+
+
 # --- check: required singleton ---------------------------------------------------
 
 

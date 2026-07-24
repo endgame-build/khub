@@ -87,7 +87,14 @@ def init_workspace(
     name: str | None = None,
     force: bool = False,
 ) -> InitResult:
-    """Scaffold a workspace at ``path`` from ``preset``. Writes only ``.khub/``."""
+    """Scaffold a workspace at ``path`` from ``preset``.
+
+    Writes ``.khub/`` (schema, config, templates), a ``.gitignore`` line, the
+    empty type directories, and any missing md singletons (creations only —
+    never an existing entity file). On failure the ``.khub/`` it created and
+    the singletons it minted are removed; directories and the ``.gitignore``
+    line may remain (harmless, idempotent on retry).
+    """
     # Guards run before any write: reject an unknown preset, refuse a non-empty
     # target without --force. Nothing on disk changes until both pass.
     preset_path = resolve_preset(preset, preset_source)
@@ -161,7 +168,8 @@ def init_workspace(
         # never touched (WS-003 as amended).
         _create_singletons(target, entities, created_singletons)
     except BaseException:
-        # Keep init atomic: drop the partial .khub/ we just created, and any
+        # Best-effort unwind (not full atomicity — dirs/.gitignore may remain):
+        # drop the partial .khub/ we just created, and any
         # singleton files this run minted outside it.
         for _, spath in created_singletons:
             spath.unlink(missing_ok=True)
