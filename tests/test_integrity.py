@@ -10,7 +10,6 @@ gate sees them.
 from __future__ import annotations
 
 import json
-import subprocess
 from pathlib import Path
 from typing import Callable
 
@@ -345,57 +344,6 @@ def test_cli_check_cycle(cycle_ws: Path, monkeypatch) -> None:
     data = json.loads(out.output)
     assert len(data["cycles"]) == 1
     assert set(data["cycles"][0]) == {"fragment/a", "fragment/b", "fragment/c"}
-
-
-# --- validate --fix (git-backed date backfill) -------------------------------
-
-
-def _git(root: Path, *args: str, when: str | None = None) -> None:
-    env = None
-    if when:
-        import os
-
-        env = os.environ.copy()
-        env["GIT_AUTHOR_DATE"] = env["GIT_COMMITTER_DATE"] = when
-    subprocess.run(["git", "-C", str(root), *args], check=True, capture_output=True, text=True, env=env)
-
-
-@pytest.mark.unit
-def test_validate_fix_backfills_updated(fresh_ws: Path, seed: Seed) -> None:
-    """TS-INT-001-U07 (REQ-INT001-01): --fix backfills a missing `updated` from git."""
-    entity.create(fresh_ws, "person", {"name": "W", "role": "consultant"}, id_="w")
-    seed(fresh_ws, "fragments/undated.md", type="fragment", stage="raw", owner="w",
-         created="2026-01-01")  # no `updated`
-    _git(fresh_ws, "init")
-    _git(fresh_ws, "config", "user.email", "t@t")
-    _git(fresh_ws, "config", "user.name", "t")
-    _git(fresh_ws, "add", "-A")
-    _git(fresh_ws, "commit", "-m", "seed", when="2026-01-05T12:00:00")
-
-    before = frontmatter.load(str(fresh_ws / "fragments" / "undated.md")).metadata
-    assert "updated" not in before
-    report = validate(fresh_ws, fix=True)
-    assert "fragment/undated" in report.fixed
-    after = frontmatter.load(str(fresh_ws / "fragments" / "undated.md")).metadata
-    assert str(after["updated"]) == "2026-01-05"
-
-
-@pytest.mark.unit
-def test_validate_fix_respects_target(fresh_ws: Path, seed: Seed) -> None:
-    """Review #1: --fix scoped to a target leaves untargeted entities untouched."""
-    entity.create(fresh_ws, "person", {"name": "W", "role": "consultant"}, id_="w")
-    seed(fresh_ws, "fragments/a.md", type="fragment", stage="raw", owner="w", created="2026-01-01")
-    seed(fresh_ws, "fragments/b.md", type="fragment", stage="raw", owner="w", created="2026-01-01")
-    _git(fresh_ws, "init")
-    _git(fresh_ws, "config", "user.email", "t@t")
-    _git(fresh_ws, "config", "user.name", "t")
-    _git(fresh_ws, "add", "-A")
-    _git(fresh_ws, "commit", "-m", "seed", when="2026-01-05T12:00:00")
-
-    report = validate(fresh_ws, "fragment/a", fix=True)
-    assert report.fixed == ["fragment/a"]
-    assert "updated" in frontmatter.load(str(fresh_ws / "fragments" / "a.md")).metadata
-    assert "updated" not in frontmatter.load(str(fresh_ws / "fragments" / "b.md")).metadata
 
 
 # --- review-fix regressions --------------------------------------------------

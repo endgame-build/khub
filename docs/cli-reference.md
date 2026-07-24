@@ -327,7 +327,7 @@ $ khub history [OPTIONS] ID
 
 ## `khub validate`
 
-Validate entities: khub validate [TARGET] [--strict] [--fix].
+Validate entities: khub validate [TARGET] [--strict].
 
 **Usage**:
 
@@ -342,7 +342,6 @@ $ khub validate [OPTIONS] [TARGET]
 **Options**:
 
 * `--strict`: Close the schema: reject undeclared keys.
-* `--fix`: Backfill a missing `updated` from git (v1 scope).
 * `--format TEXT`: text (Rich on a TTY) or json.  [default: text]
 * `--help`: Show this message and exit.
 

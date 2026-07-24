@@ -22,12 +22,11 @@ def validate_command(
     ctx: typer.Context,
     target: str = typer.Argument(None, metavar="TARGET", help="A type or type/slug; default: all."),
     strict: bool = typer.Option(False, "--strict", help="Close the schema: reject undeclared keys."),
-    fix: bool = typer.Option(False, "--fix", help="Backfill a missing `updated` from git (v1 scope)."),
     fmt: str = typer.Option("text", "--format", help="text (Rich on a TTY) or json."),
 ) -> None:
-    """Validate entities: khub validate [TARGET] [--strict] [--fix]."""
+    """Validate entities: khub validate [TARGET] [--strict]."""
     root = resolve_root(ctx)
-    report = validate(root, target, strict=strict, fix=fix)
+    report = validate(root, target, strict=strict)
     _emit_validate(report, fmt)
     if not report.ok:
         raise typer.Exit(1)
@@ -40,7 +39,6 @@ def _emit_validate(report: ValidateReport, fmt: str) -> None:
             {"id": e.id, "type": e.type, "slug": e.slug, "field": e.field, "reason": e.reason}
             for e in report.errors
         ],
-        "fixed": report.fixed,
     }
     emit(payload, fmt, lambda: _validate_human(report))
 

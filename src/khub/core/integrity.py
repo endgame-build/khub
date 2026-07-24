@@ -27,7 +27,7 @@ from typing import Any
 
 import networkx as nx
 
-from khub.core.entity import _read_doc, _write_doc, entity_path
+from khub.core.entity import _read_doc, entity_path
 from khub.core.errors import LocatedError
 from khub.core.graph import _predicate_digraph, build_graph
 from khub.core.index import Index, build_index, filter_index, resolve_target, stray_nodes
@@ -74,7 +74,6 @@ class ValidateReport:
 
     count: int  # typed entities validated (reference markdown is never scanned)
     errors: list[FieldError]
-    fixed: list[str] = field(default_factory=list)  # ids whose `updated` --fix backfilled
 
     @property
     def ok(self) -> bool:
@@ -86,16 +85,15 @@ def validate(
     target: str | None = None,
     *,
     strict: bool = False,
-    fix: bool = False,
 ) -> ValidateReport:
     """Validate present declared fields and referential integrity over the tree.
 
     ``target`` restricts to a type or ``type/slug`` (default: the whole workspace).
-    ``--strict`` rejects undeclared keys. ``--fix`` (v1 scope) backfills a missing
-    ``updated`` date from ``git log`` before validating. Every error is collected.
+    ``--strict`` rejects undeclared keys. Every error is collected. Validate never
+    writes: repairing a missing date is ``khub backfill``'s job, so the read gate
+    stays a read.
     """
     resolved = load_schema(root)
-    fixed = _fix_updated(root, resolved, target) if fix else []
 
     index = build_index(root, resolved)
     valid = filter_index(index, stray_nodes(index))  # strays are not entities of their layout
@@ -134,7 +132,7 @@ def validate(
                 ),
                 target=target,
             )
-    return ValidateReport(count=count, errors=errors, fixed=fixed)
+    return ValidateReport(count=count, errors=errors)
 
 
 def _body_structure_errors(
@@ -335,45 +333,6 @@ def _relation_errors(
                 )
             )
     return errors
-
-
-def _fix_updated(root: Path, resolved: ResolvedSchema, target: str | None) -> list[str]:
-    """Backfill a missing ``updated`` from git for each in-target entity lacking one.
-
-    The only repair v1 ``--fix`` performs (the broader auto-repair is deferred).
-    Honors the ``target`` selector — a scoped run touches only the named entity, not
-    the whole tree — and skips strays (a stray is not an entity to repair). Reuses the
-    shared ``git log`` date helper; entities outside git, or already carrying
-    ``updated``, are left untouched.
-    """
-    from khub.core.gitlog import has_git_history, last_commit_date
-
-    if not has_git_history(root):
-        return []
-    index = build_index(root, resolved)
-    valid = filter_index(index, stray_nodes(index))
-    fixed: list[str] = []
-    for node in sorted(valid.nodes):
-        if not _in_target(node, target):
-            continue
-        type_, slug = node
-        if resolved.types[type_].storage.layout == "collection":
-            # A collection file's commit date is not a row's date — attributing it
-            # would be wrong for every row but the last-touched one. Rows get
-            # `updated` from add/edit; row-diff date attribution is the named
-            # fast-follow (docs/collections-design.md).
-            continue
-        if valid.meta[node].get("updated"):
-            continue
-        path = entity_path(root, resolved.types[type_], slug)
-        git_date = last_commit_date(root, str(path.relative_to(root)))
-        if git_date is None:
-            continue
-        cmap, body = _read_doc(path)
-        cmap["updated"] = git_date
-        _write_doc(path, cmap, body)
-        fixed.append(f"{type_}/{slug}")
-    return fixed
 
 
 # --- check -------------------------------------------------------------------

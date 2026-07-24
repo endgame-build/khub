@@ -227,3 +227,26 @@ def test_log_json_one_shape_with_git(fresh_ws: Path, monkeypatch: pytest.MonkeyP
     payload = json.loads(runner.invoke(app, ["log", "--format", "json"]).output)
     assert payload["git_available"] is True
     assert isinstance(payload["entries"], list) and payload["entries"]
+
+
+# --- surfaces removed in 0.9.0 ------------------------------------------------
+# Each asserts the surface is gone AND that its absence is a clean usage error
+# (exit 2), never a traceback and never a silently accepted no-op.
+
+
+@pytest.mark.integration
+def test_validate_fix_flag_is_gone(fresh_ws: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """`--fix` was removed in 0.9.0; date repair is `khub backfill`, and validate never writes."""
+    monkeypatch.chdir(fresh_ws)
+    result = runner.invoke(app, ["validate", "--fix"])
+    assert result.exit_code == 2
+    assert "No such option" in result.output
+
+
+@pytest.mark.integration
+def test_validate_json_drops_fixed_key(fresh_ws: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """The validate payload no longer carries `fixed` — nothing to report when nothing writes."""
+    monkeypatch.chdir(fresh_ws)
+    payload = json.loads(runner.invoke(app, ["validate", "--format", "json"]).output)
+    assert "fixed" not in payload
+    assert {"count", "errors"} <= payload.keys()
