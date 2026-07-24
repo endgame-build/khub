@@ -26,12 +26,6 @@ from khub.core.index import build_index, filter_index, stray_nodes
 from khub.core.introspect import load_schema
 from khub.core.project import effective_date, stale_days
 
-# ASCII control bytes as field/record separators in the git format string: they
-# never appear in a commit hash or ISO date, so parsing stays unambiguous even
-# when a path or date would otherwise collide with a printable delimiter.
-_REC = "\x1e"  # record separator: one per commit
-_FLD = "\x1f"  # field separator: hash | date within the commit header
-
 # INT-007 previously kept a private 30-day default here, distinct from the workspace
 # `stale_days`. The divergence was inert — the CLI always passed the configured
 # `stale_days`, so the 30-day literal surfaced only to direct library callers. Unified:
@@ -78,9 +72,9 @@ def first_commit_date(root: Path, relpath: str) -> date | None:
     """The committer date of the *first* commit touching ``relpath``, or None if untracked.
 
     ``backfill`` (FS-005) derives ``created`` from the first commit — the read
-    ``stale``/``log`` never needed, so it extends the shared helper here. ``git log``
-    lists newest-first, so the oldest commit is the last line; committer date (``%cd``)
-    matches ``last_commit_date`` and ``log``.
+    ``stale`` never needed, so it extends the shared helper here. ``git log`` lists
+    newest-first, so the oldest commit is the last line; committer date (``%cd``)
+    matches ``last_commit_date``.
 
     # ponytail: lines[-1] is the oldest commit on a linear history (the common cutover
     # case). A merge with non-monotonic committer dates could reorder the tail; lift to

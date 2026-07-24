@@ -25,6 +25,19 @@ from khub.core.errors import LocatedError
 SKILL_HINT = "khub install-skills"
 
 
+def _skill_hint(scaffolded: Path) -> str:
+    """The follow-up command, aimed at the workspace that was just scaffolded.
+
+    ``install-skills`` resolves its root by walking up from the working directory, so a
+    bare hint after ``khub init firm-ops ./my-hub`` would either find no workspace or —
+    worse — find an unrelated one above cwd. Point it at the target unless that target
+    IS cwd.
+    """
+    if scaffolded.resolve() == Path.cwd().resolve():
+        return SKILL_HINT
+    return f"khub -C {scaffolded} install-skills"
+
+
 
 @guard
 def init_command(
@@ -75,7 +88,7 @@ def init_command(
             payload["wire"] = [dataclasses.asdict(o) for o in wire_result.outcomes]
         if wire_error is not None:
             payload["wire_error"] = wire_error
-        payload["skill_hint"] = SKILL_HINT
+        payload["skill_hint"] = _skill_hint(result.path)
         typer.echo(json.dumps(payload, default=str))
         return
 
@@ -93,4 +106,4 @@ def init_command(
             typer.echo(f"{outcome.action} {outcome.path.name}")
     if wire_error is not None:
         typer.echo(f"wire skipped: {wire_error}", err=True)
-    typer.echo(f"\nAgent skill not installed. To install:\n  {SKILL_HINT}")
+    typer.echo(f"\nAgent skill not installed. To install:\n  {_skill_hint(result.path)}")

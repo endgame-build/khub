@@ -36,10 +36,16 @@ _SKILL_ARTIFACT_DIRS = (".claude/skills/", ".agents/skills/")
 
 @dataclass(frozen=True)
 class SkillOutcome:
-    """What happened when installing the agent skill."""
+    """What happened when installing the agent skill.
+
+    ``detail`` carries npx's own diagnostics on a captured (``quiet``) failure —
+    without it a failed install in machine mode is an action name and nothing to
+    debug, since the ssh/auth error npx printed was swallowed by the capture.
+    """
 
     action: str  # "installed" | "skipped-no-npx" | "failed"
     command: list[str]
+    detail: str = ""
 
 
 def skill_command(agents: Sequence[str] | None = None) -> list[str]:
@@ -80,11 +86,14 @@ def install_skill(
         return SkillOutcome(action="skipped-no-npx", command=cmd)
     try:
         completed = subprocess.run(cmd, cwd=root, capture_output=quiet, text=quiet)
-    except OSError:
+    except OSError as exc:
         # npx resolved on PATH but exec still failed (Windows .cmd, stale/broken entry).
-        return SkillOutcome(action="failed", command=cmd)
+        return SkillOutcome(action="failed", command=cmd, detail=str(exc))
     if completed.returncode != 0:
-        return SkillOutcome(action="failed", command=cmd)
+        # Under `quiet` npx's streams were captured, so carry them out; otherwise the
+        # user already saw them on the inherited terminal and `detail` stays empty.
+        captured = "".join(filter(None, (completed.stderr, completed.stdout))) if quiet else ""
+        return SkillOutcome(action="failed", command=cmd, detail=captured.strip())
     gitignore = root / ".gitignore"
     for pattern in _SKILL_ARTIFACT_DIRS:
         _append_gitignore(gitignore, pattern)

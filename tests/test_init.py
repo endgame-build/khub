@@ -332,7 +332,9 @@ def test_init_wires_and_hints_the_skill(
     assert (ws / "CLAUDE.md").exists()  # wire ran; no selection → both files
     assert (ws / "AGENTS.md").exists()
     assert "@.khub/schema.yaml" not in (ws / "AGENTS.md").read_text()  # pointer, not import
-    assert "khub install-skills" in result.output
+    # The hint aims at the scaffolded target, not cwd: `install-skills` walks up from the
+    # working directory, so a bare hint after `init ./elsewhere` would miss the workspace.
+    assert f"khub -C {ws} install-skills" in result.output
     assert not (ws / "skills-lock.json").exists()  # nothing was installed
 
 
@@ -363,7 +365,7 @@ def test_init_json_carries_wire_and_hint(
     )
     assert result.exit_code == 0, result.output
     payload = json.loads(result.output)
-    assert payload["skill_hint"] == "khub install-skills"
+    assert payload["skill_hint"] == f"khub -C {ws} install-skills"
     assert "skill" not in payload  # the outcome object is gone with the tail
     wired = {Path(o["path"]).name for o in payload["wire"]}
     assert wired == {"CLAUDE.md", "AGENTS.md"}  # non-interactive → both files
@@ -388,7 +390,7 @@ def test_init_wire_failure_is_best_effort(
     payload = json.loads(result.output)
     assert payload["wire_error"] == "schema went missing"
     assert "wire" not in payload  # no outcomes recorded when wire raised
-    assert payload["skill_hint"] == "khub install-skills"  # the hint still prints
+    assert payload["skill_hint"] == f"khub -C {ws} install-skills"  # the hint still prints
 
 
 @pytest.mark.integration

@@ -2,6 +2,31 @@
 
 Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); khub is pre-release.
 
+## [Unreleased]
+
+### Fixed
+
+- **`khub install-skills` corrupted stdout on a pipe.** The gate deciding whether to capture
+  npx's own output keyed on `--format json`, but the gate deciding whether to *emit* JSON is
+  `want_json()` — which is also true for any non-TTY. Piping the command at the default
+  `--format text` printed npx's progress and then the JSON document, leaving stdout
+  unparseable. Both now use `want_json()`.
+- **A missing `npx` no longer exits 0.** `skipped-no-npx` was a correct best-effort outcome
+  while this was an `init` tail; as a command you run on purpose it is a failure, so a CI step
+  on a Node-less image cannot report success with no skill installed.
+- **A failed install now carries npx's diagnostics.** Under capture, the ssh/auth error npx
+  printed was swallowed, leaving `{"action": "failed"}` and nothing to debug. `SkillOutcome`
+  gained `detail`, echoed to stderr.
+- **`khub init`'s hint is path-aware.** After `khub init firm-ops ./my-hub` it now prints
+  `khub -C ./my-hub install-skills`; `install-skills` resolves its root from the working
+  directory, so the bare hint found no workspace — or an unrelated one above cwd.
+- **The eval harness ran `khub init --no-skill`**, a flag 0.9.0 deleted, so `tests/eval/`
+  died with `CalledProcessError` before any agent ran.
+
+### Removed
+
+- Dead `_REC`/`_FLD` git-format separators in `core/gitlog.py`, orphaned with `khub log`.
+
 ## [0.9.0] — 2026-07-25
 
 A surface cut. Four features earned less than they cost: three are gone, one moved out of

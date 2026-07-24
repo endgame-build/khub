@@ -89,7 +89,7 @@ def build_wired(dest: Path) -> Path:
     """A wired, empty firm-ops workspace grown by the agents themselves."""
     if dest.exists():
         shutil.rmtree(dest)
-    _run(["khub", "init", "firm-ops", str(dest), "--no-skill"])
+    _run(["khub", "init", "firm-ops", str(dest)])
     _install_skills(dest)
     _install_instructions_hook(dest)
     return dest

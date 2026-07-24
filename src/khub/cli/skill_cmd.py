@@ -6,8 +6,11 @@ on SSH access to the skill repo. Split out: ``init`` scaffolds and wires, then
 names this command; installing is its own explicit step.
 
 That split changes the failure contract. Inside ``init`` an install failure was
-best-effort — the scaffold had to survive it. Asked for directly, a failure is
-the command's whole outcome, so it reports on stderr and exits 1.
+best-effort — the scaffold had to survive it. Asked for directly, anything short
+of an install is the command's whole outcome, so it reports on stderr and exits 1.
+That covers a missing ``npx`` too: as an init tail "skipped, no npx" was a fine
+exit 0, but a CI step running this command on a Node-less image must not report
+success with no skill installed.
 """
 
 from __future__ import annotations
@@ -16,7 +19,7 @@ import dataclasses
 
 import typer
 
-from khub.cli._render import emit, guard, resolve_root
+from khub.cli._render import emit, guard, resolve_root, want_json
 from khub.core.skill import SKILLS_SOURCE, SkillOutcome, install_skill, skill_command
 
 
@@ -46,11 +49,18 @@ def install_skills_command(
         )
         return
 
-    # json mode captures npx's own output so stdout stays one parseable document.
-    outcome = install_skill(root, agents=agents, quiet=(fmt == "json"))
-    failed = outcome.action == "failed"
-    emit(dataclasses.asdict(outcome), fmt, lambda: typer.echo(skill_line(outcome), err=failed))
-    if failed:
+    # Capture npx's own output whenever this run emits a machine document — which is
+    # `--format json` OR any non-TTY (a pipe, a redirect, CI), the same gate `emit`
+    # uses. Keying on `fmt` alone let npx's progress print ahead of the JSON on a
+    # pipe, leaving stdout unparseable.
+    outcome = install_skill(root, agents=agents, quiet=want_json(fmt))
+    installed = outcome.action == "installed"
+    emit(dataclasses.asdict(outcome), fmt, lambda: typer.echo(skill_line(outcome), err=not installed))
+    if not installed:
+        # npx's diagnostics were captured away from stdout; surface them on stderr so a
+        # failed install is debuggable instead of just an action name.
+        if outcome.detail:
+            typer.echo(outcome.detail, err=True)
         raise typer.Exit(1)
 
 

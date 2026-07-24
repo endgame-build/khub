@@ -148,9 +148,70 @@ def test_cli_install_skills_exits_1_on_failure(fresh_ws: Path, monkeypatch) -> N
     monkeypatch.chdir(fresh_ws)
     monkeypatch.setattr(skillmod.shutil, "which", lambda _: "/opt/npx")
     monkeypatch.setattr(
-        skillmod.subprocess, "run", lambda *_a, **_k: types.SimpleNamespace(returncode=1)
+        skillmod.subprocess,
+        "run",
+        lambda *_a, **_k: types.SimpleNamespace(returncode=1, stdout="", stderr=""),
     )
     result = runner.invoke(app, ["install-skills"])
     assert result.exit_code == 1
     # CliRunner is not a TTY, so the read contract emits the machine payload, not prose.
     assert json.loads(result.output)["action"] == "failed"
+
+
+@pytest.mark.integration
+def test_cli_install_skills_exits_1_without_npx(fresh_ws: Path, monkeypatch) -> None:
+    """No npx is a failed install, not a quiet success.
+
+    As an `init` tail, "skipped, no npx" was rightly exit 0 — the scaffold still stood.
+    As the command you ran on purpose it is exit 1, so a CI step on a Node-less image
+    cannot report success with no skill installed.
+    """
+    monkeypatch.chdir(fresh_ws)
+    monkeypatch.setattr(skillmod.shutil, "which", lambda _: None)
+    result = runner.invoke(app, ["install-skills"])
+    assert result.exit_code == 1
+    assert json.loads(result.output)["action"] == "skipped-no-npx"
+
+
+@pytest.mark.integration
+def test_cli_install_skills_stdout_is_one_document_on_a_pipe(
+    fresh_ws: Path, monkeypatch
+) -> None:
+    """Piped (non-TTY) at the default --format text, stdout must still parse as one JSON
+    document: npx's own progress output is captured, never interleaved ahead of it.
+
+    The quiet gate keyed on `fmt == "json"` while the output gate was want_json(), so a
+    plain `khub install-skills > out.json` emitted npx chatter and then the payload.
+    """
+    monkeypatch.chdir(fresh_ws)
+    noisy = "◇ Installed 2 skills\n└ Done!\n"
+
+    def fake_run(cmd: list[str], cwd: Path = None, capture_output: bool = False, **_k: object):  # type: ignore[assignment]
+        if not capture_output:  # inheriting stdout is exactly the corruption under test
+            print(noisy, end="")
+            return types.SimpleNamespace(returncode=0, stdout=None, stderr=None)
+        return types.SimpleNamespace(returncode=0, stdout=noisy, stderr="")
+
+    monkeypatch.setattr(skillmod.shutil, "which", lambda _: "/opt/npx")
+    monkeypatch.setattr(skillmod.subprocess, "run", fake_run)
+
+    result = runner.invoke(app, ["install-skills"])  # no --format: text + non-TTY
+    assert result.exit_code == 0, result.output
+    assert json.loads(result.output)["action"] == "installed"  # whole stdout parses
+
+
+@pytest.mark.integration
+def test_cli_install_skills_failure_carries_npx_diagnostics(fresh_ws: Path, monkeypatch) -> None:
+    """A captured failure surfaces npx's own error on stderr, not just an action name."""
+    monkeypatch.chdir(fresh_ws)
+    monkeypatch.setattr(skillmod.shutil, "which", lambda _: "/opt/npx")
+    monkeypatch.setattr(
+        skillmod.subprocess,
+        "run",
+        lambda *_a, **_k: types.SimpleNamespace(
+            returncode=1, stdout="", stderr="git@github.com: Permission denied (publickey)."
+        ),
+    )
+    result = runner.invoke(app, ["install-skills"])
+    assert result.exit_code == 1
+    assert "Permission denied (publickey)" in result.output

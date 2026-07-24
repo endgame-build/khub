@@ -33,8 +33,9 @@ khub is a `khub` console script (Python 3.11+). Install it, then seed a workspac
 
 ```bash
 uv tool install git+ssh://git@github.com/endgame-build/khub@v0.9.0   # or clone + uv sync
-khub init firm-ops ./my-hub          # scaffold .khub/ (+ templates, singletons), wire agent files, install the skill
+khub init firm-ops ./my-hub          # scaffold .khub/ (+ templates, singletons), wire agent files
 cd my-hub
+khub install-skills                  # install the agent skill (needs npx)
 ```
 
 Author entities. Referential integrity hard-fails on write (a relation to a missing target is rejected), but a missing field never blocks capture:
