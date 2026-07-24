@@ -30,7 +30,7 @@ import networkx as nx
 from khub.core.entity import _read_doc, _write_doc, entity_path
 from khub.core.errors import LocatedError
 from khub.core.graph import _predicate_digraph, build_graph
-from khub.core.index import build_index, filter_index, resolve_target, stray_nodes
+from khub.core.index import Index, build_index, filter_index, resolve_target, stray_nodes
 from khub.core.introspect import load_schema
 from khub.core.model import ResolvedAttribute, ResolvedSchema, ResolvedType
 
