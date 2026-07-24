@@ -2,6 +2,52 @@
 
 Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); khub is pre-release.
 
+## [0.9.0] — 2026-07-25
+
+A surface cut. Four features earned less than they cost: three are gone, one moved out of
+the command it was bolted onto. No core module changed — every removal was a CLI-layer or
+projection-layer surface. Net: ~700 fewer lines of source, ~500 fewer of tests, one fewer
+runtime dependency.
+
+### Added
+
+- **`khub install-skills`** — installs the agent skill via `npx skills`, split out of
+  `khub init`. `--agent <name>` (repeatable) targets specific coding agents instead of npx's
+  auto-detect; `--dry-run` prints the exact command and runs nothing; `--format json` emits
+  the outcome. A failed install exits 1 — inside `init` the same failure was best-effort so
+  the scaffold could survive it, but a command whose only job is the install does not.
+
+### Removed
+
+- **`khub log`** — git history at ontology altitude, including per-row commit attribution for
+  collection types, was over half of `core/gitlog.py`. `khub history <id>` answers the
+  graph-side question (the supersession chain) and `git log -- <path>` answers the rest.
+  `khub stale` and the shared commit-date helpers are untouched.
+- **`validate --fix`** — `khub backfill` already writes a missing `updated` from git via the
+  same helper, plus `created` and per-type required scaffolding. `--fix` also made `validate`
+  (a read gate) a writer, blurring the validate/check separation. **Scope note:** scoped date
+  repair does not survive the removal. `--fix` accepted a `type/slug` target; `backfill`'s
+  `--type` gates only its scaffolding pass, so date backfill is tree-wide. Accepted rather
+  than widening `backfill`'s behaviour inside a cut.
+- **The interactive wizard and `--agent`** — 180 lines of source, 301 of tests, and a
+  questionary/prompt_toolkit dependency to prompt humans in an agent-first tool, behind a gate
+  that switched it off for agents, pipes, and CI. Every input is now a flag or an argument;
+  a missing one is the usage error it already was headlessly (exit 2). `--agent` is removed
+  outright rather than kept as a silent no-op, so a script still passing it fails loudly.
+  Output still adapts to the reader: Rich on a TTY, JSON on a pipe or under `--format json`.
+- **The `npx skills` install inside `khub init`**, and its `--no-skill` flag — scaffolding a
+  workspace hard-depended on Node and on SSH access to the skill repo. `init` now prints the
+  follow-up command instead of running it.
+
+### Changed
+
+- `validate --format json` no longer carries `fixed`; nothing writes, so there is nothing to
+  report.
+- `init --format json` carries `skill_hint` (`"khub install-skills"`) instead of a `skill`
+  outcome object.
+- `khub init` seeds both `CLAUDE.md` and `AGENTS.md`; the per-agent file selection came from
+  the wizard's multiselect, which no longer exists. `khub wire --target` still narrows it.
+
 ## [0.8.0] — 2026-07-24
 
 ### Added

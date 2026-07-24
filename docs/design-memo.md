@@ -68,7 +68,7 @@ The concrete stack under the five layers. Each pick stays dependency-light and e
 | Projection | **SQLite** + **FTS5** (stdlib `sqlite3`) | full-text search (`khub search`, in-memory per invocation, zero new dependency); persisted `nodes`/`edges` tables planned; HQ already proved the shape |
 | Graph engine (if ever) | embedded graph engine (oxigraph or a kuzu fork) | considered and not adopted; kuzu was archived Oct 2025 (Apple acqui-hire), so a fork or oxigraph would be the path, and a server stays unjustified while the corpus is small |
 | CLI | **Typer** + **Rich** | type-driven commands, `--format json` for the agent, trees and tables for a human |
-| Git history | `git` over `subprocess` | `log` and `stale` read history; git is present, so no library dependency |
+| Git history | `git` over `subprocess` | `stale` and `backfill` read commit dates; git is present, so no library dependency |
 | Tooling | **uv**, **Ruff**, **mypy**, **pytest** | a golden-corpus test runs khub against an HQ snapshot and asserts it validates and checks cleanly (a functional cutover, judged on its own output) |
 
 Python 3.11+, shipped as a `khub` console script (`uv tool install`). A Claude Code skill, a thin `SKILL.md` over the same commands, ships from this repo as a plugin; an MCP server exposing the same verbs is planned, its tool schemas emitted natively from the resolved schema.
@@ -171,8 +171,8 @@ The schema header stamps provenance (`# khub-preset: engineering@1.0.0`). The en
 khub ships as a Python package and runs through `uv`. The zero-install path mirrors `npx`, straight from the private repo over git:
 
 ```
-uvx --from git+ssh://git@github.com/endgame-build/khub@v0.8.0 khub init firm-ops ./my-hub
-uv tool install git+ssh://git@github.com/endgame-build/khub@v0.8.0   # install once, then reuse
+uvx --from git+ssh://git@github.com/endgame-build/khub@v0.9.0 khub init firm-ops ./my-hub
+uv tool install git+ssh://git@github.com/endgame-build/khub@v0.9.0   # install once, then reuse
 khub init engineering ./acme-hub
 ```
 
