@@ -2,6 +2,48 @@
 
 Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); khub is pre-release.
 
+## [Unreleased]
+
+### Added
+
+- **`layout: singleton`** — a type living at one fixed file (0..1 entity; the slug is the type
+  name, so `khub get prd` resolves). `add` refuses a second instance; a type-level
+  `required: true` makes `check` report the singleton's absence (`missing_singletons`).
+- **Body templates** — per-type YAML at `.khub/templates/<type>.yaml` (flattened from the
+  preset's `templates/` dir at init; workspace-owned, editable). `add` seeds new md bodies from
+  the template (`--no-template` opts out); `khub init` CREATES every missing md singleton from
+  its template (creations only — WS-003 amended: init may create singletons, never modifies an
+  existing entity file; `InitResult.singletons_created` reports them); `validate` holds every
+  templated body to the template's section headings as an ordered subsequence (prefix-match,
+  numbering stripped, extras allowed) — a `body` finding, capture never blocked. Entry keys
+  `heading`/`hint`/`text` now; `optional`/`repeat`/`pattern` reserved and rejected.
+- **build-hub narrative singletons** — prd (required), roadmap, glossary, arc42, erd become
+  singleton types with shipped templates (21 types total); templates also ship for the ten
+  ID-enumerated record types.
+
+### Changed
+
+- **Presets are directories** — `src/khub/presets/<name>/schema.yaml` (+ `templates/*.yaml`);
+  `--preset-source` uses the same convention. BREAKING for flat `<name>.yaml` preset sources.
+
+- **`build-hub` preset rewritten to the converged 16-type ontology (preset 0.2.0)** — the
+  paved-road-hub convergence (2026-07-24). Layout moves to two knowledge roots
+  (`knowledge/{product,architecture}` durable truth · root `specs/` delivery state). New
+  governance types: `domain` (body = blueprint narration; `depends_on` narrowed to
+  `domain→domain`), `entity` (`owner` single + required — single-writer schema-enforced),
+  `boundary`, `quality-attribute`, `component` (required `repo` edge; carries the churny
+  `consumes` side), `baseline` (yaml registry). `contract` becomes a hub-authored yaml-format
+  entity (`provider → component | external-system`; machine spec under `contracts/specs/`,
+  outside the scan). `repo` collection moves to `knowledge/architecture/repos.yaml`.
+  `feature-spec` absorbs `feature` (the FS is the feature record); `solution-spec` dropped.
+
+### Removed
+
+- **`build-spoke` preset, its parity test, and its doc** — spokes carry no khub workspace:
+  code plus a plain `entities.yaml` the hub `resource`-links; every decision, repo-local
+  included, is a hub adr/pdr. The corpus is layout-invariant: monorepo and multi-repo use the
+  same `build-hub` preset.
+
 ## [0.7.1] — 2026-07-10
 
 ### Fixed

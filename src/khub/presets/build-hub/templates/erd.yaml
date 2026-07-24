@@ -1,0 +1,8 @@
+title: Entity relationships
+sections:
+- heading: Overview
+  hint: the cross-domain picture - a mermaid erDiagram reads well here
+- heading: Entities
+  hint: one subsection per entity; owner and reads live in the graph - narrate meaning
+- heading: Relationships
+  hint: cardinality and lifecycle notes the graph cannot carry

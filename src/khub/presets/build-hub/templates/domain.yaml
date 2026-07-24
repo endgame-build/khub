@@ -1,0 +1,10 @@
+title: Domain
+sections:
+- heading: Responsibilities
+  hint: the bounded context - what this domain answers for
+- heading: Ubiquitous language
+  hint: the terms this domain uses precisely
+- heading: Read model
+  hint: entities read from other domains, and via which contract
+- heading: Acceptance criteria
+  hint: cite boundaries (BOUND-NNN) the blueprint must hold

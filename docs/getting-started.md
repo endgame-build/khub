@@ -29,7 +29,7 @@ From inside Claude Code, `/plugin install khub@khub` then `/khub:setup` installs
 
 ## Seed a workspace
 
-`init` scaffolds a workspace from a preset. The `firm-ops` preset is the HQ operations ontology: nine entity types (client, project, person, opportunity, meeting, and more) with typed relations between them.
+`init` scaffolds a workspace from a preset — a directory holding the preset's `schema.yaml` and optional body `templates/`. The `firm-ops` preset is the HQ operations ontology: nine entity types (client, project, person, opportunity, meeting, and more) with typed relations between them. A preset with templates also gets them flattened to `.khub/templates/`, and every md `layout: singleton` type with a template is created on the spot (the `build-hub` preset seeds `prd.md`, `roadmap.md`, `glossary.md`, `arc42.md`, `erd.md` this way — creations only, an existing file is never touched).
 
 ```bash
 khub init firm-ops ./my-hub

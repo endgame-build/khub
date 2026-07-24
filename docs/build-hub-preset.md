@@ -1,287 +1,257 @@
 # Build-hub preset
 
-**The system-level description of a build project.** `build-hub` models what a multi-repo software system *is* and *why*, in the repo that sits above the code repos: the durable functional map (capabilities), the interfaces between parties (contracts, external systems), the reasons behind the shape (architecture and product decision records), what must hold (requirements), and what to build next (features, work packages, and the feature/test spec pair). The hub holds only knowledge that is meaningful across repos; anything a pipeline regenerates — facet views, knowledge-graph JSONL, OpenAPI specs — is linked out via `resource`, never duplicated as entities.
+**The knowledge hub of a build project.** `build-hub` models what a software system *is*, *why it
+is shaped this way*, and *what to build next*, in the repo that sits above the code repos: the
+functional map (capabilities), the obligations (requirements), the governance layer (domains,
+entities, boundaries, quality attributes), the topology (components, repos, contracts, external
+systems, baselines), the reasons (architecture and product decision records), and the work spine
+(feature specs, test specs, work packages). The hub holds every cross-repo fact; anything a
+pipeline regenerates — facet views, knowledge-graph JSONL — is linked out via `resource`, never
+duplicated as entities.
 
-`khub init build-hub ./my-hub` seeds a workspace from it. For a hands-on first run, start with [`getting-started.md`](getting-started.md); to author or extend the types yourself, see [`schema.md`](schema.md).
+`khub init build-hub ./my-hub` seeds a workspace from it. For a hands-on first run, start with
+[`getting-started.md`](getting-started.md); to author or extend the types yourself, see
+[`schema.md`](schema.md).
 
-Preset version **0.1.0**. Twelve entity types. Ten relation predicates in eighteen declarations, plus the four universal edges from the core base.
+Preset version **0.2.0**. Twenty-one entity types (sixteen graph records + five narrative
+singletons). Seventeen relation predicates in twenty-four declarations beyond the four universal
+edges from the core base (`domain.depends_on` narrows the universal edge to a typed
+`domain → domain`). The preset is a directory: `schema.yaml` + `templates/*.yaml` — one body
+template per md type, flattened to `.khub/templates/` at init.
+
+**Spoke repos carry no khub workspace.** A spoke is code plus one plain `entities.yaml`
+field-schema file (validated by the spoke's own CI, `resource`-linked from hub entity records).
+Every decision — repo-local included — is a hub `adr`/`pdr`. The corpus is layout-invariant:
+monorepo and multi-repo use this same preset; only the delivery topology differs (multi-repo pins
+a versioned contracts artifact; monorepo reads HEAD).
 
 ## Scope: one hub per what?
 
-One hub per **system** — the set of repos that can break each other: they share a contract, a capability, a data store, one product brief. **The hub follows coupling**, not org lines and not flow.
+One hub per **system** — the set of repos that can break each other: they share a contract, a
+capability, a data store, one product brief. **The hub follows coupling**, not org lines and not
+flow.
 
 | Candidate boundary | Verdict | Why |
 |---|---|---|
 | per system | the definition | the hub exists to manage change propagation between coupled repos |
 | per product | usually right | a product is normally one coupled repo set with one brief — same boundary, different name |
 | per value stream | right when aligned | healthy orgs align stream boundaries with coupling (Conway); when they diverge, follow coupling |
-| per team | never | teams are orthogonal — a hub per team deletes the space *between* teams, which is where the hub earns its keep; inter-team contracts would lose their single home |
+| per team | never | teams are orthogonal — a hub per team deletes the space *between* teams, which is where the hub earns its keep |
 
-Tie-breaker when unsure: *if this repo changes, whose `check` should trip?* Everything inside one answer's radius is one hub.
+Tie-breaker when unsure: *if this repo changes, whose `check` should trip?* Everything inside one
+answer's radius is one hub. Two loosely-coupled products are two hubs, each modeling the other as
+an `external-system`; a portfolio view is a projection over multiple hubs, never a bigger hub.
+Entry threshold: one team and a couple of repos don't need a hub — adopt it when the second team
+or the first cross-repo contract arrives.
 
-The divergence cases resolve without federation:
+## Layout: two knowledge roots
 
-- **One journey across two loosely-coupled products** (checkout hands off to a separately-shipped billing product over one stable API): two hubs, each modeling the other as an `external-system`. Hubs never federate; they see each other as vendors.
-- **One tightly-coupled platform serving several streams**: one hub, several streams drawing from it. Splitting by stream scatters the platform's contracts and breaks "who do we break" exactly where the platform needs it most.
-- **Portfolio view** (across systems) is a projection over multiple hubs — the way Backstage projects one — never a bigger hub.
+- **`knowledge/`** — durable truth, split `product/` (what and why, product-side) vs
+  `architecture/` (how-shaped and what-must-hold). Directories by domain, types by term — the
+  `decisions/` pair (`knowledge/product/decisions/`, `knowledge/architecture/decisions/`) is the
+  pattern.
+- **`specs/`** — delivery state at the workspace root: a different cadence with a different
+  writer (the tracker sync flips `work-package.status`; everything else is reviewed prose).
 
-Entry threshold: one team and a couple of repos don't need a hub — a README and a tracker are the right tool. Adopt the hub when the second team or the first cross-repo contract arrives.
+The five narrative documents — prd, roadmap, glossary (product/) and arc42, erd
+(architecture/) — **are** entity types: `layout: singleton`, one fixed file each, slug = type
+name (`khub get prd`). `khub init` creates each from its body template; `validate` holds every
+templated body to its template's section headings; `prd` is `required: true`, so `check` fails
+while it is absent. They link entity slugs inline and are full edge targets (`adr affects →
+prd`). One stock-storage convention remains for machine artifacts: OpenAPI/AsyncAPI specs live
+under `contracts/specs/` (a subdirectory — invisible to the single-level scan).
 
 ## The three altitudes
 
-Three type names sit close together; the boundary matters for agents:
-
 - **capability** — what the system does. Durable, survives reorganizations of the work.
-- **feature** — a bounded change to the system. A work container with a lifecycle.
-- **work-package** — an executable slice of a feature. The unit an agent or engineer picks up.
+- **feature-spec** — a bounded change to the system, and its record. There is no separate
+  "feature" container: the FS carries the work status and the placement/obligation edges.
+- **work-package** — an executable slice of a feature-spec. The unit an agent or engineer picks up.
+
+## Storage forms and naming
+
+One rule decides file vs collection: **prose a human reviews → one file per record, ID-enumerated
+slug; homogeneous wiring → a registry collection row, name-keyed** (the registry file is the
+enumeration).
+
+| Form | Types · slug scheme |
+|---|---|
+| File, ID-enumerated | adr `AD-NNN-slug` · pdr `PD-NNN-slug` · boundary `BOUND-NNN-slug` · quality-attribute `QA-NNN-slug` · requirement `FR-NNN`/`CST-NNN` · capability `CAP-NNN-slug` · component `CMP-NNN-slug` · feature-spec `FS-NNN-slug` · test-spec `TS-NNN-slug` · work-package `WP-NNN-slug` |
+| File, name-keyed | domain · entity · contract · external-system (natural-name identity; contracts name-keyed so `consumes: readings-api` reads) |
+| Collection (yaml) | `knowledge/architecture/repos.yaml` · `knowledge/architecture/baselines.yaml` |
+| Singleton (md) | prd · roadmap · glossary · arc42 · erd — one fixed file, slug = type name; prd is `required: true` |
 
 ## What every entity carries
 
-`khub init` merges `core.yaml` into the preset, so every build-hub entity carries the base block on top of its own fields:
-
-- **Base attributes** — `type`, `draft`, `author`, `created`, `updated`, `title`, `description`, `resource`, and `tags`.
-- **Four universal edges** — `related`, `sources`, `references`, `depends_on`, each `any → any` and many-valued.
-
-The tables below list only what build-hub adds or tightens. Every markdown type tightens `title` to required (it mints the slug).
+`khub init` merges `core.yaml` into the preset, so every build-hub entity carries the base block:
+attributes `type`, `draft`, `author`, `created`, `updated`, `title`, `description`, `resource`,
+`tags`; universal edges `related`, `sources`, `references`, `depends_on`. The tables below list
+only what build-hub adds or tightens. Every markdown type tightens `title` to required (it mints
+the slug).
 
 ## Relation vocabulary
 
 | Predicate | From → To | Required |
 |---|---|---|
-| `capabilities` | feature, requirement, repo → capability (many) | no |
-| `feature` | work-package, feature-spec → feature | yes |
-| `requirements` | feature → requirement (many) | no |
-| `repo` | work-package → repo | no |
+| `capabilities` | requirement, feature-spec → capability (many) | no |
+| `requirements` | feature-spec → requirement (many) | no |
 | `realized_in` | requirement → repo (many) | no |
+| `feature` | work-package → feature-spec | yes |
+| `repo` | work-package → repo; component → repo | wp no · component yes |
 | `verifies` | test-spec → feature-spec | yes |
-| `supersedes` | adr → adr; pdr → pdr; solution-spec → solution-spec | no |
-| `affects` | adr, pdr, solution-spec → any (many) | no |
-| `provider` | contract → repo \| external-system | yes |
-| `consumes` | repo, external-system → contract (many) | no |
-| `related` | any → any (many) | no |
-| `sources` | any → any (many) | no |
-| `references` | any → any (many) | no |
-| `depends_on` | any → any (many) | no |
+| `supersedes` | adr → adr; pdr → pdr; feature-spec → feature-spec | no |
+| `affects` | adr, pdr, boundary → any (many) | no |
+| `drivers` | adr → quality-attribute (many) | no |
+| `produces` | adr → boundary (many) | no |
+| `depends_on` | domain → domain (many; narrowed from the universal edge) | no |
+| `reads` | domain → entity (many) | no |
+| `owner` | entity → domain | yes (single) |
+| `applies_to` | quality-attribute → domain \| component (many) | no |
+| `domains` | component → domain (many) | no |
+| `provider` | contract → component \| external-system | yes |
+| `consumes` | component, external-system → contract (many) | no |
+| `component` | baseline → component | no |
 
 Two conventions drive the edge placement:
 
-- **Upstream linking.** Every stored edge points up the durability ladder — `work-package → feature → requirement → capability` (weeks → months → years → lifetime) — and time flows down it: the edit lands on the entity being born, never on one that already exists. The reverse directions (`consumed_by`, a feature's work packages, which features satisfy a requirement, a superseded decision) are computed at read time, never stored.
-- **Split by churn** (contracts). `provider` lives on the contract: it is required and near-immutable, so `check` catches a contract nobody owns. `consumes` lives on each consumer — the repo row or external-system file its owner already edits — so a new consumer is a one-word edit in its own file, and the contract never accumulates a stale consumer list.
+- **Upstream linking.** Every stored edge points up the durability ladder — `work-package →
+  feature-spec → requirement → capability` — and the edit lands on the entity being born, never
+  on one that already exists. Reverse directions (consumed_by, an FS's work packages, which
+  feature-specs satisfy a requirement, a superseded record) are computed at read time.
+- **Split by churn** (contracts). `provider` lives on the contract: required and near-immutable,
+  so `check` catches a contract nobody owns. `consumes` lives on each consuming component or
+  external-system — a new consumer is a one-line edit in its own file, and the contract never
+  accumulates a stale consumer list.
 
-## The twelve entities
+## The twenty-one entities
 
-### capability
+### Narrative singletons — the prose layer
 
-Layout: file (`capabilities/{slug}.md`). A durable unit of the functional map; what the system does, independent of how the work is sliced.
+- **prd** (`knowledge/product/prd.md`, required) — vision, target user, the FR narrative linking
+  `FR-NNN` slugs, non-goals, success metrics. The product source of truth; `check` fails without it.
+- **roadmap** (`knowledge/product/roadmap.md`) — lanes, execution order, build order narration.
+- **glossary** (`knowledge/product/glossary.md`) — terms with owning domains; entity slugs link the graph.
+- **arc42** (`knowledge/architecture/arc42.md`) — the twelve arc42 sections; links `AD-`/`QA-` slugs.
+- **erd** (`knowledge/architecture/erd.md`) — the cross-domain entity narrative; owner/reads live in
+  the graph, the doc narrates meaning.
 
-| Attribute | Type | Notes |
-|---|---|---|
-| `title` | required | overrides the base default; mints the slug |
-| `facet_id` | text | `UCAP-XXX` — joins the facet-synthesis inventory |
+### Product — what and why
 
-Relations: none beyond the universal edges. Everything else points here.
+- **capability** (`knowledge/product/capabilities/`) — the durable functional map; `facet_id`
+  joins the facet-synthesis inventory. Vocabulary is hub-owned: work claims against these slugs.
+- **requirement** (`knowledge/product/requirements/`) — `kind: functional | constraint |
+  business-rule`; EARS-friendly prose in the body; `capabilities` places it, `realized_in` is the
+  stored backstop for reality outside the work spine. NFRs are quality-attribute entities, not
+  requirements. The PRD narrates and links `FR-NNN` slugs; coverage (every requirement carries at
+  least one inbound `requirements` edge from a live feature-spec) is a graph check.
+- **pdr** (`knowledge/product/decisions/`) — product decision record; `status: proposed |
+  accepted | rejected`, `supersedes` self-typed, `affects → any`.
 
-### feature
+### Architecture — how-shaped and what-must-hold
 
-Layout: file (`features/{slug}.md`). A bounded change to the system; the work container.
+- **adr** (`knowledge/architecture/decisions/`) — the pdr shape plus `drivers →
+  quality-attribute` (why) and `produces → boundary` (what invariant it created).
+- **domain** (`knowledge/architecture/domains/`) — the bounded context. `tier: core | supporting
+  | generic`; `depends_on → domain` is the cycle-checked predicate; `relationship` (conformist ·
+  customer-supplier · partnership · shared-kernel · acl) is a plain attribute qualifying its
+  dependency posture — khub edges carry no properties. **The domain body is the blueprint
+  narration**: responsibilities, ubiquitous language, acceptance criteria.
+- **entity** (`knowledge/architecture/entities/`) — identity plus a one-paragraph definition.
+  `owner → domain` is single-valued and **required**: the single-writer rule is schema-enforced —
+  a second authoritative writer is unrepresentable. `reads` edges from other domains make
+  read-without-ownership a lintable fact. Field detail churns with code and lives in the owning
+  spoke's `entities.yaml` via `resource`.
+- **boundary** (`knowledge/architecture/boundaries/`) — an extend-never-weaken invariant:
+  `scope`, `enforcement` (architecture-test · ci-gate · linter · code-review · manual), the
+  one-sentence `rule`, and `affects` fan-out. ADRs `produce` boundaries; blueprints' acceptance
+  criteria cite them.
+- **quality-attribute** (`knowledge/architecture/quality-attributes/`) — a concrete measurable
+  `scenario` with `measurement` and `enforcement`; `applies_to` domains or components. Absorbs
+  classic NFR lists.
+- **component** (`knowledge/architecture/components/`) — the deployable: `kind`, `stack`, a
+  required `repo` edge (the component↔codebase mapping), the `domains` it hosts, and the churny
+  `consumes` side of contract edges. The body describes the deployable — stack rationale,
+  operational notes.
+- **repo** (`knowledge/architecture/repos.yaml`, collection) — a pure remotes record: `repo`
+  (org/name, loosely pattern-pinned — tighten to your org), `status: active | archived`.
+- **contract** (`knowledge/architecture/contracts/`, **yaml-format file entities**) — hub-authored
+  interface records: `kind: api | events | data`, `status: proposed | active | deprecated`,
+  required `provider → component | external-system`. Policy prose (idempotency, auth model,
+  versioning) rides the reserved `body` field; the machine spec is a standalone
+  `contracts/specs/<slug>.openapi.yaml` linked via `resource`, so codegen and contract tests
+  consume it directly. Consumers are the computed inverse of `consumes`.
+- **external-system** (`knowledge/architecture/external-systems/`) — a vendor or neighboring
+  product; `consumes` the contracts we emit to it (e.g. webhooks).
+- **baseline** (`knowledge/architecture/baselines.yaml`, collection) — quality bars: `metric`,
+  `value` (text — accommodates `"80"` and `"99.9%"` alike), `direction`, `as_of`, `source`, and a
+  `component` edge.
 
-| Attribute | Type | Notes |
-|---|---|---|
-| `title` | required | |
-| `status` | enum, required | `planned`, `active`, `done`, `dropped` |
+### Specs — delivery state
 
-Relations: `capabilities` → capability (many) — *placement*: where in the system map this change belongs. `requirements` → requirement (many) — *obligation*: which statements this change satisfies, and the spine implementation status derives from. The two edges answer different questions; disagreement between them is information, not drift.
+- **feature-spec** (`specs/feature-specs/`) — the feature record: `status: planned | active |
+  done | dropped`, `capabilities` (placement), `requirements` (obligation), `supersedes`
+  self-typed.
+- **test-spec** (`specs/test-specs/`) — `verifies → feature-spec`, required. The FS→TS pair is
+  what upgrades "we merged code" into "the rule demonstrably holds."
+- **work-package** (`specs/work-packages/`) — the executable slice: required `feature` edge, a
+  `repo` routing edge (one repo; a slice spanning repos gets split), coarse `status` the tracker
+  sync flips on merge.
 
-### work-package
+## Authorship: everything is hub-authored
 
-Layout: file (`work-packages/{slug}.md`). An executable slice of a feature; acceptance criteria live in the body.
-
-| Attribute | Type | Notes |
-|---|---|---|
-| `title` | required | |
-| `status` | enum, required | `planned`, `active`, `done`, `dropped` |
-
-Relations: `feature` → feature (required), `repo` → repo — where the slice lands, single-valued on purpose: a slice spanning repos gets split, and the schema says so.
-
-Status is deliberately coarse: khub is the spec-of-record, and the execution tracker (beads, Jira) owns fine-grained state. Four values keep the sync a trivial mapping. No status field in this preset carries a schema default — `add` applies none, so status is always an explicit statement, and a missing one is exactly what `check` reports.
-
-### feature-spec
-
-Layout: file (`specs/feature/{slug}.md`). The elaboration of a feature before implementation — forge's FS artifact as a hub entity. The spec prose is the body.
-
-| Attribute | Type | Notes |
-|---|---|---|
-| `title` | required | |
-
-Relations: `feature` → feature (required).
-
-### test-spec
-
-Layout: file (`specs/test/{slug}.md`). The test counterpart of a feature spec — forge's TS artifact; scenarios and coverage mapping in the body.
-
-| Attribute | Type | Notes |
-|---|---|---|
-| `title` | required | |
-
-Relations: `verifies` → feature-spec (required). The FS→TS pairing as a graph edge.
-
-### solution-spec
-
-Layout: file (`specs/solution/{slug}.md`). The architectural counterpart of the feature-spec: where a feature-spec connects requirements and product decisions on the behavior side, a solution-spec connects components and architecture decisions on the structure side — the standalone design document for a change that spans repos.
-
-It carries **RFC semantics**: a point-in-time intended design, never a living architecture document. RFCs age well precisely because they don't pretend to be current — accepted choices distill into `adr`s, surfaces into `contract`s, and the next design supersedes this one rather than editing it.
-
-| Attribute | Type | Notes |
-|---|---|---|
-| `title` | required | |
-| `status` | enum, required | `proposed`, `accepted`, `rejected` |
-| `facet_id` | text | `TDR-NN` — as-built design imported at bootstrap |
-
-Relations: `supersedes` → solution-spec, `affects` → any (many) — the components it connects: repos, contracts, capabilities, features.
-
-### requirement
-
-Layout: file (`requirements/{slug}.md`). A system-level requirement that belongs to no single work package; EARS-friendly prose in the body.
-
-| Attribute | Type | Notes |
-|---|---|---|
-| `title` | required | |
-| `kind` | enum, required | `functional`, `quality`, `constraint`, `business-rule` |
-| `facet_id` | text | `EARS-`/`NFR-`/`CONST-XXX` — import traceability |
-
-Relations: `capabilities` → capability (many), `realized_in` → repo (many) — the stored backstop for reality the work spine never touched: brownfield bootstrap and hotfixes. For tracked work, implementation status derives from the graph (see [The implementation loop](#the-implementation-loop)); derivation audits the claim.
-
-### adr
-
-Layout: file (`decisions/architecture/{slug}.md`). An architecture decision record: context, options, outcome in the body.
-
-| Attribute | Type | Notes |
-|---|---|---|
-| `title` | required | |
-| `status` | enum, required | `proposed`, `accepted`, `rejected` |
-| `facet_id` | text | `ADR-`/`TDD-XXX` — import traceability |
-
-Relations: `supersedes` → adr, `affects` → any (many). A decision is *superseded* when another decision's `supersedes` edge points at it — the state is computed, never stored, so it cannot drift.
-
-### pdr
-
-Layout: file (`decisions/product/{slug}.md`). A product decision record; same shape as `adr`, separate type by design.
-
-| Attribute | Type | Notes |
-|---|---|---|
-| `title` | required | |
-| `status` | enum, required | `proposed`, `accepted`, `rejected` |
-
-Relations: `supersedes` → pdr, `affects` → any (many).
-
-### repo
-
-Layout: collection (`repos.jsonl`, one row per code repo). The hub↔spoke join point.
-
-| Attribute | Type | Notes |
-|---|---|---|
-| `repo` | text, required | `org/name`, pattern `^[a-z0-9._-]+/[a-z0-9._-]+$` — tighten to your org in the engagement schema |
-| `status` | enum, required | `active`, `archived` |
-
-Relations: `capabilities` → capability (many), `consumes` → contract (many).
-
-Convention: the slug is the git basename — the same join key facet's merge-kg uses (`codebase`). Slug and repo name may diverge; the row's `body` notes why.
-
-### contract
-
-Layout: file (`contracts/{slug}.md`). One entity per interface surface — not per endpoint, not per spec file. A provider exposing a REST API and emitting events is two contracts.
-
-| Attribute | Type | Notes |
-|---|---|---|
-| `title` | required | |
-| `kind` | enum, required | `api` (REST/GraphQL/gRPC — the linked spec says which), `events` (queues, webhooks), `data` (shared schema/DB/file coupling) |
-| `status` | enum, required | `proposed`, `active`, `deprecated` |
-| `facet_id` | text | `OAPI-XXX` / `AAPI-XXX` — joins facet-contract output |
-
-Relations: `provider` → repo \| external-system (required, union).
-
-The authoritative spec is linked via `resource`. The body carries what a spec cannot: idempotency rules, auth model, versioning policy, known consumer assumptions.
-
-Contracts are born in their provider's spoke and synced into the hub; vendor contracts are the hand-authored exception. See [Authorship](#authorship-hub-spoke-synced-spoke-resident).
-
-### external-system
-
-Layout: file (`external-systems/{slug}.md`). A third-party dependency agents must not guess about: vendor APIs, PMS integrations, payment providers.
-
-| Attribute | Type | Notes |
-|---|---|---|
-| `title` | required | |
-
-Relations: `consumes` → contract (many) — for surfaces we expose to the vendor, such as webhooks. A vendor API we call is a contract whose `provider` is the external system.
-
-## Authorship: hub, spoke-synced, spoke-resident
-
-Every entity has exactly one authoring home. The litmus test for spoke authorship: does exactly one spoke naturally own it, can CI next to the code keep it honest, and does it still mean something across repos? All three yes → spoke-authored and synced to the hub. Cross-repo meaning missing → spoke-authored but spoke-resident. Single ownership missing → hub-authored.
-
-| Class | Types | Mechanics |
-|---|---|---|
-| Hub-authored | capability, feature, work-package, requirement, adr (system scope), pdr, external-system, vendor contracts | authored in place; no sync |
-| Spoke-authored, hub-synced | contract (born in its provider repo) — the only synced type | copied up by a sync with `synced_from` provenance; hub `validate`/`check` run on ingest |
-| Spoke-authored, spoke-resident | repo-local decisions (TDRs) — see [`build-spoke-preset.md`](build-spoke-preset.md) | never synced; promoted to hub entities by hand when they graduate to system scope |
-
-One rule keeps the classes stable: **vocabulary is hub-owned; spokes claim against it.** Capabilities are many-realized, so spoke-minted capabilities would fragment the map (three teams minting "reservations", "reservation-mgmt", "booking"). Spokes reference hub capability slugs; the claims travel, the vocabulary never does.
-
-Contracts are the only entities that cross the boundary upward — a spoke is authoritative for its public surface, and the contract is that surface. Repo rows and feature/test specs stay hub-authored; repo interiors (TDRs, insights) stay home.
-
-### The contract lifecycle
-
-A contract entity is born in its provider's spoke — `docs/contracts/<slug>.md` in this same `contract` schema, spec file as sibling — from `proposed` onward. The provider team flips status, writes the semantics prose, and evolves the spec behind contract tests and breaking-change gates. The hub's `contracts/` inventory is a synced projection of those files: the sync stamps provenance, derives `provider` from the repo of origin, and refuses slug collisions across spokes rather than dedupe-renaming (a silently renamed contract breaks consumer edges). `consumes` edges stay on hub `repos.jsonl` rows, so the blast-radius query resolves against one node, and a spoke deleting a still-consumed contract surfaces as dangling edges at the next hub `check` — the cross-repo breaking-change tripwire.
-
-Two exceptions are hand-authored in hub `contracts/`, distinguishable by the absent `synced_from`: vendor contracts (no spoke exists; the spec is a vendored snapshot under `specs/contract/`, pinned deliberately — the vendor drifting is their event), and the rare design-first contract whose provider repo does not exist yet (create the repo first where possible; the proposed contract should be its first commit).
-
-`specs/contract/` holds hub-side draft specs and vendor snapshots only; a living spec for an implemented contract lives in its provider repo, and Backstage or any other catalog is a read-side projection of this graph, never a source.
+Previous versions of this preset family split authorship three ways (hub-authored, spoke-synced
+contracts, spoke-resident TDRs) and shipped a `build-spoke` counterpart preset. **v0.2.0 removes
+all of it.** The litmus that survived: knowledge with cross-repo meaning is hub-authored, and all
+of it now lives in this one workspace; knowledge that churns with code (field schemas) stays in
+the spoke as a plain file the hub links via `resource`, with the spoke's own CI keeping it honest.
+Contract changes ride hub PRs; a provider team reviews there. No sync machinery, no provenance
+stamps, no cross-workspace references.
 
 ## The implementation loop
 
-Nothing is ever marked "implemented" — hand-flipped status is the first thing to rot. The PR merge is the only real event, it enters the graph in one place (the tracker flips work-package `status`), and everything else is traversal:
+Nothing is ever marked "implemented" — hand-flipped status is the first thing to rot. The PR
+merge is the only real event, it enters the graph in one place (the tracker flips `work-package
+status → done`), and everything else is traversal:
 
 ```
 PR merged in a spoke
-  → work-package status → done          (tracker sync — already happens)
-  → all of the feature's slices done?   (traversal)
-  → feature.requirements                (the obligation binding)
+  → work-package status → done          (tracker sync)
+  → all of the feature-spec's slices done?   (traversal)
+  → feature-spec.requirements            (the obligation binding)
   → requirement implemented — in the repos those slices' `repo` edges name
 ```
 
-Two grades of knowing:
-
-- **Claimed** — every feature binding the requirement has all work-packages done. Derived from merge events, drift-free.
-- **Verified** — additionally, the feature's `test-spec` suite is green in the spoke's CI. The FS→TS pair is what upgrades "we merged code" into "the rule demonstrably holds."
-
-"Partial" is a fact, not a label: claimed in one repo, unverified, absent in another. The one stored exception is `requirement.realized_in` — for reality the work spine never touched (brownfield bootstrap, hotfixes). For tracked work it is at most a cached conclusion; derivation is the audit, and disagreement between the two is a lint, not a debate.
+Two grades of knowing: **claimed** — every feature-spec binding the requirement has all
+work-packages done; **verified** — additionally, the FS's `test-spec` suite is green in the
+spoke's CI. `requirement.realized_in` is the stored backstop for reality the work spine never
+touched (brownfield bootstrap, hotfixes); derivation is the audit, and disagreement between the
+two is a lint, not a debate.
 
 ## Bootstrap from facet (legacy import)
 
-A legacy estate enters this same thin structure. Run the recovery pipelines (facet-scan per repo, facet-synthesis for the system), then promote the entity-like outputs into hub entities — a **one-time curated promotion**, after which the hub owns them. Re-running facet later feeds a reconcile report against the curated hub, never an overwrite. That keeps the "generated is never resident" rule intact: these entities stop being generated the moment humans adopt them.
-
-| facet output | Hub home | Import rule |
-|---|---|---|
-| capabilities (`UCAP`/`FUNC`) | capability | `facet_id` join |
-| EARS / NFR / constraints / business rules | requirement | kind: EARS → functional or business-rule, NFR → quality, CONST → constraint; `realized_in` records where they already hold |
-| ADR collection + tech decisions (`TDD`) | adr | inferred (implicit) decisions enter `proposed`, humans accept; product-flavored ones re-homed to pdr by hand — facet has no product-decision concept |
-| contract specs (OpenAPI / AsyncAPI / DDL / SLO) | contract | provider assigned from the owning repo |
-| external integrations (`INT`) | external-system + contract | a provider absent from the repo inventory becomes an external-system |
-| as-built technical design (`TDR`) | solution-spec, `accepted` | a point-in-time record of the design *as found*; `sources` → the TDR |
-| repo inventory | repos.jsonl | slug = git basename (facet's merge join key) |
-| deep views, risk registers, threat models, use-case inventories | not entities | linked via `resource`; regenerable |
-
-Statuses are assigned "as found"; every imported entity carries its `facet_id`. Afterwards, `check` reports the unwired remainder — that is the curation backlog, not an error.
+`facet_id` on capability / requirement / adr / contract is the import traceability spine. Legacy
+import is a one-time curated promotion (facet output → hub entities); facet reruns feed a
+reconcile report, never an overwrite. `pdr` carries no `facet_id` — facet has no product-decision
+concept.
 
 ## Design note: what was deliberately left out
 
-The type list was cut against the doc types that stay alive in real engagement hubs (umbrella, hooli, vandelay). These did not make it, each with the same profile — only ever written once, as generated pipeline output, then frozen:
-
-- **stakeholder**, **term/glossary**, **environment**, **risk**, **milestone**, **persona**, **pattern** — zero hand-maintained instances anywhere. Add any of them back with a schema edit the day the engagement starts writing them.
-- **The spoke side** lives in its own preset — [`build-spoke-preset.md`](build-spoke-preset.md). Spoke→hub references are plain-text hub slugs, since cross-workspace edges cannot be integrity-checked in v1.
-- **The product brief** stays a plain file in the hub repo; singletons do not need a schema type.
+- **feature and solution-spec** (removed in 0.2.0) — the FS is the feature record; RFC-style
+  multi-component designs distill directly into adrs and contracts.
+- **build-spoke preset** (removed in 0.2.0) — spokes carry no typed knowledge.
+- **Ceremonial inventories** (stakeholder map, risk register, traceability matrix, environments)
+  — only ever existed as frozen one-shot pipeline output. Add back via schema edit if the
+  engagement starts writing them.
+- **Component/module maps, runbooks, debt and insight types** — rot fastest, or live in the
+  instruction/memory layer, not the entity graph.
+- **Edge properties and ignore globs** — considered as engine features during the paved-road-hub
+  convergence and found unnecessary: a plain attribute (`domain.relationship`) and the
+  `contracts/specs/` subdirectory convention cover the same ground with stock storage. Heading
+  contracts DID land — as body templates (`layout: singleton` + `.khub/templates/`), which fold
+  scaffold and contract into one artifact.
 
 ## See also
 
-- [`schema.md`](schema.md) — how presets are authored and extended.
+- [`schema.md`](schema.md) — author or extend types; `.khub/schema.yaml` is the editable copy.
 - [`firm-ops-preset.md`](firm-ops-preset.md) — the consulting-firm operating graph.
-- [`cli.md`](cli.md) — the full command surface.
+- [`collections-design.md`](collections-design.md) — the registry row model.

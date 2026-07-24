@@ -39,6 +39,7 @@ from khub.core import formats
 from khub.core.errors import LocatedError
 from khub.core.index import Index, build_index, resolve_target
 from khub.core.introspect import load_schema
+from khub.core.template import load_template
 from khub.core.model import ResolvedAttribute, ResolvedRelation, ResolvedSchema, ResolvedType
 from khub.core.values import as_bool, is_bool, is_dateish, is_number
 
@@ -146,6 +147,7 @@ def create(
     strict: bool = False,
     body: str = "",
     draft: bool = False,
+    use_template: bool = True,
 ) -> CreateResult:
     """Mint a new entity of ``type_`` from ``fields`` (raw ``--field value`` strings).
 
@@ -161,6 +163,17 @@ def create(
 
     index = build_index(root, resolved)
     attrs, rels, extras = _partition(rtype, fields, strict=strict)
+    # Template seeding: an md type with a workspace template and no explicit body
+    # starts from the scaffold (--no-template / use_template=False opts out).
+    # A broken template never blocks capture — seed nothing and let `validate`
+    # report the template itself.
+    if use_template and not body.strip() and rtype.storage.fmt == "md":
+        try:
+            tpl = load_template(root, type_)
+        except Exception:  # noqa: BLE001 — validate carries the template finding
+            tpl = None
+        if tpl is not None:
+            body = tpl.render()
     body = _md_normalized(body, rtype)
 
     # Referential integrity (and bare-target ambiguity) hard-fail before any byte
@@ -188,6 +201,26 @@ def create(
             rel = rtype.relations[predicate]
             meta[predicate] = rels[predicate] if rel.many else rels[predicate][0]
     meta.update(extras)
+
+    if rtype.storage.layout == "singleton":
+        # The slug IS the type name; an --id saying otherwise is a mistake, not a request.
+        if id_ is not None and id_ != type_:
+            raise LocatedError(
+                code="singleton_id",
+                message=f"'{type_}' is a singleton — its id is always '{type_}' (drop --id)",
+            )
+        slug = type_
+        path = entity_path(root, rtype, slug)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            _write_new(path, meta, body)
+        except FileExistsError:
+            raise LocatedError(
+                code="singleton_exists",
+                message=f"Singleton '{type_}' already exists at {path.relative_to(root)}; "
+                "edit it instead of adding another",
+            ) from None
+        return CreateResult(type=type_, slug=slug, path=path, draft=is_draft)
 
     if rtype.storage.layout == "collection":
         base = _slug_base(id_) if id_ is not None else _slug_base(_slug_source(type_, attrs))
@@ -761,6 +794,9 @@ def entity_path(root: Path, rtype: ResolvedType, slug: str) -> Path:
     path of their own — ``path#slug`` is the row locator)."""
     if rtype.storage.layout == "collection":
         return _collection_file(root, rtype)
+    if rtype.storage.layout == "singleton":
+        # One fixed file regardless of slug (slug is the type name).
+        return root / (rtype.storage.path or f"{rtype.name}.{rtype.storage.fmt}")
     base = root / (rtype.storage.path or rtype.name)
     if rtype.storage.layout == "folder":
         return base / slug / f"_index.{rtype.storage.fmt}"

@@ -1,0 +1,7 @@
+title: Work package
+sections:
+- heading: Scope
+  hint: the executable slice - one repo
+- heading: Implementation notes
+- heading: Done means
+  hint: the observable outcome, not the activity

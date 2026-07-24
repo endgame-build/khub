@@ -52,6 +52,9 @@ def add_command(
     strict: bool = typer.Option(False, "--strict", help="Reject fields the schema does not declare."),
     body_text: str = typer.Option(None, "--body", help="Body prose as a string."),
     body_file: str = typer.Option(None, "--body-file", help="Read the body from a file ('-' for stdin)."),
+    no_template: bool = typer.Option(
+        False, "--no-template", help="Start with an empty body even when the type has a template."
+    ),
     fmt: str = typer.Option("text", "--format", help="text or json (emits the written record)."),
 ) -> None:
     """Create an entity: khub add opportunity --client initech --owner noor --stage prospect.
@@ -79,7 +82,10 @@ def add_command(
         if not prompter.confirm(f"Create {type_}?"):
             raise typer.Abort()
 
-    result = create(root, type_, fields, id_=id_, strict=strict, body=body, draft=draft)
+    result = create(
+        root, type_, fields, id_=id_, strict=strict, body=body, draft=draft,
+        use_template=not no_template,
+    )
 
     if fmt == "json":
         typer.echo(json.dumps(_ref_record(root, result), default=str))

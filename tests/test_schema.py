@@ -24,7 +24,7 @@ runner = CliRunner()
 
 PRESETS = Path(__file__).resolve().parents[1] / "src" / "khub" / "presets"
 CORE = PRESETS / "core.yaml"
-FIRM_OPS = PRESETS / "firm-ops.yaml"
+FIRM_OPS = PRESETS / "firm-ops" / "schema.yaml"
 
 
 @pytest.fixture(scope="module")

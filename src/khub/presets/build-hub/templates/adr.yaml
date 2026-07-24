@@ -1,0 +1,8 @@
+title: Architecture decision
+sections:
+- heading: Context
+  hint: the forces; link drivers (QA-NNN) inline
+- heading: Decision
+  hint: one paragraph, active voice
+- heading: Consequences
+  hint: what gets easier, what gets harder; boundaries produced (BOUND-NNN)

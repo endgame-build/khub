@@ -20,7 +20,7 @@ class StorageConfig:
     ``path`` names that file (default ``{type}.{fmt}``) instead of a directory.
     """
 
-    layout: Literal["file", "folder", "collection"]
+    layout: Literal["file", "folder", "collection", "singleton"]
     path: str | None = None
     fmt: str = "md"
 
@@ -58,6 +58,9 @@ class ResolvedType:
     storage: StorageConfig
     attributes: dict[str, ResolvedAttribute] = field(default_factory=dict)
     relations: dict[str, ResolvedRelation] = field(default_factory=dict)
+    # Singleton-only (see TypeDecl.required): a missing required singleton is a
+    # `check` finding.
+    required: bool = False
 
     @property
     def collection_relpath(self) -> str:

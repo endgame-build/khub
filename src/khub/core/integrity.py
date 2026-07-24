@@ -30,7 +30,7 @@ import networkx as nx
 from khub.core.entity import _read_doc, _write_doc, entity_path
 from khub.core.errors import LocatedError
 from khub.core.graph import _predicate_digraph, build_graph
-from khub.core.index import build_index, filter_index, resolve_target, stray_nodes
+from khub.core.index import Index, build_index, filter_index, resolve_target, stray_nodes
 from khub.core.introspect import load_schema
 from khub.core.model import ResolvedAttribute, ResolvedSchema, ResolvedType
 
@@ -109,6 +109,12 @@ def validate(
         rtype = resolved.types[type_]
         errors.extend(_validate_entity(rtype, type_, slug, valid.meta[node], valid, strict=strict))
 
+    # Body-structure contract: an md type with a workspace template requires the
+    # template's section headings in every instance body, in order (extras
+    # allowed). The index carries frontmatter only, so bodies are re-read here —
+    # and only for templated types.
+    errors.extend(_body_structure_errors(root, resolved, valid, target))
+
     # A file inside a layout that could not be parsed is a frontmatter error, not a
     # silent skip — one bad file is reported, never a raised ParserError.
     malformed_errors = _malformed_errors(resolved, index.malformed, target)
@@ -129,6 +135,58 @@ def validate(
                 target=target,
             )
     return ValidateReport(count=count, errors=errors, fixed=fixed)
+
+
+def _body_structure_errors(
+    root: Path, resolved: ResolvedSchema, valid: Index, target: str | None
+) -> list[FieldError]:
+    """Template-contract findings: per md entity of a templated type, the first
+    template heading missing (or out of order) in the body's H2 sequence."""
+    from khub.core.template import load_template, missing_heading
+
+    errors: list[FieldError] = []
+    for type_, rtype in resolved.types.items():
+        if rtype.storage.fmt != "md" or rtype.storage.layout == "collection":
+            continue
+        # A broken template must not abort the run: validate's contract is to
+        # collect every finding. Report it once, on the type, and move on.
+        try:
+            tpl = load_template(root, type_)
+        except Exception as err:  # noqa: BLE001 — LocatedError or a raw YAML parse error
+            reason = getattr(err, "message", None) or str(err)
+            errors.append(FieldError(type=type_, slug="*", field="template", reason=reason))
+            continue
+        if tpl is None:
+            continue
+        for node in sorted(valid.nodes):
+            if node[0] != type_ or not _in_target(node, target):
+                continue
+            path = entity_path(root, rtype, node[1])
+            try:
+                _, body = _read_doc(path)
+            except Exception:  # noqa: BLE001 — frontmatter parsed (the node exists) but the
+                # full read failed; scan did NOT flag this file, so stay loud here.
+                errors.append(
+                    FieldError(
+                        type=type_, slug=node[1], field="body",
+                        reason="body could not be read for the structure check",
+                    )
+                )
+                continue
+            missing = missing_heading(tpl, body)
+            if missing is not None:
+                errors.append(
+                    FieldError(
+                        type=type_,
+                        slug=node[1],
+                        field="body",
+                        reason=(
+                            f"missing or out-of-order section '## {missing}' "
+                            f"(template {type_}.yaml requires its headings in order)"
+                        ),
+                    )
+                )
+    return errors
 
 
 def _in_target(node: tuple[str, str], target: str | None) -> bool:
@@ -366,6 +424,8 @@ class CheckReport:
     # Dangling reports suppressed because their target type's collection file is
     # malformed — derivative noise rolled into the malformed finding.
     suppressed_dangling: int = 0
+    # Singleton types declared `required: true` whose file does not exist.
+    missing_singletons: list[str] = field(default_factory=list)
 
     @property
     def passed(self) -> bool:
@@ -376,6 +436,7 @@ class CheckReport:
             or self.strays
             or self.cycles
             or self.malformed
+            or self.missing_singletons
         )
 
 
@@ -424,6 +485,13 @@ def check(root: Path, *, strict: bool = False) -> CheckReport:
     # never reaches nx.simple_cycles — detect it directly as a one-node cycle.
     cycles = _cycles(graph) + _self_cycles(resolved, valid, entity_nodes)
     stray_paths = sorted({_stray_locator(root, resolved, t, s) for (t, s) in strays})
+    # A required singleton with no live node (absent file, or present-but-stray)
+    # is a gap the graph cannot express as incompleteness — report it directly.
+    missing_singletons = sorted(
+        t
+        for t, rt in resolved.types.items()
+        if rt.storage.layout == "singleton" and rt.required and (t, t) not in valid.nodes
+    )
     return CheckReport(
         incomplete=incomplete,
         orphans=orphans,
@@ -433,6 +501,7 @@ def check(root: Path, *, strict: bool = False) -> CheckReport:
         malformed=[str(p) for p in index.malformed],
         strict=strict,
         suppressed_dangling=suppressed,
+        missing_singletons=missing_singletons,
     )
 
 

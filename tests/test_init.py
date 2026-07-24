@@ -38,10 +38,10 @@ entities:
 
 @pytest.fixture
 def preset_source(tmp_path: Path) -> Path:
-    """A preset-source dir holding the tiny `note` preset."""
+    """A preset-source dir holding the tiny `note` preset (directory layout)."""
     src = tmp_path / "presets"
-    src.mkdir()
-    (src / "note.yaml").write_text(NOTE_PRESET)
+    (src / "note").mkdir(parents=True)
+    (src / "note" / "schema.yaml").write_text(NOTE_PRESET)
     return src
 
 
@@ -50,14 +50,16 @@ def preset_source(tmp_path: Path) -> Path:
 
 @pytest.mark.unit
 def test_resolve_known_preset_from_package() -> None:
-    """TS-WS-001-U01: the packaged firm-ops preset resolves."""
-    assert resolve_preset("firm-ops").name == "firm-ops.yaml"
+    """TS-WS-001-U01: the packaged firm-ops preset resolves (dir layout)."""
+    resolved = resolve_preset("firm-ops")
+    assert resolved.name == "schema.yaml"
+    assert resolved.parent.name == "firm-ops"
 
 
 @pytest.mark.unit
 def test_resolve_preset_from_source(preset_source: Path) -> None:
     """TS-WS-001-U01: a preset resolves from --preset-source."""
-    assert resolve_preset("note", preset_source) == preset_source / "note.yaml"
+    assert resolve_preset("note", preset_source) == preset_source / "note" / "schema.yaml"
 
 
 @pytest.mark.unit
@@ -175,7 +177,7 @@ def test_cli_unknown_preset_message(tmp_path: Path) -> None:
     target.mkdir()
     result = runner.invoke(app, ["init", "bogus", str(target)])
     assert result.exit_code == 1
-    assert "Unknown preset 'bogus'. Known presets: build-hub, build-spoke, firm-ops" in result.output
+    assert "Unknown preset 'bogus'. Known presets: build-hub, firm-ops" in result.output
     assert list(target.iterdir()) == []
 
 
@@ -208,7 +210,8 @@ def test_cli_scaffold_firm_ops(tmp_path: Path) -> None:
 @pytest.mark.unit
 def test_entity_less_preset_rejected(tmp_path: Path, preset_source: Path) -> None:
     """A preset declaring no entities is rejected, not silently scaffolded empty."""
-    (preset_source / "hollow.yaml").write_text('version: "1.0.0"\nentities: {}\n')
+    (preset_source / "hollow").mkdir()
+    (preset_source / "hollow" / "schema.yaml").write_text('version: "1.0.0"\nentities: {}\n')
     with pytest.raises(LocatedError) as ei:
         init_workspace("hollow", tmp_path / "ws", preset_source=preset_source)
     assert ei.value.code == "empty_preset"

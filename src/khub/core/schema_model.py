@@ -64,15 +64,37 @@ class TypeDecl(_Strict):
     ``gjson`` is named in the grammar but undefined — rejected everywhere.
     """
 
-    layout: Literal["file", "folder", "collection"]
+    layout: Literal["file", "folder", "collection", "singleton"]
     path: str | None = None
     format: str = "md"
+    # Singleton-only: `check` reports a missing required singleton. Meaningless
+    # (and rejected) on the other layouts — per-entity requiredness lives on
+    # attributes/relations.
+    required: bool = False
     attributes: dict[str, AttrDecl] = {}
     relations: dict[str, RelationDecl] = {}
 
     @model_validator(mode="after")
     def _storage_matrix(self) -> "TypeDecl":
-        if self.layout == "collection":
+        if self.required and self.layout != "singleton":
+            raise ValueError(
+                "'required' is singleton-only (a required file/folder/collection "
+                "type has no single artifact to require)"
+            )
+        if self.layout == "singleton":
+            if not self.path:
+                raise ValueError("a singleton type needs path: the exact file it lives at")
+            suffix = Path(self.path).suffix.lstrip(".")
+            explicit = "format" in self.model_fields_set
+            fmt = self.format if explicit else (suffix or "md")
+            if fmt not in PER_ITEM:
+                raise ValueError(
+                    f"format '{fmt}' is not supported for a singleton; use md, json, or yaml"
+                )
+            if suffix and suffix != fmt:
+                raise ValueError(f"path suffix '.{suffix}' disagrees with format '{fmt}'")
+            self.format = fmt
+        elif self.layout == "collection":
             suffix = Path(self.path).suffix.lstrip(".") if self.path else ""
             # model_fields_set distinguishes an authored `format: md` (rejected —
             # md is never a collection format) from the field default (derivable
