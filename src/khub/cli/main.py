@@ -16,7 +16,7 @@ from khub.cli.entity_cmd import (
     remove_command,
     unlink_command,
 )
-from khub.cli.gitlog_cmd import log_command, stale_command
+from khub.cli.gitlog_cmd import stale_command
 from khub.cli.graph_cmd import history_command, impact_command, neighbors_command
 from khub.cli.init_cmd import init_command
 from khub.cli.integrity_cmd import check_command, validate_command
@@ -89,7 +89,6 @@ app.command(name="history")(history_command)
 app.command(name="validate")(validate_command)
 app.command(name="check")(check_command)
 app.command(name="stale")(stale_command)
-app.command(name="log")(log_command)
 app.command(name="reindex")(reindex_command)
 app.command(name="viz")(viz_command)
 app.command(name="backfill")(backfill_command)

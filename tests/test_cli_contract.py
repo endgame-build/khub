@@ -67,17 +67,6 @@ def test_workspace_option_targets_path(
     assert data["counts"]["client"] == 1 and data["counts"]["person"] == 1
 
 
-# --- fix 2: log --format json on a no-git workspace -------------------------
-
-
-@pytest.mark.integration
-def test_log_json_no_git_is_valid_json(fresh_ws: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.chdir(fresh_ws)  # init_workspace does not git-init
-    result = runner.invoke(app, ["log", "--format", "json"])
-    assert result.exit_code == 0, result.output
-    assert json.loads(result.output) == {"entries": [], "git_available": False}
-
-
 # --- fix 3: qualified id contract -------------------------------------------
 
 
@@ -212,26 +201,20 @@ def test_stray_field_token_is_a_usage_error(fresh_ws: Path, monkeypatch: pytest.
     assert "no value" in result.output
 
 
-@pytest.mark.integration
-def test_log_json_one_shape_with_git(fresh_ws: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """`log --format json` emits {"entries": [...], "git_available": true} on a git workspace."""
-    import subprocess
-
-    monkeypatch.chdir(fresh_ws)
-    runner.invoke(app, ["add", "client", "--name", "Acme"])
-    subprocess.run(["git", "init", "-q", "."], check=True)
-    subprocess.run(["git", "add", "-A"], check=True)
-    subprocess.run(
-        ["git", "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", "seed"], check=True
-    )
-    payload = json.loads(runner.invoke(app, ["log", "--format", "json"]).output)
-    assert payload["git_available"] is True
-    assert isinstance(payload["entries"], list) and payload["entries"]
-
-
 # --- surfaces removed in 0.9.0 ------------------------------------------------
 # Each asserts the surface is gone AND that its absence is a clean usage error
 # (exit 2), never a traceback and never a silently accepted no-op.
+
+
+@pytest.mark.integration
+def test_log_command_is_gone(fresh_ws: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """`khub log` was removed in 0.9.0: `khub history` covers the graph side, `git log
+    -- <path>` the rest. `stale` — the other git-derived read — is untouched."""
+    monkeypatch.chdir(fresh_ws)
+    result = runner.invoke(app, ["log"])
+    assert result.exit_code == 2
+    assert "No such command" in result.output
+    assert runner.invoke(app, ["stale", "--format", "json"]).exit_code == 0
 
 
 @pytest.mark.integration

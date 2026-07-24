@@ -78,7 +78,7 @@ Two eval tiers: deterministic golden-file tests cover the engine (the HQ functio
 ### Principles (Invariants)
 
 1. **Markdown is truth.** One entity equals one file in git. Audit, diff, PR review, and portability come for free.
-2. **The graph is a derived projection,** rebuilt from the Markdown on demand. No graph database is ever the source of truth. History (`khub log`) is derived from git the same way.
+2. **The graph is a derived projection,** rebuilt from the Markdown on demand. No graph database is ever the source of truth. Git-derived dates (`khub stale`) are read the same way.
 3. **The schema is the contract.** Surfaces introspect the schema at runtime and never hardcode per-type knowledge.
 4. **Relations are authoritative, from two sources.** A relation feeds the graph from an explicit role-named field the schema marks as an edge (the field name is the predicate, the value is the target), or from the derived inverse of such a field. Forward fields are stored single-sided on one entity; inverse edges are computed, never stored. (Deriving a parent edge from nested placement is not yet supported; a parent relation is an explicit edge.) Inline body links are navigational only.
 5. **Structural integrity is not semantic truth.** khub guarantees an entity is well-formed and every relation resolves; it does not guarantee an assertion is correct. A schema-legal but false write validates. The backstop is attributable git history and `git revert`.
@@ -106,7 +106,8 @@ Two eval tiers: deterministic golden-file tests cover the engine (the HQ functio
   - `khub validate`: per-entity well-formedness against the schema, plus referential integrity.
   - `khub check`: graph-wide over the active (`draft: false`) subgraph. Relations resolve, required-completeness holds for `active` entities (computed from the schema; an active-but-incomplete entity is reported), a `draft` does not satisfy a required relation, no orphans (entities with no inbound or outbound relation), no dangling edges, and no stray files (a file inside a type's layout that is not a valid entity of that type; reference docs outside the type layouts are skipped).
   - `khub stale`: entities whose `updated` is past a threshold; dates backfilled from `git log`.
-  - `khub log`: git history rendered at ontology altitude (entities and relations), for orientation without a gate.
+
+  A fourth signal, `khub log` (git history rendered at ontology altitude), shipped in v1 and was removed in 0.9.0. Rendering commits as entities and touched predicates — including per-row attribution for collection types — was over half of `core/gitlog.py` and answered a question `khub history` (the supersession chain) and `git log -- <path>` already answer between them.
 
 ### Command Surface
 
@@ -134,7 +135,6 @@ The CLI is a thin, schema-introspecting adapter over the core library's verbs: c
 | Integrity | `khub validate [path]` | per-entity well-formedness and referential integrity (default: whole workspace) |
 | | `khub check` | graph-wide: relations resolve, required relations complete, no orphans, no stray files, no edge cycles |
 | | `khub stale [--days N]` | entities past an `updated` threshold; dates backfilled from `git log` |
-| | `khub log [<id>]` | git history at ontology altitude |
 | Projection | `khub reindex` | regenerate the OKF `index.md` navigation from the graph |
 | | `khub backfill [--type T]` | add missing frontmatter and dates from `git log` |
 | | `khub viz` | self-contained Cytoscape HTML over the typed graph |

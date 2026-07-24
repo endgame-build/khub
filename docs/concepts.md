@@ -10,7 +10,7 @@ One entity is one file in git: Markdown with YAML frontmatter, or one row of a s
 
 ## The graph is a derived projection
 
-khub reads the frontmatter, builds an in-memory graph on demand, answers your query, and throws the graph away. It never stores it. `khub log` derives history from git the same way. Because the projection is computed and never persisted, it is never stale and never the authority. Delete the index and nothing is lost; the next command rebuilds it.
+khub reads the frontmatter, builds an in-memory graph on demand, answers your query, and throws the graph away. It never stores it. `khub stale` derives dates from git the same way. Because the projection is computed and never persisted, it is never stale and never the authority. Delete the index and nothing is lost; the next command rebuilds it.
 
 ## The schema is the contract
 

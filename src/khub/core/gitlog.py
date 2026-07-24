@@ -1,30 +1,27 @@
-"""Git-derived reads — ``khub stale`` and ``khub log`` (WPK-004-2, FS-004).
+"""Git-derived reads — ``khub stale`` (WPK-004-2, FS-004).
 
-Two reads round out the integrity loop, both derived from git, never from
-hand-kept state:
+``stale`` reports entities whose effective date is past a threshold (default: the
+workspace's ``stale_days``), oldest first. The effective date is the ``updated``
+field when present, else the last-commit date read from ``git log`` (read, never
+written — INT-008). A non-git workspace falls back to ``updated`` alone.
 
-- ``stale``: entities whose effective date is past a threshold (default: the
-  workspace's ``stale_days``), oldest first. The effective date is the ``updated``
-  field when present, else the last-commit date read from ``git log`` (read, never
-  written — INT-008). A non-git workspace falls back to ``updated`` alone.
-- ``log``: ``git log`` rendered at ontology altitude — each commit's changed files
-  mapped to entity ids and the relation predicates touched, never raw file paths.
-  ``log <id>`` filters to one entity. A no-git workspace is a no-op success.
+``khub log`` lived here until 0.9.0, rendering git history at ontology altitude.
+It was removed: ``khub history`` answers the graph-side question and ``git log --
+<path>`` answers the rest, neither of which needed the per-row commit attribution
+that made up most of this module.
 
-The ``git log`` date helper is shared with ``backfill`` (FS-005) and with
-``validate --fix``. Every git call is read-only.
+The ``git log`` date helpers are shared with ``backfill`` (FS-005). Every git call
+is read-only.
 """
 
 from __future__ import annotations
 
 import subprocess
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
-from typing import Any
 
-from khub.core import formats
-from khub.core.entity import entity_path, resolve_id
+from khub.core.entity import entity_path
 from khub.core.index import build_index, filter_index, stray_nodes
 from khub.core.introspect import load_schema
 from khub.core.project import effective_date, stale_days
@@ -155,191 +152,3 @@ def stale(root: Path, *, days: int | None = None, now: date) -> StaleReport:
             entries.append(StaleEntry(type_, slug, eff, age, source))
     entries.sort(key=lambda e: (e.age, e.type, e.slug), reverse=True)
     return StaleReport(entries=entries, git_available=git_ok)
-
-
-# --- log ---------------------------------------------------------------------
-
-
-@dataclass(frozen=True)
-class LogEntry:
-    """One commit's change to one entity, at ontology altitude (no file path)."""
-
-    commit: str  # short hash
-    type: str
-    slug: str
-    date: str  # committer ISO datetime
-    relations: list[str] = field(default_factory=list)  # predicates touched
-
-
-def log(
-    root: Path,
-    id_: str | None = None,
-    *,
-    limit: int | None = None,
-    since: str | None = None,
-) -> list[LogEntry] | None:
-    """Git history mapped to entities and the relations each commit touched.
-
-    Returns ``None`` when the workspace has no git history (the caller reports the
-    no-op success). With ``id_``, only commits touching that entity are returned;
-    ``limit`` caps the commit count and ``since`` bounds the window. The relations
-    a commit touched are computed by diffing the file's frontmatter against its
-    parent — an attribute-only edit yields an empty relation list, the entity still
-    named.
-    """
-    resolved = load_schema(root)
-    index = build_index(root, resolved)
-    valid = filter_index(index, stray_nodes(index))  # strays are not entities
-    # Resolve the id BEFORE the git check, so a bad/ambiguous id raises the located
-    # lookup error whether or not the workspace has git history (a non-git `log
-    # ghost` must fail the same way it does in a repo, not report "no history").
-    target = resolve_id(valid, id_) if id_ else None
-    if not has_git_history(root):
-        return None
-
-    # One path maps to ONE node for file/folder layouts and to every row of a
-    # collection — a commit touching the inventory is attributed per changed row.
-    path_to_nodes: dict[str, list[tuple[str, str]]] = {}
-    for t, s in valid.nodes:
-        rel = str(entity_path(root, resolved.types[t], s).relative_to(root))
-        path_to_nodes.setdefault(rel, []).append((t, s))
-    target_rel = (
-        str(entity_path(root, resolved.types[target[0]], target[1]).relative_to(root))
-        if target
-        else None
-    )
-
-    # A row-targeted log cannot give git's --max-count the limit: commits touching
-    # only OTHER rows of the shared file would consume the budget and starve the
-    # target ("no history" for an entity with history). Walk unbounded, cap entries.
-    target_is_row = (
-        target is not None and resolved.types[target[0]].storage.layout == "collection"
-    )
-    args = ["log", f"--format={_REC}%h{_FLD}%cI", "--name-only"]
-    if limit is not None and not target_is_row:
-        args.append(f"--max-count={limit}")
-    if since is not None:
-        args.append(f"--since={since}")
-    if target_rel is not None:
-        args += ["--", target_rel]
-    out = _git(root, *args).stdout
-
-    entries: list[LogEntry] = []
-    for chunk in out.split(_REC):
-        if not chunk.strip():
-            continue
-        lines = chunk.splitlines()
-        commit, when = lines[0].split(_FLD)
-        files = [ln for ln in lines[1:] if ln.strip()]
-        for relpath in files:
-            nodes = path_to_nodes.get(relpath)
-            if nodes is None:
-                continue
-            rtype = resolved.types[nodes[0][0]]
-            if rtype.storage.layout == "collection":
-                entries.extend(
-                    _collection_entries(root, commit, when, relpath, rtype, nodes, target)
-                )
-                continue
-            node = nodes[0]
-            if target is not None and node != target:
-                continue
-            entries.append(
-                LogEntry(
-                    commit=commit,
-                    type=node[0],
-                    slug=node[1],
-                    date=when,
-                    relations=_relations_changed(root, commit, relpath, rtype),
-                )
-            )
-    entries = _since_exact(entries, since)
-    if limit is not None and target_is_row:
-        entries = entries[:limit]
-    return entries
-
-
-def _collection_entries(
-    root: Path,
-    commit: str,
-    when: str,
-    relpath: str,
-    rtype: Any,
-    nodes: list[tuple[str, str]],
-    target: tuple[str, str] | None,
-) -> list[LogEntry]:
-    """One LogEntry per row whose value changed in ``commit`` — row-correct history.
-
-    Diffs the collection blob at ``commit`` vs its parent by slug (the same
-    two-``git show`` cost the per-file path pays). Rows no longer in the current
-    index are skipped, matching the per-file behavior for deleted entities; an
-    unparseable blob at either rev contributes no rows for that commit.
-    """
-    new = _rows_at(root, commit, relpath, rtype.storage.fmt)
-    old = _rows_at(root, f"{commit}^", relpath, rtype.storage.fmt)
-    known = {s for (_, s) in nodes}
-    out: list[LogEntry] = []
-    for slug in sorted(set(new) | set(old)):
-        if slug not in known or new.get(slug) == old.get(slug):
-            continue
-        node = (rtype.name, slug)
-        if target is not None and node != target:
-            continue
-        n_row, o_row = new.get(slug) or {}, old.get(slug) or {}
-        rels = [
-            pred
-            for pred in rtype.relations
-            if _rel_value(n_row.get(pred)) != _rel_value(o_row.get(pred))
-        ]
-        out.append(LogEntry(commit=commit, type=rtype.name, slug=slug, date=when, relations=rels))
-    return out
-
-
-def _rows_at(root: Path, rev: str, relpath: str, fmt: str) -> dict[str, Any]:
-    """The collection's raw rows at ``rev``; empty if absent or unparseable."""
-    res = _git(root, "show", f"{rev}:{relpath}")
-    if res.returncode != 0:
-        return {}
-    try:
-        return formats.load_collection(res.stdout, fmt)
-    except Exception:  # noqa: BLE001 — a malformed blob contributes no row entries
-        return {}
-
-
-def _since_exact(entries: list[LogEntry], since: str | None) -> list[LogEntry]:
-    """Inclusive ``--since`` to the day: git's ``--since`` is approximate, so re-filter.
-
-    Only applied when ``since`` is an ISO date; a relative spec (``2 weeks ago``) is
-    left to git's coarse filter.
-    """
-    if since is None:
-        return entries
-    try:
-        floor = date.fromisoformat(since)
-    except ValueError:
-        return entries
-    return [e for e in entries if date.fromisoformat(e.date[:10]) >= floor]
-
-
-def _relations_changed(root: Path, commit: str, relpath: str, rtype: Any) -> list[str]:
-    """The relation predicates whose value changed in ``commit`` versus its parent."""
-    new = _frontmatter_at(root, commit, relpath)
-    old = _frontmatter_at(root, f"{commit}^", relpath)  # empty when the file was added
-    return [pred for pred in rtype.relations if _rel_value(new.get(pred)) != _rel_value(old.get(pred))]
-
-
-def _rel_value(value: Any) -> Any:
-    """A relation value normalized for change comparison: a many-valued list compares
-    on membership, not order — a pure reorder is not a change."""
-    return sorted(map(str, value)) if isinstance(value, list) else value
-
-
-def _frontmatter_at(root: Path, rev: str, relpath: str) -> dict[str, Any]:
-    """The metadata of ``relpath`` at ``rev``; empty if absent or unparseable."""
-    res = _git(root, "show", f"{rev}:{relpath}")
-    if res.returncode != 0:
-        return {}
-    try:
-        return formats.parse(res.stdout, formats.fmt_of(relpath))[0]
-    except Exception:  # noqa: BLE001 — a malformed blob is "no relations changed"
-        return {}

@@ -279,26 +279,6 @@ def test_yaml_collection_rows_are_searchable(fresh_ws: Path, monkeypatch: pytest
 
 
 @pytest.mark.integration
-def test_collection_log_is_row_correct(cws: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """A commit touching the inventory is attributed to the rows that changed."""
-    monkeypatch.chdir(cws)
-    seed_git = ["git", "-c", "user.email=t@t", "-c", "user.name=t"]
-    runner.invoke(app, ["add", "repo", "--id", "a", "--repo", "endgame-build/a"])
-    runner.invoke(app, ["add", "repo", "--id", "b", "--repo", "endgame-build/b"])
-    subprocess.run(["git", "init", "-q", "."], check=True)
-    subprocess.run(["git", "add", "-A"], check=True)
-    subprocess.run([*seed_git, "commit", "-qm", "seed"], check=True)
-    assert runner.invoke(app, ["edit", "repo/b", "status", "archived"]).exit_code == 0
-    subprocess.run(["git", "add", "-A"], check=True)
-    subprocess.run([*seed_git, "commit", "-qm", "archive b"], check=True)
-
-    log_b = json.loads(runner.invoke(app, ["log", "repo/b", "--format", "json"]).output)
-    assert len(log_b["entries"]) == 2  # seed + archive
-    log_a = json.loads(runner.invoke(app, ["log", "repo/a", "--format", "json"]).output)
-    assert len(log_a["entries"]) == 1  # only the seed commit touched row a
-
-
-@pytest.mark.integration
 def test_collection_backfill_skips_and_stale_never_lies(
     cws: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

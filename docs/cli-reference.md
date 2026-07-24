@@ -33,7 +33,6 @@ $ khub [OPTIONS] COMMAND [ARGS]...
 * `validate`: Validate entities: khub validate [TARGET]...
 * `check`: Check the active graph: completeness,...
 * `stale`: List entities past the `updated`...
-* `log`: Render git history at ontology altitude:...
 * `reindex`: Regenerate the OKF index.md from the...
 * `viz`: Render the typed graph to a self-contained...
 * `backfill`: Backfill missing dates and frontmatter:...
@@ -374,27 +373,6 @@ $ khub stale [OPTIONS]
 **Options**:
 
 * `--days INTEGER`: Staleness threshold in days; default: the workspace&#x27;s stale_days.
-* `--format TEXT`: text (Rich table on a TTY) or json.  [default: text]
-* `--help`: Show this message and exit.
-
-## `khub log`
-
-Render git history at ontology altitude: khub log [ID] [--limit N] [--since DATE].
-
-**Usage**:
-
-```console
-$ khub log [OPTIONS] [ID]
-```
-
-**Arguments**:
-
-* `[ID]`: A bare slug or type/slug; default: all.
-
-**Options**:
-
-* `--limit INTEGER`: Cap the number of rendered commits.
-* `--since TEXT`: Only commits on/after this date.
 * `--format TEXT`: text (Rich table on a TTY) or json.  [default: text]
 * `--help`: Show this message and exit.
 

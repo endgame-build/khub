@@ -10,7 +10,6 @@ whitelist, git-backed `log`, and `search` over field values and body prose.
 from __future__ import annotations
 
 import json
-import subprocess
 from datetime import date
 from pathlib import Path
 from typing import Callable
@@ -218,25 +217,6 @@ def test_schema_rejects_unimplemented_formats(fws: Path, monkeypatch: pytest.Mon
 
 
 # --- git, search ----------------------------------------------------------------
-
-
-@pytest.mark.integration
-def test_log_tracks_json_relation_change(fws: Path, seed: Seed, monkeypatch: pytest.MonkeyPatch) -> None:
-    """`log` diffs json blobs across commits — the owner edge change is attributed."""
-    monkeypatch.chdir(fws)
-    seed(fws, "identity/team/noor.md", type="person", name="Noor", created=date(2026, 6, 1))
-    added = json.loads(runner.invoke(app, ["add", "fragment", "--stage", "raw", "--format", "json"]).output)
-    subprocess.run(["git", "init", "-q", "."], check=True)
-    subprocess.run(["git", "add", "-A"], check=True)
-    git_c = ["git", "-c", "user.email=t@t", "-c", "user.name=t"]
-    subprocess.run([*git_c, "commit", "-qm", "seed"], check=True)
-    assert runner.invoke(app, ["link", added["slug"], "owner", "noor"]).exit_code == 0
-    subprocess.run(["git", "add", "-A"], check=True)
-    subprocess.run([*git_c, "commit", "-qm", "link owner"], check=True)
-
-    payload = json.loads(runner.invoke(app, ["log", added["slug"], "--format", "json"]).output)
-    assert payload["git_available"] is True
-    assert payload["entries"][0]["relations"] == ["owner"]
 
 
 @pytest.mark.integration
