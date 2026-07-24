@@ -2,6 +2,28 @@
 
 Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); khub is pre-release.
 
+## [Unreleased]
+
+### Changed
+
+- **`build-hub` preset rewritten to the converged 16-type ontology (preset 0.2.0)** — the
+  paved-road-hub convergence (2026-07-24). Layout moves to two knowledge roots
+  (`knowledge/{product,architecture}` durable truth · root `specs/` delivery state). New
+  governance types: `domain` (body = blueprint narration; `depends_on` narrowed to
+  `domain→domain`), `entity` (`owner` single + required — single-writer schema-enforced),
+  `boundary`, `quality-attribute`, `component` (required `repo` edge; carries the churny
+  `consumes` side), `baseline` (yaml registry). `contract` becomes a hub-authored yaml-format
+  entity (`provider → component | external-system`; machine spec under `contracts/specs/`,
+  outside the scan). `repo` collection moves to `knowledge/architecture/repos.yaml`.
+  `feature-spec` absorbs `feature` (the FS is the feature record); `solution-spec` dropped.
+
+### Removed
+
+- **`build-spoke` preset, its parity test, and its doc** — spokes carry no khub workspace:
+  code plus a plain `entities.yaml` the hub `resource`-links; every decision, repo-local
+  included, is a hub adr/pdr. The corpus is layout-invariant: monorepo and multi-repo use the
+  same `build-hub` preset.
+
 ## [0.7.1] — 2026-07-10
 
 ### Fixed
