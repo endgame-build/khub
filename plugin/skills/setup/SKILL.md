@@ -27,10 +27,16 @@ If `uv` or Python 3.11+ is missing, report the prerequisite error and stop; inst
 
 ## 2. Set up the project
 
-**No workspace yet** (no `.khub/` at or above the working directory)? Scaffold one. `khub init` seeds the tree, wires the schema into your agent files (`CLAUDE.md` + `AGENTS.md`), and installs the agent skill in one step:
+**No workspace yet** (no `.khub/` at or above the working directory)? Scaffold one. `khub init` seeds the tree and wires the schema into your agent files (`CLAUDE.md` + `AGENTS.md`):
 
 ```bash
 khub init firm-ops ./my-hub && cd my-hub
+```
+
+Then install the agent skill into this project (a separate step since 0.9.0 — it needs `npx` and SSH access, which a scaffold must not depend on):
+
+```bash
+khub install-skills
 ```
 
 **Workspace already present** (a cloned engagement repo)? Do not re-scaffold; just wire it:

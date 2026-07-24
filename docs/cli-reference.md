@@ -17,7 +17,7 @@ $ khub [OPTIONS] COMMAND [ARGS]...
 
 **Commands**:
 
-* `init`: Scaffold a workspace from a preset, then...
+* `init`: Scaffold a workspace from a preset and...
 * `status`: Summarize the workspace: counts,...
 * `add`: Create an entity: khub add opportunity...
 * `get`: Read an entity&#x27;s frontmatter and body,...
@@ -37,14 +37,16 @@ $ khub [OPTIONS] COMMAND [ARGS]...
 * `viz`: Render the typed graph to a self-contained...
 * `backfill`: Backfill missing dates and frontmatter:...
 * `wire`: Wire the workspace into agent context...
+* `install-skills`: Install the khub agent skill: khub...
 * `schema`: Introspect the active schema.
 
 ## `khub init`
 
-Scaffold a workspace from a preset, then wire it and install the agent skill.
+Scaffold a workspace from a preset and wire it into the agent context files.
 
-On a TTY, a missing preset/path launches a wizard and the wire/skill tails are
-confirmed; an agent (``--agent``), a pipe, or ``--format json`` never prompts.
+On a TTY, a missing preset/path launches a wizard and the wire tail is confirmed;
+an agent (``--agent``), a pipe, or ``--format json`` never prompts. Installing the
+agent skill is a separate step: ``khub install-skills``.
 
 **Usage**:
 
@@ -63,7 +65,6 @@ $ khub init [OPTIONS] [PRESET] [PATH]
 * `--name TEXT`: Workspace name (default: the target dir name).
 * `--force`: Scaffold into a non-empty target.
 * `--no-wire`: Skip wiring the schema into the agent files.
-* `--no-skill`: Skip installing the agent skill via npx skills.
 * `--format TEXT`: text confirmation (default); json emits resolved provenance.  [default: text]
 * `--help`: Show this message and exit.
 
@@ -439,6 +440,23 @@ $ khub wire [OPTIONS]
 
 * `--target TEXT`: Create and wire a specific file: claude, agents, or both. Omit to update the agent files that already exist.
 * `--dry-run`: Print the block(s); write nothing.
+* `--help`: Show this message and exit.
+
+## `khub install-skills`
+
+Install the khub agent skill: khub install-skills [--agent claude-code] [--dry-run].
+
+**Usage**:
+
+```console
+$ khub install-skills [OPTIONS]
+```
+
+**Options**:
+
+* `--agent TEXT`: Install for this coding agent (repeatable). Omitted: npx auto-detects.
+* `--dry-run`: Print the npx command that would run, and run nothing.
+* `--format TEXT`: text or json (emits the outcome).  [default: text]
 * `--help`: Show this message and exit.
 
 ## `khub schema`

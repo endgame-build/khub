@@ -85,7 +85,13 @@ khub ships as a Claude Code plugin from this repo, so an agent can install and d
 
 The `khub` skill maps agent intent onto the read and write verbs; `/khub:setup` bootstraps the CLI and sets up the current project.
 
-The skill is not Claude-only. For Cursor, Codex, Gemini CLI, and ~70 other agents, install it with [`npx skills`](https://skills.sh) (the same convention `khub init` uses under the hood):
+The skill is not Claude-only. For Cursor, Codex, Gemini CLI, and ~70 other agents, `khub install-skills` installs it via [`npx skills`](https://skills.sh) (add `--agent <name>` to target one, `--dry-run` to preview):
+
+```
+khub install-skills
+```
+
+Without khub on PATH, run the same install directly:
 
 ```
 npx skills add git@github.com:endgame-build/khub.git -s khub -s setup

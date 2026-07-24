@@ -10,7 +10,6 @@ answers — so the real command logic runs with zero prompt_toolkit.
 from __future__ import annotations
 
 import json
-import types
 from pathlib import Path
 
 import pytest
@@ -117,34 +116,6 @@ def test_init_wizard_scaffolds_and_wires(tmp_path: Path, monkeypatch) -> None:
     assert (ws / ".khub" / "schema.yaml").exists()   # scaffolded from the picked preset
     assert (ws / "CLAUDE.md").exists()               # wire confirmed, claude-code picked
     assert "installed khub agent skill" not in result.output  # skill declined
-
-
-@pytest.mark.integration
-def test_init_wizard_agent_multiselect_passes_through(
-    tmp_path: Path, preset_source: Path, monkeypatch
-) -> None:
-    """Skill confirmed + an agent picked → npx runs with `--agent <picked>`."""
-    calls: list[list[str]] = []
-
-    def fake_run(cmd, cwd=None, capture_output=False, **_k):
-        calls.append(cmd)
-        return types.SimpleNamespace(returncode=0)
-
-    monkeypatch.setattr("khub.core.skill.shutil.which", lambda _: "/opt/npx")
-    monkeypatch.setattr("khub.core.skill.subprocess.run", fake_run)
-
-    ws = tmp_path / "hub"
-    fake = FakePrompter(
-        paths=[str(ws)],            # ? Directory (preset supplied as an arg below)
-        confirms=[False, True],     # wire? no ; skill? yes
-        checkboxes=[["cursor"]],    # ? which agents
-    )
-    _inject(monkeypatch, fake)
-
-    result = runner.invoke(app, ["init", "note", "--preset-source", str(preset_source)])
-    assert result.exit_code == 0, result.output
-    assert calls, "npx skills should have run"
-    assert "--agent" in calls[0] and "cursor" in calls[0]
 
 
 @pytest.mark.integration

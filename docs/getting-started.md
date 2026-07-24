@@ -39,14 +39,16 @@ khub init firm-ops ./my-hub
 Initialized firm-ops workspace at my-hub
 created CLAUDE.md
 created AGENTS.md
-installed khub agent skill (npx skills)
+
+Agent skill not installed. To install:
+  khub install-skills
 ```
 
 ```bash
 cd my-hub
 ```
 
-`init` does three things in one step: it scaffolds the tree, wires the schema into your agent files (`CLAUDE.md` and `AGENTS.md`; next section), and installs the khub agent skill into whichever coding agent it detects. The skill install shells out to `npx skills` and needs `npx`; without it, init prints `skill install skipped` and the scaffold still succeeds. Pass `--no-skill` or `--no-wire` to turn off either tail.
+`init` does two things: it scaffolds the tree and wires the schema into your agent files (`CLAUDE.md` and `AGENTS.md`; next section). Pass `--no-wire` to skip the wire tail. Installing the agent skill is a separate step, `khub install-skills` — it needs `npx` and SSH access to the skill repo, and a scaffold should not depend on either.
 
 init wrote a `.khub/` control directory and one folder per entity type:
 
@@ -78,13 +80,19 @@ updated AGENTS.md
 
 Bare `khub wire` updates whichever agent files already exist. `khub wire --target claude|agents|both` creates a specific one (`CLAUDE.md` gets the import, `AGENTS.md` the pointer).
 
-`init` also installed the khub agent skill. To add it to another agent, or into an existing workspace you cloned rather than scaffolded, install it directly with [`npx skills`](https://skills.sh) (Cursor, Codex, and others land in `.agents/skills/`; Claude Code in `.claude/skills/`):
+Now install the agent skill (Cursor, Codex, and others land in `.agents/skills/`; Claude Code in `.claude/skills/`):
+
+```bash
+khub install-skills
+```
+
+Add `--agent claude-code` (repeatable) to target specific agents instead of letting npx auto-detect, or `--dry-run` to see the command it would run. Without khub on PATH, the same install is [`npx skills`](https://skills.sh) directly:
 
 ```bash
 npx skills add git@github.com:endgame-build/khub.git -s khub -s setup
 ```
 
-That writes a `skills-lock.json` at the project root. Commit it so teammates install the same skill version. The installed skill directories are per-machine; `khub init` already added `.claude/skills/` and `.agents/skills/` to `.gitignore`, so a manual `npx skills add` is the only case where you add those lines yourself.
+Either way writes a `skills-lock.json` at the project root. Commit it so teammates install the same skill version. The installed skill directories are per-machine, and `khub install-skills` adds `.claude/skills/` and `.agents/skills/` to `.gitignore` for you; after a bare `npx skills add` you add those lines yourself.
 
 ## Author your first entities
 

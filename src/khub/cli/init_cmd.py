@@ -1,10 +1,12 @@
 """``khub init`` — operator trigger for ``core.init_workspace`` (WPK-001-1). Thin wiring.
 
 After scaffolding, ``init`` wires the workspace into the selected agent context files
-(``CLAUDE.md`` / ``AGENTS.md``, both by default) and installs the khub agent skill
-(agnostically, via ``npx skills``), so a fresh workspace is agent-ready in one command.
-Both tails are best-effort and independently skippable (``--no-wire`` / ``--no-skill``);
-neither unwinds a successful scaffold.
+(``CLAUDE.md`` / ``AGENTS.md``, both by default). The wire tail is best-effort and
+skippable (``--no-wire``); it never unwinds a successful scaffold.
+
+Until 0.9.0 ``init`` also shelled out to ``npx skills`` to install the agent skill,
+which made scaffolding depend on Node and on SSH access to the skill repo. That is
+now ``khub install-skills``; ``init`` ends by naming it.
 """
 
 from __future__ import annotations
@@ -18,7 +20,10 @@ import typer
 from khub.cli import interact
 from khub.cli._render import guard
 from khub.core.errors import LocatedError
-from khub.core.skill import SKILLS_SOURCE, SkillOutcome
+
+# Printed after a scaffold, and carried as `skill_hint` in the JSON payload, so an
+# agent driving `init --format json` learns the follow-up without parsing prose.
+SKILL_HINT = "khub install-skills"
 
 # A short convenience list for the wizard's agent multiselect; empty picks (or headless)
 # fall back to npx's own auto-detect. Not exhaustive — skills.sh supports ~70 agents.
@@ -47,19 +52,16 @@ def init_command(
     no_wire: bool = typer.Option(
         False, "--no-wire", help="Skip wiring the schema into the agent files."
     ),
-    no_skill: bool = typer.Option(
-        False, "--no-skill", help="Skip installing the agent skill via npx skills."
-    ),
     fmt: str = typer.Option(
         "text", "--format", help="text confirmation (default); json emits resolved provenance."
     ),
 ) -> None:
-    """Scaffold a workspace from a preset, then wire it and install the agent skill.
+    """Scaffold a workspace from a preset and wire it into the agent context files.
 
-    On a TTY, a missing preset/path launches a wizard and the wire/skill tails are
-    confirmed; an agent (``--agent``), a pipe, or ``--format json`` never prompts.
+    On a TTY, a missing preset/path launches a wizard and the wire tail is confirmed;
+    an agent (``--agent``), a pipe, or ``--format json`` never prompts. Installing the
+    agent skill is a separate step: ``khub install-skills``.
     """
-    from khub.core.skill import install_skill
     from khub.core.wire import wire
     from khub.core.workspace import (  # heavy (compile path); imported lazily
         init_workspace,
@@ -77,19 +79,16 @@ def init_command(
     if path is None:
         path = prompter.path("Directory", default=".") if prompter is not None else Path(".")
 
-    # Tail choices: a --no-* flag forces skip; else confirm on a TTY; else default on.
+    # Tail choice: --no-wire forces skip; else confirm on a TTY; else default on.
     do_wire = not no_wire and (prompter.confirm("Wire the schema into your agent files?") if prompter else True)
-    do_skill = not no_skill and (prompter.confirm("Install the khub agent skill?") if prompter else True)
     agents = None
-    if (do_wire or do_skill) and prompter is not None:
-        picks = prompter.checkbox(
-            "Set up which agents? (none = both files / auto-detect)", _COMMON_AGENTS
-        )
+    if do_wire and prompter is not None:
+        picks = prompter.checkbox("Set up which agents? (none = both files)", _COMMON_AGENTS)
         agents = picks or None
 
     result = init_workspace(preset, path, preset_source=preset_source, name=name, force=force)
 
-    # Best-effort tails: a wire/skill hiccup does not unwind the scaffold above.
+    # Best-effort tail: a wire hiccup does not unwind the scaffold above.
     wire_result = None
     wire_error = None
     if do_wire:
@@ -100,10 +99,6 @@ def init_command(
             wire_error = err.message
         except OSError as err:  # e.g. a read-only agent file; report, don't unwind
             wire_error = str(err)
-    # In json mode capture npx output so it never precedes the JSON document.
-    skill_outcome = (
-        install_skill(result.path, agents=agents, quiet=(fmt == "json")) if do_skill else None
-    )
 
     if fmt == "json":
         payload = dataclasses.asdict(result)
@@ -111,8 +106,7 @@ def init_command(
             payload["wire"] = [dataclasses.asdict(o) for o in wire_result.outcomes]
         if wire_error is not None:
             payload["wire_error"] = wire_error
-        if skill_outcome is not None:
-            payload["skill"] = dataclasses.asdict(skill_outcome)
+        payload["skill_hint"] = SKILL_HINT
         typer.echo(json.dumps(payload, default=str))
         return
 
@@ -130,15 +124,4 @@ def init_command(
             typer.echo(f"{outcome.action} {outcome.path.name}")
     if wire_error is not None:
         typer.echo(f"wire skipped: {wire_error}", err=True)
-    if skill_outcome is not None:
-        # A failure is an error stream; installed/skipped are informational (stdout).
-        typer.echo(_skill_line(skill_outcome), err=(skill_outcome.action == "failed"))
-
-
-def _skill_line(outcome: SkillOutcome) -> str:
-    """A human line for the skill-install outcome."""
-    if outcome.action == "installed":
-        return "installed khub agent skill (npx skills)"
-    if outcome.action == "skipped-no-npx":
-        return "skill install skipped: npx not found (install Node, or run `npx skills add …`)"
-    return f"skill install failed: run `npx skills add {SKILLS_SOURCE} -s khub -s setup` by hand"
+    typer.echo(f"\nAgent skill not installed. To install:\n  {SKILL_HINT}")

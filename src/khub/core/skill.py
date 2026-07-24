@@ -1,12 +1,15 @@
-"""Install the khub agent skill via ``npx skills`` (the tail of ``khub init``).
+"""Install the khub agent skill via ``npx skills`` (``khub install-skills``).
 
 Shells out to Vercel's skills.sh CLI (``npx skills``, the agent-agnostic skill
 installer) to drop the khub skill into whichever coding agent is present —
 Claude Code, Cursor, Codex, and ~70 others — and to write a ``skills-lock.json``.
-Same convention Neon's ``neon init`` uses.
 
-Best-effort by design: a missing ``npx``, an exec failure, or a non-zero exit is
-reported, never raised. Scaffolding a workspace must never hard-depend on Node.
+Never raises: a missing ``npx``, an exec failure, or a non-zero exit comes back
+as an outcome. This ran as a tail of ``khub init`` until 0.9.0, where that
+tolerance was the point (a scaffold must not hard-depend on Node). As its own
+command the tolerance stays here, and the CLI adapter turns a ``failed`` outcome
+into exit 1 — the layer that knows the install was asked for is the layer that
+decides it is fatal.
 
 The clone runs over the inherited stdin so an interactive user can answer an ssh
 host-key or passphrase prompt. In CI, configure ssh non-interactively
@@ -39,7 +42,8 @@ class SkillOutcome:
     command: list[str]
 
 
-def _command(agents: Sequence[str] | None = None) -> list[str]:
+def skill_command(agents: Sequence[str] | None = None) -> list[str]:
+    """The ``npx skills add`` argv. Public so ``--dry-run`` can print exactly what would run."""
     cmd = [
         "npx",
         "-y",
@@ -64,14 +68,14 @@ def install_skill(
 
     Runs ``npx skills add`` with ``cwd=root`` so the skill and its
     ``skills-lock.json`` land in the workspace, then gitignores the per-machine
-    skill directories. ``agents`` narrows the install to named coding agents (the
-    interactive wizard's multiselect); ``None`` keeps npx's auto-detect. ``quiet``
+    skill directories. ``agents`` narrows the install to named coding agents
+    (``--agent``, repeatable); ``None`` keeps npx's auto-detect. ``quiet``
     captures npx's output instead of inheriting the terminal, for machine-readable
     callers whose stdout must stay clean.
     """
     from khub.core.workspace import _append_gitignore
 
-    cmd = _command(agents)
+    cmd = skill_command(agents)
     if shutil.which("npx") is None:
         return SkillOutcome(action="skipped-no-npx", command=cmd)
     try:
