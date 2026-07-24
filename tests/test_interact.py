@@ -39,7 +39,8 @@ def preset_source(tmp_path: Path) -> Path:
     """A preset-source dir holding the tiny `note` preset."""
     src = tmp_path / "presets"
     src.mkdir()
-    (src / "note.yaml").write_text(NOTE_PRESET)
+    (src / "note").mkdir()
+    (src / "note" / "schema.yaml").write_text(NOTE_PRESET)
     return src
 
 

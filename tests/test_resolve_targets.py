@@ -60,7 +60,7 @@ entities:
 def test_authored_presets_resolve():
     """Integration: the authored core.yaml + firm-ops.yaml resolve to 9 types,
     with the post-review model (union engagement minus build; project.active)."""
-    schema = resolve([PRESETS / "core.yaml", PRESETS / "firm-ops.yaml"])
+    schema = resolve([PRESETS / "core.yaml", PRESETS / "firm-ops" / "schema.yaml"])
     assert len(schema.types) == 9
 
     eng = schema.types["meeting"].relations["engagement"]

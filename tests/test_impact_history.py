@@ -58,7 +58,8 @@ def history_ws(tmp_path: Path, seed: Seed) -> Path:
     """A generic workspace with a four-link `supersedes` chain (derived inverse)."""
     src = tmp_path / "presets"
     src.mkdir()
-    (src / "fixture.yaml").write_text(HISTORY_PRESET)
+    (src / "fixture").mkdir()
+    (src / "fixture" / "schema.yaml").write_text(HISTORY_PRESET)
     ws = tmp_path / "ws"
     init_workspace("fixture", ws, preset_source=src)
     for a, b in [("decision-0012", "decision-0008"), ("decision-0008", "decision-0005"),

@@ -320,8 +320,8 @@ def test_collection_backfill_skips_and_stale_never_lies(
 def test_init_scaffolds_no_collection_file(tmp_path: Path) -> None:
     """init creates a collection's parent dir only — never the file, never a dir named like it."""
     preset = tmp_path / "presets"
-    preset.mkdir()
-    preset.joinpath("mini.yaml").write_text(
+    (preset / "mini").mkdir(parents=True)
+    preset.joinpath("mini", "schema.yaml").write_text(
         "version: 0.1.0\n"
         "entities:\n"
         "  note: { layout: file, path: notes }\n"

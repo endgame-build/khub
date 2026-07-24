@@ -264,7 +264,8 @@ def supersedes_ws(tmp_path: Path, seed: Seed) -> Path:
     """A generic decision with a supersedes chain plus a git edit history of one record."""
     src = tmp_path / "presets"
     src.mkdir()
-    (src / "fixture.yaml").write_text(HISTORY_PRESET)
+    (src / "fixture").mkdir()
+    (src / "fixture" / "schema.yaml").write_text(HISTORY_PRESET)
     ws = tmp_path / "ws"
     init_workspace("fixture", ws, preset_source=src)
     seed(ws, "decisions/decision-0001.md", type="decision")

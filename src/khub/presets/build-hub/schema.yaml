@@ -34,17 +34,18 @@
 #  - entity.owner is single-valued and REQUIRED: the single-writer rule is
 #    schema-enforced — a second authoritative writer is unrepresentable.
 #    Field-level detail churns with code and lives in the owning spoke's
-#    entities.yaml, linked via `resource`, never restated hub-side. ERD prose
-#    for humans co-locates as knowledge/architecture/entities/_index.md (file
-#    scans skip _index.md).
+#    entities.yaml, linked via `resource`, never restated hub-side.
 #  - component decomposes the classic topology block: kind/stack attrs, a
 #    required `repo` edge (the component↔codebase mapping), `domains` it hosts,
 #    and the churny `consumes` side of contract edges. repo rows are a pure
 #    remotes record. domain.relationship is a PLAIN attribute qualifying that
 #    domain's depends_on posture (edge properties are not a khub feature).
-#  - Narrative documents (prd, roadmap, arc42, overview, glossary) are NOT
-#    entity types: they live outside the inventory dirs (knowledge/product/,
-#    knowledge/architecture/) as plain prose the hub's own tooling governs.
+#  - The five narrative documents ARE types — SINGLETONS (layout: singleton;
+#    one fixed file each; slug = type name): prd, roadmap, glossary
+#    (knowledge/product/) and arc42, erd (knowledge/architecture/). init creates
+#    each from its body template in templates/; validate holds every templated
+#    type's body to its template's section headings (ordered subsequence,
+#    extras allowed). prd is `required: true` — check fails while it is absent.
 #  - status enums stay coarse (planned/active/done/dropped) so tracker sync is
 #    a trivial mapping; no status field declares a `default` — `add` applies no
 #    schema defaults, so status is always an explicit statement.
@@ -60,6 +61,38 @@
 version: "0.2.0"
 
 entities:
+
+  # ------------------------------------------- narrative singletons: the prose
+  prd:
+    layout: singleton
+    path: knowledge/product/prd.md
+    required: true              # the product source of truth — check fails without it
+    attributes:
+      title: { required: true }
+
+  roadmap:
+    layout: singleton
+    path: knowledge/product/roadmap.md
+    attributes:
+      title: { required: true }
+
+  glossary:
+    layout: singleton
+    path: knowledge/product/glossary.md
+    attributes:
+      title: { required: true }
+
+  arc42:
+    layout: singleton
+    path: knowledge/architecture/arc42.md
+    attributes:
+      title: { required: true }
+
+  erd:
+    layout: singleton
+    path: knowledge/architecture/erd.md
+    attributes:
+      title: { required: true }
 
   # ------------------------------------------------------------ product: what
   capability:

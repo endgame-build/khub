@@ -43,7 +43,8 @@ def inverse_ws(tmp_path: Path, seed: Seed) -> Path:
     """A workspace whose schema declares a stored→derived inverse pair."""
     src = tmp_path / "presets"
     src.mkdir()
-    (src / "fixture.yaml").write_text(FIXTURE_PRESET)
+    (src / "fixture").mkdir()
+    (src / "fixture" / "schema.yaml").write_text(FIXTURE_PRESET)
     ws = tmp_path / "ws"
     init_workspace("fixture", ws, preset_source=src)
     seed(ws, "docs/node-a.md", type="doc", supersedes="node-b")

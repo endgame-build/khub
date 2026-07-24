@@ -15,7 +15,7 @@ from khub.core import resolve
 
 PRESETS = Path(__file__).resolve().parents[1] / "src" / "khub" / "presets"
 CORE = PRESETS / "core.yaml"
-FIRM_OPS = PRESETS / "firm-ops.yaml"
+FIRM_OPS = PRESETS / "firm-ops" / "schema.yaml"
 
 NINE_TYPES = {
     "opportunity", "project", "meeting", "transcript", "fragment",

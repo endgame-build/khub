@@ -1,11 +1,14 @@
 """Workspace scaffolder — WPK-001-1.
 
-``init_workspace`` flattens ``core`` and a named preset into one editable
-``.khub/schema.yaml``, stamps provenance, writes ``config.yaml``, gitignores
-``.khub/generated/`` (the runtime collection locks), and lays down the entity
-tree. It owns only ``.khub/`` and the (empty) type directories — it never writes
-or overwrites an entity ``.md`` (WS-003), so the same command green-fields a
-fresh workspace and force-seeds over a live corpus (the HQ cutover).
+``init_workspace`` flattens ``core`` and a named preset (a DIRECTORY:
+``<name>/schema.yaml`` + optional ``<name>/templates/*.yaml``) into one editable
+``.khub/schema.yaml`` (+ ``.khub/templates/``), stamps provenance, writes
+``config.yaml``, gitignores ``.khub/generated/`` (the runtime collection locks),
+and lays down the entity tree — including CREATING each md singleton that has a
+template and does not exist yet. It never MODIFIES an existing entity file
+(WS-003, amended for singletons: may create, never overwrite), so the same
+command green-fields a fresh workspace and force-seeds over a live corpus (the
+HQ cutover).
 """
 
 from __future__ import annotations
@@ -54,18 +57,23 @@ class InitResult:
     # is a loud signal the non-destructive guarantee was violated.
     entity_files_modified: int = 0
     seeded_over_corpus: bool = False
+    # Singletons created by this init (type names) — creations, never overwrites.
+    singletons_created: tuple[str, ...] = ()
 
 
 def known_presets(source: Path | None = None) -> list[str]:
-    """The presets resolvable from ``source`` (or the packaged presets)."""
+    """The presets resolvable from ``source`` (or the packaged presets).
+
+    A preset is a directory: ``<name>/schema.yaml`` (+ optional ``templates/``).
+    """
     where = source or PRESETS_DIR
-    return sorted(p.stem for p in where.glob("*.yaml") if p.stem != "core")
+    return sorted(p.parent.name for p in where.glob("*/schema.yaml"))
 
 
 def resolve_preset(name: str, source: Path | None = None) -> Path:
-    """Locate ``<name>.yaml`` in ``source`` or the packaged presets."""
+    """Locate ``<name>/schema.yaml`` in ``source`` or the packaged presets."""
     where = source or PRESETS_DIR
-    candidate = where / f"{name}.yaml"
+    candidate = where / name / "schema.yaml"
     if not candidate.exists():
         raise LocatedError.unknown_preset(name, known_presets(source))
     return candidate
@@ -106,6 +114,7 @@ def init_workspace(
 
     khub = target / ".khub"
     created_khub = not khub.exists()
+    created_singletons: list[tuple[str, Path]] = []
     try:
         khub.mkdir(parents=True, exist_ok=True)
         schema_path = khub / "schema.yaml"
@@ -126,18 +135,36 @@ def init_workspace(
 
         _append_gitignore(target / ".gitignore", ".khub/generated/")
 
+        # Flatten the preset's templates (if any) into the workspace-owned copy —
+        # the same editable-copy relationship schema.yaml has with the preset.
+        preset_templates = preset_path.parent / "templates"
+        if preset_templates.is_dir():
+            tpl_dir = khub / "templates"
+            tpl_dir.mkdir(exist_ok=True)
+            for tpl in sorted(preset_templates.glob("*.yaml")):
+                (tpl_dir / tpl.name).write_text(tpl.read_text())
+
         # Lay down one directory per type's storage path (file and folder layouts
-        # need the dir; a collection's path names a FILE — create only its parent,
-        # never the file: a missing collection is legitimately zero entities).
+        # need the dir; a collection's or singleton's path names a FILE — create
+        # only its parent, never the file: a missing collection/singleton is
+        # legitimately zero entities).
         for name, decl in entities.items():
-            if decl.get("layout") == "collection":
+            if decl.get("layout") in ("collection", "singleton"):
                 cpath = target / (decl.get("path") or f"{name}.{decl.get('format', '')}")
                 if cpath.parent != target:
                     cpath.parent.mkdir(parents=True, exist_ok=True)
             elif decl.get("path"):
                 (target / decl["path"]).mkdir(parents=True, exist_ok=True)
+
+        # Create each md singleton that has a template and does not exist yet —
+        # frontmatter + scaffolded body. Creations only: an existing file is
+        # never touched (WS-003 as amended).
+        _create_singletons(target, entities, created_singletons)
     except BaseException:
-        # Keep init atomic: drop the partial .khub/ we just created.
+        # Keep init atomic: drop the partial .khub/ we just created, and any
+        # singleton files this run minted outside it.
+        for _, spath in created_singletons:
+            spath.unlink(missing_ok=True)
         if created_khub:
             shutil.rmtree(khub, ignore_errors=True)
         raise
@@ -153,7 +180,41 @@ def init_workspace(
         source=str(preset_source) if preset_source else None,
         entity_files_modified=modified,
         seeded_over_corpus=seeded_over_corpus,
+        singletons_created=tuple(name for name, _ in created_singletons),
     )
+
+
+def _create_singletons(
+    target: Path, entities: dict[str, Any], created: list[tuple[str, Path]]
+) -> None:
+    """Create missing md singletons with template-scaffolded bodies; skip existing.
+
+    Mutates ``created`` as it goes so the caller can roll creations back on failure.
+    """
+    from datetime import date
+
+    from khub.core import formats
+    from khub.core.template import load_template
+
+    for name, decl in entities.items():
+        if decl.get("layout") != "singleton" or not decl.get("path"):
+            continue
+        spath = target / decl["path"]
+        if spath.suffix != ".md" or spath.exists():
+            continue
+        tpl = load_template(target, name)
+        if tpl is None:
+            continue
+        meta: dict[str, Any] = {
+            "type": name,
+            "created": date.today(),
+            "updated": date.today(),
+            "draft": False,
+            "title": tpl.title or name,
+        }
+        spath.parent.mkdir(parents=True, exist_ok=True)
+        spath.write_text(formats.render(meta, tpl.render(), "md"))
+        created.append((name, spath))
 
 
 # Entity-capable suffixes (PER_ITEM + .jsonl ahead of collections). Vendor/VCS
