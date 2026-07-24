@@ -36,6 +36,7 @@ khub validates the **schema-declared subset** of an entity and leaves everything
 2. **`required` is a completeness gate.** A missing required field or relation does not reject the write; the entity is still saved, active by default. Capture is never blocked. `check` enforces required-completeness over the `active` subgraph and reports an active-but-incomplete entity.
 3. **Extensions are free.** Any key the schema does not declare is accepted with any value, validated against nothing, and preserved verbatim on round-trip.
 4. **`--strict` closes the schema.** `validate --strict` (and `add`/`edit --strict`) rejects unknown keys, for when a closed contract is wanted.
+5. **Templated types hold their body shape.** When `.khub/templates/<type>.yaml` exists, `validate` requires the template's section headings in every instance body as an ordered subsequence (extras allowed) — reported as a `body` finding, never blocking a write. `check` additionally reports a `required: true` singleton whose file is absent.
 
 ### Write semantics
 
@@ -67,7 +68,7 @@ A type stores its entities as `md` (the default: YAML frontmatter + prose body),
 
 | Command | Args and options | Returns / does |
 |---|---|---|
-| `khub init <preset> [path=.]` | `--preset-source <path>`, `--name <name>`, `--force`, `--no-wire`, `--no-skill`, `--format <text\|json>` (json emits resolved provenance) | scaffold a workspace from a preset (the seeded fork), then wire it into the selected agent files (`CLAUDE.md` + `AGENTS.md` by default) and install the agent skill via `npx skills` (best-effort; needs `npx`). `--no-wire` / `--no-skill` skip either tail |
+| `khub init <preset> [path=.]` | `--preset-source <path>`, `--name <name>`, `--force`, `--no-wire`, `--no-skill`, `--format <text\|json>` (json emits resolved provenance) | scaffold a workspace from a preset directory (`schema.yaml` + `templates/`), flatten templates to `.khub/templates/`, create missing md singletons from their templates (creations only), then wire the selected agent files and install the agent skill via `npx skills` (best-effort). `--no-wire` / `--no-skill` skip either tail |
 | `khub schema` | `--format` | the full effective schema: types, fields, enums, relations, layout/format/nesting per type, and provenance (source preset + version) |
 | `khub schema types` | `--format` | type list (view of the above) |
 | `khub schema show <type>` | `--format` | one type's fields, enums, required, relations, layout (view) |
@@ -78,7 +79,7 @@ A type stores its entities as `md` (the default: YAML frontmatter + prose body),
 
 | Command | Args and options | Does |
 |---|---|---|
-| `khub add <type>` | `--<field> <value>` (repeatable; schema or extension), `--id <slug>`, `--draft`, `--body <text>`, `--body-file <path>` (`-` for stdin; not both), `--strict`, `--format text\|json` (emits the written record) | mint a slug, write a well-formed entity (active by default; `--draft` marks it unpublished); print its id |
+| `khub add <type>` | `--<field> <value>` (repeatable; schema or extension), `--id <slug>`, `--draft`, `--body <text>`, `--body-file <path>` (`-` for stdin; not both), `--no-template`, `--strict`, `--format text\|json` (emits the written record) | mint a slug, write a well-formed entity (active by default; `--draft` marks it unpublished); a templated md type seeds its body from `.khub/templates/<type>.yaml`; a singleton's slug is its type name; print its id |
 | `khub get <id>` | `--format json\|table\|raw`, `--edges` | print an entity; `--edges` includes derived inverse edges |
 | `khub edit <id> <field> <value>` | or `--<field> <value>` (repeatable), `--body <text>` (`''` clears) / `--body-file` (not both), `--strict`, `--format text\|json` (emits the updated record) | edit fields, bump `updated`, re-validate |
 | `khub remove <id>` | `--force` | delete an entity; refuses while an inbound edge resolves to it, unless `--force` |

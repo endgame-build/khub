@@ -47,9 +47,26 @@ entities:
 
 Three keys set where and how a type's entities live on disk. khub reads them directly.
 
-- `layout` — `file` (one entity per file, `{path}/{slug}.md`), `folder` (one entity per folder, `{path}/{slug}/_index.md`), or `collection` (every entity of the type is a row in ONE file).
+- `layout` — `file` (one entity per file, `{path}/{slug}.md`), `folder` (one entity per folder, `{path}/{slug}/_index.md`), `collection` (every entity of the type is a row in ONE file), or `singleton` (exactly one fixed file, 0..1 entity; the slug IS the type name, so `khub get prd` resolves it).
 - `format` — `md` (the default: YAML frontmatter + prose body), `json`, or `yaml`. Collections take `json | jsonl | yaml`. A non-md entity is a single mapping; prose rides in a reserved `body` field.
-- `path` — the inventory directory, relative to the workspace root (or the file, for a collection).
+- `path` — the inventory directory, relative to the workspace root (or the file, for a collection/singleton).
+- `required` — singleton-only: `check` reports a missing required singleton (e.g. a workspace without its `prd.md`).
+
+### Body templates
+
+A sibling mechanism, activated by convention: if `.khub/templates/<type>.yaml` exists, that md type is *templated*. `khub init` flattens the preset's `templates/` dir into `.khub/templates/` (an editable workspace copy, like schema.yaml itself), creates every missing md singleton from its template, and `khub add` seeds new bodies from it (`--no-template` opts out). `validate` then holds every instance body to the template: its `sections[].heading` list must appear in the body's H2 sequence as an ordered subsequence — extras allowed, capture never blocked. A template is small YAML:
+
+```yaml
+title: Product requirements     # optional; the init-created singleton's title
+sections:
+  - heading: Vision
+    hint: one paragraph         # rendered as an HTML comment placeholder
+  - heading: Non-goals
+    text: |                     # optional literal pre-filled markdown
+      Nothing here yet.
+```
+
+`optional`, `repeat`, and `pattern` on entries are reserved for a later version and rejected today.
 
 The [CLI reference](cli.md) covers the on-disk contract for entity formats and collections in full.
 

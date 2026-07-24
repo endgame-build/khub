@@ -77,8 +77,10 @@ the declared library. Canonical loaders/dumpers: `core/resolve.py` (safe load),
 
 ## Presets
 
-`src/khub/presets/core.yaml` (the `base` block) + one preset per domain
-(`firm-ops.yaml`, `build-hub.yaml`). `khub init` flattens
-core + a preset into an engagement's `.khub/schema.yaml`. The preset is the
-source of truth for its schema; planning specs may drift from it (see
-`docs/firm-ops-preset.md`, `docs/build-hub-preset.md`).
+`src/khub/presets/core.yaml` (the `base` block) + one preset DIRECTORY per
+domain (`firm-ops/schema.yaml`, `build-hub/schema.yaml` + optional
+`<preset>/templates/*.yaml` body templates). `khub init` flattens core + a
+preset into an engagement's `.khub/schema.yaml` and copies the preset's
+templates to `.khub/templates/`. The preset is the source of truth for its
+schema; planning specs may drift from it (see `docs/firm-ops-preset.md`,
+`docs/build-hub-preset.md`).

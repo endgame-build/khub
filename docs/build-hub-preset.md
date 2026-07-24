@@ -13,9 +13,11 @@ duplicated as entities.
 [`getting-started.md`](getting-started.md); to author or extend the types yourself, see
 [`schema.md`](schema.md).
 
-Preset version **0.2.0**. Sixteen entity types. Seventeen relation predicates in twenty-five
-declarations beyond the four universal edges from the core base (`domain.depends_on` narrows the
-universal edge to a typed `domain → domain`).
+Preset version **0.2.0**. Twenty-one entity types (sixteen graph records + five narrative
+singletons). Seventeen relation predicates in twenty-four declarations beyond the four universal
+edges from the core base (`domain.depends_on` narrows the universal edge to a typed
+`domain → domain`). The preset is a directory: `schema.yaml` + `templates/*.yaml` — one body
+template per md type, flattened to `.khub/templates/` at init.
 
 **Spoke repos carry no khub workspace.** A spoke is code plus one plain `entities.yaml`
 field-schema file (validated by the spoke's own CI, `resource`-linked from hub entity records).
@@ -51,12 +53,13 @@ or the first cross-repo contract arrives.
 - **`specs/`** — delivery state at the workspace root: a different cadence with a different
   writer (the tracker sync flips `work-package.status`; everything else is reviewed prose).
 
-Narrative documents — PRD, roadmap, arc42, overview, glossary — are **not** entity types. They
-live in the same two roots as plain prose, outside the inventory directories, and link entity
-slugs inline. Two stock-storage conventions keep prose near its records without tripping the
-stray gate: ERD prose lives at `knowledge/architecture/entities/_index.md` (file scans skip
-`_index.md`), and machine specs live under `contracts/specs/` (a subdirectory — invisible to the
-single-level scan).
+The five narrative documents — prd, roadmap, glossary (product/) and arc42, erd
+(architecture/) — **are** entity types: `layout: singleton`, one fixed file each, slug = type
+name (`khub get prd`). `khub init` creates each from its body template; `validate` holds every
+templated body to its template's section headings; `prd` is `required: true`, so `check` fails
+while it is absent. They link entity slugs inline and are full edge targets (`adr affects →
+prd`). One stock-storage convention remains for machine artifacts: OpenAPI/AsyncAPI specs live
+under `contracts/specs/` (a subdirectory — invisible to the single-level scan).
 
 ## The three altitudes
 
@@ -76,6 +79,7 @@ enumeration).
 | File, ID-enumerated | adr `AD-NNN-slug` · pdr `PD-NNN-slug` · boundary `BOUND-NNN-slug` · quality-attribute `QA-NNN-slug` · requirement `FR-NNN`/`CST-NNN` · capability `CAP-NNN-slug` · component `CMP-NNN-slug` · feature-spec `FS-NNN-slug` · test-spec `TS-NNN-slug` · work-package `WP-NNN-slug` |
 | File, name-keyed | domain · entity · contract · external-system (natural-name identity; contracts name-keyed so `consumes: readings-api` reads) |
 | Collection (yaml) | `knowledge/architecture/repos.yaml` · `knowledge/architecture/baselines.yaml` |
+| Singleton (md) | prd · roadmap · glossary · arc42 · erd — one fixed file, slug = type name; prd is `required: true` |
 
 ## What every entity carries
 
@@ -119,7 +123,17 @@ Two conventions drive the edge placement:
   external-system — a new consumer is a one-line edit in its own file, and the contract never
   accumulates a stale consumer list.
 
-## The sixteen entities
+## The twenty-one entities
+
+### Narrative singletons — the prose layer
+
+- **prd** (`knowledge/product/prd.md`, required) — vision, target user, the FR narrative linking
+  `FR-NNN` slugs, non-goals, success metrics. The product source of truth; `check` fails without it.
+- **roadmap** (`knowledge/product/roadmap.md`) — lanes, execution order, build order narration.
+- **glossary** (`knowledge/product/glossary.md`) — terms with owning domains; entity slugs link the graph.
+- **arc42** (`knowledge/architecture/arc42.md`) — the twelve arc42 sections; links `AD-`/`QA-` slugs.
+- **erd** (`knowledge/architecture/erd.md`) — the cross-domain entity narrative; owner/reads live in
+  the graph, the doc narrates meaning.
 
 ### Product — what and why
 
@@ -230,10 +244,11 @@ concept.
   engagement starts writing them.
 - **Component/module maps, runbooks, debt and insight types** — rot fastest, or live in the
   instruction/memory layer, not the entity graph.
-- **Edge properties, per-type heading contracts, ignore globs** — considered as engine features
-  during the paved-road-hub convergence and found unnecessary: a plain attribute, hub-side
-  validators, and the `_index.md`/subdirectory conventions cover the same ground with stock
-  storage.
+- **Edge properties and ignore globs** — considered as engine features during the paved-road-hub
+  convergence and found unnecessary: a plain attribute (`domain.relationship`) and the
+  `contracts/specs/` subdirectory convention cover the same ground with stock storage. Heading
+  contracts DID land — as body templates (`layout: singleton` + `.khub/templates/`), which fold
+  scaffold and contract into one artifact.
 
 ## See also
 

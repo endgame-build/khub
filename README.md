@@ -17,11 +17,12 @@ Built on top of the [Open Knowledge Format (OKF)](https://github.com/GoogleCloud
 
 ## What it does today
 
-- **Author** — `add` / `get` / `edit` / `link` / `unlink` / `remove`: schema-validated writes, referential integrity hard-fails, capture never blocked, minimal-diff round-trips.
+- **Author** — `add` / `get` / `edit` / `link` / `unlink` / `remove`: schema-validated writes, referential integrity hard-fails, capture never blocked, minimal-diff round-trips. A templated type's `add` seeds the body from its template (`--no-template` opts out).
 - **Find** — `query` (frontmatter + edge filters), `search` (BM25 full-text over titles, bodies, and fields: FTS5, built in-memory per call, never stale), `neighbors` / `impact` / `history` (graph walks).
-- **Gate** — `validate` (per-entity well-formedness) and `check` (graph-wide completeness, dangling edges, strays, cycles; orphans informational unless `--strict`); `stale` and `log` read git at entity altitude, row-accurate even inside collections.
+- **Gate** — `validate` (per-entity well-formedness, including body structure against the type's template: required section headings as an ordered subsequence) and `check` (graph-wide completeness, dangling edges, strays, cycles, missing required singletons; orphans informational unless `--strict`); `stale` and `log` read git at entity altitude, row-accurate even inside collections.
 - **Project** — `reindex` (OKF `index.md`), `viz` (Cytoscape HTML), `backfill` (git-derived dates and scaffolding).
-- **Store** — per-type `layout` (file / folder / collection) × `format` (md / json / yaml; collections take json / jsonl / yaml). Non-md entities carry prose in a reserved `body` field; collection writes are lock-serialized and crash-atomic.
+- **Store** — per-type `layout` (file / folder / collection / singleton) × `format` (md / json / yaml; collections take json / jsonl / yaml). A singleton is one fixed file whose slug is the type name (`khub get prd`). Non-md entities carry prose in a reserved `body` field; collection writes are lock-serialized and crash-atomic.
+- **Scaffold** — presets are directories (`<name>/schema.yaml` + `templates/*.yaml`); `khub init` flattens both into `.khub/` and creates every missing md singleton from its template (creations only — an existing file is never touched).
 - **Wire** — `wire`: link the schema into a project's agent files. Bare `wire` updates whichever of `CLAUDE.md` / `AGENTS.md` exist; `--target claude|agents|both` creates one. `CLAUDE.md` gets a `@.khub/schema.yaml` import, `AGENTS.md` a schema pointer, both with the command surface — so an agent reasons in the ontology with or without the CLI.
 
 Full command surface and JSON contracts: [`docs/cli.md`](docs/cli.md). Feature history: [`CHANGELOG.md`](CHANGELOG.md). All documentation: [`docs/`](docs/).
@@ -32,7 +33,7 @@ khub is a `khub` console script (Python 3.11+). Install it, then seed a workspac
 
 ```bash
 uv tool install git+ssh://git@github.com/endgame-build/khub@v0.7.1   # or clone + uv sync
-khub init firm-ops ./my-hub          # scaffold .khub/, wire CLAUDE.md + AGENTS.md, install the agent skill
+khub init firm-ops ./my-hub          # scaffold .khub/ (+ templates, singletons), wire agent files, install the skill
 cd my-hub
 ```
 
@@ -68,7 +69,7 @@ khub keeps git as the source of truth, then adds a typed schema and a derived gr
 
 ## Presets
 
-A preset is a canonical ontology for one domain: its entity types, attributes, and legal relations. `khub init` merges `core.yaml` (the `base` block every entity carries: `type`, `created`/`updated`, `tags`, the OKF fields, the `any → any` edges) with the named preset into an engagement's `.khub/schema.yaml`, which agents and humans then extend as the work demands.
+A preset is a canonical ontology for one domain — a directory holding its `schema.yaml` (entity types, attributes, legal relations) and optional body `templates/`. `khub init` merges `core.yaml` (the `base` block every entity carries: `type`, `created`/`updated`, `tags`, the OKF fields, the `any → any` edges) with the named preset into an engagement's `.khub/schema.yaml`, which agents and humans then extend as the work demands.
 
 **`firm-ops` ships today**: the HQ operations ontology (client, project, person, opportunity, meeting, and more); see [`docs/firm-ops-preset.md`](docs/firm-ops-preset.md). Engineering, consulting, and research presets are planned. New to khub? Start with [`docs/getting-started.md`](docs/getting-started.md).
 
