@@ -23,7 +23,7 @@ uv run khub --help    # prefix every command below with `uv run`
 
 The rest of this guide writes `khub …`. If you cloned, read that as `uv run khub …`; the output is the same.
 
-This walkthrough passes every value as a flag so it copies and pastes. On your own terminal you can drop the flags: `khub init`, `khub add project`, or `khub edit` run a wizard that picks the preset, walks the schema, and offers existing entities as relation targets. Pass `--agent` (or pipe the output, or set `--format json`) to turn the wizard off; that is how an agent drives khub.
+This walkthrough passes every value as a flag, which is the only way khub takes input: it never prompts, so a missing argument is a usage error rather than a question. That is also exactly how an agent drives it — pipe the output or add `--format json` to get machine-readable records.
 
 From inside Claude Code, `/plugin install khub@khub` then `/khub:setup` installs and wires khub for you; see the [README](../README.md#use-it-from-claude-code).
 

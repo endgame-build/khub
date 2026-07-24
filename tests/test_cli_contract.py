@@ -233,3 +233,62 @@ def test_validate_json_drops_fixed_key(fresh_ws: Path, monkeypatch: pytest.Monke
     payload = json.loads(runner.invoke(app, ["validate", "--format", "json"]).output)
     assert "fixed" not in payload
     assert {"count", "errors"} <= payload.keys()
+
+
+@pytest.mark.integration
+def test_agent_flag_is_gone(fresh_ws: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """`--agent` existed only to switch prompting off; with no prompts it has no meaning.
+
+    Removed rather than kept as a silent no-op: a script still passing it should fail
+    loudly, not appear to work.
+    """
+    monkeypatch.chdir(fresh_ws)
+    result = runner.invoke(app, ["--agent", "status"])
+    assert result.exit_code == 2
+    assert "No such option" in result.output
+    assert runner.invoke(app, ["status", "--format", "json"]).exit_code == 0
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize(
+    "argv, expected",
+    [
+        (["add"], "Missing argument 'TYPE'"),
+        (["get"], "Missing argument 'ID'"),
+        (["edit"], "Missing argument 'ID'"),
+        (["remove"], "Missing argument 'ID'"),
+        (["link", "acme"], "Provide ID PREDICATE TARGET."),
+        (["unlink", "acme", "partner"], "Provide ID PREDICATE TARGET."),
+    ],
+)
+def test_missing_input_is_a_usage_error(
+    fresh_ws: Path, monkeypatch: pytest.MonkeyPatch, argv: list[str], expected: str
+) -> None:
+    """A missing input opened a wizard until 0.9.0; it is now the usage error it always
+    was headlessly. Same message on a TTY and off it — there is one path now."""
+    monkeypatch.chdir(fresh_ws)
+    result = runner.invoke(app, argv)
+    assert result.exit_code == 2
+    assert expected in result.output
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize("argv", [["add"], ["init"], ["get"], ["edit"]])
+def test_missing_input_never_reads_stdin(fresh_ws: Path, argv: list[str]) -> None:
+    """The no-hang guarantee, asserted the only way it can actually fail.
+
+    CliRunner would pass even if the code still tried to read stdin, so this runs a real
+    subprocess with stdin closed: a surviving prompt blocks forever instead of exiting.
+    """
+    import subprocess
+    import sys
+
+    result = subprocess.run(
+        [sys.executable, "-m", "khub.cli.main", *argv],
+        cwd=fresh_ws,
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    assert result.returncode == 2, result.stderr

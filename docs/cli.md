@@ -9,20 +9,17 @@ The CLI is a thin, schema-introspecting adapter over the core library's verbs (c
 | Option | Meaning |
 |---|---|
 | `-C, --workspace <path>` | Operate on this workspace instead of the working directory. Default: the nearest `.khub/` above the working directory. Given a path, khub resolves the nearest `.khub/` at or above it. |
-| `--agent` | Agent mode: never prompt. A missing input becomes the usual error. Output format is unchanged. |
 | `--format <json\|table>` | Output shape for read commands. Default: table on a TTY, json otherwise. Some commands add `ids`, `raw`, or `tree`. |
 | `--version` | Print the khub version and exit. |
 | `--help` | Show help. |
 
-`-C/--workspace`, `--agent`, and `--version` are parsed before the command name — put them first (`khub --agent -C <path> <command>`), the git convention. `--format` and the other per-command options follow the command as usual.
+`-C/--workspace` and `--version` are parsed before the command name — put them first (`khub -C <path> <command>`), the git convention. `--format` and the other per-command options follow the command as usual.
 
 Read commands include `draft` entities in scope and surface each entity's `orphan`/`stale` flag by default; `--active`/`--draft` and `--orphan`/`--stale` narrow the set.
 
-### Interactive prompts
+### khub never prompts
 
-On a terminal, a write verb run with a missing input opens a wizard instead of erroring: `khub init` picks a preset and confirms the wire/skill tails; `khub add`/`edit` walk the type's fields, offering enums as menus and relations as picks from existing entities; `khub link`/`get`/`remove` pick the entity, predicate, and target from lists. A wizard fills only what a flag left empty, and it never blocks capture: required fields are marked but stay skippable.
-
-khub never prompts an agent: with `--agent`, with `--format json`, when stdin/stdout is not a TTY (a pipe, a redirect), or under CI, a missing input is the same error it has always been. Every prompted value has a flag, so any interactive result reproduces headlessly.
+Every input is a flag or an argument; a missing one is a usage error (exit 2), never a question. khub shipped an interactive wizard through 0.8.0 — `init` picked a preset, `add`/`edit` walked the schema — behind a gate that switched it off for agents, pipes, and CI. The gate meant the wizard was dead weight on every agent invocation, which is the invocation khub is built for, so 0.9.0 removed both it and the `--agent` flag that disabled it. Output still adapts to the reader: a Rich table on a TTY, JSON on a pipe or under `--format json`.
 
 ### JSON record shape
 

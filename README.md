@@ -55,7 +55,7 @@ khub check                       # graph-wide: relations resolve, nothing dangli
 
 Every read command takes `--format json` for an agent and prints a Rich table for a human.
 
-**Interactive or headless.** On a terminal, a write verb with a missing input opens a wizard: `khub init` picks a preset, `khub add` walks the schema and picks relation targets from a list, `khub edit`/`link`/`remove` pick the entity and field. Agents never see a prompt: `--agent`, `--format json`, a pipe, or CI turns every missing input back into the usual error, and every prompted value has a flag, so anything the wizard does reproduces headlessly.
+**Headless by design.** Every input is a flag; a missing one is a usage error, never a prompt. khub carried an interactive wizard through 0.8.0 behind a gate that switched it off for agents, pipes, and CI — dead weight on exactly the invocation khub is built for. Removed in 0.9.0, along with the `--agent` flag that disabled it.
 
 ## Why not a folder of Markdown, a database, or a RAG store?
 

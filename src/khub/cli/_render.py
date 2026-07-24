@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import functools
 import json
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, ParamSpec, TypeVar
 
@@ -25,6 +26,18 @@ from khub.core.locate import find_workspace
 
 _P = ParamSpec("_P")
 _R = TypeVar("_R")
+
+
+@dataclass(frozen=True)
+class CliState:
+    """Global CLI state stashed on ``ctx.obj`` by the root callback.
+
+    Carries the ``--workspace`` override and nothing else. It also carried an
+    ``agent`` flag until 0.9.0, when khub stopped prompting: with no prompts there
+    is no human/agent mode to switch between.
+    """
+
+    workspace: Path | None
 
 
 def guard(fn: Callable[_P, _R]) -> Callable[_P, _R]:
@@ -56,8 +69,8 @@ def resolve_root(ctx: typer.Context) -> Path:
 def is_tty() -> bool:
     """True when stdout is an interactive terminal — the one human/machine signal.
 
-    Both the output gate (``want_json``) and the prompt gate (``interact.can_prompt``)
-    key off this, so a pipe or a redirect flips both to machine behavior together.
+    The output gate (``want_json``) keys off this, so a pipe or a redirect gets
+    machine output. It also gated prompting until 0.9.0; only the output side remains.
     """
     return Console().is_terminal
 

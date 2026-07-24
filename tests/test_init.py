@@ -391,13 +391,11 @@ def test_init_wire_failure_is_best_effort(
     assert payload["skill_hint"] == "khub install-skills"  # the hint still prints
 
 
-@pytest.mark.unit
-def test_wire_targets_mapping() -> None:
-    """init's seed choice: claude-code→CLAUDE, other→AGENTS, no selection→both."""
-    from khub.cli.init_cmd import _wire_targets
-
-    assert _wire_targets(None) == (True, True)
-    assert _wire_targets([]) == (True, True)
-    assert _wire_targets(["claude-code"]) == (True, False)
-    assert _wire_targets(["codex"]) == (False, True)
-    assert _wire_targets(["claude-code", "cursor"]) == (True, True)
+@pytest.mark.integration
+def test_init_wires_both_agent_files(tmp_path: Path, preset_source: Path) -> None:
+    """`_wire_targets` mapped the wizard's agent picks onto files; with no picker there
+    is nothing to map, so init seeds both. `khub wire --target` still narrows it."""
+    ws = tmp_path / "ws"
+    result = runner.invoke(app, ["init", "note", str(ws), "--preset-source", str(preset_source)])
+    assert result.exit_code == 0, result.output
+    assert (ws / "CLAUDE.md").exists() and (ws / "AGENTS.md").exists()

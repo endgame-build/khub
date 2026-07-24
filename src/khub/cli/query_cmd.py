@@ -16,10 +16,8 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
-from khub.cli import interact
 from khub.cli._render import emit, guard, resolve_root
 from khub.cli.entity_cmd import DYNAMIC_FIELDS, parse_fields
-from khub.core.introspect import load_schema, types_list
 from khub.core.query import Match, QueryFilters, query
 
 __all__ = ["query_command", "DYNAMIC_FIELDS"]
@@ -40,19 +38,8 @@ def query_command(
     fmt: str = typer.Option("text", "--format", help="text (Rich table on a TTY), json, or ids."),
 ) -> None:
     """Filter entities: khub query --type opportunity --stage prospect --format json."""
-    prompter = interact.make_prompter(ctx.obj, fmt)
     fields = parse_fields(ctx.args)
     root = resolve_root(ctx)
-    # A bare interactive query offers a type filter; (all) keeps the full set.
-    no_filters = not any(
-        [type_, tag, has, missing, orphan, stale, draft, active, limit, fields]
-    )
-    if prompter is not None and no_filters:
-        choice = prompter.select(
-            "Filter by type", choices=["(all)", *sorted(types_list(load_schema(root)))]
-        )
-        if choice != "(all)":
-            type_ = choice
     filters = QueryFilters(
         type=type_,
         fields=fields,

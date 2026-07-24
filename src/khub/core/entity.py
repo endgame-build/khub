@@ -919,8 +919,8 @@ def _md_normalized(body: str, rtype: ResolvedType) -> str:
 def _read_doc(path: Path) -> tuple[Any, str]:
     """Round-trip-load a document (order + comments preserved) and its body.
 
-    Kept under this name — ``integrity._fix_updated`` and ``backfill._apply``
-    import it; the per-format dispatch lives in ``core.formats``.
+    Kept under this name — ``integrity._body_structure_errors`` and
+    ``backfill._apply`` import it; the per-format dispatch lives in ``core.formats``.
     """
     return formats.read_doc(path)
 

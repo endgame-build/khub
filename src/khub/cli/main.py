@@ -18,9 +18,9 @@ from khub.cli.entity_cmd import (
 )
 from khub.cli.gitlog_cmd import stale_command
 from khub.cli.graph_cmd import history_command, impact_command, neighbors_command
+from khub.cli._render import CliState
 from khub.cli.init_cmd import init_command
 from khub.cli.integrity_cmd import check_command, validate_command
-from khub.cli.interact import CliState
 from khub.cli.projection_cmd import reindex_command, viz_command
 from khub.cli.query_cmd import query_command
 from khub.cli.schema_cmd import schema_app
@@ -57,20 +57,15 @@ def _root(
     workspace: Path | None = typer.Option(
         None, "-C", "--workspace", help="Operate on this workspace instead of the working directory."
     ),
-    agent: bool = typer.Option(
-        False,
-        "--agent",
-        help="Agent mode: never prompt (agents cannot use interactivity). Output format is unchanged.",
-    ),
     version: bool | None = typer.Option(
         None, "--version", callback=_version_callback, is_eager=True, help="Print the khub version and exit."
     ),
 ) -> None:
     """khub — schema-bound context management."""
-    # Stash global state; every command resolves the root via cli._render.resolve_root()
-    # and its prompter via cli.interact.make_prompter(), both reading ctx.obj (Click
-    # propagates it to subcommands). Defaults keep `khub <command>` routing as before.
-    ctx.obj = CliState(workspace=workspace, agent=agent)
+    # Stash global state; every command resolves the root via cli._render.resolve_root(),
+    # reading ctx.obj (Click propagates it to subcommands). Defaults keep `khub <command>`
+    # routing as before.
+    ctx.obj = CliState(workspace=workspace)
 
 
 app.command(name="init")(init_command)

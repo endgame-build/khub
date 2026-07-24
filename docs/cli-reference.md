@@ -11,7 +11,6 @@ $ khub [OPTIONS] COMMAND [ARGS]...
 **Options**:
 
 * `-C, --workspace PATH`: Operate on this workspace instead of the working directory.
-* `--agent`: Agent mode: never prompt (agents cannot use interactivity). Output format is unchanged.
 * `--version`: Print the khub version and exit.
 * `--help`: Show this message and exit.
 
@@ -44,9 +43,8 @@ $ khub [OPTIONS] COMMAND [ARGS]...
 
 Scaffold a workspace from a preset and wire it into the agent context files.
 
-On a TTY, a missing preset/path launches a wizard and the wire tail is confirmed;
-an agent (``--agent``), a pipe, or ``--format json`` never prompts. Installing the
-agent skill is a separate step: ``khub install-skills``.
+A missing PRESET is a usage error; PATH defaults to the working directory.
+Installing the agent skill is a separate step: ``khub install-skills``.
 
 **Usage**:
 
@@ -87,8 +85,7 @@ $ khub status [OPTIONS]
 
 Create an entity: khub add opportunity --client initech --owner noor --stage prospect.
 
-On a TTY, a bare ``khub add`` picks the type and walks the schema fields; an agent
-passes the type and ``--field value`` pairs exactly as before.
+A missing TYPE is a usage error; every field is a flag.
 
 **Usage**:
 
@@ -135,8 +132,7 @@ $ khub get [OPTIONS] [ID]
 
 Edit an entity: khub edit initech-deal stage proposal-sent  (or --field value).
 
-On a TTY, a bare ``khub edit`` picks the entity, then the field, then its value; an
-agent passes the id and the field/value exactly as before.
+A missing ID is a usage error; the field and value are positional or flags.
 
 **Usage**:
 
