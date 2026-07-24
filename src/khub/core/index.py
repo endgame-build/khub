@@ -77,6 +77,16 @@ def scan_type(root: Path, rtype: ResolvedType) -> tuple[list[tuple[str, dict[str
     """
     if rtype.storage.layout == "collection":
         return _scan_collection(root, rtype)
+    if rtype.storage.layout == "singleton":
+        # Exactly one fixed file; slug is the type name. Missing = zero entities
+        # (a required-but-absent singleton is a `check` finding, not a scan error).
+        spath = root / (rtype.storage.path or "")
+        if not spath.is_file():
+            return [], []
+        parsed = load_meta(spath)
+        if parsed is None:
+            return [], [spath]
+        return [(rtype.name, parsed)], []
     if not rtype.storage.path:
         return [], []
     base = root / rtype.storage.path

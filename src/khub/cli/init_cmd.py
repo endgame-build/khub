@@ -123,6 +123,8 @@ def init_command(
         )
     else:
         typer.echo(f"Initialized {result.preset} workspace at {result.path}")
+    if result.singletons_created:
+        typer.echo("created singletons: " + ", ".join(result.singletons_created))
     if wire_result is not None:
         for outcome in wire_result.outcomes:
             typer.echo(f"{outcome.action} {outcome.path.name}")

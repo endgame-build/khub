@@ -1,0 +1,21 @@
+title: Architecture (arc42)
+sections:
+- heading: Introduction and goals
+  hint: quality goals + key stakeholders
+- heading: Constraints
+- heading: Context and scope
+  hint: system boundary; external systems by slug
+- heading: Solution strategy
+- heading: Building block view
+  hint: components by CMP slug; narrate the mapping, the graph holds it
+- heading: Runtime view
+  hint: key scenarios
+- heading: Deployment view
+- heading: Crosscutting concepts
+- heading: Architecture decisions
+  hint: link AD-NNN slugs - the decisions/ inventory is canonical
+- heading: Quality requirements
+  hint: link QA-NNN slugs
+- heading: Risks and technical debt
+- heading: Glossary
+  hint: link the glossary singleton; do not restate terms

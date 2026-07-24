@@ -18,13 +18,14 @@ from khub.core import resolve
 
 PRESETS = Path(__file__).resolve().parents[1] / "src" / "khub" / "presets"
 CORE = PRESETS / "core.yaml"
-BUILD_HUB = PRESETS / "build-hub.yaml"
+BUILD_HUB = PRESETS / "build-hub" / "schema.yaml"
 
-SIXTEEN_TYPES = {
+SINGLETONS = {"prd", "roadmap", "glossary", "arc42", "erd"}
+TWENTY_ONE_TYPES = {
     "capability", "requirement", "pdr", "adr", "domain", "entity", "boundary",
     "quality-attribute", "component", "repo", "contract", "external-system",
     "baseline", "feature-spec", "test-spec", "work-package",
-}
+} | SINGLETONS
 BUILD_HUB_PREDICATES = {
     "capabilities", "realized_in", "supersedes", "affects", "drivers",
     "produces", "reads", "owner", "applies_to", "repo", "domains", "consumes",
@@ -37,8 +38,22 @@ def build_hub_schema():
     return resolve([CORE, BUILD_HUB])
 
 
-def test_declares_sixteen_types(build_hub_schema):
-    assert set(build_hub_schema.types) == SIXTEEN_TYPES
+def test_declares_twenty_one_types(build_hub_schema):
+    assert set(build_hub_schema.types) == TWENTY_ONE_TYPES
+
+
+def test_narrative_singletons(build_hub_schema):
+    """The five narrative docs are singleton types; prd is the required one."""
+    s = build_hub_schema
+    for name in SINGLETONS:
+        t = s.types[name]
+        assert t.storage.layout == "singleton"
+        assert t.storage.fmt == "md"
+        assert t.attributes["title"].required is True
+    assert s.types["prd"].required is True
+    assert s.types["prd"].storage.path == "knowledge/product/prd.md"
+    assert s.types["arc42"].storage.path == "knowledge/architecture/arc42.md"
+    assert all(not s.types[n].required for n in SINGLETONS - {"prd"})
 
 
 def test_declares_build_hub_predicates(build_hub_schema):
@@ -190,5 +205,5 @@ def test_storage(build_hub_schema):
     assert s.types["feature-spec"].storage.path == "specs/feature-specs"
     assert s.types["test-spec"].storage.path == "specs/test-specs"
     assert s.types["work-package"].storage.path == "specs/work-packages"
-    files = SIXTEEN_TYPES - {"repo", "baseline"}
+    files = TWENTY_ONE_TYPES - {"repo", "baseline"} - SINGLETONS
     assert all(s.types[n].storage.layout == "file" for n in files)

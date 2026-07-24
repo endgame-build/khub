@@ -1,0 +1,6 @@
+title: Requirement
+sections:
+- heading: Statement
+  hint: EARS-friendly - WHEN <trigger> the <system> SHALL <response>
+- heading: Acceptance criteria
+- heading: Notes

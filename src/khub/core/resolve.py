@@ -91,7 +91,13 @@ def _resolve_type(
         relations[rn] = _relation(name, rn, rd, declared)
 
     storage = StorageConfig(layout=decl.layout, path=decl.path, fmt=decl.format)
-    return ResolvedType(name=name, storage=storage, attributes=attributes, relations=relations)
+    return ResolvedType(
+        name=name,
+        storage=storage,
+        attributes=attributes,
+        relations=relations,
+        required=decl.required,
+    )
 
 
 def _attr(name: str, ad: AttrDecl, *, overridden: bool) -> ResolvedAttribute:

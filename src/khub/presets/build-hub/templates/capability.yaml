@@ -1,0 +1,6 @@
+title: Capability
+sections:
+- heading: Definition
+  hint: what counts as this capability - spokes claim against this slug
+- heading: Boundaries
+  hint: what is adjacent but NOT this capability

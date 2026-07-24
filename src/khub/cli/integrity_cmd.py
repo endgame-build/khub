@@ -99,6 +99,8 @@ def _check_human(report: CheckReport) -> None:
         )
     for cycle in report.cycles:
         typer.echo(f"cycle {' -> '.join(cycle)}")
+    for name in report.missing_singletons:
+        typer.echo(f"missing required singleton {name}")
 
 
 def _check_payload(report: CheckReport) -> dict[str, Any]:
@@ -124,4 +126,5 @@ def _check_payload(report: CheckReport) -> dict[str, Any]:
         "malformed": getattr(report, "malformed", []),
         "cycles": report.cycles,
         "suppressed_dangling": report.suppressed_dangling,
+        "missing_singletons": report.missing_singletons,
     }
