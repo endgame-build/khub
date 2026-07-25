@@ -33,6 +33,18 @@ when.
   turns before writing anything. The block previously led with writes.
 - **The khub skill gained a "Know when to write" section** — the same triggers, plus the rule
   that a stated fact about the system is a write while a question about it is a query.
+- **The capture cues are mapped, and the overclaim is gone.** A 20-turn A/B held one fact
+  byte-identical and moved only the closing imperative: `Record it.` recorded 5/5 with the
+  right type and kind, `Note it.` recorded **0/5** — replying "Noted." every time — and a bare
+  statement with no imperative recorded 0/5, answering "No task given yet." The capability was
+  never in doubt; one verb worked and its synonyms did not, because "Note it." collides with
+  "Noted." as a reply token. The block and the skill now say that "note it", "write it down",
+  "log it", "FYI", "heads up", "for the record" and a bare statement all mean record it, that an
+  acknowledgement is not a record, and that entities are written with `khub add` rather than by
+  choosing a path (the second observed failure: `Write it down.` sent the agent hunting for a
+  target file). Re-measured on the same four variants: **30% → 70%**, with `Note it.` at 5/5.
+  The block's previous claim that capture happens "without being asked" measured 0/5 and has
+  been removed rather than left overclaiming.
 
 ## [0.13.0] — 2026-07-25
 
