@@ -2,6 +2,66 @@
 
 Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); khub is pre-release.
 
+## [0.11.0] — 2026-07-25
+
+A stress test of the `build-hub` preset — three agents plus a manual pass — found
+thirteen defects; two independent code reviews of the fixes found nine more. All
+reproduced before fixing and re-verified after.
+
+### Fixed
+
+- **`khub remove <singleton>` crashed** on every singleton (`NotADirectoryError`,
+  raw traceback, file left on disk). `delete()` re-derived the path instead of using
+  `entity_path()`, and a singleton's `path` IS the file. This was also the only
+  recovery path for a corrupted singleton — every write verb rightly refuses one.
+- **`init --force` destroyed workspace-owned files.** It rewrote `.khub/schema.yaml`,
+  `config.yaml` and every template, while reporting `entity_files_modified: 0`
+  (`_entity_hashes` skips `.khub/`). Re-init now preserves them and reports
+  `preserved`; genuinely missing files are still restored. It also refuses a re-init
+  whose preset differs from the workspace's, which would otherwise mint files for
+  types the preserved schema does not declare.
+- **Cycle detection covered only `depends_on`.** Three ADRs each superseding the next
+  passed `check` clean, with `history` giving a different answer per entry point.
+  Relations now carry `acyclic: true`; `depends_on` remains acyclic by contract with
+  or without the flag, so no existing workspace loses the check. Self-cycles
+  (a self-superseding record written by hand or by import) are caught too.
+- **A `draft` required singleton satisfied `check`**, while a draft target already
+  failed to satisfy another entity's required relation — the two `required` gates
+  disagreed about the same flag. `check` now reports it, and distinguishes
+  *unpublished* from *absent*.
+- **`reindex` and `viz` wrote from a scan that had silently dropped files.** A
+  malformed collection is not in the graph, so `reindex` rewrote `index.md` with an
+  entire type erased and exited 0. Both refuse now, naming the files.
+- **Derived inverse edges were unreachable.** Neither preset declared any `inverse:`,
+  so `get --edges` never returned one and "is this ADR superseded?" read as
+  "current". build-hub now declares the inverses its comments already promised
+  (`superseded`, `consumed_by`), `query --has/--missing` accepts them (making
+  `--missing superseded` the "still current?" query), a stored forward edge is never
+  shadowed by an inverse, and an inverse is rejected on a type that cannot carry it.
+- **Failures were not machine-readable.** They now use the same output gate as
+  successes, so a piped agent no longer gets a JSON record on success and prose on
+  failure. `remove` gained `--format`; `check --format json` reports `strict` and
+  `draft_singletons`; `OSError` renders as a normal failure instead of a traceback
+  (`BrokenPipeError` is re-raised, so `khub schema | head` still works).
+- **`''` and `null` are now consistent.** `--field ""` clears to null on write;
+  `validate` rejects a stored `''`, which `check` already counted as missing.
+- **A scoped `validate <entity>` reported other types' template errors** and exited 1.
+- **`sections: []`** declares an empty body contract instead of erroring — and stays a
+  template, so `add` still seeds the title and `init` still creates the singleton.
+- A yaml collection's **document header comment** survived only until the first write.
+- **`backfill --dry-run`** omitted the collection-skip line the real run prints.
+
+### Changed
+
+- `build-hub`: `supersedes` is `acyclic: true` on adr/pdr/feature-spec and declares
+  `inverse: superseded`; `consumes` declares `inverse: consumed_by`.
+
+**Upgrading an existing workspace.** `.khub/schema.yaml` is workspace-owned and is
+never rewritten, so a workspace scaffolded before this release keeps its current
+schema. Cycle detection on `depends_on` and every engine fix apply immediately. To
+pick up build-hub's new `acyclic`/`inverse` declarations, copy those keys into your
+`.khub/schema.yaml` — `khub init --force` deliberately will not do it for you.
+
 ## [0.10.0] — 2026-07-25
 
 khub's agent skills now ship inside the package, so installing them is a file
