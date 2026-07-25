@@ -17,7 +17,7 @@ kb/
     build.schema.yaml     the whole contract: khub's core base + the six types
     templates/*.md        body templates; their ## headings are the body contract
   install.sh              wires the skill into .opencode/skills (or copy it yourself)
-  test_kb.py              24 tests, no pytest required
+  test_kb.py              27 tests, no pytest required
 ```
 
 ## The commands

@@ -257,11 +257,22 @@ def _block_map(lines: list[tuple[int, str, int]], cursor: list[int], indent: int
         cursor[0] += 1
         if inline:
             out[key] = _flow(inline, number)
-        elif cursor[0] < len(lines) and lines[cursor[0]][0] > indent:
+        elif cursor[0] < len(lines) and _opens_block(lines[cursor[0]], indent):
             out[key] = _block(lines, cursor, lines[cursor[0]][0])
         else:
             out[key] = None
     return out
+
+
+def _opens_block(line: tuple[int, str, int], indent: int) -> bool:
+    """Whether this line is the body of the key above it.
+
+    A nested mapping must be indented further, but a block SEQUENCE may sit level
+    with its key — which is exactly how khub's generated `.khub/schema.yaml` writes
+    an enum, so refusing it made a khub workspace's own schema unreadable here.
+    """
+    col, text, _ = line
+    return col > indent or (col == indent and text.startswith("- "))
 
 
 def _block_list(lines: list[tuple[int, str, int]], cursor: list[int], indent: int) -> list[Any]:
@@ -880,9 +891,12 @@ def cmd_add(args: argparse.Namespace) -> int:
         if target not in corpus.entities:
             raise Bad(f"{target!r} resolves to nothing — link it after the target exists")
 
-    body = args.body if args.body is not None else (template_for(corpus.root, args.type) or "")
+    if args.body is not None and args.body_file:
+        raise Bad("pass --body or --body-file, not both")
     if args.body_file:
         body = sys.stdin.read() if args.body_file == "-" else Path(args.body_file).read_text()
+    else:
+        body = args.body if args.body is not None else (template_for(corpus.root, args.type) or "")
     ordered = _order_keys(schema, args.type, fm)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(render([l for k, v in ordered for l in emit_key(k, v)], body))

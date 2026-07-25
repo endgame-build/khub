@@ -107,6 +107,23 @@ def test_yaml_matches_ruamel_on_the_shipped_schema() -> None:
     assert kb.load_yaml(source) == expected
 
 
+def test_yaml_reads_a_block_sequence_level_with_its_key() -> None:
+    """khub's generated .khub/schema.yaml writes enums this way, so a workspace
+    that copies its own schema into .kb/ has to parse."""
+    parsed = kb.load_yaml(
+        "attributes:\n  kind:\n    enum:\n    - functional\n    - constraint\n"
+        "    required: true\n"
+    )
+    assert parsed == {"attributes": {"kind": {"enum": ["functional", "constraint"],
+                                             "required": True}}}
+
+
+def test_add_refuses_body_and_body_file_together() -> None:
+    root = fresh()
+    assert run(root, "add", "adr", "--title", "X", "--status", "proposed",
+               "--body", "hi", "--body-file", "-") == 2
+
+
 def test_yaml_subset_edges() -> None:
     parsed = kb.load_yaml(
         '# leading comment\n'

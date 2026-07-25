@@ -6,7 +6,7 @@ Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelo
 
 ### Added
 
-- **`id_prefix`, and enumerated ids for every minted slug.** `add` now mints
+- **`id_prefix`, and enumerated ids for every minted slug** (breaking: minted ids change shape). `add` now mints
   `<prefix>-NNN-<slug>` where a type declares `id_prefix`, and `NNN-<slug>` where it
   does not — so a corpus reads in authoring order and an entity can be named in prose
   by a short stable handle (`ad-004`) instead of a whole title. The number is one past
@@ -38,14 +38,6 @@ Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelo
   [`docs/build-lite-standalone.md`](docs/build-lite-standalone.md); it ships nothing
   into the `khub` package and changes no khub behaviour. A corpus it authors
   validates and checks clean under `khub init build-lite`, unmodified.
-
-### Migration
-
-Existing entities keep their slugs — nothing renames anything on disk, and `--id`
-still writes exactly what you pass. Only newly minted ids change shape, so a
-workspace that predates this release ends up with a mix (`acme-corp` beside
-`002-globex`). Renaming the old ones is a manual `git mv` plus a reference sweep
-until `khub rename` ships.
 
 ## [0.12.0] — 2026-07-25
 

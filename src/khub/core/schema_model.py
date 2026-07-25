@@ -14,9 +14,9 @@ output that validates entity frontmatter.)
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, ConfigDict, model_validator
+from pydantic import BaseModel, ConfigDict, StringConstraints, model_validator
 
 from khub.core.formats import COLLECTION, PER_ITEM
 
@@ -56,6 +56,13 @@ class RelationDecl(_Strict):
     acyclic: bool = False
 
 
+# A prefix is a slug token: it is concatenated with the ordinal and the slugified
+# title, and everything else in an id is lowercase alphanumeric. An empty one would
+# mint a leading hyphen; a hyphenated one would make the prefix unreadable back out
+# of the id.
+ID_PREFIX_RE = r"^[a-z][a-z0-9]*$"
+
+
 class IdPrefixDecl(_Strict):
     """A prefix chosen by the value of another attribute (``by``), one per enum member.
 
@@ -64,7 +71,7 @@ class IdPrefixDecl(_Strict):
     """
 
     by: str
-    map: dict[str, str]
+    map: dict[str, Annotated[str, StringConstraints(pattern=ID_PREFIX_RE)]]
 
 
 class TypeDecl(_Strict):
@@ -96,7 +103,7 @@ class TypeDecl(_Strict):
     # NNN the next free number for that prefix. A convention several presets already
     # carried in prose (`ad-NNN`, `fr-NNN`) and every author had to type by hand into
     # `--id`; declaring it makes the schema mint it. Absent = khub's plain slug.
-    id_prefix: str | IdPrefixDecl | None = None
+    id_prefix: Annotated[str, StringConstraints(pattern=ID_PREFIX_RE)] | IdPrefixDecl | None = None
     attributes: dict[str, AttrDecl] = {}
     relations: dict[str, RelationDecl] = {}
 

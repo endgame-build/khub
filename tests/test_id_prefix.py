@@ -137,6 +137,22 @@ entities:
 
 
 @pytest.mark.unit
+@pytest.mark.parametrize("value", ["''", "'AD'", "'a-d'", "'1st'", "'  '"])
+def test_a_prefix_must_be_a_slug_token(tmp_path: Path, value: str) -> None:
+    """It is concatenated into a filename: empty mints a leading hyphen, and a
+    hyphenated one cannot be read back out of the id."""
+    path = _schema(tmp_path, f"""
+entities:
+  a:
+    layout: file
+    path: as
+    id_prefix: {value}
+""")
+    with pytest.raises(Exception):
+        resolve([path])
+
+
+@pytest.mark.unit
 def test_resolved_prefix_shapes() -> None:
     literal = IdPrefix(literal="ad")
     assert literal.resolve({}) == "ad" and literal.all == ("ad",)
