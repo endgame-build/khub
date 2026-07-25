@@ -2,7 +2,20 @@
 
 Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); khub is pre-release.
 
-## [Unreleased]
+## [0.16.0] — 2026-07-25
+
+### Added
+
+- **`check` reports a misplaced entity** — a file outside every declared layout whose
+  frontmatter names a type the schema knows. This is the one breakage a schema-driven
+  scan is blind to by construction: the globs follow the schema, so a file the schema
+  no longer covers is not *absent*, it is *unscanned*, and every other gate passes over
+  it in silence. Found by graduating a flat build-lite corpus onto build-hub's nested
+  layout — `khub init` reported `entity_files_modified: 0` and `validate` returned
+  clean while seeing none of the eight entities. It is the mirror of `stray` (a
+  non-entity inside a layout) and fails the gate for the same reason; the two never
+  double-report the same file. Deliberately narrow: a README carries no `type` and an
+  unrelated doc carries an unknown one, so neither fires.
 
 ### Changed
 

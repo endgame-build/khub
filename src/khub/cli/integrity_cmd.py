@@ -92,6 +92,11 @@ def _check_human(report: CheckReport) -> None:
         typer.echo(f"orphan {o}")
     for s in report.strays:
         typer.echo(f"stray file {s}")
+    for m in report.misplaced:
+        typer.echo(
+            f"misplaced {m.path}: declares type '{m.type}' but sits outside "
+            f"{m.expected} — no command can see it"
+        )
     # getattr-guarded so this works before/after core adds CheckReport.malformed.
     for m in getattr(report, "malformed", []):
         typer.echo(f"malformed file {m}")
@@ -129,6 +134,12 @@ def _check_payload(report: CheckReport) -> dict[str, Any]:
             for d in report.dangling
         ],
         "strays": report.strays,
+        # Files claiming a known type from outside every layout: unscanned, so
+        # invisible to every other finding here.
+        "misplaced": [
+            {"path": m.path, "type": m.type, "expected": m.expected}
+            for m in getattr(report, "misplaced", [])
+        ],
         # getattr-guarded so this works before/after core adds CheckReport.malformed.
         "malformed": getattr(report, "malformed", []),
         "cycles": report.cycles,

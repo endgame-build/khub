@@ -29,6 +29,7 @@ import networkx as nx
 
 from khub.core.entity import _read_doc, entity_path
 from khub.core.errors import LocatedError
+from khub.core.formats import load_meta
 from khub.core.graph import _predicate_digraph, build_graph
 from khub.core.index import Index, build_index, filter_index, resolve_target, stray_nodes
 from khub.core.introspect import load_schema
@@ -430,6 +431,21 @@ class Dangling:
 
 
 @dataclass(frozen=True)
+class Misplaced:
+    """A file that CLAIMS to be an entity but sits where no layout looks.
+
+    The mirror of a stray: a stray is a non-entity inside a layout, this is an
+    entity outside every layout. It is the only shape of breakage the scan cannot
+    see by construction — the globs follow the schema, so a file the schema does
+    not cover is not "absent", it is unscanned, and every gate passes over it.
+    """
+
+    path: str
+    type: str
+    expected: str
+
+
+@dataclass(frozen=True)
 class CheckReport:
     """The graph-wide structural verdict — empty everywhere means pass."""
 
@@ -457,6 +473,9 @@ class CheckReport:
     # The subset of `draft_singletons` whose type is `required: true` — the only drafts
     # that fail the gate, since an unpublished PRD must not turn the whole gate green.
     draft_required_singletons: list[str] = field(default_factory=list)
+    # Files declaring a known `type` that live outside every declared layout — an
+    # entity the scan never reaches. See `Misplaced`.
+    misplaced: list[Misplaced] = field(default_factory=list)
 
     @property
     def passed(self) -> bool:
@@ -469,6 +488,7 @@ class CheckReport:
             or self.malformed
             or self.missing_singletons
             or self.draft_required_singletons
+            or self.misplaced
         )
 
 
@@ -564,7 +584,48 @@ def check(root: Path, *, strict: bool = False) -> CheckReport:
         draft_required_singletons=draft_required_singletons,
         missing_singletons=missing_singletons,
         draft_singletons=draft_singletons,
+        misplaced=_misplaced(root, resolved),
     )
+
+
+_SKIP_DIRS = {".git", ".khub", ".kb", "node_modules", ".venv", "venv", "__pycache__"}
+
+
+def _misplaced(root: Path, resolved: ResolvedSchema) -> list[Misplaced]:
+    """Markdown outside every layout whose frontmatter names a type the schema knows.
+
+    Deliberately narrow. A README carries no `type`, and a doc about something else
+    carries an unknown one — neither fires. It takes a file that positively claims to
+    be, say, a `component` while sitting where components are not kept, which is what
+    a moved path or a swapped schema leaves behind.
+    """
+    scanned_dirs: set[Path] = set()
+    scanned_files: set[Path] = set()
+    for rtype in resolved.types.values():
+        if rtype.storage.layout == "singleton" and rtype.storage.path:
+            scanned_files.add((root / rtype.storage.path).resolve())
+        elif rtype.storage.layout == "collection":
+            scanned_files.add((root / rtype.collection_relpath).resolve())
+        elif rtype.storage.path:
+            scanned_dirs.add((root / rtype.storage.path).resolve())
+
+    out: list[Misplaced] = []
+    for path in sorted(root.rglob("*.md")):
+        if any(part in _SKIP_DIRS or part.startswith(".") for part in path.relative_to(root).parts):
+            continue
+        resolved_path = path.resolve()
+        if resolved_path in scanned_files:
+            continue
+        if any(d == resolved_path.parent or d in resolved_path.parents for d in scanned_dirs):
+            continue  # inside a layout: a bad file there is a stray, reported already
+        meta = load_meta(path)
+        tname = (meta or {}).get("type")
+        if not isinstance(tname, str) or tname not in resolved.types:
+            continue
+        rtype = resolved.types[tname]
+        expected = rtype.storage.path or rtype.collection_relpath
+        out.append(Misplaced(path=str(path.relative_to(root)), type=tname, expected=expected))
+    return out
 
 
 def _derivative_dangle(resolved: ResolvedSchema, d: Dangling, broken: set[str]) -> bool:

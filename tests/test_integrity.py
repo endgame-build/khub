@@ -19,7 +19,9 @@ from typer.testing import CliRunner
 
 from khub.cli.main import app
 from khub.core import entity
+from khub.core.entity import create
 from khub.core.integrity import check, validate
+from khub.core.workspace import init_workspace
 
 runner = CliRunner()
 Seed = Callable[..., None]
@@ -708,3 +710,65 @@ def test_draft_singleton_is_distinguished_from_an_absent_one(tmp_path: Path) -> 
     entity.delete(ws, "prd")
     absent = check(ws)
     assert absent.missing_singletons == ["prd"] and absent.draft_singletons == []
+
+
+# --- misplaced: an entity outside every layout -----------------------------------
+
+
+@pytest.mark.integration
+def test_misplaced_reports_a_file_the_scan_cannot_reach(tmp_path: Path) -> None:
+    """The one breakage a schema-driven scan is blind to by construction.
+
+    Move a type's declared path (or swap the schema) and the old files are not
+    absent — they are unscanned, so every other gate passes over them. This was
+    found by graduating a flat build-lite corpus onto build-hub's nested layout:
+    `check` returned clean while seeing none of the eight entities.
+    """
+    root = tmp_path / "ws"
+    root.mkdir()
+    init_workspace("build-lite", root)
+    create(root, "component", {"title": "API", "kind": "service"})
+
+    # the schema now looks somewhere else; the file does not move
+    schema = root / ".khub" / "schema.yaml"
+    schema.write_text(
+        schema.read_text().replace("path: knowledge/components",
+                                   "path: knowledge/architecture/components")
+    )
+
+    report = check(root)
+    assert not report.passed
+    assert [(m.path, m.type, m.expected) for m in report.misplaced] == [
+        ("knowledge/components/cmp-001-api.md", "component",
+         "knowledge/architecture/components")
+    ]
+
+
+@pytest.mark.integration
+def test_misplaced_ignores_everything_that_is_not_a_claim(tmp_path: Path) -> None:
+    """Narrow on purpose: it takes a file positively claiming a known type."""
+    root = tmp_path / "ws"
+    root.mkdir()
+    init_workspace("build-lite", root)
+
+    (root / "README.md").write_text("# A repo\n\nNo frontmatter here.\n")
+    (root / "notes.md").write_text("---\ntype: meeting\ntitle: Not our type\n---\n")
+    (root / "docs").mkdir()
+    (root / "docs" / "guide.md").write_text("---\ntitle: No type key\n---\n")
+
+    assert check(root).misplaced == []
+
+
+@pytest.mark.integration
+def test_a_file_inside_a_layout_stays_a_stray_not_a_misplacement(tmp_path: Path) -> None:
+    """The two findings are mirrors and must never double-report the same file."""
+    root = tmp_path / "ws"
+    root.mkdir()
+    init_workspace("build-lite", root)
+    (root / "knowledge" / "components" / "wrong.md").write_text(
+        "---\ntype: adr\ntitle: In the wrong layout\nstatus: proposed\ncreated: 2026-07-25\n---\n"
+    )
+
+    report = check(root)
+    assert report.strays == ["knowledge/components/wrong.md"]
+    assert report.misplaced == []
