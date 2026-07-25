@@ -248,7 +248,7 @@ def create(
                 message=f"Slug '{slug}' is already taken in {type_}; choose another --id",
             ) from None
     else:
-        base = _slug_base(_slug_source(type_, attrs))
+        base = _minted_base(rtype, attrs, index)
         slug, path = _mint_and_write(root, rtype, base, type_, index, meta, body)
     return CreateResult(type=type_, slug=slug, path=path, draft=is_draft)
 
@@ -416,6 +416,39 @@ def _slug_base(source: str) -> str:
             message=f"Slug '{base[:40]}…' exceeds {_MAX_SLUG} characters",
         )
     return base
+
+
+_ORDINAL_WIDTH = 3
+
+
+def _minted_base(rtype: ResolvedType, attrs: dict[str, Any], index: Index) -> str:
+    """A minted slug: ``<prefix>-<number>-<slug>``, or ``<number>-<slug>`` with no prefix.
+
+    Every minted id carries an ordinal, so a corpus reads in the order it was
+    authored and an entity can be named in prose by a short stable handle
+    (``ad-004``) instead of a whole title. The number is zero-padded to three and
+    keeps counting past it — 001, 045, 1200.
+    """
+    base = _slug_base(_slug_source(rtype.name, attrs))
+    prefix = rtype.id_prefix.resolve(attrs) if rtype.id_prefix else None
+    stem = f"{prefix}-" if prefix else ""
+    return f"{stem}{_next_ordinal(index, rtype.name, prefix):0{_ORDINAL_WIDTH}d}-{base}"
+
+
+def _next_ordinal(index: Index, type_: str, prefix: str | None) -> int:
+    """One past the highest ordinal in use for this type (and prefix, if any).
+
+    Counted per prefix, not per type: a requirement schema minting ``fr-`` and
+    ``cst-`` keeps two independent sequences, which is what makes the number
+    readable as "the fourth constraint" rather than an arbitrary position.
+    """
+    pattern = re.compile(rf"^{re.escape(prefix)}-(\d+)-" if prefix else r"^(\d+)-")
+    used = [
+        int(m.group(1))
+        for node_type, slug in index.nodes
+        if node_type == type_ and (m := pattern.match(slug))
+    ]
+    return max(used, default=0) + 1
 
 
 def _explicit_slug(id_: str, type_: str, index: Index) -> str:

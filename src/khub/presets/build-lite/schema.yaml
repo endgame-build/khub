@@ -102,6 +102,7 @@ entities:
   requirement:
     layout: file
     path: knowledge/requirements
+    id_prefix: { by: kind, map: { functional: fr, constraint: cst, business-rule: br } }
     attributes:
       title: { required: true }   # override core OKF title -> required (slug source)
       kind:  { enum: [functional, constraint, business-rule], required: true }
@@ -115,6 +116,7 @@ entities:
   adr:
     layout: file
     path: knowledge/decisions
+    id_prefix: ad
     attributes:
       title:  { required: true }
       status: { enum: [proposed, accepted, rejected], required: true }
@@ -126,6 +128,7 @@ entities:
   component:
     layout: file
     path: knowledge/components
+    id_prefix: cmp
     attributes:
       title: { required: true }
       kind:  { enum: [service, library, external], required: true }
@@ -139,6 +142,7 @@ entities:
   feature-spec:
     layout: file
     path: specs
+    id_prefix: fs
     attributes:
       title:  { required: true }
       status: { enum: [planned, active, done, dropped], required: true }

@@ -198,9 +198,9 @@ def test_slug_from_title_then_type(fresh_ws: Path, seed: Seed) -> None:
     """A no-name type mints from title, else from the type name."""
     _people(fresh_ws, seed)
     titled = create(fresh_ws, "fragment", {"stage": "raw", "owner": "ann", "title": "My Note"})
-    assert titled.slug == "my-note"
+    assert titled.slug == "001-my-note"
     bare = create(fresh_ws, "fragment", {"stage": "raw", "owner": "ann"})
-    assert bare.slug == "fragment"
+    assert bare.slug == "002-fragment"
 
 
 # --- fix 11: self-link --------------------------------------------------------

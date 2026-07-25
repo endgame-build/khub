@@ -17,29 +17,47 @@ kb/
     build.schema.yaml     the whole contract: khub's core base + the six types
     templates/*.md        body templates; their ## headings are the body contract
   install.sh              wires the skill into .opencode/skills (or copy it yourself)
-  test_kb.py              17 tests, no pytest required
+  test_kb.py              24 tests, no pytest required
 ```
 
-## The eight commands
+## The commands
+
+**The verbs and flags are khub's** — kb implements a subset, so anything learned
+on one transfers to the other.
 
 | | |
 |---|---|
 | `kb init` | scaffold the corpus directories and the two narrative documents |
-| `kb schema` | the ontology: types, fields, enums, edges. Read before writing frontmatter |
-| `kb new <type> "<title>" [--set f=v]` | mint one conforming entity file, print its id |
-| `kb link <id> <predicate> <target>` | add a schema-checked relation |
-| `kb unlink <id> <predicate> <target>` | remove one |
-| `kb ls [type] [--where f=v] [--has p] [--missing p] [--tag t]` | list entities, filtered; `--missing` is the gap query |
-| `kb links <id> [--predicate p] [--depth n] [--direction in\|out\|both]` | edges in and out, **including the derived inverses**; `--depth` is the blast radius |
-| `kb check [--strict] [--json]` | sweep the corpus. Errors break, gaps do not |
+| `kb schema [types\|show <t>\|edges]` | the ontology. Read before writing frontmatter |
+| `kb status` | counts per type, orphans, errors, gaps |
+| `kb add <type> --title "..." --<field> <v>` | mint one entity file, print its id |
+| `kb get <id> [--edges]` | one entity, plus what points at it |
+| `kb edit <id> <field> <value>` | change one attribute, bump `updated` |
+| `kb remove <id> [--force]` | delete; refuses while an edge still points at it |
+| `kb link` / `kb unlink <id> <pred> <target>` | a schema-checked relation |
+| `kb query [--type t] [--<field> v] [--has p] [--missing p]` | filter; `--missing` is the gap query |
+| `kb neighbors <id> [--depth n] [--in\|--out]` | adjacency, **including derived inverses** |
+| `kb impact <id> [--predicate p] [--reverse]` | blast radius over one predicate |
+| `kb history <id>` | the supersession chain |
+| `kb validate [target]` | per-entity well-formedness and referential integrity |
+| `kb check [--strict]` | graph-wide. Errors break, gaps do not |
+| `kb install-skills [--target t] [--global] [--bin DIR]` | wire the skill into an agent |
 
-Bare `kb` prints the list. `-C/--root` targets another workspace; `--json` is on
-`ls`, `links`, `check` and `schema`.
+Bare `kb` prints the list. `-C/--workspace` targets another workspace,
+`--format json` is on every read command.
 
-There is deliberately no `get`, no `search`, no `edit`, no `--body`: reading,
-grepping and writing prose are things the agent's own tools do better. What is
-here is what they cannot do — the reverse edge, the exhaustive sweep, a
-deterministic id, one uniform shape across sessions.
+Deliberately absent, and khub-only: `search` (ripgrep wins at this scale),
+`stale`, `reindex`, `viz`, `backfill`, `wire`. Reading, grepping and writing
+prose are things the agent's own tools do better.
+
+## Ids
+
+`kb add` mints `<prefix>-NNN-<slug>`, or `NNN-<slug>` for a type with no declared
+prefix. The number is one past the highest in use and each prefix counts
+separately, so `fr-001` and `cst-001` coexist. The prefix follows `kind`, which
+puts a mislabelled entity in plain sight and makes `check` able to catch it. This
+is khub's rule, declared by `id_prefix` in the schema — both tools mint the same
+id for the same input, and a test pins that.
 
 ## Drop it in
 
@@ -65,23 +83,7 @@ so `kb check | head` would also need `head *`:
 { "permission": { "bash": { "*": "ask", "kb *": "allow", "python3 *kb.py *": "allow" } } }
 ```
 
-## Use
-
-```bash
-kb                        # the verb list
-kb schema                 # types, fields, enums, edges — the whole vocabulary
-kb new adr "Use Postgres for the primary store" --set status=proposed
-kb link ad-004-use-postgres affects cmp-001-api
-kb links cmp-001-api --depth 3        # edges in and out, including derived inverses
-kb ls requirement --missing realized_in
-kb check [--strict] [--json]
-```
-
-`new` mints the id (`ad-004-…`, prefix from the type and its `kind`), writes the
-frontmatter, and seeds the body from `templates/<type>.md`. You then write the
-prose in the file directly — that is the intended path, not a `--body` flag.
-`check` is the gate: **errors** mean the corpus is broken, **gaps** mean legal but
-unfinished, and only errors fail the exit code (`--strict` fails on both).
+## The corpus
 
 ```
 knowledge/prd.md          the product          (one document, required)
@@ -92,6 +94,12 @@ knowledge/components/     cmp-NNN              what exists, what depends on what
 specs/                    fs-NNN               what is being built
 ```
 
+`add` writes the frontmatter and seeds the body from `templates/<type>.md`. You
+then write the prose in the file directly — that is the intended path, not a
+`--body` flag. `check` is the gate: **errors** mean the corpus is broken, **gaps**
+mean legal but unfinished, and only errors fail the exit code (`--strict` fails on
+both).
+
 ## The contract
 
 `scripts/build.schema.yaml` is khub's `core.yaml` base block and its build-lite
@@ -100,18 +108,17 @@ edit when a project needs a field — `kb.py` names no type, field or predicate.
 A project can override the shipped copy at `.kb/build.schema.yaml` (and
 `.kb/templates/<type>.md`) without touching this directory.
 
-It is **1:1 with `presets/core.yaml` + `presets/build-lite/schema.yaml`**, with
-exactly one addition: `id_prefix` per type, because khub mints slugs from titles
-while `kb` mints enumerated ids and checks the prefix against the entity's `kind`.
-Nothing else differs at any depth — same `version`, same base block, same enum
-member order, same `acyclic` and `inverse` declarations. Attributes `kb` never
-reads (`draft`, `author`, `sources`, `references`) stay declared: a closed schema
-and a deleted attribute do not mix — drop one and every entity khub writes becomes
-an `unknown_field` error.
+It is **1:1 with `presets/core.yaml` + `presets/build-lite/schema.yaml`** — a
+verbatim concatenation of the two, so it is identical by construction. No
+additions, no omissions, nothing reordered. Attributes `kb` never reads (`draft`,
+`author`, `sources`, `references`) stay declared: a closed schema and a deleted
+attribute do not mix — drop one and every entity khub writes becomes an
+`unknown_field` error.
 
 `tests/test_build_lite_standalone.py` in the khub repo enforces that. It diffs
-this file against the preset sources key by key, fails on any second delta, and
-regenerates the body templates from khub's own renderer.
+this file against both preset sources key by key and fails on **any** difference,
+generates the body templates from khub's own renderer, and checks that kb and khub
+mint the same id for the same input.
 
 Frontmatter is a deliberately small YAML subset — flat `key: value`, `[a, b]`, or
 `- item` lines; no nesting, no multi-line scalars, no trailing comments. That is

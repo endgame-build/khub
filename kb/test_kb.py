@@ -138,10 +138,10 @@ def test_yaml_subset_edges() -> None:
 def test_workspace_can_override_the_schema() -> None:
     root = fresh()
     shipped = (SCRIPTS / "build.schema.yaml").read_text()
-    override = root / ".build-lite" / kb.SCHEMA_FILE
+    override = root / kb.CONFIG_DIR / kb.SCHEMA_FILE
     override.parent.mkdir(parents=True)
     override.write_text(shipped.replace("stack: { type: text }", "stack: { type: text, required: true }"))
-    run(root, "new", "component", "API", "--set", "kind=service")
+    run(root, "add", "component", "--title", "API", "--kind", "service")
     assert "incomplete" in codes(root)[kb.GAP]
 
 
@@ -150,10 +150,10 @@ def test_workspace_can_override_the_schema() -> None:
 
 def test_new_mints_ids_by_kind_and_numbers_per_prefix() -> None:
     root = fresh()
-    run(root, "new", "component", "Public API", "--set", "kind=service")
-    run(root, "new", "requirement", "A user can pay", "--set", "kind=functional")
-    run(root, "new", "requirement", "Settles in 2s", "--set", "kind=constraint")
-    run(root, "new", "requirement", "Refunds within 30d", "--set", "kind=functional")
+    run(root, "add", "component", "--title", "Public API", "--kind", "service")
+    run(root, "add", "requirement", "--title", "A user can pay", "--kind", "functional")
+    run(root, "add", "requirement", "--title", "Settles in 2s", "--kind", "constraint")
+    run(root, "add", "requirement", "--title", "Refunds within 30d", "--kind", "functional")
     slugs = set(kb.scan(root, kb.load_schema(root)).entities)
     assert {"cmp-001-public-api", "fr-001-a-user-can-pay", "cst-001-settles-in-2s"} <= slugs
     assert "fr-002-refunds-within-30d" in slugs
@@ -161,14 +161,14 @@ def test_new_mints_ids_by_kind_and_numbers_per_prefix() -> None:
 
 def test_new_rejects_unknown_field_and_unresolvable_edge() -> None:
     root = fresh()
-    assert run(root, "new", "adr", "X", "--set", "status=proposed", "--set", "owner=noor") == 2
-    assert run(root, "new", "adr", "X", "--set", "status=proposed", "--set", "affects=ghost") == 2
-    assert run(root, "new", "requirement", "X") == 2  # no kind, so no id prefix
+    assert run(root, "add", "adr", "--title", "X", "--status", "proposed", "--owner", "noor") == 2
+    assert run(root, "add", "adr", "--title", "X", "--status", "proposed", "--affects", "ghost") == 2
+    assert run(root, "add", "requirement", "--title", "X") == 2  # no kind, so no id prefix
 
 
 def test_link_is_surgical_and_checked() -> None:
     root = fresh()
-    run(root, "new", "component", "API", "--set", "kind=service")
+    run(root, "add", "component", "--title", "API", "--kind", "service")
     write(
         root / "knowledge/components/cmp-002-worker.md",
         """
@@ -189,7 +189,7 @@ Consumes the queue.
     assert run(root, "link", "cmp-002-worker", "depends_on", "cmp-001-api") == 0  # idempotent
     assert (root / "knowledge/components/cmp-002-worker.md").read_text() == before
 
-    run(root, "new", "adr", "Split the worker", "--set", "status=proposed")
+    run(root, "add", "adr", "--title", "Split the worker", "--status", "proposed")
     assert run(root, "link", "ad-001-split-the-worker", "affects", "cmp-002-worker") == 0
     assert run(root, "link", "ad-001-split-the-worker", "affects", "ghost") == 2
     assert run(root, "link", "ad-001-split-the-worker", "supersedes", "cmp-001-api") == 2  # wrong type
@@ -208,11 +208,10 @@ Consumes the queue.
 
 def test_seeded_corpus_is_green() -> None:
     root = fresh()
-    run(root, "new", "component", "API", "--set", "kind=service")
-    run(root, "new", "requirement", "A user can pay", "--set", "kind=functional")
+    run(root, "add", "component", "--title", "API", "--kind", "service")
+    run(root, "add", "requirement", "--title", "A user can pay", "--kind", "functional")
     run(root, "link", "fr-001-a-user-can-pay", "realized_in", "cmp-001-api")
-    run(root, "new", "feature-spec", "Checkout", "--set", "status=active",
-        "--set", "requirements=fr-001-a-user-can-pay")
+    run(root, "add", "feature-spec", "--title", "Checkout", "--status", "active", "--requirements", "fr-001-a-user-can-pay")
     found = codes(root)
     assert found[kb.ERROR] == []
     assert found[kb.GAP] == [], found[kb.GAP]
@@ -221,7 +220,7 @@ def test_seeded_corpus_is_green() -> None:
 
 def test_every_error_fires() -> None:
     root = fresh()
-    run(root, "new", "adr", "Fine", "--set", "status=accepted")
+    run(root, "add", "adr", "--title", "Fine", "--status", "accepted")
     write(root / "knowledge/decisions/ad-002-broken.md", """
 ---
 type: adr
@@ -273,7 +272,7 @@ created: 2026-07-25
 
 def test_gaps_do_not_fail_the_gate() -> None:
     root = fresh()
-    run(root, "new", "component", "API", "--set", "kind=service")
+    run(root, "add", "component", "--title", "API", "--kind", "service")
     (root / "knowledge/arc42.md").unlink()
     found = codes(root)
     assert found[kb.ERROR] == []
@@ -299,9 +298,8 @@ def test_body_shape_is_a_gap() -> None:
 
 def test_inverse_edges_are_computed() -> None:
     root = fresh()
-    run(root, "new", "component", "API", "--set", "kind=service")
-    run(root, "new", "adr", "Use Postgres", "--set", "status=accepted",
-        "--set", "affects=cmp-001-api")
+    run(root, "add", "component", "--title", "API", "--kind", "service")
+    run(root, "add", "adr", "--title", "Use Postgres", "--status", "accepted", "--affects", "cmp-001-api")
     corpus = kb.scan(root, kb.load_schema(root))
     assert corpus.in_edges("cmp-001-api") == [("affects", "ad-001-use-postgres")]
     assert corpus.out_edges("cmp-001-api") == []
@@ -311,13 +309,99 @@ def test_inverse_edges_are_computed() -> None:
 def test_blast_radius_walks_transitively() -> None:
     root = fresh()
     for name in ("A", "B", "C"):
-        run(root, "new", "component", name, "--set", "kind=service")
+        run(root, "add", "component", "--title", name, "--kind", "service")
     run(root, "link", "cmp-001-a", "depends_on", "cmp-002-b")
     run(root, "link", "cmp-002-b", "depends_on", "cmp-003-c")
     corpus = kb.scan(root, kb.load_schema(root))
     reached = {t for _, t in corpus.out_edges("cmp-001-a")}
     assert reached == {"cmp-002-b"}
-    assert run(root, "links", "cmp-001-a", "--depth", "3", "--direction", "out") == 0
+    assert run(root, "neighbors", "cmp-001-a", "--depth", "3", "--out") == 0
+
+
+def test_minting_follows_khubs_rule() -> None:
+    """`<prefix>-NNN-<slug>`, one sequence per prefix — byte-identical to khub's."""
+    root = fresh()
+    run(root, "add", "adr", "--title", "Use Postgres", "--status", "proposed")
+    run(root, "add", "adr", "--title", "Drop Redis", "--status", "proposed")
+    run(root, "add", "requirement", "--title", "Pay by card", "--kind", "functional")
+    run(root, "add", "requirement", "--title", "Settle in 2s", "--kind", "constraint")
+    run(root, "add", "requirement", "--title", "Refund in 30d", "--kind", "functional")
+    slugs = set(kb.scan(root, kb.load_schema(root)).entities)
+    assert {"ad-001-use-postgres", "ad-002-drop-redis", "fr-001-pay-by-card",
+            "cst-001-settle-in-2s", "fr-002-refund-in-30d"} <= slugs
+
+
+def test_minting_without_a_declared_prefix_is_a_bare_number() -> None:
+    root = fresh()
+    shipped = (SCRIPTS / kb.SCHEMA_FILE).read_text()
+    override = root / kb.CONFIG_DIR / kb.SCHEMA_FILE
+    override.parent.mkdir(parents=True)
+    override.write_text(shipped.replace("    id_prefix: cmp\n", ""))
+    run(root, "add", "component", "--title", "Public API", "--kind", "service")
+    assert "001-public-api" in kb.scan(root, kb.load_schema(root)).entities
+
+
+def test_explicit_id_bypasses_minting() -> None:
+    root = fresh()
+    run(root, "add", "adr", "--title", "Hand named", "--status", "proposed", "--id", "ad-050-hand")
+    assert "ad-050-hand" in kb.scan(root, kb.load_schema(root)).entities
+
+
+def test_bad_id_is_reported_for_both_shapes() -> None:
+    root = fresh()
+    write(root / "knowledge/decisions/nonsense.md", """
+---
+type: adr
+title: Bad filename
+status: proposed
+created: 2026-07-25
+---
+""")
+    assert "bad_id" in codes(root)[kb.ERROR]
+
+
+def test_get_edit_remove_and_status() -> None:
+    root = fresh()
+    run(root, "add", "component", "--title", "API", "--kind", "service")
+    run(root, "add", "adr", "--title", "Use it", "--status", "proposed",
+        "--affects", "cmp-001-api")
+
+    assert run(root, "get", "cmp-001-api", "--edges") == 0
+    assert run(root, "status") == 0
+
+    assert run(root, "edit", "ad-001-use-it", "status", "accepted") == 0
+    entity = kb.scan(root, kb.load_schema(root)).entities["ad-001-use-it"]
+    assert entity.fm["status"] == "accepted" and entity.fm["updated"]
+    assert run(root, "edit", "ad-001-use-it", "status", "nope") == 2        # enum
+    assert run(root, "edit", "ad-001-use-it", "affects", "cmp-001-api") == 2  # a relation
+
+    assert run(root, "remove", "cmp-001-api") == 2      # inbound edge holds it
+    assert run(root, "remove", "cmp-001-api", "--force") == 0
+    assert not (root / "knowledge/components/cmp-001-api.md").exists()
+
+
+def test_validate_is_the_per_entity_subset_of_check() -> None:
+    root = fresh()
+    run(root, "add", "component", "--title", "API", "--kind", "service")
+    write(root / "knowledge/decisions/ad-001-broken.md", """
+---
+type: adr
+title: Broken
+status: maybe
+created: 2026-07-25
+---
+""")
+    corpus = kb.scan(root, kb.load_schema(root))
+    per_entity = {f.code for f in kb.check(corpus) if f.code in kb.VALIDATE_CODES}
+    assert per_entity == {"bad_value"}
+    assert run(root, "validate") == 1
+    # the orphan component is a graph finding, so validate does not fail on it
+    assert "orphan" not in per_entity
+
+
+def test_install_skills_dry_run_names_its_targets() -> None:
+    root = fresh()
+    assert run(root, "install-skills", "--dry-run", "--target", "opencode") == 0
 
 
 def main() -> int:

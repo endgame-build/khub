@@ -106,6 +106,19 @@ so `{"skills": {"paths": ["kb/skills"]}}` loads the skill in place with
 no install step at all. That key is implemented but undocumented, hence the
 install script as the guaranteed route.
 
+### The API is khub's
+
+Every verb and flag name is khub's, and kb implements a strict subset: `init`,
+`schema`, `status`, `add`, `get`, `edit`, `remove`, `link`, `unlink`, `query`,
+`neighbors`, `impact`, `history`, `validate`, `check`, `install-skills`. Absent,
+and deliberately: `search`, `stale`, `reindex`, `viz`, `backfill`, `wire`.
+
+An earlier draft optimised each verb locally and produced a surface that read
+differently — `new`, `ls`, and one merged `links` walk. It was a smaller surface
+and it was wrong: the entire value of this thing is that a corpus graduates to
+khub, and a corpus graduates far more easily than a habit does. Names that
+transfer are worth more than names that are individually shorter.
+
 ### Why one script, not one script per verb
 
 `add.py` / `link.py` / `validate.py` as separate files is the obvious
@@ -176,15 +189,15 @@ TypeScript were read instead):
 
 | khub surface | In build-lite standalone |
 |---|---|
-| `query`, `get`, `neighbors`, `impact`, `history` | folded into **`ls`** and **`links`**. One walk verb with `--depth`, `--predicate` and `--direction` covers adjacency, blast radius, and the supersession chain — they were never three algorithms. |
+| `query`, `get`, `neighbors`, `impact`, `history` | **kept, under khub's names.** One BFS backs all three walks — they differ only in defaults — but the verbs stay separate so what an agent learns on khub transfers unchanged. |
 | `search` (FTS5, BM25) | **cut.** ripgrep is better at this scale and the agent already has it. |
-| `add --body/--body-file`, `edit` | **cut.** The agent writes the file. `new` scaffolds, `link`/`unlink` keep edges honest. |
-| `validate` + `check` as two gates | **one `check`** with two severities: `error` (broken) and `gap` (unfinished). The invariant the split protects — *capture is never blocked* — survives as the exit code, which only errors set. |
+| `add --body/--body-file`, `edit` | **kept, and rarely the right call.** The agent writes prose into the file; `add` scaffolds, `edit` is for one attribute, `link`/`unlink` keep edges honest. |
+| `validate` + `check` as two gates | **both kept**, splitting one sweep by finding code: `validate` reports the per-entity subset, `check` adds the graph-wide gates. Two severities cut across them — `error` (broken) and `gap` (unfinished) — and only errors set the exit code, so capture is never blocked. |
 | `draft` flag, active-subgraph logic | **the behaviour is cut, the attribute is not.** `adr.status` and `feature-spec.status` already say what draft would, and no relation in build-lite is required, so the flag gates nothing here. It is still declared, because deleting an attribute from a *closed* schema turns every entity khub writes into an `unknown_field` error — which is what the drift test caught. Same for `author`, `sources` and `references`: declared, unread. |
 | `stale`, `backfill`, `log`, git integration | **cut.** git is the freshness record; `git log -- <path>` answers it without a projection. |
 | `reindex`, `viz`, OKF export | **cut.** No index to keep current, no dashboard consumer. |
 | collections, `json`/`yaml`/`jsonl` entities, locks, atomic replace | **cut.** Markdown only. build-lite has no homogeneous registry left. |
-| presets, `init <preset>`, schema flattening, `wire`, `install-skills` | **cut.** One schema, shipped pre-flattened as `build.schema.yaml`. Installation is `cp -r`. |
+| presets, `init <preset>`, schema flattening, `wire` | **cut.** One schema, shipped pre-flattened as `build.schema.yaml`. `install-skills` is kept, under khub's name. |
 | networkx, pydantic, typer, rich, ruamel, python-frontmatter | **cut.** BFS over a dict is 20 lines; validation is the checker; argparse is stdlib. Two hand-written readers replace the YAML dependency: a flat profile for frontmatter (~90 lines, which is also what pins the corpus to one shape) and a nested subset reader for the schema (~140 lines, tested against `ruamel.yaml`'s parse of the shipped file). |
 | `type/slug` qualification, ambiguity resolution | **cut by specialization.** Ids carry a type prefix (`ad-`, `cmp-`, `fs-`, `fr-`/`cst-`/`br-`), so every slug is globally unambiguous. |
 
@@ -192,7 +205,7 @@ TypeScript were read instead):
 
 Cutting is only half of it. A fixed schema affords checks a general engine cannot:
 
-- **`kb new` mints the id**, including the kind-dependent prefix — `--set kind=constraint` yields `cst-004-…`, and a `fr-` file whose `kind` says `constraint` is a `check` error. khub cannot do this; its slugs come from titles.
+- **The id scheme moved *into* khub.** Minting `ad-004-use-postgres` began as a kb-only trick, which made it a divergence and a second thing to learn. It is now `id_prefix` in the schema, so khub mints the same id from the same input and the presets' long-documented `ad-`/`fr-`/`wp-` conventions are finally declared rather than typed by hand into `--id`. What stays kb-only is *enforcement*: a `fr-` file whose `kind` says `constraint` is a `check` error here, because this schema is closed.
 - **The schema is closed by default.** In khub, unknown keys are legal (it is an open format serving many domains) and `--strict` closes it. Here, an unknown field is an *error* — because the realistic failure is `realised_in` for `realized_in`, a typo that silently produces no edge at all.
 - **Body templates are Markdown files.** Their own `##` headings are the contract, so one file both seeds a new document and validates every existing one. khub needs a YAML section list because it must express more.
 

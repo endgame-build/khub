@@ -36,8 +36,7 @@ SCRIPTS = STANDALONE / "scripts"
 PRESETS = REPO / "src" / "khub" / "presets"
 PRESET = "build-lite"
 
-# The one documented departure from khub's scaffold. Anything else is drift.
-DELTA_TYPE_KEYS = {"id_prefix"}
+
 
 
 @pytest.fixture(scope="module")
@@ -80,12 +79,7 @@ def test_entities_match_khub(scaffold: Path) -> None:
 
     assert set(shipped) == set(canonical), "the six types are the contract"
     for type_, cfg in shipped.items():
-        extra = set(cfg) - set(canonical[type_])
-        assert extra <= DELTA_TYPE_KEYS, f"{type_} carries undocumented key(s) {extra}"
-        for key, value in cfg.items():
-            if key in DELTA_TYPE_KEYS:
-                continue
-            assert value == canonical[type_][key], f"{type_}.{key} drifted from the preset"
+        assert cfg == canonical[type_], f"{type_} drifted from the preset"
 
 
 def _diff(khub: Any, shipped: Any, path: str = "") -> list[str]:
@@ -121,8 +115,7 @@ def test_shipped_schema_is_core_plus_preset_verbatim() -> None:
     shipped = _load(SCRIPTS / "build.schema.yaml")
 
     assert set(shipped) == set(combined), "top-level keys must match core.yaml + the preset"
-    allowed = {f"+ entities.{t}.id_prefix (only in the drop-in)" for t in combined["entities"]}
-    assert set(_diff(combined, shipped)) <= allowed, "\n".join(_diff(combined, shipped))
+    assert _diff(combined, shipped) == [], "\n".join(_diff(combined, shipped))
 
 
 @pytest.mark.integration
@@ -138,6 +131,28 @@ def test_id_prefixes_cover_every_stored_type(kb: Any, scaffold: Path) -> None:
         spec = schema.types[type_]["id_prefix"]
         if isinstance(spec, dict):
             assert sorted(spec["map"]) == sorted(enum or []), f"{type_} prefix map != kind enum"
+
+
+@pytest.mark.e2e
+def test_both_tools_mint_the_same_id(kb: Any, tmp_path: Path) -> None:
+    """The point of putting id_prefix in the preset: one rule, two implementations."""
+    theirs, ours = tmp_path / "khub", tmp_path / "kb"
+    for root in (theirs, ours):
+        root.mkdir()
+    init_workspace(PRESET, theirs)
+    create(theirs, "adr", {"title": "Use Postgres", "status": "proposed"})
+    create(theirs, "requirement", {"title": "Settle in 2s", "kind": "constraint"})
+
+    with contextlib.redirect_stdout(io.StringIO()):
+        kb.main(["-C", str(ours), "init"])
+        kb.main(["-C", str(ours), "add", "adr", "--title", "Use Postgres",
+                 "--status", "proposed"])
+        kb.main(["-C", str(ours), "add", "requirement", "--title", "Settle in 2s",
+                 "--kind", "constraint"])
+
+    minted = lambda root: sorted(p.stem for p in (root / "knowledge").rglob("*.md"))
+    assert minted(theirs) == minted(ours) == ["ad-001-use-postgres", "arc42",
+                                              "cst-001-settle-in-2s", "prd"]
 
 
 @pytest.mark.integration
@@ -166,13 +181,11 @@ def test_a_kb_authored_corpus_graduates_to_khub(kb: Any, tmp_path: Path) -> None
             return int(kb.main(["-C", str(root), *argv]))
 
     assert run("init") == 0
-    assert run("new", "component", "Public API", "--set", "kind=service") == 0
-    assert run("new", "component", "Stripe", "--set", "kind=external") == 0
-    assert run("new", "requirement", "Payments settle in 2s", "--set", "kind=constraint") == 0
-    assert run("new", "adr", "Use Stripe", "--set", "status=accepted",
-               "--set", "affects=cmp-001-public-api") == 0
-    assert run("new", "feature-spec", "Checkout", "--set", "status=planned",
-               "--set", "requirements=cst-001-payments-settle-in-2s") == 0
+    assert run("add", "component", "--title", "Public API", "--kind", "service") == 0
+    assert run("add", "component", "--title", "Stripe", "--kind", "external") == 0
+    assert run("add", "requirement", "--title", "Payments settle in 2s", "--kind", "constraint") == 0
+    assert run("add", "adr", "--title", "Use Stripe", "--status", "accepted", "--affects", "cmp-001-public-api") == 0
+    assert run("add", "feature-spec", "--title", "Checkout", "--status", "planned", "--requirements", "cst-001-payments-settle-in-2s") == 0
     assert run("link", "cst-001-payments-settle-in-2s", "realized_in", "cmp-001-public-api") == 0
     assert run("link", "cmp-001-public-api", "depends_on", "cmp-002-stripe") == 0
     assert run("check", "--strict") == 0

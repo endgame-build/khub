@@ -402,17 +402,24 @@ class Schema:
 SCHEMA_FILE = "build.schema.yaml"
 
 
-def load_schema(root: Path) -> Schema:
+CONFIG_DIR = ".kb"
+
+
+def _config(root: Path, name: str) -> Path:
     """The workspace override if it has one, else the copy beside this script."""
-    local = root / ".build-lite" / SCHEMA_FILE
-    path = local if local.is_file() else HERE / SCHEMA_FILE
+    local = root / CONFIG_DIR / name
+    return local if local.is_file() else HERE / name
+
+
+def load_schema(root: Path) -> Schema:
+    path = _config(root, SCHEMA_FILE)
     if not path.is_file():
-        raise Bad(f"no {SCHEMA_FILE} beside {HERE / 'kb.py'} or under {root}/.kb/")
+        raise Bad(f"no {SCHEMA_FILE} beside {HERE / 'kb.py'} or under {root}/{CONFIG_DIR}/")
     return Schema(load_yaml(path.read_text()))
 
 
 def template_for(root: Path, type_: str) -> str | None:
-    local = root / ".build-lite" / "templates" / f"{type_}.md"
+    local = root / CONFIG_DIR / "templates" / f"{type_}.md"
     path = local if local.is_file() else HERE / "templates" / f"{type_}.md"
     return path.read_text() if path.is_file() else None
 
@@ -590,13 +597,15 @@ def _entity_findings(corpus: Corpus, e: Entity) -> Iterable[Finding]:
 
 
 def _id_findings(schema: Schema, e: Entity) -> Iterable[Finding]:
+    """Ids follow the schema: `<prefix>-NNN-slug`, or `NNN-slug` with no prefix."""
     prefixes = schema.prefixes(e.type)
     if not prefixes:
+        if not re.match(r"^\d{3,}-[a-z0-9-]+$", e.slug):
+            yield Finding(ERROR, "bad_id", e.slug, "filename must be NNN-slug")
         return
-    m = re.match(r"^([a-z]+)-(\d{3})-([a-z0-9-]+)$", e.slug)
+    m = re.match(r"^([a-z]+)-(\d{3,})-([a-z0-9-]+)$", e.slug)
     if not m or m.group(1) not in prefixes:
-        shape = "|".join(prefixes)
-        yield Finding(ERROR, "bad_id", e.slug, f"filename must be {shape}-NNN-slug")
+        yield Finding(ERROR, "bad_id", e.slug, f"filename must be {'|'.join(prefixes)}-NNN-slug")
         return
     expected = schema.prefix_for(e.type, e.fm)
     if expected and m.group(1) != expected:
@@ -665,71 +674,49 @@ def _cycle_findings(corpus: Corpus) -> Iterable[Finding]:
 # ----------------------------------------------------------------- commands
 
 
-def cmd_check(args: argparse.Namespace) -> int:
-    corpus = load(args)
-    findings = check(corpus)
-    errors = [f for f in findings if f.severity == ERROR]
-    gaps = [f for f in findings if f.severity == GAP]
-    if args.json:
-        print(json.dumps({
-            "entities": len(corpus.entities),
-            "errors": [f.__dict__ for f in errors],
-            "gaps": [f.__dict__ for f in gaps],
-        }, indent=2))
+VALIDATE_CODES = {
+    "malformed", "duplicate_id", "type_mismatch", "unknown_field", "bad_value",
+    "bad_id", "cardinality", "self_link", "dangling", "wrong_type",
+}
+
+
+def _emit(args: argparse.Namespace, payload: Any, render_text: Any) -> None:
+    """khub's output contract: --format json for the agent, text for a human."""
+    if args.format == "json":
+        print(json.dumps(payload, indent=2))
     else:
-        print(f"{len(corpus.entities)} entities, {len(errors)} errors, {len(gaps)} gaps")
-        if errors:
-            print("\nerrors — the corpus is broken here")
-            for f in errors:
-                print(f.line())
-        if gaps:
-            print("\ngaps — legal, but unfinished")
-            for f in gaps:
-                print(f.line())
-    if errors:
-        return 1
-    return 1 if (gaps and args.strict) else 0
+        render_text()
 
 
-def cmd_new(args: argparse.Namespace) -> int:
-    corpus = load(args)
-    schema = corpus.schema
-    if args.type not in schema.types:
-        raise Bad(f"unknown type {args.type!r} — one of {', '.join(schema.types)}")
-    fields = dict(pair.split("=", 1) for pair in args.set) if args.set else {}
-    unknown = set(fields) - set(schema.fields(args.type))
-    if unknown:
-        raise Bad(f"unknown field(s) {', '.join(sorted(unknown))} for {args.type}")
+def _record(corpus: Corpus, e: Entity) -> dict[str, Any]:
+    """The uniform JSON record. `id` is the bare slug: kb ids carry a type prefix,
+    so unlike khub they are never ambiguous and never need `type/slug`."""
+    return {"id": e.slug, "type": e.type, "slug": e.slug,
+            "path": rel(corpus.root, e.path), **e.fm}
 
-    fm: dict[str, Any] = {"type": args.type, "title": args.title}
-    for key, raw in fields.items():
-        spec = schema.fields(args.type)[key]
-        fm[key] = [v.strip() for v in raw.split(",")] if spec.get("many") else raw
-    fm["created"] = date.today().isoformat()
 
-    if schema.is_singleton(args.type):
-        path = corpus.root / schema.types[args.type]["path"]
-        slug = args.type
-    else:
-        prefix = schema.prefix_for(args.type, fm)
-        if prefix is None:
-            spec = schema.types[args.type]["id_prefix"]
-            raise Bad(f"{args.type} needs --set {spec['by']}=<{'|'.join(spec['map'])}> to mint an id")
-        slug = f"{prefix}-{next_number(corpus, prefix):03d}-{slugify(args.title)}"
-        path = type_root(corpus.root, schema, args.type) / f"{slug}.md"
-    if path.exists():
-        raise Bad(f"{rel(corpus.root, path)} already exists")
-
-    for target in (t for _, t in _declared_edges(schema, args.type, fm)):
-        if target not in corpus.entities:
-            raise Bad(f"{target!r} resolves to nothing — link it after the target exists")
-
-    ordered = _order_keys(schema, args.type, fm)
-    body = template_for(corpus.root, args.type) or ""
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(render([l for k, v in ordered for l in emit_key(k, v)], body))
-    print(f"{slug}  {rel(corpus.root, path)}")
-    return 0
+def dynamic_fields(extra: Sequence[str], known: Iterable[str]) -> dict[str, str]:
+    """khub's `--<field> <value>` options, which argparse cannot declare ahead."""
+    fields = set(known)
+    out: dict[str, str] = {}
+    i = 0
+    while i < len(extra):
+        token = extra[i]
+        if not token.startswith("--"):
+            raise Bad(f"unexpected argument {token!r}")
+        if "=" in token:
+            name, value = token[2:].split("=", 1)
+            i += 1
+        else:
+            name = token[2:]
+            if i + 1 >= len(extra) or extra[i + 1].startswith("--"):
+                raise Bad(f"--{name} needs a value")
+            value = extra[i + 1]
+            i += 2
+        if name not in fields and name.replace("-", "_") in fields:
+            name = name.replace("-", "_")
+        out[name] = value
+    return out
 
 
 def _declared_edges(schema: Schema, type_: str, fm: dict[str, Any]) -> list[tuple[str, str]]:
@@ -745,12 +732,10 @@ def _order_keys(schema: Schema, type_: str, fm: dict[str, Any]) -> list[tuple[st
     return [(k, fm[k]) for k in lead if k in fm] + [(k, v) for k, v in fm.items() if k not in lead]
 
 
-def next_number(corpus: Corpus, prefix: str) -> int:
-    used = [
-        int(m.group(1))
-        for slug in corpus.entities
-        if (m := re.match(rf"^{re.escape(prefix)}-(\d+)-", slug))
-    ]
+def next_number(corpus: Corpus, prefix: str | None) -> int:
+    """One past the highest ordinal in use for this prefix — khub counts the same way."""
+    pattern = re.compile(rf"^{re.escape(prefix)}-(\d+)-" if prefix else r"^(\d+)-")
+    used = [int(m.group(1)) for slug in corpus.entities if (m := pattern.match(slug))]
     return max(used, default=0) + 1
 
 
@@ -763,6 +748,186 @@ def slugify(text: str, limit: int = 40) -> str:
     return "-".join(out) or "untitled"
 
 
+def _type_of(corpus: Corpus, slug: str) -> str | None:
+    hit = corpus.entities.get(slug)
+    return hit.type if hit else None
+
+
+# ------------------------------------------------------------------ workspace
+
+
+def cmd_init(args: argparse.Namespace) -> int:
+    root = Path(args.workspace or ".").resolve()
+    schema = load_schema(root)
+    made: list[str] = []
+    for type_, cfg in schema.types.items():
+        path = root / cfg["path"]
+        if schema.is_singleton(type_):
+            if path.is_file():
+                continue
+            path.parent.mkdir(parents=True, exist_ok=True)
+            fm = {"type": type_, "title": type_.upper() if type_ == "prd" else "Architecture",
+                  "created": date.today().isoformat()}
+            path.write_text(render([l for k, v in fm.items() for l in emit_key(k, v)],
+                                   template_for(root, type_) or ""))
+            made.append(cfg["path"])
+        elif not path.is_dir():
+            path.mkdir(parents=True, exist_ok=True)
+            (path / ".gitkeep").touch()
+            made.append(cfg["path"] + "/")
+    print("\n".join(f"created {m}" for m in made) or "nothing to do — already scaffolded")
+    print("\nnext: write knowledge/prd.md, then `kb check`")
+    return 0
+
+
+def cmd_schema(args: argparse.Namespace) -> int:
+    schema = load_schema(find_root(args.workspace))
+    view = args.view or "all"
+    if view == "show" and args.type not in schema.types:
+        raise Bad(f"unknown type {args.type!r} — one of {', '.join(schema.types)}")
+    types = [args.type] if view == "show" else list(schema.types)
+
+    if args.format == "json":
+        if view == "types":
+            print(json.dumps(list(schema.types), indent=2))
+        elif view == "edges":
+            print(json.dumps({t: schema.rels(t) for t in types}, indent=2))
+        elif view == "show":
+            print(json.dumps({args.type: schema.types[args.type]}, indent=2))
+        else:
+            print(json.dumps(schema.data, indent=2))
+        return 0
+
+    if view == "types":
+        for type_ in types:
+            print(type_)
+        return 0
+    for type_ in types:
+        cfg = schema.types[type_]
+        where = (f"{cfg['path']}, one document" if schema.is_singleton(type_)
+                 else f"{cfg['path']}/{'|'.join(schema.prefixes(type_)) or 'slug'}-NNN-slug.md")
+        print(f"\n{type_}  ({where})")
+        if view != "edges":
+            for name, spec in schema.attrs(type_).items():
+                if name == "type":
+                    continue
+                shape = "|".join(spec["enum"]) if spec.get("enum") else spec.get("type", "text")
+                print(f"    {name:<14} {shape}{'  (required)' if spec.get('required') else ''}")
+        for name, spec in schema.rels(type_).items():
+            many = "[]" if spec.get("many") else ""
+            inv = f"  (inverse: {spec['inverse']})" if spec.get("inverse") else ""
+            print(f"    {name:<14} -> {spec['to']}{many}{inv}")
+    return 0
+
+
+def cmd_status(args: argparse.Namespace) -> int:
+    corpus = load(args)
+    findings = check(corpus)
+    counts = {t: len(corpus.by_type(t)) for t in corpus.schema.types}
+    errors = sum(1 for f in findings if f.severity == ERROR)
+    gaps = sum(1 for f in findings if f.severity == GAP)
+    orphans = sum(1 for f in findings if f.code == "orphan")
+    payload = {"counts": counts, "total": len(corpus.entities), "orphan": orphans,
+               "errors": errors, "gaps": gaps}
+
+    def text() -> None:
+        for type_, n in counts.items():
+            print(f"{type_:<14} {n}")
+        print(f"\n{len(corpus.entities)} entities, {orphans} orphan, "
+              f"{errors} errors, {gaps} gaps")
+
+    _emit(args, payload, text)
+    return 0
+
+
+# ---------------------------------------------------------------------- write
+
+
+def cmd_add(args: argparse.Namespace) -> int:
+    corpus = load(args)
+    schema = corpus.schema
+    if args.type not in schema.types:
+        raise Bad(f"unknown type {args.type!r} — one of {', '.join(schema.types)}")
+    declared = schema.fields(args.type)
+    fields = dynamic_fields(args.extra, declared)
+    unknown = set(fields) - set(declared)
+    if unknown:
+        raise Bad(f"unknown field(s) {', '.join(sorted(unknown))} for {args.type}")
+    title = fields.pop("title", None)
+    if not title:
+        raise Bad("--title is required: it is the slug source")
+
+    fm: dict[str, Any] = {"type": args.type, "title": title}
+    for key, raw in fields.items():
+        fm[key] = [v.strip() for v in raw.split(",")] if declared[key].get("many") else raw
+    fm["created"] = date.today().isoformat()
+
+    if schema.is_singleton(args.type):
+        path, slug = corpus.root / schema.types[args.type]["path"], args.type
+    else:
+        slug = args.id or _mint(corpus, schema, args.type, fm, title)
+        path = type_root(corpus.root, schema, args.type) / f"{slug}.md"
+    if path.exists():
+        raise Bad(f"{rel(corpus.root, path)} already exists")
+
+    for target in (t for _, t in _declared_edges(schema, args.type, fm)):
+        if target not in corpus.entities:
+            raise Bad(f"{target!r} resolves to nothing — link it after the target exists")
+
+    body = args.body if args.body is not None else (template_for(corpus.root, args.type) or "")
+    if args.body_file:
+        body = sys.stdin.read() if args.body_file == "-" else Path(args.body_file).read_text()
+    ordered = _order_keys(schema, args.type, fm)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(render([l for k, v in ordered for l in emit_key(k, v)], body))
+    _emit(args, {"id": slug, "type": args.type, "slug": slug, "path": rel(corpus.root, path)},
+          lambda: print(f"{slug}  {rel(corpus.root, path)}"))
+    return 0
+
+
+def _mint(corpus: Corpus, schema: Schema, type_: str, fm: dict[str, Any], title: str) -> str:
+    """khub's rule: `<prefix>-NNN-<slug>`, or `NNN-<slug>` where no prefix is declared."""
+    spec = schema.types[type_].get("id_prefix")
+    prefix = schema.prefix_for(type_, fm)
+    if prefix is None and isinstance(spec, dict):
+        raise Bad(f"{type_} needs --{spec['by']} <{'|'.join(spec['map'])}> to mint an id")
+    stem = f"{prefix}-" if prefix else ""
+    return f"{stem}{next_number(corpus, prefix):03d}-{slugify(title)}"
+
+
+def cmd_edit(args: argparse.Namespace) -> int:
+    corpus = load(args)
+    entity = _need(corpus, args.id)
+    declared = corpus.schema.fields(entity.type)
+    if args.field not in declared:
+        raise Bad(f"{entity.type} has no {args.field!r} — one of {', '.join(declared)}")
+    if args.field in corpus.schema.rels(entity.type):
+        raise Bad(f"{args.field} is a relation — use `kb link {args.id} {args.field} <target>`")
+    problem = _attr_problem(declared[args.field], args.value)
+    if problem:
+        raise Bad(f"{args.field}: {problem}")
+    lines = splice(entity.front_lines, args.field, args.value)
+    if "updated" in declared:
+        lines = splice(lines, "updated", date.today().isoformat())
+    entity.path.write_text(render(lines, entity.body))
+    _emit(args, {"id": entity.slug, "type": entity.type, args.field: args.value},
+          lambda: print(f"{entity.slug} {args.field} = {args.value}"))
+    return 0
+
+
+def cmd_remove(args: argparse.Namespace) -> int:
+    corpus = load(args)
+    entity = _need(corpus, args.id)
+    inbound = corpus.in_edges(entity.slug)
+    if inbound and not args.force:
+        who = ", ".join(f"{s} ({p})" for p, s in inbound)
+        raise Bad(f"{entity.slug} still has inbound edges from {who} — --force to delete anyway")
+    entity.path.unlink()
+    _emit(args, {"id": entity.slug, "removed": rel(corpus.root, entity.path)},
+          lambda: print(f"removed {rel(corpus.root, entity.path)}"))
+    return 0
+
+
 def cmd_link(args: argparse.Namespace) -> int:
     corpus = load(args)
     entity = _need(corpus, args.id)
@@ -770,10 +935,9 @@ def cmd_link(args: argparse.Namespace) -> int:
     if args.predicate not in rels:
         raise Bad(f"{entity.type} has no {args.predicate!r} — one of {', '.join(rels)}")
     spec = rels[args.predicate]
-    unlinking = args.__dict__.get("remove", False)
-    target = _need(corpus, args.target) if not unlinking else corpus.entities.get(args.target)
+    unlinking = args.remove
     if not unlinking:
-        assert target is not None
+        target = _need(corpus, args.target)
         if target.slug == entity.slug:
             raise Bad("an entity cannot link to itself")
         if spec["to"] != "any" and target.type != spec["to"]:
@@ -799,58 +963,46 @@ def cmd_link(args: argparse.Namespace) -> int:
     else:
         lines = splice(lines, args.predicate, value)
     entity.path.write_text(render(lines, entity.body))
-    arrow = "x" if unlinking else "->"
-    print(f"{entity.slug} {args.predicate} {arrow} {args.target}")
+    print(f"{entity.slug} {args.predicate} {'x' if unlinking else '->'} {args.target}")
     return 0
 
 
-def cmd_links(args: argparse.Namespace) -> int:
+# ----------------------------------------------------------------- read/walk
+
+
+def cmd_get(args: argparse.Namespace) -> int:
     corpus = load(args)
     entity = _need(corpus, args.id)
-    rows: list[tuple[int, str, str, str]] = []
-    seen = {entity.slug}
-    frontier = [entity.slug]
-    for depth in range(1, args.depth + 1):
-        nxt: list[str] = []
-        for slug in frontier:
-            pairs = []
-            if args.direction in ("out", "both"):
-                pairs += [("out", p, t) for p, t in corpus.out_edges(slug)]
-            if args.direction in ("in", "both"):
-                pairs += [("in", p, s) for p, s in corpus.in_edges(slug)]
-            for way, pred, other in pairs:
-                if args.predicate and pred != args.predicate:
-                    continue
-                label = corpus.schema.inverse(pred) if way == "in" else pred
-                rows.append((depth, way, label or pred, other))
-                if other not in seen:
-                    seen.add(other)
-                    nxt.append(other)
-        frontier = nxt
-    if args.json:
-        print(json.dumps([
-            {"depth": d, "direction": w, "predicate": p, "id": o, "type": _type_of(corpus, o)}
-            for d, w, p, o in rows
-        ], indent=2))
-        return 0
-    print(f"{entity.slug}  ({entity.type})  {entity.title}")
-    for depth, way, pred, other in rows:
-        hit = corpus.entities.get(other)
-        arrow = "->" if way == "out" else "<-"
-        pad = "  " * depth
-        print(f"{pad}{way:<3} {pred:<14} {arrow} {other:<24} {hit.title if hit else '(missing)'}")
+    payload = _record(corpus, entity)
+    if args.edges:
+        payload["edges"] = (
+            [{"direction": "out", "predicate": p, "id": t} for p, t in corpus.out_edges(entity.slug)]
+            + [{"direction": "in", "predicate": corpus.schema.inverse(p) or p, "id": s}
+               for p, s in corpus.in_edges(entity.slug)]
+        )
+
+    def text() -> None:
+        print(f"{entity.slug}  ({entity.type})  {rel(corpus.root, entity.path)}")
+        for key, value in entity.fm.items():
+            print(f"  {key:<14} {value}")
+        for edge in payload.get("edges", []):
+            arrow = "->" if edge["direction"] == "out" else "<-"
+            print(f"  {edge['direction']:<3} {edge['predicate']:<14} {arrow} {edge['id']}")
+
+    _emit(args, payload, text)
     return 0
 
 
-def _type_of(corpus: Corpus, slug: str) -> str | None:
-    hit = corpus.entities.get(slug)
-    return hit.type if hit else None
-
-
-def cmd_ls(args: argparse.Namespace) -> int:
+def cmd_query(args: argparse.Namespace) -> int:
     corpus = load(args)
-    wanted = dict(pair.split("=", 1) for pair in args.where) if args.where else {}
-    rows = []
+    schema = corpus.schema
+    known = {k for t in schema.types for k in schema.fields(t)}
+    wanted = dynamic_fields(args.extra, known)
+    unknown = set(wanted) - known
+    if unknown:
+        raise Bad(f"unknown field(s) {', '.join(sorted(unknown))}")
+
+    rows: list[Entity] = []
     for e in sorted(corpus.entities.values(), key=lambda x: (x.type, x.slug)):
         if args.type and e.type != args.type:
             continue
@@ -858,69 +1010,185 @@ def cmd_ls(args: argparse.Namespace) -> int:
             continue
         if args.tag and args.tag not in as_list(e.fm.get("tags")):
             continue
-        preds = {p for p, _ in corpus.out_edges(e.slug)}
+        preds = {p for p, _ in corpus.out_edges(e.slug)} | {
+            corpus.schema.inverse(p) or p for p, _ in corpus.in_edges(e.slug)
+        }
         if args.has and args.has not in preds:
             continue
         if args.missing and args.missing in preds:
             continue
         rows.append(e)
-    if args.json:
-        print(json.dumps(
-            [{"id": e.slug, "type": e.type, "path": rel(corpus.root, e.path), **e.fm} for e in rows],
-            indent=2,
-        ))
-        return 0
-    for e in rows:
-        facet = e.fm.get("kind") or e.fm.get("status") or ""
-        print(f"{e.slug:<26} {e.type:<13} {facet!s:<12} {e.title}")
+    if args.limit:
+        rows = rows[: args.limit]
+
+    def text() -> None:
+        for e in rows:
+            facet = e.fm.get("kind") or e.fm.get("status") or ""
+            print(f"{e.slug:<26} {e.type:<13} {facet!s:<12} {e.title}")
+
+    _emit(args, [_record(corpus, e) for e in rows], text)
     return 0
 
 
-def cmd_schema(args: argparse.Namespace) -> int:
-    schema = load_schema(find_root(args.root))
-    if args.json:
-        print(json.dumps(schema.data, indent=2))
-        return 0
-    for type_, cfg in schema.types.items():
-        if schema.is_singleton(type_):
-            where = f"{cfg['path']}, one document"
-        else:
-            where = f"{cfg['path']}/{'|'.join(schema.prefixes(type_))}-NNN-slug.md"
-        print(f"\n{type_}  ({where})")
-        for name, spec in schema.attrs(type_).items():
-            if name == "type":
-                continue
-            shape = "|".join(spec["enum"]) if spec.get("enum") else spec.get("type", "text")
-            print(f"    {name:<14} {shape}{'  (required)' if spec.get('required') else ''}")
-        for name, spec in schema.rels(type_).items():
-            many = "[]" if spec.get("many") else ""
-            inv = f"  (inverse: {spec['inverse']})" if spec.get("inverse") else ""
-            print(f"    {name:<14} -> {spec['to']}{many}{inv}")
+def _walk(corpus: Corpus, start: str, *, predicate: str | None,
+          direction: str, depth: int) -> list[tuple[int, str, str, str]]:
+    """One BFS behind neighbors, impact and history — they differ only in defaults."""
+    rows: list[tuple[int, str, str, str]] = []
+    seen, frontier = {start}, [start]
+    for level in range(1, depth + 1):
+        nxt: list[str] = []
+        for slug in frontier:
+            pairs: list[tuple[str, str, str]] = []
+            if direction in ("out", "both"):
+                pairs += [("out", p, t) for p, t in corpus.out_edges(slug)]
+            if direction in ("in", "both"):
+                pairs += [("in", p, s) for p, s in corpus.in_edges(slug)]
+            for way, pred, other in pairs:
+                if predicate and pred != predicate:
+                    continue
+                label = corpus.schema.inverse(pred) if way == "in" else pred
+                rows.append((level, way, label or pred, other))
+                if other not in seen:
+                    seen.add(other)
+                    nxt.append(other)
+        frontier = nxt
+    return rows
+
+
+def _render_walk(corpus: Corpus, entity: Entity, rows: list[tuple[int, str, str, str]],
+                 args: argparse.Namespace) -> int:
+    def text() -> None:
+        print(f"{entity.slug}  ({entity.type})  {entity.title}")
+        for level, way, pred, other in rows:
+            hit = corpus.entities.get(other)
+            arrow = "->" if way == "out" else "<-"
+            print(f"{'  ' * level}{way:<3} {pred:<14} {arrow} {other:<24} "
+                  f"{hit.title if hit else '(missing)'}")
+
+    _emit(args, [{"depth": d, "direction": w, "predicate": p, "id": o,
+                  "type": _type_of(corpus, o)} for d, w, p, o in rows], text)
     return 0
 
 
-def cmd_init(args: argparse.Namespace) -> int:
-    root = Path(args.root or ".").resolve()
-    schema = load_schema(root)
-    made: list[str] = []
-    for type_, cfg in schema.types.items():
-        path = root / cfg["path"]
-        if schema.is_singleton(type_):
-            if path.is_file():
-                continue
-            path.parent.mkdir(parents=True, exist_ok=True)
-            fm = {"type": type_, "title": type_.upper() if type_ == "prd" else "Architecture"}
-            fm["created"] = date.today().isoformat()
-            lines = [l for k, v in fm.items() for l in emit_key(k, v)]
-            path.write_text(render(lines, template_for(root, type_) or ""))
-            made.append(cfg["path"])
-        elif not path.is_dir():
-            path.mkdir(parents=True, exist_ok=True)
-            (path / ".gitkeep").touch()
-            made.append(cfg["path"] + "/")
-    print("\n".join(f"created {m}" for m in made) or "nothing to do — already scaffolded")
-    print("\nnext: write knowledge/prd.md, then `kb check`")
+def cmd_neighbors(args: argparse.Namespace) -> int:
+    corpus = load(args)
+    entity = _need(corpus, args.id)
+    direction = "in" if args.in_ else "out" if args.out else "both"
+    rows = _walk(corpus, entity.slug, predicate=args.predicate,
+                 direction=direction, depth=args.depth)
+    return _render_walk(corpus, entity, rows, args)
+
+
+def cmd_impact(args: argparse.Namespace) -> int:
+    corpus = load(args)
+    entity = _need(corpus, args.id)
+    rows = _walk(corpus, entity.slug, predicate=args.predicate,
+                 direction="in" if args.reverse else "out", depth=len(corpus.entities) or 1)
+    return _render_walk(corpus, entity, rows, args)
+
+
+def cmd_history(args: argparse.Namespace) -> int:
+    corpus = load(args)
+    entity = _need(corpus, args.id)
+    rows = _walk(corpus, entity.slug, predicate=args.predicate,
+                 direction="both", depth=args.limit or len(corpus.entities) or 1)
+    return _render_walk(corpus, entity, rows, args)
+
+
+# ------------------------------------------------------------------ integrity
+
+
+def _report(args: argparse.Namespace, corpus: Corpus, findings: list[Finding]) -> int:
+    errors = [f for f in findings if f.severity == ERROR]
+    gaps = [f for f in findings if f.severity == GAP]
+
+    def text() -> None:
+        print(f"{len(corpus.entities)} entities, {len(errors)} errors, {len(gaps)} gaps")
+        if errors:
+            print("\nerrors — the corpus is broken here")
+            for f in errors:
+                print(f.line())
+        if gaps:
+            print("\ngaps — legal, but unfinished")
+            for f in gaps:
+                print(f.line())
+
+    _emit(args, {"entities": len(corpus.entities), "strict": bool(getattr(args, "strict", False)),
+                 "errors": [f.__dict__ for f in errors], "gaps": [f.__dict__ for f in gaps]}, text)
+    if errors:
+        return 1
+    return 1 if (gaps and getattr(args, "strict", False)) else 0
+
+
+def cmd_validate(args: argparse.Namespace) -> int:
+    """Per-entity well-formedness and referential integrity, khub's split."""
+    corpus = load(args)
+    findings = [f for f in check(corpus) if f.code in VALIDATE_CODES]
+    if args.target:
+        findings = [f for f in findings
+                    if f.where == args.target or f.where.startswith(f"{args.target}/")
+                    or _type_of(corpus, f.where) == args.target]
+    return _report(args, corpus, findings)
+
+
+def cmd_check(args: argparse.Namespace) -> int:
+    """Everything validate covers, plus the graph-wide gates."""
+    return _report(args, load(args), check(load(args)))
+
+
+# ------------------------------------------------------------------- install
+
+
+SKILL_TARGETS = {"opencode": ".opencode/skills", "claude": ".claude/skills",
+                 "agents": ".agents/skills"}
+
+
+def cmd_install_skills(args: argparse.Namespace) -> int:
+    """Copy the skill where a host will find it. khub's verb, khub's flags."""
+    import shutil
+
+    source = HERE.parent / "skills" / "kb"
+    if not source.is_dir():
+        raise Bad(f"no skill directory at {source}")
+    targets = args.target or ["opencode"]
+    root = find_root(args.workspace)
+    written: list[str] = []
+    for name in targets:
+        if name not in SKILL_TARGETS:
+            raise Bad(f"unknown target {name!r} — one of {', '.join(SKILL_TARGETS)}")
+        dest = _skill_dir(name, root, args.global_) / "kb"
+        written.append(str(dest))
+        if args.dry_run:
+            continue
+        shutil.copytree(source, dest, dirs_exist_ok=True,
+                        ignore=shutil.ignore_patterns("__pycache__"))
+    if args.bin and not args.dry_run:
+        binary = Path(args.bin).expanduser()
+        binary.mkdir(parents=True, exist_ok=True)
+        link = binary / "kb"
+        link.unlink(missing_ok=True)
+        link.symlink_to(HERE / "kb.py")
+        written.append(str(link))
+
+    def text() -> None:
+        for path in written:
+            print(f"{'would install' if args.dry_run else 'installed'} {path}")
+        print('\nallow it — the catch-all goes FIRST, opencode takes the last match:')
+        print('  { "permission": { "bash": { "*": "ask", "kb *": "allow" } } }')
+
+    _emit(args, {"installed": written, "dry_run": args.dry_run}, text)
     return 0
+
+
+def _skill_dir(target: str, root: Path, is_global: bool) -> Path:
+    if not is_global:
+        return root / SKILL_TARGETS[target]
+    if target == "opencode":  # opencode reads global skills under the XDG root
+        import os
+        xdg = os.environ.get("XDG_CONFIG_HOME")
+        return (Path(xdg) if xdg else Path.home() / ".config") / "opencode" / "skills"
+    return Path.home() / SKILL_TARGETS[target].lstrip(".").replace("skills", "skills", 1) \
+        if False else Path.home() / SKILL_TARGETS[target]
 
 
 def _need(corpus: Corpus, slug: str) -> Entity:
@@ -931,32 +1199,68 @@ def _need(corpus: Corpus, slug: str) -> Entity:
 
 
 def load(args: argparse.Namespace) -> Corpus:
-    root = find_root(args.root)
+    root = find_root(args.workspace)
     return scan(root, load_schema(root))
 
 
 # --------------------------------------------------------------------- main
+#
+# The verbs and flags are khub's, so what an agent learns on one transfers to the
+# other. kb implements a subset: khub's `search`, `stale`, `reindex`, `viz`,
+# `backfill` and `wire` are deliberately absent (see the README).
+
+
+def _add_format(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--format", choices=["text", "json"], default="text")
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="kb", description=__doc__.split("\n")[0])
-    parser.add_argument("-C", "--root", help="workspace root (default: nearest knowledge/ above cwd)")
+    parser.add_argument("-C", "--workspace",
+                        help="operate on this workspace (default: nearest knowledge/ above cwd)")
     # Not required: a bare `kb` prints the verb list rather than an argparse error,
     # because that listing is how a reader (and an agent) discovers the surface.
-    sub = parser.add_subparsers(dest="command", metavar="{init,schema,new,link,unlink,ls,links,check}")
+    sub = parser.add_subparsers(dest="command", metavar="<command>")
 
     p = sub.add_parser("init", help="scaffold the corpus directories and the two documents")
     p.set_defaults(fn=cmd_init)
 
     p = sub.add_parser("schema", help="the ontology: types, fields, enums, edges")
-    p.add_argument("--json", action="store_true")
+    p.add_argument("view", nargs="?", choices=["types", "show", "edges"])
+    p.add_argument("type", nargs="?")
+    _add_format(p)
     p.set_defaults(fn=cmd_schema)
 
-    p = sub.add_parser("new", help="mint one conforming entity file and print its id")
+    p = sub.add_parser("status", help="counts per type, orphans, errors, gaps")
+    _add_format(p)
+    p.set_defaults(fn=cmd_status)
+
+    p = sub.add_parser("add", help="mint one conforming entity file; --<field> <value>")
     p.add_argument("type")
-    p.add_argument("title")
-    p.add_argument("--set", action="append", metavar="FIELD=VALUE", help="repeatable")
-    p.set_defaults(fn=cmd_new)
+    p.add_argument("--id", help="explicit slug instead of a minted one")
+    p.add_argument("--body")
+    p.add_argument("--body-file", help="- for stdin")
+    _add_format(p)
+    p.set_defaults(fn=cmd_add)
+
+    p = sub.add_parser("get", help="one entity; --edges adds the derived inverses")
+    p.add_argument("id")
+    p.add_argument("--edges", action="store_true")
+    _add_format(p)
+    p.set_defaults(fn=cmd_get)
+
+    p = sub.add_parser("edit", help="change one attribute and bump updated")
+    p.add_argument("id")
+    p.add_argument("field")
+    p.add_argument("value")
+    _add_format(p)
+    p.set_defaults(fn=cmd_edit)
+
+    p = sub.add_parser("remove", help="delete an entity; refuses while an edge points at it")
+    p.add_argument("id")
+    p.add_argument("--force", action="store_true")
+    _add_format(p)
+    p.set_defaults(fn=cmd_remove)
 
     p = sub.add_parser("link", help="add a schema-checked relation")
     p.add_argument("id")
@@ -970,33 +1274,71 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("target")
     p.set_defaults(fn=cmd_link, remove=True)
 
-    p = sub.add_parser("ls", help="list entities, filtered")
-    p.add_argument("type", nargs="?")
-    p.add_argument("--where", action="append", metavar="FIELD=VALUE", help="repeatable")
+    p = sub.add_parser("query", help="filter by frontmatter; --<field> <value>")
+    p.add_argument("--type")
     p.add_argument("--tag")
     p.add_argument("--has", metavar="PREDICATE")
     p.add_argument("--missing", metavar="PREDICATE", help="the gap query")
-    p.add_argument("--json", action="store_true")
-    p.set_defaults(fn=cmd_ls)
+    p.add_argument("--limit", type=int)
+    _add_format(p)
+    p.set_defaults(fn=cmd_query)
 
-    p = sub.add_parser("links", help="edges in and out, including the derived inverses")
+    p = sub.add_parser("neighbors", help="one-hop adjacency, both directions by default")
     p.add_argument("id")
     p.add_argument("--predicate")
-    p.add_argument("--depth", type=int, default=1, help="walk transitively (blast radius)")
-    p.add_argument("--direction", choices=["in", "out", "both"], default="both")
-    p.add_argument("--json", action="store_true")
-    p.set_defaults(fn=cmd_links)
+    p.add_argument("--depth", type=int, default=1)
+    p.add_argument("--in", dest="in_", action="store_true")
+    p.add_argument("--out", action="store_true")
+    _add_format(p)
+    p.set_defaults(fn=cmd_neighbors)
 
-    p = sub.add_parser("check", help="sweep the whole corpus: errors break the build, gaps do not")
+    p = sub.add_parser("impact", help="blast radius: the transitive closure over one predicate")
+    p.add_argument("id")
+    p.add_argument("--predicate", default="depends_on")
+    p.add_argument("--reverse", action="store_true", help="ancestors instead of descendants")
+    _add_format(p)
+    p.set_defaults(fn=cmd_impact)
+
+    p = sub.add_parser("history", help="the supersession chain")
+    p.add_argument("id")
+    p.add_argument("--predicate", default="supersedes")
+    p.add_argument("--limit", type=int)
+    _add_format(p)
+    p.set_defaults(fn=cmd_history)
+
+    p = sub.add_parser("validate", help="per-entity well-formedness and referential integrity")
+    p.add_argument("target", nargs="?", help="a type or an id (default: the whole workspace)")
+    _add_format(p)
+    p.set_defaults(fn=cmd_validate)
+
+    p = sub.add_parser("check", help="graph-wide: errors break the build, gaps do not")
     p.add_argument("--strict", action="store_true", help="fail on gaps too")
-    p.add_argument("--json", action="store_true")
+    _add_format(p)
     p.set_defaults(fn=cmd_check)
+
+    p = sub.add_parser("install-skills", help="copy the skill into the agent skill directories")
+    p.add_argument("--target", action="append", choices=sorted(SKILL_TARGETS),
+                   help="repeatable (default: opencode)")
+    p.add_argument("--global", dest="global_", action="store_true")
+    p.add_argument("--bin", metavar="DIR", help="also symlink `kb` onto PATH")
+    p.add_argument("--dry-run", action="store_true")
+    _add_format(p)
+    p.set_defaults(fn=cmd_install_skills)
     return parser
+
+
+# `add` and `query` take schema-driven --<field> options argparse cannot declare.
+DYNAMIC = {"add", "query"}
 
 
 def main(argv: Sequence[str] | None = None) -> int:
     parser = build_parser()
-    args = parser.parse_args(argv)
+    argv = list(sys.argv[1:] if argv is None else argv)
+    if any(a in DYNAMIC for a in argv):
+        args, extra = parser.parse_known_args(argv)
+        args.extra = extra
+    else:
+        args, args.extra = parser.parse_args(argv), []
     if not getattr(args, "fn", None):
         parser.print_help()
         return 0

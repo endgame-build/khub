@@ -6,6 +6,19 @@ Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelo
 
 ### Added
 
+- **`id_prefix`, and enumerated ids for every minted slug.** `add` now mints
+  `<prefix>-NNN-<slug>` where a type declares `id_prefix`, and `NNN-<slug>` where it
+  does not — so a corpus reads in authoring order and an entity can be named in prose
+  by a short stable handle (`ad-004`) instead of a whole title. The number is one past
+  the highest in use, padded to three and counting past it (001, 045, 1000); each
+  prefix keeps its own sequence, so `fr-001` and `cst-001` coexist. `id_prefix` takes a
+  literal (`adr: ad`) or a by-value mapping (`{ by: kind, map: {...} }`) that puts the
+  kind in the filename, where a mislabelled entity is visible; the map must cover its
+  enum exactly or the schema is rejected at resolve time. An explicit `--id` is
+  untouched. build-lite and build-hub declare the prefixes their docs already used in
+  prose (`ad-`, `fr-`, `cst-`, `cmp-`, `fs-`, `wp-`, …); firm-ops declares none.
+  See [`docs/schema.md`](docs/schema.md#enumerated-ids).
+
 - **`kb/` — build-lite standalone**, a separate, dependency-free
   implementation of the `build-lite` preset for one build project driven by
   opencode. A drop-in directory: `skills/kb/SKILL.md` for the agent, and
@@ -13,16 +26,26 @@ Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelo
   Eight commands — scaffold an entity, keep an edge honest, walk the derived graph,
   sweep the corpus — in ~850 lines of stdlib Python against khub's 7,000 and six
   dependencies. `build.schema.yaml` is khub's `core.yaml` base and the build-lite
-  preset combined into one file in khub's own vocabulary, with one commented delta
-  (`id_prefix` per type), and it is the only file to edit to add a field.
-  `tests/test_build_lite_standalone.py` holds that contract: it diffs the shipped
-  schema against a live `khub init build-lite` scaffold, generates the body
-  templates from the preset's own renderer, and runs the compatibility claim in
-  both directions. The rationale, the option comparison, and the four khub invariants
+  preset combined into one file in khub's own vocabulary, and it is the only file to
+  edit to add a field.
+  `build.schema.yaml` is a verbatim concatenation of `presets/core.yaml` and
+  `presets/build-lite/schema.yaml`, so it is 1:1 by construction;
+  `tests/test_build_lite_standalone.py` diffs it against both sources key by key and
+  fails on any difference at all, generates the body templates from the preset's own
+  renderer, checks that both tools mint the same id, and runs the compatibility claim
+  in both directions. The rationale, the option comparison, and the four khub invariants
   it deliberately breaks are in
   [`docs/build-lite-standalone.md`](docs/build-lite-standalone.md); it ships nothing
   into the `khub` package and changes no khub behaviour. A corpus it authors
   validates and checks clean under `khub init build-lite`, unmodified.
+
+### Migration
+
+Existing entities keep their slugs — nothing renames anything on disk, and `--id`
+still writes exactly what you pass. Only newly minted ids change shape, so a
+workspace that predates this release ends up with a mix (`acme-corp` beside
+`002-globex`). Renaming the old ones is a manual `git mv` plus a reference sweep
+until `khub rename` ships.
 
 ## [0.12.0] — 2026-07-25
 

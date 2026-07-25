@@ -18,24 +18,29 @@ knowledge/components/         cmp-NNN                     what exists, what talk
 specs/                        fs-NNN                      what we are building now
 ```
 
-`kb` does the four things you cannot do for yourself. Everything else — reading,
-searching, writing prose — use your own tools, they are better at it.
+`kb` does what you cannot do for yourself. Everything else — reading, searching,
+writing prose — use your own tools, they are better at it.
 
-Run it as `kb`. If that is not on PATH, it is `python3 kb/scripts/kb.py`
-from the project root; run it once with no arguments to see the verb list.
+Run it as `kb`. If that is not on PATH, it is `python3 kb/scripts/kb.py` from the
+project root; run it with no arguments for the verb list. **The verbs and flags
+are khub's**, so anything you know from `khub` works here.
 
 ```bash
 kb schema                  # the exact fields, enums and edges. Read this before writing frontmatter.
-kb new <type> "<title>" --set kind=... --set status=...    # mints the id and the file
-kb link <id> <predicate> <target>                          # a checked edge; unlink removes
-kb links <id> [--depth 3] [--predicate p]                  # edges IN and OUT, including derived ones
-kb ls [type] [--where status=active] [--missing realized_in]
-kb check                   # sweep the whole corpus. Run it before you finish.
+kb add <type> --title "..." --kind ... --status ...   # mints the id and the file
+kb link <id> <predicate> <target>                     # a checked edge; unlink removes
+kb neighbors <id> [--depth 3]      # edges IN and OUT, including the derived inverses
+kb impact <id> [--predicate p]     # blast radius; history <id> walks supersedes
+kb query [--type t] [--status active] [--missing realized_in]
+kb get <id> --edges                # one entity, with what points at it
+kb edit <id> <field> <value>       # one attribute; relations go through link
+kb validate                # per-entity errors only
+kb check                   # the whole corpus. Run it before you finish.
 ```
 
 ## The loop
 
-1. `kb new` the entity — it mints `ad-007-<slug>`, the frontmatter, and the body
+1. `kb add` the entity — it mints `ad-007-<slug>`, the frontmatter, and the body
    template with a hint comment under each heading. The whole vocabulary lives in
    `kb/scripts/build.schema.yaml`; `kb schema` prints it.
 2. Open the file and write the prose. Replace the hint comments; keep the `##`
@@ -75,11 +80,13 @@ section of `prd.md` or `arc42.md`, or it is `requirement.kind: constraint`.
 - **Never invent a type, a field, or a predicate.** `kb schema` is the whole
   vocabulary; an unknown field is a `check` error, not an extension.
 - **Never grep for what points at something** — the reverse edge is not in the
-  file. `kb links <id>` computes it. `kb links <id> --depth 3` is the blast radius.
+  file. `kb neighbors <id>` computes it, and `kb impact <id>` is the blast radius.
 - **Ids are the currency.** Reference documents by id (`ad-004-postgres`) in
   frontmatter *and* in prose, never by title or path.
-- **`kb new` mints ids**; never name a file yourself. The prefix must match the
-  kind (`cst-` for a constraint), and `check` enforces it.
+- **`kb add` mints ids**; never name a file yourself. Ids are
+  `<prefix>-NNN-<slug>`, the prefix must match the kind (`cst-` for a
+  constraint), and `check` enforces both. Refer to entities by that id in prose
+  too — `ad-004` is the handle.
 - **A relation to a document that does not exist yet is rejected.** Create the
   target first, then link.
 - One statement per requirement. If it needs "and", it is two requirements.

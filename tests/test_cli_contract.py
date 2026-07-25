@@ -77,7 +77,7 @@ def test_add_get_query_emit_qualified_id(seeded: Path, monkeypatch: pytest.Monke
     added = runner.invoke(app, ["add", "client", "--name", "Beta", "--format", "json"])
     assert added.exit_code == 0, added.output
     rec = json.loads(added.output)
-    assert (rec["id"], rec["type"], rec["slug"]) == ("client/beta", "client", "beta")
+    assert (rec["id"], rec["type"], rec["slug"]) == ("client/001-beta", "client", "001-beta")
 
     got = runner.invoke(app, ["get", "client/acme", "--format", "json"])
     assert got.exit_code == 0, got.output

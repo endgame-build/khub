@@ -58,6 +58,32 @@ Two further keys sit beside the storage config and tune what `check` demands of 
 - `required` — singleton-only: `check` reports a missing required singleton (e.g. a workspace without its `prd.md`).
 - `orphan` — `orphan: true` declares that edge-less is this type's *expected* state, so `check` stops reporting its entities as orphans, `--strict` stops failing on them, `query --orphan` stops flagging them and the `status` count stops including them. Default `false`. Use it for a narrative root nothing points at by design: build-hub declares it on all five narrative singletons (`prd`, `roadmap`, `glossary`, `arc42`, `erd`) and build-lite on its two, because every stored edge in those presets points *up* the durability ladder and the documents sit above its top — so orphan-ness there is a finding no authoring could ever close, and without the flag `check --strict` could not go green on a correct workspace. Unlike `required` this is **not** singleton-only: any type whose members are legitimately unwired may declare it, and a singleton that *does* carry relations is still swept. It removes no signal — a missing required edge is still reported by required-completeness, which names the field.
 
+### Enumerated ids
+
+Every minted slug carries an ordinal, so a corpus reads in authoring order and an entity can be named in prose by a short stable handle (`ad-004`) rather than a whole title. The shape is:
+
+```
+<prefix>-<number>-<slug>     when the type declares id_prefix
+<number>-<slug>              when it does not
+```
+
+The number is one past the highest already in use, zero-padded to three, and it keeps counting past that (`001`, `045`, `1000`). An explicit `--id` is left exactly as given — the caller named it — but the next minted id still counts from it.
+
+`id_prefix` takes either a literal token, or a mapping that picks one by the value of another attribute:
+
+```yaml
+adr:
+  id_prefix: ad                  # ad-001-use-postgres
+requirement:
+  id_prefix: { by: kind, map: { functional: fr, constraint: cst, business-rule: br } }
+  attributes:
+    kind: { enum: [functional, constraint, business-rule], required: true }
+```
+
+The by-value form puts the kind in the filename, which is where a mislabelled entity becomes visible. Its `by` must name an attribute of that type declaring an `enum`, and its `map` must cover exactly that enum's members — otherwise a legal value would mint no prefix, and the schema is rejected at resolve time rather than failing later on one unlucky entity. Each prefix keeps its own sequence, so `fr-001` and `cst-001` coexist and the number reads as "the first constraint". A missing `by` value (capture is never blocked) falls back to a bare `NNN-slug`.
+
+build-lite and build-hub declare the prefixes their docs already used in prose (`ad-`, `fr-`, `cst-`, `cmp-`, `fs-`, `wp-`, …); firm-ops declares none, so its entities are numbered without one.
+
 ### Body templates
 
 A sibling mechanism, activated by convention: if `.khub/templates/<type>.yaml` exists, that md type is *templated*. `khub init` flattens the preset's `templates/` dir into `.khub/templates/` (an editable workspace copy, like schema.yaml itself), creates every missing md singleton from its template, and `khub add` seeds new bodies from it (`--no-template` opts out). `validate` then holds every instance body to the template: its `sections[].heading` list must appear in the body's H2 sequence as an ordered subsequence — extras allowed, capture never blocked. A template is small YAML:

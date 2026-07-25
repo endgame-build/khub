@@ -111,7 +111,7 @@ def test_mint_suffix_collision_json(fws: Path, monkeypatch: pytest.MonkeyPatch) 
     monkeypatch.chdir(fws)
     first = json.loads(runner.invoke(app, ["add", "fragment", "--stage", "raw", "--format", "json"]).output)
     second = json.loads(runner.invoke(app, ["add", "fragment", "--stage", "raw", "--format", "json"]).output)
-    assert first["slug"] == "fragment" and second["slug"] == "fragment-2"
+    assert first["slug"] == "001-fragment" and second["slug"] == "002-fragment"
 
 
 @pytest.mark.integration
@@ -181,7 +181,7 @@ def test_mixed_workspace_scan_and_gates(fws: Path, seed: Seed, monkeypatch: pyte
     runner.invoke(app, ["add", "project", "--id", "demo", "--client", "acme",
                         "--updated", "2026-06-01"])
 
-    for type_, expect in (("client", "acme"), ("fragment", "fragment"), ("project", "demo")):
+    for type_, expect in (("client", "acme"), ("fragment", "001-fragment"), ("project", "demo")):
         rows = json.loads(runner.invoke(app, ["query", "--type", type_, "--format", "json"]).output)
         assert [r["slug"] for r in rows] == [expect]
 
@@ -202,7 +202,7 @@ def test_malformed_json_is_contained(fws: Path, monkeypatch: pytest.MonkeyPatch)
     payload = json.loads(checked.output)
     assert "fragments/broken.json" in payload["malformed"]
     rows = json.loads(runner.invoke(app, ["query", "--type", "fragment", "--format", "json"]).output)
-    assert [r["slug"] for r in rows] == ["fragment"]  # the good entity still loads
+    assert [r["slug"] for r in rows] == ["001-fragment"]  # the good entity still loads
 
 
 @pytest.mark.integration

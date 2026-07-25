@@ -172,7 +172,7 @@ def test_cli_no_template_flag(ws: Path, monkeypatch) -> None:
     monkeypatch.chdir(ws)
     r = runner.invoke(app, ["add", "note", "--title", "Third", "--no-template"])
     assert r.exit_code == 0, r.output
-    body = (ws / "notes" / "third.md").read_text()
+    body = (ws / "notes" / "001-third.md").read_text()
     assert "## Summary" not in body
 
 
@@ -213,7 +213,7 @@ def test_validate_reports_missing_section(ws: Path) -> None:
     result.path.write_text(text)
     report = validate(ws)
     assert not report.ok
-    err = next(e for e in report.errors if e.slug == "broken")
+    err = next(e for e in report.errors if e.slug == result.slug)
     assert err.field == "body"
     assert "Details" in err.reason
 

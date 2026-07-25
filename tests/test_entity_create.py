@@ -55,9 +55,9 @@ def test_slug_minted_from_id_name_or_type(fresh_ws: Path, seed: Seed) -> None:
     by_id = create(fresh_ws, "client", {"name": "Acme Corp"}, id_="explicit")
     assert by_id.slug == "explicit"
     by_name = create(fresh_ws, "client", {"name": "Beta Corp"})
-    assert by_name.slug == "beta-corp"
+    assert by_name.slug == "001-beta-corp"
     by_type = create(fresh_ws, "opportunity", {"client": "initech", "owner": "noor", "stage": "prospect"})
-    assert by_type.slug == "opportunity"
+    assert by_type.slug == "001-opportunity"
 
 
 @pytest.mark.unit
@@ -159,7 +159,7 @@ def test_collision_suffix_is_deterministic(fresh_ws: Path, seed: Seed) -> None:
     first = create(fresh_ws, "client", {"name": "Acme"})
     second = create(fresh_ws, "client", {"name": "Acme"})
     third = create(fresh_ws, "client", {"name": "Acme"})
-    assert (first.slug, second.slug, third.slug) == ("acme", "acme-2", "acme-3")
+    assert (first.slug, second.slug, third.slug) == ("001-acme", "002-acme", "003-acme")
 
 
 @pytest.mark.unit
@@ -189,8 +189,8 @@ def test_cli_create_active(fresh_ws: Path, seed: Seed, monkeypatch) -> None:
     monkeypatch.chdir(fresh_ws)
     result = runner.invoke(app, ["add", "opportunity", "--client", "initech", "--owner", "noor", "--stage", "prospect"])
     assert result.exit_code == 0
-    assert "Created opportunity 'opportunity' (active)" in result.output
-    written = fresh_ws / "opportunities" / "opportunity" / "_index.md"
+    assert "Created opportunity '001-opportunity' (active)" in result.output
+    written = fresh_ws / "opportunities" / "001-opportunity" / "_index.md"
     assert written.exists()
     meta = frontmatter.load(str(written)).metadata
     assert meta["draft"] is False
@@ -204,8 +204,8 @@ def test_cli_missing_required_saves_active(fresh_ws: Path, seed: Seed, monkeypat
     monkeypatch.chdir(fresh_ws)
     result = runner.invoke(app, ["add", "opportunity", "--stage", "prospect"])
     assert result.exit_code == 0
-    assert "Created opportunity 'opportunity' (active)" in result.output
-    written = fresh_ws / "opportunities" / "opportunity" / "_index.md"
+    assert "Created opportunity '001-opportunity' (active)" in result.output
+    written = fresh_ws / "opportunities" / "001-opportunity" / "_index.md"
     assert written.exists()
     assert frontmatter.load(str(written)).metadata["draft"] is False
 
@@ -217,8 +217,8 @@ def test_cli_add_draft_flag(fresh_ws: Path, seed: Seed, monkeypatch) -> None:
     monkeypatch.chdir(fresh_ws)
     result = runner.invoke(app, ["add", "opportunity", "--client", "initech", "--owner", "noor", "--stage", "prospect", "--draft"])
     assert result.exit_code == 0
-    assert "Created opportunity 'opportunity' (draft)" in result.output
-    written = fresh_ws / "opportunities" / "opportunity" / "_index.md"
+    assert "Created opportunity '001-opportunity' (draft)" in result.output
+    written = fresh_ws / "opportunities" / "001-opportunity" / "_index.md"
     assert frontmatter.load(str(written)).metadata["draft"] is True
 
 
@@ -244,7 +244,7 @@ def test_cli_strict_rejects_unknown_field(fresh_ws: Path, seed: Seed, monkeypatc
     assert "Unknown field 'vibe' rejected under --strict" in strict.output
     loose = runner.invoke(app, ["add", "opportunity", "--client", "initech", "--owner", "noor", "--stage", "prospect", "--vibe", "high"])
     assert loose.exit_code == 0
-    written = fresh_ws / "opportunities" / "opportunity" / "_index.md"
+    written = fresh_ws / "opportunities" / "001-opportunity" / "_index.md"
     assert frontmatter.load(str(written)).metadata["vibe"] == "high"
 
 
@@ -255,7 +255,7 @@ def test_cli_meeting_flat_with_engagement(fresh_ws: Path, seed: Seed, monkeypatc
     monkeypatch.chdir(fresh_ws)
     result = runner.invoke(app, ["add", "meeting", "--engagement", "initech-pov", "--call-type", "client", "--source", "recording", "--date", "2026-06-19"])
     assert result.exit_code == 0
-    written = fresh_ws / "meetings" / "meeting.md"
+    written = fresh_ws / "meetings" / "001-meeting.md"
     assert written.exists()
     assert frontmatter.load(str(written)).metadata["engagement"] == "initech-pov"
 
@@ -273,4 +273,4 @@ def test_cli_explicit_id_and_collision(fresh_ws: Path, seed: Seed, monkeypatch) 
     assert "Slug 'acme' is already taken in client" in second.output
     assert not (fresh_ws / "clients" / "acme-2.md").exists()
     minted = runner.invoke(app, ["add", "client", "--name", "Beta Corp"])
-    assert minted.exit_code == 0 and (fresh_ws / "clients" / "beta-corp.md").exists()
+    assert minted.exit_code == 0 and (fresh_ws / "clients" / "001-beta-corp.md").exists()

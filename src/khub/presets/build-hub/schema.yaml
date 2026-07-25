@@ -118,6 +118,7 @@ entities:
   capability:
     layout: file
     path: knowledge/product/capabilities
+    id_prefix: cap
     attributes:
       title:    { required: true }   # override core OKF title -> required (slug source)
       facet_id: { type: text }       # UCAP-XXX — joins the facet-synthesis inventory
@@ -125,6 +126,7 @@ entities:
   requirement:
     layout: file
     path: knowledge/product/requirements
+    id_prefix: { by: kind, map: { functional: fr, constraint: cst, business-rule: br } }
     attributes:
       title:    { required: true }
       kind:     { enum: [functional, constraint, business-rule], required: true }
@@ -138,6 +140,7 @@ entities:
   pdr:
     layout: file
     path: knowledge/product/decisions
+    id_prefix: pd
     attributes:
       title:  { required: true }
       status: { enum: [proposed, accepted, rejected], required: true }
@@ -149,6 +152,7 @@ entities:
   adr:
     layout: file
     path: knowledge/architecture/decisions
+    id_prefix: ad
     attributes:
       title:    { required: true }
       status:   { enum: [proposed, accepted, rejected], required: true }
@@ -191,6 +195,7 @@ entities:
   boundary:
     layout: file
     path: knowledge/architecture/boundaries
+    id_prefix: bound
     attributes:
       title:       { required: true }
       scope:       { enum: [domain, api, data, system] }
@@ -203,6 +208,7 @@ entities:
   quality-attribute:
     layout: file
     path: knowledge/architecture/quality-attributes
+    id_prefix: qa
     attributes:
       title:       { required: true }
       category:    { type: text }       # reliability, security, performance, ...
@@ -216,6 +222,7 @@ entities:
   component:
     layout: file
     path: knowledge/architecture/components
+    id_prefix: cmp
     attributes:
       title: { required: true }
       kind:  { enum: [service, library, external], required: true }
@@ -268,6 +275,7 @@ entities:
   feature-spec:
     layout: file
     path: specs/feature-specs
+    id_prefix: fs
     attributes:
       title:  { required: true }
       status: { enum: [planned, active, done, dropped], required: true }
@@ -280,6 +288,7 @@ entities:
   test-spec:
     layout: file
     path: specs/test-specs
+    id_prefix: ts
     attributes:
       title: { required: true }
     relations:
@@ -288,6 +297,7 @@ entities:
   work-package:
     layout: file
     path: specs/work-packages
+    id_prefix: wp
     attributes:
       title:  { required: true }
       status: { enum: [planned, active, done, dropped], required: true }

@@ -54,6 +54,32 @@ class ResolvedRelation:
 
 
 @dataclass(frozen=True)
+class IdPrefix:
+    """A type's enumerated-id policy: a literal prefix, or one per enum member.
+
+    See ``TypeDecl.id_prefix``. Frozen and tuple-backed so ``ResolvedType`` stays
+    hashable; ``by``/``members`` are empty for the literal form.
+    """
+
+    literal: str | None = None
+    by: str | None = None
+    members: tuple[tuple[str, str], ...] = ()
+
+    def resolve(self, attributes: dict[str, Any]) -> str | None:
+        """The prefix for one entity's attributes, or None when its ``by`` is absent."""
+        if self.literal is not None:
+            return self.literal
+        value = attributes.get(self.by or "")
+        return dict(self.members).get(value) if isinstance(value, str) else None
+
+    @property
+    def all(self) -> tuple[str, ...]:
+        if self.literal is not None:
+            return (self.literal,)
+        return tuple(dict.fromkeys(prefix for _, prefix in self.members))
+
+
+@dataclass(frozen=True)
 class ResolvedType:
     """One resolved entity type: base merged in, overrides applied, predicates resolved."""
 
@@ -66,6 +92,8 @@ class ResolvedType:
     required: bool = False
     # See TypeDecl.orphan: this type's instances are exempt from the orphan sweep.
     orphan: bool = False
+    # See TypeDecl.id_prefix: `add` mints `<prefix>-NNN-<slug>` when this is set.
+    id_prefix: IdPrefix | None = None
 
     @property
     def collection_relpath(self) -> str:

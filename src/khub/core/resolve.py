@@ -17,13 +17,21 @@ from ruamel.yaml import YAML
 
 from khub.core.errors import LocatedError
 from khub.core.model import (
+    IdPrefix,
     ResolvedAttribute,
     ResolvedRelation,
     ResolvedSchema,
     ResolvedType,
     StorageConfig,
 )
-from khub.core.schema_model import AttrDecl, BaseBlock, RelationDecl, SchemaFile, TypeDecl
+from khub.core.schema_model import (
+    AttrDecl,
+    BaseBlock,
+    IdPrefixDecl,
+    RelationDecl,
+    SchemaFile,
+    TypeDecl,
+)
 
 _yaml = YAML(typ="safe")
 
@@ -98,7 +106,16 @@ def _resolve_type(
         relations=relations,
         required=decl.required,
         orphan=decl.orphan,
+        id_prefix=_id_prefix(decl.id_prefix),
     )
+
+
+def _id_prefix(decl: str | IdPrefixDecl | None) -> IdPrefix | None:
+    if decl is None:
+        return None
+    if isinstance(decl, str):
+        return IdPrefix(literal=decl)
+    return IdPrefix(by=decl.by, members=tuple(decl.map.items()))
 
 
 def _attr(name: str, ad: AttrDecl, *, overridden: bool) -> ResolvedAttribute:

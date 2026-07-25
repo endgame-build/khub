@@ -56,6 +56,17 @@ class RelationDecl(_Strict):
     acyclic: bool = False
 
 
+class IdPrefixDecl(_Strict):
+    """A prefix chosen by the value of another attribute (``by``), one per enum member.
+
+    ``requirement`` mints ``fr-`` for a functional and ``cst-`` for a constraint, so
+    the prefix carries the kind and a mislabelled file is visible in its filename.
+    """
+
+    by: str
+    map: dict[str, str]
+
+
 class TypeDecl(_Strict):
     """One entity type's storage config plus its attribute/relation deltas.
 
@@ -81,8 +92,38 @@ class TypeDecl(_Strict):
     # singleton that DOES carry relations should still be swept, and a non-
     # singleton type may legitimately be edge-less.
     orphan: bool = False
+    # Enumerated ids: `add` mints `<prefix>-NNN-<slug>` instead of a bare slug, with
+    # NNN the next free number for that prefix. A convention several presets already
+    # carried in prose (`ad-NNN`, `fr-NNN`) and every author had to type by hand into
+    # `--id`; declaring it makes the schema mint it. Absent = khub's plain slug.
+    id_prefix: str | IdPrefixDecl | None = None
     attributes: dict[str, AttrDecl] = {}
     relations: dict[str, RelationDecl] = {}
+
+    @model_validator(mode="after")
+    def _id_prefix_matches_its_enum(self) -> TypeDecl:
+        """A by-value prefix must name a declared enum and cover every member.
+
+        Otherwise a legal `kind` mints no id, and the failure surfaces at `add`
+        time on one unlucky entity rather than when the schema is read.
+        """
+        spec = self.id_prefix
+        if not isinstance(spec, IdPrefixDecl):
+            return self
+        attr = self.attributes.get(spec.by)
+        if attr is None or not attr.enum:
+            raise ValueError(
+                f"id_prefix.by '{spec.by}' must name an attribute of this type "
+                "that declares an enum"
+            )
+        missing = [member for member in attr.enum if member not in spec.map]
+        unknown = [key for key in spec.map if key not in attr.enum]
+        if missing or unknown:
+            raise ValueError(
+                f"id_prefix.map must cover exactly {spec.by}'s enum; "
+                f"missing {missing or '[]'}, unknown {unknown or '[]'}"
+            )
+        return self
 
     @model_validator(mode="after")
     def _storage_matrix(self) -> TypeDecl:
