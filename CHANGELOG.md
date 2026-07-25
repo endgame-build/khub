@@ -2,6 +2,26 @@
 
 Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); khub is pre-release.
 
+## [0.14.1] — 2026-07-25
+
+Repository only — the built wheel is byte-identical to 0.14.0. The eval harness that produced
+0.14.0's findings was run from a scratch directory and existed nowhere in the repo, so nothing
+in 0.14.0 was reproducible by anyone else.
+
+### Added
+
+- **`tests/eval/run_build_lite.py`** — the build-lite retarget of the wiring eval, with the
+  three task sets the 0.14.0 work was measured on: `narrative` (27 ordered engineering asks,
+  adherence end to end), `statements` (8 bare facts, isolating activation), and `cues` (one
+  fact × four imperatives, isolating the cue word with the failing variant as an in-run
+  control). It overrides three firm-ops-shaped things and edits nothing in `base.py`/`run.py`:
+  `preflight` asserts the PATH khub rather than force-installing over the operator's global
+  binary, `build_wired` takes the preset as a parameter and can lay a workspace inside a copy
+  of a real repo, and the turn cap is a flag — `run.py`'s hardcoded 14 assumes an empty
+  workspace, and a smoke run on a real codebase hit it mid-exploration.
+- **`tests/eval/README.md`** documents both, and states the rule the design depends on: read
+  results from in-run controls, never from cross-run baselines.
+
 ## [0.14.0] — 2026-07-25
 
 An agentic eval on an unfamiliar codebase (27 tasks over a copy of `httpie/cli`, wired vs

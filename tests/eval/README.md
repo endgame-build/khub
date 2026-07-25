@@ -47,6 +47,35 @@ Off-rails categories: `F1 bypass-write`, `F2 bypass-read`, `F3 khub-misuse`,
 batch + machine-checkable intents) · `run.py` (runner + scorer) · `report.py`
 (scorecard + taxonomy).
 
+## build-lite: `run_build_lite.py`
+
+The firm-ops harness (`run.py` + `tasks.py`) measures an empty workspace. `run_build_lite.py`
+measures a preset laid down INSIDE a copy of a real code repo, so the agent has source to read
+while it captures — which is the situation khub actually ships into.
+
+```
+export PATH=<venv-with-khub>/bin:$PATH        # preflight asserts the pinned build; never installs
+python run_build_lite.py --seed-repo <repo-copy> --conditions wired,unwired --reps 1
+python run_build_lite.py --task-set cues --reps 5 --conditions wired --seed-repo <repo-copy>
+```
+
+Three task sets (`--task-set`), each isolating one question:
+
+| set | n | question |
+|---|---|---|
+| `narrative` (default) | 27 | wiring adherence end to end, ordered and accumulating |
+| `statements` | 8 | activation — does a bare stated fact become a record? |
+| `cues` | 4 | which imperative triggers capture, with the failing variant as in-run control |
+
+It overrides exactly three firm-ops-shaped things and edits nothing in `base.py`/`run.py`:
+`preflight` asserts the PATH khub instead of force-installing over the operator's global one,
+`build_wired` takes the preset as a parameter and can seed a real repo, and the turn cap is a
+flag (`--max-turns`, default 30 — `run.py`'s hardcoded 14 assumes an empty workspace, and a
+smoke run hit it mid-exploration on a real codebase).
+
+**Read results from in-run controls only.** Cross-run comparisons are unsafe: the turn cap
+differs from the firm-ops harness, and see the confound below.
+
 ## Known confound: the operator's user-level CLAUDE.md
 
 The agents under test run as the operator, so `~/.claude/CLAUDE.md` is in their context
