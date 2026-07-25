@@ -14,6 +14,7 @@ import sys
 import tempfile
 from pathlib import Path
 
+sys.dont_write_bytecode = True  # a __pycache__ in the skill dir would eat a file-listing slot
 spec = importlib.util.spec_from_file_location("bl", Path(__file__).parent / "skill" / "bl.py")
 assert spec and spec.loader
 bl = importlib.util.module_from_spec(spec)

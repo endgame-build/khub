@@ -775,7 +775,9 @@ def load(args: argparse.Namespace) -> Corpus:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="bl", description=__doc__.split("\n")[0])
     parser.add_argument("-C", "--root", help="workspace root (default: nearest knowledge/ above cwd)")
-    sub = parser.add_subparsers(dest="command", required=True)
+    # Not required: a bare `bl` prints the verb list rather than an argparse error,
+    # because that listing is how a reader (and an agent) discovers the surface.
+    sub = parser.add_subparsers(dest="command", metavar="{init,schema,new,link,unlink,ls,links,check}")
 
     p = sub.add_parser("init", help="scaffold the corpus directories and the two documents")
     p.set_defaults(fn=cmd_init)
@@ -827,7 +829,11 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    args = build_parser().parse_args(argv)
+    parser = build_parser()
+    args = parser.parse_args(argv)
+    if not getattr(args, "fn", None):
+        parser.print_help()
+        return 0
     try:
         return int(args.fn(args))
     except Bad as exc:

@@ -93,9 +93,35 @@ the skill, the schema, the templates, and the tool.
   templates/*.md    4 body templates; their `##` headings are the body contract
 ```
 
-`cp -r` installs it. The same directory works verbatim in Claude Code
-(`.claude/skills/`) — opencode reads Claude's skill locations too, and the
-frontmatter uses only `name` and `description`, which both hosts accept.
+`lite/install.sh` (or a bare `cp -r`) installs it. The same directory works
+verbatim in Claude Code (`.claude/skills/`) — opencode reads Claude's skill
+locations too, and the frontmatter uses only `name` and `description`, which both
+hosts accept.
+
+### Why one script, not one script per verb
+
+`add.py` / `link.py` / `validate.py` as separate files is the obvious
+decomposition, and it loses on two counts.
+
+**It breaks the mechanism it is meant to serve.** When a skill loads, opencode
+lists its files for the model — `ripgrep.find({ pattern: "!**/SKILL.md", limit:
+10 })`, followed by *"Note: file list is sampled."* Ten. The install directory
+holds six files, so all six are always visible. Eight verb scripts plus a shared
+core, `schema.json` and four templates is fourteen, and which four vanish is
+whatever ripgrep happened not to reach. Verb names would become *less* reliably
+discoverable, not more, and `SKILL.md` already lists all eight in six lines.
+
+**The verbs are not independent programs.** Roughly 310 of the 700 lines are the
+frontmatter profile, the schema, the corpus scan, and the edge computation, and
+every verb needs most of it. Splitting therefore means a shared `_core.py` plus
+seven ~30-line wrappers: eight files and slightly more code for exactly the same
+logic. The alternative — each script parsing frontmatter its own way — is how two
+readers start disagreeing about the same file.
+
+What the decomposition is actually reaching for is that the verbs should be
+legible. They are: `bl` with no arguments prints all eight with one-line
+descriptions, and `SKILL.md` leads with the same list. If per-verb entry points
+are ever wanted for a human's fingers, symlinks cost nothing and change no code.
 
 ### opencode specifics that shaped it
 
@@ -104,10 +130,10 @@ the doc sources in `packages/web/src/content/docs` and the implementing
 TypeScript were read instead):
 
 - **Skills are first-class and bundle scripts.** Loading a skill hands the model
-  the skill's absolute base directory plus a **file listing capped at 10
-  entries**. The install directory holds 6 files besides `SKILL.md` — deliberate
-  headroom, and the reason `README.md`, the tests, and the opencode extras live
-  outside it.
+  the skill's absolute base directory plus a file listing that is **capped at 10
+  entries and explicitly described to the model as sampled**. The install
+  directory holds 6 files besides `SKILL.md` — deliberate headroom, and the
+  reason `README.md`, the tests, and the opencode extras live outside it.
 - **No `allowed-tools`.** opencode recognizes only `name`, `description`,
   `license`, `compatibility`, `metadata`. `name` must match the directory name.
 - **Permissions match per sub-command, last rule wins.** The shell tool

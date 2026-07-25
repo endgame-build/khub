@@ -13,11 +13,14 @@ how to run it.
 The whole product is `skill/`. Copy it in:
 
 ```bash
-mkdir -p .opencode/skills
-cp -r lite/skill .opencode/skills/build-lite
-ln -s "$PWD/.opencode/skills/build-lite/bl.py" ~/.local/bin/bl   # optional, but nicer
+lite/install.sh --bin ~/.local/bin     # or: cp -r lite/skill .opencode/skills/build-lite
 bl init && bl check
 ```
+
+`install.sh` targets `.opencode/skills/` by default; `--claude` and `--agents`
+add the other two locations, `--global` installs to the machine-wide equivalents
+(XDG-correct for opencode), and `--bin DIR` symlinks `bl` onto PATH. Re-run it to
+upgrade.
 
 `.claude/skills/` and `.agents/skills/` work identically — opencode reads all
 three, and the skill is plain SKILL.md with no host-specific frontmatter.
