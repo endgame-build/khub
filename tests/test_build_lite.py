@@ -172,3 +172,22 @@ def test_every_shipped_preset_declares_a_capture_trigger() -> None:
         resolved = resolve([CORE, PRESETS / preset / "schema.yaml"])
         missing = [n for n, ty in resolved.types.items() if not ty.when]
         assert not missing, f"{preset}: types with no `when`: {missing}"
+
+
+@pytest.mark.integration
+def test_every_singleton_cue_links_its_own_file() -> None:
+    """A singleton's cue says "edit the existing document" — it has to say WHICH.
+
+    The link is authored in the `when` prose rather than derived, which buys wording
+    control and costs the chance of a link that disagrees with `path`. This is that
+    check: the declared path must appear in the cue, so a moved singleton or a typo'd
+    link fails here instead of sending an agent to a file that does not exist.
+    """
+    for preset in ("firm-ops", "build-hub", "build-lite"):
+        resolved = resolve([CORE, PRESETS / preset / "schema.yaml"])
+        for name, ty in resolved.types.items():
+            if ty.storage.layout != "singleton":
+                continue
+            assert ty.storage.path and ty.storage.path in (ty.when or ""), (
+                f"{preset}/{name}: `when` does not link its own path {ty.storage.path!r}"
+            )

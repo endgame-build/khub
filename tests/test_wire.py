@@ -9,6 +9,7 @@ from typer.testing import CliRunner
 
 from khub.cli.main import app
 from khub.core.wire import BEGIN, END, wire
+from khub.core.workspace import init_workspace
 
 runner = CliRunner()
 
@@ -66,6 +67,26 @@ def test_wire_bare_noop_when_none(fresh_ws: Path) -> None:
 
 
 @pytest.mark.integration
+@pytest.mark.integration
+def test_singleton_cues_carry_their_file_link(tmp_path: Path) -> None:
+    """The block tells an agent to edit the existing document — and now says which.
+
+    build-lite's two singletons are the case: without the link, "edit the existing
+    document, never add a second" leaves the agent to introspect or guess the path.
+    """
+    ws = tmp_path / "ws"
+    init_workspace("build-lite", ws)
+    wire(ws, claude=True, agents=True)
+
+    for name in ("CLAUDE.md", "AGENTS.md"):
+        text = (ws / name).read_text()
+        assert "[knowledge/prd.md](knowledge/prd.md)" in text, name
+        assert "[knowledge/arc42.md](knowledge/arc42.md)" in text, name
+        # a non-singleton is written by `khub add`, so its cue names no path
+        adr_line = next(ln for ln in text.splitlines() if ln.startswith("- `adr`"))
+        assert "](" not in adr_line
+
+
 def test_wire_is_idempotent(fresh_ws: Path) -> None:
     wire(fresh_ws, claude=True)
     before = (fresh_ws / "CLAUDE.md").read_text(encoding="utf-8")

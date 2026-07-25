@@ -2,6 +2,20 @@
 
 Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); khub is pre-release.
 
+## [0.17.0] — 2026-07-25
+
+### Changed
+
+- **A singleton's capture cue now links its own file.** The wired block told an agent to
+  "edit the existing document, never add a second" without saying *which* document, so it
+  had to run `khub schema show prd` or guess a path. All seven singleton cues across
+  build-lite and build-hub now carry a Markdown link to their declared `path`. Content
+  only — `wire` already emitted `when` verbatim, so no code changed. The link is authored
+  rather than derived to keep the wording the preset author's; a test holds every shipped
+  singleton cue to containing its own `path`, so a moved file or a typo'd link fails the
+  suite instead of misdirecting an agent. firm-ops declares no singletons and is
+  unaffected.
+
 ## [0.16.0] — 2026-07-25
 
 ### Added

@@ -80,7 +80,8 @@ entities:
   # ------------------------------------------- narrative singletons: the prose
   prd:
     when: >-
-      someone states what the product is for, who it serves, or what is deliberately out of scope
+      someone states what the product is for, who it serves, or what is deliberately out of
+      scope — edit [knowledge/product/prd.md](knowledge/product/prd.md), never add a second
     layout: singleton
     path: knowledge/product/prd.md
     required: true              # the product source of truth — check fails without it
@@ -90,7 +91,8 @@ entities:
 
   roadmap:
     when: >-
-      sequencing or priority across releases is decided or changes
+      sequencing or priority across releases is decided or changes — edit
+      [knowledge/product/roadmap.md](knowledge/product/roadmap.md), never add a second
     layout: singleton
     path: knowledge/product/roadmap.md
     orphan: true
@@ -99,7 +101,8 @@ entities:
 
   glossary:
     when: >-
-      a domain word is used in a way that a newcomer would misread
+      a domain word is used in a way that a newcomer would misread — edit
+      [knowledge/product/glossary.md](knowledge/product/glossary.md), never add a second
     layout: singleton
     path: knowledge/product/glossary.md
     orphan: true
@@ -109,7 +112,8 @@ entities:
   arc42:
     when: >-
       the shape of the system is described or changes — context, building blocks, data
-      model, a crosscutting concern — edit the existing document
+      model, a crosscutting concern — edit
+      [knowledge/architecture/arc42.md](knowledge/architecture/arc42.md)
     layout: singleton
     path: knowledge/architecture/arc42.md
     orphan: true
@@ -118,7 +122,8 @@ entities:
 
   erd:
     when: >-
-      the relationships between stored entities are described or change
+      the relationships between stored entities are described or change — edit
+      [knowledge/architecture/erd.md](knowledge/architecture/erd.md), never add a second
     layout: singleton
     path: knowledge/architecture/erd.md
     orphan: true

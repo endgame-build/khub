@@ -88,7 +88,7 @@ entities:
     orphan: true                # a narrative root: nothing points at it, by design
     when: >-
       someone states what the product is for, who it serves, or what is deliberately out
-      of scope — edit the existing document, never add a second
+      of scope — edit [knowledge/prd.md](knowledge/prd.md), never add a second
     attributes:
       title: { required: true }
     # absorbs build-hub's roadmap and glossary as sections
@@ -99,7 +99,7 @@ entities:
     orphan: true
     when: >-
       the shape of the system is described or changes — context, building blocks, data
-      model, a crosscutting concern — edit the existing document
+      model, a crosscutting concern — edit [knowledge/arc42.md](knowledge/arc42.md)
     attributes:
       title: { required: true }
     # absorbs build-hub's erd as the Data model section

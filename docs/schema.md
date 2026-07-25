@@ -58,6 +58,12 @@ Two further keys sit beside the storage config and tune what `check` demands of 
 - `required` — singleton-only: `check` reports a missing required singleton (e.g. a workspace without its `prd.md`).
 - `orphan` — `orphan: true` declares that edge-less is this type's *expected* state, so `check` stops reporting its entities as orphans, `--strict` stops failing on them, `query --orphan` stops flagging them and the `status` count stops including them. Default `false`. Use it for a narrative root nothing points at by design: build-hub declares it on all five narrative singletons (`prd`, `roadmap`, `glossary`, `arc42`, `erd`) and build-lite on its two, because every stored edge in those presets points *up* the durability ladder and the documents sit above its top — so orphan-ness there is a finding no authoring could ever close, and without the flag `check --strict` could not go green on a correct workspace. Unlike `required` this is **not** singleton-only: any type whose members are legitimately unwired may declare it, and a singleton that *does* carry relations is still swept. It removes no signal — a missing required edge is still reported by required-completeness, which names the field.
 
+### Capture cues (`when`)
+
+A type may declare `when` — one line of domain language naming the moment to capture it ("a choice is made, rejected, or revisited between real alternatives"). `khub wire` renders every one of them into the managed block in `CLAUDE.md` / `AGENTS.md`, verbatim, so an agent knows *when* to record without running the CLI; `khub schema show <type>` prints it too.
+
+**A singleton's cue should link its own file.** A singleton is edited, never added to — its cue ends with advice like "edit the existing document", and without a target the agent has to introspect the schema or guess a path. Write the link into the prose: `edit [knowledge/prd.md](knowledge/prd.md), never add a second`. The link is authored rather than derived so the wording stays the author's, and a test holds every shipped preset's singleton cue to containing its declared `path`, so a moved file or a typo'd link fails the suite instead of misdirecting an agent.
+
 ### Enumerated ids
 
 Every minted slug carries an ordinal, so a corpus reads in authoring order and an entity can be named in prose by a short stable handle (`ad-004`) rather than a whole title. The shape is:
