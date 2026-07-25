@@ -101,6 +101,12 @@ def init_command(
         typer.echo(f"Initialized {result.preset} workspace at {result.path}")
     if result.singletons_created:
         typer.echo("created singletons: " + ", ".join(result.singletons_created))
+    if result.preserved:
+        # Say it out loud: a re-init leaves the workspace's own schema/templates in
+        # place, so nobody has to wonder whether --force just restored the preset.
+        typer.echo(f"preserved {len(result.preserved)} workspace-owned file(s): "
+                   + ", ".join(result.preserved[:3])
+                   + (" …" if len(result.preserved) > 3 else ""))
     if wire_result is not None:
         for outcome in wire_result.outcomes:
             typer.echo(f"{outcome.action} {outcome.path.name}")

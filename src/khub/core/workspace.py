@@ -59,6 +59,11 @@ class InitResult:
     seeded_over_corpus: bool = False
     # Singletons created by this init (type names) — creations, never overwrites.
     singletons_created: tuple[str, ...] = ()
+    # Workspace-owned files a re-init left alone (`.khub/schema.yaml`,
+    # `.khub/config.yaml`, `.khub/templates/*.yaml`). The engagement owns these
+    # outright — editing schema.yaml IS the override mechanism — so a re-scaffold
+    # reports them instead of silently restoring the preset's copy.
+    preserved: tuple[str, ...] = ()
 
 
 def known_presets(source: Path | None = None) -> list[str]:
@@ -124,9 +129,16 @@ def init_workspace(
     created_singletons: list[tuple[str, Path]] = []
     try:
         khub.mkdir(parents=True, exist_ok=True)
+        preserved: list[str] = []
         schema_path = khub / "schema.yaml"
         header = f"# khub-preset: {preset}@{version}\n"
-        schema_path.write_text(header + _dump_yaml(merged))
+        # Creations only, same rule entity files and singletons already follow: the
+        # workspace owns schema.yaml, so a re-init must not restore the preset over
+        # local edits. Refreshing from a newer preset is an upgrade, not a scaffold.
+        if schema_path.exists():
+            preserved.append(".khub/schema.yaml")
+        else:
+            schema_path.write_text(header + _dump_yaml(merged))
 
         ws_name = name or target.resolve().name or "workspace"
         config = {
@@ -138,7 +150,11 @@ def init_workspace(
             # is written — nothing reads it (format is a per-type schema facet).
             "defaults": {"stale_days": DEFAULT_STALE_DAYS},
         }
-        (khub / "config.yaml").write_text(_dump_yaml(config))
+        config_path = khub / "config.yaml"
+        if config_path.exists():
+            preserved.append(".khub/config.yaml")  # carries edited defaults (stale_days)
+        else:
+            config_path.write_text(_dump_yaml(config))
 
         _append_gitignore(target / ".gitignore", ".khub/generated/")
 
@@ -149,7 +165,11 @@ def init_workspace(
             tpl_dir = khub / "templates"
             tpl_dir.mkdir(exist_ok=True)
             for tpl in sorted(preset_templates.glob("*.yaml")):
-                (tpl_dir / tpl.name).write_text(tpl.read_text())
+                dest = tpl_dir / tpl.name
+                if dest.exists():
+                    preserved.append(f".khub/templates/{tpl.name}")
+                else:
+                    dest.write_text(tpl.read_text())
 
         # Lay down one directory per type's storage path (file and folder layouts
         # need the dir; a collection's or singleton's path names a FILE — create
@@ -189,6 +209,7 @@ def init_workspace(
         entity_files_modified=modified,
         seeded_over_corpus=seeded_over_corpus,
         singletons_created=tuple(name for name, _ in created_singletons),
+        preserved=tuple(preserved),
     )
 
 

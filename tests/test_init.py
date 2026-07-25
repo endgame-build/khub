@@ -404,3 +404,43 @@ def test_init_wires_both_agent_files(tmp_path: Path, preset_source: Path) -> Non
     result = runner.invoke(app, ["init", "note", str(ws), "--preset-source", str(preset_source)])
     assert result.exit_code == 0, result.output
     assert (ws / "CLAUDE.md").exists() and (ws / "AGENTS.md").exists()
+
+
+# --- re-init preserves workspace-owned files (0.10.x: --force clobbered them) ---
+
+
+@pytest.mark.unit
+def test_force_reinit_preserves_schema_and_templates(tmp_path: Path) -> None:
+    """The engagement owns `.khub/schema.yaml` outright — editing it IS the override
+    mechanism — and templates are workspace-owned after init. A re-scaffold used to
+    restore the preset's copy over both, silently, while reporting 0 files modified."""
+    ws = tmp_path / "ws"
+    init_workspace("build-hub", ws)
+    schema = ws / ".khub" / "schema.yaml"
+    tpl = ws / ".khub" / "templates" / "prd.yaml"
+    schema.write_text(schema.read_text() + "\n# LOCAL OVERRIDE\n")
+    tpl.write_text(tpl.read_text() + "\n# LOCAL TEMPLATE EDIT\n")
+
+    result = init_workspace("build-hub", ws, force=True)
+
+    assert "# LOCAL OVERRIDE" in schema.read_text()
+    assert "# LOCAL TEMPLATE EDIT" in tpl.read_text()
+    assert ".khub/schema.yaml" in result.preserved
+    assert ".khub/templates/prd.yaml" in result.preserved
+    assert ".khub/config.yaml" in result.preserved
+
+
+@pytest.mark.unit
+def test_reinit_still_restores_what_is_actually_missing(tmp_path: Path) -> None:
+    """Preserving must not become "do nothing": a deleted template and a deleted
+    singleton are still recreated, because those are creations, not overwrites."""
+    ws = tmp_path / "ws"
+    init_workspace("build-hub", ws)
+    (ws / ".khub" / "templates" / "adr.yaml").unlink()
+    (ws / "knowledge" / "product" / "roadmap.md").unlink()
+
+    result = init_workspace("build-hub", ws, force=True)
+
+    assert (ws / ".khub" / "templates" / "adr.yaml").is_file()
+    assert "roadmap" in result.singletons_created
+    assert ".khub/templates/adr.yaml" not in result.preserved
