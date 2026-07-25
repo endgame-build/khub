@@ -2,6 +2,20 @@
 
 Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); khub is pre-release.
 
+## [Unreleased]
+
+### Changed
+
+- **kb moved to its own repository.** The standalone build-lite implementation and
+  its two parity suites left this repo for `paved-kb`, extracted with history. khub
+  goes back to being one thing — the general engine — and kb owns the build tooling.
+  The `build-lite` preset **stays here**: kb's layout is flat (`knowledge/requirements`)
+  where build-hub's is nested (`knowledge/product/requirements`), so build-lite is
+  what a kb corpus graduates onto without moving a file. The parity tests now run in
+  kb's CI against a pinned khub, which is where the burden belongs — but drift is
+  detected one repo away, so a khub release that changes a payload will fail kb's CI
+  rather than this one's.
+
 ## [0.15.0] — 2026-07-25
 
 ### Added

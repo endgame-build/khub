@@ -6,8 +6,9 @@ script. ~850 lines of code where khub is 7,000, no dependencies where khub has
 six, and byte-compatible output so a corpus that outgrows it graduates by running
 `khub init build-lite` over the same files.**
 
-The working implementation is in [`kb/`](../kb/README.md). This
-page is why it has the shape it has, and what was considered instead.
+The working implementation now lives in its own repository, `paved-kb`. This
+page is why it has the shape it has, and what was considered instead — the
+reasoning is khub's to keep even though the code left.
 
 ## The question this answers
 
@@ -171,7 +172,7 @@ TypeScript were read instead):
   `"kb *": "allow"` after it, and prefer not to pipe.
 - **There are no PostToolUse hooks.** The analogue is a plugin's
   `tool.execute.after`, which can append to the tool's own output — ~30 lines,
-  in [`kb/README.md`](../kb/README.md#optional-make-the-gate-ambient),
+  in the `paved-kb` repository's README,
   turning the gate from something the agent must remember into something ambient.
   (The `experimental.hook.file_edited` key visible in opencode's SDK types is a
   stale artifact — no runtime code reads it. Formatters can run a command on
