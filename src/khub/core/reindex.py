@@ -19,7 +19,7 @@ import networkx as nx
 
 from khub.core.entity import entity_path
 from khub.core.graph import build_graph
-from khub.core.index import Index, build_index, filter_index, stray_nodes
+from khub.core.index import Index, build_index, filter_index, reject_malformed, stray_nodes
 from khub.core.introspect import load_schema
 from khub.core.model import ResolvedSchema
 
@@ -69,6 +69,7 @@ def build_index_doc(root: Path) -> tuple[str, int]:
     """
     resolved = load_schema(root)
     scanned = build_index(root, resolved)
+    reject_malformed(scanned, "reindex")
     index = filter_index(scanned, stray_nodes(scanned))  # strays are not entities
     graph = build_graph(index)
     return render_index(root, resolved, index, graph), len(index.nodes)

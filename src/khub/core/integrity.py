@@ -445,12 +445,21 @@ def check(root: Path, *, strict: bool = False) -> CheckReport:
     # never reaches nx.simple_cycles — detect it directly as a one-node cycle.
     cycles = _cycles(graph, resolved) + _self_cycles(resolved, valid, entity_nodes)
     stray_paths = sorted({_stray_locator(root, resolved, t, s) for (t, s) in strays})
-    # A required singleton with no live node (absent file, or present-but-stray)
-    # is a gap the graph cannot express as incompleteness — report it directly.
+    # A required singleton with no live node (absent file, present-but-stray, or
+    # present-but-draft) is a gap the graph cannot express as incompleteness —
+    # report it directly. A draft is unpublished, and the sibling rule already says
+    # a draft target never satisfies another entity's required relation; a draft
+    # cannot satisfy its own type's requiredness either, or an unpublished PRD
+    # turns the whole gate green.
     missing_singletons = sorted(
         t
         for t, rt in resolved.types.items()
-        if rt.storage.layout == "singleton" and rt.required and (t, t) not in valid.nodes
+        if rt.storage.layout == "singleton"
+        and rt.required
+        and (
+            (t, t) not in valid.nodes
+            or as_bool(valid.meta[(t, t)].get("draft", False))
+        )
     )
     return CheckReport(
         incomplete=incomplete,

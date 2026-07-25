@@ -19,7 +19,7 @@ import networkx as nx
 
 from khub.core.errors import LocatedError
 from khub.core.graph import build_graph
-from khub.core.index import build_index, filter_index, stray_nodes
+from khub.core.index import build_index, filter_index, reject_malformed, stray_nodes
 from khub.core.introspect import load_schema
 from khub.core.locate import provenance
 
@@ -58,6 +58,7 @@ def viz(root: Path, *, out: str = DEFAULT_OUT, type_filter: str | None = None) -
             type_filter, provenance(root).get("preset", ""), sorted(resolved.types)
         )
     scanned = build_index(root, resolved)
+    reject_malformed(scanned, "render the graph")
     index = filter_index(scanned, stray_nodes(scanned))  # strays are not entities
     graph = build_graph(index)
 

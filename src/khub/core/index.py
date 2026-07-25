@@ -15,6 +15,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from khub.core.errors import LocatedError
 from khub.core.formats import load_collection, load_meta, split_row
 from khub.core.model import ResolvedRelation, ResolvedSchema, ResolvedType
 
@@ -200,4 +201,25 @@ def filter_index(index: Index, drop: set[tuple[str, str]]) -> Index:
         types_by_slug=types_by_slug,
         meta=meta,
         malformed=index.malformed,
+    )
+
+
+def reject_malformed(index: Index, verb: str) -> None:
+    """Refuse to derive a written projection from a scan that dropped files.
+
+    A malformed file is not in the graph, so `reindex`/`viz` would happily emit an
+    artifact with an entire type missing and exit 0 — the same silent-partial-write
+    the collection writers already refuse. `check` reports the malformed files; this
+    keeps a broken scan from being committed as if it were the whole picture.
+    """
+    if not index.malformed:
+        return
+    listed = ", ".join(str(p) for p in sorted(index.malformed)[:3])
+    more = f" (+{len(index.malformed) - 3} more)" if len(index.malformed) > 3 else ""
+    raise LocatedError(
+        code="malformed_projection",
+        message=(
+            f"Refusing to {verb}: {len(index.malformed)} file(s) could not be parsed, "
+            f"so the graph is incomplete — {listed}{more}. Run `khub check` for the list."
+        ),
     )

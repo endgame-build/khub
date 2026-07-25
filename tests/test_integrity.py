@@ -499,3 +499,21 @@ def test_depends_on_cycles_still_reported(tmp_path: Path) -> None:
     entity.link(ws, "gamma", "depends_on", "alpha")
 
     assert any(len(c) == 3 for c in check(ws).cycles)
+
+
+@pytest.mark.unit
+def test_draft_required_singleton_is_reported_missing(tmp_path: Path) -> None:
+    """The two `required` gates disagreed about `draft`: a draft target already fails
+    to satisfy another entity's required relation, but a draft REQUIRED SINGLETON
+    passed clean — so an unpublished PRD turned the whole gate green."""
+    from khub.core import entity
+    from khub.core.workspace import init_workspace
+
+    ws = tmp_path / "ws"
+    init_workspace("build-hub", ws)
+    assert check(ws).missing_singletons == []  # published: satisfied
+
+    entity.update(ws, "prd", {"draft": "true"})
+    report = check(ws)
+    assert report.missing_singletons == ["prd"]
+    assert not report.passed

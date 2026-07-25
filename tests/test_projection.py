@@ -549,3 +549,47 @@ def test_cli_viz_unknown_type(firm_ops_ws: Path, monkeypatch) -> None:
     monkeypatch.chdir(firm_ops_ws)
     out = runner.invoke(app, ["viz", "--type", "bogus"])
     assert out.exit_code == 1 and "bogus" in out.output
+
+
+# --- malformed scans must not become written projections (0.11.0) --------------
+
+
+@pytest.mark.unit
+def test_reindex_refuses_when_a_collection_is_malformed(tmp_path: Path) -> None:
+    """A malformed file is not in the graph, so reindex used to write an index with an
+    entire type erased and exit 0 — a silent partial write of the OKF artifact, while
+    the collection writers correctly refused the same workspace."""
+    from khub.core import entity
+    from khub.core.errors import LocatedError
+    from khub.core.workspace import init_workspace
+
+    ws = tmp_path / "ws"
+    init_workspace("build-hub", ws)
+    entity.create(ws, "repo", {"repo": "acme/a", "status": "active"}, id_="svc-a")
+    reindex(ws)
+    assert "svc-a" in (ws / "index.md").read_text()
+    before = (ws / "index.md").read_bytes()
+
+    collection = ws / "knowledge" / "architecture" / "repos.yaml"
+    collection.write_text(collection.read_text() + "svc-a:\n  repo: acme/dup\n  status: active\n")
+
+    with pytest.raises(LocatedError) as err:
+        reindex(ws)
+    assert err.value.code == "malformed_projection"
+    assert (ws / "index.md").read_bytes() == before  # the stale index is left intact
+
+
+@pytest.mark.unit
+def test_viz_refuses_when_a_collection_is_malformed(tmp_path: Path) -> None:
+    from khub.core.errors import LocatedError
+    from khub.core.workspace import init_workspace
+
+    ws = tmp_path / "ws"
+    init_workspace("build-hub", ws)
+    collection = ws / "knowledge" / "architecture" / "repos.yaml"
+    collection.write_text("a:\n  repo: x/y\na:\n  repo: x/z\n")
+
+    with pytest.raises(LocatedError) as err:
+        viz(ws, out=str(tmp_path / "v.html"))
+    assert err.value.code == "malformed_projection"
+    assert not (tmp_path / "v.html").exists()
