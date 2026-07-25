@@ -16,6 +16,7 @@ from pathlib import Path
 import pytest
 
 from khub.core.entity import create
+from khub.core.errors import LocatedError
 from khub.core.model import IdPrefix
 from khub.core.resolve import resolve
 from khub.core.workspace import init_workspace
@@ -148,7 +149,7 @@ entities:
     path: as
     id_prefix: {value}
 """)
-    with pytest.raises(Exception):
+    with pytest.raises(LocatedError):
         resolve([path])
 
 
