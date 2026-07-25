@@ -98,6 +98,7 @@ def _resolve_type(
     for rn, rd in decl.relations.items():
         relations[rn] = _relation(name, rn, rd, declared)
 
+    _check_id_prefix(name, decl, attributes)
     storage = StorageConfig(layout=decl.layout, path=decl.path, fmt=decl.format)
     return ResolvedType(
         name=name,
@@ -108,6 +109,39 @@ def _resolve_type(
         orphan=decl.orphan,
         id_prefix=_id_prefix(decl.id_prefix),
     )
+
+
+def _check_id_prefix(
+    name: str, decl: TypeDecl, attributes: dict[str, ResolvedAttribute]
+) -> None:
+    """A by-value prefix must name an enum attribute and cover every member.
+
+    Checked here rather than on ``TypeDecl`` because the deciding attribute may come
+    from the base block, or be an override that tightens only ``required`` — both of
+    which are invisible until the base has been merged in.
+    """
+    spec = decl.id_prefix
+    if not isinstance(spec, IdPrefixDecl):
+        return
+    attr = attributes.get(spec.by)
+    if attr is None or not attr.enum:
+        raise LocatedError(
+            code="schema_error",
+            message=(
+                f"{name}.id_prefix.by '{spec.by}' must name an attribute of this type "
+                "that declares an enum"
+            ),
+        )
+    missing = [m for m in attr.enum if m not in spec.map]
+    unknown = [k for k in spec.map if k not in attr.enum]
+    if missing or unknown:
+        raise LocatedError(
+            code="schema_error",
+            message=(
+                f"{name}.id_prefix.map must cover exactly {spec.by}'s enum; "
+                f"missing {missing or '[]'}, unknown {unknown or '[]'}"
+            ),
+        )
 
 
 def _id_prefix(decl: str | IdPrefixDecl | None) -> IdPrefix | None:

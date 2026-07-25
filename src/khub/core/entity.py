@@ -224,7 +224,8 @@ def create(
         return CreateResult(type=type_, slug=slug, path=path, draft=is_draft)
 
     if rtype.storage.layout == "collection":
-        base = _slug_base(id_) if id_ is not None else _slug_base(_slug_source(type_, attrs))
+        base = (_slug_base(id_) if id_ is not None
+                else _minted_base(rtype, attrs, index))  # collections number too
         slug = _create_row(root, rtype, type_, meta, body, base, explicit=id_ is not None)
         return CreateResult(
             type=type_,

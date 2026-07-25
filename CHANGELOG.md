@@ -21,7 +21,10 @@ Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelo
   prefix disagrees with the attribute that chose it (a `fr-` file whose `kind` says
   `constraint`), is an error on field `id` — a disagreement no other gate can see,
   since the enum is legal and every relation resolves. Types declaring no prefix are
-  unchecked, so existing corpora keep their bare slugs.
+  unchecked, so `firm-ops` corpora are untouched — but **every non-singleton
+  `build-lite` and `build-hub` type now declares one**, so entities in those
+  workspaces that predate this release are reported until their files are renamed by
+  hand. There is no `rename` verb yet.
   See [`docs/schema.md`](docs/schema.md#enumerated-ids).
 
 - **`kb/` — build-lite standalone**, a separate, dependency-free

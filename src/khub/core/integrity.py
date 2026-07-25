@@ -283,7 +283,7 @@ def _validate_entity(
     return errors
 
 
-_ENUMERATED_ID = re.compile(r"^([a-z][a-z0-9]*)-(\d{3,})-[a-z0-9-]+$")
+_ENUMERATED_ID = re.compile(r"^(?:([a-z][a-z0-9]*)-)?(\d+)-[a-z0-9-]+$")
 
 
 def _id_error(rtype: ResolvedType, slug: str, meta: dict[str, Any]) -> str | None:
@@ -312,6 +312,12 @@ def _id_error(rtype: ResolvedType, slug: str, meta: dict[str, Any]) -> str | Non
     if match is None:
         shape = "|".join(prefix_decl.all)
         return f"slug does not follow this type's id scheme ({shape}-NNN-slug)"
+    if match.group(1) is None:
+        # A bare `NNN-slug`: minted while the deciding attribute was still unset,
+        # which capture-is-never-blocked permits. Filling the attribute in later
+        # must not strand the entity behind a gate no verb can clear — khub has no
+        # rename. The ordinal is there; the prefix is a nicety it missed.
+        return None
     if match.group(1) != expected:
         deciding = f" for {prefix_decl.by} '{meta.get(prefix_decl.by)}'" if prefix_decl.by else ""
         return f"slug says '{match.group(1)}-' but the schema mints '{expected}-'{deciding}"

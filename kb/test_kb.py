@@ -407,6 +407,53 @@ created: 2026-07-25
     assert "bad_id" in codes(root)[kb.ERROR]
 
 
+def test_writes_coerce_and_validate_like_khub() -> None:
+    """A list or bool written as a raw string fails the very next validate, and a
+    bad enum has to be refused before the file exists — khub does both."""
+    root = fresh()
+    assert run(root, "add", "adr", "--title", "X", "--status", "accepted", "--tags", "a,b") == 0
+    entity = scan(root).entities["ad-001-x"]
+    assert entity.fm["tags"] == ["a", "b"]
+    assert codes(root)[kb.ERROR] == []
+
+    assert run(root, "add", "adr", "--title", "Y", "--status", "bogus") == 2
+    assert "ad-002-y" not in scan(root).entities
+
+    assert run(root, "edit", "ad-001-x", "draft", "true") == 0
+    assert scan(root).entities["ad-001-x"].fm["draft"] is True
+    assert run(root, "edit", "ad-001-x", "draft", "maybe") == 2
+
+
+def test_a_required_false_is_present_not_missing() -> None:
+    """`not value` would call a legitimate `false` (or 0) a missing field."""
+    root = fresh()
+    shipped = (SCRIPTS / kb.SCHEMA_FILE).read_text()
+    override = root / kb.CONFIG_DIR / kb.SCHEMA_FILE
+    override.parent.mkdir(parents=True)
+    override.write_text(shipped.replace(
+        "    draft:       { type: bool, default: false }",
+        "    draft:       { type: bool, default: false, required: true }"))
+    run(root, "add", "component", "--title", "API", "--kind", "service", "--draft", "false")
+    corpus = scan(root)
+    assert corpus.entities["cmp-001-api"].fm["draft"] is False
+    incomplete = {f.where for f in kb.check(corpus) if f.code == "incomplete"}
+    assert "cmp-001-api" not in incomplete
+
+
+def test_ordinals_count_within_a_type() -> None:
+    """khub scopes the counter to the type; a shared prefix-less scheme must not
+    make two types share one sequence."""
+    root = fresh()
+    shipped = (SCRIPTS / kb.SCHEMA_FILE).read_text()
+    override = root / kb.CONFIG_DIR / kb.SCHEMA_FILE
+    override.parent.mkdir(parents=True)
+    override.write_text(shipped.replace("    id_prefix: cmp\n", "").replace("    id_prefix: ad\n", ""))
+    run(root, "add", "component", "--title", "API", "--kind", "service")
+    run(root, "add", "adr", "--title", "Decide", "--status", "proposed")
+    slugs = set(scan(root).entities)
+    assert {"001-api", "001-decide"} <= slugs, slugs
+
+
 def test_get_edit_remove_and_status() -> None:
     root = fresh()
     run(root, "add", "component", "--title", "API", "--kind", "service")

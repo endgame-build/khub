@@ -108,31 +108,6 @@ class TypeDecl(_Strict):
     relations: dict[str, RelationDecl] = {}
 
     @model_validator(mode="after")
-    def _id_prefix_matches_its_enum(self) -> TypeDecl:
-        """A by-value prefix must name a declared enum and cover every member.
-
-        Otherwise a legal `kind` mints no id, and the failure surfaces at `add`
-        time on one unlucky entity rather than when the schema is read.
-        """
-        spec = self.id_prefix
-        if not isinstance(spec, IdPrefixDecl):
-            return self
-        attr = self.attributes.get(spec.by)
-        if attr is None or not attr.enum:
-            raise ValueError(
-                f"id_prefix.by '{spec.by}' must name an attribute of this type "
-                "that declares an enum"
-            )
-        missing = [member for member in attr.enum if member not in spec.map]
-        unknown = [key for key in spec.map if key not in attr.enum]
-        if missing or unknown:
-            raise ValueError(
-                f"id_prefix.map must cover exactly {spec.by}'s enum; "
-                f"missing {missing or '[]'}, unknown {unknown or '[]'}"
-            )
-        return self
-
-    @model_validator(mode="after")
     def _storage_matrix(self) -> TypeDecl:
         if self.required and self.layout != "singleton":
             raise ValueError(

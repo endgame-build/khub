@@ -587,7 +587,7 @@ def _entity_findings(corpus: Corpus, e: Entity, *, strict: bool) -> Iterable[Fin
         if key in attrs:
             problem = _attr_problem(attrs[key], value)
             if problem:
-                yield err("bad_value", f"{key}: {problem}", key)
+                yield err("bad_value", problem, key)
 
     for pred, spec in rels.items():
         values = as_list(e.fm.get(pred))
@@ -595,7 +595,7 @@ def _entity_findings(corpus: Corpus, e: Entity, *, strict: bool) -> Iterable[Fin
             yield err("cardinality", f"{pred} takes one target, got {len(values)}", pred)
         for target in values:
             if not isinstance(target, str):
-                yield err("bad_value", f"{pred}: {target!r} is not a slug", pred)
+                yield err("bad_value", f"{target!r} is not a slug", pred)
                 continue
             if target == e.slug:
                 yield err("self_link", f"{pred} points at itself", pred)
@@ -611,7 +611,10 @@ def _entity_findings(corpus: Corpus, e: Entity, *, strict: bool) -> Iterable[Fin
         if reason:
             yield err("bad_id", reason, "id")
 
-    missing = [k for k, spec in known.items() if spec.get("required") and not e.fm.get(k)]
+    missing = [
+        k for k, spec in known.items()
+        if spec.get("required") and (k not in e.fm or e.fm[k] in (None, "", []))
+    ]
     if missing:
         yield Finding(GAP, "incomplete", e.slug, "missing " + ", ".join(sorted(missing)))
 
@@ -630,7 +633,7 @@ def _entity_findings(corpus: Corpus, e: Entity, *, strict: bool) -> Iterable[Fin
         yield Finding(GAP, "orphan", e.slug, "no relation in or out")
 
 
-ENUMERATED_ID = re.compile(r"^([a-z][a-z0-9]*)-(\d{3,})-[a-z0-9-]+$")
+ENUMERATED_ID = re.compile(r"^(?:([a-z][a-z0-9]*)-)?(\d+)-[a-z0-9-]+$")
 
 
 def _id_error(schema: Schema, e: Entity) -> str | None:
@@ -648,6 +651,8 @@ def _id_error(schema: Schema, e: Entity) -> str | None:
     match = ENUMERATED_ID.match(e.slug)
     if match is None:
         return f"slug does not follow this type's id scheme ({'|'.join(prefixes)}-NNN-slug)"
+    if match.group(1) is None:
+        return None  # minted before the deciding attribute was set; khub allows it too
     if match.group(1) != expected:
         spec = schema.types[e.type].get("id_prefix")
         by = spec["by"] if isinstance(spec, dict) else None
@@ -740,6 +745,48 @@ def _record(corpus: Corpus, e: Entity) -> dict[str, Any]:
             "path": rel(corpus.root, e.path), **e.fm}
 
 
+def coerce(spec: dict[str, Any], raw: str) -> Any:
+    """A raw CLI string as the schema's type — khub validates writes the same way.
+
+    Without this a `list` attribute is stored as the literal `a,b` and a `bool` as
+    the string `true`, and the very next `validate` fails on a file this tool just
+    wrote.
+    """
+    kind = spec.get("type", "text")
+    if spec.get("many") or kind == "list":
+        return [v.strip() for v in raw.split(",") if v.strip()]
+    if kind == "bool":
+        if raw.lower() not in ("true", "false"):
+            raise Bad(f"expected true or false, got {raw!r}")
+        return raw.lower() == "true"
+    if kind == "number":
+        try:
+            return int(raw) if raw.isdigit() or raw.lstrip("-").isdigit() else float(raw)
+        except ValueError:
+            raise Bad(f"expected a number, got {raw!r}") from None
+    return raw
+
+
+def validated(schema: Schema, type_: str, fields: dict[str, str]) -> dict[str, Any]:
+    """Every field coerced and checked before a byte is written, as khub does.
+
+    An undeclared key is an extension and is stored verbatim — the schema is open.
+    """
+    declared = schema.fields(type_)
+    out: dict[str, Any] = {}
+    for key, raw in fields.items():
+        spec = declared.get(key)
+        if spec is None:
+            out[key] = raw
+            continue
+        value = coerce(spec, raw)
+        problem = _attr_problem(spec, value) if key in schema.attrs(type_) else None
+        if problem:
+            raise Bad(f"{key}: {problem}")
+        out[key] = value
+    return out
+
+
 def dynamic_fields(extra: Sequence[str], known: Iterable[str]) -> dict[str, str]:
     """khub's `--<field> <value>` options, which argparse cannot declare ahead."""
     fields = set(known)
@@ -777,10 +824,18 @@ def _order_keys(schema: Schema, type_: str, fm: dict[str, Any]) -> list[tuple[st
     return [(k, fm[k]) for k in lead if k in fm] + [(k, v) for k, v in fm.items() if k not in lead]
 
 
-def next_number(corpus: Corpus, prefix: str | None) -> int:
-    """One past the highest ordinal in use for this prefix — khub counts the same way."""
+def next_number(corpus: Corpus, type_: str, prefix: str | None) -> int:
+    """One past the highest ordinal in use for this type and prefix — khub's rule.
+
+    Scoped to the type, not the whole corpus: two types sharing a prefix-less scheme
+    keep independent sequences, exactly as khub's `_next_ordinal` does.
+    """
     pattern = re.compile(rf"^{re.escape(prefix)}-(\d+)-" if prefix else r"^(\d+)-")
-    used = [int(m.group(1)) for slug in corpus.entities if (m := pattern.match(slug))]
+    used = [
+        int(m.group(1))
+        for e in corpus.entities.values()
+        if e.type == type_ and (m := pattern.match(e.slug))
+    ]
     return max(used, default=0) + 1
 
 
@@ -956,10 +1011,7 @@ def cmd_add(args: argparse.Namespace) -> int:
     if not title:
         raise Bad("--title is required: it is the slug source")
 
-    fm: dict[str, Any] = {"type": args.type, "title": title}
-    for key, raw in fields.items():
-        spec = declared.get(key, {})  # an undeclared key is an extension, stored verbatim
-        fm[key] = [v.strip() for v in raw.split(",")] if spec.get("many") else raw
+    fm: dict[str, Any] = {"type": args.type, "title": title, **validated(schema, args.type, fields)}
     fm["created"] = date.today().isoformat()
 
     if schema.is_singleton(args.type):
@@ -995,7 +1047,7 @@ def _mint(corpus: Corpus, schema: Schema, type_: str, fm: dict[str, Any], title:
     if prefix is None and isinstance(spec, dict):
         raise Bad(f"{type_} needs --{spec['by']} <{'|'.join(spec['map'])}> to mint an id")
     stem = f"{prefix}-" if prefix else ""
-    return f"{stem}{next_number(corpus, prefix):03d}-{slugify(title)}"
+    return f"{stem}{next_number(corpus, type_, prefix):03d}-{slugify(title)}"
 
 
 def cmd_edit(args: argparse.Namespace) -> int:
@@ -1006,10 +1058,8 @@ def cmd_edit(args: argparse.Namespace) -> int:
         raise Bad(f"{entity.type} has no {args.field!r} — one of {', '.join(declared)}")
     if args.field in corpus.schema.rels(entity.type):
         raise Bad(f"{args.field} is a relation — use `kb link {args.id} {args.field} <target>`")
-    problem = _attr_problem(declared[args.field], args.value)
-    if problem:
-        raise Bad(f"{args.field}: {problem}")
-    lines = splice(entity.front_lines, args.field, args.value)
+    value = validated(corpus.schema, entity.type, {args.field: args.value})[args.field]
+    lines = splice(entity.front_lines, args.field, value)
     if "updated" in declared:
         lines = splice(lines, "updated", date.today().isoformat())
     entity.path.write_text(render(lines, entity.body))

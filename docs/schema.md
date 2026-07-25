@@ -67,7 +67,7 @@ Every minted slug carries an ordinal, so a corpus reads in authoring order and a
 <number>-<slug>              when it does not
 ```
 
-The number is one past the highest already in use, zero-padded to three, and it keeps counting past that (`001`, `045`, `1000`). An explicit `--id` is left exactly as given — the caller named it — but the next minted id still counts from it.
+The number is one past the highest already in use, zero-padded to three, and it keeps counting past that (`001`, `045`, `1000`). An explicit `--id` is written exactly as given and the next minted id still counts from it — but it is *not* exempt from the gate below, so on a type that declares a prefix an `--id` outside the scheme is written and then reported. That is khub's standing split: writes capture, gates report.
 
 `id_prefix` takes either a literal token, or a mapping that picks one by the value of another attribute:
 
@@ -82,7 +82,7 @@ requirement:
 
 The by-value form puts the kind in the filename, which is where a mislabelled entity becomes visible. Its `by` must name an attribute of that type declaring an `enum`, and its `map` must cover exactly that enum's members — otherwise a legal value would mint no prefix, and the schema is rejected at resolve time rather than failing later on one unlucky entity. Each prefix keeps its own sequence, so `fr-001` and `cst-001` coexist and the number reads as "the first constraint". A missing `by` value (capture is never blocked) falls back to a bare `NNN-slug`.
 
-`validate` holds an entity to its type's scheme: a slug that does not follow it, or whose prefix disagrees with the attribute that chose it (a `fr-` file whose `kind` says `constraint`), is an error on field `id`. That disagreement is invisible to every other gate — the enum is legal, the relations resolve, nothing dangles. Types declaring no prefix are not checked, so corpora predating the scheme keep their bare slugs; an entity whose deciding attribute is unset is skipped too, because `check` already reports that as incomplete.
+`validate` holds an entity to its type's scheme: a slug that does not follow it, or whose prefix disagrees with the attribute that chose it (a `fr-` file whose `kind` says `constraint`), is an error on field `id`. That disagreement is invisible to every other gate — the enum is legal, the relations resolve, nothing dangles. A bare `NNN-slug` passes: that is what `add` mints while the deciding attribute is still unset, and since khub has no `rename`, rejecting it later would strand the entity behind a gate no verb can clear. Types declaring no prefix are not checked at all, so corpora predating the scheme keep their bare slugs.
 
 build-lite and build-hub declare the prefixes their docs already used in prose (`ad-`, `fr-`, `cst-`, `cmp-`, `fs-`, `wp-`, …); firm-ops declares none, so its entities are numbered without one.
 

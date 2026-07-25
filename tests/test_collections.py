@@ -179,7 +179,7 @@ def test_collection_full_verb_roundtrip(
     # a second add mints past the taken slug; explicit --id collision refuses
     minted = json.loads(runner.invoke(app, ["add", "repo", "--repo", "endgame-build/x",
                                             "--status", "active", "--format", "json"]).output)
-    assert minted["slug"] == "repo"
+    assert minted["slug"] == "001-repo"
     dup = runner.invoke(app, ["add", "repo", "--id", "acme", "--repo", "endgame-build/y",
                               "--status", "active"])
     assert dup.exit_code == 1 and "already taken" in dup.output
@@ -190,7 +190,7 @@ def test_collection_full_verb_roundtrip(
     assert runner.invoke(app, ["edit", "acme", "status", "archived"]).exit_code == 0
     after = {ln.split('"slug": "')[1].split('"')[0]: ln
              for ln in (cws / "repo.jsonl").read_text().splitlines()}
-    assert after["repo"] == before["repo"] and after["acme"] != before["acme"]
+    assert after["001-repo"] == before["001-repo"] and after["acme"] != before["acme"]
 
     # idempotent no-op unlink leaves the file bytes untouched
     text_before = (cws / "repo.jsonl").read_text()
@@ -204,7 +204,7 @@ def test_collection_full_verb_roundtrip(
     removed = runner.invoke(app, ["remove", "repo/acme", "--force"])
     assert removed.exit_code == 0
     left = load_collection((cws / "repo.jsonl").read_text(), "jsonl")
-    assert "acme" not in left and "repo" in left  # file survives with the other row
+    assert "acme" not in left and "001-repo" in left  # file survives with the other row
 
 
 @pytest.mark.integration

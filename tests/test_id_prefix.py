@@ -108,6 +108,9 @@ def test_a_missing_by_value_falls_back_to_a_bare_number(lite: Path) -> None:
 def test_by_value_prefix_must_match_its_enum(tmp_path: Path) -> None:
     """A map that misses an enum member would mint no id for that member."""
     path = _schema(tmp_path, """
+base:
+  attributes:
+    type: { type: text, required: true }
 entities:
   requirement:
     layout: file
@@ -118,12 +121,15 @@ entities:
 """)
     with pytest.raises(Exception) as err:
         resolve([path])
-    assert "must cover exactly kind's enum" in str(err.value)
+    assert "id_prefix.map must cover exactly kind's enum" in str(err.value)
 
 
 @pytest.mark.unit
 def test_by_value_prefix_needs_an_enum_attribute(tmp_path: Path) -> None:
     path = _schema(tmp_path, """
+base:
+  attributes:
+    type: { type: text, required: true }
 entities:
   requirement:
     layout: file
@@ -143,6 +149,9 @@ def test_a_prefix_must_be_a_slug_token(tmp_path: Path, value: str) -> None:
     """It is concatenated into a filename: empty mints a leading hyphen, and a
     hyphenated one cannot be read back out of the id."""
     path = _schema(tmp_path, f"""
+base:
+  attributes:
+    type: {{ type: text, required: true }}
 entities:
   a:
     layout: file
@@ -151,6 +160,40 @@ entities:
 """)
     with pytest.raises(LocatedError):
         resolve([path])
+
+
+@pytest.mark.unit
+def test_a_by_value_prefix_may_decide_on_a_BASE_attribute(tmp_path: Path) -> None:
+    """The deciding attribute can come from the base block, or be an override that
+    tightens only `required` — neither is visible before the base is merged."""
+    path = _schema(tmp_path, """
+base:
+  attributes:
+    kind: { enum: [functional, constraint] }
+entities:
+  requirement:
+    layout: file
+    path: reqs
+    id_prefix: { by: kind, map: { functional: fr, constraint: cst } }
+    attributes:
+      kind: { required: true }
+""")
+    rtype = resolve([path]).types["requirement"]
+    assert rtype.id_prefix is not None
+    assert rtype.id_prefix.resolve({"kind": "constraint"}) == "cst"
+
+
+@pytest.mark.integration
+def test_an_id_minted_before_its_kind_stays_valid_once_the_kind_is_set(lite: Path) -> None:
+    """Capture is never blocked, so a requirement can be minted with no `kind` — and
+    khub has no rename, so the gate must not strand it once the kind arrives."""
+    from khub.core.entity import update
+    from khub.core.integrity import validate as khub_validate
+
+    minted = create(lite, "requirement", {"title": "No kind yet"})
+    assert minted.slug == "001-no-kind-yet"
+    update(lite, minted.slug, {"kind": "functional"})
+    assert [e.field for e in khub_validate(lite).errors] == []
 
 
 @pytest.mark.unit
