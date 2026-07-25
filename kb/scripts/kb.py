@@ -25,7 +25,9 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
+import shutil
 import sys
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
@@ -603,11 +605,15 @@ def _id_findings(schema: Schema, e: Entity) -> Iterable[Finding]:
         if not re.match(r"^\d{3,}-[a-z0-9-]+$", e.slug):
             yield Finding(ERROR, "bad_id", e.slug, "filename must be NNN-slug")
         return
+    expected = schema.prefix_for(e.type, e.fm)
+    if expected is None:
+        # The prefix is chosen by an attribute this entity has not set yet, so no
+        # id can be right. `incomplete` already names that cause; do not say it twice.
+        return
     m = re.match(r"^([a-z]+)-(\d{3,})-([a-z0-9-]+)$", e.slug)
     if not m or m.group(1) not in prefixes:
         yield Finding(ERROR, "bad_id", e.slug, f"filename must be {'|'.join(prefixes)}-NNN-slug")
         return
-    expected = schema.prefix_for(e.type, e.fm)
     if expected and m.group(1) != expected:
         yield Finding(ERROR, "bad_id", e.slug, f"prefix disagrees with its kind (want {expected}-)")
 
@@ -1133,7 +1139,8 @@ def cmd_validate(args: argparse.Namespace) -> int:
 
 def cmd_check(args: argparse.Namespace) -> int:
     """Everything validate covers, plus the graph-wide gates."""
-    return _report(args, load(args), check(load(args)))
+    corpus = load(args)
+    return _report(args, corpus, check(corpus))
 
 
 # ------------------------------------------------------------------- install
@@ -1145,8 +1152,6 @@ SKILL_TARGETS = {"opencode": ".opencode/skills", "claude": ".claude/skills",
 
 def cmd_install_skills(args: argparse.Namespace) -> int:
     """Copy the skill where a host will find it. khub's verb, khub's flags."""
-    import shutil
-
     source = HERE.parent / "skills" / "kb"
     if not source.is_dir():
         raise Bad(f"no skill directory at {source}")
@@ -1184,11 +1189,9 @@ def _skill_dir(target: str, root: Path, is_global: bool) -> Path:
     if not is_global:
         return root / SKILL_TARGETS[target]
     if target == "opencode":  # opencode reads global skills under the XDG root
-        import os
         xdg = os.environ.get("XDG_CONFIG_HOME")
         return (Path(xdg) if xdg else Path.home() / ".config") / "opencode" / "skills"
-    return Path.home() / SKILL_TARGETS[target].lstrip(".").replace("skills", "skills", 1) \
-        if False else Path.home() / SKILL_TARGETS[target]
+    return Path.home() / SKILL_TARGETS[target]
 
 
 def _need(corpus: Corpus, slug: str) -> Entity:

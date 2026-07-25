@@ -347,6 +347,22 @@ def test_explicit_id_bypasses_minting() -> None:
     assert "ad-050-hand" in kb.scan(root, kb.load_schema(root)).entities
 
 
+def test_a_missing_kind_reports_its_cause_once() -> None:
+    """The prefix depends on `kind`; with none set no id can be right, and
+    `incomplete` already names the cause. Reporting bad_id too says it twice."""
+    root = fresh()
+    write(root / "knowledge/requirements/001-no-kind.md", """
+---
+type: requirement
+title: No kind
+created: 2026-07-25
+---
+""")
+    found = codes(root)
+    assert "bad_id" not in found[kb.ERROR]
+    assert "incomplete" in found[kb.GAP]
+
+
 def test_bad_id_is_reported_for_both_shapes() -> None:
     root = fresh()
     write(root / "knowledge/decisions/nonsense.md", """
