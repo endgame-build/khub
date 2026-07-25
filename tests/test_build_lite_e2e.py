@@ -303,9 +303,17 @@ def test_a_drafted_optional_singleton_is_reported_on_a_tty(lite_ws: Path) -> Non
     """It does not fail the gate, so the human path returned early and printed nothing —
     the exact silence the report was added to end."""
     runner.invoke(app, ["-C", str(lite_ws), "edit", "arc42", "draft", "true"])
-    result = runner.invoke(app, ["-C", str(lite_ws), "check"], env=TTY)
-    assert result.exit_code == 0
-    assert "arc42 is unpublished" in result.output
+    passing = runner.invoke(app, ["-C", str(lite_ws), "check"], env=TTY)
+    assert passing.exit_code == 0
+    assert "arc42 is unpublished" in passing.output
+
+    # And on the FAILING path, where a separate finding drives the exit code: the human
+    # view has two branches, so reporting it in only one is the same silence again.
+    (lite_ws / "knowledge" / "prd.md").unlink()
+    failing = runner.invoke(app, ["-C", str(lite_ws), "check"], env=TTY)
+    assert failing.exit_code == 1
+    assert "arc42 is unpublished" in failing.output
+    assert "prd is missing" in failing.output
 
 
 @pytest.mark.e2e

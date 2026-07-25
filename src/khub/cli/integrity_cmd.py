@@ -76,8 +76,9 @@ def _check_human(report: CheckReport) -> None:
     if report.passed:
         for o in report.orphans:
             typer.echo(f"orphan {o} (informational)")
-        # A drafted OPTIONAL singleton does not fail the gate, so the loop below never
-        # runs for it — and printing nothing is the silence this report exists to end.
+        # Reported on BOTH paths. A drafted optional singleton does not fail the gate, so
+        # on its own it lands here; the failing path prints it too (see below). Either way
+        # it is said out loud — printing nothing is the silence this report exists to end.
         for name in report.draft_singletons:
             typer.echo(f"singleton {name} is unpublished (draft: true) (informational)")
         typer.echo("Graph check passed")
