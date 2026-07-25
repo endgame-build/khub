@@ -23,6 +23,7 @@ khub's docs, organized by [Diátaxis](https://diataxis.fr): learning, tasks, ref
 
 - [Concepts](concepts.md) — the mental model in seven ideas: Markdown is truth, the derived graph, validate vs check, and more.
 - [Design memo](design-memo.md) — rationale, the five-layer engine, technology choices, and the invariants every change preserves.
+- [build-lite, standalone](build-lite-standalone.md) — the preset reimplemented as one skill plus one dependency-free script for opencode: what earns code when the only caller is an agent, what was cut, and why the corpus still graduates to khub.
 
 ---
 
