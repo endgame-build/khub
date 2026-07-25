@@ -6,7 +6,11 @@ agent cannot do for itself: mint a conforming file, keep an edge honest, walk
 the derived graph, and sweep the whole corpus for breakage.
 
 Everything else (read, search, write prose) the agent already does with its own
-tools, so it is not here. Stdlib only, one file: copy it in and run it.
+tools, so it is not here.
+
+Stdlib only. It reads `build.schema.yaml` and `templates/` from its own
+directory — or from `<workspace>/.build-lite/` when a project overrides them —
+and hardcodes no type, field or predicate.
 
 Frontmatter profile
 -------------------
@@ -32,6 +36,7 @@ from typing import Any
 HERE = Path(__file__).resolve().parent
 FENCE = "---"
 KEY_RE = re.compile(r"^([A-Za-z_][A-Za-z0-9_-]*):(?:[ \t]+(.*))?$")
+YAML_KEY_RE = re.compile(r"^([A-Za-z_][A-Za-z0-9_.-]*):[ \t]*(.*)$")
 ITEM_RE = re.compile(r"^[ \t]*-[ \t]+(.*)$")
 H2_RE = re.compile(r"^##\s+(.*)$", re.MULTILINE)
 CODE_FENCE_RE = re.compile(r"^(```|~~~).*?^\1[^\S\n]*$", re.MULTILINE | re.DOTALL)
@@ -104,6 +109,8 @@ def parse_front(lines: Sequence[str]) -> dict[str, Any]:
         key, inline = m.group(1), m.group(2)
         if key in out:
             raise Bad(f"line {i + 1}: duplicate key {key!r}")
+        if inline and inline.lstrip().startswith("{"):
+            raise Bad(f"line {i + 1}: frontmatter is flat — no nested mappings ({key!r})")
         if inline is None or not inline.strip():
             items: list[Any] = []
             i += 1
@@ -190,14 +197,166 @@ def render(front: Sequence[str], body: str) -> str:
     return f"{FENCE}\n{head}\n{FENCE}\n\n{body.lstrip(chr(10))}"
 
 
+# ---------------------------------------------------------------- yaml (read)
+#
+# Enough YAML to read build.schema.yaml, which is authored in khub's vocabulary
+# and therefore nested: block mappings by indentation, flow mappings and lists
+# (`{ enum: [a, b], required: true }`), quoted scalars, and comments both on
+# their own line and trailing. Reading only — nothing rewrites this file — and
+# checked in the tests against ruamel's parse of the shipped schema.
+
+
+def load_yaml(text: str) -> Any:
+    lines: list[tuple[int, str, int]] = []
+    for number, raw in enumerate(text.split("\n"), 1):
+        stripped = _strip_comment(raw)
+        if stripped.strip():
+            lines.append((len(stripped) - len(stripped.lstrip(" ")), stripped.strip(), number))
+    if not lines:
+        return {}
+    cursor = [0]
+    value = _block(lines, cursor, lines[0][0])
+    if cursor[0] != len(lines):
+        raise Bad(f"line {lines[cursor[0]][2]}: unexpected indentation")
+    return value
+
+
+def _strip_comment(line: str) -> str:
+    quote = ""
+    for i, ch in enumerate(line):
+        if quote:
+            if ch == quote:
+                quote = ""
+        elif ch in "\"'":
+            quote = ch
+        elif ch == "#" and (i == 0 or line[i - 1] in " \t"):
+            return line[:i]
+    return line
+
+
+def _block(lines: list[tuple[int, str, int]], cursor: list[int], indent: int) -> Any:
+    if lines[cursor[0]][1].startswith("- "):
+        return _block_list(lines, cursor, indent)
+    return _block_map(lines, cursor, indent)
+
+
+def _block_map(lines: list[tuple[int, str, int]], cursor: list[int], indent: int) -> dict[str, Any]:
+    out: dict[str, Any] = {}
+    while cursor[0] < len(lines):
+        col, text, number = lines[cursor[0]]
+        if col < indent:
+            break
+        if col > indent:
+            raise Bad(f"line {number}: unexpected indentation")
+        m = YAML_KEY_RE.match(text)
+        if not m:
+            raise Bad(f"line {number}: not a `key: value` line ({text!r})")
+        key, inline = m.group(1), m.group(2)
+        cursor[0] += 1
+        if inline:
+            out[key] = _flow(inline, number)
+        elif cursor[0] < len(lines) and lines[cursor[0]][0] > indent:
+            out[key] = _block(lines, cursor, lines[cursor[0]][0])
+        else:
+            out[key] = None
+    return out
+
+
+def _block_list(lines: list[tuple[int, str, int]], cursor: list[int], indent: int) -> list[Any]:
+    out: list[Any] = []
+    while cursor[0] < len(lines):
+        col, text, number = lines[cursor[0]]
+        if col < indent or not text.startswith("- "):
+            break
+        cursor[0] += 1
+        out.append(_flow(text[2:].strip(), number))
+    return out
+
+
+def _flow(text: str, number: int) -> Any:
+    value, rest = _flow_value(text, number)
+    if rest.strip():
+        raise Bad(f"line {number}: trailing content after value ({rest.strip()!r})")
+    return value
+
+
+def _flow_value(text: str, number: int) -> tuple[Any, str]:
+    s = text.lstrip()
+    if s.startswith("{"):
+        return _flow_pairs(s[1:], number)
+    if s.startswith("["):
+        return _flow_items(s[1:], number)
+    if s[:1] in ("'", '"'):
+        quote, i = s[0], 1
+        while i < len(s) and s[i] != quote:
+            i += 2 if s[i] == "\\" else 1
+        if i >= len(s):
+            raise Bad(f"line {number}: unterminated quote")
+        return s[1:i].replace('\\"', '"').replace("\\\\", "\\"), s[i + 1 :]
+    end = len(s)
+    for i, ch in enumerate(s):
+        if ch in ",}]":
+            end = i
+            break
+    return _bare(s[:end].strip()), s[end:]
+
+
+def _flow_pairs(text: str, number: int) -> tuple[dict[str, Any], str]:
+    out: dict[str, Any] = {}
+    rest = text
+    while True:
+        rest = rest.lstrip()
+        if rest.startswith("}"):
+            return out, rest[1:]
+        if not rest:
+            raise Bad(f"line {number}: unterminated flow mapping")
+        key, _, remainder = rest.partition(":")
+        if not _:
+            raise Bad(f"line {number}: flow mapping entry without a ':' ({rest!r})")
+        value, rest = _flow_value(remainder, number)
+        out[key.strip()] = value
+        rest = rest.lstrip()
+        rest = rest.removeprefix(",")
+
+
+def _flow_items(text: str, number: int) -> tuple[list[Any], str]:
+    out: list[Any] = []
+    rest = text
+    while True:
+        rest = rest.lstrip()
+        if rest.startswith("]"):
+            return out, rest[1:]
+        if not rest:
+            raise Bad(f"line {number}: unterminated flow sequence")
+        value, rest = _flow_value(rest, number)
+        out.append(value)
+        rest = rest.lstrip()
+        rest = rest.removeprefix(",")
+
+
+def _bare(token: str) -> Any:
+    if token in ("true", "false"):
+        return token == "true"
+    if token in ("null", "~", ""):
+        return None
+    if re.fullmatch(r"-?\d+", token):
+        return int(token)
+    return token
+
+
 # -------------------------------------------------------------------- schema
 
 
 class Schema:
+    """The resolved contract. khub's vocabulary, read straight from the YAML."""
+
     def __init__(self, data: dict[str, Any]) -> None:
         self.data = data
-        self.base = data.get("base", {})
-        self.types: dict[str, dict[str, Any]] = data["types"]
+        self.base = data.get("base") or {}
+        entities = data.get("entities")
+        if not isinstance(entities, dict) or not entities:
+            raise Bad("schema has no `entities` block")
+        self.types: dict[str, dict[str, Any]] = entities
 
     def attrs(self, type_: str) -> dict[str, Any]:
         merged = dict(self.base.get("attributes", {}))
@@ -213,7 +372,7 @@ class Schema:
         return {**self.attrs(type_), **self.rels(type_)}
 
     def is_singleton(self, type_: str) -> bool:
-        return bool(self.types[type_].get("singleton"))
+        return self.types[type_].get("layout") == "singleton"
 
     def prefixes(self, type_: str) -> list[str]:
         spec = self.types[type_].get("id_prefix")
@@ -240,11 +399,16 @@ class Schema:
         return None
 
 
+SCHEMA_FILE = "build.schema.yaml"
+
+
 def load_schema(root: Path) -> Schema:
     """The workspace override if it has one, else the copy beside this script."""
-    local = root / ".build-lite" / "schema.json"
-    path = local if local.is_file() else HERE / "schema.json"
-    return Schema(json.loads(path.read_text()))
+    local = root / ".build-lite" / SCHEMA_FILE
+    path = local if local.is_file() else HERE / SCHEMA_FILE
+    if not path.is_file():
+        raise Bad(f"no {SCHEMA_FILE} beside {HERE / 'bl.py'} or under {root}/.build-lite/")
+    return Schema(load_yaml(path.read_text()))
 
 
 def template_for(root: Path, type_: str) -> str | None:
@@ -575,7 +739,9 @@ def _declared_edges(schema: Schema, type_: str, fm: dict[str, Any]) -> list[tupl
 def _order_keys(schema: Schema, type_: str, fm: dict[str, Any]) -> list[tuple[str, Any]]:
     """type, title, the type's own required fields, created, then the rest."""
     own = [k for k in schema.types[type_].get("attributes", {}) if k in fm]
-    lead = ["type", "title", *own, "created"]
+    # dict.fromkeys dedupes: a type may redeclare a base attribute (every type
+    # here redeclares `title` to make it required), and it must stay one key.
+    lead = list(dict.fromkeys(["type", "title", *own, "created"]))
     return [(k, fm[k]) for k in lead if k in fm] + [(k, v) for k, v in fm.items() if k not in lead]
 
 

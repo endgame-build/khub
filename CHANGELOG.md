@@ -6,12 +6,16 @@ Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelo
 
 ### Added
 
-- **`lite/` — build-lite standalone**, a separate, dependency-free implementation of
-  the `build-lite` preset for one build project driven by opencode. One skill
-  directory (`SKILL.md` + `bl.py` + `schema.json` + Markdown body templates) holding
-  eight commands: scaffold an entity, keep an edge honest, walk the derived graph,
-  sweep the corpus. ~700 lines of stdlib Python against khub's 7,000 and six
-  dependencies. The rationale, the option comparison, and the four khub invariants
+- **`build-lite/` — build-lite standalone**, a separate, dependency-free
+  implementation of the `build-lite` preset for one build project driven by
+  opencode. A drop-in directory: `skills/build-lite/SKILL.md` for the agent, and
+  `scripts/` holding `bl.py`, `build.schema.yaml` and the Markdown body templates.
+  Eight commands — scaffold an entity, keep an edge honest, walk the derived graph,
+  sweep the corpus — in ~850 lines of stdlib Python against khub's 7,000 and six
+  dependencies. `build.schema.yaml` is khub's `core.yaml` base and the build-lite
+  preset combined into one file in khub's own vocabulary, with two commented
+  deltas (`id_prefix` per type; no `draft`), and it is the only file to edit to
+  add a field. The rationale, the option comparison, and the four khub invariants
   it deliberately breaks are in
   [`docs/build-lite-standalone.md`](docs/build-lite-standalone.md); it ships nothing
   into the `khub` package and changes no khub behaviour. A corpus it authors

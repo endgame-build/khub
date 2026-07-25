@@ -1,0 +1,137 @@
+# build.schema.yaml — the whole contract for a build-lite corpus.
+#
+# khub's core.yaml (the `base` block every entity inherits) and its build-lite
+# preset (the six entity types), combined into one self-contained file. This is
+# the only file to edit when a project needs a field: `bl` reads it at runtime
+# and hardcodes no type, field or predicate.
+#
+# Six types. A type earns a slot only if it is referenced by id from elsewhere,
+# walked as a graph, or gated by `check`. Prose a human reads start to finish is
+# a body; a fact stored once and read once is an attribute; anything that churns
+# with the code stays a file in the repo, linked via the base `resource`.
+#
+# They answer the five questions asked mid-build: what am I building
+# (feature-spec), what must hold (requirement), why can I not do X (adr, via
+# `affects`), where does the code live and what talks to what (component), and
+# what is this product (prd, arc42).
+#
+# What build-hub has and this does not, and where each went:
+#   capability -> base `tags` on requirement       pdr -> the prd body
+#   boundary, quality-attribute -> requirement.kind: constraint (the biggest
+#     real loss: enforcement/measurement/scenario stop being queryable, and this
+#     is the first one back)
+#   domain, entity -> arc42 sections               repo -> component.repo (text)
+#   contract -> the machine spec is a file; hang it off the provider's `resource`
+#   external-system -> component.kind: external    baseline -> CI and dashboards
+#   work-package -> the feature-spec IS the work unit
+#   test-spec -> the feature-spec's Acceptance criteria
+#   roadmap, glossary -> prd sections              erd -> the arc42 Data model
+#
+# Add-back order when this stops fitting: (1) boundary + quality-attribute,
+# (2) contract — alone, its provider targets `component`, (3) repo +
+# work-package, (4) domain + entity, (5) the rest, or switch to build-hub.
+#
+# Deltas from khub's generated .khub/schema.yaml, deliberate and listed so the
+# difference is never a surprise:
+#   - `id_prefix` is added per type. khub mints a slug from the title; `bl` mints
+#     an enumerated id (ad-004-slug) and checks the prefix against the entity's
+#     kind, which is only possible because there is exactly one schema. khub's
+#     schema model is extra="forbid", so this file is `bl`'s contract, not a khub
+#     workspace schema — `khub init build-lite` writes its own.
+#   - base `draft` is dropped. It is khub's manual publish flag, and in a corpus
+#     this small it gates nothing: adr.status and feature-spec.status already say
+#     it, and no relation here is required. Absent reads as khub's default
+#     (false), so every file stays a valid khub entity.
+
+version: "0.1.0"
+
+# ---------------------------------------------------------------- the base
+# Merged into every type at load time. A type declares only its delta and may
+# override a base attribute by redeclaring it.
+base:
+  attributes:
+    type:        { type: text, required: true }    # discriminator — pinned per type
+    author:      { type: text }                    # the writer, person or agent
+    created:     { type: date, required: true }
+    updated:     { type: date }                    # optional; git is the freshness record
+    title:       { type: text }                    # OKF
+    description: { type: text }                    # OKF — one line, shown by `bl ls`
+    resource:    { type: text }                    # OKF — canonical URI / link-out
+    tags:        { type: list }
+  relations:
+    related:     { to: any, many: true }           # prefer this one
+    sources:     { to: any, many: true }
+    references:  { to: any, many: true }
+    depends_on:  { to: any, many: true, acyclic: true }
+
+entities:
+
+  # ------------------------------------------------ narrative: the two docs
+  prd:
+    layout: singleton
+    path: knowledge/prd.md
+    required: true              # the product source of truth — check fails without it
+    orphan: true                # a narrative root: nothing points at it, by design
+    attributes:
+      title: { required: true }
+    # absorbs build-hub's roadmap and glossary as sections
+
+  arc42:
+    layout: singleton
+    path: knowledge/arc42.md
+    orphan: true
+    attributes:
+      title: { required: true }
+    # absorbs build-hub's erd as the Data model section
+
+  # ------------------------------------------------------- what must hold
+  requirement:
+    layout: file
+    path: knowledge/requirements
+    id_prefix: { by: kind, map: { functional: fr, constraint: cst, business-rule: br } }
+    attributes:
+      title: { required: true }
+      kind:  { enum: [functional, constraint, business-rule], required: true }
+    relations:
+      realized_in: { to: component, many: true }
+    # EARS-friendly prose in the body. `kind: constraint` absorbs build-hub's
+    # boundary and quality-attribute: state the invariant, its measurement and
+    # how it is enforced, in the body.
+
+  # ------------------------------------------------------ why it is so
+  adr:
+    layout: file
+    path: knowledge/decisions
+    id_prefix: ad
+    attributes:
+      title:  { required: true }
+      status: { enum: [proposed, accepted, rejected], required: true }
+    relations:
+      supersedes: { to: adr, inverse: superseded, acyclic: true }
+      affects:    { to: any, many: true }   # blast radius — the query that earns this type
+
+  # ------------------------------------------------------ what exists
+  component:
+    layout: file
+    path: knowledge/components
+    id_prefix: cmp
+    attributes:
+      title: { required: true }
+      kind:  { enum: [service, library, external], required: true }
+      stack: { type: text }   # ours: the runtime; external: the vendor
+      repo:  { type: text }   # ours only — org/name; absent on an external
+    # base `depends_on` carries component -> component and component -> external,
+    # which is what makes "what breaks when this vendor changes" a graph walk.
+
+  # --------------------------------------------- what to build (delivery)
+  feature-spec:
+    layout: file
+    path: specs
+    id_prefix: fs
+    attributes:
+      title:  { required: true }
+      status: { enum: [planned, active, done, dropped], required: true }
+    relations:
+      requirements: { to: requirement, many: true }   # what this change satisfies
+      supersedes:   { to: feature-spec, inverse: superseded, acyclic: true }
+    # the FS IS the work record — no separate feature container, no work-package

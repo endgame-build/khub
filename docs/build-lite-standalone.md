@@ -1,13 +1,13 @@
 # build-lite, standalone
 
 **A separate, tiny implementation of the build-lite preset for one build project
-driven by opencode: one skill directory containing one stdlib Python script.
-~700 lines of code where khub is 7,000, no dependencies where khub has six, and
-byte-compatible output so a corpus that outgrows it graduates by running
+driven by opencode: a drop-in directory holding a skill and one stdlib Python
+script. ~850 lines of code where khub is 7,000, no dependencies where khub has
+six, and byte-compatible output so a corpus that outgrows it graduates by running
 `khub init build-lite` over the same files.**
 
-The working implementation is in [`lite/`](../lite/README.md). This page is why
-it has the shape it has, and what was considered instead.
+The working implementation is in [`build-lite/`](../build-lite/README.md). This
+page is why it has the shape it has, and what was considered instead.
 
 ## The question this answers
 
@@ -81,42 +81,53 @@ plugin runs it automatically after every corpus edit.
 | **MCP server** | a process, a protocol, always-on tool schemas | Over-serving. Its advantage is cross-agent reach, and a CLI already has that more cheaply. Revisit only if the corpus is driven from a hosted agent with no shell. |
 | **Full khub + build-lite preset** (status quo) | 7,000 lines, 6 deps, `uv tool install`, search/viz/backfill/collections/presets unused | The graduation target, not the daily driver. Its generality is real value at a firm's scale and dead weight at one project's. |
 
-The recommendation is the second row, and the packaging follows from how opencode
-loads skills: **the deliverable is a single directory** that is simultaneously
-the skill, the schema, the templates, and the tool.
+The recommendation is the second row, and the deliverable is **one directory you
+drop into a project**, holding the two things that install to different places:
 
 ```
-.opencode/skills/build-lite/
-  SKILL.md          the ontology, the routing rules, the loop      (92 lines)
-  bl.py             scaffold + check + walk, stdlib only          (~700 lines)
-  schema.json       the contract — the only file to edit for a new field
-  templates/*.md    4 body templates; their `##` headings are the body contract
+build-lite/
+  skills/build-lite/SKILL.md   what the agent reads: the ontology, the routing
+                               rules, the loop                       (95 lines)
+  scripts/
+    bl.py                      scaffold + check + walk, stdlib only (~850 lines)
+    build.schema.yaml          khub's core base + the six types, combined
+    templates/*.md             4 body templates; their `##` headings are the
+                               body contract
+  install.sh                   wires the skill into .opencode/skills
+  test_bl.py                   17 tests
 ```
 
-`lite/install.sh` (or a bare `cp -r`) installs it. The same directory works
-verbatim in Claude Code (`.claude/skills/`) — opencode reads Claude's skill
-locations too, and the frontmatter uses only `name` and `description`, which both
-hosts accept.
+Only the skill has to move, because `.opencode/skills`, `.claude/skills` and
+`.agents/skills` are the only places a host looks. `scripts/` stays where it
+lands — `bl.py` resolves its schema and templates relative to itself. And there
+is a zero-copy path: opencode's `skills.paths` config key takes directories
+(relative entries resolve against the project root, scanned for `**/SKILL.md`),
+so `{"skills": {"paths": ["build-lite/skills"]}}` loads the skill in place with
+no install step at all. That key is implemented but undocumented, hence the
+install script as the guaranteed route.
 
 ### Why one script, not one script per verb
 
 `add.py` / `link.py` / `validate.py` as separate files is the obvious
-decomposition, and it loses on two counts.
+decomposition. One argument against it used to be decisive and no longer is; the
+other still holds.
 
-**It breaks the mechanism it is meant to serve.** When a skill loads, opencode
-lists its files for the model — `ripgrep.find({ pattern: "!**/SKILL.md", limit:
-10 })`, followed by *"Note: file list is sampled."* Ten. The install directory
-holds six files, so all six are always visible. Eight verb scripts plus a shared
-core, `schema.json` and four templates is fourteen, and which four vanish is
-whatever ripgrep happened not to reach. Verb names would become *less* reliably
-discoverable, not more, and `SKILL.md` already lists all eight in six lines.
+**The one that lapsed.** When a skill loads, opencode lists its files for the
+model — `ripgrep.find({ pattern: "!**/SKILL.md", limit: 10 })`, followed by
+*"Note: file list is sampled."* While the tool lived inside the skill directory,
+eight verb scripts plus a shared core, the schema and four templates would have
+been fourteen files competing for ten slots, with no say in which four vanished.
+Moving `scripts/` out of the skill directory removed that constraint entirely:
+the skill now holds exactly one file. Splitting is no longer *blocked*.
 
-**The verbs are not independent programs.** Roughly 310 of the 700 lines are the
-frontmatter profile, the schema, the corpus scan, and the edge computation, and
-every verb needs most of it. Splitting therefore means a shared `_core.py` plus
-seven ~30-line wrappers: eight files and slightly more code for exactly the same
-logic. The alternative — each script parsing frontmatter its own way — is how two
-readers start disagreeing about the same file.
+**The one that stands.** The verbs are not independent programs. Roughly 400 of
+the 850 lines are the frontmatter profile, the schema reader, the corpus scan and
+the edge computation, and every verb needs most of it — `add` resolves edges,
+which needs the index; `link` validates a target, which needs the index and the
+schema; `check` needs all of it. Splitting therefore means a shared `_core.py`
+plus seven ~30-line wrappers: eight files and slightly more code for exactly the
+same logic. The alternative — each script parsing frontmatter its own way — is
+how two readers start disagreeing about the same file.
 
 What the decomposition is actually reaching for is that the verbs should be
 legible. They are: `bl` with no arguments prints all eight with one-line
@@ -129,11 +140,16 @@ Verified against the opencode source at v1.18.5 (its docs site 403s from here, s
 the doc sources in `packages/web/src/content/docs` and the implementing
 TypeScript were read instead):
 
-- **Skills are first-class and bundle scripts.** Loading a skill hands the model
-  the skill's absolute base directory plus a file listing that is **capped at 10
-  entries and explicitly described to the model as sampled**. The install
-  directory holds 6 files besides `SKILL.md` — deliberate headroom, and the
-  reason `README.md`, the tests, and the opencode extras live outside it.
+- **Skills are first-class and can bundle scripts.** Loading a skill hands the
+  model the skill's absolute base directory plus a file listing **capped at 10
+  entries and explicitly described to the model as sampled**. Bundling was the
+  first design; keeping the tool in a sibling `scripts/` instead means the skill
+  ships one file and the cap stops mattering, at the cost of `SKILL.md` having to
+  name the script's path.
+- **`skills.paths` loads a skill from anywhere.** Relative entries resolve
+  against the project root and are scanned for `**/SKILL.md`, which is what makes
+  a genuine zero-copy drop-in possible. Implemented in `skill/index.ts`, absent
+  from every doc page — so it is offered as the fast path, not the only one.
 - **No `allowed-tools`.** opencode recognizes only `name`, `description`,
   `license`, `compatibility`, `metadata`. `name` must match the directory name.
 - **Permissions match per sub-command, last rule wins.** The shell tool
@@ -141,8 +157,8 @@ TypeScript were read instead):
   so `bl check | head` needs `head *` allowed too. Put `"*": "ask"` **first** and
   `"bl *": "allow"` after it, and prefer not to pipe.
 - **There are no PostToolUse hooks.** The analogue is a plugin's
-  `tool.execute.after`, which can append to the tool's own output — that is
-  [`lite/opencode/plugin-check.ts`](../lite/opencode/plugin-check.ts), ~30 lines,
+  `tool.execute.after`, which can append to the tool's own output — ~30 lines,
+  in [`build-lite/README.md`](../build-lite/README.md#optional-make-the-gate-ambient),
   turning the gate from something the agent must remember into something ambient.
   (The `experimental.hook.file_edited` key visible in opencode's SDK types is a
   stale artifact — no runtime code reads it. Formatters can run a command on
@@ -164,12 +180,12 @@ TypeScript were read instead):
 | `search` (FTS5, BM25) | **cut.** ripgrep is better at this scale and the agent already has it. |
 | `add --body/--body-file`, `edit` | **cut.** The agent writes the file. `new` scaffolds, `link`/`unlink` keep edges honest. |
 | `validate` + `check` as two gates | **one `check`** with two severities: `error` (broken) and `gap` (unfinished). The invariant the split protects — *capture is never blocked* — survives as the exit code, which only errors set. |
-| `draft` flag, active-subgraph logic | **cut.** `adr.status` and `feature-spec.status` already say what draft would. Absent reads as khub's default `false`, so files stay compatible. |
+| `draft` flag, active-subgraph logic | **cut.** `adr.status` and `feature-spec.status` already say what draft would, and no relation in build-lite is required, so the flag gates nothing here. Absent reads as khub's default `false`, so files stay compatible. It is the only base attribute dropped — `author`, `sources` and `references` are unused by this tool but kept, because the base block is meant to be recognisably khub's. |
 | `stale`, `backfill`, `log`, git integration | **cut.** git is the freshness record; `git log -- <path>` answers it without a projection. |
 | `reindex`, `viz`, OKF export | **cut.** No index to keep current, no dashboard consumer. |
 | collections, `json`/`yaml`/`jsonl` entities, locks, atomic replace | **cut.** Markdown only. build-lite has no homogeneous registry left. |
-| presets, `init <preset>`, schema flattening, `wire`, `install-skills` | **cut.** One schema, shipped as `schema.json`. Installation is `cp -r`. |
-| networkx, pydantic, typer, rich, ruamel, python-frontmatter | **cut.** BFS over a dict is 20 lines; validation is the checker; argparse is stdlib. Frontmatter is a documented flat-YAML profile with a hand-written reader (~90 lines), which is also what pins the corpus to one shape. |
+| presets, `init <preset>`, schema flattening, `wire`, `install-skills` | **cut.** One schema, shipped pre-flattened as `build.schema.yaml`. Installation is `cp -r`. |
+| networkx, pydantic, typer, rich, ruamel, python-frontmatter | **cut.** BFS over a dict is 20 lines; validation is the checker; argparse is stdlib. Two hand-written readers replace the YAML dependency: a flat profile for frontmatter (~90 lines, which is also what pins the corpus to one shape) and a nested subset reader for the schema (~140 lines, tested against `ruamel.yaml`'s parse of the shipped file). |
 | `type/slug` qualification, ambiguity resolution | **cut by specialization.** Ids carry a type prefix (`ad-`, `cmp-`, `fs-`, `fr-`/`cst-`/`br-`), so every slug is globally unambiguous. |
 
 ### And what specialization buys back
@@ -195,39 +211,45 @@ holds at this scale. They are listed so the next reader does not "fix" them:
    it is why `links` computes inverses on every call.
 
 The invariant that is *strengthened*: schema-genericity. `bl.py` contains no type
-name, no field name, and no predicate. Every one comes from `schema.json`, which
-is why adding a field is a data edit, and why the add-back ladder in
+name, no field name, and no predicate. Every one comes from `build.schema.yaml`,
+which is why adding a field is a data edit — a project can even override the
+shipped copy at `.build-lite/build.schema.yaml` without touching the drop-in —
+and why the add-back ladder in
 [`build-lite-preset.md`](build-lite-preset.md) still works here.
 
 ## Size
 
 | | build-lite standalone | khub |
 |---|---|---|
-| implementation | 841 lines, 1 file (~700 non-blank) | 6,990 lines, 40 modules |
-| tests | 269 lines, 13 tests | 8,135 lines |
+| implementation | 1,013 lines, 1 file (847 non-blank) | 6,990 lines, 40 modules |
+| tests | 339 lines, 17 tests | 8,135 lines |
 | runtime dependencies | 0 | 6 |
-| install | `cp -r skill/ .opencode/skills/build-lite` | `uv tool install git+ssh://…` |
+| install | `cp -r build-lite/` into the project | `uv tool install git+ssh://…` |
 | commands | 8 | 30 |
 
 The tests are shaped around the fact that **the checker is the product**: one
 seeded corpus broken in every way the schema permits, asserted against the set of
-finding codes it produces, plus a round-trip of the frontmatter profile.
+finding codes it produces, plus a round-trip of the frontmatter profile and a
+differential check of the schema reader against `ruamel.yaml`.
 
 ## Risks worth watching
 
-- **The hand-written YAML profile** is the one place a bug would be quiet rather
-  than loud. It is confined to two functions (`parse_front` / `emit_scalar`) and
-  covered by a round-trip test over the hostile scalars (`"Use: Postgres"`,
-  leading dashes, `true`, empty, padded). If it ever misreads real data, swapping
-  in `ruamel.yaml` is a two-function change — at the cost of the zero-dependency
-  install, which is most of why this is easy to adopt.
+- **The two hand-written YAML readers** are where a bug would be quiet rather
+  than loud. The frontmatter profile is confined to `parse_front`/`emit_scalar`
+  and round-trip tested over hostile scalars (`"Use: Postgres"`, leading dashes,
+  `true`, empty, padded). The schema reader is nested and therefore riskier, so
+  it is tested differentially: its parse of the shipped `build.schema.yaml` must
+  equal `ruamel.yaml`'s, byte for byte in structure. If either ever misreads real
+  data, swapping in `ruamel` is a small, local change — at the cost of the
+  zero-dependency install, which is most of why this is easy to adopt.
 - **Surgical frontmatter edits** in `link`/`unlink` splice one key's lines and
   leave the rest byte-identical, so a hand-written file keeps its comments and
   quoting. Tested, but it is the subtlest code in the file.
-- **Drift from the canonical preset.** `schema.json` is a hand-maintained
-  projection of `presets/build-lite/schema.yaml`. If the two are meant to stay in
-  step, generate it (`khub schema --format json` emits the same shape) and diff it
-  in CI. Left manual for now — the preset is stable and the projection is 73 lines.
+- **Drift from the canonical preset.** `build.schema.yaml` is a copy of
+  `presets/core.yaml` + `presets/build-lite/schema.yaml`, in the same vocabulary,
+  with two commented deltas. Being the same format makes a drift check cheap —
+  diff it against a `khub init build-lite` scaffold in CI — but nothing does that
+  yet, and a copy is still a copy.
 - **Body-shape gaps are noisy at first.** A freshly scaffolded `prd.md` satisfies
   its template because `init` seeds it; a hand-created document will not. That is
   the intended nudge, but it is the finding most likely to be ignored.

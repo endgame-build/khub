@@ -14,8 +14,9 @@ import sys
 import tempfile
 from pathlib import Path
 
-sys.dont_write_bytecode = True  # a __pycache__ in the skill dir would eat a file-listing slot
-spec = importlib.util.spec_from_file_location("bl", Path(__file__).parent / "skill" / "bl.py")
+sys.dont_write_bytecode = True
+SCRIPTS = Path(__file__).parent / "scripts"
+spec = importlib.util.spec_from_file_location("bl", SCRIPTS / "bl.py")
 assert spec and spec.loader
 bl = importlib.util.module_from_spec(spec)
 sys.modules["bl"] = bl  # dataclasses resolve their annotations through sys.modules
@@ -74,6 +75,74 @@ def test_risky_scalars_are_quoted() -> None:
     for value in ["Use: Postgres", "- dash", "true", "", "  padded  ", "hash # comment"]:
         line = bl.emit_key("title", value)[0]
         assert bl.parse_front([line])["title"] == value, line
+
+
+# ----------------------------------------------------------------- schema yaml
+
+
+def test_yaml_reads_the_shipped_schema() -> None:
+    schema = bl.load_schema(Path("/nonexistent"))
+    assert set(schema.types) == {"prd", "arc42", "requirement", "adr", "component", "feature-spec"}
+    assert schema.is_singleton("prd") and not schema.is_singleton("adr")
+    assert schema.types["prd"]["required"] is True
+    assert schema.attrs("requirement")["kind"]["enum"] == ["functional", "constraint", "business-rule"]
+    assert schema.attrs("requirement")["created"]["required"] is True  # merged from base
+    assert schema.rels("adr")["supersedes"] == {"to": "adr", "inverse": "superseded", "acyclic": True}
+    assert schema.rels("adr")["depends_on"]["to"] == "any"  # merged from base
+    assert schema.prefixes("requirement") == ["fr", "cst", "br"]
+    assert schema.prefix_for("adr", {}) == "ad"
+    assert "draft" not in schema.attrs("prd")  # the documented delta from khub's base
+
+
+def test_yaml_matches_ruamel_on_the_shipped_schema() -> None:
+    """The parser is a subset reader; the subset must mean what YAML means."""
+    try:
+        from ruamel.yaml import YAML  # dev-only; the shipped tool has no dependencies
+    except ImportError:
+        print("    (skipped: ruamel not installed)")
+        return
+    source = (SCRIPTS / "build.schema.yaml").read_text()
+    with io.StringIO(source) as fh:
+        expected = YAML(typ="safe").load(fh)
+    assert bl.load_yaml(source) == expected
+
+
+def test_yaml_subset_edges() -> None:
+    parsed = bl.load_yaml(
+        '# leading comment\n'
+        'version: "0.1.0"   # trailing, and a # inside quotes below\n'
+        'quoted: "a: b # not a comment"\n'
+        'nested:\n'
+        '  flow: { a: 1, b: [x, y], c: { d: true } }\n'
+        '  empty:\n'
+        '  block:\n'
+        '    - one\n'
+        '    - two\n'
+        'bare: knowledge/prd.md\n'
+    )
+    assert parsed == {
+        "version": "0.1.0",
+        "quoted": "a: b # not a comment",
+        "nested": {"flow": {"a": 1, "b": ["x", "y"], "c": {"d": True}}, "empty": None,
+                   "block": ["one", "two"]},
+        "bare": "knowledge/prd.md",
+    }
+    for bad in ["a: {b: 1\n", "a: [1, 2\n", "  oops: 1\na: 2\n", "a: 1\n  b: 2\n"]:
+        try:
+            bl.load_yaml(bad)
+            raise AssertionError(f"accepted {bad!r}")
+        except bl.Bad:
+            pass
+
+
+def test_workspace_can_override_the_schema() -> None:
+    root = fresh()
+    shipped = (SCRIPTS / "build.schema.yaml").read_text()
+    override = root / ".build-lite" / bl.SCHEMA_FILE
+    override.parent.mkdir(parents=True)
+    override.write_text(shipped.replace("stack: { type: text }", "stack: { type: text, required: true }"))
+    run(root, "new", "component", "API", "--set", "kind=service")
+    assert "incomplete" in codes(root)[bl.GAP]
 
 
 # ---------------------------------------------------------------- authoring

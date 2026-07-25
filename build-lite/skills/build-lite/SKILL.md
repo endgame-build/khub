@@ -18,9 +18,11 @@ knowledge/components/         cmp-NNN                     what exists, what talk
 specs/                        fs-NNN                      what we are building now
 ```
 
-`bl` (this skill's `bl.py`, run with `python3`) does the four things you cannot do
-for yourself. Everything else — reading, searching, writing prose — use your own
-tools, they are better at it.
+`bl` does the four things you cannot do for yourself. Everything else — reading,
+searching, writing prose — use your own tools, they are better at it.
+
+Run it as `bl`. If that is not on PATH, it is `python3 build-lite/scripts/bl.py`
+from the project root; run it once with no arguments to see the verb list.
 
 ```bash
 bl schema                  # the exact fields, enums and edges. Read this before writing frontmatter.
@@ -34,7 +36,8 @@ bl check                   # sweep the whole corpus. Run it before you finish.
 ## The loop
 
 1. `bl new` the entity — it mints `ad-007-<slug>`, the frontmatter, and the body
-   template with a hint comment under each heading.
+   template with a hint comment under each heading. The whole vocabulary lives in
+   `build-lite/scripts/build.schema.yaml`; `bl schema` prints it.
 2. Open the file and write the prose. Replace the hint comments; keep the `##`
    headings and their order.
 3. `bl link` every relation. Edit frontmatter by hand only for plain attributes.
