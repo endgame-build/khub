@@ -246,6 +246,69 @@ def test_an_uppercase_id_round_trips(lite_ws: Path) -> None:
 
 
 @pytest.mark.e2e
+def test_case_variant_targets_never_duplicate_an_edge(lite_ws: Path) -> None:
+    """Case-insensitive resolution without canonical storage is worse than no folding.
+
+    Resolution accepted `CMP-001-CORE`, but `link` stored the caller's raw string and
+    deduped by exact match — so three spellings of one node became three parallel edges,
+    each reporting `changed: true`. Before folding existed the mixed-case call hard-failed,
+    so this was impossible: the fix must canonicalize on write, not only on read.
+    """
+    changed = []
+    for spelling in ("CMP-001-CORE", "cmp-001-core", "Cmp-001-Core"):
+        out = runner.invoke(
+            app, ["-C", str(lite_ws), "link", "cmp-003-presets", "depends_on", spelling]
+        )
+        changed.append(json.loads(out.output)["changed"])
+    assert changed == [True, False, False]
+
+    stored = (lite_ws / "knowledge" / "components" / "cmp-003-presets.md").read_text()
+    assert stored.count("cmp-001-core") == 1
+    assert "CMP-001-CORE" not in stored  # the canonical spelling is what lands
+
+    # ...and unlink by any spelling removes the edge it can see.
+    out = runner.invoke(
+        app, ["-C", str(lite_ws), "unlink", "cmp-003-presets", "depends_on", "CMP-001-Core"]
+    )
+    assert json.loads(out.output)["changed"] is True
+
+
+@pytest.mark.e2e
+def test_a_qualified_id_folds_case_for_reads_and_writes_alike(lite_ws: Path) -> None:
+    """`get component/CMP-001-Core` resolved while `link ... component/CMP-001-Core` did
+    not — the two resolvers disagreed on the qualified form only."""
+    assert runner.invoke(app, ["-C", str(lite_ws), "get", "component/CMP-001-Core"]).exit_code == 0
+    linked = runner.invoke(
+        app, ["-C", str(lite_ws), "link", "cmp-002-cli", "references", "component/CMP-001-Core"]
+    )
+    assert linked.exit_code == 0, linked.output
+
+
+@pytest.mark.e2e
+def test_missing_skips_types_that_cannot_carry_the_name(lite_ws: Path) -> None:
+    """Untyped `--missing kind` returned prd/arc42 too — neither declares `kind`, so they
+    are not gaps an author could ever close, and they dilute the gap query."""
+    # A genuine gap to find: capture is never blocked, so a required field may be absent.
+    assert runner.invoke(
+        app, ["-C", str(lite_ws), "add", "requirement", "--id", "fr-gap", "--title", "Gap"]
+    ).exit_code == 0
+
+    rows = json.loads(runner.invoke(app, ["-C", str(lite_ws), "query", "--missing", "kind"]).output)
+    assert [r["slug"] for r in rows] == ["fr-gap"]  # the only entity that CAN lack `kind`
+    assert not any(r["type"] in {"prd", "arc42"} for r in rows)
+
+
+@pytest.mark.e2e
+def test_a_drafted_optional_singleton_is_reported_on_a_tty(lite_ws: Path) -> None:
+    """It does not fail the gate, so the human path returned early and printed nothing —
+    the exact silence the report was added to end."""
+    runner.invoke(app, ["-C", str(lite_ws), "edit", "arc42", "draft", "true"])
+    result = runner.invoke(app, ["-C", str(lite_ws), "check"], env=TTY)
+    assert result.exit_code == 0
+    assert "arc42 is unpublished" in result.output
+
+
+@pytest.mark.e2e
 def test_no_template_is_refused_on_a_templated_type(lite_ws: Path) -> None:
     """The flag's only outcome on a templated type was an entity `validate` rejects."""
     result = runner.invoke(
@@ -271,13 +334,19 @@ def test_schema_show_exposes_every_enforced_contract(lite_ws: Path) -> None:
 
 @pytest.mark.e2e
 def test_schema_edges_keeps_every_declared_target(lite_ws: Path) -> None:
-    """`supersedes` is declared on adr AND feature-spec, but the aggregation kept only the
-    first-seen row — advertising `feature-spec --supersedes--> adr`, an edge validate rejects."""
+    """`supersedes` is declared on adr AND feature-spec with DIFFERENT targets.
+
+    Keying rows by predicate name collapsed them and made `from` x `to` a cross product,
+    advertising `feature-spec --supersedes--> adr` — an edge validate rejects. Merging the
+    targets only added the reverse claim as well, so each declaration gets its own row.
+    """
     edges = json.loads(runner.invoke(app, ["-C", str(lite_ws), "schema", "edges"]).output)
-    supersedes = next(e for e in edges if e["predicate"] == "supersedes")
-    assert supersedes["from"] == ["adr", "feature-spec"]
-    assert supersedes["to"] == ["adr", "feature-spec"]
-    assert supersedes["acyclic"] is True
+    rows = [e for e in edges if e["predicate"] == "supersedes"]
+    assert {(tuple(r["from"]), tuple(r["to"])) for r in rows} == {
+        (("adr",), ("adr",)),
+        (("feature-spec",), ("feature-spec",)),
+    }
+    assert all(r["acyclic"] is True and r["inverse"] == "superseded" for r in rows)
 
 
 @pytest.mark.e2e

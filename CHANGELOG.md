@@ -27,22 +27,34 @@ index, or the query layer.
   false. Absent, null, or empty counts as missing. Together with the search gap this had
   left **no route** to find an entity by an attribute value, which pushes an agent back
   to grep: the bypass the wiring exists to prevent.
-- **Ids resolve case-insensitively.** `add --id CMP-001-Api` slugifies to `cmp-001-api`,
-  and every read of the string the caller passed failed. Both resolvers fold case, so
-  `get` and `link` can no longer disagree about whether an entity exists.
+- **Ids resolve case-insensitively, and writes store the canonical spelling.** `add --id
+  CMP-001-Api` slugifies to `cmp-001-api`, and every read of the string the caller passed
+  failed. Both resolvers fold case, on the bare and qualified forms alike. Folding on read
+  alone would have been worse than none: `link` stored the caller's raw string and deduped
+  by exact match, so three spellings of one node became three parallel edges, each
+  reporting `changed: true`, and `unlink` of another spelling was a silent no-op.
 - **`--no-template` is refused on a templated type.** Its only outcome there was an
   entity `validate` rejected on the very next run.
 - **`schema show` / `schema edges` expose what they enforce.** `acyclic`, `inverse`,
   `pattern` and `default` were resolved, enforced, and invisible — an agent told to
-  discover the schema at runtime could not learn why a write was rejected. `schema edges`
-  also kept only the first-seen declaration of a predicate, so build-lite's `supersedes`
-  advertised `feature-spec --supersedes--> adr`, an edge `validate` rejects; declarations
-  now merge.
+  discover the schema at runtime could not learn why a write was rejected.
+- **`schema edges` emits one row per distinct declaration.** Keying rows by predicate name
+  kept only the first-seen targets, so build-lite's `supersedes` (adr → adr, feature-spec →
+  feature-spec) advertised `feature-spec --supersedes--> adr` — an edge `validate` rejects.
+  Merging the targets does not fix it; `from` × `to` is a cross product, so a union just
+  adds the reverse claim too. Only types declaring a predicate identically now share a row.
 - **A drafted singleton is reported.** A drafted non-required singleton (`arc42`) left the
   active subgraph and appeared in no list, with `check` passing; a drafted required one
   (`prd`) was reported twice, once as "missing" for a file sitting on disk. The two
   conditions are now disjoint, with `draft_required_singletons` naming the subset that
-  fails the gate.
+  fails the gate — and the text view reports the optional case too, which by definition
+  never reaches the failure path.
+- **`--missing <name>` skips types that cannot carry the name.** Untyped, `--missing kind`
+  returned every singleton alongside the entities that genuinely lack it, diluting a gap
+  query with rows no author could ever close.
+- **`search` no longer double-counts titles.** `title`/`name` already populate the
+  dedicated FTS `title` column; folding them into the body sweep as well shifted BM25
+  ranking and let a snippet excerpt frontmatter as if it were prose.
 - **The eval's bypass detector sees singleton writes.** A singleton's storage path is a
   file, so the prefix test could never match it and an agent that hand-edited the PRD
   scored on-rails. firm-ops declares no singletons, which is why the published adherence

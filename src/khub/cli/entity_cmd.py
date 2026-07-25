@@ -49,7 +49,10 @@ def add_command(
     body_text: str = typer.Option(None, "--body", help="Body prose as a string."),
     body_file: str = typer.Option(None, "--body-file", help="Read the body from a file ('-' for stdin)."),
     no_template: bool = typer.Option(
-        False, "--no-template", help="Start with an empty body even when the type has a template."
+        False,
+        "--no-template",
+        help="Start with an empty body. Refused on a type that HAS a template, since the "
+        "result would fail validate; use --body to supply your own sections.",
     ),
     fmt: str = typer.Option("text", "--format", help="text or json (emits the written record)."),
 ) -> None:

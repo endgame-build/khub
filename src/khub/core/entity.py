@@ -515,6 +515,25 @@ def get(root: Path, id_: str, *, edges: bool = False) -> EntityView:
     )
 
 
+def _same_target(a: str, b: str) -> bool:
+    """Two target spellings naming one node. Case-insensitive, because lookup is."""
+    return a.casefold() == b.casefold()
+
+
+def _canonical_target(target: str, matches: set[tuple[str, str]]) -> str:
+    """The spelling to STORE for a resolved target, preserving the caller's qualified form.
+
+    Resolution folds case, so storing the caller's raw string let ``CMP-001-Api`` and
+    ``cmp-001-api`` sit side by side as two parallel edges to ONE node, each reporting
+    ``changed: true`` — and made an ``unlink`` of the other spelling a silent no-op. One
+    node, one stored value.
+    """
+    if len(matches) != 1:
+        return target
+    ttype, tslug = next(iter(matches))
+    return f"{ttype}/{tslug}" if "/" in target else tslug
+
+
 def resolve_id(index: Index, id_: str) -> tuple[str, str]:
     """Resolve a bare slug (or qualified ``type/slug``) to one ``(type, slug)`` node.
 
@@ -677,20 +696,22 @@ def link(root: Path, id_: str, predicate: str, target: str) -> LinkResult:
             message=f"Cannot link '{id_}' to itself via '{predicate}'",
         )
 
+    target = _canonical_target(target, matches)
+
     def apply(cmap: Any) -> bool:
         existing = cmap.get(predicate)
         changed = False
         if rel.many:
             values = _as_list(existing)  # a scalar many-value reads as [value], never char-split
-            if target not in values:
+            if not any(_same_target(str(v), target) for v in values):
                 values.append(target)
                 changed = True
             cmap[predicate] = values
         else:
-            if existing not in (None, "", target):
+            current = None if existing in (None, "") else str(existing)
+            if current is not None and not _same_target(current, target):
                 raise LocatedError.cardinality_violation(predicate)
-            if existing != target:
-                changed = True
+            changed = current != target
             cmap[predicate] = target
         return changed
 
@@ -717,14 +738,14 @@ def unlink(root: Path, id_: str, predicate: str, target: str) -> LinkResult:
         changed = False
         if rel.many:
             values = _as_list(existing)  # a scalar many-value reads as [value], never char-split
-            if target in values:
-                remaining = [v for v in values if v != target]
+            if any(_same_target(str(v), target) for v in values):
+                remaining = [v for v in values if not _same_target(str(v), target)]
                 if remaining:
                     cmap[predicate] = remaining
                 else:
                     del cmap[predicate]
                 changed = True
-        elif existing == target:
+        elif existing is not None and _same_target(str(existing), target):
             del cmap[predicate]
             changed = True
         return changed

@@ -104,7 +104,7 @@ $ khub add [OPTIONS] [TYPE]
 * `--strict`: Reject fields the schema does not declare.
 * `--body <str>`: Body prose as a string.
 * `--body-file <str>`: Read the body from a file (&#x27;-&#x27; for stdin).
-* `--no-template`: Start with an empty body even when the type has a template.
+* `--no-template`: Start with an empty body. Refused on a type that HAS a template, since the result would fail validate; use --body to supply your own sections.
 * `--format <str>`: text or json (emits the written record).  [default: text]
 * `--help`: Show this message and exit.
 

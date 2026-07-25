@@ -64,35 +64,36 @@ def schema_view(resolved: ResolvedSchema, provenance: dict[str, str]) -> dict[st
     }
 
 
+def _signature(rel: ResolvedRelation) -> tuple[Any, ...]:
+    """Everything that makes one declaration of a predicate distinct from another."""
+    return (rel.predicate, rel.targets, rel.kind, rel.many, rel.required, rel.inverse, rel.acyclic)
+
+
 def edges_view(resolved: ResolvedSchema) -> list[dict[str, Any]]:
-    """The relation vocabulary aggregated by predicate, with from/to/cardinality."""
+    """The relation vocabulary: one row per DISTINCT declaration, with from/to/cardinality.
+
+    Keying rows by predicate NAME alone is lossy in a way that actively misleads. build-lite
+    declares `supersedes` on adr (→ adr) and on feature-spec (→ feature-spec); one row makes
+    `from` × `to` a cross product, advertising `feature-spec --supersedes--> adr` — an edge
+    `validate` rejects. Merging the targets does not help: it just adds the reverse claim
+    too. So a row is keyed by the whole declaration, and only types that declare a predicate
+    IDENTICALLY share one. Nothing is merged, so nothing can be misreported.
+    """
     # Base (universal) predicates apply to every type — their source is `any`.
-    edges: dict[str, dict[str, Any]] = {}
-    for predicate, rel in resolved.base_relations.items():
-        edges[predicate] = _edge(rel, sources=["any"])
-    # Type-declared predicates accumulate their declaring types as `from`, and MERGE the
-    # declarations themselves. A predicate declared on two types (build-lite's
-    # `supersedes` on both adr and feature-spec) used to keep only the first-seen `to`,
-    # so this view advertised `feature-spec --supersedes--> adr` — an edge `validate`
-    # rejects. Targets union; the modal flags OR, since the view answers "is this ever
-    # many / required / acyclic?" across every declaration.
-    sources: dict[str, set[str]] = {}
+    rows: dict[tuple[Any, ...], dict[str, Any]] = {
+        _signature(rel): _edge(rel, sources=["any"]) for rel in resolved.base_relations.values()
+    }
+    sources: dict[tuple[Any, ...], set[str]] = {}
     for tname, rtype in resolved.types.items():
         for predicate, rel in rtype.relations.items():
             if predicate in resolved.base_relations:
                 continue
-            sources.setdefault(predicate, set()).add(tname)
-            edge = edges.setdefault(predicate, _edge(rel, sources=[]))
-            edge["to"] = sorted(set(edge["to"]) | set(rel.targets))
-            edge["required"] = edge["required"] or rel.required
-            edge["many"] = edge["many"] or rel.many
-            edge["acyclic"] = edge["acyclic"] or rel.acyclic
-            edge["inverse"] = edge["inverse"] or rel.inverse
-            if edge["kind"] != rel.kind:  # e.g. typed on one type, any on another
-                edge["kind"] = "union"
-    for predicate, srcs in sources.items():
-        edges[predicate]["from"] = sorted(srcs)
-    return [edges[p] for p in sorted(edges)]
+            sig = _signature(rel)
+            sources.setdefault(sig, set()).add(tname)
+            rows.setdefault(sig, _edge(rel, sources=[]))
+    for sig, srcs in sources.items():
+        rows[sig]["from"] = sorted(srcs)
+    return [rows[s] for s in sorted(rows, key=lambda s: (str(s[0]), str(s[1])))]
 
 
 def _type_view(rtype: ResolvedType) -> dict[str, Any]:

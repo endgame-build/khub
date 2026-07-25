@@ -159,13 +159,29 @@ def _passes(
         return False
     if f.has is not None and not _has_value(node, meta, g, resolved, f.has):
         return False
-    if f.missing is not None and _has_value(node, meta, g, resolved, f.missing):
+    if f.missing is not None and (
+        # A type that cannot carry the name has no gap to surface: without --type,
+        # `--missing kind` otherwise returned every singleton alongside the components
+        # that genuinely lack it, diluting the gap query with unfillable rows.
+        not _declares(node[0], resolved, f.missing)
+        or _has_value(node, meta, g, resolved, f.missing)
+    ):
         return False
     if f.orphan and not orphan:
         return False
     if f.stale and not stale:  # noqa: SIM103 — one guard per filter reads better than a
         return False             # collapsed boolean; the parallel shape is the point
     return True
+
+
+def _declares(type_: str, resolved: ResolvedSchema, name: str) -> bool:
+    """Whether ``type_`` could carry ``name`` at all — as a relation, inverse, or attribute."""
+    rtype = resolved.types[type_]
+    return (
+        name in rtype.relations
+        or name in rtype.attributes
+        or bool(_inverse_sources(resolved, name, type_))
+    )
 
 
 def _has_value(

@@ -159,8 +159,13 @@ def fts_body(meta: dict[str, Any], body: str, fmt: str) -> str:
     Until 0.13.0 md entities returned the body alone, so `search python` missed an
     entity carrying `stack: python` — while json/yaml entities matched it. Same rule
     for every format now, which is what README and the khub skill always claimed.
+
+    ``title``/``name`` are excluded: they already populate the dedicated ``title`` FTS
+    column, and folding them in here counted every title twice in BM25 and let a snippet
+    excerpt a run of frontmatter values as if it were prose.
     """
-    scalars = (v for k, v in meta.items() if k != "type" and isinstance(v, str))
+    skip = {"type", "title", "name"}
+    scalars = (v for k, v in meta.items() if k not in skip and isinstance(v, str))
     return " ".join([body, *scalars]).strip()
 
 

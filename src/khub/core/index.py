@@ -181,15 +181,24 @@ def resolve_target(
     accepts on an ambiguous slug); a bare slug resolves by slug — across every type
     for a universal (``any``) edge, within the declared targets for a typed edge.
     """
+    # Resolve case the same way the read verbs do, so `link x rel CMP-001` and
+    # `get CMP-001` cannot disagree about whether that entity exists. Both forms fold:
+    # `resolve_id` accepts a qualified id case-insensitively, so this must too.
     if "/" in target:
         t, s = target.split("/", 1)
         if (t, s) not in nodes:
-            return set()
+            canon = canonical_slug(s, types_by_slug)
+            if canon is None:
+                return set()
+            match = next(
+                (ct for ct in types_by_slug[canon] if ct.casefold() == t.casefold()), None
+            )
+            if match is None:
+                return set()
+            t, s = match, canon
         # A qualified id still honors the edge's declared targets: a typed/union edge
         # rejects a node of a disallowed type; a universal (any) edge accepts any.
         return {(t, s)} if rel.kind == "any" or t in rel.targets else set()
-    # Resolve case the same way the read verbs do, so `link x rel CMP-001` and
-    # `get CMP-001` cannot disagree about whether that entity exists.
     target = canonical_slug(target, types_by_slug) or target
     if rel.kind == "any":
         return {(t, target) for t in types_by_slug.get(target, ())}
