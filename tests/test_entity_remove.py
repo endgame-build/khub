@@ -140,3 +140,35 @@ def test_cli_remove_unknown_id(fresh_ws: Path, monkeypatch) -> None:
     result = runner.invoke(app, ["remove", "ghost"])
     assert result.exit_code == 1
     assert "No entity 'ghost' found" in result.output
+
+
+# --- singleton layout (0.10.x: delete re-derived the path and crashed) ----------
+
+
+@pytest.mark.unit
+def test_remove_singleton_deletes_its_one_file(tmp_path: Path) -> None:
+    """A singleton's `path` IS the file. `delete` used to append the slug to it
+    (`prd.md/prd.md`) and raise NotADirectoryError, leaving the entity on disk."""
+    from khub.core.workspace import init_workspace
+
+    ws = tmp_path / "ws"
+    init_workspace("build-hub", ws)
+    prd = ws / "knowledge" / "product" / "prd.md"
+    assert prd.is_file()
+
+    result = delete(ws, "prd")
+    assert result.removed
+    assert not prd.exists()
+
+
+@pytest.mark.unit
+def test_remove_singleton_then_check_reports_it_missing(tmp_path: Path) -> None:
+    """Removing the required singleton is now possible, and `check` notices."""
+    from khub.core.integrity import check
+    from khub.core.workspace import init_workspace
+
+    ws = tmp_path / "ws"
+    init_workspace("build-hub", ws)
+    delete(ws, "prd")
+    report = check(ws)
+    assert "prd" in report.missing_singletons

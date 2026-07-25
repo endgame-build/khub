@@ -760,11 +760,13 @@ def delete(root: Path, id_: str, *, force: bool = False) -> DeleteResult:
 
         _mutate_collection(root, rtype, mutate)
         return DeleteResult(type=type_, slug=slug, removed=True, inbound=inbound)
-    base = root / (rtype.storage.path or rtype.name)
+    # Reuse the one path resolver rather than re-deriving: it is the only place that
+    # knows a singleton's `path` IS the file, not a directory to append a name to.
+    path = entity_path(root, rtype, slug)
     if rtype.storage.layout == "folder":
-        shutil.rmtree(base / slug)
+        shutil.rmtree(path.parent)  # the entity is the folder, not just its _index
     else:
-        (base / f"{slug}.{rtype.storage.fmt}").unlink()
+        path.unlink()
     return DeleteResult(type=type_, slug=slug, removed=True, inbound=inbound)
 
 
