@@ -122,6 +122,9 @@ def test_global_scope_writes_home_dirs_and_no_gitignore(
     home = tmp_path / "home"
     home.mkdir()
     monkeypatch.setattr(Path, "home", staticmethod(lambda: home))
+    # This asserts the ~/.config fallback, so the ambient XDG_CONFIG_HOME must not
+    # leak in — CI runners set it, which is how this failed there and not locally.
+    monkeypatch.delenv("XDG_CONFIG_HOME", raising=False)
 
     report = install_skills(fresh_ws, scope_global=True)
     assert report.scope == "global"
