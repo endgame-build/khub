@@ -39,16 +39,26 @@ on one transfers to the other.
 | `kb neighbors <id> [--depth n] [--in\|--out]` | adjacency, **including derived inverses** |
 | `kb impact <id> [--predicate p] [--reverse]` | blast radius over one predicate |
 | `kb history <id>` | the supersession chain |
-| `kb validate [target]` | per-entity well-formedness and referential integrity |
-| `kb check [--strict]` | graph-wide. Errors break, gaps do not |
-| `kb install-skills [--target t] [--global] [--bin DIR]` | wire the skill into an agent |
+| `kb validate [target] [--strict]` | per-entity well-formedness and referential integrity |
+| `kb check [--strict]` | graph-wide: completeness, orphans, dangling, strays, cycles |
+| `kb search <text> [--type t] [--limit n]` | full-text, FTS5 + BM25 |
+| `kb stale [--days n]` | entities past an `updated` threshold |
+| `kb reindex [--dry-run]` | regenerate the OKF `index.md` |
+| `kb wire [--target CLAUDE\|AGENTS]` | managed block in the agent context files |
+| `kb install-skills [--target t] [--global] [--bin DIR]` | install the skill |
 
 Bare `kb` prints the list. `-C/--workspace` targets another workspace,
 `--format json` is on every read command.
 
-Deliberately absent, and khub-only: `search` (ripgrep wins at this scale),
-`stale`, `reindex`, `viz`, `backfill`, `wire`. Reading, grepping and writing
-prose are things the agent's own tools do better.
+**kb is a behavioural subset of khub, not a variant.** Same verb names, same
+flags, same JSON payloads, same exit codes, same findings — a corpus and the
+habits both transfer. `tests/test_kb_khub_parity.py` in the khub repo runs both
+tools over one corpus and diffs the results, including `search` ranking and the
+bytes of `index.md`.
+
+Still khub-only: `viz` (a Cytoscape HTML page) and `backfill` (git-derived date
+repair). `stale` here reads the dates the files carry rather than backfilling
+them from `git log`.
 
 ## Ids
 

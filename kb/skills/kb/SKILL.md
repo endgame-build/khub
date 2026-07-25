@@ -34,8 +34,10 @@ kb impact <id> [--predicate p]     # blast radius; history <id> walks supersedes
 kb query [--type t] [--status active] [--missing realized_in]
 kb get <id> --edges                # one entity, with what points at it
 kb edit <id> <field> <value>       # one attribute; relations go through link
+kb search "<text>"         # full-text, when you do not know the id
 kb validate                # per-entity errors only
 kb check                   # the whole corpus. Run it before you finish.
+kb reindex                 # regenerate index.md; wire, stale, status also exist
 ```
 
 ## The loop
@@ -84,9 +86,8 @@ section of `prd.md` or `arc42.md`, or it is `requirement.kind: constraint`.
 - **Ids are the currency.** Reference documents by id (`ad-004-postgres`) in
   frontmatter *and* in prose, never by title or path.
 - **`kb add` mints ids**; never name a file yourself. Ids are
-  `<prefix>-NNN-<slug>`, the prefix must match the kind (`cst-` for a
-  constraint), and `check` enforces both. Refer to entities by that id in prose
-  too — `ad-004` is the handle.
+  `<prefix>-NNN-<slug>` and the prefix follows the kind (`cst-` for a
+  constraint). Refer to entities by that id in prose too — `ad-004` is the handle.
 - **A relation to a document that does not exist yet is rejected.** Create the
   target first, then link.
 - One statement per requirement. If it needs "and", it is two requirements.

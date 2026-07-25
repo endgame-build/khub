@@ -209,19 +209,32 @@ Cutting is only half of it. A fixed schema affords checks a general engine canno
 - **The schema is closed by default.** In khub, unknown keys are legal (it is an open format serving many domains) and `--strict` closes it. Here, an unknown field is an *error* — because the realistic failure is `realised_in` for `realized_in`, a typo that silently produces no edge at all.
 - **Body templates are Markdown files.** Their own `##` headings are the contract, so one file both seeds a new document and validates every existing one. khub needs a YAML section list because it must express more.
 
-## Divergences from khub's invariants, on purpose
+## Behavioural parity, not a variant
 
-Four of khub's stated invariants are broken here, each with a reason that only
-holds at this scale. They are listed so the next reader does not "fix" them:
+An earlier draft of this tool diverged in four ways that all looked like
+improvements in isolation: one merged gate instead of `validate` and `check`, a
+closed schema, an id-shape gate khub does not have, and its own JSON record
+shape. Every one of them broke the premise. A corpus that graduates is worth
+little if the *commands* do not, and a divergence discovered at graduation time
+is a divergence discovered too late.
 
-1. **`validate` and `check` are collapsed** into one command with two severities.
-   One pass over ~100 files is milliseconds; two gates is one more thing for the
-   agent to remember. The distinction survives where it matters — in the exit code.
-2. **Referential integrity is not enforced at write time** for hand-edited files,
-   only for `new` and `link`. See "files are the write API."
-3. **The schema is closed**, not open.
-4. **The graph is still derived, never stored** — that one is not negotiable, and
-   it is why `links` computes inverses on every call.
+So kb is now a strict behavioural subset: same verb names, same flags, same
+payload keys, same exit codes, same findings on the same corpus.
+`tests/test_kb_khub_parity.py` builds one workspace, runs both tools over it, and
+diffs the results — `validate` and `check` payloads on clean and broken corpora,
+the open-schema/`--strict` pair, `query` identity, `status` counts, `search`
+ranking scores, and the bytes of `index.md`.
+
+Matching khub cost the checks kb had invented, and one of them is a real loss: it
+no longer reports a `fr-` file whose `kind` says `constraint`. The right home for
+that is khub's own `check`, where both tools would get it.
+
+The one invariant that was never negotiable: **the graph is derived, never
+stored**, which is why the walks compute inverses on every call.
+
+What still differs is capability, not behaviour: `viz` and `backfill` are absent,
+and `stale` reads the dates the files carry rather than backfilling them from
+`git log`.
 
 The invariant that is *strengthened*: schema-genericity. `kb.py` contains no type
 name, no field name, and no predicate. Every one comes from `build.schema.yaml`,

@@ -36,6 +36,10 @@ def fresh() -> Path:
     return root
 
 
+def scan(root: Path):
+    return kb.scan(root, kb.load_schema(root))
+
+
 def codes(root: Path) -> dict[str, list[str]]:
     corpus = kb.scan(root, kb.load_schema(root))
     out: dict[str, list[str]] = {kb.ERROR: [], kb.GAP: []}
@@ -178,7 +182,10 @@ def test_new_mints_ids_by_kind_and_numbers_per_prefix() -> None:
 
 def test_new_rejects_unknown_field_and_unresolvable_edge() -> None:
     root = fresh()
-    assert run(root, "add", "adr", "--title", "X", "--status", "proposed", "--owner", "noor") == 2
+    # khub stores an undeclared field as an extension; only --strict refuses.
+    assert run(root, "add", "adr", "--title", "X", "--status", "proposed", "--owner", "noor") == 0
+    assert run(root, "add", "adr", "--title", "Y", "--status", "proposed",
+               "--owner", "noor", "--strict") == 2
     assert run(root, "add", "adr", "--title", "X", "--status", "proposed", "--affects", "ghost") == 2
     assert run(root, "add", "requirement", "--title", "X") == 2  # no kind, so no id prefix
 
@@ -280,10 +287,8 @@ created: 2026-07-25
     (root / "knowledge/prd.md").unlink()
 
     found = set(codes(root)[kb.ERROR])
-    assert found == {
-        "bad_id", "bad_value", "cycle", "dangling", "malformed",
-        "missing", "stray", "type_mismatch", "unknown_field",
-    }, found
+    assert found == {"bad_value", "body_shape", "cycle", "dangling", "malformed",
+                     "missing", "stray"}, found
     assert run(root, "check") == 1
 
 
@@ -303,11 +308,13 @@ def test_narrative_roots_are_never_orphans() -> None:
     assert codes(root)[kb.GAP] == []
 
 
-def test_body_shape_is_a_gap() -> None:
+def test_a_missing_template_section_is_a_validate_error() -> None:
+    """khub reports it through `validate` with field=body; kb matches."""
     root = fresh()
     prd = root / "knowledge/prd.md"
     prd.write_text(prd.read_text().replace("## Non-goals", "## Later maybe"))
-    assert "body_shape" in codes(root)[kb.GAP]
+    finding = next(f for f in kb.check(scan(root)) if f.code == "body_shape")
+    assert finding.severity == kb.ERROR and finding.field == "body"
 
 
 # ------------------------------------------------------------------- graph
@@ -380,17 +387,23 @@ created: 2026-07-25
     assert "incomplete" in found[kb.GAP]
 
 
-def test_bad_id_is_reported_for_both_shapes() -> None:
+def test_an_unenumerated_filename_is_not_an_error() -> None:
+    """kb mints `ad-NNN-slug`, but khub does not police a hand-named file and
+    neither does kb — the two gates have to agree."""
     root = fresh()
     write(root / "knowledge/decisions/nonsense.md", """
 ---
 type: adr
-title: Bad filename
+title: Hand named
 status: proposed
 created: 2026-07-25
 ---
+
+## Context
+## Decision
+## Consequences
 """)
-    assert "bad_id" in codes(root)[kb.ERROR]
+    assert codes(root)[kb.ERROR] == []
 
 
 def test_get_edit_remove_and_status() -> None:
@@ -426,7 +439,7 @@ created: 2026-07-25
 """)
     corpus = kb.scan(root, kb.load_schema(root))
     per_entity = {f.code for f in kb.check(corpus) if f.code in kb.VALIDATE_CODES}
-    assert per_entity == {"bad_value"}
+    assert per_entity == {"bad_value", "body_shape"}
     assert run(root, "validate") == 1
     # the orphan component is a graph finding, so validate does not fail on it
     assert "orphan" not in per_entity

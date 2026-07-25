@@ -59,6 +59,9 @@ class Finding:
     code: str
     where: str
     message: str
+    # The frontmatter key at fault, as khub reports it. `validate` shows this, not
+    # the code: "kind: 'nope' not in ..." is what a reader has to act on.
+    field: str = ""
 
     def line(self) -> str:
         mark = "E" if self.severity == ERROR else "-"
@@ -493,9 +496,13 @@ def scan(root: Path, schema: Schema) -> Corpus:
         else:
             if not target.is_dir():
                 continue
-            visible = [p for p in target.iterdir() if not p.name.startswith(".")]
-            files = sorted(p for p in visible if p.is_file() and p.suffix == ".md")
-            corpus.strays.extend(sorted(p for p in visible if p not in files))
+            # Only the declared format is scanned, exactly as khub does: an
+            # off-format file in a layout is invisible to both tools, and a
+            # directory is simply not an entity.
+            files = sorted(
+                p for p in target.iterdir()
+                if p.is_file() and p.suffix == ".md" and not p.name.startswith(".")
+            )
         for path in files:
             slug = type_ if schema.is_singleton(type_) else path.stem
             try:
@@ -506,6 +513,12 @@ def scan(root: Path, schema: Schema) -> Corpus:
                 continue
             if slug in corpus.entities:
                 corpus.collisions.append((slug, path))
+                continue
+            if fm.get("type") != type_:
+                # khub's rule: a file inside a layout whose internal type disagrees
+                # is a stray, dropped from the graph rather than validated as a
+                # broken entity of the type it is filed under.
+                corpus.strays.append(path)
                 continue
             corpus.entities[slug] = Entity(slug, type_, path, fm, body, front)
     return corpus
@@ -534,7 +547,7 @@ def rel(root: Path, path: Path) -> str:
 # -------------------------------------------------------------------- check
 
 
-def check(corpus: Corpus) -> list[Finding]:
+def check(corpus: Corpus, *, strict: bool = False) -> list[Finding]:
     schema, out = corpus.schema, []
     for path, why in corpus.malformed:
         out.append(Finding(ERROR, "malformed", rel(corpus.root, path), why))
@@ -549,50 +562,49 @@ def check(corpus: Corpus) -> list[Finding]:
             out.append(Finding(severity, "missing", cfg["path"], f"the {type_} has not been written"))
 
     for entity in corpus.entities.values():
-        out.extend(_entity_findings(corpus, entity))
+        out.extend(_entity_findings(corpus, entity, strict=strict))
     out.extend(_cycle_findings(corpus))
     order = {ERROR: 0, GAP: 1}
     return sorted(out, key=lambda f: (order[f.severity], f.code, f.where))
 
 
-def _entity_findings(corpus: Corpus, e: Entity) -> Iterable[Finding]:
+def _entity_findings(corpus: Corpus, e: Entity, *, strict: bool) -> Iterable[Finding]:
     schema = corpus.schema
     attrs, rels = schema.attrs(e.type), schema.rels(e.type)
     known = {**attrs, **rels}
 
-    def err(code: str, msg: str) -> Finding:
-        return Finding(ERROR, code, e.slug, msg)
+    def err(code: str, msg: str, field: str = "") -> Finding:
+        return Finding(ERROR, code, e.slug, msg, field or code)
 
-    if e.fm.get("type") != e.type:
-        yield err("type_mismatch", f"type: {e.fm.get('type')!r} in the {e.type} directory")
     for key, value in e.fm.items():
         if key not in known:
-            yield err("unknown_field", f"{key!r} is not in the schema (typo, or drop it)")
+            # khub's schema is OPEN: an undeclared key is accepted and preserved, and
+            # only `--strict` rejects it. kb matches — otherwise an entity khub itself
+            # allows would fail here.
+            if strict:
+                yield err("unknown_field", f"{key!r} is not in the schema (typo, or drop it)", key)
             continue
         if key in attrs:
             problem = _attr_problem(attrs[key], value)
             if problem:
-                yield err("bad_value", f"{key}: {problem}")
+                yield err("bad_value", f"{key}: {problem}", key)
 
     for pred, spec in rels.items():
         values = as_list(e.fm.get(pred))
         if not spec.get("many") and len(values) > 1:
-            yield err("cardinality", f"{pred} takes one target, got {len(values)}")
+            yield err("cardinality", f"{pred} takes one target, got {len(values)}", pred)
         for target in values:
             if not isinstance(target, str):
-                yield err("bad_value", f"{pred}: {target!r} is not a slug")
+                yield err("bad_value", f"{pred}: {target!r} is not a slug", pred)
                 continue
             if target == e.slug:
-                yield err("self_link", f"{pred} points at itself")
+                yield err("self_link", f"{pred} points at itself", pred)
                 continue
             hit = corpus.entities.get(target)
             if hit is None:
-                yield err("dangling", f"{pred} -> {target} resolves to nothing")
+                yield err("dangling", f"{pred} -> {target} resolves to nothing", pred)
             elif spec["to"] != "any" and hit.type != spec["to"]:
-                yield err("wrong_type", f"{pred} -> {target} is a {hit.type}, wants {spec['to']}")
-
-    if not schema.is_singleton(e.type):
-        yield from _id_findings(schema, e)
+                yield err("wrong_type", f"{pred} -> {target} is a {hit.type}, wants {spec['to']}", pred)
 
     missing = [k for k, spec in known.items() if spec.get("required") and not e.fm.get(k)]
     if missing:
@@ -602,31 +614,15 @@ def _entity_findings(corpus: Corpus, e: Entity) -> Iterable[Finding]:
     if template:
         absent = _missing_heading(template, e.body)
         if absent:
-            yield Finding(GAP, "body_shape", e.slug, f"no '## {absent}' section")
+            yield Finding(ERROR, "body_shape", e.slug,
+                          f"missing required section '{absent}'", "body")
 
     swept = not corpus.schema.types[e.type].get("orphan")
-    if swept and not corpus.out_edges(e.slug) and not corpus.in_edges(e.slug):
+    # Only RESOLVED edges count, as in khub: an entity whose one edge dangles is
+    # disconnected from the graph, and the dangling finding names the other half.
+    resolved_out = [t for _, t in corpus.out_edges(e.slug) if t in corpus.entities]
+    if swept and not resolved_out and not corpus.in_edges(e.slug):
         yield Finding(GAP, "orphan", e.slug, "no relation in or out")
-
-
-def _id_findings(schema: Schema, e: Entity) -> Iterable[Finding]:
-    """Ids follow the schema: `<prefix>-NNN-slug`, or `NNN-slug` with no prefix."""
-    prefixes = schema.prefixes(e.type)
-    if not prefixes:
-        if not re.match(r"^\d{3,}-[a-z0-9-]+$", e.slug):
-            yield Finding(ERROR, "bad_id", e.slug, "filename must be NNN-slug")
-        return
-    expected = schema.prefix_for(e.type, e.fm)
-    if expected is None:
-        # The prefix is chosen by an attribute this entity has not set yet, so no
-        # id can be right. `incomplete` already names that cause; do not say it twice.
-        return
-    m = re.match(r"^([a-z]+)-(\d{3,})-([a-z0-9-]+)$", e.slug)
-    if not m or m.group(1) not in prefixes:
-        yield Finding(ERROR, "bad_id", e.slug, f"filename must be {'|'.join(prefixes)}-NNN-slug")
-        return
-    if expected and m.group(1) != expected:
-        yield Finding(ERROR, "bad_id", e.slug, f"prefix disagrees with its kind (want {expected}-)")
 
 
 def _attr_problem(spec: dict[str, Any], value: Any) -> str | None:
@@ -691,9 +687,11 @@ def _cycle_findings(corpus: Corpus) -> Iterable[Finding]:
 # ----------------------------------------------------------------- commands
 
 
+# khub's split: `validate` is per-entity well-formedness plus referential integrity;
+# `check` adds the graph-wide gates on top. Same finding, same command, either tool.
 VALIDATE_CODES = {
-    "malformed", "duplicate_id", "type_mismatch", "unknown_field", "bad_value",
-    "bad_id", "cardinality", "self_link", "dangling", "wrong_type",
+    "malformed", "duplicate_id", "unknown_field", "bad_value",
+    "cardinality", "self_link", "dangling", "wrong_type", "body_shape",
 }
 
 
@@ -706,9 +704,8 @@ def _emit(args: argparse.Namespace, payload: Any, render_text: Any) -> None:
 
 
 def _record(corpus: Corpus, e: Entity) -> dict[str, Any]:
-    """The uniform JSON record. `id` is the bare slug: kb ids carry a type prefix,
-    so unlike khub they are never ambiguous and never need `type/slug`."""
-    return {"id": e.slug, "type": e.type, "slug": e.slug,
+    """khub's uniform record: qualified `id`, plus separate `type` and `slug`."""
+    return {"id": f"{e.type}/{e.slug}", "type": e.type, "slug": e.slug,
             "path": rel(corpus.root, e.path), **e.fm}
 
 
@@ -838,22 +835,76 @@ def cmd_schema(args: argparse.Namespace) -> int:
 
 
 def cmd_status(args: argparse.Namespace) -> int:
+    """khub's `status` payload. `draft` is always 0 and `stale` needs git — see
+    cmd_stale — but the keys are khub's so a consumer parses one shape."""
     corpus = load(args)
     findings = check(corpus)
     counts = {t: len(corpus.by_type(t)) for t in corpus.schema.types}
-    errors = sum(1 for f in findings if f.severity == ERROR)
-    gaps = sum(1 for f in findings if f.severity == GAP)
-    orphans = sum(1 for f in findings if f.code == "orphan")
-    payload = {"counts": counts, "total": len(corpus.entities), "orphan": orphans,
-               "errors": errors, "gaps": gaps}
+    total = len(corpus.entities)
+    payload = {
+        "counts": counts,
+        "total": total,
+        "draft": sum(1 for e in corpus.entities.values() if e.fm.get("draft") is True),
+        "active": sum(1 for e in corpus.entities.values() if e.fm.get("draft") is not True),
+        "orphan": sum(1 for f in findings if f.code == "orphan"),
+        "stale": _stale_slugs(corpus, stale_days(args)) and len(_stale_slugs(corpus, stale_days(args))) or 0,
+        "okf_conformant": not any(f.code in {"malformed", "dangling"} for f in findings),
+        "stray": sum(1 for f in findings if f.code == "stray"),
+        "malformed": sum(1 for f in findings if f.code == "malformed"),
+    }
 
     def text() -> None:
+        if not total:
+            print("Workspace initialized; no entities yet")
+            return
         for type_, n in counts.items():
             print(f"{type_:<14} {n}")
-        print(f"\n{len(corpus.entities)} entities, {orphans} orphan, "
-              f"{errors} errors, {gaps} gaps")
+        print(f"\ndraft / active  {payload['draft']} / {payload['active']}")
+        print(f"orphan          {payload['orphan']}")
+        print(f"stale           {payload['stale']}")
+        print(f"OKF-conformant  {'yes' if payload['okf_conformant'] else 'no'}")
 
     _emit(args, payload, text)
+    return 0
+
+
+def stale_days(args: argparse.Namespace) -> int:
+    return int(getattr(args, "days", None) or 90)
+
+
+def _stale_slugs(corpus: Corpus, days: int) -> list[tuple[str, str]]:
+    """(slug, date) for entities whose `updated` (else `created`) is older than `days`.
+
+    khub backfills the date from `git log`; kb reads only what the file carries, so an
+    entity with no date is not stale rather than guessed at.
+    """
+    cutoff = date.today().toordinal() - days
+    out: list[tuple[str, str]] = []
+    for e in sorted(corpus.entities.values(), key=lambda x: x.slug):
+        stamp = e.fm.get("updated") or e.fm.get("created")
+        if not isinstance(stamp, str) or not DATE_RE.match(stamp):
+            continue
+        if date.fromisoformat(stamp).toordinal() < cutoff:
+            out.append((e.slug, stamp))
+    return out
+
+
+def cmd_stale(args: argparse.Namespace) -> int:
+    """khub's `stale`: entities past an `updated` threshold."""
+    corpus = load(args)
+    rows = _stale_slugs(corpus, stale_days(args))
+    records = [
+        {"id": f"{corpus.entities[s].type}/{s}", "type": corpus.entities[s].type,
+         "slug": s, "updated": stamp}
+        for s, stamp in rows
+    ]
+
+    def text() -> None:
+        for r in records:
+            print(f"{r['id']}  {r['updated']}")
+        print(f"{len(records)} stale entities (> {stale_days(args)} days)")
+
+    _emit(args, records, text)
     return 0
 
 
@@ -868,7 +919,7 @@ def cmd_add(args: argparse.Namespace) -> int:
     declared = schema.fields(args.type)
     fields = dynamic_fields(args.extra, declared)
     unknown = set(fields) - set(declared)
-    if unknown:
+    if unknown and args.strict:
         raise Bad(f"unknown field(s) {', '.join(sorted(unknown))} for {args.type}")
     title = fields.pop("title", None)
     if not title:
@@ -876,7 +927,8 @@ def cmd_add(args: argparse.Namespace) -> int:
 
     fm: dict[str, Any] = {"type": args.type, "title": title}
     for key, raw in fields.items():
-        fm[key] = [v.strip() for v in raw.split(",")] if declared[key].get("many") else raw
+        spec = declared.get(key, {})  # an undeclared key is an extension, stored verbatim
+        fm[key] = [v.strip() for v in raw.split(",")] if spec.get("many") else raw
     fm["created"] = date.today().isoformat()
 
     if schema.is_singleton(args.type):
@@ -1118,43 +1170,107 @@ def cmd_history(args: argparse.Namespace) -> int:
 # ------------------------------------------------------------------ integrity
 
 
-def _report(args: argparse.Namespace, corpus: Corpus, findings: list[Finding]) -> int:
-    errors = [f for f in findings if f.severity == ERROR]
-    gaps = [f for f in findings if f.severity == GAP]
-
-    def text() -> None:
-        print(f"{len(corpus.entities)} entities, {len(errors)} errors, {len(gaps)} gaps")
-        if errors:
-            print("\nerrors — the corpus is broken here")
-            for f in errors:
-                print(f.line())
-        if gaps:
-            print("\ngaps — legal, but unfinished")
-            for f in gaps:
-                print(f.line())
-
-    _emit(args, {"entities": len(corpus.entities), "strict": bool(getattr(args, "strict", False)),
-                 "errors": [f.__dict__ for f in errors], "gaps": [f.__dict__ for f in gaps]}, text)
-    if errors:
-        return 1
-    return 1 if (gaps and getattr(args, "strict", False)) else 0
+def _qualified(corpus: Corpus, where: str) -> str:
+    """A finding's locator as khub writes it: `type/slug` for an entity, else the path."""
+    hit = corpus.entities.get(where)
+    return f"{hit.type}/{hit.slug}" if hit else where
 
 
 def cmd_validate(args: argparse.Namespace) -> int:
-    """Per-entity well-formedness and referential integrity, khub's split."""
+    """khub's `validate`: per-entity well-formedness and referential integrity.
+
+    Same payload keys, same text lines, same exit code — an agent or a CI step
+    cannot tell which tool ran.
+    """
     corpus = load(args)
-    findings = [f for f in check(corpus) if f.code in VALIDATE_CODES]
+    findings = [f for f in check(corpus, strict=args.strict) if f.code in VALIDATE_CODES]
     if args.target:
-        findings = [f for f in findings
-                    if f.where == args.target or f.where.startswith(f"{args.target}/")
-                    or _type_of(corpus, f.where) == args.target]
-    return _report(args, corpus, findings)
+        wanted = args.target.split("/")[-1]
+        findings = [
+            f for f in findings
+            if f.where == wanted or _type_of(corpus, f.where) == args.target
+        ]
+    errors = [
+        {"id": _qualified(corpus, f.where), "type": _type_of(corpus, f.where),
+         "slug": f.where, "field": f.field or f.code, "reason": f.message}
+        for f in findings
+    ]
+
+    def text() -> None:
+        for e in errors:
+            print(f"{e['id']}: {e['field']}: {e['reason']}")
+        print(f"Validated {len(corpus.entities)} entities; {len(errors)} errors")
+
+    _emit(args, {"count": len(corpus.entities), "errors": errors}, text)
+    return 1 if errors else 0
 
 
 def cmd_check(args: argparse.Namespace) -> int:
-    """Everything validate covers, plus the graph-wide gates."""
+    """khub's `check`: the graph-wide gate, in khub's payload and exit code.
+
+    Orphans are always reported and fail only under `--strict`, exactly as khub
+    documents; everything else fails the gate.
+    """
     corpus = load(args)
-    return _report(args, corpus, check(corpus))
+    findings = check(corpus, strict=args.strict)
+    by_code: dict[str, list[Finding]] = {}
+    for f in findings:
+        by_code.setdefault(f.code, []).append(f)
+
+    incomplete = [
+        {"id": _qualified(corpus, f.where), "type": _type_of(corpus, f.where), "slug": f.where,
+         "missing_fields": sorted(f.message.removeprefix("missing ").split(", ")),
+         "missing_relations": []}
+        for f in by_code.get("incomplete", [])
+    ]
+    dangling = [
+        {"id": _qualified(corpus, f.where), "type": _type_of(corpus, f.where), "slug": f.where,
+         "predicate": f.message.split()[0], "target": f.message.split()[2]}
+        for f in by_code.get("dangling", [])
+    ]
+    orphans = [_qualified(corpus, f.where) for f in by_code.get("orphan", [])]
+    strays = [f.where for f in by_code.get("stray", [])]
+    malformed = [f.where for f in by_code.get("malformed", [])]
+    cycles = [f.message.split(": ", 1)[-1].split(" -> ") for f in by_code.get("cycle", [])]
+    missing_singletons = [
+        Path(f.where).stem for f in by_code.get("missing", []) if f.severity == ERROR
+    ]
+    other = [f for f in findings if f.severity == ERROR and f.code not in {
+        "dangling", "stray", "malformed", "cycle", "missing"}]
+    passed = not (incomplete or dangling or strays or malformed or cycles
+                  or missing_singletons or other or (orphans and args.strict))
+
+    payload = {
+        "passed": passed, "incomplete": incomplete, "orphans": orphans, "dangling": dangling,
+        "strays": strays, "malformed": malformed, "cycles": cycles, "suppressed_dangling": 0,
+        "missing_singletons": missing_singletons, "draft_singletons": [], "strict": args.strict,
+    }
+
+    def text() -> None:
+        if passed:
+            for o in orphans:
+                print(f"orphan {o} (informational)")
+            print("Graph check passed")
+            return
+        for inc in incomplete:
+            print(f"active-but-incomplete {inc['id']}: missing {', '.join(inc['missing_fields'])}")
+        for d in dangling:
+            print(f"dangling edge {d['id']}: {d['predicate']} -> '{d['target']}' does not resolve")
+        for o in orphans:
+            print(f"orphan {o}")
+        for stray in strays:
+            print(f"stray file {stray}")
+        for m in malformed:
+            print(f"malformed file {m}")
+        for cycle in cycles:
+            print(f"cycle {' -> '.join(cycle)}")
+        for name in missing_singletons:
+            print(f"required singleton {name} is missing")
+        for f in other:
+            print(f"{f.code} {f.where}: {f.message}")
+
+    _emit(args, payload, text)
+    return 0 if passed else 1
 
 
 # ------------------------------------------------------------------- install
@@ -1208,6 +1324,184 @@ def _skill_dir(target: str, root: Path, is_global: bool) -> Path:
     return Path.home() / SKILL_TARGETS[target]
 
 
+# ------------------------------------------------------------------ projection
+
+
+def cmd_search(args: argparse.Namespace) -> int:
+    """khub's `search`, on khub's engine: an in-memory FTS5 index built per call.
+
+    Same virtual table, same MATCH, same bm25 ordering and snippet call, so the
+    ranking is not merely similar — it is the same computation. sqlite3 is stdlib,
+    so this costs no dependency.
+    """
+    import sqlite3
+
+    corpus = load(args)
+    if args.type and args.type not in corpus.schema.types:
+        raise Bad(f"unknown type {args.type!r} — one of {', '.join(corpus.schema.types)}")
+
+    conn = sqlite3.connect(":memory:")
+    try:
+        try:
+            conn.execute(
+                "CREATE VIRTUAL TABLE fts USING "
+                "fts5(title, body, type UNINDEXED, slug UNINDEXED, path UNINDEXED)"
+            )
+        except sqlite3.OperationalError as err:
+            raise Bad(f"this Python's sqlite3 has no FTS5: {err}") from None
+        conn.executemany("INSERT INTO fts VALUES (?,?,?,?,?)", [
+            (e.title or e.slug, e.body, e.type, e.slug, rel(corpus.root, e.path))
+            for e in sorted(corpus.entities.values(), key=lambda x: (x.type, x.slug))
+            if not args.type or e.type == args.type
+        ])
+        sql = (
+            "SELECT type, slug, title, bm25(fts) AS score, "
+            "snippet(fts, -1, '', '', '…', 12) AS snip, path "
+            "FROM fts WHERE fts MATCH ? ORDER BY rank LIMIT ?"
+        )
+        try:
+            rows = conn.execute(sql, (args.text, max(0, args.limit))).fetchall()
+        except sqlite3.OperationalError as err:
+            raise Bad(f"bad search query {args.text!r}: {err}") from None
+    finally:
+        conn.close()
+
+    records = [
+        {"id": f"{t}/{slug}", "type": t, "slug": slug, "title": title,
+         "score": score, "snippet": snip, "path": path}
+        for t, slug, title, score, snip, path in rows
+    ]
+    if args.format == "ids":
+        for r in records:
+            print(r["slug"])
+        return 0
+
+    def text() -> None:
+        if not records:
+            print("No entities match")
+        for r in records:
+            print(f"{r['id']:<34} {r['title']:<28} {r['snippet']}")
+
+    _emit(args, records, text)
+    return 0
+
+
+OKF_VERSION = "0.1"
+INDEX_NAME = "index.md"
+
+
+def cmd_reindex(args: argparse.Namespace) -> int:
+    """khub's `reindex`: the OKF index.md, rendered from the live graph.
+
+    Same front matter keys, same grouping in schema-declared order, same
+    `predicate → [label](link)` cross-links sorted for determinism.
+    """
+    corpus = load(args)
+    malformed = [rel(corpus.root, path) for path, _ in corpus.malformed]
+    if malformed:
+        raise Bad(f"refusing to reindex from a corpus with malformed files: {', '.join(malformed)}")
+
+    lines = ["# Index", ""]
+    groups = {t: sorted(e.slug for e in corpus.by_type(t)) for t in corpus.schema.types}
+    groups = {t: slugs for t, slugs in groups.items() if slugs}
+    if not groups:
+        lines += ["_No entities._", ""]
+    for type_, slugs in groups.items():
+        lines += [f"## {type_}", ""]
+        for slug in slugs:
+            entity = corpus.entities[slug]
+            xlinks = sorted(
+                f"{pred} → [{_label(corpus, target)}]({_link(corpus, target)})"
+                for pred, target in corpus.out_edges(slug)
+                if target in corpus.entities
+            )
+            suffix = f" — {', '.join(xlinks)}" if xlinks else ""
+            lines.append(f"- [{_label(corpus, slug)}]({_link(corpus, entity.slug)}){suffix}")
+        lines.append("")
+    front = f"---\nokf_version: '{OKF_VERSION}'\nentity_count: {len(corpus.entities)}\n---\n"
+    content = front + "\n".join(lines) + "\n"
+
+    path = corpus.root / INDEX_NAME
+    unchanged = path.is_file() and path.read_text() == content
+    if not args.dry_run and not unchanged:
+        path.write_text(content)
+    action = "unchanged" if unchanged else ("would write" if args.dry_run else "wrote")
+    _emit(args, {"count": len(corpus.entities), "path": INDEX_NAME, "action": action},
+          lambda: print(f"{action} {INDEX_NAME} ({len(corpus.entities)} entities)"))
+    return 0
+
+
+def _label(corpus: Corpus, slug: str) -> str:
+    entity = corpus.entities.get(slug)
+    return (entity.title or slug) if entity else slug
+
+
+def _link(corpus: Corpus, slug: str) -> str:
+    entity = corpus.entities.get(slug)
+    return rel(corpus.root, entity.path) if entity else slug
+
+
+BEGIN = "<!-- BEGIN kb -->"
+END = "<!-- END kb -->"
+
+
+def cmd_wire(args: argparse.Namespace) -> int:
+    """khub's `wire`: a managed block in the agent context files.
+
+    Same markers-and-upsert shape, pointing at kb's schema instead of `.khub/`.
+    Bare `wire` updates whichever files exist; `--target` creates one.
+    """
+    root = find_root(args.workspace)
+    schema = load_schema(root)
+    types = ", ".join(f"`{t}`" for t in schema.types)
+    block = "\n".join([
+        BEGIN,
+        "## kb — the typed doc corpus",
+        "",
+        f"This repository carries a kb corpus: {types}.",
+        "",
+        "The ontology is the schema file below; read it to work in this model, even",
+        "without running kb:",
+        "",
+        "kb/scripts/build.schema.yaml",
+        "",
+        "Author with `kb add`, relate with `kb link`, and gate with `kb check` before",
+        "you finish. `kb schema` prints the vocabulary.",
+        END,
+    ])
+
+    targets = [f"{t}.md" for t in (args.target or ["CLAUDE", "AGENTS"])]
+    if not args.target:
+        present = [t for t in targets if (root / t).is_file()]
+        if not present:
+            raise Bad("neither CLAUDE.md nor AGENTS.md exists — pass --target CLAUDE|AGENTS")
+        targets = present
+
+    outcomes = []
+    for name in targets:
+        path = root / name
+        before = path.read_text() if path.is_file() else ""
+        after = _upsert(before, block)
+        action = "unchanged" if after == before else ("created" if not before else "updated")
+        if action != "unchanged" and not args.dry_run:
+            path.write_text(after)
+        outcomes.append({"path": name, "action": action})
+
+    _emit(args, {"outcomes": outcomes, "dry_run": args.dry_run},
+          lambda: [print(f"{o['action']} {o['path']}") for o in outcomes] and None)
+    return 0
+
+
+def _upsert(text: str, block: str) -> str:
+    """Replace the managed block if present, else append it. Idempotent, minimal diff."""
+    if BEGIN in text and END in text:
+        head, _, rest = text.partition(BEGIN)
+        _, _, tail = rest.partition(END)
+        return head + block + tail
+    separator = "" if not text or text.endswith("\n\n") else ("\n" if text.endswith("\n") else "\n\n")
+    return text + separator + block + "\n"
+
+
 def _need(corpus: Corpus, slug: str) -> Entity:
     hit = corpus.entities.get(slug)
     if hit is None:
@@ -1248,7 +1542,8 @@ def build_parser() -> argparse.ArgumentParser:
     _add_format(p)
     p.set_defaults(fn=cmd_schema)
 
-    p = sub.add_parser("status", help="counts per type, orphans, errors, gaps")
+    p = sub.add_parser("status", help="counts per type, draft/active, orphan, stale")
+    p.add_argument("--days", type=int, help="stale threshold, default 90")
     _add_format(p)
     p.set_defaults(fn=cmd_status)
 
@@ -1257,6 +1552,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--id", help="explicit slug instead of a minted one")
     p.add_argument("--body")
     p.add_argument("--body-file", help="- for stdin")
+    p.add_argument("--strict", action="store_true", help="close the schema: reject undeclared keys")
     _add_format(p)
     p.set_defaults(fn=cmd_add)
 
@@ -1324,14 +1620,38 @@ def build_parser() -> argparse.ArgumentParser:
     p.set_defaults(fn=cmd_history)
 
     p = sub.add_parser("validate", help="per-entity well-formedness and referential integrity")
-    p.add_argument("target", nargs="?", help="a type or an id (default: the whole workspace)")
+    p.add_argument("target", nargs="?", help="a type or type/slug (default: the whole workspace)")
+    p.add_argument("--strict", action="store_true", help="close the schema: reject undeclared keys")
     _add_format(p)
     p.set_defaults(fn=cmd_validate)
 
-    p = sub.add_parser("check", help="graph-wide: errors break the build, gaps do not")
-    p.add_argument("--strict", action="store_true", help="fail on gaps too")
+    p = sub.add_parser("check", help="graph-wide: completeness, orphans, dangling, strays, cycles")
+    p.add_argument("--strict", action="store_true", help="fail the gate on orphans too")
     _add_format(p)
     p.set_defaults(fn=cmd_check)
+
+    p = sub.add_parser("search", help="full-text over titles and bodies (FTS5, BM25)")
+    p.add_argument("text", help='MATCH text: terms, "phrases", OR, NEAR, prefix*')
+    p.add_argument("--type")
+    p.add_argument("--limit", type=int, default=20)
+    p.add_argument("--format", choices=["text", "json", "ids"], default="text")
+    p.set_defaults(fn=cmd_search)
+
+    p = sub.add_parser("stale", help="entities past an updated threshold")
+    p.add_argument("--days", type=int, help="default 90")
+    _add_format(p)
+    p.set_defaults(fn=cmd_stale)
+
+    p = sub.add_parser("reindex", help="regenerate the OKF index.md from the graph")
+    p.add_argument("--dry-run", action="store_true")
+    _add_format(p)
+    p.set_defaults(fn=cmd_reindex)
+
+    p = sub.add_parser("wire", help="inject a managed kb block into the agent context files")
+    p.add_argument("--target", action="append", choices=["CLAUDE", "AGENTS"], help="repeatable")
+    p.add_argument("--dry-run", action="store_true")
+    _add_format(p)
+    p.set_defaults(fn=cmd_wire)
 
     p = sub.add_parser("install-skills", help="copy the skill into the agent skill directories")
     p.add_argument("--target", action="append", choices=sorted(SKILL_TARGETS),
