@@ -155,9 +155,9 @@ def init_workspace(
         # need the dir; a collection's or singleton's path names a FILE — create
         # only its parent, never the file: a missing collection/singleton is
         # legitimately zero entities).
-        for name, decl in entities.items():
+        for type_name, decl in entities.items():
             if decl.get("layout") in ("collection", "singleton"):
-                cpath = target / (decl.get("path") or f"{name}.{decl.get('format', '')}")
+                cpath = target / (decl.get("path") or f"{type_name}.{decl.get('format', '')}")
                 if cpath.parent != target:
                     cpath.parent.mkdir(parents=True, exist_ok=True)
             elif decl.get("path"):

@@ -22,11 +22,10 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 from dataclasses import dataclass
+from pathlib import Path
 from typing import cast
 
 import networkx as nx
-
-from pathlib import Path
 
 from khub.core.entity import resolve_id
 from khub.core.errors import LocatedError

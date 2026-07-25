@@ -27,7 +27,7 @@ class LocatedError(Exception):
     # --- resolver (WPK-000-1) ------------------------------------------------
 
     @classmethod
-    def unknown_target(cls, type_: str, relation: str, target: str) -> "LocatedError":
+    def unknown_target(cls, type_: str, relation: str, target: str) -> LocatedError:
         return cls(
             code="unknown_relation_target",
             message=f"Type '{type_}' relation '{relation}' targets unknown type '{target}'",
@@ -37,14 +37,14 @@ class LocatedError(Exception):
         )
 
     @classmethod
-    def missing_base(cls) -> "LocatedError":
+    def missing_base(cls) -> LocatedError:
         return cls(
             code="missing_base",
             message="Schema declares entities but no base block; base attributes are missing",
         )
 
     @classmethod
-    def raw_linkml_smuggled(cls, type_: str | None, construct: str, location: str) -> "LocatedError":
+    def raw_linkml_smuggled(cls, type_: str | None, construct: str, location: str) -> LocatedError:
         where = f" at {location}" if location else ""
         return cls(
             code="raw_linkml_smuggled",
@@ -56,13 +56,13 @@ class LocatedError(Exception):
     # --- duplicate type (WPK-000-2) ------------------------------------------
 
     @classmethod
-    def duplicate_type(cls, type_: str) -> "LocatedError":
+    def duplicate_type(cls, type_: str) -> LocatedError:
         return cls(code="duplicate_type", message=f"Duplicate type '{type_}'", type=type_)
 
     # --- workspace (WPK-001-1 / WPK-001-2) -----------------------------------
 
     @classmethod
-    def unknown_preset(cls, name: str, known: list[str]) -> "LocatedError":
+    def unknown_preset(cls, name: str, known: list[str]) -> LocatedError:
         return cls(
             code="unknown_preset",
             message=f"Unknown preset '{name}'. Known presets: {', '.join(known)}",
@@ -70,7 +70,7 @@ class LocatedError(Exception):
         )
 
     @classmethod
-    def target_not_empty(cls, path: str) -> "LocatedError":
+    def target_not_empty(cls, path: str) -> LocatedError:
         return cls(
             code="target_not_empty",
             message=f"Target {path} is not empty. Pass --force to scaffold anyway",
@@ -78,7 +78,7 @@ class LocatedError(Exception):
         )
 
     @classmethod
-    def unknown_type(cls, name: str, preset: str, known: list[str]) -> "LocatedError":
+    def unknown_type(cls, name: str, preset: str, known: list[str]) -> LocatedError:
         return cls(
             code="unknown_type",
             message=f"No type '{name}' in the {preset} schema. Known types: {', '.join(known)}",
@@ -86,14 +86,14 @@ class LocatedError(Exception):
         )
 
     @classmethod
-    def no_workspace(cls) -> "LocatedError":
+    def no_workspace(cls) -> LocatedError:
         return cls(
             code="no_workspace",
             message="No .khub workspace found. Run khub init <preset>",
         )
 
     @classmethod
-    def bad_target(cls, value: str) -> "LocatedError":
+    def bad_target(cls, value: str) -> LocatedError:
         return cls(
             code="bad_target",
             message=f"Unknown --target '{value}'. Choose claude, agents, or both",
@@ -105,7 +105,7 @@ class LocatedError(Exception):
     @classmethod
     def referential_integrity(
         cls, target_type: str, target: str, predicate: str, *, noun: str = "relation"
-    ) -> "LocatedError":
+    ) -> LocatedError:
         return cls(
             code="referential_integrity",
             message=f"No {target_type} '{target}' to satisfy {noun} '{predicate}'",
@@ -115,7 +115,7 @@ class LocatedError(Exception):
         )
 
     @classmethod
-    def invalid_slug(cls, source: str) -> "LocatedError":
+    def invalid_slug(cls, source: str) -> LocatedError:
         return cls(
             code="invalid_slug",
             message=f"Cannot mint a slug from '{source}'",
@@ -123,7 +123,7 @@ class LocatedError(Exception):
         )
 
     @classmethod
-    def strict_unknown_field(cls, field: str) -> "LocatedError":
+    def strict_unknown_field(cls, field: str) -> LocatedError:
         return cls(
             code="strict_unknown_field",
             message=f"Unknown field '{field}' rejected under --strict",
@@ -131,7 +131,7 @@ class LocatedError(Exception):
         )
 
     @classmethod
-    def enum_violation(cls, value: str, field: str, allowed: tuple[str, ...]) -> "LocatedError":
+    def enum_violation(cls, value: str, field: str, allowed: tuple[str, ...]) -> LocatedError:
         return cls(
             code="enum_violation",
             message=f"'{value}' is not a valid {field} ({', '.join(allowed)})",
@@ -140,7 +140,7 @@ class LocatedError(Exception):
         )
 
     @classmethod
-    def pattern_violation(cls, value: str, field: str, pattern: str) -> "LocatedError":
+    def pattern_violation(cls, value: str, field: str, pattern: str) -> LocatedError:
         return cls(
             code="pattern_violation",
             message=f"'{value}' does not match the pattern for {field} ({pattern})",
@@ -149,7 +149,7 @@ class LocatedError(Exception):
         )
 
     @classmethod
-    def number_violation(cls, value: str, field: str) -> "LocatedError":
+    def number_violation(cls, value: str, field: str) -> LocatedError:
         return cls(
             code="number_violation",
             message=f"'{value}' is not a valid number for {field}",
@@ -158,13 +158,13 @@ class LocatedError(Exception):
         )
 
     @classmethod
-    def lookup_error(cls, id_: str) -> "LocatedError":
+    def lookup_error(cls, id_: str) -> LocatedError:
         return cls(code="lookup_error", message=f"No entity '{id_}' found", target=id_)
 
     # --- query (WPK-003-1) ---------------------------------------------------
 
     @classmethod
-    def unknown_filter_field(cls, field: str, type_: str) -> "LocatedError":
+    def unknown_filter_field(cls, field: str, type_: str) -> LocatedError:
         return cls(
             code="filter_error",
             message=f"No field '{field}' on type '{type_}'",
@@ -173,14 +173,14 @@ class LocatedError(Exception):
         )
 
     @classmethod
-    def fts_unavailable(cls, detail: str) -> "LocatedError":
+    def fts_unavailable(cls, detail: str) -> LocatedError:
         return cls(
             code="fts_unavailable",
             message=f"SQLite FTS5 is unavailable in this Python build ({detail})",
         )
 
     @classmethod
-    def bad_search_query(cls, text: str, detail: str) -> "LocatedError":
+    def bad_search_query(cls, text: str, detail: str) -> LocatedError:
         return cls(
             code="bad_search_query",
             message=f"Invalid search query '{text}' ({detail}). Quote phrases: '\"exact phrase\"'",
@@ -188,7 +188,7 @@ class LocatedError(Exception):
         )
 
     @classmethod
-    def ambiguous_slug(cls, slug: str, candidates: list[str]) -> "LocatedError":
+    def ambiguous_slug(cls, slug: str, candidates: list[str]) -> LocatedError:
         listed = ", ".join(candidates)
         return cls(
             code="ambiguity_error",
@@ -197,7 +197,7 @@ class LocatedError(Exception):
         )
 
     @classmethod
-    def illegal_predicate(cls, predicate: str, type_: str) -> "LocatedError":
+    def illegal_predicate(cls, predicate: str, type_: str) -> LocatedError:
         return cls(
             code="illegal_predicate",
             message=f"Predicate '{predicate}' is not legal for type '{type_}'",
@@ -206,7 +206,7 @@ class LocatedError(Exception):
         )
 
     @classmethod
-    def cardinality_violation(cls, predicate: str) -> "LocatedError":
+    def cardinality_violation(cls, predicate: str) -> LocatedError:
         return cls(
             code="cardinality_violation",
             message=f"Predicate '{predicate}' is single-valued; use edit to replace",
@@ -216,7 +216,7 @@ class LocatedError(Exception):
     @classmethod
     def inbound_edge_refusal(
         cls, type_: str, slug: str, count: int
-    ) -> "LocatedError":
+    ) -> LocatedError:
         phrase = "edge resolves" if count == 1 else "edges resolve"
         return cls(
             code="inbound_edge_refusal",

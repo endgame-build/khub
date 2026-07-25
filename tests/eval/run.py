@@ -35,7 +35,7 @@ GREP_CMD = re.compile(r"\b(grep|rg|cat|head|tail|find|ls|sed|awk)\b")
 def khub_json(ws: Path, *args: str):
     try:
         p = subprocess.run(["khub", "-C", str(ws), *args, "--format", "json"],
-                           capture_output=True, text=True, timeout=60)
+                           capture_output=True, text=True, timeout=60, check=False)
         return json.loads(p.stdout)
     except (json.JSONDecodeError, subprocess.TimeoutExpired):
         return None
@@ -178,8 +178,8 @@ def judge(task: dict, sig: dict, verdict: dict, model: str) -> dict:
             data = next((e for e in data if isinstance(e, dict) and e.get("type") == "result"), {})
         result = data.get("result", "") if isinstance(data, dict) else ""
         return {"root_cause": result.strip()[:200]}
-    except Exception:  # judge is best-effort; never let it kill the run
-        return {"root_cause": "judge-unavailable"}
+    except Exception:  # noqa: BLE001 — the judge is best-effort; any failure in it must
+        return {"root_cause": "judge-unavailable"}  # degrade the report, never kill the run
 
 
 def main() -> None:

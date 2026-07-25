@@ -7,9 +7,9 @@ and strict-mode field rejection.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from datetime import date
 from pathlib import Path
-from typing import Callable
 
 import frontmatter
 import pytest
@@ -30,15 +30,15 @@ def _prereqs(ws: Path, seed: Seed) -> None:
 
 
 def _deal(ws: Path, seed: Seed, **over: object) -> Path:
-    meta: dict[str, object] = dict(
-        type="opportunity",
-        created="2026-01-01",
-        updated="2026-01-01",
-        draft=False,
-        stage="prospect",
-        client="initech",
-        owner="noor",
-    )
+    meta: dict[str, object] = {
+        "type": "opportunity",
+        "created": "2026-01-01",
+        "updated": "2026-01-01",
+        "draft": False,
+        "stage": "prospect",
+        "client": "initech",
+        "owner": "noor",
+    }
     meta.update(over)
     seed(ws, "opportunities/initech-deal/_index.md", **meta)
     return ws / "opportunities" / "initech-deal" / "_index.md"

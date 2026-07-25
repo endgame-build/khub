@@ -10,9 +10,9 @@ inbound derived inverse.
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
 from datetime import date
 from pathlib import Path
-from typing import Callable
 
 import frontmatter
 import pytest

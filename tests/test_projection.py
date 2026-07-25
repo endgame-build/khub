@@ -12,8 +12,8 @@ from __future__ import annotations
 
 import os
 import subprocess
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable
 
 import frontmatter
 import pytest
@@ -58,7 +58,7 @@ def seed_firm_ops(root: Path) -> None:
     )
 
 
-def _live(root: Path):  # noqa: ANN202
+def _live(root: Path):
     """(resolved, valid index, graph) over the live tree — the projection's input."""
     resolved = load_schema(root)
     scanned = build_index(root, resolved)

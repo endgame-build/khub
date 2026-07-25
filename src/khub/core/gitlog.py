@@ -37,7 +37,7 @@ from khub.core.project import effective_date, stale_days
 
 def _git(root: Path, *args: str) -> subprocess.CompletedProcess[str]:
     """Run ``git -C root <args>`` capturing text output (never raises on failure)."""
-    return subprocess.run(  # noqa: S603,S607 — fixed argv, no shell
+    return subprocess.run(
         ["git", "-C", str(root), *args],
         capture_output=True,
         text=True,

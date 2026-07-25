@@ -6,11 +6,10 @@ resolution error, JSON output). The seeded tree mirrors test_project.py.
 
 from __future__ import annotations
 
+import json
+from collections.abc import Callable
 from datetime import date
 from pathlib import Path
-from typing import Callable
-
-import json
 
 import pytest
 from typer.testing import CliRunner

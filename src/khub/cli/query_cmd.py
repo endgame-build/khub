@@ -20,7 +20,7 @@ from khub.cli._render import emit, guard, resolve_root
 from khub.cli.entity_cmd import DYNAMIC_FIELDS, parse_fields
 from khub.core.query import Match, QueryFilters, query
 
-__all__ = ["query_command", "DYNAMIC_FIELDS"]
+__all__ = ["DYNAMIC_FIELDS", "query_command"]
 
 
 @guard

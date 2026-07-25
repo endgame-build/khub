@@ -9,9 +9,9 @@ and resolver latent fixes and the reindex link-escaping.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from datetime import date
 from pathlib import Path
-from typing import Callable
 
 import pytest
 

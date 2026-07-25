@@ -11,9 +11,9 @@ from __future__ import annotations
 import json
 import os
 import subprocess
+from collections.abc import Callable
 from datetime import date
 from pathlib import Path
-from typing import Callable
 
 import frontmatter
 import pytest

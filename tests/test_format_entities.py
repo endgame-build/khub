@@ -10,9 +10,9 @@ whitelist, git-backed `log`, and `search` over field values and body prose.
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
 from datetime import date
 from pathlib import Path
-from typing import Callable
 
 import pytest
 from typer.testing import CliRunner

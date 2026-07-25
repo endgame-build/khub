@@ -10,9 +10,9 @@ default, and the idempotent link/unlink no-op messages.
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
 from datetime import date, timedelta
 from pathlib import Path
-from typing import Callable
 
 import pytest
 from typer.testing import CliRunner
@@ -283,7 +283,7 @@ def test_missing_input_never_reads_stdin(fresh_ws: Path, argv: list[str]) -> Non
     import subprocess
     import sys
 
-    result = subprocess.run(
+    result = subprocess.run(  # noqa: PLW1510 — the exit code IS the assertion below
         [sys.executable, "-m", "khub.cli.main", *argv],
         cwd=fresh_ws,
         stdin=subprocess.DEVNULL,

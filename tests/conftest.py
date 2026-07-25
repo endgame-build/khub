@@ -5,8 +5,8 @@ Each scenario resolves from its own fixture; the HQ snapshot is mounted read-onl
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable
 
 import pytest
 

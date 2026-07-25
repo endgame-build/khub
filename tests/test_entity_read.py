@@ -9,8 +9,8 @@ derived-edge cases run against a generic fixture preset that declares a
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable
 
 import frontmatter
 import pytest

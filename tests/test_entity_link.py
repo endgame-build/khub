@@ -6,8 +6,8 @@ sided storage, and edge removal (with derived inverses left to recompute).
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable
 
 import frontmatter
 import pytest
@@ -30,10 +30,10 @@ def _prereqs(ws: Path, seed: Seed) -> None:
 
 
 def _project(ws: Path, seed: Seed, **over: object) -> Path:
-    meta: dict[str, object] = dict(
-        type="project", created="2026-01-01", updated="2026-01-01", draft=False,
-        client="initech", owner="noor",
-    )
+    meta: dict[str, object] = {
+        "type": "project", "created": "2026-01-01", "updated": "2026-01-01", "draft": False,
+        "client": "initech", "owner": "noor",
+    }
     meta.update(over)
     seed(ws, "projects/initech-pov/_index.md", **meta)
     return ws / "projects" / "initech-pov" / "_index.md"

@@ -10,8 +10,8 @@ in core.entity.delete). Wire it to a real check run when FS-004 lands.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable
 
 import frontmatter
 import pytest

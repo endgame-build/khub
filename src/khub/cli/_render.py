@@ -14,9 +14,10 @@ from __future__ import annotations
 
 import functools
 import json
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable, ParamSpec, TypeVar
+from typing import Any, ParamSpec, TypeVar
 
 import typer
 from rich.console import Console

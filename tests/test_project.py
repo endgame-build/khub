@@ -7,9 +7,9 @@ are derived from the scanned tree, never stored (WS-006/WS-008).
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from datetime import date
 from pathlib import Path
-from typing import Callable
 
 import pytest
 

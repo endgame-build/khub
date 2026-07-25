@@ -30,17 +30,18 @@ from __future__ import annotations
 import os
 import re
 import shutil
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import date
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 from khub.core import formats
 from khub.core.errors import LocatedError
 from khub.core.index import Index, build_index, resolve_target
 from khub.core.introspect import load_schema
-from khub.core.template import load_template
 from khub.core.model import ResolvedAttribute, ResolvedRelation, ResolvedSchema, ResolvedType
+from khub.core.template import load_template
 from khub.core.values import as_bool, is_bool, is_dateish, is_number
 
 # The longest slug we mint or accept; an over-long --id would otherwise crash at

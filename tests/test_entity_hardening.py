@@ -9,16 +9,16 @@ fallback, self-link and ambiguous-target refusal, backdating, and the LinkResult
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from datetime import date
 from pathlib import Path
-from typing import Callable
 
 import frontmatter
 import pytest
 
 from khub.core.entity import create, link, unlink, update
-from khub.core.formats import _split_frontmatter
 from khub.core.errors import LocatedError
+from khub.core.formats import _split_frontmatter
 
 Seed = Callable[..., None]
 
@@ -29,10 +29,10 @@ def _people(ws: Path, seed: Seed) -> None:
 
 
 def _deal(ws: Path, seed: Seed, **over: object) -> Path:
-    meta: dict[str, object] = dict(
-        type="opportunity", created="2026-01-01", updated="2026-01-01",
-        draft=False, stage="prospect", client="initech", owner="noor",
-    )
+    meta: dict[str, object] = {
+        "type": "opportunity", "created": "2026-01-01", "updated": "2026-01-01",
+        "draft": False, "stage": "prospect", "client": "initech", "owner": "noor",
+    }
     meta.update(over)
     seed(ws, "opportunities/initech-deal/_index.md", **meta)
     return ws / "opportunities" / "initech-deal" / "_index.md"

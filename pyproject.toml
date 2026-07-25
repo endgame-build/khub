@@ -63,6 +63,17 @@ markers = [
 [tool.ruff]
 line-length = 100
 
+[tool.ruff.lint]
+# Two default rules fight decisions khub made deliberately; the rest stay on.
+ignore = [
+    # `typer.Option(...)` / `typer.Argument(...)` in a parameter default IS the Typer
+    # idiom — every command signature in cli/ is built that way.
+    "B008",
+    # khub dates are naive local ISO dates by design (`created`/`updated`, the stale
+    # threshold, git commit dates). A tz-aware `date.today()` would change the model.
+    "DTZ011",
+]
+
 [tool.mypy]
 python_version = "3.11"
 strict = true

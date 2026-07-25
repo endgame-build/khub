@@ -59,16 +59,20 @@ def build_block(
     type_list = ", ".join(f"`{t}`" for t in types) if types else "none declared yet"
     if import_supported:
         link = [
-            "The ontology is imported below, so it loads into context even without running the "
-            "khub CLI:",
+            (
+                "The ontology is imported below, so it loads into context even without "
+                "running the khub CLI:"
+            ),
             "",
             "@.khub/schema.yaml",
             "",
         ]
     else:
         link = [
-            "The ontology is defined in the schema file below; read it to work in this model, "
-            "even without running the khub CLI:",
+            (
+                "The ontology is defined in the schema file below; read it to work in this "
+                "model, even without running the khub CLI:"
+            ),
             "",
         ]
     return "\n".join(
@@ -76,26 +80,37 @@ def build_block(
             BEGIN,
             "## khub workspace",
             "",
-            "This repository is a [khub](https://github.com/endgame-build/khub) "
-            "workspace: its domain is modeled as typed entities and typed relations, and the "
-            "schema is the contract. Reason in that model.",
+            (
+                "This repository is a [khub](https://github.com/endgame-build/khub) "
+                "workspace: its domain is modeled as typed entities and typed relations, and "
+                "the schema is the contract. Reason in that model."
+            ),
             "",
             *link,
-            f"Schema file: [`.khub/schema.yaml`](.khub/schema.yaml). Preset: `{stamp}`. "
-            f"Entity types: {type_list}.",
+            (
+                f"Schema file: [`.khub/schema.yaml`](.khub/schema.yaml). Preset: `{stamp}`. "
+                f"Entity types: {type_list}."
+            ),
             "",
             "When khub is installed, prefer it for typed reads and writes over grepping files:",
             "",
             "- Introspect: `khub schema`, `khub schema show <type>`, `khub status`.",
-            "- Read: `khub query --type <t>`, `khub get <id> --edges`, `khub neighbors <id>`, "
-            "`khub impact <id>`, `khub history <id>`, `khub search <text>`.",
-            "- Write: `khub add <type> --<field> <v>`, `khub edit <id> <field> <v>`, "
-            "`khub link <id> <pred> <target>`, `khub unlink`, `khub remove <id>`. Capture is "
-            "never blocked; `--draft` marks an entity unpublished.",
+            (
+                "- Read: `khub query --type <t>`, `khub get <id> --edges`, "
+                "`khub neighbors <id>`, `khub impact <id>`, `khub history <id>`, "
+                "`khub search <text>`."
+            ),
+            (
+                "- Write: `khub add <type> --<field> <v>`, `khub edit <id> <field> <v>`, "
+                "`khub link <id> <pred> <target>`, `khub unlink`, `khub remove <id>`. "
+                "Capture is never blocked; `--draft` marks an entity unpublished."
+            ),
             "- Every read takes `--format json` for machine-readable output.",
             "",
-            "Not installed? `uv tool install git+ssh://git@github.com/endgame-build/khub`, "
-            "then `khub install-skills`.",
+            (
+                "Not installed? `uv tool install git+ssh://git@github.com/endgame-build/khub`, "
+                "then `khub install-skills`."
+            ),
             END,
         ]
     )

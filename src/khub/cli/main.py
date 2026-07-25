@@ -6,6 +6,7 @@ from pathlib import Path
 
 import typer
 
+from khub.cli._render import CliState
 from khub.cli.backfill_cmd import backfill_command
 from khub.cli.entity_cmd import (
     DYNAMIC_FIELDS,
@@ -18,7 +19,6 @@ from khub.cli.entity_cmd import (
 )
 from khub.cli.gitlog_cmd import stale_command
 from khub.cli.graph_cmd import history_command, impact_command, neighbors_command
-from khub.cli._render import CliState
 from khub.cli.init_cmd import init_command
 from khub.cli.integrity_cmd import check_command, validate_command
 from khub.cli.projection_cmd import reindex_command, viz_command

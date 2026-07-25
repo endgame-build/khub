@@ -149,8 +149,8 @@ def _passes(
         return False
     if f.orphan and not orphan:
         return False
-    if f.stale and not stale:
-        return False
+    if f.stale and not stale:  # noqa: SIM103 — one guard per filter reads better than a
+        return False             # collapsed boolean; the parallel shape is the point
     return True
 
 

@@ -13,9 +13,10 @@ from __future__ import annotations
 
 import json
 import subprocess
+from collections.abc import Callable
 from datetime import date
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 import pytest
 from typer.testing import CliRunner
@@ -86,7 +87,9 @@ def test_jsonl_duplicate_slug_is_malformed() -> None:
 
 @pytest.mark.unit
 def test_yaml_duplicate_key_is_malformed() -> None:
-    with pytest.raises(Exception):  # ruamel DuplicateKeyError — whole-file contract
+    from ruamel.yaml.constructor import DuplicateKeyError
+
+    with pytest.raises(DuplicateKeyError):  # the whole-file contract, named
         load_collection("a:\n  x: 1\na:\n  x: 2\n", "yaml")
 
 

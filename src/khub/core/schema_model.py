@@ -75,7 +75,7 @@ class TypeDecl(_Strict):
     relations: dict[str, RelationDecl] = {}
 
     @model_validator(mode="after")
-    def _storage_matrix(self) -> "TypeDecl":
+    def _storage_matrix(self) -> TypeDecl:
         if self.required and self.layout != "singleton":
             raise ValueError(
                 "'required' is singleton-only (a required file/folder/collection "

@@ -17,7 +17,7 @@ from collections import Counter, defaultdict
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from run import verdict_from_signals  # noqa: E402
+from run import verdict_from_signals
 
 SIG_KEYS = ("skill_loaded", "khub_write", "khub_read", "file_write", "grep")
 
