@@ -19,7 +19,7 @@ Built on top of the [Open Knowledge Format (OKF)](https://github.com/GoogleCloud
 
 - **Author** — `add` / `get` / `edit` / `link` / `unlink` / `remove`: schema-validated writes, referential integrity hard-fails, capture never blocked, minimal-diff round-trips. A templated type's `add` seeds the body from its template (`--no-template` opts out).
 - **Find** — `query` (frontmatter + edge filters), `search` (BM25 full-text over titles, bodies, and fields: FTS5, built in-memory per call, never stale), `neighbors` / `impact` / `history` (graph walks).
-- **Gate** — `validate` (per-entity well-formedness, including body structure against the type's template: required section headings as an ordered subsequence) and `check` (graph-wide completeness, dangling edges, strays, cycles, missing required singletons; orphans informational unless `--strict`); `stale` and `log` read git at entity altitude, row-accurate even inside collections.
+- **Gate** — `validate` (per-entity well-formedness, including body structure against the type's template: required section headings as an ordered subsequence) and `check` (graph-wide completeness, dangling edges, strays, cycles, missing required singletons; orphans informational unless `--strict`); `stale` reads git at entity altitude, row-accurate even inside collections.
 - **Project** — `reindex` (OKF `index.md`), `viz` (Cytoscape HTML), `backfill` (git-derived dates and scaffolding).
 - **Store** — per-type `layout` (file / folder / collection / singleton) × `format` (md / json / yaml; collections take json / jsonl / yaml). A singleton is one fixed file whose slug is the type name (`khub get prd`). Non-md entities carry prose in a reserved `body` field; collection writes are lock-serialized and crash-atomic.
 - **Scaffold** — presets are directories (`<name>/schema.yaml` + `templates/*.yaml`); `khub init` flattens both into `.khub/` and creates every missing md singleton from its template (creations only — an existing file is never touched).
@@ -32,7 +32,7 @@ Full command surface and JSON contracts: [`docs/cli.md`](docs/cli.md). Feature h
 khub is a `khub` console script (Python 3.11+). Install it, then seed a workspace from a preset:
 
 ```bash
-uv tool install git+ssh://git@github.com/endgame-build/khub@v0.9.0   # or clone + uv sync
+uv tool install git+ssh://git@github.com/endgame-build/khub@v0.9.1   # or clone + uv sync
 khub init firm-ops ./my-hub          # scaffold .khub/ (+ templates, singletons), wire agent files
 cd my-hub
 khub install-skills                  # install the agent skill (needs npx)

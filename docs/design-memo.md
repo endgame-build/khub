@@ -171,8 +171,8 @@ The schema header stamps provenance (`# khub-preset: engineering@1.0.0`). The en
 khub ships as a Python package and runs through `uv`. The zero-install path mirrors `npx`, straight from the private repo over git:
 
 ```
-uvx --from git+ssh://git@github.com/endgame-build/khub@v0.9.0 khub init firm-ops ./my-hub
-uv tool install git+ssh://git@github.com/endgame-build/khub@v0.9.0   # install once, then reuse
+uvx --from git+ssh://git@github.com/endgame-build/khub@v0.9.1 khub init firm-ops ./my-hub
+uv tool install git+ssh://git@github.com/endgame-build/khub@v0.9.1   # install once, then reuse
 khub init engineering ./acme-hub
 ```
 
@@ -186,7 +186,7 @@ Everything stays private for now. `uvx` and `uv tool install` run from the priva
 
 The **engine** is proven on the real thing: **firm-hq** cut over to khub. The proving ground is HQ's live firm-operations corpus, already running the projection-and-validation pattern under `kb.py`. khub runs read-only against the same files, then takes over: a functional cutover proven against the live corpus. Markdown is truth, so the risk stays low: khub never owns the data, the `.md` files go untouched, and the incumbent keeps working until cutover.
 
-The cutover exercises the whole engine: the schema-introspecting core library, the in-memory `networkx` index, the integrity loop (`validate`/`check`/`stale` + `log`), plus `reindex` and `backfill` for the HQ migration; the full author and query command surface; `khub init`; and the **firm-ops preset**, the port of `hq.schema.yml` (9 types, 14 relation predicates), captured in full in `firm-ops-preset.md`.
+The cutover exercises the whole engine: the schema-introspecting core library, the in-memory `networkx` index, the integrity loop (`validate`/`check`/`stale`), plus `reindex` and `backfill` for the HQ migration; the full author and query command surface; `khub init`; and the **firm-ops preset**, the port of `hq.schema.yml` (9 types, 14 relation predicates), captured in full in `firm-ops-preset.md`.
 
 Not yet built, and named: the engineering preset and any preset beyond firm-ops; the persisted SQLite/graph projection; `diff-preset` drift/promotion; hub↔engagement sync; the MCP server; facet and OKF-bundle ingestion; `rename`; concurrency arbitration.
 

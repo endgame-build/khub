@@ -2,7 +2,7 @@
 
 Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); khub is pre-release.
 
-## [Unreleased]
+## [0.9.1] — 2026-07-25
 
 ### Fixed
 

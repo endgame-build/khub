@@ -99,9 +99,10 @@ upgrade when a real corpus hits a 500-row file with one typo.
   an approximation). A row with no `updated` is skipped, as today.
 - **`backfill`**: skips collection types and reports the skip; row-level date
   attribution (first/last commit in which the row's value changed) is planned
-  but not yet implemented: it is the `log` walk below run to exhaustion.
-- **`log <row-id>`** is row-correct: parse the collection blob at `rev`
-  and `rev^` (generalizing `gitlog._frontmatter_at` to `{slug: row}`), diff the
+  but not yet implemented: it needs the per-rev row diff sketched below.
+- **Row-level git attribution** (shipped as `khub log <row-id>` until 0.9.0, when
+  `log` was removed; kept here as the design for row-dated `backfill`): parse the
+  collection blob at `rev` and `rev^` (a `{slug: row}` frontmatter read), diff the
   row by slug: one `LogEntry` per changed row, same two-`git show`s-per-commit
   cost as today. `gitlog.path_to_node` becomes one-path-to-many-nodes.
 
@@ -145,5 +146,5 @@ schema until decided:
    additive schema change only).
 2. **HQ pilot** (Noor, 2026-07-07): port real hq's `project-repos.yaml` into a
    `repo` collection type in `a live firm-ops workspace`: rows become entities
-   with edges to projects; `validate`/`check`/`query`/`search`/`log` run green
+   with edges to projects; `validate`/`check`/`query`/`search` run green
    against the real corpus.
