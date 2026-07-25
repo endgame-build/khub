@@ -2,9 +2,21 @@
 
 Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); khub is pre-release.
 
-## [Unreleased]
+## [0.13.0] — 2026-07-25
 
 ### Added
+
+- **kb reads a khub workspace's own body templates.** Dropped into a `.khub/`
+  workspace, kb now holds entities to *that* workspace's `.khub/templates/*.yaml`
+  contract rather than the four Markdown templates it ships, and seeds new bodies
+  from them. Found by running kb over a build-hub corpus, where it had been checking
+  build-lite's prd/arc42 sections and missing every template build-hub declares. Its
+  YAML reader grew the two shapes those files need — a mapping that starts on a `-`
+  item, and a plain scalar containing a comma — and is now checked against
+  `ruamel.yaml` on every preset, template and schema file in the repo.
+- **`kb/smoke.sh`** — 108 assertions across four cells: khub and kb, each over
+  build-hub and build-lite, plus cross-tool parity and the graduation path. Every
+  exit code asserted, payloads compared as data.
 
 - **`id_prefix`, and enumerated ids for every minted slug** (breaking: minted ids change shape). `add` now mints
   `<prefix>-NNN-<slug>` where a type declares `id_prefix`, and `NNN-<slug>` where it

@@ -284,19 +284,28 @@ def _block_list(lines: list[tuple[int, str, int]], cursor: list[int], indent: in
         col, text, number = lines[cursor[0]]
         if col < indent or not text.startswith("- "):
             break
+        item = text[2:].strip()
+        if YAML_KEY_RE.match(item) and not item.rstrip().endswith(("}", "]")):
+            # `- heading: Vision` followed by deeper `hint:` lines — a mapping that
+            # starts on the dash. Re-seat the first line at the mapping's own column
+            # and let the block reader consume it with its continuation lines; khub's
+            # body templates are written this way.
+            lines[cursor[0]] = (col + 2, item, number)
+            out.append(_block_map(lines, cursor, col + 2))
+            continue
         cursor[0] += 1
-        out.append(_flow(text[2:].strip(), number))
+        out.append(_flow(item, number))
     return out
 
 
 def _flow(text: str, number: int) -> Any:
-    value, rest = _flow_value(text, number)
+    value, rest = _flow_value(text, number, in_flow=False)
     if rest.strip():
         raise Bad(f"line {number}: trailing content after value ({rest.strip()!r})")
     return value
 
 
-def _flow_value(text: str, number: int) -> tuple[Any, str]:
+def _flow_value(text: str, number: int, *, in_flow: bool = True) -> tuple[Any, str]:
     s = text.lstrip()
     if s.startswith("{"):
         return _flow_pairs(s[1:], number)
@@ -309,6 +318,10 @@ def _flow_value(text: str, number: int) -> tuple[Any, str]:
         if i >= len(s):
             raise Bad(f"line {number}: unterminated quote")
         return s[1:i].replace('\\"', '"').replace("\\\\", "\\"), s[i + 1 :]
+    if not in_flow:
+        # A plain scalar runs to end of line. Only inside { } or [ ] do , } ]
+        # terminate it — `hint: who operates this, in their words` is one value.
+        return _bare(s.strip()), ""
     end = len(s)
     for i, ch in enumerate(s):
         if ch in ",}]":
@@ -434,7 +447,30 @@ def load_schema(root: Path) -> Schema:
     return Schema(load_yaml(path.read_text()))
 
 
+def khub_template(root: Path, type_: str) -> tuple[list[str], str] | None:
+    """(headings, source-name) from a khub workspace's own `.khub/templates/<t>.yaml`.
+
+    A kb dropped into a khub workspace must hold entities to THAT workspace's body
+    contract, not to the four templates kb happens to ship. Without this, kb checks
+    build-lite's prd/arc42 sections against a build-hub corpus and misses every
+    template build-hub actually declares.
+    """
+    path = root / ".khub" / "templates" / f"{type_}.yaml"
+    if not path.is_file():
+        return None
+    data = load_yaml(path.read_text())
+    if not isinstance(data, dict):
+        return None
+    sections = data.get("sections") or []
+    return [s["heading"] for s in sections if isinstance(s, dict) and s.get("heading")], path.name
+
+
 def template_for(root: Path, type_: str) -> str | None:
+    """The body scaffold `add` seeds from — kb's Markdown, or khub's rendered YAML."""
+    khub = khub_template(root, type_)
+    if khub is not None:
+        headings, _ = khub
+        return "\n".join(f"## {h}\n" for h in headings)
     local = root / CONFIG_DIR / "templates" / f"{type_}.md"
     path = local if local.is_file() else HERE / "templates" / f"{type_}.md"
     return path.read_text() if path.is_file() else None
@@ -616,14 +652,29 @@ def _entity_findings(corpus: Corpus, e: Entity, *, strict: bool) -> Iterable[Fin
         if spec.get("required") and (k not in e.fm or e.fm[k] in (None, "", []))
     ]
     if missing:
-        yield Finding(GAP, "incomplete", e.slug, "missing " + ", ".join(sorted(missing)))
+        # khub reports fields and relations in separate lists; the message keeps
+        # them apart so `check` can rebuild both.
+        fields = sorted(k for k in missing if k in attrs)
+        relations = sorted(k for k in missing if k in rels)
+        yield Finding(GAP, "incomplete", e.slug,
+                      "missing " + ", ".join(fields + relations),
+                      "|".join(fields) + "//" + "|".join(relations))
 
-    template = template_for(corpus.root, e.type)
-    if template:
-        absent = _missing_heading(template, e.body)
-        if absent:
-            yield Finding(ERROR, "body_shape", e.slug,
-                          f"missing required section '{absent}'", "body")
+    contract = khub_template(corpus.root, e.type)
+    if contract is not None:
+        headings, source = contract
+    else:
+        template = template_for(corpus.root, e.type)
+        headings = H2_RE.findall(CODE_FENCE_RE.sub("", template)) if template else []
+        source = f"{e.type}.md"
+    absent = _missing_heading(headings, e.body)
+    if absent:
+        yield Finding(
+            ERROR, "body_shape", e.slug,
+            f"missing or out-of-order section '## {absent}' "
+            f"(template {source} requires its headings in order)",
+            "body",
+        )
 
     swept = not corpus.schema.types[e.type].get("orphan")
     # Only RESOLVED edges count, as in khub: an entity whose one edge dangles is
@@ -676,9 +727,8 @@ def _attr_problem(spec: dict[str, Any], value: Any) -> str | None:
     return None if isinstance(value, str) and value.strip() else "must be non-empty text"
 
 
-def _missing_heading(template: str, body: str) -> str | None:
-    """The first template H2 not present, in order. Extra headings are fine."""
-    required = H2_RE.findall(CODE_FENCE_RE.sub("", template))
+def _missing_heading(required: list[str], body: str) -> str | None:
+    """The first required H2 not present, in order. Extra headings are fine."""
     present = [h.strip() for h in H2_RE.findall(CODE_FENCE_RE.sub("", body))]
     pos = 0
     for want in (h.strip() for h in required):
@@ -1300,8 +1350,8 @@ def cmd_check(args: argparse.Namespace) -> int:
 
     incomplete = [
         {"id": _qualified(corpus, f.where), "type": _type_of(corpus, f.where), "slug": f.where,
-         "missing_fields": sorted(f.message.removeprefix("missing ").split(", ")),
-         "missing_relations": []}
+         "missing_fields": [k for k in f.field.split("//")[0].split("|") if k],
+         "missing_relations": [k for k in f.field.split("//")[1].split("|") if k]}
         for f in by_code.get("incomplete", [])
     ]
     dangling = [
