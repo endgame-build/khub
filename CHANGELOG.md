@@ -2,6 +2,52 @@
 
 Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); khub is pre-release.
 
+## [0.10.0] — 2026-07-25
+
+khub's agent skills now ship inside the package, so installing them is a file
+copy instead of a network clone. The Claude Code plugin marketplace — a second,
+Claude-only channel for the same two files — is gone.
+
+### Changed
+
+- **`khub install-skills` copies from the package.** No Node, no network, no
+  clone of a private repo. It shelled out to `npx skills add
+  git@github.com:endgame-build/khub.git` because `plugin/skills/` sat outside the
+  wheel and the files genuinely were not on disk at runtime — which made a
+  two-file copy unusable for anyone without SSH access to the ENDGAME org, and
+  broken offline.
+- **New flags:** `--target claude|agents|opencode` and `--skill khub|setup` (both
+  repeatable), `--global` for the home directories, `--dry-run`. Default writes
+  both skills to `.claude/skills/`, `.agents/skills/`, and `.opencode/skills/`.
+  Every file is compared first and reported `created` / `updated` / `unchanged`,
+  so the command is safe to re-run — and worth re-running after a khub upgrade.
+- **Skills moved to `skills/` at the repo root** and reach the wheel through
+  hatch's `force-include`. That location is deliberate: it is the container
+  skills.sh discovers without a manifest, so `npx skills add <repo> -s setup`
+  still works as the bootstrap for a machine with no khub yet. Two channels, two
+  moments — npx bootstraps, `install-skills` is the steady state.
+- The `khub wire` block no longer advertises `/khub:setup`; it names
+  `uv tool install` and `khub install-skills`.
+
+### Removed
+
+- **The Claude Code plugin marketplace** (`.claude-plugin/marketplace.json`,
+  `plugin/.claude-plugin/plugin.json`). **Migration:** run `khub install-skills`,
+  which writes `.claude/skills/` by default. An already-installed plugin keeps
+  working but no longer updates.
+- **`install-skills --agent`** — it was the npx passthrough.
+
+### Fixed
+
+- The gitignore written by a project-scope install covered the whole target
+  directory, so a repo committing its own `.claude/skills/<name>/` had every file
+  added to it afterwards silently ignored. It now ignores `<dir>/<skill>/` per
+  installed skill.
+- `--global` required a khub workspace, failing with "No .khub workspace found"
+  in exactly the case a machine-wide install is for.
+- The opencode `--global` target ignored `XDG_CONFIG_HOME`, writing skills where
+  opencode never looks while reporting them installed.
+
 ## [0.9.1] — 2026-07-25
 
 ### Fixed

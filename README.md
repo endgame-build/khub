@@ -32,7 +32,7 @@ Full command surface and JSON contracts: [`docs/cli.md`](docs/cli.md). Feature h
 khub is a `khub` console script (Python 3.11+). Install it, then seed a workspace from a preset:
 
 ```bash
-uv tool install git+ssh://git@github.com/endgame-build/khub@v0.9.1   # or clone + uv sync
+uv tool install git+ssh://git@github.com/endgame-build/khub@v0.10.0   # or clone + uv sync
 khub init firm-ops ./my-hub          # scaffold .khub/ (+ templates, singletons), wire agent files
 cd my-hub
 khub install-skills                  # install the agent skill (needs npx)
@@ -81,7 +81,7 @@ khub ships two skills: `khub` (the read and write verbs) and `setup` (install th
 **Option 1 — the CLI, then its skills.** A file copy out of the installed package: offline, no Node, safe to re-run.
 
 ```bash
-uv tool install git+ssh://git@github.com/endgame-build/khub@v0.9.1
+uv tool install git+ssh://git@github.com/endgame-build/khub@v0.10.0
 khub install-skills
 ```
 
