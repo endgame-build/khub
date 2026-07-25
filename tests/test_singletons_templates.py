@@ -254,3 +254,29 @@ def test_check_reports_missing_required_singleton(ws: Path) -> None:
     report = check(ws)
     assert report.missing_singletons == ["prd"]
     assert not report.passed
+
+
+@pytest.mark.unit
+def test_empty_sections_means_no_body_contract(tmp_path: Path) -> None:
+    """`sections: []` is the explicit way to say "template, but no required headings".
+    It used to error, while deleting the file entirely was fine — so there was no way
+    to declare an empty contract."""
+    from khub.core.template import load_template, template_path
+
+    ws = tmp_path / "ws"
+    init_workspace("build-hub", ws)
+    template_path(ws, "adr").write_text("title: x\nsections: []\n")
+    assert load_template(ws, "adr") is None
+
+
+@pytest.mark.unit
+def test_missing_sections_key_is_still_an_error(tmp_path: Path) -> None:
+    """A file that declares nothing coherent is a typo, not an intent."""
+    from khub.core.errors import LocatedError
+    from khub.core.template import load_template, template_path
+
+    ws = tmp_path / "ws"
+    init_workspace("build-hub", ws)
+    template_path(ws, "adr").write_text("title: x\n")
+    with pytest.raises(LocatedError):
+        load_template(ws, "adr")

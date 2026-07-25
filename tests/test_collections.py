@@ -344,3 +344,23 @@ def test_schema_matrix(cws: Path) -> None:
         load_schema(cws)
     set_repo(layout="collection", path="stuff/repo.yaml")  # format derived from suffix
     assert load_schema(cws).types["repo"].storage.fmt == "yaml"
+
+
+@pytest.mark.integration
+def test_yaml_collection_keeps_its_header_comment(
+    fresh_ws: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """docs/collections-design.md promises yaml preserves comments. `load_collection`
+    rebuilt rows as a plain dict, so ruamel's document-level comment — the "do not
+    hand-edit" header a registry file carries — vanished on the first write. Comments
+    between and after rows always survived, since those attach to the rows."""
+    _add_repo_type(fresh_ws, fmt="yaml", path="repos.yaml")
+    monkeypatch.chdir(fresh_ws)
+    assert runner.invoke(app, ["add", "repo", "--id", "svc-a", "--repo", "e/a"]).exit_code == 0
+
+    path = fresh_ws / "repos.yaml"
+    header = "# registry of every repo - do not hand-edit\n"
+    path.write_text(header + path.read_text())
+
+    assert runner.invoke(app, ["edit", "repo/svc-a", "status", "archived"]).exit_code == 0
+    assert path.read_text().startswith(header)

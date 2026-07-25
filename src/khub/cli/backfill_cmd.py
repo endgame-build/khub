@@ -37,6 +37,7 @@ def _emit(report: BackfillReport) -> None:
             typer.echo(f"{id_}: {', '.join(fields)}")
         if not report.changes:
             typer.echo("No changes")
+        _emit_skipped(report)  # a preview that omits the skip is not a preview
         return
     if not report.git_available:
         typer.echo("No git history; dates not backfilled")
@@ -46,6 +47,11 @@ def _emit(report: BackfillReport) -> None:
     # backfilled" line above is never the whole story when files were in fact changed.
     if report.scaffolded_entities:
         typer.echo(f"Scaffolded frontmatter on {report.scaffolded_entities} entities")
+    _emit_skipped(report)
+
+
+def _emit_skipped(report: BackfillReport) -> None:
+    """The collection-skip line — printed by both the real run and the dry-run."""
     if report.skipped_collections:
         typer.echo(
             f"Skipped collection types ({', '.join(report.skipped_collections)}): "

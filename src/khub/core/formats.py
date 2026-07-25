@@ -236,7 +236,11 @@ def load_collection(text: str, fmt: str) -> dict[str, Any]:
             rows[slug] = row
     else:
         data = _load_mapping(text, fmt, _yaml_rt)
-        rows = {}
+        # Validate in place and return the loaded mapping itself. Rebuilding it as a
+        # plain dict dropped ruamel's document-level comment — the header a registry
+        # file carries ("# do not hand-edit") vanished on the first write, against the
+        # documented yaml round-trip guarantee. Comments between and after rows
+        # survived either way, since those attach to the individual rows.
         for key, row in data.items():
             if not isinstance(key, str) or not key:
                 raise LocatedError(
@@ -253,7 +257,7 @@ def load_collection(text: str, fmt: str) -> dict[str, Any]:
                     code="malformed_entity",
                     message=f"row '{key}' carries a disagreeing slug key '{inner}'",
                 )
-            rows[key] = row
+        rows = data
     for slug, row in rows.items():
         _pop_body(dict(row), fmt, ctx=f"row '{slug}': ")  # validate, discard the copy
     return rows

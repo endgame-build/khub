@@ -83,7 +83,13 @@ def template_path(root: Path, type_: str) -> Path:
 
 
 def load_template(root: Path, type_: str) -> BodyTemplate | None:
-    """The type's template, or None when the convention file is absent."""
+    """The type's template, or None when there is no body contract.
+
+    None means either no template file, or a file declaring ``sections: []`` — the
+    explicit way to say "this type has a template (for `add` to seed a title) but
+    requires no headings". A MISSING ``sections`` key is still an error: the file
+    exists and declares nothing coherent, which is a typo, not an intent.
+    """
     path = template_path(root, type_)
     if not path.is_file():
         return None
@@ -93,9 +99,13 @@ def load_template(root: Path, type_: str) -> BodyTemplate | None:
     unknown = set(data) - _TOP_KEYS
     if unknown:
         raise _invalid(type_, f"unknown top-level keys: {', '.join(sorted(unknown))}")
-    raw_sections = data.get("sections")
-    if not isinstance(raw_sections, list) or not raw_sections:
-        raise _invalid(type_, "'sections' must be a non-empty list")
+    if "sections" not in data:
+        raise _invalid(type_, "'sections' is required (use `sections: []` for no body contract)")
+    raw_sections = data["sections"]
+    if not isinstance(raw_sections, list):
+        raise _invalid(type_, "'sections' must be a list")
+    if not raw_sections:
+        return None  # declared, deliberately empty: no headings required
     sections: list[Section] = []
     for i, entry in enumerate(raw_sections):
         if not isinstance(entry, dict):

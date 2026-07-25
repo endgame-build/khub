@@ -593,3 +593,18 @@ def test_viz_refuses_when_a_collection_is_malformed(tmp_path: Path) -> None:
         viz(ws, out=str(tmp_path / "v.html"))
     assert err.value.code == "malformed_projection"
     assert not (tmp_path / "v.html").exists()
+
+
+@pytest.mark.integration
+def test_backfill_dry_run_previews_the_collection_skip(tmp_path: Path, monkeypatch) -> None:
+    """A dry-run's job is to preview exactly what the real run reports; it returned
+    early before the skip line, so the one thing it had to say went missing."""
+    from khub.core.workspace import init_workspace
+
+    ws = tmp_path / "ws"
+    init_workspace("build-hub", ws)
+    entity.create(ws, "repo", {"repo": "acme/a", "status": "active"}, id_="svc-a")
+    monkeypatch.chdir(ws)
+    dry = runner.invoke(app, ["backfill", "--dry-run"])
+    assert dry.exit_code == 0
+    assert "Skipped collection types" in dry.output
