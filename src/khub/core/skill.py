@@ -12,12 +12,15 @@ private repo. ``npx skills add`` still works against the repo — root ``skills/
 is a container skills.sh discovers without a manifest — but it is a bootstrap
 route for machines that have no khub yet, not something khub itself invokes.
 
-Installed skills are managed copies: a re-install re-syncs them to the packaged
-content, so edits belong in ``skills/``, not in an installed copy.
+Installed skills are managed copies: a re-install overwrites them from the
+packaged content, so edits belong in ``skills/``, not in an installed copy. The
+sync is additive — a file khub no longer ships is left where it is rather than
+deleted, because this writes into directories other tools also populate.
 """
 
 from __future__ import annotations
 
+import os
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -31,14 +34,29 @@ from khub.core.errors import LocatedError
 _PACKAGED_SKILLS = Path(__file__).resolve().parent.parent / "skills"
 _REPO_SKILLS = Path(__file__).resolve().parents[3] / "skills"
 
-# Where each agent family reads project-local skills, and the home equivalent.
-# opencode reads all three project dirs; the copies are byte-identical, so a name
-# collision resolves to the same skill rather than one shadowing another.
-TARGETS: dict[str, tuple[str, str]] = {
-    "claude": (".claude/skills", ".claude/skills"),
-    "agents": (".agents/skills", ".agents/skills"),
-    "opencode": (".opencode/skills", ".config/opencode/skills"),
+# Where each agent family reads project-local skills. opencode reads all three;
+# the copies are byte-identical, so a name collision resolves to the same skill
+# rather than one shadowing another.
+TARGETS: dict[str, str] = {
+    "claude": ".claude/skills",
+    "agents": ".agents/skills",
+    "opencode": ".opencode/skills",
 }
+
+
+def global_dir(target: str) -> Path:
+    """The machine-wide directory ``target`` reads, for ``--global``.
+
+    Only opencode's differs from its project path: it lives under the XDG config
+    root, so a user with ``XDG_CONFIG_HOME`` set would otherwise get the skills
+    written somewhere opencode never looks — reported as installed, and silently
+    absent.
+    """
+    home = Path.home()
+    if target == "opencode":
+        xdg = os.environ.get("XDG_CONFIG_HOME")
+        return (Path(xdg) if xdg else home / ".config") / "opencode" / "skills"
+    return home / TARGETS[target]
 
 
 def skills_dir() -> Path:
@@ -79,7 +97,7 @@ class SkillReport:
 
 
 def install_skills(
-    root: Path,
+    root: Path | None,
     *,
     skills: Sequence[str] | None = None,
     targets: Sequence[str] | None = None,
@@ -91,10 +109,17 @@ def install_skills(
     Every file is compared before it is written, so a re-install reports
     ``unchanged`` and leaves mtimes alone — the command is safe to run from a
     session hook. ``dry_run`` reports the same writes without touching disk.
-    Project scope also gitignores the skill directories: they are reproducible
-    from the installed khub, so committing them would be committing a copy.
+
+    ``root`` is required for project scope and unused under ``scope_global``: a
+    machine-wide install has no workspace to sit in, which is exactly the case
+    where none exists yet.
     """
     from khub.core.workspace import _append_gitignore
+
+    if root is None and not scope_global:
+        raise LocatedError(
+            code="missing_root", message="A project-scope skill install needs a workspace root"
+        )
 
     source = skills_dir()
     wanted = list(skills) if skills else available_skills()
@@ -102,16 +127,17 @@ def install_skills(
     chosen = list(targets) if targets else list(TARGETS)
     _reject_unknown(chosen, list(TARGETS), "target")
 
-    base = Path.home() if scope_global else root
     writes: list[SkillWrite] = []
     for target in chosen:
-        project_dir, home_dir = TARGETS[target]
-        dest_root = base / (home_dir if scope_global else project_dir)
+        dest_root = global_dir(target) if scope_global else (root or Path()) / TARGETS[target]
         for name in wanted:
-            writes.extend(_sync_skill(source / name, dest_root / name, base, dry_run))
-        if not scope_global and not dry_run:
-            # Project scope only: a home directory is not a git repo.
-            _append_gitignore(root / ".gitignore", f"{project_dir}/")
+            # Paths report absolute under --global: relative to $HOME they would be
+            # byte-identical to a project install, so a reader could not tell which ran.
+            writes.extend(_sync_skill(source / name, dest_root / name, None if scope_global else root, dry_run))
+            if not scope_global and not dry_run and root is not None:
+                # Ignore only what khub owns. Ignoring the whole `.claude/skills/`
+                # would also swallow a repo's own committed skills alongside ours.
+                _append_gitignore(root / ".gitignore", f"{TARGETS[target]}/{name}/")
 
     return SkillReport(
         scope="global" if scope_global else "project",
@@ -121,7 +147,7 @@ def install_skills(
     )
 
 
-def _sync_skill(src: Path, dest: Path, base: Path, dry_run: bool) -> list[SkillWrite]:
+def _sync_skill(src: Path, dest: Path, base: Path | None, dry_run: bool) -> list[SkillWrite]:
     """Copy one skill directory, reporting an action per file."""
     writes: list[SkillWrite] = []
     for item in sorted(p for p in src.rglob("*") if p.is_file()):
@@ -140,8 +166,10 @@ def _sync_skill(src: Path, dest: Path, base: Path, dry_run: bool) -> list[SkillW
     return writes
 
 
-def _display(path: Path, base: Path) -> str:
-    """Workspace-relative where possible; absolute under --global."""
+def _display(path: Path, base: Path | None) -> str:
+    """Workspace-relative under project scope; absolute when ``base`` is None (--global)."""
+    if base is None:
+        return str(path)
     try:
         return str(path.relative_to(base))
     except ValueError:

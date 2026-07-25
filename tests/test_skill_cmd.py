@@ -102,12 +102,16 @@ def test_target_and_skill_narrow_the_install(fresh_ws: Path) -> None:
 
 
 @pytest.mark.unit
-def test_project_scope_gitignores_the_skill_dirs(fresh_ws: Path) -> None:
-    """Installed skills are reproducible from the CLI, so they stay out of git."""
+def test_project_scope_gitignores_only_what_khub_owns(fresh_ws: Path) -> None:
+    """Installed skills are reproducible from the CLI, so they stay out of git —
+    but ignore only khub's own skill directories. Ignoring the whole
+    `.claude/skills/` would silently swallow a repo's own committed skills."""
     install_skills(fresh_ws)
-    ignored = (fresh_ws / ".gitignore").read_text()
+    ignored = (fresh_ws / ".gitignore").read_text().splitlines()
     for target in PROJECT_DIRS:
-        assert f"{target}/" in ignored
+        assert f"{target}/khub/" in ignored
+        assert f"{target}/setup/" in ignored
+        assert f"{target}/" not in ignored  # not the whole directory
 
 
 @pytest.mark.unit
@@ -125,6 +129,36 @@ def test_global_scope_writes_home_dirs_and_no_gitignore(
     assert (home / ".config/opencode/skills/khub/SKILL.md").is_file()  # opencode's home path differs
     assert not (fresh_ws / ".agents").exists()
     assert ".agents/skills/" not in (fresh_ws / ".gitignore").read_text()
+    # Absolute, so a reader can tell a machine install from a workspace one; relative
+    # to $HOME these would read identically to a project install.
+    assert all(w.path.startswith(str(home)) for w in report.writes)
+
+
+@pytest.mark.unit
+def test_global_scope_needs_no_workspace(tmp_path: Path, monkeypatch) -> None:
+    """A machine-wide install is what you run *before* any workspace exists."""
+    home = tmp_path / "home"
+    home.mkdir()
+    monkeypatch.setattr(Path, "home", staticmethod(lambda: home))
+
+    report = install_skills(None, scope_global=True)
+    assert report.scope == "global"
+    assert (home / ".claude/skills/khub/SKILL.md").is_file()
+
+
+@pytest.mark.unit
+def test_global_opencode_honours_xdg_config_home(tmp_path: Path, monkeypatch) -> None:
+    """opencode reads its skills under $XDG_CONFIG_HOME; writing to ~/.config
+    regardless would report `created` for files opencode never loads."""
+    home = tmp_path / "home"
+    xdg = tmp_path / "xdg"
+    home.mkdir()
+    monkeypatch.setattr(Path, "home", staticmethod(lambda: home))
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(xdg))
+
+    install_skills(None, targets=["opencode"], scope_global=True)
+    assert (xdg / "opencode/skills/khub/SKILL.md").is_file()
+    assert not (home / ".config").exists()
 
 
 @pytest.mark.unit
@@ -170,6 +204,22 @@ def test_cli_unknown_target_is_a_clean_error(fresh_ws: Path, monkeypatch) -> Non
     assert result.exit_code == 1
     assert "Unknown target" in result.output
     assert "Traceback" not in result.output
+
+
+@pytest.mark.integration
+def test_cli_global_works_outside_a_workspace(tmp_path: Path, monkeypatch) -> None:
+    """`--global` must not demand a `.khub/`: it is the pre-workspace install."""
+    home = tmp_path / "home"
+    elsewhere = tmp_path / "elsewhere"
+    home.mkdir()
+    elsewhere.mkdir()
+    monkeypatch.setattr(Path, "home", staticmethod(lambda: home))
+    monkeypatch.chdir(elsewhere)
+
+    result = runner.invoke(app, ["install-skills", "--global", "--format", "json"])
+    assert result.exit_code == 0, result.output
+    assert json.loads(result.output)["scope"] == "global"
+    assert (home / ".agents/skills/khub/SKILL.md").is_file()
 
 
 @pytest.mark.integration

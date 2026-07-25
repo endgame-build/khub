@@ -38,9 +38,9 @@ def install_skills_command(
     fmt: str = typer.Option("text", "--format", help="text (Rich table on a TTY) or json."),
 ) -> None:
     """Install khub's agent skills: khub install-skills [--target agents] [--global]."""
-    # --global writes under $HOME, but the workspace still resolves: an install is
-    # scoped to a khub workspace either way, and project scope needs the root anyway.
-    root = resolve_root(ctx)
+    # --global writes under $HOME and needs no workspace — which is the point: a
+    # machine-wide install is exactly what you run before any workspace exists.
+    root = None if global_ else resolve_root(ctx)
     report = install_skills(
         root,
         skills=skill or None,
