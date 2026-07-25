@@ -44,8 +44,32 @@ class WireResult:
     outcomes: list[WireOutcome]
 
 
+def _when_to_record(whens: dict[str, str] | None) -> list[str]:
+    """The capture triggers, rendered from each type's schema-declared ``when``.
+
+    The block already said HOW to write. It never said WHEN, and a real-codebase eval
+    showed that is where wired agents lose: most off-rails operations were no command at
+    all, because a terse ask ("Note it.") read as conversation rather than work. These
+    lines are per-domain and come verbatim from the schema, so a new type ships its own
+    trigger and no surface code learns a type name.
+    """
+    if not whens:
+        return []
+    return [
+        "Record as you go — when one of these moments occurs, capture it without being asked:",
+        "",
+        *[f"- `{t}` — {w}" for t, w in whens.items()],
+        "",
+    ]
+
+
 def build_block(
-    preset: str, version: str, types: list[str], *, import_supported: bool = True
+    preset: str,
+    version: str,
+    types: list[str],
+    *,
+    import_supported: bool = True,
+    whens: dict[str, str] | None = None,
 ) -> str:
     """The managed context-file block (markers included, no trailing newline).
 
@@ -92,7 +116,15 @@ def build_block(
                 f"Entity types: {type_list}."
             ),
             "",
-            "When khub is installed, prefer it for typed reads and writes over grepping files:",
+            *_when_to_record(whens),
+            (
+                "Every write goes through the CLI — it is the only path that validates against "
+                "the schema and resolves relations. If you edit an entity file by hand anyway "
+                "(or a human did), run `khub validate` on it immediately: an unvalidated "
+                "hand-edit is how a workspace acquires a field no gate will ever report."
+            ),
+            "",
+            "Reading the graph is a khub operation too — query it, do not grep it:",
             "",
             "- Introspect: `khub schema`, `khub schema show <type>`, `khub status`.",
             (
@@ -151,8 +183,13 @@ def wire(
     prov = provenance(root)
     resolved = load_schema(root)
     types = types_list(resolved)
-    claude_block = build_block(prov["preset"], prov["version"], types, import_supported=True)
-    agents_block = build_block(prov["preset"], prov["version"], types, import_supported=False)
+    whens = {name: t.when for name, t in resolved.types.items() if t.when}
+    claude_block = build_block(
+        prov["preset"], prov["version"], types, import_supported=True, whens=whens
+    )
+    agents_block = build_block(
+        prov["preset"], prov["version"], types, import_supported=False, whens=whens
+    )
     candidates = [(root / "CLAUDE.md", claude_block), (root / "AGENTS.md", agents_block)]
 
     if claude or agents:

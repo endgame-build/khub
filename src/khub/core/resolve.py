@@ -98,6 +98,7 @@ def _resolve_type(
         relations=relations,
         required=decl.required,
         orphan=decl.orphan,
+        when=decl.when,
     )
 
 

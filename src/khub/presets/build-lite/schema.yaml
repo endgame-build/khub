@@ -86,6 +86,9 @@ entities:
     path: knowledge/prd.md
     required: true              # the product source of truth — check fails without it
     orphan: true                # a narrative root: nothing points at it, by design
+    when: >-
+      someone states what the product is for, who it serves, or what is deliberately out
+      of scope — edit the existing document, never add a second
     attributes:
       title: { required: true }
     # absorbs build-hub's roadmap and glossary as sections
@@ -94,6 +97,9 @@ entities:
     layout: singleton
     path: knowledge/arc42.md
     orphan: true
+    when: >-
+      the shape of the system is described or changes — context, building blocks, data
+      model, a crosscutting concern — edit the existing document
     attributes:
       title: { required: true }
     # absorbs build-hub's erd as the Data model section
@@ -102,6 +108,9 @@ entities:
   requirement:
     layout: file
     path: knowledge/requirements
+    when: >-
+      a rule is stated that the system must satisfy or must never violate. "must", "never",
+      "always", "policy", "has to" are the tells; a stated invariant is a record, not a reply
     attributes:
       title: { required: true }   # override core OKF title -> required (slug source)
       kind:  { enum: [functional, constraint, business-rule], required: true }
@@ -115,6 +124,9 @@ entities:
   adr:
     layout: file
     path: knowledge/decisions
+    when: >-
+      a choice is made, rejected, or revisited between real alternatives — including "we
+      considered X and are not doing it". Capture the reasoning while it is still known
     attributes:
       title:  { required: true }
       status: { enum: [proposed, accepted, rejected], required: true }
@@ -126,6 +138,9 @@ entities:
   component:
     layout: file
     path: knowledge/components
+    when: >-
+      a part of the system is named as a thing that can break, be owned, or be swapped —
+      a service, a library of ours, or a vendor dependency we sit on
     attributes:
       title: { required: true }
       kind:  { enum: [service, library, external], required: true }
@@ -139,6 +154,9 @@ entities:
   feature-spec:
     layout: file
     path: specs
+    when: >-
+      work is proposed, started, finished, or dropped. Record it when it is proposed, then
+      edit `status` as it moves — do not wait until it is done
     attributes:
       title:  { required: true }
       status: { enum: [planned, active, done, dropped], required: true }

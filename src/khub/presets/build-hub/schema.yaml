@@ -79,6 +79,8 @@ entities:
 
   # ------------------------------------------- narrative singletons: the prose
   prd:
+    when: >-
+      someone states what the product is for, who it serves, or what is deliberately out of scope
     layout: singleton
     path: knowledge/product/prd.md
     required: true              # the product source of truth — check fails without it
@@ -87,6 +89,8 @@ entities:
       title: { required: true }
 
   roadmap:
+    when: >-
+      sequencing or priority across releases is decided or changes
     layout: singleton
     path: knowledge/product/roadmap.md
     orphan: true
@@ -94,6 +98,8 @@ entities:
       title: { required: true }
 
   glossary:
+    when: >-
+      a domain word is used in a way that a newcomer would misread
     layout: singleton
     path: knowledge/product/glossary.md
     orphan: true
@@ -101,6 +107,9 @@ entities:
       title: { required: true }
 
   arc42:
+    when: >-
+      the shape of the system is described or changes — context, building blocks, data
+      model, a crosscutting concern — edit the existing document
     layout: singleton
     path: knowledge/architecture/arc42.md
     orphan: true
@@ -108,6 +117,8 @@ entities:
       title: { required: true }
 
   erd:
+    when: >-
+      the relationships between stored entities are described or change
     layout: singleton
     path: knowledge/architecture/erd.md
     orphan: true
@@ -116,6 +127,8 @@ entities:
 
   # ------------------------------------------------------------ product: what
   capability:
+    when: >-
+      a coherent chunk of product value is named as a thing the system does
     layout: file
     path: knowledge/product/capabilities
     attributes:
@@ -123,6 +136,8 @@ entities:
       facet_id: { type: text }       # UCAP-XXX — joins the facet-synthesis inventory
 
   requirement:
+    when: >-
+      a rule is stated that the system must satisfy or must never violate — 'must', 'never', 'always' are the tells
     layout: file
     path: knowledge/product/requirements
     attributes:
@@ -136,6 +151,8 @@ entities:
     # quality-attribute entities, not requirements
 
   pdr:
+    when: >-
+      a product-level choice is made about behaviour or scope, as opposed to implementation
     layout: file
     path: knowledge/product/decisions
     attributes:
@@ -147,6 +164,8 @@ entities:
 
   # ------------------------------------------------------- architecture: how
   adr:
+    when: >-
+      a technical choice is made, rejected, or revisited between real alternatives — including what we are NOT doing
     layout: file
     path: knowledge/architecture/decisions
     attributes:
@@ -160,6 +179,8 @@ entities:
       produces:   { to: boundary, many: true }
 
   domain:
+    when: >-
+      a bounded area of the problem space is named as having its own language and rules
     layout: file
     path: knowledge/architecture/domains
     attributes:
@@ -176,6 +197,8 @@ entities:
     # language, acceptance criteria
 
   entity:
+    when: >-
+      a thing the system stores is identified, with an owner and a lifecycle
     layout: file
     path: knowledge/architecture/entities
     attributes:
@@ -189,6 +212,8 @@ entities:
     # (skipped by the scan).
 
   boundary:
+    when: >-
+      a limit is stated that separates what we control from what we do not
     layout: file
     path: knowledge/architecture/boundaries
     attributes:
@@ -201,6 +226,8 @@ entities:
       affects: { to: any, many: true }
 
   quality-attribute:
+    when: >-
+      a non-functional target is named — latency, availability, throughput — with a number worth holding to
     layout: file
     path: knowledge/architecture/quality-attributes
     attributes:
@@ -214,6 +241,8 @@ entities:
       applies_to: { to: [domain, component], many: true }
 
   component:
+    when: >-
+      a part of the system is named as a thing that can break, be owned, or be swapped
     layout: file
     path: knowledge/architecture/components
     attributes:
@@ -229,6 +258,8 @@ entities:
     # the vendor, base `resource` carries its API docs.
 
   repo:
+    when: >-
+      a codebase is named that holds part of this system
     layout: collection
     path: knowledge/architecture/repos.yaml   # format derived from the path suffix
     attributes:
@@ -237,6 +268,8 @@ entities:
     # pure remotes record — an engagement tightens the pattern to its org
 
   contract:
+    when: >-
+      an interface between two parts is agreed, published, or versioned
     layout: file
     format: yaml
     path: knowledge/architecture/contracts
@@ -253,6 +286,8 @@ entities:
     # A vendor-provided contract has a `kind: external` component as its provider.
 
   baseline:
+    when: >-
+      a measurement is taken that later work will be compared against
     layout: collection
     path: knowledge/architecture/baselines.yaml
     attributes:
@@ -266,6 +301,8 @@ entities:
 
   # -------------------------------------------------- specs: delivery state
   feature-spec:
+    when: >-
+      work is proposed, started, finished, or dropped — record at proposed, then edit `status`
     layout: file
     path: specs/feature-specs
     attributes:
@@ -278,6 +315,8 @@ entities:
     # the FS IS the feature record — there is no separate feature container
 
   test-spec:
+    when: >-
+      a way of proving a requirement holds is agreed
     layout: file
     path: specs/test-specs
     attributes:
@@ -286,6 +325,8 @@ entities:
       verifies: { to: feature-spec, required: true }   # green TS = "verified", not just merged
 
   work-package:
+    when: >-
+      a feature is split into a unit one person or agent can finish
     layout: file
     path: specs/work-packages
     attributes:

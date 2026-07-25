@@ -66,6 +66,8 @@ class ResolvedType:
     required: bool = False
     # See TypeDecl.orphan: this type's instances are exempt from the orphan sweep.
     orphan: bool = False
+    # See TypeDecl.when: the moment to capture this type, in domain language.
+    when: str | None = None
 
     @property
     def collection_relpath(self) -> str:

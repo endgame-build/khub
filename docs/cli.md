@@ -76,7 +76,7 @@ A type stores its entities as `md` (the default: YAML frontmatter + prose body),
 | `khub init <preset> [path=.]` | `--preset-source <path>`, `--name <name>`, `--force`, `--no-wire`, `--format <text\|json>` (json emits resolved provenance) | scaffold a workspace from a preset directory (`schema.yaml` + `templates/`), flatten templates to `.khub/templates/`, create missing md singletons from their templates (creations only), then wire the selected agent files. `--no-wire` skips the tail. Prints the `khub install-skills` hint (`skill_hint` in the JSON payload); installs nothing. Re-running over an existing workspace preserves anything workspace-owned (`.khub/schema.yaml`, `.khub/config.yaml`, `.khub/templates/*.yaml`) and reports it as `preserved`; only genuinely missing files are recreated. Refreshing from a newer preset is an upgrade, not a scaffold |
 | `khub schema` | `--format` | the full effective schema: types, fields, enums, relations, layout/format/nesting per type, and provenance (source preset + version) |
 | `khub schema types` | `--format` | type list (view of the above) |
-| `khub schema show <type>` | `--format` | one type's fields, enums, required, relations, layout (view) |
+| `khub schema show <type>` | `--format` | one type's fields, enums, required, relations, layout, and `when` — the moment to capture it (view) |
 | `khub schema edges` | `--format` | the relation vocabulary (view) |
 | `khub status` | `--format` | counts per type, draft vs active, orphan and stale counts, OKF-conformance flag (projectable-to-OKF) |
 

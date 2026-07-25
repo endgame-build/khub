@@ -163,3 +163,12 @@ def test_four_templates_ship():
     assert {p.stem for p in TEMPLATES.glob("*.yaml")} == {
         "prd", "arc42", "adr", "feature-spec",
     }
+
+
+def test_every_shipped_preset_declares_a_capture_trigger() -> None:
+    """`when` is only useful if every type has one — a gap is a type an agent will not
+    think to record. Pins all three presets so a new type cannot ship without its moment."""
+    for preset in ("firm-ops", "build-hub", "build-lite"):
+        resolved = resolve([CORE, PRESETS / preset / "schema.yaml"])
+        missing = [n for n, ty in resolved.types.items() if not ty.when]
+        assert not missing, f"{preset}: types with no `when`: {missing}"

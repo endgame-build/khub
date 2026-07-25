@@ -2,6 +2,38 @@
 
 Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); khub is pre-release.
 
+## [0.14.0] — 2026-07-25
+
+An agentic eval on an unfamiliar codebase (27 tasks over a copy of `httpie/cli`, wired vs
+unwired) put wired adherence at 78% against unwired's 0%. The wired losses were almost all
+**inaction, not wrong action**: four of six were single-turn replies with no tool call at all.
+Asked "Policy: credentials must never appear in output. Note it.", the agent answered
+"Noted." and stopped. The schema said how to write and the agent did that well; nothing said
+when.
+
+### Added
+
+- **`when:` — a per-type capture trigger in the schema.** One line of domain language naming
+  the moment a type should be recorded ("a rule is stated that the system must satisfy or must
+  never violate"), declared next to `layout` and `required`. `khub wire` renders every trigger
+  into the agent context files under "Record as you go", and `schema show` exposes it, so an
+  agent can recognise the moment rather than only execute a command once told. Per-domain
+  knowledge belongs in the schema, so a new type ships its own trigger and no surface code
+  learns a type name. All three presets declare one on every type, pinned by a test.
+
+### Changed
+
+- **The wired block states the CLI rule and the hand-edit recovery.** "Every write goes through
+  the CLI — the only path that validates against the schema and resolves relations. If you edit
+  an entity file by hand anyway, run `khub validate` on it immediately." An unvalidated
+  hand-edit is how a workspace acquires a field no default gate will report (see 0.13.0's note
+  on `validate --strict`).
+- **The block now says reading the graph is a khub operation.** The eval's one wired
+  read-bypass spent 13 `Read` calls on `knowledge/**` instead of `khub query`, and ran out of
+  turns before writing anything. The block previously led with writes.
+- **The khub skill gained a "Know when to write" section** — the same triggers, plus the rule
+  that a stated fact about the system is a write while a question about it is a query.
+
 ## [0.13.0] — 2026-07-25
 
 A smoke test drove every command against a real `build-lite` workspace and found eleven

@@ -108,6 +108,9 @@ def _type_view(rtype: ResolvedType) -> dict[str, Any]:
         # sweep, and would read `khub check`'s silence as a bug.
         "required": rtype.required,
         "orphan": rtype.orphan,
+        # The capture trigger: an agent that knows the shape still has to recognise the
+        # moment, and that is per-domain knowledge only the schema can carry.
+        "when": rtype.when,
         # `pattern` and `default` are enforced (write-time validation, schema defaults)
         # but were invisible here, so an agent could not tell why a value was rejected.
         "fields": [

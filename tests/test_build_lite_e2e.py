@@ -329,6 +329,38 @@ def test_no_template_is_refused_on_a_templated_type(lite_ws: Path) -> None:
 
 
 @pytest.mark.e2e
+def test_every_type_declares_a_capture_trigger(lite_ws: Path) -> None:
+    """`when` answers the question the schema could not: not how to write, but WHEN.
+
+    A real-codebase eval showed wired agents losing on inaction, not wrong commands — a
+    terse "Note it." read as conversation. The trigger is per-domain, so it lives in the
+    schema and reaches every surface without any of them learning a type name.
+    """
+    view = json.loads(runner.invoke(app, ["-C", str(lite_ws), "schema"]).output)
+    whens = {t["name"]: t["when"] for t in view["types"]}
+    assert all(whens.values()), f"types with no capture trigger: {[k for k,v in whens.items() if not v]}"
+    assert "must satisfy or must never violate" in whens["requirement"]
+
+
+@pytest.mark.e2e
+def test_the_wired_block_carries_the_triggers_and_the_cli_rule(
+    ws_for: Callable[[str, Path], Path], tmp_path: Path
+) -> None:
+    """The block is what `init` installs; the skill is a separate opt-in step, so the
+    activation rules have to survive in the block alone."""
+    ws = ws_for("build-lite", tmp_path / "ws")
+    runner.invoke(app, ["-C", str(ws), "wire", "--target", "claude"])
+    block = (ws / "CLAUDE.md").read_text()
+
+    assert "Record as you go" in block
+    for type_ in ("prd", "arc42", "requirement", "adr", "component", "feature-spec"):
+        assert f"- `{type_}` —" in block, f"{type_} trigger missing from the block"
+    assert "Every write goes through the CLI" in block
+    assert "run `khub validate` on it immediately" in block
+    assert "query it, do not grep it" in block
+
+
+@pytest.mark.e2e
 def test_schema_show_exposes_every_enforced_contract(lite_ws: Path) -> None:
     """`acyclic`, `inverse`, `pattern` and `default` are enforced but were undiscoverable,
     so an agent told to read the schema at runtime could not learn why a write was rejected."""

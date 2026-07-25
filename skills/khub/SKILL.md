@@ -29,9 +29,26 @@ The schema lives at `.khub/schema.yaml`; the active preset (`firm-ops`, `build-h
 - `khub history <id> --format json` — a supersession chain.
 - `khub search <text> --format json` — BM25 full-text over titles, bodies, and fields.
 
+## Know when to write
+
+Most missed capture is not a wrong command — it is no command, because a terse ask reads as
+conversation. "Policy: credentials must never appear in output. Note it." is a `requirement`,
+not a reply.
+
+Each type declares `when` — the moment to capture it, in the domain's own language. Read them
+from `khub schema --format json` (or the wired block, which lists them), and treat them as
+triggers: when the moment occurs, record it and say you did. Propose the record in place rather
+than asking permission for each one — capture is never blocked, and a `--draft` entity is the
+right answer when you are unsure it belongs.
+
+A stated fact about the system is a write. A question about the system is a query.
+
 ## Write
 
 Agent and human write the same graph through the same gates; there is no approval step.
+Every write goes through the CLI — the only path that validates and resolves relations. If an
+entity file gets hand-edited anyway, run `khub validate` on it immediately: an unvalidated
+hand-edit is how a workspace acquires a field no default gate will report.
 
 - `khub add <type> --<field> <v> [--body <text>] [--draft] --format json` — mint an entity. Set relation fields inline (`--client acme-corp`). A relation to a missing target is rejected; a missing required field is captured anyway and reported later by `khub check`.
 - `khub edit <id> <field> <v> --format json` — change a field; `edit <id> draft false` publishes.
