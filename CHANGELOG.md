@@ -13,9 +13,12 @@ Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelo
   Eight commands — scaffold an entity, keep an edge honest, walk the derived graph,
   sweep the corpus — in ~850 lines of stdlib Python against khub's 7,000 and six
   dependencies. `build.schema.yaml` is khub's `core.yaml` base and the build-lite
-  preset combined into one file in khub's own vocabulary, with two commented
-  deltas (`id_prefix` per type; no `draft`), and it is the only file to edit to
-  add a field. The rationale, the option comparison, and the four khub invariants
+  preset combined into one file in khub's own vocabulary, with one commented delta
+  (`id_prefix` per type), and it is the only file to edit to add a field.
+  `tests/test_build_lite_standalone.py` holds that contract: it diffs the shipped
+  schema against a live `khub init build-lite` scaffold, generates the body
+  templates from the preset's own renderer, and runs the compatibility claim in
+  both directions. The rationale, the option comparison, and the four khub invariants
   it deliberately breaks are in
   [`docs/build-lite-standalone.md`](docs/build-lite-standalone.md); it ships nothing
   into the `khub` package and changes no khub behaviour. A corpus it authors

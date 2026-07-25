@@ -91,7 +91,7 @@ def test_yaml_reads_the_shipped_schema() -> None:
     assert schema.rels("adr")["depends_on"]["to"] == "any"  # merged from base
     assert schema.prefixes("requirement") == ["fr", "cst", "br"]
     assert schema.prefix_for("adr", {}) == "ad"
-    assert "draft" not in schema.attrs("prd")  # the documented delta from khub's base
+    assert schema.attrs("prd")["draft"] == {"type": "bool", "default": False}  # declared, inert
 
 
 def test_yaml_matches_ruamel_on_the_shipped_schema() -> None:

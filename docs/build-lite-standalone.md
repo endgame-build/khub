@@ -180,7 +180,7 @@ TypeScript were read instead):
 | `search` (FTS5, BM25) | **cut.** ripgrep is better at this scale and the agent already has it. |
 | `add --body/--body-file`, `edit` | **cut.** The agent writes the file. `new` scaffolds, `link`/`unlink` keep edges honest. |
 | `validate` + `check` as two gates | **one `check`** with two severities: `error` (broken) and `gap` (unfinished). The invariant the split protects — *capture is never blocked* — survives as the exit code, which only errors set. |
-| `draft` flag, active-subgraph logic | **cut.** `adr.status` and `feature-spec.status` already say what draft would, and no relation in build-lite is required, so the flag gates nothing here. Absent reads as khub's default `false`, so files stay compatible. It is the only base attribute dropped — `author`, `sources` and `references` are unused by this tool but kept, because the base block is meant to be recognisably khub's. |
+| `draft` flag, active-subgraph logic | **the behaviour is cut, the attribute is not.** `adr.status` and `feature-spec.status` already say what draft would, and no relation in build-lite is required, so the flag gates nothing here. It is still declared, because deleting an attribute from a *closed* schema turns every entity khub writes into an `unknown_field` error — which is what the drift test caught. Same for `author`, `sources` and `references`: declared, unread. |
 | `stale`, `backfill`, `log`, git integration | **cut.** git is the freshness record; `git log -- <path>` answers it without a projection. |
 | `reindex`, `viz`, OKF export | **cut.** No index to keep current, no dashboard consumer. |
 | collections, `json`/`yaml`/`jsonl` entities, locks, atomic replace | **cut.** Markdown only. build-lite has no homogeneous registry left. |
@@ -245,14 +245,74 @@ differential check of the schema reader against `ruamel.yaml`.
 - **Surgical frontmatter edits** in `link`/`unlink` splice one key's lines and
   leave the rest byte-identical, so a hand-written file keeps its comments and
   quoting. Tested, but it is the subtlest code in the file.
-- **Drift from the canonical preset.** `build.schema.yaml` is a copy of
-  `presets/core.yaml` + `presets/build-lite/schema.yaml`, in the same vocabulary,
-  with two commented deltas. Being the same format makes a drift check cheap —
-  diff it against a `khub init build-lite` scaffold in CI — but nothing does that
-  yet, and a copy is still a copy.
+- ~~**Drift from the canonical preset.**~~ Closed. See "What can be built from
+  khub" below: `tests/test_build_lite_standalone.py` diffs the shipped schema
+  against a live `khub init build-lite` scaffold on every CI run, and the body
+  templates are generated from the preset's own renderer.
 - **Body-shape gaps are noisy at first.** A freshly scaffolded `prd.md` satisfies
   its template because `init` seeds it; a hand-created document will not. That is
   the intended nudge, but it is the finding most likely to be ignored.
+
+## What can be built from khub, and what cannot
+
+The tool is hand-written, which invites the question of how much of it could be
+*derived* from khub instead. The line falls between code and contract.
+
+**The contract is derivable, and now verified as such.**
+`tests/test_build_lite_standalone.py` scaffolds a live `khub init build-lite`
+workspace on every CI run and diffs it against the shipped drop-in: the base
+block must be khub's verbatim, every entity must match the preset key for key,
+and the only permitted addition is `id_prefix`. The four body templates are not
+compared but *generated* — khub's `BodyTemplate.render()` emits exactly the
+`## Heading` + `<!-- hint -->` Markdown the drop-in ships, so they are a build
+artifact of the preset. The test also runs both directions of the compatibility
+claim: a corpus authored entirely through `kb` survives `khub init --force` byte
+for byte and passes khub's `validate` and `check`, and an entity khub writes
+passes `kb check` clean.
+
+It earned itself on the first run, catching two genuine drifts: the templates had
+hand-typed blank lines the renderer does not produce, and dropping `draft` from a
+*closed* schema made every khub-written entity an `unknown_field` error. The
+second one is the interesting failure — the deltas were being reasoned about one
+side at a time, and a test that runs both tools over one corpus does not let you.
+
+**The code is not derivable.** Three independent reasons:
+
+1. **Dependency floor.** khub's core needs pydantic, ruamel, networkx and
+   python-frontmatter. Any derivation carries them, and dependency-free is the
+   whole premise of a drop-in.
+2. **`kb` is not a subset of khub.** Merged `validate`+`check` with severities, a
+   closed schema, kind-agreeing id prefixes, Markdown templates, one `links` verb
+   in place of three walks. Specialization is not subtraction, so even a perfect
+   tree-shaker would emit khub-minus-features, not this.
+3. **Nothing shakes Python source to readable single-file output** anyway.
+   `pyinstaller` and `nuitka` emit binaries, not source you can read in a repo.
+
+And the code that *would* be shared is the part that stopped being interesting:
+roughly 400 lines of scan, index and edge-walking, all of which is small
+precisely *because* the dependencies went. `networkx` becomes a 20-line BFS. The
+sharing opportunity evaporated at the moment specialization made it cheap.
+
+The only true merge — making khub's core stdlib-only so the drop-in could vendor
+it — refactors the engine to serve its smallest consumer. Named here so it is
+visibly rejected rather than overlooked.
+
+### Why not ship khub as a `.pyz`
+
+A zipapp is the obvious "distribute it whole" answer and it fails on all three
+counts. `pydantic-core` is a compiled Rust extension, and Python cannot `dlopen`
+from inside a zip — so shiv or pex would have to unpack to a cache on first run,
+which makes it a self-extracting installer, not a file. That archive is also
+built against one platform's wheels, so it stops being droppable into a
+teammate's repo. It weighs tens of megabytes against 36 KB. And it still would
+not be `kb`: same thirty verbs, none of the specialization.
+
+For `kb` itself a `.pyz` is strictly worse than what it already is. One stdlib
+file is readable, greppable, diffable in git, and editable in place — and
+`build.schema.yaml` sitting next to it *is meant to be edited*. Zipping that shut
+trades every one of those properties for a packaging problem the tool does not
+have. If someone wants full khub without installing it, `uvx --from
+git+ssh://…/khub khub` already does that today.
 
 ## Graduation
 

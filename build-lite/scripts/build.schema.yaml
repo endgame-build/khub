@@ -31,17 +31,16 @@
 # (2) contract — alone, its provider targets `component`, (3) repo +
 # work-package, (4) domain + entity, (5) the rest, or switch to build-hub.
 #
-# Deltas from khub's generated .khub/schema.yaml, deliberate and listed so the
-# difference is never a surprise:
-#   - `id_prefix` is added per type. khub mints a slug from the title; `kb` mints
-#     an enumerated id (ad-004-slug) and checks the prefix against the entity's
-#     kind, which is only possible because there is exactly one schema. khub's
-#     schema model is extra="forbid", so this file is `kb`'s contract, not a khub
-#     workspace schema — `khub init build-lite` writes its own.
-#   - base `draft` is dropped. It is khub's manual publish flag, and in a corpus
-#     this small it gates nothing: adr.status and feature-spec.status already say
-#     it, and no relation here is required. Absent reads as khub's default
-#     (false), so every file stays a valid khub entity.
+# ONE delta from khub's generated .khub/schema.yaml, and tests/test_build_lite_
+# standalone.py fails on any second one: `id_prefix` is added per type. khub mints
+# a slug from the title; `kb` mints an enumerated id (ad-004-slug) and checks the
+# prefix against the entity's kind, which is only possible because there is exactly
+# one schema. khub's schema model is extra="forbid", so this file is `kb`'s
+# contract, not a khub workspace schema — `khub init build-lite` writes its own.
+#
+# Everything else is khub's, verbatim, including attributes kb never reads. A
+# closed schema and a deleted attribute do not mix: drop `draft` here and every
+# entity khub writes becomes an unknown_field error the moment kb reads it.
 
 version: "0.1.0"
 
@@ -51,6 +50,10 @@ version: "0.1.0"
 base:
   attributes:
     type:        { type: text, required: true }    # discriminator — pinned per type
+    draft:       { type: bool, default: false }    # khub's publish flag; kb gates on
+                                                   # nothing here, but khub WRITES it,
+                                                   # and this schema is closed — so it
+                                                   # is declared and ignored, never dropped
     author:      { type: text }                    # the writer, person or agent
     created:     { type: date, required: true }
     updated:     { type: date }                    # optional; git is the freshness record

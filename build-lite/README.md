@@ -78,11 +78,13 @@ edit when a project needs a field — `kb.py` names no type, field or predicate.
 A project can override the shipped copy at `.build-lite/build.schema.yaml` (and
 `.build-lite/templates/<type>.md`) without touching this directory.
 
-Two deliberate deltas from what `khub init build-lite` generates, both commented
-in the file: `id_prefix` is added per type (khub mints slugs from titles; `kb`
-mints enumerated ids and checks the prefix against the entity's `kind`), and the
-base `draft` flag is dropped (nothing in build-lite gates on it, and absent reads
-as khub's default `false`).
+One deliberate delta from what `khub init build-lite` generates: `id_prefix` is
+added per type, because khub mints slugs from titles while `kb` mints enumerated
+ids and checks the prefix against the entity's `kind`. Everything else is khub's
+verbatim, including attributes `kb` never reads — a closed schema and a deleted
+attribute do not mix. `tests/test_build_lite_standalone.py` in the khub repo
+fails on any second delta, and on any drift in the body templates, which are
+generated from the preset's own renderer.
 
 Frontmatter is a deliberately small YAML subset — flat `key: value`, `[a, b]`, or
 `- item` lines; no nesting, no multi-line scalars, no trailing comments. That is
