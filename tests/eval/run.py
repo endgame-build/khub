@@ -27,6 +27,9 @@ from tasks import batch
 WRITE_VERB = re.compile(r"\bkhub\s+(?:-C\s+\S+\s+)?(add|edit|link|unlink|remove)\b")
 READ_VERB = re.compile(r"\bkhub\s+(?:-C\s+\S+\s+)?(get|query|neighbors|impact|history|search|status|schema|check|validate)\b")
 GREP_CMD = re.compile(r"\b(grep|rg|cat|head|tail|find|ls|sed|awk)\b")
+# A reply that recites the operator's own CLAUDE.md instead of doing the task. Observed:
+# one op answered "PROTOCOL ACTIVE: - Stop on failure, words before tools ...".
+HOST_MARKER = re.compile(r"PROTOCOL ACTIVE|Stop on failure, words before tools")
 
 
 # --- khub oracle --------------------------------------------------------------
@@ -87,6 +90,7 @@ def parse_stream(log: Path, ws: Path) -> dict:
     prefixes = tuple(entity_path_prefixes(ws)) if ws.exists() else ()
     khub_writes, khub_reads, file_writes, greps = [], [], [], []
     skill_loaded = False
+    host_instructions = False
     for line in log.read_text(errors="replace").splitlines():
         try:
             e = json.loads(line)
@@ -94,6 +98,8 @@ def parse_stream(log: Path, ws: Path) -> dict:
             continue
         if e.get("type") == "system" and e.get("subtype") == "init":
             skill_loaded = "khub" in (e.get("skills") or [])
+        if e.get("type") == "result" and HOST_MARKER.search(str(e.get("result", ""))):
+            host_instructions = True
         if e.get("type") != "assistant":
             continue
         for b in e.get("message", {}).get("content", []):
@@ -117,6 +123,12 @@ def parse_stream(log: Path, ws: Path) -> dict:
                 greps.append(f"{name}:{inp.get('pattern') or inp.get('path')}")
     return {
         "skill_loaded": skill_loaded,
+        # The agents run as the operator, so the operator's user-level CLAUDE.md is in
+        # their context alongside the workspace block under test. Isolating it via
+        # CLAUDE_CONFIG_DIR also moves the credentials, so the run cannot authenticate.
+        # It cannot be prevented cheaply — so it is DETECTED: an op whose reply is the
+        # host's instructions rather than the task is contaminated, not a khub result.
+        "host_instructions": host_instructions,
         "khub_write": bool(khub_writes),
         "khub_read": bool(khub_reads),
         "file_write": file_writes,

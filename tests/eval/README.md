@@ -46,3 +46,19 @@ Off-rails categories: `F1 bypass-write`, `F2 bypass-read`, `F3 khub-misuse`,
 `base.py` (pre-flight + wired/unwired fixtures) · `tasks.py` (the ordered ask
 batch + machine-checkable intents) · `run.py` (runner + scorer) · `report.py`
 (scorecard + taxonomy).
+
+## Known confound: the operator's user-level CLAUDE.md
+
+The agents under test run as the operator, so `~/.claude/CLAUDE.md` is in their context
+alongside the workspace block being measured. It cannot be isolated cheaply: `CLAUDE_CONFIG_DIR`
+redirects the config directory but takes authentication with it, and the credentials are not a
+file that can be copied alongside (Keychain-backed on macOS), so an isolated run cannot log in.
+
+It is therefore **detected rather than prevented**. `parse_stream` sets `host_instructions` on
+any op whose final reply recites the host's instructions instead of doing the task — observed
+once as a reply of "PROTOCOL ACTIVE: - Stop on failure, words before tools ...". Treat those ops
+as contaminated and exclude them; a run with several is not a clean measurement of the wiring.
+
+The practical consequence: absolute rates carry an unknown tax from whatever the operator's own
+instructions tell an agent to do. Comparisons WITHIN one run (wired vs unwired, cue A vs cue B)
+share the tax and remain valid, which is why the evals are designed around in-run controls.
