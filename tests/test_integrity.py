@@ -441,3 +441,61 @@ def test_cli_check_strict_gates_orphans(orphan_only_ws: Path, monkeypatch) -> No
     assert "client/dormant-co" in json.loads(ok.output)["orphans"]
     strict = runner.invoke(app, ["check", "--strict", "--format", "json"])
     assert strict.exit_code == 1
+
+
+# --- acyclic predicates beyond depends_on (0.11.0) -----------------------------
+
+
+@pytest.mark.unit
+def test_supersedes_cycle_is_reported(tmp_path: Path) -> None:
+    """Cycle detection was hardcoded to `depends_on`, so three ADRs each superseding
+    the next passed clean — every one reported current, `history` answering
+    differently per entry point. build-hub marks `supersedes` acyclic."""
+    from khub.core import entity
+    from khub.core.workspace import init_workspace
+
+    ws = tmp_path / "ws"
+    init_workspace("build-hub", ws)
+    for i in (1, 2, 3):
+        entity.create(ws, "adr", {"title": f"A{i}", "status": "accepted"}, id_=f"ad-{i}")
+    entity.link(ws, "ad-3", "supersedes", "ad-2")
+    entity.link(ws, "ad-2", "supersedes", "ad-1")
+    entity.link(ws, "ad-1", "supersedes", "ad-3")  # closes the cycle
+
+    report = check(ws)
+    assert not report.passed
+    assert len(report.cycles) == 1
+    assert set(report.cycles[0]) == {"adr/ad-1", "adr/ad-2", "adr/ad-3"}
+
+
+@pytest.mark.unit
+def test_self_supersession_is_reported(tmp_path: Path, seed: Seed) -> None:
+    """`link` refuses a self-edge, but a hand-edit or an import can still write one,
+    and `build_graph` drops self-edges — so `_self_cycles` must cover every acyclic
+    predicate, not just depends_on."""
+    from khub.core.workspace import init_workspace
+
+    ws = tmp_path / "ws"
+    init_workspace("build-hub", ws)
+    seed(ws, "knowledge/architecture/decisions/solo.md", type="adr", title="Solo",
+         status="accepted", supersedes="solo", created="2026-01-01")
+
+    report = check(ws)
+    assert ["adr/solo"] in report.cycles
+
+
+@pytest.mark.unit
+def test_depends_on_cycles_still_reported(tmp_path: Path) -> None:
+    """Regression guard: generalising the check must not lose the original predicate."""
+    from khub.core import entity
+    from khub.core.workspace import init_workspace
+
+    ws = tmp_path / "ws"
+    init_workspace("build-hub", ws)
+    for name in ("alpha", "beta", "gamma"):
+        entity.create(ws, "domain", {"title": name}, id_=name)
+    entity.link(ws, "alpha", "depends_on", "beta")
+    entity.link(ws, "beta", "depends_on", "gamma")
+    entity.link(ws, "gamma", "depends_on", "alpha")
+
+    assert any(len(c) == 3 for c in check(ws).cycles)

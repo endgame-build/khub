@@ -73,7 +73,7 @@ def query(root: Path, filters: QueryFilters, *, now: date) -> list[Match]:
         meta = index.meta[node]
         orphan = g.in_degree(node) == 0 and g.out_degree(node) == 0
         stale = is_stale(meta, now=now, stale_days=days)
-        if not _passes(node, meta, g, filters, orphan=orphan, stale=stale):
+        if not _passes(node, meta, g, filters, resolved, orphan=orphan, stale=stale):
             continue
         matches.append(
             Match(
@@ -108,7 +108,7 @@ def _validate_filter_names(resolved: ResolvedSchema, root: Path, filters: QueryF
             if fname not in rtype.attributes and fname not in rtype.relations:
                 raise LocatedError.unknown_filter_field(fname, filters.type)
         for pred in preds:
-            if pred not in rtype.relations:
+            if pred not in rtype.relations and not _inverse_sources(resolved, pred):
                 raise LocatedError.unknown_filter_field(pred, filters.type)
         return
     attrs = {a for t in resolved.types.values() for a in t.attributes}
@@ -117,7 +117,7 @@ def _validate_filter_names(resolved: ResolvedSchema, root: Path, filters: QueryF
         if fname not in attrs and fname not in rels:
             raise LocatedError.unknown_filter_field(fname, "any")
     for pred in preds:
-        if pred not in rels:
+        if pred not in rels and not _inverse_sources(resolved, pred):
             raise LocatedError.unknown_filter_field(pred, "any")
 
 
@@ -126,6 +126,7 @@ def _passes(
     meta: dict[str, Any],
     g: nx.MultiDiGraph,
     f: QueryFilters,
+    resolved: ResolvedSchema,
     *,
     orphan: bool,
     stale: bool,
@@ -143,9 +144,11 @@ def _passes(
         return False
     # --has / --missing test the *resolved* edge: an edge only exists in the graph
     # when its value resolved to a node, so an unresolvable target counts as missing.
-    if f.has is not None and not _has_edge(g, node, f.has):
+    if f.has is not None and not _has_edge(g, node, f.has, _inverse_sources(resolved, f.has)):
         return False
-    if f.missing is not None and _has_edge(g, node, f.missing):
+    if f.missing is not None and _has_edge(
+        g, node, f.missing, _inverse_sources(resolved, f.missing)
+    ):
         return False
     if f.orphan and not orphan:
         return False
@@ -154,9 +157,30 @@ def _passes(
     return True
 
 
-def _has_edge(g: nx.MultiDiGraph, node: tuple[str, str], predicate: str) -> bool:
-    """Whether ``node`` has a resolvable outbound edge for ``predicate``."""
+def _has_edge(
+    g: nx.MultiDiGraph, node: tuple[str, str], predicate: str, inverse_of: set[str] | None = None
+) -> bool:
+    """Whether ``node`` has a resolvable edge for ``predicate``.
+
+    A declared inverse (``superseded`` for ``supersedes``) is never stored, so it is
+    answered from the INBOUND side: the forward edge lives on the other entity. That
+    makes ``--missing superseded`` the "which decisions are still current?" query.
+    """
+    if inverse_of:
+        return any(
+            pred in inverse_of for _, _, pred in g.in_edges(node, keys=False, data="predicate")
+        )
     return any(pred == predicate for _, _, pred in g.out_edges(node, keys=False, data="predicate"))
+
+
+def _inverse_sources(resolved: ResolvedSchema, name: str) -> set[str]:
+    """The forward predicates whose declared inverse is ``name`` (empty if not one)."""
+    return {
+        rel.predicate
+        for rtype in resolved.types.values()
+        for rel in rtype.relations.values()
+        if rel.inverse == name
+    }
 
 
 def _field_matches(value: Any, wanted: str) -> bool:

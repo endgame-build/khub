@@ -52,6 +52,8 @@ class RelationDecl(_Strict):
     many: bool = False
     required: bool = False
     inverse: str | None = None
+    # `check` reports elementary and self cycles over every acyclic predicate.
+    acyclic: bool = False
 
 
 class TypeDecl(_Strict):

@@ -122,7 +122,7 @@ entities:
       title:  { required: true }
       status: { enum: [proposed, accepted, rejected], required: true }
     relations:
-      supersedes: { to: pdr }              # superseded = computed inverse, never stored
+      supersedes: { to: pdr, inverse: superseded, acyclic: true }   # superseded is computed, never stored
       affects:    { to: any, many: true }
 
   # ------------------------------------------------------- architecture: how
@@ -134,7 +134,7 @@ entities:
       status:   { enum: [proposed, accepted, rejected], required: true }
       facet_id: { type: text }       # ADR-/TDD-XXX — import traceability
     relations:
-      supersedes: { to: adr }
+      supersedes: { to: adr, inverse: superseded, acyclic: true }
       affects:    { to: any, many: true }             # blast radius
       drivers:    { to: quality-attribute, many: true }
       produces:   { to: boundary, many: true }
@@ -203,7 +203,7 @@ entities:
     relations:
       repo:     { to: repo, required: true }    # the component <-> codebase mapping
       domains:  { to: domain, many: true }
-      consumes: { to: contract, many: true }    # churny side; consumed_by computed
+      consumes: { to: contract, many: true, inverse: consumed_by }   # churny side
     # the body describes the deployable: stack rationale, operational notes
 
   repo:
@@ -235,7 +235,7 @@ entities:
     attributes:
       title: { required: true }
     relations:
-      consumes: { to: contract, many: true }   # e.g. webhooks we emit to a vendor
+      consumes: { to: contract, many: true, inverse: consumed_by }   # e.g. webhooks we emit
 
   baseline:
     layout: collection
@@ -259,7 +259,7 @@ entities:
     relations:
       capabilities: { to: capability, many: true }    # placement: where in the system map
       requirements: { to: requirement, many: true }   # obligation: what this change satisfies
-      supersedes:   { to: feature-spec }
+      supersedes:   { to: feature-spec, inverse: superseded, acyclic: true }
     # the FS IS the feature record — there is no separate feature container
 
   test-spec:

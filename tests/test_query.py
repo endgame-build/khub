@@ -208,3 +208,44 @@ def test_cli_query_format_ids(qws: Path, monkeypatch) -> None:
     out = runner.invoke(app, ["query", "--type", "opportunity", "--format", "ids"])
     assert out.exit_code == 0
     assert set(out.output.split()) == {"op-prospect", "op-proposal", "op-won"}
+
+
+# --- derived inverse predicates as filters (0.11.0) ----------------------------
+
+
+@pytest.mark.unit
+def test_has_and_missing_accept_a_declared_inverse(tmp_path: Path) -> None:
+    """A declared inverse is never stored, so it is answered from the inbound side.
+    `--missing superseded` is the "which decisions are still current?" query, and it
+    used to fail with `No field 'superseded' on type 'adr'`."""
+    from khub.core import entity
+    from khub.core.query import QueryFilters, query
+    from khub.core.workspace import init_workspace
+
+    ws = tmp_path / "ws"
+    init_workspace("build-hub", ws)
+    entity.create(ws, "adr", {"title": "First", "status": "rejected"}, id_="first")
+    entity.create(ws, "adr", {"title": "Second", "status": "accepted",
+                              "supersedes": "first"}, id_="second")
+    entity.create(ws, "adr", {"title": "Live", "status": "accepted"}, id_="live")
+
+    superseded = query(ws, QueryFilters(type="adr", has="superseded"), now=date.today())
+    assert [m.slug for m in superseded] == ["first"]
+
+    current = sorted(
+        m.slug for m in query(ws, QueryFilters(type="adr", missing="superseded"), now=date.today())
+    )
+    assert current == ["live", "second"]
+
+
+@pytest.mark.unit
+def test_unknown_predicate_is_still_rejected(tmp_path: Path) -> None:
+    """Accepting inverses must not turn a typo into a silent empty result."""
+    from khub.core.errors import LocatedError
+    from khub.core.query import QueryFilters, query
+    from khub.core.workspace import init_workspace
+
+    ws = tmp_path / "ws"
+    init_workspace("build-hub", ws)
+    with pytest.raises(LocatedError):
+        query(ws, QueryFilters(type="adr", has="bogus"), now=date.today())

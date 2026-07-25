@@ -45,10 +45,11 @@ _is_bool = is_bool
 _is_number = is_number
 _is_dateish = is_dateish
 
-# ponytail: `depends_on` is the acyclic-by-contract predicate (the "hard
-# dependency" edge), so cycle detection runs over it. Lift to a per-predicate
-# acyclic flag in the schema if another predicate ever needs the same guard.
-_ACYCLIC_PREDICATE = "depends_on"
+# Cycle detection runs over every predicate the schema marks `acyclic: true`
+# (core declares it on `depends_on`; build-hub adds `supersedes` on adr/pdr/
+# feature-spec). It was hardcoded to `depends_on` until 0.11.0, which let a
+# supersedes cycle through: three ADRs each superseding the next, all reported
+# current, with `history` giving a different answer per entry point.
 
 
 # --- validate ----------------------------------------------------------------
@@ -442,7 +443,7 @@ def check(root: Path, *, strict: bool = False) -> CheckReport:
     ]
     # build_graph skips self-edges, so a stored self-reference on the acyclic predicate
     # never reaches nx.simple_cycles — detect it directly as a one-node cycle.
-    cycles = _cycles(graph) + _self_cycles(resolved, valid, entity_nodes)
+    cycles = _cycles(graph, resolved) + _self_cycles(resolved, valid, entity_nodes)
     stray_paths = sorted({_stray_locator(root, resolved, t, s) for (t, s) in strays})
     # A required singleton with no live node (absent file, or present-but-stray)
     # is a gap the graph cannot express as incompleteness — report it directly.
@@ -548,10 +549,23 @@ def _dangling(
     return out
 
 
-def _cycles(graph: nx.MultiDiGraph) -> list[list[str]]:
-    """Elementary cycles on the acyclic-by-contract predicate, as id lists."""
-    sub = _predicate_digraph(graph, _ACYCLIC_PREDICATE)
-    return [[f"{t}/{s}" for (t, s) in cycle] for cycle in nx.simple_cycles(sub)]
+def _acyclic_predicates(resolved: ResolvedSchema) -> list[str]:
+    """Every predicate the schema marks acyclic, deduped and ordered for stable output."""
+    return sorted({
+        rel.predicate
+        for rtype in resolved.types.values()
+        for rel in rtype.relations.values()
+        if rel.acyclic
+    })
+
+
+def _cycles(graph: nx.MultiDiGraph, resolved: ResolvedSchema) -> list[list[str]]:
+    """Elementary cycles on each acyclic-by-contract predicate, as id lists."""
+    out: list[list[str]] = []
+    for predicate in _acyclic_predicates(resolved):
+        sub = _predicate_digraph(graph, predicate)
+        out.extend([f"{t}/{s}" for (t, s) in cycle] for cycle in nx.simple_cycles(sub))
+    return out
 
 
 def _self_cycles(
@@ -559,22 +573,28 @@ def _self_cycles(
 ) -> list[list[str]]:
     """One-node cycles: a stored acyclic-predicate value resolving to the entity itself.
 
-    ``build_graph`` skips self-edges, so a self-referential ``depends_on`` never reaches
-    the graph cycle detector — surface it here as a single-node cycle ``[[id]]``.
+    ``build_graph`` skips self-edges, so a self-referential ``depends_on`` (or a
+    self-superseding ADR) never reaches the graph cycle detector — surface it here as
+    a single-node cycle ``[[id]]``. `link` refuses a self-edge, but a hand-edit, an
+    import, or a merge resolution can still write one.
     """
     out: list[list[str]] = []
+    predicates = _acyclic_predicates(resolved)
     for node in nodes:
         type_, slug = node
-        rel = resolved.types[type_].relations.get(_ACYCLIC_PREDICATE)
-        if rel is None:
-            continue
-        value = index.meta[node].get(_ACYCLIC_PREDICATE)
-        if not _present(value):
-            continue
-        for target in value if isinstance(value, list) else [value]:
-            if node in resolve_target(rel, str(target), index.nodes, index.types_by_slug):
+        for predicate in predicates:
+            rel = resolved.types[type_].relations.get(predicate)
+            if rel is None:
+                continue
+            value = index.meta[node].get(predicate)
+            if not _present(value):
+                continue
+            if any(
+                node in resolve_target(rel, str(target), index.nodes, index.types_by_slug)
+                for target in (value if isinstance(value, list) else [value])
+            ):
                 out.append([f"{type_}/{slug}"])
-                break
+                break  # one self-cycle entry per entity, whichever predicate caused it
     return out
 
 

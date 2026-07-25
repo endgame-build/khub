@@ -132,7 +132,7 @@ def _relation(type_name: str, predicate: str, rd: RelationDecl, declared: set[st
     if to == "any":
         return ResolvedRelation(
             predicate=predicate, targets=("any",), kind="any",
-            many=rd.many, required=rd.required, inverse=rd.inverse,
+            many=rd.many, required=rd.required, inverse=rd.inverse, acyclic=rd.acyclic,
         )
     if isinstance(to, list):
         for target in to:
@@ -140,14 +140,14 @@ def _relation(type_name: str, predicate: str, rd: RelationDecl, declared: set[st
                 raise LocatedError.unknown_target(type_name, predicate, target)
         return ResolvedRelation(
             predicate=predicate, targets=tuple(to), kind="union",
-            many=rd.many, required=rd.required, inverse=rd.inverse,
+            many=rd.many, required=rd.required, inverse=rd.inverse, acyclic=rd.acyclic,
         )
     # single typed target
     if to not in declared:
         raise LocatedError.unknown_target(type_name, predicate, to)
     return ResolvedRelation(
         predicate=predicate, targets=(to,), kind="typed",
-        many=rd.many, required=rd.required, inverse=rd.inverse,
+        many=rd.many, required=rd.required, inverse=rd.inverse, acyclic=rd.acyclic,
     )
 
 

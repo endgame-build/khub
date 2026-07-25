@@ -48,6 +48,9 @@ class ResolvedRelation:
     many: bool = False
     required: bool = False
     inverse: str | None = None
+    # Cycle-checked by `check`. A hierarchy predicate (depends_on, supersedes) is
+    # acyclic by contract; a plain association (related, affects) is not.
+    acyclic: bool = False
 
 
 @dataclass(frozen=True)

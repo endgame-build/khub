@@ -29,4 +29,4 @@ base:
     related:     { to: any, many: true }
     sources:     { to: any, many: true }
     references:  { to: any, many: true }
-    depends_on:  { to: any, many: true }
+    depends_on:  { to: any, many: true, acyclic: true }
