@@ -1,4 +1,4 @@
-"""Tests for bl. Run with `python3 lite/test_bl.py` (no pytest needed) or `uv run pytest lite`.
+"""Tests for kb. Run with `python3 lite/test_kb.py` (no pytest needed) or `uv run pytest lite`.
 
 The checker is the product, so the bulk of this is one seeded corpus broken in
 every way the schema can be broken, asserted against the finding codes.
@@ -16,17 +16,17 @@ from pathlib import Path
 
 sys.dont_write_bytecode = True
 SCRIPTS = Path(__file__).parent / "scripts"
-spec = importlib.util.spec_from_file_location("bl", SCRIPTS / "bl.py")
+spec = importlib.util.spec_from_file_location("kb", SCRIPTS / "kb.py")
 assert spec and spec.loader
-bl = importlib.util.module_from_spec(spec)
-sys.modules["bl"] = bl  # dataclasses resolve their annotations through sys.modules
-spec.loader.exec_module(bl)
+kb = importlib.util.module_from_spec(spec)
+sys.modules["kb"] = kb  # dataclasses resolve their annotations through sys.modules
+spec.loader.exec_module(kb)
 
 
 def run(root: Path, *argv: str) -> int:
     """Exercise the real CLI entry point; its chatter belongs to the tool, not here."""
     with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
-        return bl.main(["-C", str(root), *argv])
+        return kb.main(["-C", str(root), *argv])
 
 
 def fresh() -> Path:
@@ -37,9 +37,9 @@ def fresh() -> Path:
 
 
 def codes(root: Path) -> dict[str, list[str]]:
-    corpus = bl.scan(root, bl.load_schema(root))
-    out: dict[str, list[str]] = {bl.ERROR: [], bl.GAP: []}
-    for f in bl.check(corpus):
+    corpus = kb.scan(root, kb.load_schema(root))
+    out: dict[str, list[str]] = {kb.ERROR: [], kb.GAP: []}
+    for f in kb.check(corpus):
         out[f.severity].append(f.code)
     return out
 
@@ -54,34 +54,34 @@ def write(path: Path, text: str) -> None:
 
 def test_frontmatter_round_trip() -> None:
     source = '---\ntype: adr\ntitle: "Use: Postgres"\ntags: [a, b]\naffects:\n  - x\n  - y\n---\n\nbody\n'
-    front, body = bl.split_front(source)
-    fm = bl.parse_front(front)
+    front, body = kb.split_front(source)
+    fm = kb.parse_front(front)
     assert fm == {"type": "adr", "title": "Use: Postgres", "tags": ["a", "b"], "affects": ["x", "y"]}
     assert body == "body\n"
-    lines = [line for k, v in fm.items() for line in bl.emit_key(k, v)]
-    assert bl.parse_front(bl.split_front(bl.render(lines, body))[0]) == fm
+    lines = [line for k, v in fm.items() for line in kb.emit_key(k, v)]
+    assert kb.parse_front(kb.split_front(kb.render(lines, body))[0]) == fm
 
 
 def test_profile_violations_are_reported_not_guessed() -> None:
     for bad in ["---\nnested:\n  a: 1\n---\n\n", "---\ntype: adr\n", "no fence\n"]:
         try:
-            bl.parse_front(bl.split_front(bad)[0])
+            kb.parse_front(kb.split_front(bad)[0])
             raise AssertionError(f"accepted {bad!r}")
-        except bl.Bad:
+        except kb.Bad:
             pass
 
 
 def test_risky_scalars_are_quoted() -> None:
     for value in ["Use: Postgres", "- dash", "true", "", "  padded  ", "hash # comment"]:
-        line = bl.emit_key("title", value)[0]
-        assert bl.parse_front([line])["title"] == value, line
+        line = kb.emit_key("title", value)[0]
+        assert kb.parse_front([line])["title"] == value, line
 
 
 # ----------------------------------------------------------------- schema yaml
 
 
 def test_yaml_reads_the_shipped_schema() -> None:
-    schema = bl.load_schema(Path("/nonexistent"))
+    schema = kb.load_schema(Path("/nonexistent"))
     assert set(schema.types) == {"prd", "arc42", "requirement", "adr", "component", "feature-spec"}
     assert schema.is_singleton("prd") and not schema.is_singleton("adr")
     assert schema.types["prd"]["required"] is True
@@ -104,11 +104,11 @@ def test_yaml_matches_ruamel_on_the_shipped_schema() -> None:
     source = (SCRIPTS / "build.schema.yaml").read_text()
     with io.StringIO(source) as fh:
         expected = YAML(typ="safe").load(fh)
-    assert bl.load_yaml(source) == expected
+    assert kb.load_yaml(source) == expected
 
 
 def test_yaml_subset_edges() -> None:
-    parsed = bl.load_yaml(
+    parsed = kb.load_yaml(
         '# leading comment\n'
         'version: "0.1.0"   # trailing, and a # inside quotes below\n'
         'quoted: "a: b # not a comment"\n'
@@ -129,20 +129,20 @@ def test_yaml_subset_edges() -> None:
     }
     for bad in ["a: {b: 1\n", "a: [1, 2\n", "  oops: 1\na: 2\n", "a: 1\n  b: 2\n"]:
         try:
-            bl.load_yaml(bad)
+            kb.load_yaml(bad)
             raise AssertionError(f"accepted {bad!r}")
-        except bl.Bad:
+        except kb.Bad:
             pass
 
 
 def test_workspace_can_override_the_schema() -> None:
     root = fresh()
     shipped = (SCRIPTS / "build.schema.yaml").read_text()
-    override = root / ".build-lite" / bl.SCHEMA_FILE
+    override = root / ".build-lite" / kb.SCHEMA_FILE
     override.parent.mkdir(parents=True)
     override.write_text(shipped.replace("stack: { type: text }", "stack: { type: text, required: true }"))
     run(root, "new", "component", "API", "--set", "kind=service")
-    assert "incomplete" in codes(root)[bl.GAP]
+    assert "incomplete" in codes(root)[kb.GAP]
 
 
 # ---------------------------------------------------------------- authoring
@@ -154,7 +154,7 @@ def test_new_mints_ids_by_kind_and_numbers_per_prefix() -> None:
     run(root, "new", "requirement", "A user can pay", "--set", "kind=functional")
     run(root, "new", "requirement", "Settles in 2s", "--set", "kind=constraint")
     run(root, "new", "requirement", "Refunds within 30d", "--set", "kind=functional")
-    slugs = set(bl.scan(root, bl.load_schema(root)).entities)
+    slugs = set(kb.scan(root, kb.load_schema(root)).entities)
     assert {"cmp-001-public-api", "fr-001-a-user-can-pay", "cst-001-settles-in-2s"} <= slugs
     assert "fr-002-refunds-within-30d" in slugs
 
@@ -214,8 +214,8 @@ def test_seeded_corpus_is_green() -> None:
     run(root, "new", "feature-spec", "Checkout", "--set", "status=active",
         "--set", "requirements=fr-001-a-user-can-pay")
     found = codes(root)
-    assert found[bl.ERROR] == []
-    assert found[bl.GAP] == [], found[bl.GAP]
+    assert found[kb.ERROR] == []
+    assert found[kb.GAP] == [], found[kb.GAP]
     assert run(root, "check", "--strict") == 0
 
 
@@ -263,7 +263,7 @@ created: 2026-07-25
     (root / "specs/notes.txt").touch()
     (root / "knowledge/prd.md").unlink()
 
-    found = set(codes(root)[bl.ERROR])
+    found = set(codes(root)[kb.ERROR])
     assert found == {
         "bad_id", "bad_value", "cycle", "dangling", "malformed",
         "missing", "stray", "type_mismatch", "unknown_field",
@@ -276,22 +276,22 @@ def test_gaps_do_not_fail_the_gate() -> None:
     run(root, "new", "component", "API", "--set", "kind=service")
     (root / "knowledge/arc42.md").unlink()
     found = codes(root)
-    assert found[bl.ERROR] == []
-    assert set(found[bl.GAP]) == {"orphan", "missing"}
+    assert found[kb.ERROR] == []
+    assert set(found[kb.GAP]) == {"orphan", "missing"}
     assert run(root, "check") == 0
     assert run(root, "check", "--strict") == 1
 
 
 def test_narrative_roots_are_never_orphans() -> None:
     root = fresh()
-    assert codes(root)[bl.GAP] == []
+    assert codes(root)[kb.GAP] == []
 
 
 def test_body_shape_is_a_gap() -> None:
     root = fresh()
     prd = root / "knowledge/prd.md"
     prd.write_text(prd.read_text().replace("## Non-goals", "## Later maybe"))
-    assert "body_shape" in codes(root)[bl.GAP]
+    assert "body_shape" in codes(root)[kb.GAP]
 
 
 # ------------------------------------------------------------------- graph
@@ -302,7 +302,7 @@ def test_inverse_edges_are_computed() -> None:
     run(root, "new", "component", "API", "--set", "kind=service")
     run(root, "new", "adr", "Use Postgres", "--set", "status=accepted",
         "--set", "affects=cmp-001-api")
-    corpus = bl.scan(root, bl.load_schema(root))
+    corpus = kb.scan(root, kb.load_schema(root))
     assert corpus.in_edges("cmp-001-api") == [("affects", "ad-001-use-postgres")]
     assert corpus.out_edges("cmp-001-api") == []
     assert corpus.schema.inverse("supersedes") == "superseded"
@@ -314,7 +314,7 @@ def test_blast_radius_walks_transitively() -> None:
         run(root, "new", "component", name, "--set", "kind=service")
     run(root, "link", "cmp-001-a", "depends_on", "cmp-002-b")
     run(root, "link", "cmp-002-b", "depends_on", "cmp-003-c")
-    corpus = bl.scan(root, bl.load_schema(root))
+    corpus = kb.scan(root, kb.load_schema(root))
     reached = {t for _, t in corpus.out_edges("cmp-001-a")}
     assert reached == {"cmp-002-b"}
     assert run(root, "links", "cmp-001-a", "--depth", "3", "--direction", "out") == 0
@@ -335,5 +335,5 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    shutil.rmtree(Path(tempfile.gettempdir()) / "bl-tests", ignore_errors=True)
+    shutil.rmtree(Path(tempfile.gettempdir()) / "kb-tests", ignore_errors=True)
     raise SystemExit(main())

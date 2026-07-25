@@ -10,18 +10,18 @@
 # .agents/skills, so the skill has to be copied into one of them. That is what
 # this does. Idempotent: re-run it to upgrade.
 #
-#   build-lite/install.sh                    -> ./.opencode/skills/build-lite
+#   build-lite/install.sh                    -> ./.opencode/skills/kb
 #   build-lite/install.sh --claude --agents     also the other two locations
 #   build-lite/install.sh --global           -> $XDG_CONFIG_HOME/opencode/skills
-#   build-lite/install.sh --bin ~/.local/bin    symlink `bl` onto PATH
+#   build-lite/install.sh --bin ~/.local/bin    symlink `kb` onto PATH
 #
-# Only the skill is copied. scripts/ stays where you dropped it: bl.py resolves
+# Only the skill is copied. scripts/ stays where you dropped it: kb.py resolves
 # build.schema.yaml and templates/ relative to itself, so it runs from anywhere.
 set -eu
 
 home_dir="$(cd "$(dirname "$0")" && pwd)"
-src="$home_dir/skills/build-lite"
-name=build-lite
+src="$home_dir/skills/kb"
+name=kb
 global=0 claude=0 agents=0 bin=""
 
 while [ $# -gt 0 ]; do
@@ -54,11 +54,11 @@ done
 
 if [ -n "$bin" ]; then
   mkdir -p "$bin"
-  ln -sf "$home_dir/scripts/bl.py" "$bin/bl"
-  echo "linked $bin/bl -> $home_dir/scripts/bl.py"
+  ln -sf "$home_dir/scripts/kb.py" "$bin/kb"
+  echo "linked $bin/kb -> $home_dir/scripts/kb.py"
 fi
 
 echo
-echo "next: bl init && bl check   (or python3 $home_dir/scripts/bl.py init)"
+echo "next: kb init && kb check   (or python3 $home_dir/scripts/kb.py init)"
 echo "then allow it in opencode.json — catch-all FIRST, last match wins:"
-echo '  { "permission": { "bash": { "*": "ask", "bl *": "allow" } } }'
+echo '  { "permission": { "bash": { "*": "ask", "kb *": "allow" } } }'

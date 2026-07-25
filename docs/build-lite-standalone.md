@@ -64,7 +64,7 @@ it costs one call instead of a CLI round-trip. Two write paths means one of them
 is unpoliced.
 
 So build-lite standalone has one: **the file is the API, and `check` is the
-contract.** `bl new` scaffolds, `bl link` maintains edges (the one edit where a
+contract.** `kb new` scaffolds, `kb link` maintains edges (the one edit where a
 typo is invisible until something breaks), and everything else is the agent
 editing Markdown. Referential integrity moves from *hard-fail on write* to
 *caught by the next sweep* — the loop still closes inside the same turn, because
@@ -86,20 +86,20 @@ drop into a project**, holding the two things that install to different places:
 
 ```
 build-lite/
-  skills/build-lite/SKILL.md   what the agent reads: the ontology, the routing
+  skills/kb/SKILL.md   what the agent reads: the ontology, the routing
                                rules, the loop                       (95 lines)
   scripts/
-    bl.py                      scaffold + check + walk, stdlib only (~850 lines)
+    kb.py                      scaffold + check + walk, stdlib only (~850 lines)
     build.schema.yaml          khub's core base + the six types, combined
     templates/*.md             4 body templates; their `##` headings are the
                                body contract
   install.sh                   wires the skill into .opencode/skills
-  test_bl.py                   17 tests
+  test_kb.py                   17 tests
 ```
 
 Only the skill has to move, because `.opencode/skills`, `.claude/skills` and
 `.agents/skills` are the only places a host looks. `scripts/` stays where it
-lands — `bl.py` resolves its schema and templates relative to itself. And there
+lands — `kb.py` resolves its schema and templates relative to itself. And there
 is a zero-copy path: opencode's `skills.paths` config key takes directories
 (relative entries resolve against the project root, scanned for `**/SKILL.md`),
 so `{"skills": {"paths": ["build-lite/skills"]}}` loads the skill in place with
@@ -130,7 +130,7 @@ same logic. The alternative — each script parsing frontmatter its own way — 
 how two readers start disagreeing about the same file.
 
 What the decomposition is actually reaching for is that the verbs should be
-legible. They are: `bl` with no arguments prints all eight with one-line
+legible. They are: `kb` with no arguments prints all eight with one-line
 descriptions, and `SKILL.md` leads with the same list. If per-verb entry points
 are ever wanted for a human's fingers, symlinks cost nothing and change no code.
 
@@ -154,8 +154,8 @@ TypeScript were read instead):
   `license`, `compatibility`, `metadata`. `name` must match the directory name.
 - **Permissions match per sub-command, last rule wins.** The shell tool
   tree-sitter-parses the command line and asks about each sub-command separately,
-  so `bl check | head` needs `head *` allowed too. Put `"*": "ask"` **first** and
-  `"bl *": "allow"` after it, and prefer not to pipe.
+  so `kb check | head` needs `head *` allowed too. Put `"*": "ask"` **first** and
+  `"kb *": "allow"` after it, and prefer not to pipe.
 - **There are no PostToolUse hooks.** The analogue is a plugin's
   `tool.execute.after`, which can append to the tool's own output — ~30 lines,
   in [`build-lite/README.md`](../build-lite/README.md#optional-make-the-gate-ambient),
@@ -192,7 +192,7 @@ TypeScript were read instead):
 
 Cutting is only half of it. A fixed schema affords checks a general engine cannot:
 
-- **`bl new` mints the id**, including the kind-dependent prefix — `--set kind=constraint` yields `cst-004-…`, and a `fr-` file whose `kind` says `constraint` is a `check` error. khub cannot do this; its slugs come from titles.
+- **`kb new` mints the id**, including the kind-dependent prefix — `--set kind=constraint` yields `cst-004-…`, and a `fr-` file whose `kind` says `constraint` is a `check` error. khub cannot do this; its slugs come from titles.
 - **The schema is closed by default.** In khub, unknown keys are legal (it is an open format serving many domains) and `--strict` closes it. Here, an unknown field is an *error* — because the realistic failure is `realised_in` for `realized_in`, a typo that silently produces no edge at all.
 - **Body templates are Markdown files.** Their own `##` headings are the contract, so one file both seeds a new document and validates every existing one. khub needs a YAML section list because it must express more.
 
@@ -210,7 +210,7 @@ holds at this scale. They are listed so the next reader does not "fix" them:
 4. **The graph is still derived, never stored** — that one is not negotiable, and
    it is why `links` computes inverses on every call.
 
-The invariant that is *strengthened*: schema-genericity. `bl.py` contains no type
+The invariant that is *strengthened*: schema-genericity. `kb.py` contains no type
 name, no field name, and no predicate. Every one comes from `build.schema.yaml`,
 which is why adding a field is a data edit — a project can even override the
 shipped copy at `.build-lite/build.schema.yaml` without touching the drop-in —
@@ -265,7 +265,7 @@ khub init build-lite . --force   # --force only means "the directory isn't empty
 khub validate && khub check
 ```
 
-Verified on a corpus authored entirely by `bl` — two components, two
+Verified on a corpus authored entirely by `kb` — two components, two
 requirements, an adr, a feature spec and both narrative documents. `init`
 reported *0 entity files modified*, `validate` returned 8 entities and no
 errors, `check` passed with no findings of any kind, and `status` reported the

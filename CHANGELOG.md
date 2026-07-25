@@ -8,8 +8,8 @@ Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelo
 
 - **`build-lite/` — build-lite standalone**, a separate, dependency-free
   implementation of the `build-lite` preset for one build project driven by
-  opencode. A drop-in directory: `skills/build-lite/SKILL.md` for the agent, and
-  `scripts/` holding `bl.py`, `build.schema.yaml` and the Markdown body templates.
+  opencode. A drop-in directory: `skills/kb/SKILL.md` for the agent, and
+  `scripts/` holding `kb.py`, `build.schema.yaml` and the Markdown body templates.
   Eight commands — scaffold an entity, keep an edge honest, walk the derived graph,
   sweep the corpus — in ~850 lines of stdlib Python against khub's 7,000 and six
   dependencies. `build.schema.yaml` is khub's `core.yaml` base and the build-lite

@@ -10,13 +10,13 @@ cut and why — is in [`docs/build-lite-standalone.md`](../docs/build-lite-stand
 
 ```
 build-lite/
-  skills/build-lite/SKILL.md   what the agent reads
+  skills/kb/SKILL.md   what the agent reads
   scripts/
-    bl.py                      scaffold + check + walk
+    kb.py                      scaffold + check + walk
     build.schema.yaml          the whole contract: khub's core base + the six types
     templates/*.md             body templates; their ## headings are the body contract
   install.sh                   wires the skill into .opencode/skills (or copy it yourself)
-  test_bl.py                   17 tests, no pytest required
+  test_kb.py                   17 tests, no pytest required
 ```
 
 ## Drop it in
@@ -25,7 +25,7 @@ build-lite/
 cp -r build-lite /path/to/your/project/
 cd /path/to/your/project
 build-lite/install.sh --bin ~/.local/bin
-bl init && bl check
+kb init && kb check
 ```
 
 If your opencode config can point at the skill directly, skip the install
@@ -37,22 +37,22 @@ entirely — this is the zero-copy path:
 
 Then allow the command. The catch-all goes **first**, because opencode's last
 matching rule wins, and it matches each sub-command of a shell line separately —
-so `bl check | head` would also need `head *`:
+so `kb check | head` would also need `head *`:
 
 ```json
-{ "permission": { "bash": { "*": "ask", "bl *": "allow", "python3 *bl.py *": "allow" } } }
+{ "permission": { "bash": { "*": "ask", "kb *": "allow", "python3 *kb.py *": "allow" } } }
 ```
 
 ## Use
 
 ```bash
-bl                        # the verb list
-bl schema                 # types, fields, enums, edges — the whole vocabulary
-bl new adr "Use Postgres for the primary store" --set status=proposed
-bl link ad-004-use-postgres affects cmp-001-api
-bl links cmp-001-api --depth 3        # edges in and out, including derived inverses
-bl ls requirement --missing realized_in
-bl check [--strict] [--json]
+kb                        # the verb list
+kb schema                 # types, fields, enums, edges — the whole vocabulary
+kb new adr "Use Postgres for the primary store" --set status=proposed
+kb link ad-004-use-postgres affects cmp-001-api
+kb links cmp-001-api --depth 3        # edges in and out, including derived inverses
+kb ls requirement --missing realized_in
+kb check [--strict] [--json]
 ```
 
 `new` mints the id (`ad-004-…`, prefix from the type and its `kind`), writes the
@@ -74,12 +74,12 @@ specs/                    fs-NNN               what is being built
 
 `scripts/build.schema.yaml` is khub's `core.yaml` base block and its build-lite
 preset combined into one file, in khub's own vocabulary. It is the only thing to
-edit when a project needs a field — `bl.py` names no type, field or predicate.
+edit when a project needs a field — `kb.py` names no type, field or predicate.
 A project can override the shipped copy at `.build-lite/build.schema.yaml` (and
 `.build-lite/templates/<type>.md`) without touching this directory.
 
 Two deliberate deltas from what `khub init build-lite` generates, both commented
-in the file: `id_prefix` is added per type (khub mints slugs from titles; `bl`
+in the file: `id_prefix` is added per type (khub mints slugs from titles; `kb`
 mints enumerated ids and checks the prefix against the entity's `kind`), and the
 base `draft` flag is dropped (nothing in build-lite gates on it, and absent reads
 as khub's default `false`).
@@ -110,7 +110,7 @@ export const BuildLiteCheck: Plugin = async ({ $, worktree }) => ({
   "tool.execute.after": async (input, output) => {
     if (!WRITERS.includes(input.tool)) return
     if (!CORPUS.test(JSON.stringify(input ?? {}) + JSON.stringify(output?.metadata ?? {}))) return
-    const raw = await $`python3 ${worktree}/build-lite/scripts/bl.py check --json`
+    const raw = await $`python3 ${worktree}/build-lite/scripts/kb.py check --json`
       .cwd(worktree).nothrow().quiet().text()
     let errors: { code: string; where: string; message: string }[] = []
     try { errors = JSON.parse(raw).errors ?? [] } catch { return }
@@ -131,7 +131,7 @@ description: Show the build-lite corpus state and fix what is broken
 ---
 The doc corpus right now:
 
-!`python3 build-lite/scripts/bl.py check`
+!`python3 build-lite/scripts/kb.py check`
 
 Fix every error. Then fix the gaps caused by recent work; report what you left.
 ```
@@ -139,7 +139,7 @@ Fix every error. Then fix the gaps caused by recent work; report what you left.
 ## Test
 
 ```bash
-python3 build-lite/test_bl.py     # no pytest required
+python3 build-lite/test_kb.py     # no pytest required
 uv run pytest build-lite          # under the repo's runner; also runs the
                                   # differential check against ruamel.yaml
 ```

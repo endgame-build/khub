@@ -2,7 +2,7 @@
 #
 # khub's core.yaml (the `base` block every entity inherits) and its build-lite
 # preset (the six entity types), combined into one self-contained file. This is
-# the only file to edit when a project needs a field: `bl` reads it at runtime
+# the only file to edit when a project needs a field: `kb` reads it at runtime
 # and hardcodes no type, field or predicate.
 #
 # Six types. A type earns a slot only if it is referenced by id from elsewhere,
@@ -33,10 +33,10 @@
 #
 # Deltas from khub's generated .khub/schema.yaml, deliberate and listed so the
 # difference is never a surprise:
-#   - `id_prefix` is added per type. khub mints a slug from the title; `bl` mints
+#   - `id_prefix` is added per type. khub mints a slug from the title; `kb` mints
 #     an enumerated id (ad-004-slug) and checks the prefix against the entity's
 #     kind, which is only possible because there is exactly one schema. khub's
-#     schema model is extra="forbid", so this file is `bl`'s contract, not a khub
+#     schema model is extra="forbid", so this file is `kb`'s contract, not a khub
 #     workspace schema — `khub init build-lite` writes its own.
 #   - base `draft` is dropped. It is khub's manual publish flag, and in a corpus
 #     this small it gates nothing: adr.status and feature-spec.status already say
@@ -55,7 +55,7 @@ base:
     created:     { type: date, required: true }
     updated:     { type: date }                    # optional; git is the freshness record
     title:       { type: text }                    # OKF
-    description: { type: text }                    # OKF — one line, shown by `bl ls`
+    description: { type: text }                    # OKF — one line, shown by `kb ls`
     resource:    { type: text }                    # OKF — canonical URI / link-out
     tags:        { type: list }
   relations:

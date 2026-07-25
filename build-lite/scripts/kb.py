@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""bl — build-lite: a typed doc corpus for one build project.
+"""kb — build-lite: a typed doc corpus for one build project.
 
 Markdown + YAML frontmatter in git is the truth. This script is the part an
 agent cannot do for itself: mint a conforming file, keep an edge honest, walk
@@ -407,7 +407,7 @@ def load_schema(root: Path) -> Schema:
     local = root / ".build-lite" / SCHEMA_FILE
     path = local if local.is_file() else HERE / SCHEMA_FILE
     if not path.is_file():
-        raise Bad(f"no {SCHEMA_FILE} beside {HERE / 'bl.py'} or under {root}/.build-lite/")
+        raise Bad(f"no {SCHEMA_FILE} beside {HERE / 'kb.py'} or under {root}/.build-lite/")
     return Schema(load_yaml(path.read_text()))
 
 
@@ -919,7 +919,7 @@ def cmd_init(args: argparse.Namespace) -> int:
             (path / ".gitkeep").touch()
             made.append(cfg["path"] + "/")
     print("\n".join(f"created {m}" for m in made) or "nothing to do — already scaffolded")
-    print("\nnext: write knowledge/prd.md, then `bl check`")
+    print("\nnext: write knowledge/prd.md, then `kb check`")
     return 0
 
 
@@ -939,9 +939,9 @@ def load(args: argparse.Namespace) -> Corpus:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="bl", description=__doc__.split("\n")[0])
+    parser = argparse.ArgumentParser(prog="kb", description=__doc__.split("\n")[0])
     parser.add_argument("-C", "--root", help="workspace root (default: nearest knowledge/ above cwd)")
-    # Not required: a bare `bl` prints the verb list rather than an argparse error,
+    # Not required: a bare `kb` prints the verb list rather than an argparse error,
     # because that listing is how a reader (and an agent) discovers the surface.
     sub = parser.add_subparsers(dest="command", metavar="{init,schema,new,link,unlink,ls,links,check}")
 
@@ -1003,7 +1003,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     try:
         return int(args.fn(args))
     except Bad as exc:
-        print(f"bl: {exc}", file=sys.stderr)
+        print(f"kb: {exc}", file=sys.stderr)
         return 2
     except BrokenPipeError:  # piped into `head`
         return 0

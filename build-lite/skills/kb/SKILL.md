@@ -1,5 +1,5 @@
 ---
-name: build-lite
+name: kb
 description: Use when a repository has a knowledge/ directory with prd.md and arc42.md — the build-lite doc corpus. Covers writing and changing product requirements, constraints, architecture decisions (ADRs), components, and feature specs, and answering "what breaks if I change X", "why can't I do Y", "what is this product". Run its check before finishing any change to knowledge/ or specs/.
 ---
 
@@ -18,30 +18,30 @@ knowledge/components/         cmp-NNN                     what exists, what talk
 specs/                        fs-NNN                      what we are building now
 ```
 
-`bl` does the four things you cannot do for yourself. Everything else — reading,
+`kb` does the four things you cannot do for yourself. Everything else — reading,
 searching, writing prose — use your own tools, they are better at it.
 
-Run it as `bl`. If that is not on PATH, it is `python3 build-lite/scripts/bl.py`
+Run it as `kb`. If that is not on PATH, it is `python3 build-lite/scripts/kb.py`
 from the project root; run it once with no arguments to see the verb list.
 
 ```bash
-bl schema                  # the exact fields, enums and edges. Read this before writing frontmatter.
-bl new <type> "<title>" --set kind=... --set status=...    # mints the id and the file
-bl link <id> <predicate> <target>                          # a checked edge; unlink removes
-bl links <id> [--depth 3] [--predicate p]                  # edges IN and OUT, including derived ones
-bl ls [type] [--where status=active] [--missing realized_in]
-bl check                   # sweep the whole corpus. Run it before you finish.
+kb schema                  # the exact fields, enums and edges. Read this before writing frontmatter.
+kb new <type> "<title>" --set kind=... --set status=...    # mints the id and the file
+kb link <id> <predicate> <target>                          # a checked edge; unlink removes
+kb links <id> [--depth 3] [--predicate p]                  # edges IN and OUT, including derived ones
+kb ls [type] [--where status=active] [--missing realized_in]
+kb check                   # sweep the whole corpus. Run it before you finish.
 ```
 
 ## The loop
 
-1. `bl new` the entity — it mints `ad-007-<slug>`, the frontmatter, and the body
+1. `kb new` the entity — it mints `ad-007-<slug>`, the frontmatter, and the body
    template with a hint comment under each heading. The whole vocabulary lives in
-   `build-lite/scripts/build.schema.yaml`; `bl schema` prints it.
+   `build-lite/scripts/build.schema.yaml`; `kb schema` prints it.
 2. Open the file and write the prose. Replace the hint comments; keep the `##`
    headings and their order.
-3. `bl link` every relation. Edit frontmatter by hand only for plain attributes.
-4. `bl check`. **Errors** mean the corpus is broken — fix them before you finish.
+3. `kb link` every relation. Edit frontmatter by hand only for plain attributes.
+4. `kb check`. **Errors** mean the corpus is broken — fix them before you finish.
    **Gaps** mean legal but unfinished; fix the ones your change caused.
 
 ## What earns a document
@@ -72,13 +72,13 @@ section of `prd.md` or `arc42.md`, or it is `requirement.kind: constraint`.
 
 ## Rules
 
-- **Never invent a type, a field, or a predicate.** `bl schema` is the whole
+- **Never invent a type, a field, or a predicate.** `kb schema` is the whole
   vocabulary; an unknown field is a `check` error, not an extension.
 - **Never grep for what points at something** — the reverse edge is not in the
-  file. `bl links <id>` computes it. `bl links <id> --depth 3` is the blast radius.
+  file. `kb links <id>` computes it. `kb links <id> --depth 3` is the blast radius.
 - **Ids are the currency.** Reference documents by id (`ad-004-postgres`) in
   frontmatter *and* in prose, never by title or path.
-- **`bl new` mints ids**; never name a file yourself. The prefix must match the
+- **`kb new` mints ids**; never name a file yourself. The prefix must match the
   kind (`cst-` for a constraint), and `check` enforces it.
 - **A relation to a document that does not exist yet is rejected.** Create the
   target first, then link.
