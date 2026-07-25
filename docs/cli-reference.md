@@ -10,7 +10,7 @@ $ khub [OPTIONS] COMMAND [ARGS]...
 
 **Options**:
 
-* `-C, --workspace PATH`: Operate on this workspace instead of the working directory.
+* `-C, --workspace <path>`: Operate on this workspace instead of the working directory.
 * `--version`: Print the khub version and exit.
 * `--help`: Show this message and exit.
 
@@ -49,21 +49,21 @@ Installing the agent skill is a separate step: ``khub install-skills``.
 **Usage**:
 
 ```console
-$ khub init [OPTIONS] [PRESET] [PATH]
+$ khub init [OPTIONS] [preset] [path]
 ```
 
 **Arguments**:
 
-* `[PRESET]`: Named preset to seed from (e.g. firm-ops).
-* `[PATH]`: Target directory (default: .).
+* `preset`: Named preset to seed from (e.g. firm-ops).
+* `path`: Target directory (default: .).
 
 **Options**:
 
-* `--preset-source PATH`: Where to resolve the preset if not packaged with khub.
-* `--name TEXT`: Workspace name (default: the target dir name).
+* `--preset-source <path>`: Where to resolve the preset if not packaged with khub.
+* `--name <str>`: Workspace name (default: the target dir name).
 * `--force`: Scaffold into a non-empty target.
 * `--no-wire`: Skip wiring the schema into the agent files.
-* `--format TEXT`: text confirmation (default); json emits resolved provenance.  [default: text]
+* `--format <str>`: text confirmation (default); json emits resolved provenance.  [default: text]
 * `--help`: Show this message and exit.
 
 ## `khub status`
@@ -78,7 +78,7 @@ $ khub status [OPTIONS]
 
 **Options**:
 
-* `--format TEXT`: text (Rich table on a TTY) or json.  [default: text]
+* `--format <str>`: text (Rich table on a TTY) or json.  [default: text]
 * `--help`: Show this message and exit.
 
 ## `khub add`
@@ -95,17 +95,17 @@ $ khub add [OPTIONS] [TYPE]
 
 **Arguments**:
 
-* `[TYPE]`: The entity type to create.
+* `TYPE`: The entity type to create.
 
 **Options**:
 
-* `--id TEXT`: Explicit slug (else minted from name/type).
+* `--id <str>`: Explicit slug (else minted from name/type).
 * `--draft`: Mark the entity unpublished (default: active).
 * `--strict`: Reject fields the schema does not declare.
-* `--body TEXT`: Body prose as a string.
-* `--body-file TEXT`: Read the body from a file (&#x27;-&#x27; for stdin).
+* `--body <str>`: Body prose as a string.
+* `--body-file <str>`: Read the body from a file (&#x27;-&#x27; for stdin).
 * `--no-template`: Start with an empty body even when the type has a template.
-* `--format TEXT`: text or json (emits the written record).  [default: text]
+* `--format <str>`: text or json (emits the written record).  [default: text]
 * `--help`: Show this message and exit.
 
 ## `khub get`
@@ -120,12 +120,12 @@ $ khub get [OPTIONS] [ID]
 
 **Arguments**:
 
-* `[ID]`: A bare slug, or type/slug on ambiguity.
+* `ID`: A bare slug, or type/slug on ambiguity.
 
 **Options**:
 
 * `--edges`: Include stored and derived edges.
-* `--format TEXT`: json, table, raw, or text (Rich on a TTY).  [default: text]
+* `--format <str>`: json, table, raw, or text (Rich on a TTY).  [default: text]
 * `--help`: Show this message and exit.
 
 ## `khub edit`
@@ -142,14 +142,14 @@ $ khub edit [OPTIONS] [ID]
 
 **Arguments**:
 
-* `[ID]`: A bare slug, or type/slug on ambiguity.
+* `ID`: A bare slug, or type/slug on ambiguity.
 
 **Options**:
 
 * `--strict`: Reject fields the schema does not declare.
-* `--body TEXT`: Replace the body with this string (&#x27;&#x27; clears it).
-* `--body-file TEXT`: Replace the body from a file (&#x27;-&#x27; for stdin).
-* `--format TEXT`: text or json (emits the updated record).  [default: text]
+* `--body <str>`: Replace the body with this string (&#x27;&#x27; clears it).
+* `--body-file <str>`: Replace the body from a file (&#x27;-&#x27; for stdin).
+* `--format <str>`: text or json (emits the updated record).  [default: text]
 * `--help`: Show this message and exit.
 
 ## `khub link`
@@ -164,9 +164,9 @@ $ khub link [OPTIONS] [ID] [PREDICATE] [TARGET]
 
 **Arguments**:
 
-* `[ID]`
-* `[PREDICATE]`
-* `[TARGET]`
+* `ID`
+* `PREDICATE`
+* `TARGET`
 
 **Options**:
 
@@ -184,9 +184,9 @@ $ khub unlink [OPTIONS] [ID] [PREDICATE] [TARGET]
 
 **Arguments**:
 
-* `[ID]`
-* `[PREDICATE]`
-* `[TARGET]`
+* `ID`
+* `PREDICATE`
+* `TARGET`
 
 **Options**:
 
@@ -204,7 +204,7 @@ $ khub remove [OPTIONS] [ID]
 
 **Arguments**:
 
-* `[ID]`: A bare slug, or type/slug on ambiguity.
+* `ID`: A bare slug, or type/slug on ambiguity.
 
 **Options**:
 
@@ -223,16 +223,16 @@ $ khub query [OPTIONS]
 
 **Options**:
 
-* `--type TEXT`: Restrict to one entity type.
-* `--tag TEXT`: Keep entities carrying this tag.
-* `--has TEXT`: Keep entities with a resolvable edge for the predicate.
-* `--missing TEXT`: Keep entities lacking a resolvable edge (gap finder).
+* `--type <str>`: Restrict to one entity type.
+* `--tag <str>`: Keep entities carrying this tag.
+* `--has <str>`: Keep entities with a resolvable edge for the predicate.
+* `--missing <str>`: Keep entities lacking a resolvable edge (gap finder).
 * `--orphan`: Keep only orphan (edge-less) entities.
 * `--stale`: Keep only stale entities.
 * `--draft`: Isolate drafts.
 * `--active`: Exclude drafts.
-* `--limit INTEGER`: Cap the returned set.
-* `--format TEXT`: text (Rich table on a TTY), json, or ids.  [default: text]
+* `--limit <int>`: Cap the returned set.
+* `--format <str>`: text (Rich table on a TTY), json, or ids.  [default: text]
 * `--help`: Show this message and exit.
 
 ## `khub search`
@@ -242,18 +242,18 @@ Full-text search: khub search modernization --type transcript --format json.
 **Usage**:
 
 ```console
-$ khub search [OPTIONS] TEXT
+$ khub search [OPTIONS] {text}
 ```
 
 **Arguments**:
 
-* `TEXT`: FTS5 MATCH text: terms, &quot;phrases&quot;, OR, NEAR, prefix*.  [required]
+* `text`: FTS5 MATCH text: terms, &quot;phrases&quot;, OR, NEAR, prefix*.  [required]
 
 **Options**:
 
-* `--type TEXT`: Restrict to one entity type.
-* `--limit INTEGER`: Cap the returned set.  [default: 20]
-* `--format TEXT`: text (Rich table on a TTY), json, or ids.  [default: text]
+* `--type <str>`: Restrict to one entity type.
+* `--limit <int>`: Cap the returned set.  [default: 20]
+* `--format <str>`: text (Rich table on a TTY), json, or ids.  [default: text]
 * `--help`: Show this message and exit.
 
 ## `khub neighbors`
@@ -263,7 +263,7 @@ Walk one-hop neighbors: khub neighbors initech-pov [--predicate client --in].
 **Usage**:
 
 ```console
-$ khub neighbors [OPTIONS] ID
+$ khub neighbors [OPTIONS] {ID}
 ```
 
 **Arguments**:
@@ -272,11 +272,11 @@ $ khub neighbors [OPTIONS] ID
 
 **Options**:
 
-* `--predicate TEXT`: Restrict adjacency to one predicate.
+* `--predicate <str>`: Restrict adjacency to one predicate.
 * `--in`: Inbound edges only (incl. derived inverses).
 * `--out`: Outbound (stored) edges only.
-* `--depth INTEGER`: Bounded multi-hop adjacency over all predicates.  [default: 1]
-* `--format TEXT`: text (Rich table on a TTY) or json.  [default: text]
+* `--depth <int>`: Bounded multi-hop adjacency over all predicates.  [default: 1]
+* `--format <str>`: text (Rich table on a TTY) or json.  [default: text]
 * `--help`: Show this message and exit.
 
 ## `khub impact`
@@ -286,7 +286,7 @@ Compute blast radius: khub impact node-a [--reverse] [--predicate &lt;p&gt;].
 **Usage**:
 
 ```console
-$ khub impact [OPTIONS] ID
+$ khub impact [OPTIONS] {ID}
 ```
 
 **Arguments**:
@@ -295,9 +295,9 @@ $ khub impact [OPTIONS] ID
 
 **Options**:
 
-* `--predicate TEXT`: The edge to walk the closure over.  [default: depends_on]
+* `--predicate <str>`: The edge to walk the closure over.  [default: depends_on]
 * `--reverse`: Walk ancestors (what reaches this node).
-* `--format TEXT`: tree (depth-marked, the TTY default) or json.  [default: text]
+* `--format <str>`: tree (depth-marked, the TTY default) or json.  [default: text]
 * `--help`: Show this message and exit.
 
 ## `khub history`
@@ -307,7 +307,7 @@ Trace supersession lineage: khub history decision-0012 [--limit 3].
 **Usage**:
 
 ```console
-$ khub history [OPTIONS] ID
+$ khub history [OPTIONS] {ID}
 ```
 
 **Arguments**:
@@ -316,9 +316,9 @@ $ khub history [OPTIONS] ID
 
 **Options**:
 
-* `--predicate TEXT`: The self-referential edge to follow.  [default: supersedes]
-* `--limit INTEGER`: Cap to the N most recent links.
-* `--format TEXT`: text (Rich table on a TTY) or json.  [default: text]
+* `--predicate <str>`: The self-referential edge to follow.  [default: supersedes]
+* `--limit <int>`: Cap to the N most recent links.
+* `--format <str>`: text (Rich table on a TTY) or json.  [default: text]
 * `--help`: Show this message and exit.
 
 ## `khub validate`
@@ -333,12 +333,12 @@ $ khub validate [OPTIONS] [TARGET]
 
 **Arguments**:
 
-* `[TARGET]`: A type or type/slug; default: all.
+* `TARGET`: A type or type/slug; default: all.
 
 **Options**:
 
 * `--strict`: Close the schema: reject undeclared keys.
-* `--format TEXT`: text (Rich on a TTY) or json.  [default: text]
+* `--format <str>`: text (Rich on a TTY) or json.  [default: text]
 * `--help`: Show this message and exit.
 
 ## `khub check`
@@ -354,7 +354,7 @@ $ khub check [OPTIONS]
 **Options**:
 
 * `--strict`: Fail the gate on orphans too (default: informational).
-* `--format TEXT`: text (Rich on a TTY) or json.  [default: text]
+* `--format <str>`: text (Rich on a TTY) or json.  [default: text]
 * `--help`: Show this message and exit.
 
 ## `khub stale`
@@ -369,8 +369,8 @@ $ khub stale [OPTIONS]
 
 **Options**:
 
-* `--days INTEGER`: Staleness threshold in days; default: the workspace&#x27;s stale_days.
-* `--format TEXT`: text (Rich table on a TTY) or json.  [default: text]
+* `--days <int>`: Staleness threshold in days; default: the workspace&#x27;s stale_days.
+* `--format <str>`: text (Rich table on a TTY) or json.  [default: text]
 * `--help`: Show this message and exit.
 
 ## `khub reindex`
@@ -400,9 +400,9 @@ $ khub viz [OPTIONS]
 
 **Options**:
 
-* `--out TEXT`: Output path for the HTML (default viz.html).  [default: viz.html]
+* `--out <str>`: Output path for the HTML (default viz.html).  [default: viz.html]
 * `--open`: Open the written file in the default browser.
-* `--type TEXT`: Render only that type and its incident edges.
+* `--type <str>`: Render only that type and its incident edges.
 * `--help`: Show this message and exit.
 
 ## `khub backfill`
@@ -417,7 +417,7 @@ $ khub backfill [OPTIONS]
 
 **Options**:
 
-* `--type TEXT`: Add missing per-type frontmatter scaffolding for that type.
+* `--type <str>`: Add missing per-type frontmatter scaffolding for that type.
 * `--dry-run`: List the entities and fields that would change; write nothing.
 * `--help`: Show this message and exit.
 
@@ -434,7 +434,7 @@ $ khub wire [OPTIONS]
 
 **Options**:
 
-* `--target TEXT`: Create and wire a specific file: claude, agents, or both. Omit to update the agent files that already exist.
+* `--target <str>`: Create and wire a specific file: claude, agents, or both. Omit to update the agent files that already exist.
 * `--dry-run`: Print the block(s); write nothing.
 * `--help`: Show this message and exit.
 
@@ -450,11 +450,11 @@ $ khub install-skills [OPTIONS]
 
 **Options**:
 
-* `--target TEXT`: claude, agents, or opencode (repeatable). Default: all three.
-* `--skill TEXT`: Which skill to install (repeatable). Default: all shipped.
+* `--target <str>`: claude, agents, or opencode (repeatable). Default: all three.
+* `--skill <str>`: Which skill to install (repeatable). Default: all shipped.
 * `--global`: Install into the home directories instead of this workspace.
 * `--dry-run`: Report what would be written, and write nothing.
-* `--format TEXT`: text (Rich table on a TTY) or json.  [default: text]
+* `--format <str>`: text (Rich table on a TTY) or json.  [default: text]
 * `--help`: Show this message and exit.
 
 ## `khub schema`
@@ -469,7 +469,7 @@ $ khub schema [OPTIONS] COMMAND [ARGS]...
 
 **Options**:
 
-* `--format TEXT`: text (Rich table on a TTY) or json.  [default: text]
+* `--format <str>`: text (Rich table on a TTY) or json.  [default: text]
 * `--help`: Show this message and exit.
 
 **Commands**:
@@ -490,7 +490,7 @@ $ khub schema types [OPTIONS]
 
 **Options**:
 
-* `--format TEXT`: text (Rich table on a TTY) or json.  [default: text]
+* `--format <str>`: text (Rich table on a TTY) or json.  [default: text]
 * `--help`: Show this message and exit.
 
 ### `khub schema show`
@@ -500,16 +500,16 @@ Detail one type: fields, enums, required flags, relations, layout.
 **Usage**:
 
 ```console
-$ khub schema show [OPTIONS] TYPE
+$ khub schema show [OPTIONS] {type}
 ```
 
 **Arguments**:
 
-* `TYPE`: Type name.  [required]
+* `type`: Type name.  [required]
 
 **Options**:
 
-* `--format TEXT`: text (Rich table on a TTY) or json.  [default: text]
+* `--format <str>`: text (Rich table on a TTY) or json.  [default: text]
 * `--help`: Show this message and exit.
 
 ### `khub schema edges`
@@ -524,5 +524,5 @@ $ khub schema edges [OPTIONS]
 
 **Options**:
 
-* `--format TEXT`: text (Rich table on a TTY) or json.  [default: text]
+* `--format <str>`: text (Rich table on a TTY) or json.  [default: text]
 * `--help`: Show this message and exit.
