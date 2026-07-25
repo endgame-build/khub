@@ -84,7 +84,14 @@ def project(root: Path, *, stale_days: int, now: date) -> Projection:
                 if rel.kind != "any" and not resolved_to:
                     broken_ref = True
 
-    orphan = sum(1 for n in valid.nodes if n not in has_out and n not in has_in)
+    # Types declaring `orphan: true` are excluded: a health count that can never
+    # reach zero is not a health count. Same rule as the `check` gate and the
+    # `query` flag.
+    orphan = sum(
+        1
+        for n in valid.nodes
+        if n not in has_out and n not in has_in and not valid.resolved.types[n[0]].orphan
+    )
     return Projection(
         counts=counts,
         total=sum(counts.values()),

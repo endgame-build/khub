@@ -50,7 +50,13 @@ Three keys set where and how a type's entities live on disk. khub reads them dir
 - `layout` — `file` (one entity per file, `{path}/{slug}.md`), `folder` (one entity per folder, `{path}/{slug}/_index.md`), `collection` (every entity of the type is a row in ONE file), or `singleton` (exactly one fixed file, 0..1 entity; the slug IS the type name, so `khub get prd` resolves it).
 - `format` — `md` (the default: YAML frontmatter + prose body), `json`, or `yaml`. Collections take `json | jsonl | yaml`. A non-md entity is a single mapping; prose rides in a reserved `body` field.
 - `path` — the inventory directory, relative to the workspace root (or the file, for a collection/singleton).
+
+### Type-level gates
+
+Two further keys sit beside the storage config and tune what `check` demands of a type.
+
 - `required` — singleton-only: `check` reports a missing required singleton (e.g. a workspace without its `prd.md`).
+- `orphan` — `orphan: true` declares that edge-less is this type's *expected* state, so `check` stops reporting its entities as orphans, `--strict` stops failing on them, `query --orphan` stops flagging them and the `status` count stops including them. Default `false`. Use it for a narrative root nothing points at by design: build-hub declares it on all five narrative singletons (`prd`, `roadmap`, `glossary`, `arc42`, `erd`) and build-lite on its two, because every stored edge in those presets points *up* the durability ladder and the documents sit above its top — so orphan-ness there is a finding no authoring could ever close, and without the flag `check --strict` could not go green on a correct workspace. Unlike `required` this is **not** singleton-only: any type whose members are legitimately unwired may declare it, and a singleton that *does* carry relations is still swept. It removes no signal — a missing required edge is still reported by required-completeness, which names the field.
 
 ### Body templates
 

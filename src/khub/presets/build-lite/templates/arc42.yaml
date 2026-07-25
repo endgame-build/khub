@@ -1,0 +1,15 @@
+title: Architecture
+sections:
+- heading: Context and scope
+  hint: the system boundary; external components by cmp-NNN slug
+- heading: Solution strategy
+  hint: the shape and why - one paragraph per big call, ad-NNN slugs inline
+- heading: Building blocks
+  hint: components by cmp-NNN slug; narrate the mapping, the graph holds it
+- heading: Data model
+  hint: the ERD as a mermaid block; field-level detail lives in the code
+- heading: Crosscutting concepts
+  hint: auth, errors, logging, config - the rules that hold everywhere
+- heading: Decisions
+  hint: link ad-NNN slugs - the decisions/ inventory is canonical
+- heading: Risks and technical debt

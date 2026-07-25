@@ -98,3 +98,26 @@ entities:
     with pytest.raises(LocatedError) as ei:
         resolve(write_schema(core=core_base, preset=preset))
     assert ei.value.code == "raw_linkml_smuggled"
+
+
+def test_orphan_flag_parses_on_any_layout(write_schema, core_base):
+    """`orphan: true` declares that edge-less is a type's expected state, so
+    `check` stops sweeping it. It defaults to false and, unlike `required`, is
+    NOT singleton-only — a file type whose members are legitimately unwired may
+    declare it too."""
+    preset = """
+entities:
+  charter:
+    layout: singleton
+    path: charter.md
+    orphan: true
+  note:
+    layout: file
+    orphan: true
+  client:
+    layout: file
+"""
+    schema = resolve(write_schema(core=core_base, preset=preset))
+    assert schema.types["charter"].orphan is True
+    assert schema.types["note"].orphan is True
+    assert schema.types["client"].orphan is False  # default: swept like anything else

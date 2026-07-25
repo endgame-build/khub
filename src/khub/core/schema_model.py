@@ -73,6 +73,14 @@ class TypeDecl(_Strict):
     # (and rejected) on the other layouts — per-entity requiredness lives on
     # attributes/relations.
     required: bool = False
+    # Opt out of the orphan sweep: `orphan: true` declares that edge-less is this
+    # type's expected state, so `check` stops reporting its instances as orphans
+    # (and `--strict` stops failing on them). For a narrative root nothing points
+    # at by design — a prd, an arc42 — orphan-ness is a finding no authoring can
+    # close. Declared per type rather than inferred from `layout: singleton`: a
+    # singleton that DOES carry relations should still be swept, and a non-
+    # singleton type may legitimately be edge-less.
+    orphan: bool = False
     attributes: dict[str, AttrDecl] = {}
     relations: dict[str, RelationDecl] = {}
 

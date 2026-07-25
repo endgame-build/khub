@@ -443,6 +443,118 @@ def test_cli_check_strict_gates_orphans(orphan_only_ws: Path, monkeypatch) -> No
     assert strict.exit_code == 1
 
 
+# --- check: `orphan: true` exempts a type from the orphan sweep ----------------
+#
+# firm-ops declares no such type, so these use build-lite — the smallest preset
+# that has them (prd, arc42). The sweep asks "captured and never wired in?",
+# which a narrative root nothing points at by design can never answer yes to;
+# left reported, it made --strict fail every freshly-initialised workspace. The
+# flag is per type and never inferred from `layout: singleton` — the last test
+# here is the one that pins that distinction.
+
+
+@pytest.fixture
+def orphan_flag_ws(tmp_path: Path) -> Path:
+    """A fresh build-lite workspace: prd + arc42, both `orphan: true`, edge-less."""
+    from khub.core.workspace import init_workspace
+
+    init_workspace("build-lite", tmp_path)
+    return tmp_path
+
+
+@pytest.mark.unit
+def test_orphan_flagged_type_is_not_reported(orphan_flag_ws: Path) -> None:
+    """The two init-written singletons carry no edges and are not reported."""
+    report = check(orphan_flag_ws)
+    assert report.orphans == []
+    assert report.passed
+
+
+@pytest.mark.unit
+def test_fresh_workspace_passes_strict(orphan_flag_ws: Path) -> None:
+    """The regression this flag exists for: a correct, freshly-initialised
+    workspace must be able to satisfy the strict gate."""
+    assert check(orphan_flag_ws, strict=True).passed
+
+
+@pytest.mark.unit
+def test_exemption_is_narrow(orphan_flag_ws: Path) -> None:
+    """Only the flagged types are exempt: an edge-less entity of an unflagged
+    type in the same workspace is still an orphan, and still fails --strict."""
+    entity.create(
+        orphan_flag_ws, "component", {"title": "Dangling Service", "kind": "service"},
+        id_="cmp-001-dangling",
+    )
+    report = check(orphan_flag_ws)
+    assert report.orphans == ["component/cmp-001-dangling"]
+    assert report.passed  # informational by default
+    assert not check(orphan_flag_ws, strict=True).passed
+
+
+@pytest.mark.unit
+def test_flagged_type_completeness_still_reported(orphan_flag_ws: Path) -> None:
+    """The flag removes no signal: a flagged type missing a required field is
+    still active-but-incomplete, which names the field the orphan line never did."""
+    prd = orphan_flag_ws / "knowledge" / "prd.md"
+    prd.write_text("---\ntype: prd\ncreated: 2026-06-01\ndraft: false\n---\n")
+    incomplete = {i.id: i.missing_fields for i in check(orphan_flag_ws).incomplete}
+    assert incomplete["prd/prd"] == ["title"]
+
+
+@pytest.mark.unit
+def test_all_three_orphan_surfaces_agree(orphan_flag_ws: Path) -> None:
+    """`check`, `query --orphan` and the `status` count read one notion from
+    three sites; a flagged type must disappear from all three, or `status` shows
+    a health count that can never reach zero while `check` reports none."""
+    from datetime import date
+
+    from khub.core.project import project
+    from khub.core.query import QueryFilters, query
+
+    now = date(2026, 6, 1)
+    assert check(orphan_flag_ws).orphans == []
+    assert query(orphan_flag_ws, QueryFilters(orphan=True), now=now) == []
+    assert project(orphan_flag_ws, stale_days=30, now=now).orphan == 0
+    # ...and an unflagged type still reaches all three.
+    entity.create(
+        orphan_flag_ws, "component", {"title": "Dangling", "kind": "service"}, id_="cmp-002-x",
+    )
+    assert check(orphan_flag_ws).orphans == ["component/cmp-002-x"]
+    assert [m.slug for m in query(orphan_flag_ws, QueryFilters(orphan=True), now=now)] == [
+        "cmp-002-x"
+    ]
+    assert project(orphan_flag_ws, stale_days=30, now=now).orphan == 1
+
+
+@pytest.mark.unit
+def test_unflagged_singleton_is_still_swept(tmp_path: Path) -> None:
+    """The distinction the flag buys over keying on layout: a singleton that does
+    NOT declare `orphan: true` is swept like any other type, so a root that is
+    supposed to be wired up still surfaces when it is not."""
+    from khub.core.workspace import init_workspace
+
+    preset = tmp_path / "presets" / "mini"
+    preset.mkdir(parents=True)
+    (preset / "schema.yaml").write_text(
+        "version: '0.1.0'\n"
+        "entities:\n"
+        "  charter:\n"
+        "    layout: singleton\n"
+        "    path: charter.md\n"           # no `orphan: true` — deliberately
+        "    attributes:\n"
+        "      title: { required: true }\n"
+    )
+    ws = tmp_path / "ws"
+    ws.mkdir()
+    init_workspace("mini", ws, preset_source=tmp_path / "presets")
+    # init mints a singleton only from a body template, and `mini` ships none —
+    # so write the entity itself rather than assuming the scaffold produced it.
+    entity.create(ws, "charter", {"title": "Charter"})
+    report = check(ws)
+    assert report.orphans == ["charter/charter"]
+    assert not check(ws, strict=True).passed
+
+
 # --- acyclic predicates beyond depends_on (0.11.0) -----------------------------
 
 

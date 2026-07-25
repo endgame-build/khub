@@ -64,6 +64,8 @@ class ResolvedType:
     # Singleton-only (see TypeDecl.required): a missing required singleton is a
     # `check` finding.
     required: bool = False
+    # See TypeDecl.orphan: this type's instances are exempt from the orphan sweep.
+    orphan: bool = False
 
     @property
     def collection_relpath(self) -> str:

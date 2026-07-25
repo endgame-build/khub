@@ -71,7 +71,14 @@ def query(root: Path, filters: QueryFilters, *, now: date) -> list[Match]:
         if filters.type and type_ != filters.type:
             continue
         meta = index.meta[node]
-        orphan = g.in_degree(node) == 0 and g.out_degree(node) == 0
+        # A type declaring `orphan: true` is never flagged: edge-less is its
+        # expected state (see TypeDecl.orphan). Kept identical to the `check`
+        # gate and the `status` count — one notion, three read sites.
+        orphan = (
+            g.in_degree(node) == 0
+            and g.out_degree(node) == 0
+            and not resolved.types[type_].orphan
+        )
         stale = is_stale(meta, now=now, stale_days=days)
         if not _passes(node, meta, g, filters, resolved, orphan=orphan, stale=stale):
             continue

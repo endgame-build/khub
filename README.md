@@ -72,7 +72,11 @@ khub keeps git as the source of truth, then adds a typed schema and a derived gr
 
 A preset is a canonical ontology for one domain — a directory holding its `schema.yaml` (entity types, attributes, legal relations) and optional body `templates/`. `khub init` merges `core.yaml` (the `base` block every entity carries: `type`, `created`/`updated`, `tags`, the OKF fields, the `any → any` edges) with the named preset into an engagement's `.khub/schema.yaml`, which agents and humans then extend as the work demands.
 
-**`firm-ops` ships today**: the HQ operations ontology (client, project, person, opportunity, meeting, and more); see [`docs/firm-ops-preset.md`](docs/firm-ops-preset.md). Engineering, consulting, and research presets are planned. New to khub? Start with [`docs/getting-started.md`](docs/getting-started.md).
+**Three presets ship today:**
+
+- **`firm-ops`** — the HQ operations ontology (client, project, person, opportunity, meeting, and more); see [`docs/firm-ops-preset.md`](docs/firm-ops-preset.md).
+- **`build-hub`** — the knowledge hub of a build project: 20 types across `knowledge/{product,architecture}` + `specs/`; see [`docs/build-hub-preset.md`](docs/build-hub-preset.md).
+- **`build-lite`** — `build-hub` cut to necessity: 6 types for a small project, with a documented add-back ladder to grow into the full preset; see [`docs/build-lite-preset.md`](docs/build-lite-preset.md). New to khub? Start with [`docs/getting-started.md`](docs/getting-started.md).
 
 ## Agent skills
 

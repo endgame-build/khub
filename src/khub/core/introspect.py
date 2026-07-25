@@ -90,6 +90,12 @@ def _type_view(rtype: ResolvedType) -> dict[str, Any]:
         "layout": rtype.storage.layout,
         "format": rtype.storage.fmt,
         "path": rtype.storage.path,
+        # The two type-level gates. Surfaced because the skill tells agents to
+        # discover the schema at runtime: without these, an agent cannot tell that
+        # a singleton is check-required, or that a type is exempt from the orphan
+        # sweep, and would read `khub check`'s silence as a bug.
+        "required": rtype.required,
+        "orphan": rtype.orphan,
         "fields": [
             {
                 "name": a.name,

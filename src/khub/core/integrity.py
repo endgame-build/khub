@@ -458,10 +458,22 @@ def check(root: Path, *, strict: bool = False) -> CheckReport:
             else:
                 kept.append(d)
         dangling = kept
+    # A type declaring `orphan: true` is exempt. The sweep asks "was this captured
+    # and never wired in?", which presupposes an author who could have wired it —
+    # false for a narrative root nothing points at by design (build-hub's edges all
+    # point UP the durability ladder, and the prd sits above its top). Reporting one
+    # is a finding no authoring can close, which made `check --strict` fail a
+    # freshly-initialised correct workspace and so foreclosed strict mode entirely.
+    # The exemption is declared per type, never inferred from `layout: singleton`:
+    # a singleton that DOES carry relations must still be swept. No signal is lost
+    # either way — a missing required edge is required-completeness's finding, and
+    # it names the field.
     orphans = [
         f"{t}/{s}"
         for (t, s) in entity_nodes
-        if graph.in_degree((t, s)) == 0 and graph.out_degree((t, s)) == 0
+        if graph.in_degree((t, s)) == 0
+        and graph.out_degree((t, s)) == 0
+        and not resolved.types[t].orphan
     ]
     # build_graph skips self-edges, so a stored self-reference on the acyclic predicate
     # never reaches nx.simple_cycles — detect it directly as a one-node cycle.

@@ -15,7 +15,7 @@ The CLI is a thin, schema-introspecting adapter over the core library's verbs (c
 
 `-C/--workspace` and `--version` are parsed before the command name — put them first (`khub -C <path> <command>`), the git convention. `--format` and the other per-command options follow the command as usual.
 
-Read commands include `draft` entities in scope and surface each entity's `orphan`/`stale` flag by default; `--active`/`--draft` and `--orphan`/`--stale` narrow the set.
+Read commands include `draft` entities in scope and surface each entity's `orphan`/`stale` flag by default; `--active`/`--draft` and `--orphan`/`--stale` narrow the set. An entity of a type declaring `orphan: true` never carries the flag.
 
 ### khub never prompts
 
@@ -111,7 +111,7 @@ A type stores its entities as `md` (the default: YAML frontmatter + prose body),
 | Command | Args and options | Does |
 |---|---|---|
 | `khub validate [target=all]` | `--strict`, `--format` | per-entity well-formedness and referential integrity over the declared subset (default: whole workspace). Never writes — repairing a missing date is `khub backfill` |
-| `khub check` | `--strict`, `--format` | graph-wide: relations resolve, required-completeness for `active`, no stray files (non-entities inside a type layout; reference docs outside type layouts are skipped), no edge cycles. Orphans (zero relations) are always reported but fail the gate only under `--strict`: a fully disconnected entity can be legitimate (a dormant client whose engagements were archived). A freshly scaffolded workspace fails `--strict` out of the box: its narrative singletons have no edges yet, so every one is an orphan. `--format json` reports `strict` so a consumer can tell an informational orphan list from the reason the gate failed |
+| `khub check` | `--strict`, `--format` | graph-wide: relations resolve, required-completeness for `active`, no stray files (non-entities inside a type layout; reference docs outside type layouts are skipped), no edge cycles. Orphans (zero relations) are always reported but fail the gate only under `--strict`: a fully disconnected entity can be legitimate (a dormant client whose engagements were archived). A type declaring `orphan: true` in the schema is exempt from the sweep entirely — edge-less is its expected state, so it is never reported and never fails `--strict` (build-hub's narrative singletons declare it; without it a freshly scaffolded workspace could not pass `--strict` at all). The same rule governs `query --orphan` and the `status` orphan count. `--format json` reports `strict` so a consumer can tell an informational orphan list from the reason the gate failed |
 | `khub stale` | `--days <n>` (default: the workspace `stale_days`, 90 in firm-ops), `--format` | entities past an `updated` threshold; dates backfilled from `git log` |
 
 ## Projection and output

@@ -1,0 +1,8 @@
+title: Architecture decision
+sections:
+- heading: Context
+  hint: the forces; the constraint requirements (cst-NNN) that bind this
+- heading: Decision
+  hint: one paragraph, active voice
+- heading: Consequences
+  hint: what gets easier, what gets harder; what this forecloses

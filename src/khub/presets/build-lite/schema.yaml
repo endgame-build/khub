@@ -1,0 +1,148 @@
+# build-lite.yaml — the khub build-lite preset (a small build project's hub).
+#
+# 6 entity types; 4 relation predicates beyond the universal four from core
+# (5 declarations; supersedes is declared on both adr and feature-spec).
+# build-hub cut to necessity. A type earns a slot here only if it is referenced
+# by id from elsewhere, walked as a graph, or gated by `check`. Prose a human
+# reads start to finish is a body; a fact stored once and read once is an
+# attribute; anything that churns with the code is a file in the repo, linked
+# via the base `resource`.
+#
+# The six answer the five questions an agent asks mid-build: what am I building
+# (feature-spec), what must hold (requirement), why can I not do X (adr, via
+# `affects`), where does the code live and what talks to what (component), and
+# what is this product (prd, arc42).
+#
+# Layout: one knowledge root plus specs/. knowledge/ is durable truth (the two
+# narrative singletons at its top level, then requirements/, decisions/,
+# components/); specs/ is delivery state.
+#
+# What build-hub has and this does not, and why:
+#  - capability -> base `tags` on requirement. It is a grouping axis, and
+#    feature-spec -> requirements already carries placement. Its real job in
+#    build-hub is the UCAP-XXX facet-import spine, which lite does not do — no
+#    facet_id anywhere here.
+#  - pdr -> the prd body. Anything that constrains implementation is an adr.
+#  - boundary, quality-attribute -> `requirement.kind: constraint`. Lost:
+#    `enforcement` / `measurement` / `scenario` as queryable attributes; they
+#    become body prose. This is the cut with the most real loss and the first
+#    one back.
+#  - domain, entity -> arc42 sections (Building blocks, Data model). At this
+#    size the components ARE the map, and field-level detail lives in code.
+#  - repo -> a plain `repo` text attribute on component. The registry's only
+#    benefit was integrity-checking repo names against an enumeration.
+#  - contract -> the machine spec (OpenAPI/AsyncAPI) is already a file on disk;
+#    hang it off the providing component's base `resource`. The entity earns
+#    its slot when two repos consume it independently.
+#  - external-system -> `component` with `kind: external`. NOT a lite-only cut:
+#    build-hub 0.3.0 made the same fold, so components carry over unchanged on a
+#    move up. (Fourteen build-hub types are cut here; this is the fifteenth row
+#    only in the sense that the name is gone from both presets.)
+#  - baseline -> CI and dashboards. A git corpus records metrics stale by
+#    construction.
+#  - work-package -> feature-spec IS the work unit; there is nothing to split
+#    across repos and `status` covers the flip.
+#  - test-spec -> the feature-spec's Acceptance criteria section; the tests
+#    themselves are files in the repo.
+#  - roadmap, glossary -> prd sections. erd -> the arc42 Data model section.
+#
+# Add-back order when this stops fitting (each step is a schema edit, no
+# surface code): (1) boundary + quality-attribute, (2) contract — alone; its
+# provider targets `component`, and a vendor contract names a kind: external
+# component, so do NOT reintroduce external-system, (3) repo + work-package,
+# (4) domain + entity, (5) the rest — or switch to build-hub.
+#
+# Authoring decisions worth review:
+#  - Storage form follows build-hub's rule: prose a human reviews = one file
+#    per record with a lowercase ID-enumerated slug (ad-/fr-/cst-/cmp-/fs-NNN-slug
+#    — `add --id` slugifies and lookup is case-sensitive, so uppercase would
+#    not resolve). No collections: lite has no homogeneous wiring left to keep
+#    in a registry.
+#  - component.kind is REQUIRED: it is the ownership boundary, what we can
+#    change versus what we can only react to. `repo` is a text attribute, not
+#    an edge, so an external simply omits it.
+#  - Four of the six md types ship a body template (prd, arc42, adr,
+#    feature-spec). requirement and component deliberately do not — one
+#    statement and one paragraph respectively, and every template heading is a
+#    `validate` finding waiting to happen.
+#  - `superseded` is never stored — computed inverse of the inbound
+#    `supersedes` edge, on adr and feature-spec alike.
+#  - No status field declares a `default` — `add` applies no schema defaults,
+#    so status is always an explicit statement.
+#  - prd and arc42 declare `orphan: true`. Every stored edge points UP the
+#    durability ladder (feature-spec -> requirement), and both docs sit above
+#    its top, so nothing points at them and they point at nothing. Without the
+#    flag they are permanent orphan findings and `check --strict` can never go
+#    green on a correct workspace. The flag is per type, not per layout: a
+#    singleton carrying relations is still swept.
+
+version: "0.1.0"
+
+entities:
+
+  # -------------------------------------------------- narrative: the two docs
+  prd:
+    layout: singleton
+    path: knowledge/prd.md
+    required: true              # the product source of truth — check fails without it
+    orphan: true                # a narrative root: nothing points at it, by design
+    attributes:
+      title: { required: true }
+    # absorbs build-hub's roadmap and glossary as sections
+
+  arc42:
+    layout: singleton
+    path: knowledge/arc42.md
+    orphan: true
+    attributes:
+      title: { required: true }
+    # absorbs build-hub's erd as the Data model section
+
+  # ------------------------------------------------------------- what must hold
+  requirement:
+    layout: file
+    path: knowledge/requirements
+    attributes:
+      title: { required: true }   # override core OKF title -> required (slug source)
+      kind:  { enum: [functional, constraint, business-rule], required: true }
+    relations:
+      realized_in: { to: component, many: true }
+    # EARS-friendly prose in the body. `kind: constraint` absorbs build-hub's
+    # boundary and quality-attribute: state the invariant, its measurement and
+    # how it is enforced in the body.
+
+  # ------------------------------------------------------------ why it is so
+  adr:
+    layout: file
+    path: knowledge/decisions
+    attributes:
+      title:  { required: true }
+      status: { enum: [proposed, accepted, rejected], required: true }
+    relations:
+      supersedes: { to: adr, inverse: superseded, acyclic: true }
+      affects:    { to: any, many: true }   # blast radius — the query that earns this type
+
+  # ------------------------------------------------------------ what it is
+  component:
+    layout: file
+    path: knowledge/components
+    attributes:
+      title: { required: true }
+      kind:  { enum: [service, library, external], required: true }
+      stack: { type: text }   # ours: the runtime; external: the vendor
+      repo:  { type: text }   # ours only — org/name; absent on an external
+    # base `depends_on` carries component -> component and component -> external,
+    # which is what makes "what breaks when this vendor changes" a graph walk.
+    # base `resource` carries the API docs (external) or the machine spec (ours).
+
+  # --------------------------------------------------- what to build (delivery)
+  feature-spec:
+    layout: file
+    path: specs
+    attributes:
+      title:  { required: true }
+      status: { enum: [planned, active, done, dropped], required: true }
+    relations:
+      requirements: { to: requirement, many: true }   # obligation: what this change satisfies
+      supersedes:   { to: feature-spec, inverse: superseded, acyclic: true }
+    # the FS IS the work record — no separate feature container, no work-package

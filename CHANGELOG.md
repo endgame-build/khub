@@ -2,6 +2,54 @@
 
 Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); khub is pre-release.
 
+## [0.12.0] — 2026-07-25
+
+### Added
+
+- **`build-lite` preset** — `build-hub` cut to necessity: six entity types (`prd`,
+  `arc42`, `requirement`, `adr`, `component`, `feature-spec`), four predicates, four
+  body templates. A type earns a slot only if it is referenced by id, walked as a
+  graph, or gated by `check`; every one of the fourteen cuts names its replacement,
+  and the schema header carries the order the rest comes back in. See
+  [`docs/build-lite-preset.md`](docs/build-lite-preset.md).
+- **`orphan: true` type-level schema key** — declares that edge-less is a type's
+  expected state, so `check` stops sweeping it, `--strict` stops failing on it,
+  `query --orphan` stops flagging it and the `status` count stops including it.
+  Defaults to `false`. Unlike `required` it is not singleton-only: any type whose
+  members are legitimately unwired may declare it.
+
+### Changed
+
+- **`build-hub` 0.2.0 → 0.3.0: `external-system` folded into `component`.** A vendor
+  or neighbouring product is now a `component` with `kind: external`. `kind` becomes
+  **required** — it is the sole carrier of the ownership boundary once
+  `contract.provider` stops being a `component | external-system` union — and
+  `component.repo` drops from required to optional, because an external has no
+  codebase and khub schemas cannot express "required unless `kind: external`". The
+  component↔codebase mapping is a review-time fact now, not a `check` gate; an
+  all-internal engagement may re-tighten `repo` in its own `.khub/schema.yaml`.
+  Twenty types, seventeen predicates in twenty-three declarations. No field was lost:
+  `external-system` carried only `title` and `consumes`, both already on `component`.
+- **A freshly scaffolded workspace can pass `check --strict`.** build-hub's five
+  narrative singletons (and build-lite's two) now declare `orphan: true`. They are
+  roots nothing points at by design — every stored edge runs up the durability ladder
+  and the prd sits above its top — so reporting them was a finding no authoring could
+  close, and it made `--strict` fail every correct workspace out of the box. The
+  exemption removes no signal: a missing required edge is still reported by
+  required-completeness, which names the field.
+
+### Migration
+
+Existing workspaces are unaffected — `.khub/schema.yaml` is flattened at init, so
+these preset changes reach new inits only. A workspace re-initialised onto build-hub
+0.3.0 must:
+
+1. Convert each `external-system` entity into a `component` with `kind: external`
+   and retarget its inbound edges (a `contract.provider` pointing at one now
+   points at the component).
+2. Backfill `kind` on **every** existing component — it went from optional to
+   required, so until then `check` reports each one active-but-incomplete.
+
 ## [0.11.0] — 2026-07-25
 
 A stress test of the `build-hub` preset — three agents plus a manual pass — found

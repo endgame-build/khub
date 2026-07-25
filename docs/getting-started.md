@@ -29,7 +29,7 @@ To hand the setup to an agent instead, install the `setup` skill with `npx skill
 
 ## Seed a workspace
 
-`init` scaffolds a workspace from a preset — a directory holding the preset's `schema.yaml` and optional body `templates/`. The `firm-ops` preset is the HQ operations ontology: nine entity types (client, project, person, opportunity, meeting, and more) with typed relations between them. A preset with templates also gets them flattened to `.khub/templates/`, and every md `layout: singleton` type with a template is created on the spot (the `build-hub` preset seeds `prd.md`, `roadmap.md`, `glossary.md`, `arc42.md`, `erd.md` this way — creations only, an existing file is never touched).
+`init` scaffolds a workspace from a preset — a directory holding the preset's `schema.yaml` and optional body `templates/`. The `firm-ops` preset is the HQ operations ontology: nine entity types (client, project, person, opportunity, meeting, and more) with typed relations between them. For software work there are two more: `build-hub` (20 types) and `build-lite` (6 — the same shape cut to necessity, and the better place to start). A preset with templates also gets them flattened to `.khub/templates/`, and every md `layout: singleton` type with a template is created on the spot (the `build-hub` preset seeds `prd.md`, `roadmap.md`, `glossary.md`, `arc42.md`, `erd.md` this way — creations only, an existing file is never touched).
 
 ```bash
 khub init firm-ops ./my-hub

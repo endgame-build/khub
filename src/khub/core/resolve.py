@@ -97,6 +97,7 @@ def _resolve_type(
         attributes=attributes,
         relations=relations,
         required=decl.required,
+        orphan=decl.orphan,
     )
 
 

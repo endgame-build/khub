@@ -13,12 +13,12 @@ duplicated as entities.
 [`getting-started.md`](getting-started.md); to author or extend the types yourself, see
 [`schema.md`](schema.md).
 
-Preset version **0.2.0**. Twenty-one entity types (sixteen graph records + five narrative
-singletons). Seventeen relation predicates in twenty-four declarations beyond the four universal
+Preset version **0.3.0**. Twenty entity types (fifteen graph records + five narrative
+singletons). Seventeen relation predicates in twenty-three declarations beyond the four universal
 edges from the core base (`domain.depends_on` narrows the universal edge to a typed
 `domain → domain`). The preset is a directory: `schema.yaml` + `templates/*.yaml`, flattened to
-`.khub/templates/` at init. Fifteen of the eighteen md types ship a body template;
-`entity`, `component` and `external-system` deliberately do not — they are
+`.khub/templates/` at init. Fifteen of the seventeen md types ship a body template;
+`entity` and `component` deliberately do not — they are
 name-keyed records whose shape is their frontmatter, so `add` writes them with an
 empty body and `validate` holds them to no heading contract.
 
@@ -43,7 +43,7 @@ flow.
 
 Tie-breaker when unsure: *if this repo changes, whose `check` should trip?* Everything inside one
 answer's radius is one hub. Two loosely-coupled products are two hubs, each modeling the other as
-an `external-system`; a portfolio view is a projection over multiple hubs, never a bigger hub.
+a `kind: external` component; a portfolio view is a projection over multiple hubs, never a bigger hub.
 Entry threshold: one team and a couple of repos don't need a hub — adopt it when the second team
 or the first cross-repo contract arrives.
 
@@ -84,7 +84,7 @@ case-sensitive, so `--id CAP-001-login` is stored — and must be looked up — 
 | Form | Types · slug scheme |
 |---|---|
 | File, ID-enumerated | adr `ad-NNN-slug` · pdr `pd-NNN-slug` · boundary `bound-NNN-slug` · quality-attribute `qa-NNN-slug` · requirement `fr-NNN`/`cst-NNN` · capability `cap-NNN-slug` · component `cmp-NNN-slug` · feature-spec `fs-NNN-slug` · test-spec `ts-NNN-slug` · work-package `wp-NNN-slug` |
-| File, name-keyed | domain · entity · contract · external-system (natural-name identity; contracts name-keyed so `consumes: readings-api` reads) |
+| File, name-keyed | domain · entity · contract (natural-name identity; contracts name-keyed so `consumes: readings-api` reads) |
 | Collection (yaml) | `knowledge/architecture/repos.yaml` · `knowledge/architecture/baselines.yaml` |
 | Singleton (md) | prd · roadmap · glossary · arc42 · erd — one fixed file, slug = type name; prd is `required: true` |
 
@@ -104,7 +104,7 @@ the slug).
 | `requirements` | feature-spec → requirement (many) | no |
 | `realized_in` | requirement → repo (many) | no |
 | `feature` | work-package → feature-spec | yes |
-| `repo` | work-package → repo; component → repo | wp no · component yes |
+| `repo` | work-package → repo; component → repo | no (an external component has no codebase) |
 | `verifies` | test-spec → feature-spec | yes |
 | `supersedes` | adr → adr; pdr → pdr; feature-spec → feature-spec | no |
 | `affects` | adr, pdr, boundary → any (many) | no |
@@ -115,8 +115,8 @@ the slug).
 | `owner` | entity → domain | yes (single) |
 | `applies_to` | quality-attribute → domain \| component (many) | no |
 | `domains` | component → domain (many) | no |
-| `provider` | contract → component \| external-system | yes |
-| `consumes` | component, external-system → contract (many) | no |
+| `provider` | contract → component | yes |
+| `consumes` | component → contract (many) | no |
 | `component` | baseline → component | no |
 
 Two conventions drive the edge placement:
@@ -126,11 +126,11 @@ Two conventions drive the edge placement:
   on one that already exists. Reverse directions (consumed_by, an FS's work packages, which
   feature-specs satisfy a requirement, a superseded record) are computed at read time.
 - **Split by churn** (contracts). `provider` lives on the contract: required and near-immutable,
-  so `check` catches a contract nobody owns. `consumes` lives on each consuming component or
-  external-system — a new consumer is a one-line edit in its own file, and the contract never
+  so `check` catches a contract nobody owns. `consumes` lives on each consuming
+  component — a new consumer is a one-line edit in its own file, and the contract never
   accumulates a stale consumer list.
 
-## The twenty-one entities
+## The twenty entities
 
 ### Narrative singletons — the prose layer
 
@@ -175,20 +175,21 @@ Two conventions drive the edge placement:
 - **quality-attribute** (`knowledge/architecture/quality-attributes/`) — a concrete measurable
   `scenario` with `measurement` and `enforcement`; `applies_to` domains or components. Absorbs
   classic NFR lists.
-- **component** (`knowledge/architecture/components/`) — the deployable: `kind`, `stack`, a
-  required `repo` edge (the component↔codebase mapping), the `domains` it hosts, and the churny
-  `consumes` side of contract edges. The body describes the deployable — stack rationale,
-  operational notes.
+- **component** (`knowledge/architecture/components/`) — the deployable: a required
+  `kind: service | library | external`, `stack`, an optional `repo` edge (the component↔codebase
+  mapping), the `domains` it hosts, and the churny `consumes` side of contract edges. The body
+  describes the deployable — stack rationale, operational notes.
+  A **`kind: external`** component is a vendor or neighboring product: no `repo`, `stack` names
+  the vendor, base `resource` carries its API docs. It replaces the `external-system` type
+  removed in 0.3.0.
 - **repo** (`knowledge/architecture/repos.yaml`, collection) — a pure remotes record: `repo`
   (org/name, loosely pattern-pinned — tighten to your org), `status: active | archived`.
 - **contract** (`knowledge/architecture/contracts/`, **yaml-format file entities**) — hub-authored
   interface records: `kind: api | events | data`, `status: proposed | active | deprecated`,
-  required `provider → component | external-system`. Policy prose (idempotency, auth model,
+  required `provider → component`. Policy prose (idempotency, auth model,
   versioning) rides the reserved `body` field; the machine spec is a standalone
   `contracts/specs/<slug>.openapi.yaml` linked via `resource`, so codegen and contract tests
   consume it directly. Consumers are the computed inverse of `consumes`.
-- **external-system** (`knowledge/architecture/external-systems/`) — a vendor or neighboring
-  product; `consumes` the contracts we emit to it (e.g. webhooks).
 - **baseline** (`knowledge/architecture/baselines.yaml`, collection) — quality bars: `metric`,
   `value` (text — accommodates `"80"` and `"99.9%"` alike), `direction`, `as_of`, `source`, and a
   `component` edge.

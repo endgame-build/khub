@@ -28,7 +28,7 @@ Body structure follows the same split: a type's template (`.khub/templates/<type
 
 ## draft, orphan, and stale are projection properties
 
-`draft` is a manual publish flag, default false, never inferred from completeness. A published entity can be incomplete; a draft can be complete; a draft never satisfies another entity's required relation. `orphan` (no edge in or out) and `stale` (past an `updated` threshold, dates backfilled from git) are computed on every read. `check` and `stale` gate on the same computation the reads surface; what you see is what the gate sees.
+`draft` is a manual publish flag, default false, never inferred from completeness. A published entity can be incomplete; a draft can be complete; a draft never satisfies another entity's required relation. `orphan` (no edge in or out) and `stale` (past an `updated` threshold, dates backfilled from git) are computed on every read. A type may declare `orphan: true` to opt out of the orphan notion entirely, for a narrative root nothing points at by design — otherwise it would carry a finding no authoring could ever close. `check` and `stale` gate on the same computation the reads surface; what you see is what the gate sees.
 
 ## Structural integrity is not semantic truth
 

@@ -1,11 +1,11 @@
 # build-hub.yaml — the khub build-hub preset (the knowledge hub of a build project).
 #
-# 16 entity types; 17 relation predicates beyond the universal four from core
-# (24 declarations; domain.depends_on narrows the universal edge to domain→domain).
+# 20 entity types; 17 relation predicates beyond the universal four from core
+# (23 declarations; domain.depends_on narrows the universal edge to domain→domain).
 # The hub is the single authority for every cross-repo fact: what the product
 # must do (requirement, capability), why it is shaped this way (adr, pdr), what
 # must hold (boundary, quality-attribute), what the system is (domain, entity,
-# component, repo, contract, external-system, baseline), and what to build
+# component, repo, contract, baseline), and what to build
 # (feature-spec, test-spec, work-package). Spoke repos carry NO khub workspace —
 # code plus a plain entities.yaml field-schema file; every decision, repo-local
 # included, is a hub adr/pdr.
@@ -24,11 +24,11 @@
 #    — `add --id` slugifies and lookup is case-sensitive, so uppercase would not resolve);
 #    homogeneous wiring = a collection row, name-keyed (repos.yaml,
 #    baselines.yaml — the registry file is the enumeration). domain, entity,
-#    contract, external-system are name-keyed files (natural-name identity).
+#    contract are name-keyed files (natural-name identity).
 #  - Contracts are HUB-AUTHORED yaml entities (format: yaml; policy prose —
 #    idempotency, auth model, versioning — rides the reserved `body` field).
-#    No spoke birth, no sync. `provider` lives on the contract (required union);
-#    `consumes` lives on each consuming component/external-system; consumed_by
+#    No spoke birth, no sync. `provider` lives on the contract (required);
+#    `consumes` lives on each consuming component; consumed_by
 #    is computed. The machine spec (OpenAPI/AsyncAPI) is a standalone file under
 #    contracts/specs/ — a SUBDIRECTORY, invisible to the single-level scan —
 #    linked via `resource` so codegen and contract tests consume it directly.
@@ -36,17 +36,31 @@
 #    schema-enforced — a second authoritative writer is unrepresentable.
 #    Field-level detail churns with code and lives in the owning spoke's
 #    entities.yaml, linked via `resource`, never restated hub-side.
-#  - component decomposes the classic topology block: kind/stack attrs, a
-#    required `repo` edge (the component↔codebase mapping), `domains` it hosts,
+#  - component decomposes the classic topology block: kind/stack attrs, an
+#    optional `repo` edge (the component↔codebase mapping), `domains` it hosts,
 #    and the churny `consumes` side of contract edges. repo rows are a pure
 #    remotes record. domain.relationship is a PLAIN attribute qualifying that
 #    domain's depends_on posture (edge properties are not a khub feature).
+#  - There is no `external-system` type (v0.3.0): a vendor or neighbouring
+#    product is a `component` with `kind: external`. `kind` is REQUIRED because
+#    it is the sole carrier of the ownership boundary — what we can change vs
+#    what we can only react to — which `contract.provider`'s component |
+#    external-system union used to hold. The price is `component.repo`
+#    dropping from required to optional: an external has no codebase, and khub
+#    schemas cannot express "required unless kind: external". The
+#    component↔codebase mapping is now a review-time fact, not a `check` gate;
+#    an all-internal engagement may re-tighten it in its own .khub/schema.yaml.
 #  - The five narrative documents ARE types — SINGLETONS (layout: singleton;
 #    one fixed file each; slug = type name): prd, roadmap, glossary
 #    (knowledge/product/) and arc42, erd (knowledge/architecture/). init creates
 #    each from its body template in templates/; validate holds every templated
 #    type's body to its template's section headings (ordered subsequence,
 #    extras allowed). prd is `required: true` — check fails while it is absent.
+#  - All five singletons declare `orphan: true`: they are narrative roots that
+#    nothing points at (edges run UP the durability ladder and the prd sits
+#    above its top), so without the flag they are permanent orphan findings and
+#    `check --strict` can never go green on a correct workspace. Per type, not
+#    per layout — a singleton carrying relations is still swept.
 #  - status enums stay coarse (planned/active/done/dropped) so tracker sync is
 #    a trivial mapping; no status field declares a `default` — `add` applies no
 #    schema defaults, so status is always an explicit statement.
@@ -59,7 +73,7 @@
 #    spokes carry no typed knowledge. Monorepo and multi-repo use this same
 #    preset — the corpus is layout-invariant; only delivery topology differs.
 
-version: "0.2.0"
+version: "0.3.0"
 
 entities:
 
@@ -68,30 +82,35 @@ entities:
     layout: singleton
     path: knowledge/product/prd.md
     required: true              # the product source of truth — check fails without it
+    orphan: true                # a narrative root: nothing points at it, by design
     attributes:
       title: { required: true }
 
   roadmap:
     layout: singleton
     path: knowledge/product/roadmap.md
+    orphan: true
     attributes:
       title: { required: true }
 
   glossary:
     layout: singleton
     path: knowledge/product/glossary.md
+    orphan: true
     attributes:
       title: { required: true }
 
   arc42:
     layout: singleton
     path: knowledge/architecture/arc42.md
+    orphan: true
     attributes:
       title: { required: true }
 
   erd:
     layout: singleton
     path: knowledge/architecture/erd.md
+    orphan: true
     attributes:
       title: { required: true }
 
@@ -199,13 +218,15 @@ entities:
     path: knowledge/architecture/components
     attributes:
       title: { required: true }
-      kind:  { enum: [service, library] }
-      stack: { type: text }
+      kind:  { enum: [service, library, external], required: true }
+      stack: { type: text }                     # ours: the runtime; external: the vendor
     relations:
-      repo:     { to: repo, required: true }    # the component <-> codebase mapping
+      repo:     { to: repo }                    # the component <-> codebase mapping; ours only
       domains:  { to: domain, many: true }
       consumes: { to: contract, many: true, inverse: consumed_by }   # churny side
-    # the body describes the deployable: stack rationale, operational notes
+    # the body describes the deployable: stack rationale, operational notes.
+    # kind: external is a vendor or neighbouring product — no repo, `stack` names
+    # the vendor, base `resource` carries its API docs.
 
   repo:
     layout: collection
@@ -225,18 +246,11 @@ entities:
       status:   { enum: [proposed, active, deprecated], required: true }
       facet_id: { type: text }       # OAPI-XXX / AAPI-XXX — joins facet-contract output
     relations:
-      provider: { to: [component, external-system], required: true }
+      provider: { to: component, required: true }
     # hub-authored yaml entity: policy prose (idempotency, auth, versioning) in
     # `body`; the machine spec is contracts/specs/<slug>.openapi.yaml (subdir —
     # outside the scan), linked via `resource`. Name-keyed on purpose.
-
-  external-system:
-    layout: file
-    path: knowledge/architecture/external-systems
-    attributes:
-      title: { required: true }
-    relations:
-      consumes: { to: contract, many: true, inverse: consumed_by }   # e.g. webhooks we emit
+    # A vendor-provided contract has a `kind: external` component as its provider.
 
   baseline:
     layout: collection
