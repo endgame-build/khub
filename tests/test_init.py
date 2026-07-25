@@ -309,20 +309,23 @@ def test_force_seed_tolerates_directory_named_md(
 
 
 @pytest.fixture
-def _forbid_npx(monkeypatch) -> None:
-    """init must never shell out to npx: any subprocess call here is a regression."""
-    from khub.core import skill as skillmod
+def _forbid_subprocess(monkeypatch) -> None:
+    """init installs nothing and shells out to nothing: any subprocess is a regression.
+
+    Patched at the module rather than through `core.skill`, which no longer imports
+    subprocess at all now that installing skills is a file copy.
+    """
+    import subprocess
 
     def forbid(*_a: object, **_k: object) -> object:
-        raise AssertionError("init must not invoke npx; that is `khub install-skills`")
+        raise AssertionError("init must not spawn a subprocess; skills are a copy")
 
-    monkeypatch.setattr(skillmod.shutil, "which", lambda _: "/opt/npx")
-    monkeypatch.setattr(skillmod.subprocess, "run", forbid)
+    monkeypatch.setattr(subprocess, "run", forbid)
 
 
 @pytest.mark.integration
 def test_init_wires_and_hints_the_skill(
-    tmp_path: Path, preset_source: Path, _forbid_npx: None
+    tmp_path: Path, preset_source: Path, _forbid_subprocess: None
 ) -> None:
     """A bare (non-interactive) `init` scaffolds, wires both agent files, and names the
     install command instead of running it — no Node, no SSH, no network in a scaffold."""
@@ -340,7 +343,7 @@ def test_init_wires_and_hints_the_skill(
 
 @pytest.mark.integration
 def test_init_no_wire_skips_wiring(
-    tmp_path: Path, preset_source: Path, _forbid_npx: None
+    tmp_path: Path, preset_source: Path, _forbid_subprocess: None
 ) -> None:
     """--no-wire leaves no agent files."""
     ws = tmp_path / "ws"
@@ -355,7 +358,7 @@ def test_init_no_wire_skips_wiring(
 
 @pytest.mark.integration
 def test_init_json_carries_wire_and_hint(
-    tmp_path: Path, preset_source: Path, _forbid_npx: None
+    tmp_path: Path, preset_source: Path, _forbid_subprocess: None
 ) -> None:
     """--format json folds wire + the install hint into the payload; stdout stays pure JSON."""
     ws = tmp_path / "ws"
@@ -373,7 +376,7 @@ def test_init_json_carries_wire_and_hint(
 
 @pytest.mark.integration
 def test_init_wire_failure_is_best_effort(
-    tmp_path: Path, preset_source: Path, monkeypatch, _forbid_npx: None
+    tmp_path: Path, preset_source: Path, monkeypatch, _forbid_subprocess: None
 ) -> None:
     """A wire that raises during init does not unwind the scaffold: exit 0, error surfaced."""
     def boom(_root: Path, **_k: object) -> object:

@@ -1,16 +1,11 @@
-"""``khub install-skills`` — install the agent skill via ``npx skills``.
+"""``khub install-skills`` — copy khub's agent skills into the local agent dirs.
 
-A thin Typer adapter over ``core.skill``. This ran as a tail of ``khub init``
-until 0.9.0, which made scaffolding a workspace depend on Node being present and
-on SSH access to the skill repo. Split out: ``init`` scaffolds and wires, then
-names this command; installing is its own explicit step.
+A thin Typer adapter over ``core.skill``. The install is a file copy out of the
+package: offline, silent, and safe to re-run. Errors surface as ``LocatedError``
+through the shared ``@guard`` boundary, so there is no bespoke exit-code path.
 
-That split changes the failure contract. Inside ``init`` an install failure was
-best-effort — the scaffold had to survive it. Asked for directly, anything short
-of an install is the command's whole outcome, so it reports on stderr and exits 1.
-That covers a missing ``npx`` too: as an init tail "skipped, no npx" was a fine
-exit 0, but a CI step running this command on a Node-less image must not report
-success with no skill installed.
+``npx skills add <repo> -s setup`` remains the bootstrap for a machine with no
+khub yet, but khub itself never shells out to it.
 """
 
 from __future__ import annotations
@@ -18,56 +13,67 @@ from __future__ import annotations
 import dataclasses
 
 import typer
+from rich.console import Console
+from rich.table import Table
 
-from khub.cli._render import emit, guard, resolve_root, want_json
-from khub.core.skill import SKILLS_SOURCE, SkillOutcome, install_skill, skill_command
+from khub.cli._render import emit, guard, resolve_root
+from khub.core.skill import SkillReport, install_skills
 
 
 @guard
 def install_skills_command(
     ctx: typer.Context,
-    agent: list[str] = typer.Option(
-        None,
-        "--agent",
-        help="Install for this coding agent (repeatable). Omitted: npx auto-detects.",
+    target: list[str] = typer.Option(
+        None, "--target", help="claude, agents, or opencode (repeatable). Default: all three."
+    ),
+    skill: list[str] = typer.Option(
+        None, "--skill", help="Which skill to install (repeatable). Default: all shipped."
+    ),
+    global_: bool = typer.Option(
+        False, "--global", help="Install into the home directories instead of this workspace."
     ),
     dry_run: bool = typer.Option(
-        False, "--dry-run", help="Print the npx command that would run, and run nothing."
+        False, "--dry-run", help="Report what would be written, and write nothing."
     ),
-    fmt: str = typer.Option("text", "--format", help="text or json (emits the outcome)."),
+    fmt: str = typer.Option("text", "--format", help="text (Rich table on a TTY) or json."),
 ) -> None:
-    """Install the khub agent skill: khub install-skills [--agent claude-code] [--dry-run]."""
+    """Install khub's agent skills: khub install-skills [--target agents] [--global]."""
+    # --global writes under $HOME, but the workspace still resolves: an install is
+    # scoped to a khub workspace either way, and project scope needs the root anyway.
     root = resolve_root(ctx)
-    agents = agent or None
+    report = install_skills(
+        root,
+        skills=skill or None,
+        targets=target or None,
+        scope_global=global_,
+        dry_run=dry_run,
+    )
+    emit(_record(report), fmt, lambda: _human(report))
 
-    if dry_run:
-        cmd = skill_command(agents)
-        emit(
-            {"action": "dry-run", "command": cmd},
-            fmt,
-            lambda: typer.echo(" ".join(cmd)),
-        )
+
+def _record(report: SkillReport) -> dict[str, object]:
+    return {
+        "scope": report.scope,
+        "skills": report.skills,
+        "dry_run": report.dry_run,
+        "writes": [dataclasses.asdict(w) for w in report.writes],
+    }
+
+
+def _human(report: SkillReport) -> None:
+    if not report.writes:
+        typer.echo("No skills to install")
         return
-
-    # Capture npx's own output whenever this run emits a machine document — which is
-    # `--format json` OR any non-TTY (a pipe, a redirect, CI), the same gate `emit`
-    # uses. Keying on `fmt` alone let npx's progress print ahead of the JSON on a
-    # pipe, leaving stdout unparseable.
-    outcome = install_skill(root, agents=agents, quiet=want_json(fmt))
-    installed = outcome.action == "installed"
-    emit(dataclasses.asdict(outcome), fmt, lambda: typer.echo(skill_line(outcome), err=not installed))
-    if not installed:
-        # npx's diagnostics were captured away from stdout; surface them on stderr so a
-        # failed install is debuggable instead of just an action name.
-        if outcome.detail:
-            typer.echo(outcome.detail, err=True)
-        raise typer.Exit(1)
+    Console().print(_table(report))
+    changed = sum(1 for w in report.writes if w.action != "unchanged")
+    verb = "would write" if report.dry_run else "wrote"
+    typer.echo(f"{verb} {changed} of {len(report.writes)} files ({report.scope} scope)")
 
 
-def skill_line(outcome: SkillOutcome) -> str:
-    """A human line for the install outcome — shared with the ``init`` hint text."""
-    if outcome.action == "installed":
-        return "installed khub agent skill (npx skills)"
-    if outcome.action == "skipped-no-npx":
-        return "skill install skipped: npx not found (install Node, then re-run khub install-skills)"
-    return f"skill install failed: run `npx skills add {SKILLS_SOURCE} -s khub -s setup` by hand"
+def _table(report: SkillReport) -> Table:
+    table = Table(title=f"install-skills ({report.scope})")
+    table.add_column("path")
+    table.add_column("action")
+    for write in report.writes:
+        table.add_row(write.path, write.action)
+    return table

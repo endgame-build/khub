@@ -71,7 +71,7 @@ The concrete stack under the five layers. Each pick stays dependency-light and e
 | Git history | `git` over `subprocess` | `stale` and `backfill` read commit dates; git is present, so no library dependency |
 | Tooling | **uv**, **Ruff**, **mypy**, **pytest** | a golden-corpus test runs khub against an HQ snapshot and asserts it validates and checks cleanly (a functional cutover, judged on its own output) |
 
-Python 3.11+, shipped as a `khub` console script (`uv tool install`). A Claude Code skill, a thin `SKILL.md` over the same commands, ships from this repo as a plugin; an MCP server exposing the same verbs is planned, its tool schemas emitted natively from the resolved schema.
+Python 3.11+, shipped as a `khub` console script (`uv tool install`). Agent skills, thin `SKILL.md` files over the same commands, ship as package data and install with `khub install-skills`; an MCP server exposing the same verbs is planned, its tool schemas emitted natively from the resolved schema.
 
 Two eval tiers: deterministic golden-file tests cover the engine (the HQ functional-cutover test above), and an OKF-style fuzzy goldens-eval scores the LLM ingestion layer: precision and recall over extracted types and edges, gated on `khub check`.
 
@@ -180,7 +180,7 @@ Everything stays private for now. `uvx` and `uv tool install` run from the priva
 
 **Engine and presets.** For now the engine and presets are collocated in this single private repo. The engine is generic plumbing; the presets are the IP, so they will most likely split into their own private repo later, pulled into `init` through `khub init --preset-source <private>`. Open-core (a public engine with private presets) stays a later option.
 
-**Skill.** khub ships its agent skill from this repo two ways. For Claude Code, the repo is its own single-plugin marketplace: `claude plugins add` the repo, install `khub@khub`, then `/khub:setup` installs the CLI and sets up the project. For every other agent (Cursor, Codex, Gemini CLI, and ~70 more), the skill installs through Vercel's `npx skills`, the same convention Neon's `neon init` uses and the same call `khub init` makes under the hood. The skill is the agent's surface over the CLI verbs; `khub wire` links the schema into a project's agent files (`CLAUDE.md` with a `@.khub/schema.yaml` import, `AGENTS.md` with a schema pointer) so an agent reasons in the ontology even without the CLI.
+**Skill.** khub authors its agent skills in `skills/` at the repo root and ships them as package data, so `khub install-skills` is a file copy into the local agent directories — offline, idempotent, agent-agnostic. Two channels serve two moments: `npx skills add <repo> -s setup` bootstraps a machine that has no khub yet (root `skills/` is a container skills.sh discovers without a manifest), and `khub install-skills` is the steady state once the CLI exists. The Claude Code plugin marketplace this repo shipped through 0.9.x is gone: it was a second, Claude-only distribution channel for the same files, and it was the reason the skills lived outside the package. The skill is the agent's surface over the CLI verbs; `khub wire` links the schema into a project's agent files (`CLAUDE.md` with a `@.khub/schema.yaml` import, `AGENTS.md` with a schema pointer) so an agent reasons in the ontology even without the CLI.
 
 ## The Proving Ground
 

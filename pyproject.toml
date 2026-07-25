@@ -43,6 +43,12 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.wheel]
 packages = ["src/khub"]
 
+# Skills are authored at the repo root because that is the container
+# `npx skills add` discovers without a manifest; map them into the package so
+# `khub install-skills` can copy them from an installed wheel.
+[tool.hatch.build.targets.wheel.force-include]
+"skills" = "khub/skills"
+
 [dependency-groups]
 dev = ["pytest", "ruff", "mypy"]
 

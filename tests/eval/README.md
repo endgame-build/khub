@@ -7,7 +7,7 @@ control), lets them populate and operate it, and scores every operation
 on-/off-rails with a failure taxonomy.
 
 **Measurement only** — it changes nothing in khub. It reads the *current* repo's
-`wire.build_block` + `plugin/skills/`, and force-reinstalls `khub` from this repo
+`wire.build_block` + `skills/`, and force-reinstalls `khub` from this repo
 before running, so it always tests the latest wiring.
 
 ## Run

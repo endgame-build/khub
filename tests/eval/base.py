@@ -15,7 +15,7 @@ import tomllib
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
-SKILLS_SRC = REPO / "plugin" / "skills"
+SKILLS_SRC = REPO / "skills"
 
 
 def _run(cmd: list[str], cwd: Path | None = None, check: bool = True) -> subprocess.CompletedProcess[str]:

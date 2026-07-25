@@ -1,217 +1,181 @@
-"""TS-SKL — ``khub install-skills`` (the agent-skill install, split out of `init` in 0.9.0).
+"""TS-SKL — ``khub install-skills`` (a file copy out of the package, since 0.10.0).
 
-`core.skill` shells out to `npx skills add`; every test here stubs `shutil.which`
-and `subprocess.run`, so no test ever reaches the network or the private repo.
-The unit tests moved here from `test_init.py` unchanged in intent — same
-behaviour, new entry point — and the CLI tests cover what the split added:
-`--dry-run`, repeatable `--agent`, and exit 1 on failure (inside `init` the same
-failure was best-effort).
+Through 0.9.x this shelled out to ``npx skills add <private repo>``, because the
+skills sat outside the wheel. They now ship as package data and the install is a
+copy: offline, idempotent, and safe to re-run. The regression test for that whole
+premise is ``test_install_never_spawns_a_subprocess`` — everything else here is
+about where files land and what gets reported.
 """
 
 from __future__ import annotations
 
 import json
-import types
 from pathlib import Path
 
 import pytest
 from typer.testing import CliRunner
 
 from khub.cli.main import app
-from khub.core import skill as skillmod
+from khub.core.skill import available_skills, install_skills, skills_dir
 
 runner = CliRunner()
 
+# Every project dir the default install writes, and the skills it ships.
+PROJECT_DIRS = (".claude/skills", ".agents/skills", ".opencode/skills")
+
 
 @pytest.fixture
-def npx_ok(monkeypatch) -> list[tuple[list[str], Path, bool]]:
-    """npx present and succeeding; records (cmd, cwd, capture_output) per call."""
-    calls: list[tuple[list[str], Path, bool]] = []
+def no_subprocess(monkeypatch) -> None:
+    """Any subprocess call is a regression: the copy install must never shell out."""
+    import subprocess
 
-    def fake_run(cmd: list[str], cwd: Path = None, capture_output: bool = False, **_k: object):  # type: ignore[assignment]
-        calls.append((cmd, cwd, capture_output))
-        return types.SimpleNamespace(returncode=0)
+    def forbid(*_a: object, **_k: object) -> object:
+        raise AssertionError("install-skills must not spawn a subprocess")
 
-    monkeypatch.setattr(skillmod.shutil, "which", lambda _: "/opt/npx")
-    monkeypatch.setattr(skillmod.subprocess, "run", fake_run)
-    return calls
+    monkeypatch.setattr(subprocess, "run", forbid)
 
 
-# --- core.skill (moved from test_init.py) ------------------------------------
+# --- the packaged source -----------------------------------------------------
 
 
 @pytest.mark.unit
-def test_install_skill_skipped_without_npx(tmp_path: Path, monkeypatch) -> None:
-    """No npx on PATH → skipped-no-npx, and subprocess is never invoked."""
-    monkeypatch.setattr(skillmod.shutil, "which", lambda _: None)
+def test_skills_dir_carries_both_skills() -> None:
+    """The packaged (or dev-checkout) skills directory is the install's source."""
+    assert (skills_dir() / "khub" / "SKILL.md").is_file()
+    assert (skills_dir() / "setup" / "SKILL.md").is_file()
+    assert available_skills() == ["khub", "setup"]
 
-    def forbid(*_a: object, **_k: object) -> object:  # would be a real network clone
-        raise AssertionError("subprocess.run must not run when npx is absent")
 
-    monkeypatch.setattr(skillmod.subprocess, "run", forbid)
-    outcome = skillmod.install_skill(tmp_path)
-    assert outcome.action == "skipped-no-npx"
+# --- core.install_skills -----------------------------------------------------
 
 
 @pytest.mark.unit
-def test_install_skill_runs_npx_in_root(tmp_path: Path, npx_ok: list) -> None:
-    """npx present → run `npx skills add <source> -s khub -s setup` with cwd=root."""
-    outcome = skillmod.install_skill(tmp_path)
-
-    assert outcome.action == "installed"
-    (cmd, cwd, _), = npx_ok
-    assert cwd == tmp_path
-    assert cmd[:4] == ["npx", "-y", "skills", "add"]
-    assert skillmod.SKILLS_SOURCE in cmd
-    assert cmd.count("--skill") == 2 and "khub" in cmd and "setup" in cmd
+def test_installs_every_skill_into_every_project_dir(fresh_ws: Path, no_subprocess: None) -> None:
+    """Default: both skills into all three agent dirs, reported per file."""
+    report = install_skills(fresh_ws)
+    assert report.scope == "project"
+    assert {w.action for w in report.writes} == {"created"}
+    for target in PROJECT_DIRS:
+        for name in ("khub", "setup"):
+            assert (fresh_ws / target / name / "SKILL.md").is_file(), target
 
 
 @pytest.mark.unit
-def test_install_skill_reports_failure(tmp_path: Path, monkeypatch) -> None:
-    """A non-zero npx exit is reported as failed, never raised."""
-    monkeypatch.setattr(skillmod.shutil, "which", lambda _: "/opt/npx")
-    monkeypatch.setattr(
-        skillmod.subprocess, "run", lambda *_a, **_k: types.SimpleNamespace(returncode=1)
-    )
-    assert skillmod.install_skill(tmp_path).action == "failed"
+def test_second_run_is_unchanged_and_rewrites_nothing(fresh_ws: Path) -> None:
+    """Idempotent: a re-install reports `unchanged` and leaves mtimes alone."""
+    install_skills(fresh_ws)
+    written = fresh_ws / ".agents/skills/khub/SKILL.md"
+    before = written.stat().st_mtime_ns
+
+    report = install_skills(fresh_ws)
+    assert {w.action for w in report.writes} == {"unchanged"}
+    assert written.stat().st_mtime_ns == before
 
 
 @pytest.mark.unit
-def test_install_skill_survives_exec_error(tmp_path: Path, monkeypatch) -> None:
-    """subprocess exec failure (Windows .cmd, broken PATH) is failed, never raised."""
+def test_drifted_file_is_updated(fresh_ws: Path) -> None:
+    """An installed copy is managed: edited content is re-synced, not preserved."""
+    install_skills(fresh_ws)
+    drifted = fresh_ws / ".agents/skills/khub/SKILL.md"
+    drifted.write_text("stale content")
 
-    def boom(*_a: object, **_k: object) -> object:
-        raise OSError("cannot spawn npx")
-
-    monkeypatch.setattr(skillmod.shutil, "which", lambda _: "/opt/npx")
-    monkeypatch.setattr(skillmod.subprocess, "run", boom)
-    assert skillmod.install_skill(tmp_path).action == "failed"  # no traceback
+    report = install_skills(fresh_ws)
+    actions = {w.path: w.action for w in report.writes}
+    assert actions[".agents/skills/khub/SKILL.md"] == "updated"
+    assert drifted.read_text() != "stale content"
 
 
 @pytest.mark.unit
-def test_install_skill_gitignores_artifacts(tmp_path: Path, npx_ok: list) -> None:
-    """A successful install gitignores the per-machine skill dirs, not skills-lock.json."""
-    skillmod.install_skill(tmp_path)
-    ignored = (tmp_path / ".gitignore").read_text().splitlines()
-    assert ".claude/skills/" in ignored and ".agents/skills/" in ignored
-    assert "skills-lock.json" not in ignored
+def test_dry_run_reports_and_writes_nothing(fresh_ws: Path) -> None:
+    report = install_skills(fresh_ws, dry_run=True)
+    assert report.dry_run and report.writes
+    assert not (fresh_ws / ".agents").exists()
+    assert ".agents/skills/" not in (fresh_ws / ".gitignore").read_text()
 
 
-# --- the CLI command ---------------------------------------------------------
+@pytest.mark.unit
+def test_target_and_skill_narrow_the_install(fresh_ws: Path) -> None:
+    install_skills(fresh_ws, targets=["agents"], skills=["khub"])
+    assert (fresh_ws / ".agents/skills/khub/SKILL.md").is_file()
+    assert not (fresh_ws / ".agents/skills/setup").exists()
+    assert not (fresh_ws / ".claude").exists()
 
 
-@pytest.mark.integration
-def test_cli_install_skills_runs_in_workspace(fresh_ws: Path, npx_ok: list, monkeypatch) -> None:
-    """`khub install-skills` runs npx once, with cwd = the resolved workspace root."""
-    monkeypatch.chdir(fresh_ws)
-    result = runner.invoke(app, ["install-skills"])
-    assert result.exit_code == 0, result.output
-    (_, cwd, _), = npx_ok
-    assert cwd == fresh_ws
+@pytest.mark.unit
+def test_project_scope_gitignores_the_skill_dirs(fresh_ws: Path) -> None:
+    """Installed skills are reproducible from the CLI, so they stay out of git."""
+    install_skills(fresh_ws)
+    ignored = (fresh_ws / ".gitignore").read_text()
+    for target in PROJECT_DIRS:
+        assert f"{target}/" in ignored
 
 
-@pytest.mark.integration
-def test_cli_install_skills_dry_run_writes_nothing(
-    fresh_ws: Path, npx_ok: list, monkeypatch
+@pytest.mark.unit
+def test_global_scope_writes_home_dirs_and_no_gitignore(
+    fresh_ws: Path, tmp_path: Path, monkeypatch
 ) -> None:
-    """--dry-run prints the exact npx command and never invokes it."""
-    monkeypatch.chdir(fresh_ws)
-    result = runner.invoke(app, ["install-skills", "--dry-run", "--format", "json"])
-    assert result.exit_code == 0, result.output
-    payload = json.loads(result.output)
-    assert payload["action"] == "dry-run"
-    assert payload["command"][:4] == ["npx", "-y", "skills", "add"]
-    assert npx_ok == []  # dry really is dry
-    assert not (fresh_ws / ".gitignore").read_text().count(".claude/skills/")
+    """--global installs per machine; a home directory is not a git repo."""
+    home = tmp_path / "home"
+    home.mkdir()
+    monkeypatch.setattr(Path, "home", staticmethod(lambda: home))
+
+    report = install_skills(fresh_ws, scope_global=True)
+    assert report.scope == "global"
+    assert (home / ".agents/skills/khub/SKILL.md").is_file()
+    assert (home / ".config/opencode/skills/khub/SKILL.md").is_file()  # opencode's home path differs
+    assert not (fresh_ws / ".agents").exists()
+    assert ".agents/skills/" not in (fresh_ws / ".gitignore").read_text()
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "kwargs, code",
+    [({"skills": ["ghost"]}, "unknown_skill"), ({"targets": ["emacs"]}, "unknown_target")],
+)
+def test_unknown_selection_is_a_located_error(fresh_ws: Path, kwargs: dict, code: str) -> None:
+    from khub.core.errors import LocatedError
+
+    with pytest.raises(LocatedError) as err:
+        install_skills(fresh_ws, **kwargs)
+    assert err.value.code == code
+
+
+# --- the CLI -----------------------------------------------------------------
 
 
 @pytest.mark.integration
-def test_cli_install_skills_repeatable_agent(fresh_ws: Path, npx_ok: list, monkeypatch) -> None:
-    """Each --agent is passed through to npx's own --agent; omitted keeps auto-detect."""
-    monkeypatch.chdir(fresh_ws)
-    result = runner.invoke(
-        app, ["install-skills", "--agent", "claude-code", "--agent", "cursor"]
-    )
-    assert result.exit_code == 0, result.output
-    (cmd, _, _), = npx_ok
-    assert cmd.count("--agent") == 2
-    assert "claude-code" in cmd and "cursor" in cmd
-
-
-@pytest.mark.integration
-def test_cli_install_skills_exits_1_on_failure(fresh_ws: Path, monkeypatch) -> None:
-    """Asked for explicitly, a failed install is the outcome: stderr + exit 1.
-
-    Inside `khub init` (<=0.8.0) the same failure was best-effort — the scaffold
-    had to survive it. A command whose only job is the install does not.
-    """
-    monkeypatch.chdir(fresh_ws)
-    monkeypatch.setattr(skillmod.shutil, "which", lambda _: "/opt/npx")
-    monkeypatch.setattr(
-        skillmod.subprocess,
-        "run",
-        lambda *_a, **_k: types.SimpleNamespace(returncode=1, stdout="", stderr=""),
-    )
-    result = runner.invoke(app, ["install-skills"])
-    assert result.exit_code == 1
-    # CliRunner is not a TTY, so the read contract emits the machine payload, not prose.
-    assert json.loads(result.output)["action"] == "failed"
-
-
-@pytest.mark.integration
-def test_cli_install_skills_exits_1_without_npx(fresh_ws: Path, monkeypatch) -> None:
-    """No npx is a failed install, not a quiet success.
-
-    As an `init` tail, "skipped, no npx" was rightly exit 0 — the scaffold still stood.
-    As the command you ran on purpose it is exit 1, so a CI step on a Node-less image
-    cannot report success with no skill installed.
-    """
-    monkeypatch.chdir(fresh_ws)
-    monkeypatch.setattr(skillmod.shutil, "which", lambda _: None)
-    result = runner.invoke(app, ["install-skills"])
-    assert result.exit_code == 1
-    assert json.loads(result.output)["action"] == "skipped-no-npx"
-
-
-@pytest.mark.integration
-def test_cli_install_skills_stdout_is_one_document_on_a_pipe(
-    fresh_ws: Path, monkeypatch
+def test_cli_install_never_spawns_a_subprocess(
+    fresh_ws: Path, monkeypatch, no_subprocess: None
 ) -> None:
-    """Piped (non-TTY) at the default --format text, stdout must still parse as one JSON
-    document: npx's own progress output is captured, never interleaved ahead of it.
-
-    The quiet gate keyed on `fmt == "json"` while the output gate was want_json(), so a
-    plain `khub install-skills > out.json` emitted npx chatter and then the payload.
-    """
+    """The whole point of 0.10.0: no npx, no clone, no network — just a copy."""
     monkeypatch.chdir(fresh_ws)
-    noisy = "◇ Installed 2 skills\n└ Done!\n"
-
-    def fake_run(cmd: list[str], cwd: Path = None, capture_output: bool = False, **_k: object):  # type: ignore[assignment]
-        if not capture_output:  # inheriting stdout is exactly the corruption under test
-            print(noisy, end="")
-            return types.SimpleNamespace(returncode=0, stdout=None, stderr=None)
-        return types.SimpleNamespace(returncode=0, stdout=noisy, stderr="")
-
-    monkeypatch.setattr(skillmod.shutil, "which", lambda _: "/opt/npx")
-    monkeypatch.setattr(skillmod.subprocess, "run", fake_run)
-
-    result = runner.invoke(app, ["install-skills"])  # no --format: text + non-TTY
+    result = runner.invoke(app, ["install-skills"])
     assert result.exit_code == 0, result.output
-    assert json.loads(result.output)["action"] == "installed"  # whole stdout parses
 
 
 @pytest.mark.integration
-def test_cli_install_skills_failure_carries_npx_diagnostics(fresh_ws: Path, monkeypatch) -> None:
-    """A captured failure surfaces npx's own error on stderr, not just an action name."""
+def test_cli_json_payload(fresh_ws: Path, monkeypatch) -> None:
     monkeypatch.chdir(fresh_ws)
-    monkeypatch.setattr(skillmod.shutil, "which", lambda _: "/opt/npx")
-    monkeypatch.setattr(
-        skillmod.subprocess,
-        "run",
-        lambda *_a, **_k: types.SimpleNamespace(
-            returncode=1, stdout="", stderr="git@github.com: Permission denied (publickey)."
-        ),
-    )
-    result = runner.invoke(app, ["install-skills"])
+    payload = json.loads(runner.invoke(app, ["install-skills", "--format", "json"]).output)
+    assert payload["scope"] == "project"
+    assert payload["skills"] == ["khub", "setup"]
+    assert len(payload["writes"]) == 6  # 2 skills x 3 targets
+    assert {w["action"] for w in payload["writes"]} == {"created"}
+
+
+@pytest.mark.integration
+def test_cli_unknown_target_is_a_clean_error(fresh_ws: Path, monkeypatch) -> None:
+    monkeypatch.chdir(fresh_ws)
+    result = runner.invoke(app, ["install-skills", "--target", "emacs"])
     assert result.exit_code == 1
-    assert "Permission denied (publickey)" in result.output
+    assert "Unknown target" in result.output
+    assert "Traceback" not in result.output
+
+
+@pytest.mark.integration
+def test_cli_agent_flag_is_gone(fresh_ws: Path, monkeypatch) -> None:
+    """`--agent` was the npx passthrough; with npx gone it has no meaning."""
+    monkeypatch.chdir(fresh_ws)
+    result = runner.invoke(app, ["install-skills", "--agent", "claude-code"])
+    assert result.exit_code == 2
+    assert "No such option" in result.output

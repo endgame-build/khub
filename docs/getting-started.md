@@ -25,7 +25,7 @@ The rest of this guide writes `khub …`. If you cloned, read that as `uv run kh
 
 This walkthrough passes every value as a flag, which is the only way khub takes input: it never prompts, so a missing argument is a usage error rather than a question. That is also exactly how an agent drives it — pipe the output or add `--format json` to get machine-readable records.
 
-From inside Claude Code, `/plugin install khub@khub` then `/khub:setup` installs and wires khub for you; see the [README](../README.md#use-it-from-claude-code).
+To hand the setup to an agent instead, install the `setup` skill with `npx skills add git@github.com:endgame-build/khub.git -s setup` and ask it to set khub up; see [Agent skills](../README.md#agent-skills) for both install options.
 
 ## Seed a workspace
 
@@ -48,7 +48,7 @@ Agent skill not installed. To install:
 cd my-hub
 ```
 
-`init` does two things: it scaffolds the tree and wires the schema into your agent files (`CLAUDE.md` and `AGENTS.md`; next section). Pass `--no-wire` to skip the wire tail. Installing the agent skill is a separate step, `khub install-skills` — it needs `npx` and SSH access to the skill repo, and a scaffold should not depend on either.
+`init` does two things: it scaffolds the tree and wires the schema into your agent files (`CLAUDE.md` and `AGENTS.md`; next section). Pass `--no-wire` to skip the wire tail. Installing the agent skills is a separate step, `khub install-skills` — scaffolding a workspace and populating your agent directories are different decisions, so `init` names the command rather than running it.
 
 init wrote a `.khub/` control directory and one folder per entity type:
 
@@ -80,19 +80,21 @@ updated AGENTS.md
 
 Bare `khub wire` updates whichever agent files already exist. `khub wire --target claude|agents|both` creates a specific one (`CLAUDE.md` gets the import, `AGENTS.md` the pointer).
 
-Now install the agent skill (Cursor, Codex, and others land in `.agents/skills/`; Claude Code in `.claude/skills/`):
+Now install khub's agent skills. This is a file copy out of the installed package — no network, no Node, and safe to re-run:
 
 ```bash
 khub install-skills
 ```
 
-Add `--agent claude-code` (repeatable) to target specific agents instead of letting npx auto-detect, or `--dry-run` to see the command it would run. Without khub on PATH, the same install is [`npx skills`](https://skills.sh) directly:
+Both skills (`khub` and `setup`) land in `.claude/skills/`, `.agents/skills/`, and `.opencode/skills/`, covering Claude Code, opencode, Cursor, Codex, and the rest. Narrow it with `--target claude|agents|opencode` or `--skill khub|setup`, preview with `--dry-run`, or pass `--global` to install into your home directories once per machine instead.
+
+khub gitignores the installed directories for you: the copies are reproducible from the CLI, so committing them would be committing a duplicate. Re-run the command after upgrading khub to re-sync them — an edited copy is overwritten, so make changes in the repo's `skills/`, not in an installed one.
+
+On a machine with no khub yet, the same skills install straight from the repo with [`npx skills`](https://skills.sh) (Node and repo access required):
 
 ```bash
-npx skills add git@github.com:endgame-build/khub.git -s khub -s setup
+npx skills add git@github.com:endgame-build/khub.git -s setup
 ```
-
-Either way writes a `skills-lock.json` at the project root. Commit it so teammates install the same skill version. The installed skill directories are per-machine, and `khub install-skills` adds `.claude/skills/` and `.agents/skills/` to `.gitignore` for you; after a bare `npx skills add` you add those lines yourself.
 
 ## Author your first entities
 

@@ -1,100 +1,160 @@
-"""Install the khub agent skill via ``npx skills`` (``khub install-skills``).
+"""Install khub's agent skills by copying them out of the package.
 
-Shells out to Vercel's skills.sh CLI (``npx skills``, the agent-agnostic skill
-installer) to drop the khub skill into whichever coding agent is present —
-Claude Code, Cursor, Codex, and ~70 others — and to write a ``skills-lock.json``.
+khub authors its skills in ``skills/`` at the repo root and ships them as package
+data. Installing one is a file copy into whichever skill directories the local
+agents read — no Node, no network, no clone, and nothing that can fail on a
+machine without egress.
 
-Never raises: a missing ``npx``, an exec failure, or a non-zero exit comes back
-as an outcome. This ran as a tail of ``khub init`` until 0.9.0, where that
-tolerance was the point (a scaffold must not hard-depend on Node). As its own
-command the tolerance stays here, and the CLI adapter turns a ``failed`` outcome
-into exit 1 — the layer that knows the install was asked for is the layer that
-decides it is fatal.
+Until 0.10.0 this shelled out to ``npx skills add <private repo>``, because
+``plugin/skills/`` sat outside the wheel and genuinely was not on disk at
+runtime. That made a two-file copy depend on Node, network, and SSH access to a
+private repo. ``npx skills add`` still works against the repo — root ``skills/``
+is a container skills.sh discovers without a manifest — but it is a bootstrap
+route for machines that have no khub yet, not something khub itself invokes.
 
-The clone runs over the inherited stdin so an interactive user can answer an ssh
-host-key or passphrase prompt. In CI, configure ssh non-interactively
-(``BatchMode=yes``) so a missing key fails fast instead of blocking on the prompt.
+Installed skills are managed copies: a re-install re-syncs them to the packaged
+content, so edits belong in ``skills/``, not in an installed copy.
 """
 
 from __future__ import annotations
 
-import shutil
-import subprocess
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
-# The private repo is the skill source; the git URL form installs over SSH — the
-# same access ``uv tool install`` already needs — where the ``owner/repo``
-# shorthand would need a token.
-SKILLS_SOURCE = "git@github.com:endgame-build/khub.git"
+from khub.core.errors import LocatedError
 
-# npx drops the skill into per-machine agent directories; keep them out of git.
-# The committable artifact is ``skills-lock.json``, which pins the skill versions.
-_SKILL_ARTIFACT_DIRS = (".claude/skills/", ".agents/skills/")
+# Skills live at the repo root (the container `npx skills add` matches without a
+# manifest) and reach the wheel through hatch's force-include, which lands them
+# beside `presets/` and `assets/`. A dev checkout has no packaged copy, hence the
+# repo fallback: src/khub/core/skill.py -> parents[3] is the repo root.
+_PACKAGED_SKILLS = Path(__file__).resolve().parent.parent / "skills"
+_REPO_SKILLS = Path(__file__).resolve().parents[3] / "skills"
+
+# Where each agent family reads project-local skills, and the home equivalent.
+# opencode reads all three project dirs; the copies are byte-identical, so a name
+# collision resolves to the same skill rather than one shadowing another.
+TARGETS: dict[str, tuple[str, str]] = {
+    "claude": (".claude/skills", ".claude/skills"),
+    "agents": (".agents/skills", ".agents/skills"),
+    "opencode": (".opencode/skills", ".config/opencode/skills"),
+}
+
+
+def skills_dir() -> Path:
+    """The packaged skills directory, or the repo's in a dev checkout."""
+    for candidate in (_PACKAGED_SKILLS, _REPO_SKILLS):
+        if candidate.is_dir():
+            return candidate
+    raise LocatedError(
+        code="skills_missing",
+        message=(
+            f"No skills directory found at {_PACKAGED_SKILLS} or {_REPO_SKILLS}; "
+            "the khub install is incomplete (skills are packaged from the repo's skills/)"
+        ),
+    )
+
+
+def available_skills() -> list[str]:
+    """Every skill khub ships, by directory name."""
+    return sorted(p.parent.name for p in skills_dir().glob("*/SKILL.md"))
 
 
 @dataclass(frozen=True)
-class SkillOutcome:
-    """What happened when installing the agent skill.
+class SkillWrite:
+    """One destination file and what happened to it."""
 
-    ``detail`` carries npx's own diagnostics on a captured (``quiet``) failure —
-    without it a failed install in machine mode is an action name and nothing to
-    debug, since the ssh/auth error npx printed was swallowed by the capture.
-    """
-
-    action: str  # "installed" | "skipped-no-npx" | "failed"
-    command: list[str]
-    detail: str = ""
+    path: str  # relative to the workspace root, or absolute under --global
+    action: str  # "created" | "updated" | "unchanged"
 
 
-def skill_command(agents: Sequence[str] | None = None) -> list[str]:
-    """The ``npx skills add`` argv. Public so ``--dry-run`` can print exactly what would run."""
-    cmd = [
-        "npx",
-        "-y",
-        "skills",
-        "add",
-        SKILLS_SOURCE,
-        "--skill",
-        "khub",
-        "--skill",
-        "setup",
-        "--yes",
-    ]
-    for agent in agents or ():
-        cmd += ["--agent", agent]
-    return cmd
+@dataclass(frozen=True)
+class SkillReport:
+    """The outcome of one install: where it wrote, and what it wrote."""
+
+    scope: str  # "project" | "global"
+    skills: list[str]
+    writes: list[SkillWrite]
+    dry_run: bool = False
 
 
-def install_skill(
-    root: Path, *, agents: Sequence[str] | None = None, quiet: bool = False
-) -> SkillOutcome:
-    """Install the khub skill into the agent(s) detected under ``root``. Never raises.
+def install_skills(
+    root: Path,
+    *,
+    skills: Sequence[str] | None = None,
+    targets: Sequence[str] | None = None,
+    scope_global: bool = False,
+    dry_run: bool = False,
+) -> SkillReport:
+    """Copy the named skills into the target directories under ``root`` (or ``$HOME``).
 
-    Runs ``npx skills add`` with ``cwd=root`` so the skill and its
-    ``skills-lock.json`` land in the workspace, then gitignores the per-machine
-    skill directories. ``agents`` narrows the install to named coding agents
-    (``--agent``, repeatable); ``None`` keeps npx's auto-detect. ``quiet``
-    captures npx's output instead of inheriting the terminal, for machine-readable
-    callers whose stdout must stay clean.
+    Every file is compared before it is written, so a re-install reports
+    ``unchanged`` and leaves mtimes alone — the command is safe to run from a
+    session hook. ``dry_run`` reports the same writes without touching disk.
+    Project scope also gitignores the skill directories: they are reproducible
+    from the installed khub, so committing them would be committing a copy.
     """
     from khub.core.workspace import _append_gitignore
 
-    cmd = skill_command(agents)
-    if shutil.which("npx") is None:
-        return SkillOutcome(action="skipped-no-npx", command=cmd)
+    source = skills_dir()
+    wanted = list(skills) if skills else available_skills()
+    _reject_unknown(wanted, available_skills(), "skill")
+    chosen = list(targets) if targets else list(TARGETS)
+    _reject_unknown(chosen, list(TARGETS), "target")
+
+    base = Path.home() if scope_global else root
+    writes: list[SkillWrite] = []
+    for target in chosen:
+        project_dir, home_dir = TARGETS[target]
+        dest_root = base / (home_dir if scope_global else project_dir)
+        for name in wanted:
+            writes.extend(_sync_skill(source / name, dest_root / name, base, dry_run))
+        if not scope_global and not dry_run:
+            # Project scope only: a home directory is not a git repo.
+            _append_gitignore(root / ".gitignore", f"{project_dir}/")
+
+    return SkillReport(
+        scope="global" if scope_global else "project",
+        skills=wanted,
+        writes=writes,
+        dry_run=dry_run,
+    )
+
+
+def _sync_skill(src: Path, dest: Path, base: Path, dry_run: bool) -> list[SkillWrite]:
+    """Copy one skill directory, reporting an action per file."""
+    writes: list[SkillWrite] = []
+    for item in sorted(p for p in src.rglob("*") if p.is_file()):
+        target = dest / item.relative_to(src)
+        payload = item.read_bytes()
+        if not target.exists():
+            action = "created"
+        elif target.read_bytes() == payload:
+            action = "unchanged"
+        else:
+            action = "updated"
+        if not dry_run and action != "unchanged":
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(payload)
+        writes.append(SkillWrite(path=_display(target, base), action=action))
+    return writes
+
+
+def _display(path: Path, base: Path) -> str:
+    """Workspace-relative where possible; absolute under --global."""
     try:
-        completed = subprocess.run(cmd, cwd=root, capture_output=quiet, text=quiet)
-    except OSError as exc:
-        # npx resolved on PATH but exec still failed (Windows .cmd, stale/broken entry).
-        return SkillOutcome(action="failed", command=cmd, detail=str(exc))
-    if completed.returncode != 0:
-        # Under `quiet` npx's streams were captured, so carry them out; otherwise the
-        # user already saw them on the inherited terminal and `detail` stays empty.
-        captured = "".join(filter(None, (completed.stderr, completed.stdout))) if quiet else ""
-        return SkillOutcome(action="failed", command=cmd, detail=captured.strip())
-    gitignore = root / ".gitignore"
-    for pattern in _SKILL_ARTIFACT_DIRS:
-        _append_gitignore(gitignore, pattern)
-    return SkillOutcome(action="installed", command=cmd)
+        return str(path.relative_to(base))
+    except ValueError:
+        return str(path)
+
+
+def _reject_unknown(given: Sequence[str], known: Sequence[str], kind: str) -> None:
+    unknown = [g for g in given if g not in known]
+    if unknown:
+        raise LocatedError(
+            code=f"unknown_{kind}",
+            message=(
+                f"Unknown {kind}: {', '.join(sorted(unknown))}. "
+                f"Known {kind}s: {', '.join(known)}"
+            ),
+        )

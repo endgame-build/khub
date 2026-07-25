@@ -8,7 +8,7 @@ allowed-tools: Bash
 
 khub gives you typed, validated, queryable context held as Markdown in git. In a khub workspace (any directory with a `.khub/` above it), prefer khub over reading or grepping files: it returns typed records and enforces the schema on every write. The core library is the only place logic lives; this skill maps your intent onto the CLI and adds none.
 
-If `khub` is not installed (`command not found`), run the `/khub:setup` skill first.
+If `khub` is not installed (`command not found`), load the `setup` skill first — it installs the CLI and sets up the project.
 
 ## Discover the ontology first
 

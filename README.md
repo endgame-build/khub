@@ -74,29 +74,26 @@ A preset is a canonical ontology for one domain — a directory holding its `sch
 
 **`firm-ops` ships today**: the HQ operations ontology (client, project, person, opportunity, meeting, and more); see [`docs/firm-ops-preset.md`](docs/firm-ops-preset.md). Engineering, consulting, and research presets are planned. New to khub? Start with [`docs/getting-started.md`](docs/getting-started.md).
 
-## Use it from Claude Code
+## Agent skills
 
-khub ships as a Claude Code plugin from this repo, so an agent can install and drive it:
+khub ships two skills: `khub` (the read and write verbs) and `setup` (install the CLI, set up a project). They work in Claude Code, opencode, Cursor, Codex, Gemini CLI, and any other agent that reads a `SKILL.md`.
 
-```
-/plugin marketplace add git@github.com:endgame-build/khub.git
-/plugin install khub@khub
-/khub:setup      # installs the CLI, then sets up this project (khub init or khub wire)
-```
+**Option 1 — the CLI, then its skills.** A file copy out of the installed package: offline, no Node, safe to re-run.
 
-The `khub` skill maps agent intent onto the read and write verbs; `/khub:setup` bootstraps the CLI and sets up the current project.
-
-The skill is not Claude-only. For Cursor, Codex, Gemini CLI, and ~70 other agents, `khub install-skills` installs it via [`npx skills`](https://skills.sh) (add `--agent <name>` to target one, `--dry-run` to preview):
-
-```
+```bash
+uv tool install git+ssh://git@github.com/endgame-build/khub@v0.9.1
 khub install-skills
 ```
 
-Without khub on PATH, run the same install directly:
+That writes both skills into `.claude/skills/`, `.agents/skills/`, and `.opencode/skills/`, and gitignores them (they are reproducible from the CLI). Narrow it with `--target claude|agents|opencode` or `--skill khub|setup`; `--global` installs into your home directories instead, once per machine; `--dry-run` shows the writes first.
 
+**Option 2 — let an agent do it.** Installs the `setup` skill, which tells the agent how to install the CLI and set up the project. Needs Node, network, and read access to this repo:
+
+```bash
+npx skills add git@github.com:endgame-build/khub.git -s setup
 ```
-npx skills add git@github.com:endgame-build/khub.git -s khub -s setup
-```
+
+Use option 2 on a machine with no khub yet; option 1 is what you re-run afterwards.
 
 **Status:** v1 engine shipped and proven on a live corpus (the firm-hq cutover: the incumbent scripts retired). Design rationale in [`docs/design-memo.md`](docs/design-memo.md); the collections row model in [`docs/collections-design.md`](docs/collections-design.md).
 

@@ -36,7 +36,7 @@ $ khub [OPTIONS] COMMAND [ARGS]...
 * `viz`: Render the typed graph to a self-contained...
 * `backfill`: Backfill missing dates and frontmatter:...
 * `wire`: Wire the workspace into agent context...
-* `install-skills`: Install the khub agent skill: khub...
+* `install-skills`: Install khub&#x27;s agent skills: khub...
 * `schema`: Introspect the active schema.
 
 ## `khub init`
@@ -440,7 +440,7 @@ $ khub wire [OPTIONS]
 
 ## `khub install-skills`
 
-Install the khub agent skill: khub install-skills [--agent claude-code] [--dry-run].
+Install khub&#x27;s agent skills: khub install-skills [--target agents] [--global].
 
 **Usage**:
 
@@ -450,9 +450,11 @@ $ khub install-skills [OPTIONS]
 
 **Options**:
 
-* `--agent TEXT`: Install for this coding agent (repeatable). Omitted: npx auto-detects.
-* `--dry-run`: Print the npx command that would run, and run nothing.
-* `--format TEXT`: text or json (emits the outcome).  [default: text]
+* `--target TEXT`: claude, agents, or opencode (repeatable). Default: all three.
+* `--skill TEXT`: Which skill to install (repeatable). Default: all shipped.
+* `--global`: Install into the home directories instead of this workspace.
+* `--dry-run`: Report what would be written, and write nothing.
+* `--format TEXT`: text (Rich table on a TTY) or json.  [default: text]
 * `--help`: Show this message and exit.
 
 ## `khub schema`

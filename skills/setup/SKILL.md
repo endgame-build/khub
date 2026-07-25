@@ -1,6 +1,6 @@
 ---
 name: setup
-description: Install the khub CLI and set up the current project for agent use. Use when khub commands are unavailable (command not found), or to set khub up in a repository. Invocable as /khub:setup.
+description: Install the khub CLI and set up the current project for agent use. Use when khub commands are unavailable (command not found), or to set khub up in a repository.
 user-invocable: true
 allowed-tools: Bash
 ---
@@ -33,11 +33,13 @@ If `uv` or Python 3.11+ is missing, report the prerequisite error and stop; inst
 khub init firm-ops ./my-hub && cd my-hub
 ```
 
-Then install the agent skill into this project (a separate step since 0.9.0 — it needs `npx` and SSH access, which a scaffold must not depend on):
+Then install khub's agent skills into this project — a file copy out of the installed package, so it needs no network:
 
 ```bash
 khub install-skills
 ```
+
+That writes both skills into `.claude/skills/`, `.agents/skills/`, and `.opencode/skills/`, and gitignores them (they are reproducible from the CLI). `--target <name>` narrows it; `--global` installs into your home directories instead, once per machine.
 
 **Workspace already present** (a cloned engagement repo)? Do not re-scaffold; just wire it:
 
@@ -46,6 +48,8 @@ khub wire
 ```
 
 `wire` injects a managed block into the workspace's agent files (`CLAUDE.md` imports the schema via `@.khub/schema.yaml`; `AGENTS.md` points at the schema file) plus the command surface, so an agent reasons in the ontology even without running khub. Bare `wire` updates whichever files exist; `khub wire --target claude|agents|both` creates a specific one. Re-run after the schema changes; the block updates in place.
+
+Run `khub install-skills` here too, so this workspace carries the skills.
 
 ## Next
 

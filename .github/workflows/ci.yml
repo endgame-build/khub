@@ -27,3 +27,15 @@ jobs:
         run: |
           uv run typer --app app khub.cli.main utils docs --name khub --output docs/cli-reference.md
           git diff --exit-code docs/cli-reference.md
+      # The suite cannot catch this: `skills_dir()` falls back to the repo's
+      # skills/ in a dev checkout, so a broken force-include leaves every test
+      # green while the built wheel ships without skills. Only a build shows it.
+      - name: Wheel carries the skills
+        run: |
+          uv build
+          python3 -c "
+          import glob, zipfile
+          names = zipfile.ZipFile(glob.glob('dist/*.whl')[0]).namelist()
+          for want in ('khub/skills/khub/SKILL.md', 'khub/skills/setup/SKILL.md'):
+              assert want in names, f'{want} missing from wheel'
+          print('wheel carries both skills')"

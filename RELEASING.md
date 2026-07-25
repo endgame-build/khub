@@ -15,4 +15,4 @@ uv tool install git+ssh://git@github.com/endgame-build/khub@vX.Y.Z
 uvx --from git+ssh://git@github.com/endgame-build/khub@vX.Y.Z khub init firm-ops ./my-hub
 ```
 
-The khub Claude Code plugin pins the same tag in `plugin/skills/setup/SKILL.md`; bump it there when you cut a release so `/khub:setup` installs the matching version.
+The `setup` skill pins the same tag in `skills/setup/SKILL.md`; bump it there when you cut a release so an agent following that skill installs the matching version.

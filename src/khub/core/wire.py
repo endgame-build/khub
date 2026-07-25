@@ -94,8 +94,8 @@ def build_block(
             "never blocked; `--draft` marks an entity unpublished.",
             "- Every read takes `--format json` for machine-readable output.",
             "",
-            "Not installed? Run `/khub:setup`, or "
-            "`uv tool install git+ssh://git@github.com/endgame-build/khub`.",
+            "Not installed? `uv tool install git+ssh://git@github.com/endgame-build/khub`, "
+            "then `khub install-skills`.",
             END,
         ]
     )
