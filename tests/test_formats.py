@@ -149,6 +149,14 @@ def test_fts_body_joins_scalar_strings() -> None:
         "tags": ["a", "b"],  # lists excluded
     }
     joined = fts_body(meta, "prose here", "json")
-    assert "prose here" in joined and "Zeppelin" in joined and "example.com" in joined
+    assert "prose here" in joined and "example.com" in joined
     assert "fragment" not in joined and "True" not in joined
-    assert fts_body(meta, "prose only", "md") == "prose only"
+    # `name`/`title` already populate the dedicated FTS `title` column; folding them in
+    # here counted every title twice in BM25 and let a snippet excerpt frontmatter as prose.
+    assert "Zeppelin" not in joined
+    # Since 0.13.0 md follows the same rule: an entity is findable by its attribute
+    # values, not just its prose. Before, this returned the body alone and `search`
+    # could not reach frontmatter on the one format every preset uses by default.
+    md = fts_body(meta, "prose only", "md")
+    assert "prose only" in md and "example.com" in md
+    assert "fragment" not in md and "True" not in md and "['a', 'b']" not in md

@@ -14,7 +14,7 @@ Install the khub CLI on this machine, then set up the current project so any age
 khub needs `uv` and Python 3.11+. Install the pinned release from the private repo (SSH key, or HTTPS with a token):
 
 ```bash
-uv tool install git+ssh://git@github.com/endgame-build/khub@v0.12.0
+uv tool install git+ssh://git@github.com/endgame-build/khub@v0.14.1
 ```
 
 Then confirm it resolves:

@@ -94,13 +94,26 @@ def _type_table(view: dict[str, Any]) -> Table:
     table.add_column("type")
     table.add_column("required")
     table.add_column("enum")
+    table.add_column("notes")
     for f in view["fields"]:
+        notes = []
+        if f.get("pattern"):
+            notes.append(f"pattern {f['pattern']}")
+        if f.get("default") is not None:
+            notes.append(f"default {f['default']}")
         table.add_row(
-            f["name"], f["type"], "✓" if f["required"] else "", ", ".join(f["enum"] or [])
+            f["name"], f["type"], "✓" if f["required"] else "", ", ".join(f["enum"] or []),
+            "; ".join(notes),
         )
     for r in view["relations"]:
+        notes = []
+        if r.get("inverse"):
+            notes.append(f"inverse {r['inverse']}")
+        if r.get("acyclic"):
+            notes.append("acyclic")
         table.add_row(
-            r["predicate"], "→ " + ", ".join(r["to"]), "✓" if r["required"] else "", r["kind"]
+            r["predicate"], "→ " + ", ".join(r["to"]), "✓" if r["required"] else "", r["kind"],
+            "; ".join(notes),
         )
     return table
 
@@ -112,12 +125,19 @@ def _edges_table(edges: list[dict[str, Any]]) -> Table:
     table.add_column("to")
     table.add_column("card")
     table.add_column("required")
+    table.add_column("notes")
     for e in edges:
+        notes = []
+        if e.get("inverse"):
+            notes.append(f"inverse {e['inverse']}")
+        if e.get("acyclic"):
+            notes.append("acyclic")
         table.add_row(
             e["predicate"],
             ", ".join(e["from"]),
             ", ".join(e["to"]),
             "many" if e["many"] else "one",
             "✓" if e["required"] else "",
+            "; ".join(notes),
         )
     return table

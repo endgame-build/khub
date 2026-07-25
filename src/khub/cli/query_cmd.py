@@ -77,6 +77,7 @@ def _record(m: Match) -> dict[str, Any]:
         "id": f"{m.type}/{m.slug}",
         "type": m.type,
         "slug": m.slug,
+        "title": m.title,
         "draft": m.draft,
         "orphan": m.orphan,
         "stale": m.stale,
@@ -85,8 +86,10 @@ def _record(m: Match) -> dict[str, Any]:
 
 def _table(records: list[dict[str, Any]]) -> Table:
     table = Table(title="query")
-    for col in ("id", "type", "draft", "orphan", "stale"):
+    for col in ("id", "type", "title", "draft", "orphan", "stale"):
         table.add_column(col)
     for r in records:
-        table.add_row(r["id"], r["type"], str(r["draft"]), str(r["orphan"]), str(r["stale"]))
+        table.add_row(
+            r["id"], r["type"], r["title"], str(r["draft"]), str(r["orphan"]), str(r["stale"])
+        )
     return table

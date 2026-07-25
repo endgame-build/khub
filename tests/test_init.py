@@ -188,7 +188,10 @@ def test_cli_nonempty_target_message(tmp_path: Path) -> None:
     (target / "stray.txt").write_text("keep me")
     result = runner.invoke(app, ["init", "firm-ops", str(target)])
     assert result.exit_code == 1
-    assert f"Target {target} is not empty. Pass --force to scaffold anyway" in result.output
+    # Adding khub to an existing repo is the common case; --force must not read as
+    # "overwrite my repo", so the message states that nothing already there is touched.
+    assert f"Target {target} is not empty" in result.output
+    assert "scaffold alongside the existing files; no file already there is modified" in result.output
     assert (target / "stray.txt").read_text() == "keep me"
 
 
@@ -199,7 +202,7 @@ def test_cli_nonempty_target_message(tmp_path: Path) -> None:
 def test_cli_scaffold_firm_ops(tmp_path: Path) -> None:
     """TS-WS-001-01 (AC-001): a clean firm-ops scaffold compiles and confirms."""
     target = tmp_path / "hq"
-    result = runner.invoke(app, ["init", "firm-ops", str(target), "--no-wire"])
+    result = runner.invoke(app, ["init", "firm-ops", str(target), "--no-wire"], env={"FORCE_COLOR": "1"})
     assert result.exit_code == 0, result.output
     assert f"Initialized firm-ops workspace at {target}" in result.output
     head = (target / ".khub" / "schema.yaml").read_text().splitlines()[0]
@@ -271,7 +274,7 @@ def test_reinit_empty_workspace_is_not_a_cutover(tmp_path: Path) -> None:
     target = tmp_path / "hq"
     runner.invoke(app, ["init", "firm-ops", str(target), "--no-wire"])
     result = runner.invoke(
-        app, ["init", "firm-ops", str(target), "--force", "--no-wire"]
+        app, ["init", "firm-ops", str(target), "--force", "--no-wire"], env={"FORCE_COLOR": "1"}
     )
     assert result.exit_code == 0, result.output
     assert "entity files modified" not in result.output
@@ -288,7 +291,7 @@ def test_cli_force_seed_modifies_no_entities(tmp_path: Path) -> None:
     corpus.write_text("---\ntype: client\nname: Acme\ncreated: 2025-01-01\n---\n")
     before = corpus.read_bytes()
     result = runner.invoke(
-        app, ["init", "firm-ops", str(target), "--force", "--no-wire"]
+        app, ["init", "firm-ops", str(target), "--force", "--no-wire"], env={"FORCE_COLOR": "1"}
     )
     assert result.exit_code == 0, result.output
     assert "Initialized firm-ops workspace; 0 entity files modified" in result.output

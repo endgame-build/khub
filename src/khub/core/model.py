@@ -94,6 +94,8 @@ class ResolvedType:
     orphan: bool = False
     # See TypeDecl.id_prefix: `add` mints `<prefix>-NNN-<slug>` when this is set.
     id_prefix: IdPrefix | None = None
+    # See TypeDecl.when: the moment to capture this type, in domain language.
+    when: str | None = None
 
     @property
     def collection_relpath(self) -> str:

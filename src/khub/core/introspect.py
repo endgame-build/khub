@@ -64,24 +64,36 @@ def schema_view(resolved: ResolvedSchema, provenance: dict[str, str]) -> dict[st
     }
 
 
+def _signature(rel: ResolvedRelation) -> tuple[Any, ...]:
+    """Everything that makes one declaration of a predicate distinct from another."""
+    return (rel.predicate, rel.targets, rel.kind, rel.many, rel.required, rel.inverse, rel.acyclic)
+
+
 def edges_view(resolved: ResolvedSchema) -> list[dict[str, Any]]:
-    """The relation vocabulary aggregated by predicate, with from/to/cardinality."""
+    """The relation vocabulary: one row per DISTINCT declaration, with from/to/cardinality.
+
+    Keying rows by predicate NAME alone is lossy in a way that actively misleads. build-lite
+    declares `supersedes` on adr (→ adr) and on feature-spec (→ feature-spec); one row makes
+    `from` × `to` a cross product, advertising `feature-spec --supersedes--> adr` — an edge
+    `validate` rejects. Merging the targets does not help: it just adds the reverse claim
+    too. So a row is keyed by the whole declaration, and only types that declare a predicate
+    IDENTICALLY share one. Nothing is merged, so nothing can be misreported.
+    """
     # Base (universal) predicates apply to every type — their source is `any`.
-    edges: dict[str, dict[str, Any]] = {}
-    for predicate, rel in resolved.base_relations.items():
-        edges[predicate] = _edge(rel, sources=["any"])
-    # Type-declared predicates accumulate their declaring types as `from`.
-    sources: dict[str, set[str]] = {}
+    rows: dict[tuple[Any, ...], dict[str, Any]] = {
+        _signature(rel): _edge(rel, sources=["any"]) for rel in resolved.base_relations.values()
+    }
+    sources: dict[tuple[Any, ...], set[str]] = {}
     for tname, rtype in resolved.types.items():
         for predicate, rel in rtype.relations.items():
             if predicate in resolved.base_relations:
                 continue
-            sources.setdefault(predicate, set()).add(tname)
-            edge = edges.setdefault(predicate, _edge(rel, sources=[]))
-            edge["required"] = edge["required"] or rel.required
-    for predicate, srcs in sources.items():
-        edges[predicate]["from"] = sorted(srcs)
-    return [edges[p] for p in sorted(edges)]
+            sig = _signature(rel)
+            sources.setdefault(sig, set()).add(tname)
+            rows.setdefault(sig, _edge(rel, sources=[]))
+    for sig, srcs in sources.items():
+        rows[sig]["from"] = sorted(srcs)
+    return [rows[s] for s in sorted(rows, key=lambda s: (str(s[0]), str(s[1])))]
 
 
 def _type_view(rtype: ResolvedType) -> dict[str, Any]:
@@ -96,12 +108,19 @@ def _type_view(rtype: ResolvedType) -> dict[str, Any]:
         # sweep, and would read `khub check`'s silence as a bug.
         "required": rtype.required,
         "orphan": rtype.orphan,
+        # The capture trigger: an agent that knows the shape still has to recognise the
+        # moment, and that is per-domain knowledge only the schema can carry.
+        "when": rtype.when,
+        # `pattern` and `default` are enforced (write-time validation, schema defaults)
+        # but were invisible here, so an agent could not tell why a value was rejected.
         "fields": [
             {
                 "name": a.name,
                 "type": a.base_type,
                 "required": a.required,
                 "enum": list(a.enum) if a.enum else None,
+                "pattern": a.pattern,
+                "default": a.default,
             }
             for a in rtype.attributes.values()
         ],
@@ -116,6 +135,11 @@ def _relation_view(rel: ResolvedRelation) -> dict[str, Any]:
         "kind": rel.kind,
         "many": rel.many,
         "required": rel.required,
+        # Both are enforced and both were undiscoverable: `acyclic` decides whether
+        # `check` reports a cycle, and `inverse` names a predicate that is never stored
+        # yet is queryable (`--missing superseded`) and appears in `get --edges`.
+        "inverse": rel.inverse,
+        "acyclic": rel.acyclic,
     }
 
 
@@ -127,5 +151,7 @@ def _edge(rel: ResolvedRelation, *, sources: list[str]) -> dict[str, Any]:
         "kind": rel.kind,
         "many": rel.many,
         "required": rel.required,
+        "inverse": rel.inverse,
+        "acyclic": rel.acyclic,
         "derived": False,
     }

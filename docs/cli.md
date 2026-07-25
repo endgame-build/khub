@@ -9,7 +9,7 @@ The CLI is a thin, schema-introspecting adapter over the core library's verbs (c
 | Option | Meaning |
 |---|---|
 | `-C, --workspace <path>` | Operate on this workspace instead of the working directory. Default: the nearest `.khub/` above the working directory. Given a path, khub resolves the nearest `.khub/` at or above it. |
-| `--format <json\|table>` | Output shape for read commands. Default: table on a TTY, json otherwise. Some commands add `ids`, `raw`, or `tree`. |
+| `--format <json\|table>` | Output shape. Default: table on a TTY, json otherwise — for **reads and writes alike**. Some commands add `ids`, `raw`, or `tree`. The operator commands (`reindex`, `viz`, `backfill`, `wire`) print prose and take no `--format`. |
 | `--version` | Print the khub version and exit. |
 | `--help` | Show help. |
 
@@ -31,7 +31,7 @@ exit 2 and stays plain text.
 
 ### JSON record shape
 
-Every JSON record that identifies an entity carries the qualified `id` = `"type/slug"` plus separate `type` and `slug` keys, uniform across `query`, `search`, `add`, `get`, `edit`, `neighbors`, `impact`, `history`, `stale`, and the `validate`/`check` error rows. For example, `khub get initech-pov --format json` emits `{"id": "opportunity/initech-pov", "type": "opportunity", "slug": "initech-pov", …}`. (`check`'s `orphans` are qualified `type/slug`; `strays` are file paths, `path` or `path#slug`.)
+Every JSON record that identifies an entity carries the qualified `id` = `"type/slug"` plus separate `type` and `slug` keys, uniform across `query`, `search`, `add`, `get`, `edit`, `link`, `unlink`, `remove`, `neighbors`, `impact`, `history`, `stale`, and the `validate`/`check` error rows. Writes obey the same output gate as reads: JSON on a pipe or under `--format json`, prose only on a TTY. For example, `khub get initech-pov --format json` emits `{"id": "opportunity/initech-pov", "type": "opportunity", "slug": "initech-pov", …}`. (`check`'s `orphans` are qualified `type/slug`; `strays` are file paths, `path` or `path#slug`.)
 
 ## Validation and open schema
 
@@ -40,7 +40,7 @@ khub validates the **schema-declared subset** of an entity and leaves everything
 1. **Declared fields are enforced.** Any present field the schema knows is checked against its type, enum, pattern, and cardinality. A malformed value, or a relation to a non-existent target, is rejected on write.
 2. **`required` is a completeness gate.** A missing required field or relation does not reject the write; the entity is still saved, active by default. Capture is never blocked. `check` enforces required-completeness over the `active` subgraph and reports an active-but-incomplete entity.
 3. **Extensions are free.** Any key the schema does not declare is accepted with any value, validated against nothing, and preserved verbatim on round-trip.
-4. **`--strict` closes the schema.** `validate --strict` (and `add`/`edit --strict`) rejects unknown keys, for when a closed contract is wanted.
+4. **`--strict` closes the schema.** `validate --strict` (and `add`/`edit --strict`) rejects unknown keys, for when a closed contract is wanted. Run `validate --strict` in CI: by rule 3 a typo'd field name is captured silently and no default gate reports it.
 5. **Templated types hold their body shape.** When `.khub/templates/<type>.yaml` exists, `validate` requires the template's section headings in every instance body as an ordered subsequence (extras allowed) — reported as a `body` finding, never blocking a write. `check` additionally reports a `required: true` singleton whose file is absent.
 
 ### Write semantics
@@ -63,7 +63,7 @@ A single malformed entity file (a broken frontmatter fence, unparseable YAML) no
 
 ### Entity formats
 
-A type stores its entities as `md` (the default: YAML frontmatter + prose body), `json`, or `yaml`, per-type schema config (`format:` next to `layout:`/`path:`). A json/yaml entity is a single mapping: pure metadata, with prose carried in a reserved `body` field. `--body`/`--body-file` write it, `get` returns it as the body, an empty body writes no key, and the key never appears in `frontmatter` output or query filters. `search` indexes non-md entities over the body field plus every scalar string field. `gjson` is not supported; the schema rejects it.
+A type stores its entities as `md` (the default: YAML frontmatter + prose body), `json`, or `yaml`, per-type schema config (`format:` next to `layout:`/`path:`). A json/yaml entity is a single mapping: pure metadata, with prose carried in a reserved `body` field. `--body`/`--body-file` write it, `get` returns it as the body, an empty body writes no key, and the key never appears in `frontmatter` output or query filters. `search` indexes every entity over its body plus every scalar string field, in all formats. `gjson` is not supported; the schema rejects it.
 
 ### Collections
 
@@ -76,7 +76,7 @@ A type stores its entities as `md` (the default: YAML frontmatter + prose body),
 | `khub init <preset> [path=.]` | `--preset-source <path>`, `--name <name>`, `--force`, `--no-wire`, `--format <text\|json>` (json emits resolved provenance) | scaffold a workspace from a preset directory (`schema.yaml` + `templates/`), flatten templates to `.khub/templates/`, create missing md singletons from their templates (creations only), then wire the selected agent files. `--no-wire` skips the tail. Prints the `khub install-skills` hint (`skill_hint` in the JSON payload); installs nothing. Re-running over an existing workspace preserves anything workspace-owned (`.khub/schema.yaml`, `.khub/config.yaml`, `.khub/templates/*.yaml`) and reports it as `preserved`; only genuinely missing files are recreated. Refreshing from a newer preset is an upgrade, not a scaffold |
 | `khub schema` | `--format` | the full effective schema: types, fields, enums, relations, layout/format/nesting per type, and provenance (source preset + version) |
 | `khub schema types` | `--format` | type list (view of the above) |
-| `khub schema show <type>` | `--format` | one type's fields, enums, required, relations, layout (view) |
+| `khub schema show <type>` | `--format` | one type's fields, enums, required, relations, layout, and `when` — the moment to capture it (view) |
 | `khub schema edges` | `--format` | the relation vocabulary (view) |
 | `khub status` | `--format` | counts per type, draft vs active, orphan and stale counts, OKF-conformance flag (projectable-to-OKF) |
 
@@ -84,19 +84,19 @@ A type stores its entities as `md` (the default: YAML frontmatter + prose body),
 
 | Command | Args and options | Does |
 |---|---|---|
-| `khub add <type>` | `--<field> <value>` (repeatable; schema or extension), `--id <slug>`, `--draft`, `--body <text>`, `--body-file <path>` (`-` for stdin; not both), `--no-template`, `--strict`, `--format text\|json` (emits the written record) | mint an id — `<prefix>-NNN-<slug>` where the type declares `id_prefix`, else `NNN-<slug>`; an explicit `--id` is used verbatim — write a well-formed entity (active by default; `--draft` marks it unpublished); a templated md type seeds its body from `.khub/templates/<type>.yaml`; a singleton's slug is its type name; print its id |
+| `khub add <type>` | `--<field> <value>` (repeatable; schema or extension), `--id <slug>`, `--draft`, `--body <text>`, `--body-file <path>` (`-` for stdin; not both), `--no-template` (refused on a type that has a template — it would create an entity `validate` rejects), `--strict`, `--format text\|json` (emits the written record) | mint an id — `<prefix>-NNN-<slug>` where the type declares `id_prefix`, else `NNN-<slug>`; an explicit `--id` is used verbatim — write a well-formed entity (active by default; `--draft` marks it unpublished); a templated md type seeds its body from `.khub/templates/<type>.yaml`; a singleton's slug is its type name; print its id |
 | `khub get <id>` | `--format json\|table\|raw`, `--edges` | print an entity; `--edges` includes derived inverse edges |
 | `khub edit <id> <field> <value>` | or `--<field> <value>` (repeatable), `--body <text>` (`''` clears) / `--body-file` (not both), `--strict`, `--format text\|json` (emits the updated record) | edit fields, bump `updated`, re-validate |
-| `khub remove <id>` | `--force` | delete an entity; refuses while an inbound edge resolves to it, unless `--force`, `--format` |
-| `khub link <id> <predicate> <target>` | | add a schema-checked relation |
-| `khub unlink <id> <predicate> <target>` | | remove a relation |
+| `khub remove <id>` | `--force`, `--format text\|json` (emits the removed record) | delete an entity; refuses while an inbound edge resolves to it, unless `--force` |
+| `khub link <id> <predicate> <target>` | `--format text\|json` (emits the edge record) | add a schema-checked relation; idempotent, so read `changed` to tell a write from a no-op |
+| `khub unlink <id> <predicate> <target>` | `--format text\|json` (emits the edge record) | remove a relation; idempotent, same `changed` key |
 
 ## Lookup
 
 | Command | Args and options | Does |
 |---|---|---|
-| `khub query` | `--type <t>`, `--draft` / `--active`, `--orphan`, `--stale`, `--<field> <value>`, `--tag <tag>`, `--has <pred>`, `--missing <pred>`, `--limit <n>`, `--format json\|table\|ids` | filter entities by frontmatter; includes drafts and carries `orphan`/`stale` flags by default; `--missing` surfaces gaps |
-| `khub search <text>` | `--type <t>`, `--limit <n=20>`, `--format text\|json\|ids` | full-text over title and body (SQLite FTS5, BM25-ranked, in-memory projection built per call, never stale). Raw MATCH syntax passes through: terms, `"phrases"`, `OR`, `NEAR`, `prefix*`. Records add `title`, `score` (lower = better), `snippet`, `path` to the uniform id keys, no `draft`/`orphan`/`stale` flags on this command |
+| `khub query` | `--type <t>`, `--draft` / `--active`, `--orphan`, `--stale`, `--<field> <value>`, `--tag <tag>`, `--has <name>`, `--missing <name>`, `--limit <n>`, `--format json\|table\|ids` | filter entities by frontmatter; includes drafts and carries `title` plus `orphan`/`stale` flags by default. `--has`/`--missing` take a relation, a declared inverse, OR an attribute — for an attribute, absent/null/empty counts as missing, so `--missing repo` surfaces the gap |
+| `khub search <text>` | `--type <t>`, `--limit <n=20>`, `--format text\|json\|ids` | full-text over title, body, and every scalar frontmatter value (SQLite FTS5, BM25-ranked, in-memory projection built per call, never stale). Raw MATCH syntax passes through: terms, `"phrases"`, `OR`, `NEAR`, `prefix*`. Records add `title`, `score` (lower = better), `snippet`, `path` to the uniform id keys, no `draft`/`orphan`/`stale` flags on this command |
 
 ## Traversal
 
@@ -111,7 +111,7 @@ A type stores its entities as `md` (the default: YAML frontmatter + prose body),
 | Command | Args and options | Does |
 |---|---|---|
 | `khub validate [target=all]` | `--strict`, `--format` | per-entity well-formedness and referential integrity over the declared subset (default: whole workspace). Never writes — repairing a missing date is `khub backfill` |
-| `khub check` | `--strict`, `--format` | graph-wide: relations resolve, required-completeness for `active`, no stray files (non-entities inside a type layout; reference docs outside type layouts are skipped), no edge cycles. Orphans (zero relations) are always reported but fail the gate only under `--strict`: a fully disconnected entity can be legitimate (a dormant client whose engagements were archived). A type declaring `orphan: true` in the schema is exempt from the sweep entirely — edge-less is its expected state, so it is never reported and never fails `--strict` (build-hub's narrative singletons declare it; without it a freshly scaffolded workspace could not pass `--strict` at all). The same rule governs `query --orphan` and the `status` orphan count. `--format json` reports `strict` so a consumer can tell an informational orphan list from the reason the gate failed |
+| `khub check` | `--strict`, `--format` | graph-wide: relations resolve, required-completeness for `active`, no stray files (non-entities inside a type layout; reference docs outside type layouts are skipped), no edge cycles. Orphans (zero relations) are always reported but fail the gate only under `--strict`: a fully disconnected entity can be legitimate (a dormant client whose engagements were archived). A type declaring `orphan: true` in the schema is exempt from the sweep entirely — edge-less is its expected state, so it is never reported and never fails `--strict` (build-hub's narrative singletons declare it; without it a freshly scaffolded workspace could not pass `--strict` at all). The same rule governs `query --orphan` and the `status` orphan count. `--format json` reports `strict` so a consumer can tell an informational orphan list from the reason the gate failed. Singletons are reported in two disjoint lists: `missing_singletons` (a `required: true` type with no file) and `draft_singletons` (any singleton present but unpublished — including a non-required one, which otherwise leaves the active subgraph with no signal at all). Only `draft_required_singletons`, the subset of the latter, fails the gate |
 | `khub stale` | `--days <n>` (default: the workspace `stale_days`, 90 in firm-ops), `--format` | entities past an `updated` threshold; dates backfilled from `git log` |
 
 ## Projection and output

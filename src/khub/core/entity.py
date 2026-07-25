@@ -38,7 +38,7 @@ from typing import Any
 
 from khub.core import formats
 from khub.core.errors import LocatedError
-from khub.core.index import Index, build_index, resolve_target
+from khub.core.index import Index, build_index, canonical_slug, resolve_target
 from khub.core.introspect import load_schema
 from khub.core.model import ResolvedAttribute, ResolvedRelation, ResolvedSchema, ResolvedType
 from khub.core.template import load_template
@@ -168,12 +168,24 @@ def create(
     # starts from the scaffold (--no-template / use_template=False opts out).
     # A broken template never blocks capture — seed nothing and let `validate`
     # report the template itself.
-    if use_template and not body.strip() and rtype.storage.fmt == "md":
+    if not body.strip() and rtype.storage.fmt == "md":
         try:
             tpl = load_template(root, type_)
         except Exception:  # noqa: BLE001 — validate carries the template finding
             tpl = None
-        if tpl is not None:
+        if tpl is not None and tpl.sections:
+            if not use_template:
+                # --no-template on a templated type produced an entity `validate` rejects
+                # on its very next run ("missing or out-of-order section '## X'"): a
+                # documented flag whose only outcome was a red workspace. Refuse instead.
+                raise LocatedError(
+                    code="template_required",
+                    message=(
+                        f"Type '{type_}' has a body template, so --no-template would create "
+                        f"an entity `khub validate` rejects. Omit the flag, or pass --body "
+                        f"with the template's sections"
+                    ),
+                )
             body = tpl.render()
     body = _md_normalized(body, rtype)
 
@@ -537,17 +549,49 @@ def get(root: Path, id_: str, *, edges: bool = False) -> EntityView:
     )
 
 
+def _same_target(a: str, b: str) -> bool:
+    """Two target spellings naming one node. Case-insensitive, because lookup is."""
+    return a.casefold() == b.casefold()
+
+
+def _canonical_target(target: str, matches: set[tuple[str, str]]) -> str:
+    """The spelling to STORE for a resolved target, preserving the caller's qualified form.
+
+    Resolution folds case, so storing the caller's raw string let ``CMP-001-Api`` and
+    ``cmp-001-api`` sit side by side as two parallel edges to ONE node, each reporting
+    ``changed: true`` — and made an ``unlink`` of the other spelling a silent no-op. One
+    node, one stored value.
+    """
+    if len(matches) != 1:
+        return target
+    ttype, tslug = next(iter(matches))
+    return f"{ttype}/{tslug}" if "/" in target else tslug
+
+
 def resolve_id(index: Index, id_: str) -> tuple[str, str]:
     """Resolve a bare slug (or qualified ``type/slug``) to one ``(type, slug)`` node.
 
     A bare slug shared by two types is ambiguous; a ``type/slug`` qualifier is exact.
+
+    Case is resolved leniently as a fallback (see ``canonical_slug``): writes slugify to
+    lowercase, so an agent that reuses the ``--id`` it passed must still be able to read
+    the entity back.
     """
     if "/" in id_:
         type_, slug = id_.split("/", 1)
         if (type_, slug) in index.nodes:
             return type_, slug
+        canon = canonical_slug(slug, index.types_by_slug)
+        if canon is not None:
+            for t in index.types_by_slug[canon]:
+                if t.casefold() == type_.casefold():
+                    return t, canon
         raise LocatedError.lookup_error(id_)
     types = index.types_by_slug.get(id_)
+    if not types:
+        canon = canonical_slug(id_, index.types_by_slug)
+        if canon is not None:
+            id_, types = canon, index.types_by_slug[canon]
     if not types:
         raise LocatedError.lookup_error(id_)
     if len(types) > 1:
@@ -686,20 +730,22 @@ def link(root: Path, id_: str, predicate: str, target: str) -> LinkResult:
             message=f"Cannot link '{id_}' to itself via '{predicate}'",
         )
 
+    target = _canonical_target(target, matches)
+
     def apply(cmap: Any) -> bool:
         existing = cmap.get(predicate)
         changed = False
         if rel.many:
             values = _as_list(existing)  # a scalar many-value reads as [value], never char-split
-            if target not in values:
+            if not any(_same_target(str(v), target) for v in values):
                 values.append(target)
                 changed = True
             cmap[predicate] = values
         else:
-            if existing not in (None, "", target):
+            current = None if existing in (None, "") else str(existing)
+            if current is not None and not _same_target(current, target):
                 raise LocatedError.cardinality_violation(predicate)
-            if existing != target:
-                changed = True
+            changed = current != target
             cmap[predicate] = target
         return changed
 
@@ -726,14 +772,14 @@ def unlink(root: Path, id_: str, predicate: str, target: str) -> LinkResult:
         changed = False
         if rel.many:
             values = _as_list(existing)  # a scalar many-value reads as [value], never char-split
-            if target in values:
-                remaining = [v for v in values if v != target]
+            if any(_same_target(str(v), target) for v in values):
+                remaining = [v for v in values if not _same_target(str(v), target)]
                 if remaining:
                     cmap[predicate] = remaining
                 else:
                     del cmap[predicate]
                 changed = True
-        elif existing == target:
+        elif existing is not None and _same_target(str(existing), target):
             del cmap[predicate]
             changed = True
         return changed

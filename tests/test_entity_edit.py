@@ -159,7 +159,7 @@ def test_cli_edit_field(fresh_ws: Path, seed: Seed, monkeypatch) -> None:
     path = _deal(fresh_ws, seed)
     before = path.read_text()
     monkeypatch.chdir(fresh_ws)
-    result = runner.invoke(app, ["edit", "initech-deal", "stage", "proposal-sent"])
+    result = runner.invoke(app, ["edit", "initech-deal", "stage", "proposal-sent"], env={"FORCE_COLOR": "1"})
     assert result.exit_code == 0
     assert "Updated opportunity 'initech-deal'" in result.output
     after = path.read_text()

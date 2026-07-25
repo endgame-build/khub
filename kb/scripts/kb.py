@@ -258,7 +258,9 @@ def _block_map(lines: list[tuple[int, str, int]], cursor: list[int], indent: int
             raise Bad(f"line {number}: not a `key: value` line ({text!r})")
         key, inline = m.group(1), m.group(2)
         cursor[0] += 1
-        if inline:
+        if inline.startswith((">", "|")) and inline.rstrip() in (">", ">-", ">+", "|", "|-", "|+"):
+            out[key] = _block_scalar(lines, cursor, indent, inline.rstrip())
+        elif inline:
             out[key] = _flow(inline, number)
         elif cursor[0] < len(lines) and _opens_block(lines[cursor[0]], indent):
             out[key] = _block(lines, cursor, lines[cursor[0]][0])
@@ -296,6 +298,32 @@ def _block_list(lines: list[tuple[int, str, int]], cursor: list[int], indent: in
         cursor[0] += 1
         out.append(_flow(item, number))
     return out
+
+
+def _block_scalar(
+    lines: list[tuple[int, str, int]], cursor: list[int], indent: int, style: str
+) -> str:
+    """A `>`/`|` block scalar — folded or literal, with the chomping indicator.
+
+    khub's presets write their `when:` cues as folded scalars (`>-`), so reading a
+    shipped schema needs this. Folded joins the lines with spaces and keeps a blank
+    line as a break; literal keeps every newline; `-` strips the trailing one.
+    """
+    body: list[str] = []
+    while cursor[0] < len(lines) and lines[cursor[0]][0] > indent:
+        body.append(lines[cursor[0]][1])
+        cursor[0] += 1
+    if style[0] == "|":
+        text = "\n".join(body)
+    else:
+        folded: list[str] = []
+        for line in body:
+            if folded and line:
+                folded[-1] = f"{folded[-1]} {line}"
+            else:
+                folded.append(line)
+        text = "\n".join(folded)
+    return text if style.endswith("-") else text + "\n"
 
 
 def _flow(text: str, number: int) -> Any:
@@ -1374,7 +1402,8 @@ def cmd_check(args: argparse.Namespace) -> int:
     payload = {
         "passed": passed, "incomplete": incomplete, "orphans": orphans, "dangling": dangling,
         "strays": strays, "malformed": malformed, "cycles": cycles, "suppressed_dangling": 0,
-        "missing_singletons": missing_singletons, "draft_singletons": [], "strict": args.strict,
+        "missing_singletons": missing_singletons, "draft_singletons": [],
+        "draft_required_singletons": [], "strict": args.strict,
     }
 
     def text() -> None:
@@ -1481,7 +1510,8 @@ def cmd_search(args: argparse.Namespace) -> int:
         except sqlite3.OperationalError as err:
             raise Bad(f"this Python's sqlite3 has no FTS5: {err}") from None
         conn.executemany("INSERT INTO fts VALUES (?,?,?,?,?)", [
-            (e.title or e.slug, e.body, e.type, e.slug, rel(corpus.root, e.path))
+            (e.title or e.slug, _fts_body(corpus.schema, e), e.type, e.slug,
+             rel(corpus.root, e.path))
             for e in sorted(corpus.entities.values(), key=lambda x: (x.type, x.slug))
             if not args.type or e.type == args.type
         ])
@@ -1515,6 +1545,28 @@ def cmd_search(args: argparse.Namespace) -> int:
 
     _emit(args, records, text)
     return 0
+
+
+def _fts_body(schema: Schema, e: Entity) -> str:
+    """khub's rule since 0.13.0: the body PLUS every scalar string field.
+
+    An agent finds an entity by stack, repo or URL, not only by prose. `type` is
+    excluded as noise, and title/name are excluded because they already populate the
+    dedicated title column — counting them twice would skew BM25.
+
+    Dates and bools are excluded by their DECLARED type, not by their Python type:
+    khub holds a date as a `date` object so it drops out of its "is a str" filter,
+    while kb's reader keeps `2026-07-25` as a string. Filtering on the schema is what
+    makes the two indexes — and therefore the BM25 scores — identical.
+    """
+    declared = schema.attrs(e.type)
+    scalars = [
+        v for k, v in e.fm.items()
+        if k not in ("type", "title", "name")
+        and isinstance(v, str)
+        and declared.get(k, {}).get("type", "text") == "text"
+    ]
+    return " ".join([e.body, *scalars]).strip()
 
 
 OKF_VERSION = "0.1"

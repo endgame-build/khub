@@ -76,6 +76,22 @@ def fresh_ws(tmp_path: Path) -> Path:
 
 
 @pytest.fixture
+def ws_for() -> Callable[[str, Path], Path]:
+    """Scaffold any preset into a directory: ``ws_for("build-lite", tmp_path / "ws")``.
+
+    ``fresh_ws`` is firm-ops-hardcoded, which is why firm-ops was the only preset with an
+    end-to-end path and build-lite shipped with none.
+    """
+    from khub.core.workspace import init_workspace
+
+    def _ws(preset: str, path: Path) -> Path:
+        init_workspace(preset, path)
+        return path
+
+    return _ws
+
+
+@pytest.fixture
 def seed() -> Callable[..., None]:
     """Write an entity file under a workspace root, dispatched on the suffix.
 

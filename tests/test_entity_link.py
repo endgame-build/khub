@@ -102,7 +102,7 @@ def test_cli_link(fresh_ws: Path, seed: Seed, monkeypatch) -> None:
     _prereqs(fresh_ws, seed)
     source = _project(fresh_ws, seed)
     monkeypatch.chdir(fresh_ws)
-    result = runner.invoke(app, ["link", "initech-pov", "partner", "northwind"])
+    result = runner.invoke(app, ["link", "initech-pov", "partner", "northwind"], env={"FORCE_COLOR": "1"})
     assert result.exit_code == 0
     assert "Linked initech-pov --partner--> northwind" in result.output
     assert frontmatter.load(str(source)).metadata["partner"] == "northwind"
@@ -136,7 +136,7 @@ def test_cli_unlink(fresh_ws: Path, seed: Seed, monkeypatch) -> None:
     _prereqs(fresh_ws, seed)
     source = _project(fresh_ws, seed, partner="northwind")
     monkeypatch.chdir(fresh_ws)
-    result = runner.invoke(app, ["unlink", "initech-pov", "partner", "northwind"])
+    result = runner.invoke(app, ["unlink", "initech-pov", "partner", "northwind"], env={"FORCE_COLOR": "1"})
     assert result.exit_code == 0
     assert "Unlinked initech-pov --partner--> northwind" in result.output
     assert "partner" not in frontmatter.load(str(source)).metadata
@@ -150,4 +150,7 @@ def test_cli_link_cardinality_violation(fresh_ws: Path, seed: Seed, monkeypatch)
     monkeypatch.chdir(fresh_ws)
     result = runner.invoke(app, ["link", "initech-pov", "owner", "dana"])
     assert result.exit_code == 1
-    assert "Predicate 'owner' is single-valued; use edit to replace" in result.output
+    # The remedy names the verb AND says it replaces: an agent that generalised the old
+    # "use edit to replace" to a many-valued relation would overwrite the whole list.
+    assert "Predicate 'owner' is single-valued" in result.output
+    assert "khub edit <id> owner <target>` replaces the current value" in result.output

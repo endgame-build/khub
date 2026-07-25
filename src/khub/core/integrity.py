@@ -446,12 +446,17 @@ class CheckReport:
     # Dangling reports suppressed because their target type's collection file is
     # malformed — derivative noise rolled into the malformed finding.
     suppressed_dangling: int = 0
-    # Singleton types declared `required: true` that have no LIVE node: the file is
-    # absent, a stray, or present-but-draft.
+    # Singleton types declared `required: true` with no node on disk at all (absent, or
+    # present-but-stray). A drafted one is reported by `draft_singletons` instead — it is
+    # right there on disk, and saying "missing" sent people hunting for a file they had.
     missing_singletons: list[str] = field(default_factory=list)
-    # The subset of those that exist on disk but are unpublished — so the report can
-    # say "unpublished" rather than send a user hunting for a file that is right there.
+    # ANY singleton present on disk but unpublished. Not restricted to required types:
+    # a drafted optional singleton silently leaves the active subgraph, and reporting it
+    # nowhere meant `check` passed while the workspace had quietly lost a document.
     draft_singletons: list[str] = field(default_factory=list)
+    # The subset of `draft_singletons` whose type is `required: true` — the only drafts
+    # that fail the gate, since an unpublished PRD must not turn the whole gate green.
+    draft_required_singletons: list[str] = field(default_factory=list)
 
     @property
     def passed(self) -> bool:
@@ -463,6 +468,7 @@ class CheckReport:
             or self.cycles
             or self.malformed
             or self.missing_singletons
+            or self.draft_required_singletons
         )
 
 
@@ -523,23 +529,28 @@ def check(root: Path, *, strict: bool = False) -> CheckReport:
     # never reaches nx.simple_cycles — detect it directly as a one-node cycle.
     cycles = _cycles(graph, resolved) + _self_cycles(resolved, valid, entity_nodes)
     stray_paths = sorted({_stray_locator(root, resolved, t, s) for (t, s) in strays})
-    # A required singleton with no live node (absent file, present-but-stray, or
-    # present-but-draft) is a gap the graph cannot express as incompleteness —
-    # report it directly. A draft is unpublished, and the sibling rule already says
-    # a draft target never satisfies another entity's required relation; a draft
-    # cannot satisfy its own type's requiredness either, or an unpublished PRD
-    # turns the whole gate green.
-    required_singletons = [
-        t for t, rt in resolved.types.items() if rt.storage.layout == "singleton" and rt.required
-    ]
+    # A singleton gap is one the graph cannot express as incompleteness, so report it
+    # directly. Two distinct conditions, deliberately not conflated:
+    #   missing — no node on disk at all, and the type is required.
+    #   draft   — present but unpublished. Swept for EVERY singleton, not just required
+    #             ones: a drafted optional singleton leaves the active subgraph just as
+    #             completely, and reporting it nowhere let `check` pass while the
+    #             workspace had quietly lost a document.
+    # Only a drafted REQUIRED singleton fails the gate — a draft is unpublished, and the
+    # sibling rule already says a draft target never satisfies a required relation, so it
+    # cannot satisfy its own type's requiredness either or an unpublished PRD turns the
+    # whole gate green. Until 0.13.0 that fold put one drafted `prd` in both lists at once.
+    singletons = [t for t, rt in resolved.types.items() if rt.storage.layout == "singleton"]
     draft_singletons = sorted(
         t
-        for t in required_singletons
+        for t in singletons
         if (t, t) in valid.nodes and as_bool(valid.meta[(t, t)].get("draft", False))
     )
+    draft_required_singletons = sorted(
+        t for t in draft_singletons if resolved.types[t].required
+    )
     missing_singletons = sorted(
-        t for t in required_singletons
-        if (t, t) not in valid.nodes or t in set(draft_singletons)
+        t for t in singletons if resolved.types[t].required and (t, t) not in valid.nodes
     )
     return CheckReport(
         incomplete=incomplete,
@@ -550,6 +561,7 @@ def check(root: Path, *, strict: bool = False) -> CheckReport:
         malformed=[str(p) for p in index.malformed],
         strict=strict,
         suppressed_dangling=suppressed,
+        draft_required_singletons=draft_required_singletons,
         missing_singletons=missing_singletons,
         draft_singletons=draft_singletons,
     )

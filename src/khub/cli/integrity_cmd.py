@@ -76,6 +76,11 @@ def _check_human(report: CheckReport) -> None:
     if report.passed:
         for o in report.orphans:
             typer.echo(f"orphan {o} (informational)")
+        # Reported on BOTH paths. A drafted optional singleton does not fail the gate, so
+        # on its own it lands here; the failing path prints it too (see below). Either way
+        # it is said out loud — printing nothing is the silence this report exists to end.
+        for name in report.draft_singletons:
+            typer.echo(f"singleton {name} is unpublished (draft: true) (informational)")
         typer.echo("Graph check passed")
         return
     for inc in report.incomplete:
@@ -98,8 +103,11 @@ def _check_human(report: CheckReport) -> None:
     for cycle in report.cycles:
         typer.echo(f"cycle {' -> '.join(cycle)}")
     for name in report.missing_singletons:
-        state = "unpublished (draft: true)" if name in report.draft_singletons else "missing"
-        typer.echo(f"required singleton {name} is {state}")
+        typer.echo(f"required singleton {name} is missing")
+    for name in report.draft_singletons:
+        # An optional drafted singleton is informational; a required one fails the gate.
+        gate = "required singleton" if name in report.draft_required_singletons else "singleton"
+        typer.echo(f"{gate} {name} is unpublished (draft: true)")
 
 
 def _check_payload(report: CheckReport) -> dict[str, Any]:
@@ -126,8 +134,11 @@ def _check_payload(report: CheckReport) -> dict[str, Any]:
         "cycles": report.cycles,
         "suppressed_dangling": report.suppressed_dangling,
         "missing_singletons": report.missing_singletons,
-        # Which of those exist but are unpublished — "missing" alone would mislead.
+        # Present but unpublished — for ANY singleton, not just required ones, since a
+        # drafted optional singleton leaves the active subgraph with no other signal.
         "draft_singletons": report.draft_singletons,
+        # The subset that fails the gate, so a consumer can tell a finding from a note.
+        "draft_required_singletons": report.draft_required_singletons,
         # Say which gate ran: `orphans` populated with passed=true means default mode.
         "strict": report.strict,
     }

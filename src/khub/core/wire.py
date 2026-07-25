@@ -44,8 +44,41 @@ class WireResult:
     outcomes: list[WireOutcome]
 
 
+def _when_to_record(whens: dict[str, str] | None) -> list[str]:
+    """The capture triggers, rendered from each type's schema-declared ``when``.
+
+    The block already said HOW to write. It never said WHEN, and a real-codebase eval
+    showed that is where wired agents lose: most off-rails operations were no command at
+    all, because a terse ask ("Note it.") read as conversation rather than work. These
+    lines are per-domain and come verbatim from the schema, so a new type ships its own
+    trigger and no surface code learns a type name.
+    """
+    if not whens:
+        return []
+    return [
+        "Record as you go — when one of these moments occurs, capture it:",
+        "",
+        *[f"- `{t}` — {w}" for t, w in whens.items()],
+        "",
+        (
+            "A stated fact about the system is a capture request, whatever the wording. "
+            '"note it", "write it down", "log it", "FYI", "heads up", "for the record" — and a '
+            "bare statement with no instruction at all — all mean record it. Do that, then say "
+            "what you recorded and its id. Answering \"Noted.\" without a record does not "
+            "complete the task, and neither does asking which file to write to: entities are "
+            "written with `khub add`, never by choosing a path."
+        ),
+        "",
+    ]
+
+
 def build_block(
-    preset: str, version: str, types: list[str], *, import_supported: bool = True
+    preset: str,
+    version: str,
+    types: list[str],
+    *,
+    import_supported: bool = True,
+    whens: dict[str, str] | None = None,
 ) -> str:
     """The managed context-file block (markers included, no trailing newline).
 
@@ -92,7 +125,15 @@ def build_block(
                 f"Entity types: {type_list}."
             ),
             "",
-            "When khub is installed, prefer it for typed reads and writes over grepping files:",
+            *_when_to_record(whens),
+            (
+                "Every write goes through the CLI — it is the only path that validates against "
+                "the schema and resolves relations. If you edit an entity file by hand anyway "
+                "(or a human did), run `khub validate` on it immediately: an unvalidated "
+                "hand-edit is how a workspace acquires a field no gate will ever report."
+            ),
+            "",
+            "Reading the graph is a khub operation too — query it, do not grep it:",
             "",
             "- Introspect: `khub schema`, `khub schema show <type>`, `khub status`.",
             (
@@ -105,7 +146,11 @@ def build_block(
                 "`khub link <id> <pred> <target>`, `khub unlink`, `khub remove <id>`. "
                 "Capture is never blocked; `--draft` marks an entity unpublished."
             ),
-            "- Every read takes `--format json` for machine-readable output.",
+            (
+                "- Every read and every write above takes `--format json`. Piped output is "
+                "JSON by default; a table is only for a TTY. (`reindex`, `viz`, `backfill` "
+                "and `wire` are operator commands and print prose.)"
+            ),
             "",
             (
                 "Not installed? `uv tool install git+ssh://git@github.com/endgame-build/khub`, "
@@ -147,8 +192,13 @@ def wire(
     prov = provenance(root)
     resolved = load_schema(root)
     types = types_list(resolved)
-    claude_block = build_block(prov["preset"], prov["version"], types, import_supported=True)
-    agents_block = build_block(prov["preset"], prov["version"], types, import_supported=False)
+    whens = {name: t.when for name, t in resolved.types.items() if t.when}
+    claude_block = build_block(
+        prov["preset"], prov["version"], types, import_supported=True, whens=whens
+    )
+    agents_block = build_block(
+        prov["preset"], prov["version"], types, import_supported=False, whens=whens
+    )
     candidates = [(root / "CLAUDE.md", claude_block), (root / "AGENTS.md", agents_block)]
 
     if claude or agents:

@@ -27,6 +27,9 @@ from tasks import batch
 WRITE_VERB = re.compile(r"\bkhub\s+(?:-C\s+\S+\s+)?(add|edit|link|unlink|remove)\b")
 READ_VERB = re.compile(r"\bkhub\s+(?:-C\s+\S+\s+)?(get|query|neighbors|impact|history|search|status|schema|check|validate)\b")
 GREP_CMD = re.compile(r"\b(grep|rg|cat|head|tail|find|ls|sed|awk)\b")
+# A reply that recites the operator's own CLAUDE.md instead of doing the task. Observed:
+# one op answered "PROTOCOL ACTIVE: - Stop on failure, words before tools ...".
+HOST_MARKER = re.compile(r"PROTOCOL ACTIVE|Stop on failure, words before tools")
 
 
 # --- khub oracle --------------------------------------------------------------
@@ -72,10 +75,22 @@ def verify_expect(ws: Path, expect: dict) -> bool:
 # --- transcript parsing -------------------------------------------------------
 
 
+def is_entity_path(rel: str, paths: tuple[str, ...]) -> bool:
+    """True when ``rel`` is an entity file: inside a type's directory, or a singleton's own path.
+
+    A singleton's storage path IS the file (``knowledge/prd.md``), so the prefix test this
+    replaced — ``rel.startswith("knowledge/prd.md/")`` — could never match it. An agent that
+    hand-edited the PRD scored on-rails. firm-ops declares no singletons, which is why the
+    published adherence numbers never exposed it; build-lite has two and build-hub five.
+    """
+    return any(rel == p or rel.startswith(f"{p}/") for p in paths)
+
+
 def parse_stream(log: Path, ws: Path) -> dict:
-    prefixes = tuple(f"{p}/" for p in entity_path_prefixes(ws)) if ws.exists() else ()
+    prefixes = tuple(entity_path_prefixes(ws)) if ws.exists() else ()
     khub_writes, khub_reads, file_writes, greps = [], [], [], []
     skill_loaded = False
+    host_instructions = False
     for line in log.read_text(errors="replace").splitlines():
         try:
             e = json.loads(line)
@@ -83,6 +98,8 @@ def parse_stream(log: Path, ws: Path) -> dict:
             continue
         if e.get("type") == "system" and e.get("subtype") == "init":
             skill_loaded = "khub" in (e.get("skills") or [])
+        if e.get("type") == "result" and HOST_MARKER.search(str(e.get("result", ""))):
+            host_instructions = True
         if e.get("type") != "assistant":
             continue
         for b in e.get("message", {}).get("content", []):
@@ -100,12 +117,18 @@ def parse_stream(log: Path, ws: Path) -> dict:
             elif name in ("Write", "Edit", "MultiEdit", "NotebookEdit"):
                 fp = str(inp.get("file_path", ""))
                 rel = fp.split(str(ws) + "/", 1)[-1] if str(ws) in fp else fp.lstrip("/")
-                if rel.startswith(prefixes):
+                if is_entity_path(rel, prefixes):
                     file_writes.append(rel)
             elif name in ("Grep", "Glob"):
                 greps.append(f"{name}:{inp.get('pattern') or inp.get('path')}")
     return {
         "skill_loaded": skill_loaded,
+        # The agents run as the operator, so the operator's user-level CLAUDE.md is in
+        # their context alongside the workspace block under test. Isolating it via
+        # CLAUDE_CONFIG_DIR also moves the credentials, so the run cannot authenticate.
+        # It cannot be prevented cheaply — so it is DETECTED: an op whose reply is the
+        # host's instructions rather than the task is contaminated, not a khub result.
+        "host_instructions": host_instructions,
         "khub_write": bool(khub_writes),
         "khub_read": bool(khub_reads),
         "file_write": file_writes,

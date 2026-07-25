@@ -104,6 +104,17 @@ class TypeDecl(_Strict):
     # carried in prose (`ad-NNN`, `fr-NNN`) and every author had to type by hand into
     # `--id`; declaring it makes the schema mint it. Absent = khub's plain slug.
     id_prefix: Annotated[str, StringConstraints(pattern=ID_PREFIX_RE)] | IdPrefixDecl | None = None
+    # The moment this type should be captured, in one line of domain language —
+    # "a decision that constrains implementation", not "an ADR record". Surfaced
+    # verbatim into the agent context files by `khub wire` and by `schema show`.
+    #
+    # The schema already tells an agent HOW to write (types, fields, enums) and it
+    # follows that well; what it could not tell an agent is WHEN. Measured on a real
+    # codebase, most off-rails operations were not wrong commands but no command at
+    # all — the agent read "Policy: credentials must never appear in output. Note it."
+    # as conversation and replied "Noted." Recognising the moment is the gap, and it
+    # is per-domain knowledge, so it belongs in the schema rather than in surface code.
+    when: str | None = None
     attributes: dict[str, AttrDecl] = {}
     relations: dict[str, RelationDecl] = {}
 

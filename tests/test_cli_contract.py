@@ -115,11 +115,11 @@ def test_get_table_downgrades_to_json_on_pipe(seeded: Path, monkeypatch: pytest.
 @pytest.mark.integration
 def test_link_noop_reports_already_present(seeded: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.chdir(seeded)
-    first = runner.invoke(app, ["link", "acme-pov", "related", "acme"])
+    first = runner.invoke(app, ["link", "acme-pov", "related", "acme"], env={"FORCE_COLOR": "1"})
     assert first.exit_code == 0, first.output
     assert "Linked" in first.output
 
-    again = runner.invoke(app, ["link", "acme-pov", "related", "acme"])
+    again = runner.invoke(app, ["link", "acme-pov", "related", "acme"], env={"FORCE_COLOR": "1"})
     assert again.exit_code == 0, again.output
     assert again.output.strip() == "Edge already present"
 
@@ -127,7 +127,7 @@ def test_link_noop_reports_already_present(seeded: Path, monkeypatch: pytest.Mon
 @pytest.mark.integration
 def test_unlink_noop_reports_no_edge(seeded: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.chdir(seeded)
-    result = runner.invoke(app, ["unlink", "acme-pov", "related", "acme"])
+    result = runner.invoke(app, ["unlink", "acme-pov", "related", "acme"], env={"FORCE_COLOR": "1"})
     assert result.exit_code == 0, result.output
     assert result.output.strip() == "No edge related -> acme on acme-pov"
 
@@ -325,6 +325,56 @@ def test_failure_matches_the_success_output_gate(
     tty = runner.invoke(app, ["get", "ghost-entity"], env={"FORCE_COLOR": "1"})
     assert tty.exit_code == 1
     assert not tty.output.strip().startswith("{")
+
+
+@pytest.mark.integration
+def test_write_verbs_emit_json_on_a_pipe(seeded: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Every write verb obeys the same output gate as the read verbs.
+
+    Until 0.13.0 these gated on a literal ``fmt == "json"`` while reads used ``want_json``,
+    so a piped agent got PROSE when the command succeeded and JSON when it failed — the
+    exact asymmetry ``_fail`` exists to prevent. An agent never has a TTY, so this is the
+    contract it actually consumes.
+    """
+    monkeypatch.chdir(seeded)
+
+    added = runner.invoke(app, ["add", "client", "--name", "Beta", "--id", "beta"])
+    assert added.exit_code == 0, added.output
+    assert json.loads(added.output)["id"] == "client/beta"
+
+    edited = runner.invoke(app, ["edit", "beta", "name", "Beta Inc"])
+    assert edited.exit_code == 0, edited.output
+    assert json.loads(edited.output)["slug"] == "beta"
+
+    linked = runner.invoke(app, ["link", "acme-pov", "related", "beta"])
+    assert linked.exit_code == 0, linked.output
+    assert json.loads(linked.output) == {
+        "id": "opportunity/acme-pov", "type": "opportunity", "slug": "acme-pov",
+        "predicate": "related", "target": "beta", "changed": True,
+    }
+
+    # `changed` is the whole reason link/unlink needed a record: both are idempotent and
+    # exit 0 either way, so prose alone could not distinguish a no-op from a write.
+    again = runner.invoke(app, ["link", "acme-pov", "related", "beta"])
+    assert json.loads(again.output)["changed"] is False
+
+    unlinked = runner.invoke(app, ["unlink", "acme-pov", "related", "beta"])
+    assert json.loads(unlinked.output)["changed"] is True
+
+    removed = runner.invoke(app, ["remove", "beta"])
+    assert removed.exit_code == 0, removed.output
+    assert json.loads(removed.output)["removed"] is True
+
+
+@pytest.mark.e2e
+def test_init_emits_json_on_a_pipe(tmp_path: Path) -> None:
+    """`init` shares the gate too — the first command an agent runs in a new workspace."""
+    target = tmp_path / "hq"
+    result = runner.invoke(app, ["init", "firm-ops", str(target), "--no-wire"])
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["preset"] == "firm-ops"
+    assert payload["skill_hint"].endswith("install-skills")
 
 
 @pytest.mark.integration

@@ -6,6 +6,16 @@ Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelo
 
 ### Added
 
+- **kb tracks main's 0.13.0/0.14.x contract.** Merging main in broke three parity
+  guarantees, each fixed by matching khub rather than by relaxing the test: `search`
+  now indexes scalar attribute values as well as the body (khub's 0.13.0 rule), with
+  dates and bools excluded by their *declared* type — khub holds a date as a `date`
+  object so it drops out of its "is a str" filter, while kb's reader keeps the string,
+  and filtering on the schema is what keeps the two BM25 indexes identical; `check`
+  emits main's new `draft_required_singletons` key; and `build.schema.yaml` was
+  regenerated for the `when` cues main added to the preset. Reading those cues needed
+  block scalars (`>-`) in kb's YAML subset — the last shape it refused.
+
 - **kb reads a khub workspace's own body templates.** Dropped into a `.khub/`
   workspace, kb now holds entities to *that* workspace's `.khub/templates/*.yaml`
   contract rather than the four Markdown templates it ships, and seeds new bodies
@@ -58,6 +68,152 @@ Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelo
   [`docs/build-lite-standalone.md`](docs/build-lite-standalone.md); it ships nothing
   into the `khub` package and changes no khub behaviour. A corpus it authors
   validates and checks clean under `khub init build-lite`, unmodified.
+## [0.14.1] — 2026-07-25
+
+Repository only — the built wheel is byte-identical to 0.14.0. The eval harness that produced
+0.14.0's findings was run from a scratch directory and existed nowhere in the repo, so nothing
+in 0.14.0 was reproducible by anyone else.
+
+### Added
+
+- **`tests/eval/run_build_lite.py`** — the build-lite retarget of the wiring eval, with the
+  three task sets the 0.14.0 work was measured on: `narrative` (27 ordered engineering asks,
+  adherence end to end), `statements` (8 bare facts, isolating activation), and `cues` (one
+  fact × four imperatives, isolating the cue word with the failing variant as an in-run
+  control). It overrides three firm-ops-shaped things and edits nothing in `base.py`/`run.py`:
+  `preflight` asserts the PATH khub rather than force-installing over the operator's global
+  binary, `build_wired` takes the preset as a parameter and can lay a workspace inside a copy
+  of a real repo, and the turn cap is a flag — `run.py`'s hardcoded 14 assumes an empty
+  workspace, and a smoke run on a real codebase hit it mid-exploration.
+- **`tests/eval/README.md`** documents both, and states the rule the design depends on: read
+  results from in-run controls, never from cross-run baselines.
+
+## [0.14.0] — 2026-07-25
+
+An agentic eval on an unfamiliar codebase (27 tasks over a copy of `httpie/cli`, wired vs
+unwired) put wired adherence at 78% against unwired's 0%. The wired losses were almost all
+**inaction, not wrong action**: four of six were single-turn replies with no tool call at all.
+Asked "Policy: credentials must never appear in output. Note it.", the agent answered
+"Noted." and stopped. The schema said how to write and the agent did that well; nothing said
+when.
+
+### Added
+
+- **`when:` — a per-type capture trigger in the schema.** One line of domain language naming
+  the moment a type should be recorded ("a rule is stated that the system must satisfy or must
+  never violate"), declared next to `layout` and `required`. `khub wire` renders every trigger
+  into the agent context files under "Record as you go", and `schema show` exposes it, so an
+  agent can recognise the moment rather than only execute a command once told. Per-domain
+  knowledge belongs in the schema, so a new type ships its own trigger and no surface code
+  learns a type name. All three presets declare one on every type, pinned by a test.
+
+### Changed
+
+- **The wired block states the CLI rule and the hand-edit recovery.** "Every write goes through
+  the CLI — the only path that validates against the schema and resolves relations. If you edit
+  an entity file by hand anyway, run `khub validate` on it immediately." An unvalidated
+  hand-edit is how a workspace acquires a field no default gate will report (see 0.13.0's note
+  on `validate --strict`).
+- **The block now says reading the graph is a khub operation.** The eval's one wired
+  read-bypass spent 13 `Read` calls on `knowledge/**` instead of `khub query`, and ran out of
+  turns before writing anything. The block previously led with writes.
+- **The khub skill gained a "Know when to write" section** — the same triggers, plus the rule
+  that a stated fact about the system is a write while a question about it is a query.
+- **The capture cues are mapped, and the overclaim is gone.** A 20-turn A/B held one fact
+  byte-identical and moved only the closing imperative: `Record it.` recorded 5/5 with the
+  right type and kind, `Note it.` recorded **0/5** — replying "Noted." every time — and a bare
+  statement with no imperative recorded 0/5, answering "No task given yet." The capability was
+  never in doubt; one verb worked and its synonyms did not, because "Note it." collides with
+  "Noted." as a reply token. The block and the skill now say that "note it", "write it down",
+  "log it", "FYI", "heads up", "for the record" and a bare statement all mean record it, that an
+  acknowledgement is not a record, and that entities are written with `khub add` rather than by
+  choosing a path (the second observed failure: `Write it down.` sent the agent hunting for a
+  target file). Re-measured on the same four variants: **30% → 70%**, with `Note it.` at 5/5.
+  The block's previous claim that capture happens "without being asked" measured 0/5 and has
+  been removed rather than left overclaiming.
+
+## [0.13.0] — 2026-07-25
+
+A smoke test drove every command against a real `build-lite` workspace and found eleven
+defects no test caught: khub worked for a human at a TTY and misled an agent at a pipe.
+This release closes all eleven. No schema changed; every fix is in the CLI, the search
+index, or the query layer.
+
+### Fixed
+
+- **Write verbs emit JSON on a pipe.** `add`, `edit`, `remove`, `init`, `link` and
+  `unlink` gated on a literal `--format json` while every read command used the shared
+  output gate, so a piped agent got prose when a command SUCCEEDED and JSON when it
+  failed — the exact asymmetry the error renderer exists to prevent. All six now route
+  through `emit`. `link`/`unlink` gained `--format` and a record carrying `changed`,
+  since both verbs are idempotent and exit 0 either way: prose alone could not tell a
+  write from a no-op.
+- **`search` reaches frontmatter.** md entities indexed the body alone, so
+  `khub search python` returned nothing while `stack: python` sat in the file — on the
+  one format every preset uses by default. Every format now indexes body plus each
+  scalar field, which is what the README and the khub skill always claimed.
+- **`query --has` / `--missing` accept attributes.** Both answered from the graph, so an
+  attribute raised `No field 'repo' on type 'component'` — a message that was simply
+  false. Absent, null, or empty counts as missing. Together with the search gap this had
+  left **no route** to find an entity by an attribute value, which pushes an agent back
+  to grep: the bypass the wiring exists to prevent.
+- **Ids resolve case-insensitively, and writes store the canonical spelling.** `add --id
+  CMP-001-Api` slugifies to `cmp-001-api`, and every read of the string the caller passed
+  failed. Both resolvers fold case, on the bare and qualified forms alike. Folding on read
+  alone would have been worse than none: `link` stored the caller's raw string and deduped
+  by exact match, so three spellings of one node became three parallel edges, each
+  reporting `changed: true`, and `unlink` of another spelling was a silent no-op.
+- **`--no-template` is refused on a templated type.** Its only outcome there was an
+  entity `validate` rejected on the very next run.
+- **`schema show` / `schema edges` expose what they enforce.** `acyclic`, `inverse`,
+  `pattern` and `default` were resolved, enforced, and invisible — an agent told to
+  discover the schema at runtime could not learn why a write was rejected.
+- **`schema edges` emits one row per distinct declaration.** Keying rows by predicate name
+  kept only the first-seen targets, so build-lite's `supersedes` (adr → adr, feature-spec →
+  feature-spec) advertised `feature-spec --supersedes--> adr` — an edge `validate` rejects.
+  Merging the targets does not fix it; `from` × `to` is a cross product, so a union just
+  adds the reverse claim too. Only types declaring a predicate identically now share a row.
+- **A drafted singleton is reported.** A drafted non-required singleton (`arc42`) left the
+  active subgraph and appeared in no list, with `check` passing; a drafted required one
+  (`prd`) was reported twice, once as "missing" for a file sitting on disk. The two
+  conditions are now disjoint, with `draft_required_singletons` naming the subset that
+  fails the gate — and the text view reports the optional case too, which by definition
+  never reaches the failure path.
+- **`--missing <name>` skips types that cannot carry the name.** Untyped, `--missing kind`
+  returned every singleton alongside the entities that genuinely lack it, diluting a gap
+  query with rows no author could ever close.
+- **`search` no longer double-counts titles.** `title`/`name` already populate the
+  dedicated FTS `title` column; folding them into the body sweep as well shifted BM25
+  ranking and let a snippet excerpt frontmatter as if it were prose.
+- **The eval's bypass detector sees singleton writes.** A singleton's storage path is a
+  file, so the prefix test could never match it and an agent that hand-edited the PRD
+  scored on-rails. firm-ops declares no singletons, which is why the published adherence
+  numbers never exposed it.
+
+### Changed
+
+- **`target_not_empty` says what `--force` does.** Adding khub to a repo that already has
+  code is the common case, and the remedy read like it would overwrite the repo; it
+  scaffolds alongside and modifies nothing already there.
+- **The cardinality error names the verb and its semantics.** "use edit to replace" was
+  silent about the trap: on a many-valued relation `edit` replaces the whole list where
+  `link` appends.
+- **`query` records carry `title`.** Listing a type and reading one field per row was
+  N+1 — one `query` plus one `get` per entity.
+- **The wired CLAUDE.md block and the khub skill** no longer claim `--format json` is
+  universal; it is false for the operator commands (`reindex`, `viz`, `backfill`, `wire`),
+  which take no `--format` at all. The skill also now recommends `validate --strict` in
+  CI, since capture is never blocked and a typo'd field name is otherwise never reported.
+
+### Added
+
+- **`tests/test_build_lite_e2e.py`** — build-lite shipped with schema-resolution tests
+  only and was never passed to `khub init` anywhere in the suite, because `fresh_ws` is
+  firm-ops-hardcoded. A new `ws_for` fixture scaffolds any preset; the file pins the
+  fresh-workspace `--strict` gate, the orphan sweep agreeing across its three read sites,
+  `--force` leaving a populated repo untouched, and each integrity gate.
+- **CI asserts the version is consistent.** `__version__` is only a fallback, so it had
+  drifted four minors behind `pyproject.toml` unnoticed.
 
 ## [0.12.0] — 2026-07-25
 

@@ -99,7 +99,7 @@ def test_cli_remove_unreferenced(fresh_ws: Path, seed: Seed, monkeypatch) -> Non
     """TS-ENT-005-01: an unreferenced entity is deleted with a confirmation."""
     seed(fresh_ws, "fragments/old-fragment.md", type="fragment", stage="raw", owner="noor")
     monkeypatch.chdir(fresh_ws)
-    result = runner.invoke(app, ["remove", "old-fragment"])
+    result = runner.invoke(app, ["remove", "old-fragment"], env={"FORCE_COLOR": "1"})
     assert result.exit_code == 0
     assert "Removed fragment 'old-fragment'" in result.output
     assert not (fresh_ws / "fragments" / "old-fragment.md").exists()
@@ -121,7 +121,7 @@ def test_cli_remove_force_leaves_dangling(fresh_ws: Path, seed: Seed, monkeypatc
     """TS-ENT-005-03 (stubbed): --force deletes; dangling edges remain on disk for check."""
     _referenced_client(fresh_ws, seed)
     monkeypatch.chdir(fresh_ws)
-    result = runner.invoke(app, ["remove", "initech", "--force"])
+    result = runner.invoke(app, ["remove", "initech", "--force"], env={"FORCE_COLOR": "1"})
     assert result.exit_code == 0
     assert "Removed client 'initech'" in result.output
     assert not (fresh_ws / "clients" / "initech.md").exists()

@@ -43,10 +43,12 @@ def preflight() -> str:
 
 
 def entity_path_prefixes(ws: Path) -> list[str]:
-    """Workspace-relative path prefixes that hold entities (the bypass detector).
+    """Workspace-relative storage paths that hold entities (the bypass detector).
 
     Read from the live schema so it stays schema-generic: every type's storage
-    `path` (folder/file layouts) plus collection files.
+    `path` (folder/file layouts) plus collection files. A singleton's path is a
+    FILE, not a directory — `run.is_entity_path` matches these by equality as well
+    as by prefix, so do not append a trailing slash here.
     """
     out = _run(["khub", "-C", str(ws), "schema", "--format", "json"]).stdout
     schema = json.loads(out)

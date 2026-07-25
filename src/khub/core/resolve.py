@@ -108,6 +108,7 @@ def _resolve_type(
         required=decl.required,
         orphan=decl.orphan,
         id_prefix=_id_prefix(decl.id_prefix),
+        when=decl.when,
     )
 
 
