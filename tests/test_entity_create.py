@@ -187,7 +187,7 @@ def test_cli_create_active(fresh_ws: Path, seed: Seed, monkeypatch) -> None:
     """TS-ENT-001-01: a well-formed entity lands active with today's timestamps."""
     _prereqs(fresh_ws, seed)
     monkeypatch.chdir(fresh_ws)
-    result = runner.invoke(app, ["add", "opportunity", "--client", "initech", "--owner", "noor", "--stage", "prospect"])
+    result = runner.invoke(app, ["add", "opportunity", "--client", "initech", "--owner", "noor", "--stage", "prospect"], env={"FORCE_COLOR": "1"})
     assert result.exit_code == 0
     assert "Created opportunity 'opportunity' (active)" in result.output
     written = fresh_ws / "opportunities" / "opportunity" / "_index.md"
@@ -202,7 +202,7 @@ def test_cli_missing_required_saves_active(fresh_ws: Path, seed: Seed, monkeypat
     """TS-ENT-001-02: an omitted required relation never blocks capture; it saves active."""
     _prereqs(fresh_ws, seed)
     monkeypatch.chdir(fresh_ws)
-    result = runner.invoke(app, ["add", "opportunity", "--stage", "prospect"])
+    result = runner.invoke(app, ["add", "opportunity", "--stage", "prospect"], env={"FORCE_COLOR": "1"})
     assert result.exit_code == 0
     assert "Created opportunity 'opportunity' (active)" in result.output
     written = fresh_ws / "opportunities" / "opportunity" / "_index.md"
@@ -215,7 +215,7 @@ def test_cli_add_draft_flag(fresh_ws: Path, seed: Seed, monkeypatch) -> None:
     """TS-ENT-001-02: --draft marks the new entity unpublished."""
     _prereqs(fresh_ws, seed)
     monkeypatch.chdir(fresh_ws)
-    result = runner.invoke(app, ["add", "opportunity", "--client", "initech", "--owner", "noor", "--stage", "prospect", "--draft"])
+    result = runner.invoke(app, ["add", "opportunity", "--client", "initech", "--owner", "noor", "--stage", "prospect", "--draft"], env={"FORCE_COLOR": "1"})
     assert result.exit_code == 0
     assert "Created opportunity 'opportunity' (draft)" in result.output
     written = fresh_ws / "opportunities" / "opportunity" / "_index.md"

@@ -73,7 +73,13 @@ class LocatedError(Exception):
     def target_not_empty(cls, path: str) -> LocatedError:
         return cls(
             code="target_not_empty",
-            message=f"Target {path} is not empty. Pass --force to scaffold anyway",
+            # Adding khub to a repo that already has code is the common case, and --force
+            # reads like it overwrites. Say what it actually does: scaffolds alongside,
+            # touching no existing file (init reports "0 entity files modified").
+            message=(
+                f"Target {path} is not empty. Pass --force to scaffold alongside the "
+                f"existing files; no file already there is modified"
+            ),
             target=path,
         )
 
@@ -209,7 +215,13 @@ class LocatedError(Exception):
     def cardinality_violation(cls, predicate: str) -> LocatedError:
         return cls(
             code="cardinality_violation",
-            message=f"Predicate '{predicate}' is single-valued; use edit to replace",
+            # Name the verb AND what it does. `edit` overwrites the predicate rather than
+            # adding to it — harmless here, but an agent that generalises the advice to a
+            # many-valued relation replaces the whole list where `link` would have appended.
+            message=(
+                f"Predicate '{predicate}' is single-valued; "
+                f"`khub edit <id> {predicate} <target>` replaces the current value"
+            ),
             relation=predicate,
         )
 

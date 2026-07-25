@@ -38,7 +38,7 @@ from typing import Any
 
 from khub.core import formats
 from khub.core.errors import LocatedError
-from khub.core.index import Index, build_index, resolve_target
+from khub.core.index import Index, build_index, canonical_slug, resolve_target
 from khub.core.introspect import load_schema
 from khub.core.model import ResolvedAttribute, ResolvedRelation, ResolvedSchema, ResolvedType
 from khub.core.template import load_template
@@ -168,12 +168,24 @@ def create(
     # starts from the scaffold (--no-template / use_template=False opts out).
     # A broken template never blocks capture — seed nothing and let `validate`
     # report the template itself.
-    if use_template and not body.strip() and rtype.storage.fmt == "md":
+    if not body.strip() and rtype.storage.fmt == "md":
         try:
             tpl = load_template(root, type_)
         except Exception:  # noqa: BLE001 — validate carries the template finding
             tpl = None
-        if tpl is not None:
+        if tpl is not None and tpl.sections:
+            if not use_template:
+                # --no-template on a templated type produced an entity `validate` rejects
+                # on its very next run ("missing or out-of-order section '## X'"): a
+                # documented flag whose only outcome was a red workspace. Refuse instead.
+                raise LocatedError(
+                    code="template_required",
+                    message=(
+                        f"Type '{type_}' has a body template, so --no-template would create "
+                        f"an entity `khub validate` rejects. Omit the flag, or pass --body "
+                        f"with the template's sections"
+                    ),
+                )
             body = tpl.render()
     body = _md_normalized(body, rtype)
 
@@ -507,13 +519,26 @@ def resolve_id(index: Index, id_: str) -> tuple[str, str]:
     """Resolve a bare slug (or qualified ``type/slug``) to one ``(type, slug)`` node.
 
     A bare slug shared by two types is ambiguous; a ``type/slug`` qualifier is exact.
+
+    Case is resolved leniently as a fallback (see ``canonical_slug``): writes slugify to
+    lowercase, so an agent that reuses the ``--id`` it passed must still be able to read
+    the entity back.
     """
     if "/" in id_:
         type_, slug = id_.split("/", 1)
         if (type_, slug) in index.nodes:
             return type_, slug
+        canon = canonical_slug(slug, index.types_by_slug)
+        if canon is not None:
+            for t in index.types_by_slug[canon]:
+                if t.casefold() == type_.casefold():
+                    return t, canon
         raise LocatedError.lookup_error(id_)
     types = index.types_by_slug.get(id_)
+    if not types:
+        canon = canonical_slug(id_, index.types_by_slug)
+        if canon is not None:
+            id_, types = canon, index.types_by_slug[canon]
     if not types:
         raise LocatedError.lookup_error(id_)
     if len(types) > 1:

@@ -149,13 +149,17 @@ def render(cmap: Any, body: str, fmt: str) -> str:
 
 
 def fts_body(meta: dict[str, Any], body: str, fmt: str) -> str:
-    """The searchable prose for one entity: md bodies as-is; non-md entities
-    index their body field plus every scalar string field (an agent finds a
-    row by URL, name, or note text — dates/bools/lists excluded, ``type``
-    excluded as pure noise).
+    """The searchable prose for one entity: its body plus every scalar string field.
+
+    An agent finds an entity by URL, stack, repo, name, or note text — so attribute
+    VALUES are searchable, not just prose. Dates/bools/lists are excluded (an agent
+    filters those with ``query``, and they only dilute BM25); ``type`` is excluded as
+    pure noise, since every entity of a type carries the same token.
+
+    Until 0.13.0 md entities returned the body alone, so `search python` missed an
+    entity carrying `stack: python` — while json/yaml entities matched it. Same rule
+    for every format now, which is what README and the khub skill always claimed.
     """
-    if fmt == "md":
-        return body
     scalars = (v for k, v in meta.items() if k != "type" and isinstance(v, str))
     return " ".join([body, *scalars]).strip()
 

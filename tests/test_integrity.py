@@ -614,7 +614,7 @@ def test_depends_on_cycles_still_reported(tmp_path: Path) -> None:
 
 
 @pytest.mark.unit
-def test_draft_required_singleton_is_reported_missing(tmp_path: Path) -> None:
+def test_draft_required_singleton_fails_the_gate(tmp_path: Path) -> None:
     """The two `required` gates disagreed about `draft`: a draft target already fails
     to satisfy another entity's required relation, but a draft REQUIRED SINGLETON
     passed clean — so an unpublished PRD turned the whole gate green."""
@@ -623,12 +623,30 @@ def test_draft_required_singleton_is_reported_missing(tmp_path: Path) -> None:
 
     ws = tmp_path / "ws"
     init_workspace("build-hub", ws)
-    assert check(ws).missing_singletons == []  # published: satisfied
+    assert check(ws).draft_required_singletons == []  # published: satisfied
 
     entity.update(ws, "prd", {"draft": "true"})
     report = check(ws)
-    assert report.missing_singletons == ["prd"]
+    assert report.draft_required_singletons == ["prd"]
     assert not report.passed
+
+
+@pytest.mark.unit
+def test_draft_optional_singleton_is_reported_but_does_not_fail(tmp_path: Path) -> None:
+    """A drafted NON-required singleton was reported by no list at all and `check`
+    passed — the document silently left the active subgraph with no signal anywhere."""
+    from khub.core import entity
+    from khub.core.workspace import init_workspace
+
+    ws = tmp_path / "ws"
+    init_workspace("build-lite", ws)  # arc42 is a singleton, but not required
+    entity.update(ws, "arc42", {"draft": "true"})
+
+    report = check(ws)
+    assert report.draft_singletons == ["arc42"]
+    assert report.draft_required_singletons == []  # optional: informational only
+    assert report.missing_singletons == []
+    assert report.passed is True
 
 
 @pytest.mark.unit
@@ -681,7 +699,10 @@ def test_draft_singleton_is_distinguished_from_an_absent_one(tmp_path: Path) -> 
     init_workspace("build-hub", ws)
     entity.update(ws, "prd", {"draft": "true"})
     report = check(ws)
-    assert report.missing_singletons == ["prd"] and report.draft_singletons == ["prd"]
+    # Drafted is NOT "missing": the file is right there. One condition, one list.
+    assert report.missing_singletons == []
+    assert report.draft_singletons == ["prd"] and report.draft_required_singletons == ["prd"]
+    assert report.passed is False  # a drafted REQUIRED singleton still fails the gate
 
     entity.update(ws, "prd", {"draft": "false"})
     entity.delete(ws, "prd")

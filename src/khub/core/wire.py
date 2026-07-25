@@ -105,7 +105,11 @@ def build_block(
                 "`khub link <id> <pred> <target>`, `khub unlink`, `khub remove <id>`. "
                 "Capture is never blocked; `--draft` marks an entity unpublished."
             ),
-            "- Every read takes `--format json` for machine-readable output.",
+            (
+                "- Every read and every write above takes `--format json`. Piped output is "
+                "JSON by default; a table is only for a TTY. (`reindex`, `viz`, `backfill` "
+                "and `wire` are operator commands and print prose.)"
+            ),
             "",
             (
                 "Not installed? `uv tool install git+ssh://git@github.com/endgame-build/khub`, "

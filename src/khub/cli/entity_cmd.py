@@ -12,7 +12,6 @@ interactive wizard for it until 0.9.0; khub no longer prompts anywhere.
 
 from __future__ import annotations
 
-import json
 import sys
 from pathlib import Path
 from typing import Any
@@ -21,7 +20,7 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
-from khub.cli._render import emit, guard, resolve_root
+from khub.cli._render import emit, guard, resolve_root, want_json
 from khub.core.entity import (
     CreateResult,
     EntityView,
@@ -71,11 +70,11 @@ def add_command(
         use_template=not no_template,
     )
 
-    if fmt == "json":
-        typer.echo(json.dumps(_ref_record(root, result), default=str))
-    else:
+    def human() -> None:
         typer.echo(str(result.path.relative_to(root)))
         typer.echo(_created_message(result))
+
+    emit(_ref_record(root, result), fmt, human)
 
 
 @guard
@@ -121,10 +120,11 @@ def edit_command(
 
     result = update(root, id_, fields, strict=strict, body=body)
 
-    if fmt == "json":
-        typer.echo(json.dumps(_ref_record(root, result), default=str))
-    else:
-        typer.echo(f"Updated {result.type} '{result.slug}'")
+    emit(
+        _ref_record(root, result),
+        fmt,
+        lambda: typer.echo(f"Updated {result.type} '{result.slug}'"),
+    )
 
 
 @guard
@@ -133,15 +133,18 @@ def link_command(
     id_: str | None = typer.Argument(None, metavar="ID"),
     predicate: str | None = typer.Argument(None, metavar="PREDICATE"),
     target: str | None = typer.Argument(None, metavar="TARGET"),
+    fmt: str = typer.Option("text", "--format", help="text or json (emits the edge record)."),
 ) -> None:
     """Add a relation: khub link initech-pov partner northwind."""
     root = resolve_root(ctx)
     id_, predicate, target = _edge_args(id_, predicate, target)
     result = link(root, id_, predicate, target)
-    if not result.changed:  # the edge already existed — idempotent success (exit 0)
-        typer.echo("Edge already present")
-        return
-    typer.echo(_edge_message("Linked", result))
+
+    def human() -> None:
+        # An unchanged edge already existed — idempotent success (exit 0).
+        typer.echo("Edge already present" if not result.changed else _edge_message("Linked", result))
+
+    emit(_edge_record(result), fmt, human)
 
 
 @guard
@@ -150,15 +153,22 @@ def unlink_command(
     id_: str | None = typer.Argument(None, metavar="ID"),
     predicate: str | None = typer.Argument(None, metavar="PREDICATE"),
     target: str | None = typer.Argument(None, metavar="TARGET"),
+    fmt: str = typer.Option("text", "--format", help="text or json (emits the edge record)."),
 ) -> None:
     """Remove a relation: khub unlink initech-pov partner northwind."""
     root = resolve_root(ctx)
     id_, predicate, target = _edge_args(id_, predicate, target)
     result = unlink(root, id_, predicate, target)
-    if not result.changed:  # no such edge — idempotent no-op success (exit 0)
-        typer.echo(f"No edge {result.predicate} -> {result.target} on {result.slug}")
-        return
-    typer.echo(_edge_message("Unlinked", result))
+
+    def human() -> None:
+        # No such edge — idempotent no-op success (exit 0).
+        typer.echo(
+            f"No edge {result.predicate} -> {result.target} on {result.slug}"
+            if not result.changed
+            else _edge_message("Unlinked", result)
+        )
+
+    emit(_edge_record(result), fmt, human)
 
 
 @guard
@@ -176,20 +186,19 @@ def remove_command(
     result = delete(root, id_, force=force)
 
     if result.removed:
-        if fmt == "json":
-            typer.echo(json.dumps({
-                "id": f"{result.type}/{result.slug}",
-                "type": result.type,
-                "slug": result.slug,
-                "removed": True,
-            }, default=str))
-        else:
-            typer.echo(f"Removed {result.type} '{result.slug}'")
+        record = {
+            "id": f"{result.type}/{result.slug}",
+            "type": result.type,
+            "slug": result.slug,
+            "removed": True,
+        }
+        emit(record, fmt, lambda: typer.echo(f"Removed {result.type} '{result.slug}'"))
         return
     refusal = LocatedError.inbound_edge_refusal(result.type, result.slug, len(result.inbound))
-    if fmt == "json":
+    if want_json(fmt):
         # A refusal is a failure: let `guard` render the shared {"error": …} envelope
-        # rather than a bespoke payload no other command emits.
+        # rather than a bespoke payload no other command emits. Gated on the same
+        # signal as the success path, so one command never mixes the two shapes.
         raise refusal
     typer.echo(refusal.message, err=True)
     for edge in result.inbound:
@@ -280,6 +289,23 @@ def _ref_record(root: Path, result: CreateResult | UpdateResult) -> dict[str, An
 
 def _edge_message(verb: str, result: LinkResult) -> str:
     return f"{verb} {result.slug} --{result.predicate}--> {result.target}"
+
+
+def _edge_record(result: LinkResult) -> dict[str, Any]:
+    """The record ``link``/``unlink`` emit — one builder for both.
+
+    ``changed`` is the whole point: both verbs are idempotent and exit 0 whether or not
+    they moved anything, so prose alone left an agent unable to tell "I created this edge"
+    from "it was already there" without a follow-up ``get``.
+    """
+    return {
+        "id": f"{result.type}/{result.slug}",
+        "type": result.type,
+        "slug": result.slug,
+        "predicate": result.predicate,
+        "target": result.target,
+        "changed": result.changed,
+    }
 
 
 def _get_record(root: Path, view: EntityView) -> dict[str, Any]:

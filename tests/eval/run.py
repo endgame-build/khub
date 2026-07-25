@@ -72,8 +72,19 @@ def verify_expect(ws: Path, expect: dict) -> bool:
 # --- transcript parsing -------------------------------------------------------
 
 
+def is_entity_path(rel: str, paths: tuple[str, ...]) -> bool:
+    """True when ``rel`` is an entity file: inside a type's directory, or a singleton's own path.
+
+    A singleton's storage path IS the file (``knowledge/prd.md``), so the prefix test this
+    replaced — ``rel.startswith("knowledge/prd.md/")`` — could never match it. An agent that
+    hand-edited the PRD scored on-rails. firm-ops declares no singletons, which is why the
+    published adherence numbers never exposed it; build-lite has two and build-hub five.
+    """
+    return any(rel == p or rel.startswith(f"{p}/") for p in paths)
+
+
 def parse_stream(log: Path, ws: Path) -> dict:
-    prefixes = tuple(f"{p}/" for p in entity_path_prefixes(ws)) if ws.exists() else ()
+    prefixes = tuple(entity_path_prefixes(ws)) if ws.exists() else ()
     khub_writes, khub_reads, file_writes, greps = [], [], [], []
     skill_loaded = False
     for line in log.read_text(errors="replace").splitlines():
@@ -100,7 +111,7 @@ def parse_stream(log: Path, ws: Path) -> dict:
             elif name in ("Write", "Edit", "MultiEdit", "NotebookEdit"):
                 fp = str(inp.get("file_path", ""))
                 rel = fp.split(str(ws) + "/", 1)[-1] if str(ws) in fp else fp.lstrip("/")
-                if rel.startswith(prefixes):
+                if is_entity_path(rel, prefixes):
                     file_writes.append(rel)
             elif name in ("Grep", "Glob"):
                 greps.append(f"{name}:{inp.get('pattern') or inp.get('path')}")

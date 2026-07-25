@@ -27,6 +27,16 @@ jobs:
         run: |
           uv run typer --app app khub.cli.main utils docs --name khub --output docs/cli-reference.md
           git diff --exit-code docs/cli-reference.md
+      # __version__ is only a fallback (cli/main.py prefers installed metadata), so it
+      # drifted four minors unnoticed. Nothing else asserts the two agree.
+      - name: Version is consistent
+        run: |
+          python3 -c "
+          import pathlib, re, tomllib
+          pkg = tomllib.loads(pathlib.Path('pyproject.toml').read_text())['project']['version']
+          src = re.search(r'__version__ = \"([^\"]+)\"', pathlib.Path('src/khub/__init__.py').read_text())[1]
+          assert pkg == src, f'pyproject {pkg} != __init__ {src}'
+          print(f'version {pkg} consistent')"
       # The suite cannot catch this: `skills_dir()` falls back to the repo's
       # skills/ in a dev checkout, so a broken force-include leaves every test
       # green while the built wheel ships without skills. Only a build shows it.

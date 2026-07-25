@@ -34,13 +34,15 @@ The schema lives at `.khub/schema.yaml`; the active preset (`firm-ops`, `build-h
 Agent and human write the same graph through the same gates; there is no approval step.
 
 - `khub add <type> --<field> <v> [--body <text>] [--draft] --format json` — mint an entity. Set relation fields inline (`--client acme-corp`). A relation to a missing target is rejected; a missing required field is captured anyway and reported later by `khub check`.
-- `khub edit <id> <field> <v>` — change a field; `edit <id> draft false` publishes.
-- `khub link <id> <predicate> <target>` / `khub unlink <id> <predicate> <target>` — relations, idempotent.
-- `khub remove <id>` — delete; refuses while an inbound edge resolves to it unless `--force`.
+- `khub edit <id> <field> <v> --format json` — change a field; `edit <id> draft false` publishes.
+- `khub link <id> <predicate> <target>` / `khub unlink <id> <predicate> <target> --format json` — relations, idempotent. Read `changed` to tell a write from a no-op; both exit 0.
+- `khub remove <id> --format json` — delete; refuses while an inbound edge resolves to it unless `--force`.
 
 ## Rules
 
-- Read with `--format json`; a table is for humans, JSON is for you.
+- Every read AND write emits JSON on a pipe; a table is only for a TTY. `--format json` makes it explicit.
 - Build every write from `khub schema show`, never from a hardcoded shape.
 - On a failed command, read the located error (field, reason, or unresolved target) and correct the call.
 - Gate before you commit: `khub validate` per entity, `khub check` graph-wide.
+- Run `khub validate --strict` in CI. Capture is never blocked, so a typo'd field name (`--knid`) is written to frontmatter and neither default gate reports it; `--strict` is what turns undeclared keys into a finding.
+- `khub search` and `khub query --has/--missing` both reach attribute values, so find an entity by what it holds (`search python`, `query --type component --missing repo`) rather than listing and filtering yourself.

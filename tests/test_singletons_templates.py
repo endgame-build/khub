@@ -168,12 +168,17 @@ def test_add_explicit_body_wins_over_template(ws: Path) -> None:
     assert "## Summary" not in result.path.read_text()
 
 
-def test_cli_no_template_flag(ws: Path, monkeypatch) -> None:
+def test_cli_no_template_flag_is_refused_on_a_templated_type(ws: Path, monkeypatch) -> None:
+    """--no-template used to mint an entity that failed `validate` on the very next run.
+
+    The flag's only outcome on a templated type was a red workspace, so it is refused and
+    the message names the two ways through. `--body` still opts out of the scaffold.
+    """
     monkeypatch.chdir(ws)
     r = runner.invoke(app, ["add", "note", "--title", "Third", "--no-template"])
-    assert r.exit_code == 0, r.output
-    body = (ws / "notes" / "third.md").read_text()
-    assert "## Summary" not in body
+    assert r.exit_code == 1
+    assert "has a body template" in r.output
+    assert not (ws / "notes" / "third.md").exists()
 
 
 # --- template loading ------------------------------------------------------------

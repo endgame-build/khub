@@ -150,6 +150,24 @@ def _scan_collection(
         return [], [cpath]
 
 
+def canonical_slug(slug: str, types_by_slug: dict[str, set[str]]) -> str | None:
+    """The stored slug matching ``slug`` case-insensitively, when exactly one does.
+
+    ``add --id CMP-001-Api`` slugifies to ``cmp-001-api`` on write, so an agent reusing
+    the string it just passed got ``lookup_error`` from every read verb — write and read
+    disagreeing about one identifier. Exact match always wins; this is only the fallback.
+
+    Returns None when nothing matches, or when two stored slugs differ only by case
+    (possible on a case-sensitive filesystem, and genuinely ambiguous), so the caller
+    raises its own error rather than picking one arbitrarily.
+    """
+    if slug in types_by_slug:
+        return slug
+    folded = slug.casefold()
+    hits = [s for s in types_by_slug if s.casefold() == folded]
+    return hits[0] if len(hits) == 1 else None
+
+
 def resolve_target(
     rel: ResolvedRelation,
     target: str,
@@ -170,6 +188,9 @@ def resolve_target(
         # A qualified id still honors the edge's declared targets: a typed/union edge
         # rejects a node of a disallowed type; a universal (any) edge accepts any.
         return {(t, s)} if rel.kind == "any" or t in rel.targets else set()
+    # Resolve case the same way the read verbs do, so `link x rel CMP-001` and
+    # `get CMP-001` cannot disagree about whether that entity exists.
+    target = canonical_slug(target, types_by_slug) or target
     if rel.kind == "any":
         return {(t, target) for t in types_by_slug.get(target, ())}
     return {(t, target) for t in rel.targets if (t, target) in nodes}

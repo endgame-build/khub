@@ -70,7 +70,12 @@ def edges_view(resolved: ResolvedSchema) -> list[dict[str, Any]]:
     edges: dict[str, dict[str, Any]] = {}
     for predicate, rel in resolved.base_relations.items():
         edges[predicate] = _edge(rel, sources=["any"])
-    # Type-declared predicates accumulate their declaring types as `from`.
+    # Type-declared predicates accumulate their declaring types as `from`, and MERGE the
+    # declarations themselves. A predicate declared on two types (build-lite's
+    # `supersedes` on both adr and feature-spec) used to keep only the first-seen `to`,
+    # so this view advertised `feature-spec --supersedes--> adr` — an edge `validate`
+    # rejects. Targets union; the modal flags OR, since the view answers "is this ever
+    # many / required / acyclic?" across every declaration.
     sources: dict[str, set[str]] = {}
     for tname, rtype in resolved.types.items():
         for predicate, rel in rtype.relations.items():
@@ -78,7 +83,13 @@ def edges_view(resolved: ResolvedSchema) -> list[dict[str, Any]]:
                 continue
             sources.setdefault(predicate, set()).add(tname)
             edge = edges.setdefault(predicate, _edge(rel, sources=[]))
+            edge["to"] = sorted(set(edge["to"]) | set(rel.targets))
             edge["required"] = edge["required"] or rel.required
+            edge["many"] = edge["many"] or rel.many
+            edge["acyclic"] = edge["acyclic"] or rel.acyclic
+            edge["inverse"] = edge["inverse"] or rel.inverse
+            if edge["kind"] != rel.kind:  # e.g. typed on one type, any on another
+                edge["kind"] = "union"
     for predicate, srcs in sources.items():
         edges[predicate]["from"] = sorted(srcs)
     return [edges[p] for p in sorted(edges)]
@@ -96,12 +107,16 @@ def _type_view(rtype: ResolvedType) -> dict[str, Any]:
         # sweep, and would read `khub check`'s silence as a bug.
         "required": rtype.required,
         "orphan": rtype.orphan,
+        # `pattern` and `default` are enforced (write-time validation, schema defaults)
+        # but were invisible here, so an agent could not tell why a value was rejected.
         "fields": [
             {
                 "name": a.name,
                 "type": a.base_type,
                 "required": a.required,
                 "enum": list(a.enum) if a.enum else None,
+                "pattern": a.pattern,
+                "default": a.default,
             }
             for a in rtype.attributes.values()
         ],
@@ -116,6 +131,11 @@ def _relation_view(rel: ResolvedRelation) -> dict[str, Any]:
         "kind": rel.kind,
         "many": rel.many,
         "required": rel.required,
+        # Both are enforced and both were undiscoverable: `acyclic` decides whether
+        # `check` reports a cycle, and `inverse` names a predicate that is never stored
+        # yet is queryable (`--missing superseded`) and appears in `get --edges`.
+        "inverse": rel.inverse,
+        "acyclic": rel.acyclic,
     }
 
 
@@ -127,5 +147,7 @@ def _edge(rel: ResolvedRelation, *, sources: list[str]) -> dict[str, Any]:
         "kind": rel.kind,
         "many": rel.many,
         "required": rel.required,
+        "inverse": rel.inverse,
+        "acyclic": rel.acyclic,
         "derived": False,
     }

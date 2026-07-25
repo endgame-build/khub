@@ -12,12 +12,11 @@ now ``khub install-skills``; ``init`` ends by naming it.
 from __future__ import annotations
 
 import dataclasses
-import json
 from pathlib import Path
 
 import typer
 
-from khub.cli._render import guard
+from khub.cli._render import emit, guard
 from khub.core.errors import LocatedError
 
 # Printed after a scaffold, and carried as `skill_hint` in the JSON payload, so an
@@ -82,34 +81,34 @@ def init_command(
         except OSError as err:  # e.g. a read-only agent file; report, don't unwind
             wire_error = str(err)
 
-    if fmt == "json":
-        payload = dataclasses.asdict(result)
-        if wire_result is not None:
-            payload["wire"] = [dataclasses.asdict(o) for o in wire_result.outcomes]
-        if wire_error is not None:
-            payload["wire_error"] = wire_error
-        payload["skill_hint"] = _skill_hint(result.path)
-        typer.echo(json.dumps(payload, default=str))
-        return
-
-    if result.seeded_over_corpus:
-        typer.echo(
-            f"Initialized {result.preset} workspace; "
-            f"{result.entity_files_modified} entity files modified"
-        )
-    else:
-        typer.echo(f"Initialized {result.preset} workspace at {result.path}")
-    if result.singletons_created:
-        typer.echo("created singletons: " + ", ".join(result.singletons_created))
-    if result.preserved:
-        # Say it out loud: a re-init leaves the workspace's own schema/templates in
-        # place, so nobody has to wonder whether --force just restored the preset.
-        typer.echo(f"preserved {len(result.preserved)} workspace-owned file(s): "
-                   + ", ".join(result.preserved[:3])
-                   + (" …" if len(result.preserved) > 3 else ""))
+    payload = dataclasses.asdict(result)
     if wire_result is not None:
-        for outcome in wire_result.outcomes:
-            typer.echo(f"{outcome.action} {outcome.path.name}")
+        payload["wire"] = [dataclasses.asdict(o) for o in wire_result.outcomes]
     if wire_error is not None:
-        typer.echo(f"wire skipped: {wire_error}", err=True)
-    typer.echo(f"\nAgent skill not installed. To install:\n  {_skill_hint(result.path)}")
+        payload["wire_error"] = wire_error
+    payload["skill_hint"] = _skill_hint(result.path)
+
+    def human() -> None:
+        if result.seeded_over_corpus:
+            typer.echo(
+                f"Initialized {result.preset} workspace; "
+                f"{result.entity_files_modified} entity files modified"
+            )
+        else:
+            typer.echo(f"Initialized {result.preset} workspace at {result.path}")
+        if result.singletons_created:
+            typer.echo("created singletons: " + ", ".join(result.singletons_created))
+        if result.preserved:
+            # Say it out loud: a re-init leaves the workspace's own schema/templates in
+            # place, so nobody has to wonder whether --force just restored the preset.
+            typer.echo(f"preserved {len(result.preserved)} workspace-owned file(s): "
+                       + ", ".join(result.preserved[:3])
+                       + (" …" if len(result.preserved) > 3 else ""))
+        if wire_result is not None:
+            for outcome in wire_result.outcomes:
+                typer.echo(f"{outcome.action} {outcome.path.name}")
+        if wire_error is not None:
+            typer.echo(f"wire skipped: {wire_error}", err=True)
+        typer.echo(f"\nAgent skill not installed. To install:\n  {_skill_hint(result.path)}")
+
+    emit(payload, fmt, human)

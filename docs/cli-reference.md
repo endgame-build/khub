@@ -170,6 +170,7 @@ $ khub link [OPTIONS] [ID] [PREDICATE] [TARGET]
 
 **Options**:
 
+* `--format <str>`: text or json (emits the edge record).  [default: text]
 * `--help`: Show this message and exit.
 
 ## `khub unlink`
@@ -190,6 +191,7 @@ $ khub unlink [OPTIONS] [ID] [PREDICATE] [TARGET]
 
 **Options**:
 
+* `--format <str>`: text or json (emits the edge record).  [default: text]
 * `--help`: Show this message and exit.
 
 ## `khub remove`

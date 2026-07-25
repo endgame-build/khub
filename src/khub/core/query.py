@@ -37,6 +37,9 @@ class Match:
     draft: bool
     orphan: bool
     stale: bool
+    # Carried so listing a type does not cost one `get` per row. Defaulted to keep the
+    # positional shape stable for existing constructors.
+    title: str = ""
 
 
 @dataclass(frozen=True)
@@ -89,6 +92,7 @@ def query(root: Path, filters: QueryFilters, *, now: date) -> list[Match]:
                 draft=as_bool(meta.get("draft", False)),
                 orphan=orphan,
                 stale=stale,
+                title=str(meta.get("title") or meta.get("name") or slug),
             )
         )
     if filters.limit is not None:
@@ -115,7 +119,11 @@ def _validate_filter_names(resolved: ResolvedSchema, root: Path, filters: QueryF
             if fname not in rtype.attributes and fname not in rtype.relations:
                 raise LocatedError.unknown_filter_field(fname, filters.type)
         for pred in preds:
-            if pred not in rtype.relations and not _inverse_sources(resolved, pred, filters.type):
+            if (
+                pred not in rtype.relations
+                and pred not in rtype.attributes
+                and not _inverse_sources(resolved, pred, filters.type)
+            ):
                 raise LocatedError.unknown_filter_field(pred, filters.type)
         return
     attrs = {a for t in resolved.types.values() for a in t.attributes}
@@ -124,7 +132,7 @@ def _validate_filter_names(resolved: ResolvedSchema, root: Path, filters: QueryF
         if fname not in attrs and fname not in rels:
             raise LocatedError.unknown_filter_field(fname, "any")
     for pred in preds:
-        if pred not in rels and not _inverse_sources(resolved, pred):
+        if pred not in rels and pred not in attrs and not _inverse_sources(resolved, pred):
             raise LocatedError.unknown_filter_field(pred, "any")
 
 
@@ -149,21 +157,46 @@ def _passes(
             return False
     if f.tag is not None and not _field_matches(meta.get("tags"), f.tag):
         return False
-    # --has / --missing test the *resolved* edge: an edge only exists in the graph
-    # when its value resolved to a node, so an unresolvable target counts as missing.
-    if f.has is not None and not _has_edge(
-        g, node, f.has, _inverse_sources(resolved, f.has, node[0])
-    ):
+    if f.has is not None and not _has_value(node, meta, g, resolved, f.has):
         return False
-    if f.missing is not None and _has_edge(
-        g, node, f.missing, _inverse_sources(resolved, f.missing, node[0])
-    ):
+    if f.missing is not None and _has_value(node, meta, g, resolved, f.missing):
         return False
     if f.orphan and not orphan:
         return False
     if f.stale and not stale:  # noqa: SIM103 — one guard per filter reads better than a
         return False             # collapsed boolean; the parallel shape is the point
     return True
+
+
+def _has_value(
+    node: tuple[str, str],
+    meta: dict[str, Any],
+    g: nx.MultiDiGraph,
+    resolved: ResolvedSchema,
+    name: str,
+) -> bool:
+    """Whether ``node`` carries ``name``: a resolved edge for a relation, a populated
+    value for an attribute.
+
+    ``--has``/``--missing`` answered from the graph alone until 0.13.0, so an attribute
+    (``repo``, ``stack``) raised ``No field 'repo' on type 'component'`` — a message that
+    was simply false, since the schema declares it. An attribute has no edge, so presence
+    is read off frontmatter: absent, null, or empty counts as a gap, the same
+    null-is-absent rule ``validate`` and ``check`` already apply.
+
+    A relation still tests the *resolved* edge — an edge exists in the graph only when its
+    value resolved to a node, so an unresolvable target counts as missing.
+    """
+    rtype = resolved.types[node[0]]
+    inverse_of = _inverse_sources(resolved, name, node[0])
+    if name in rtype.relations or inverse_of:
+        return _has_edge(g, node, name, inverse_of)
+    if name in rtype.attributes:
+        value = meta.get(name)
+        if value is None:
+            return False
+        return not (isinstance(value, (str, list, dict)) and not value)
+    return False  # declared on some other type, so this entity simply lacks it
 
 
 def _has_edge(
