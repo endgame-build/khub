@@ -249,3 +249,48 @@ def test_unknown_predicate_is_still_rejected(tmp_path: Path) -> None:
     init_workspace("build-hub", ws)
     with pytest.raises(LocatedError):
         query(ws, QueryFilters(type="adr", has="bogus"), now=date.today())
+
+
+@pytest.mark.unit
+def test_a_stored_forward_edge_is_never_shadowed_by_an_inverse(tmp_path: Path) -> None:
+    """Checking the inverse branch first meant that the moment ANY type declared
+    `inverse: <name>`, `<name>` stopped being answerable as a forward predicate —
+    and `depends_on` is in the base block of every type in every preset."""
+    from khub.core import entity
+    from khub.core.query import QueryFilters, query
+    from khub.core.resolve import load_yaml
+    from khub.core.workspace import _dump_yaml, init_workspace
+
+    ws = tmp_path / "ws"
+    init_workspace("build-hub", ws)
+    sp = ws / ".khub" / "schema.yaml"
+    data = load_yaml(sp)
+    data["entities"]["domain"]["relations"]["blocks"] = {
+        "to": "any", "many": True, "inverse": "depends_on",
+    }
+    sp.write_text(_dump_yaml(data))
+
+    entity.create(ws, "domain", {"title": "A"}, id_="a")
+    entity.create(ws, "domain", {"title": "B"}, id_="b")
+    entity.link(ws, "a", "depends_on", "b")
+
+    has = [m.slug for m in query(ws, QueryFilters(type="domain", has="depends_on"), now=date.today())]
+    assert has == ["a"]  # a's own stored edge
+    missing = [
+        m.slug for m in query(ws, QueryFilters(type="domain", missing="depends_on"), now=date.today())
+    ]
+    assert missing == ["b"]
+
+
+@pytest.mark.unit
+def test_an_inverse_is_rejected_on_a_type_that_cannot_carry_it(tmp_path: Path) -> None:
+    """`superseded` is an inverse of adr/pdr/feature-spec `supersedes`; `repo` declares
+    none, so filtering it there is a typo that used to match the whole type."""
+    from khub.core.errors import LocatedError
+    from khub.core.query import QueryFilters, query
+    from khub.core.workspace import init_workspace
+
+    ws = tmp_path / "ws"
+    init_workspace("build-hub", ws)
+    with pytest.raises(LocatedError):
+        query(ws, QueryFilters(type="repo", missing="superseded"), now=date.today())

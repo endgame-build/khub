@@ -160,8 +160,8 @@ def _body_structure_errors(
             reason = getattr(err, "message", None) or str(err)
             errors.append(FieldError(type=type_, slug="*", field="template", reason=reason))
             continue
-        if tpl is None:
-            continue
+        if tpl is None or not tpl.sections:
+            continue  # no template, or an explicitly empty contract
         for node in sorted(valid.nodes):
             if node[0] != type_ or not _in_target(node, target):
                 continue
@@ -402,8 +402,12 @@ class CheckReport:
     # Dangling reports suppressed because their target type's collection file is
     # malformed — derivative noise rolled into the malformed finding.
     suppressed_dangling: int = 0
-    # Singleton types declared `required: true` whose file does not exist.
+    # Singleton types declared `required: true` that have no LIVE node: the file is
+    # absent, a stray, or present-but-draft.
     missing_singletons: list[str] = field(default_factory=list)
+    # The subset of those that exist on disk but are unpublished — so the report can
+    # say "unpublished" rather than send a user hunting for a file that is right there.
+    draft_singletons: list[str] = field(default_factory=list)
 
     @property
     def passed(self) -> bool:
@@ -469,15 +473,17 @@ def check(root: Path, *, strict: bool = False) -> CheckReport:
     # a draft target never satisfies another entity's required relation; a draft
     # cannot satisfy its own type's requiredness either, or an unpublished PRD
     # turns the whole gate green.
-    missing_singletons = sorted(
+    required_singletons = [
+        t for t, rt in resolved.types.items() if rt.storage.layout == "singleton" and rt.required
+    ]
+    draft_singletons = sorted(
         t
-        for t, rt in resolved.types.items()
-        if rt.storage.layout == "singleton"
-        and rt.required
-        and (
-            (t, t) not in valid.nodes
-            or as_bool(valid.meta[(t, t)].get("draft", False))
-        )
+        for t in required_singletons
+        if (t, t) in valid.nodes and as_bool(valid.meta[(t, t)].get("draft", False))
+    )
+    missing_singletons = sorted(
+        t for t in required_singletons
+        if (t, t) not in valid.nodes or t in set(draft_singletons)
     )
     return CheckReport(
         incomplete=incomplete,
@@ -489,6 +495,7 @@ def check(root: Path, *, strict: bool = False) -> CheckReport:
         strict=strict,
         suppressed_dangling=suppressed,
         missing_singletons=missing_singletons,
+        draft_singletons=draft_singletons,
     )
 
 
@@ -576,14 +583,23 @@ def _dangling(
     return out
 
 
+# `depends_on` is acyclic by contract in every khub schema — it was hardcoded here
+# before the flag existed. Keep it built in: schema.yaml is copied at init and owned
+# by the workspace, so a workspace created before the flag shipped carries no
+# `acyclic:` key, and keying purely off the schema would silently switch cycle
+# detection off for every one of them.
+_ALWAYS_ACYCLIC = ("depends_on",)
+
+
 def _acyclic_predicates(resolved: ResolvedSchema) -> list[str]:
-    """Every predicate the schema marks acyclic, deduped and ordered for stable output."""
-    return sorted({
+    """Every acyclic predicate: the built-in contract plus whatever the schema marks."""
+    declared = {
         rel.predicate
         for rtype in resolved.types.values()
         for rel in rtype.relations.values()
         if rel.acyclic
-    })
+    }
+    return sorted(declared | set(_ALWAYS_ACYCLIC))
 
 
 def _cycles(graph: nx.MultiDiGraph, resolved: ResolvedSchema) -> list[list[str]]:

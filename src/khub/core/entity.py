@@ -320,6 +320,13 @@ def _partition(
                 "pass --body/--body-file for prose",
             )
         if key in rtype.attributes:
+            if isinstance(raw, str) and not raw.strip():
+                # `--field ""` means "clear it". Store null, not '': null is absent
+                # (validate passes, `check` reports the gap), while '' is malformed
+                # by khub's own rule — writing it here would produce an entity that
+                # fails the gate the moment it lands. Mirrors `unlink` for relations.
+                attrs[key] = None
+                continue
             attrs[key] = _validate_attr(rtype.attributes[key], raw)
         elif key in rtype.relations:
             rel = rtype.relations[key]

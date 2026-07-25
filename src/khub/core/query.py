@@ -108,7 +108,7 @@ def _validate_filter_names(resolved: ResolvedSchema, root: Path, filters: QueryF
             if fname not in rtype.attributes and fname not in rtype.relations:
                 raise LocatedError.unknown_filter_field(fname, filters.type)
         for pred in preds:
-            if pred not in rtype.relations and not _inverse_sources(resolved, pred):
+            if pred not in rtype.relations and not _inverse_sources(resolved, pred, filters.type):
                 raise LocatedError.unknown_filter_field(pred, filters.type)
         return
     attrs = {a for t in resolved.types.values() for a in t.attributes}
@@ -144,10 +144,12 @@ def _passes(
         return False
     # --has / --missing test the *resolved* edge: an edge only exists in the graph
     # when its value resolved to a node, so an unresolvable target counts as missing.
-    if f.has is not None and not _has_edge(g, node, f.has, _inverse_sources(resolved, f.has)):
+    if f.has is not None and not _has_edge(
+        g, node, f.has, _inverse_sources(resolved, f.has, node[0])
+    ):
         return False
     if f.missing is not None and _has_edge(
-        g, node, f.missing, _inverse_sources(resolved, f.missing)
+        g, node, f.missing, _inverse_sources(resolved, f.missing, node[0])
     ):
         return False
     if f.orphan and not orphan:
@@ -166,21 +168,31 @@ def _has_edge(
     answered from the INBOUND side: the forward edge lives on the other entity. That
     makes ``--missing superseded`` the "which decisions are still current?" query.
     """
-    if inverse_of:
-        return any(
-            pred in inverse_of for _, _, pred in g.in_edges(node, keys=False, data="predicate")
-        )
-    return any(pred == predicate for _, _, pred in g.out_edges(node, keys=False, data="predicate"))
+    if any(pred == predicate for _, _, pred in g.out_edges(node, keys=False, data="predicate")):
+        return True  # a stored forward edge always wins; an inverse never shadows it
+    if not inverse_of:
+        return False
+    sources = inverse_of
+    return any(pred in sources for _, _, pred in g.in_edges(node, keys=False, data="predicate"))
 
 
-def _inverse_sources(resolved: ResolvedSchema, name: str) -> set[str]:
-    """The forward predicates whose declared inverse is ``name`` (empty if not one)."""
-    return {
-        rel.predicate
-        for rtype in resolved.types.values()
-        for rel in rtype.relations.values()
-        if rel.inverse == name
-    }
+def _inverse_sources(
+    resolved: ResolvedSchema, name: str, on_type: str | None = None
+) -> set[str]:
+    """The forward predicates whose declared inverse is ``name``.
+
+    With ``on_type``, only relations that can actually point AT that type count — an
+    inverse of a relation targeting something else is not a field of this type, and
+    accepting it would turn a typo into a filter that silently matches everything.
+    """
+    out: set[str] = set()
+    for rtype in resolved.types.values():
+        for rel in rtype.relations.values():
+            if rel.inverse != name:
+                continue
+            if on_type is None or rel.kind == "any" or on_type in rel.targets:
+                out.add(rel.predicate)
+    return out
 
 
 def _field_matches(value: Any, wanted: str) -> bool:

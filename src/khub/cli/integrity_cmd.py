@@ -98,7 +98,8 @@ def _check_human(report: CheckReport) -> None:
     for cycle in report.cycles:
         typer.echo(f"cycle {' -> '.join(cycle)}")
     for name in report.missing_singletons:
-        typer.echo(f"missing required singleton {name}")
+        state = "unpublished (draft: true)" if name in report.draft_singletons else "missing"
+        typer.echo(f"required singleton {name} is {state}")
 
 
 def _check_payload(report: CheckReport) -> dict[str, Any]:
@@ -125,6 +126,8 @@ def _check_payload(report: CheckReport) -> dict[str, Any]:
         "cycles": report.cycles,
         "suppressed_dangling": report.suppressed_dangling,
         "missing_singletons": report.missing_singletons,
+        # Which of those exist but are unpublished — "missing" alone would mislead.
+        "draft_singletons": report.draft_singletons,
         # Say which gate ran: `orphans` populated with passed=true means default mode.
         "strict": report.strict,
     }

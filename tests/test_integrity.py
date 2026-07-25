@@ -534,3 +534,44 @@ def test_empty_string_fails_validate_like_check_treats_it(fresh_ws: Path, seed: 
 
     incomplete = {i.id for i in check(fresh_ws).incomplete}
     assert {"client/blank", "client/absent"} <= incomplete  # check reports both
+
+
+@pytest.mark.unit
+def test_depends_on_stays_acyclic_without_the_schema_flag(tmp_path: Path) -> None:
+    """schema.yaml is copied at init and owned by the workspace, so a workspace made
+    before `acyclic:` existed carries no such key. Keying cycle detection purely off
+    the schema would have switched it off for every one of them."""
+    from khub.core import entity
+    from khub.core.workspace import init_workspace
+
+    ws = tmp_path / "ws"
+    init_workspace("build-hub", ws)
+    schema = ws / ".khub" / "schema.yaml"
+    schema.write_text(schema.read_text().replace(", acyclic: true", "").replace("acyclic: true", ""))
+    assert "acyclic" not in schema.read_text()  # a pre-0.11 workspace
+
+    for name in ("alpha", "beta", "gamma"):
+        entity.create(ws, "domain", {"title": name}, id_=name)
+    entity.link(ws, "alpha", "depends_on", "beta")
+    entity.link(ws, "beta", "depends_on", "gamma")
+    entity.link(ws, "gamma", "depends_on", "alpha")
+
+    assert any(len(c) == 3 for c in check(ws).cycles)
+
+
+@pytest.mark.unit
+def test_draft_singleton_is_distinguished_from_an_absent_one(tmp_path: Path) -> None:
+    """"missing" sends a user hunting for a file that is sitting right there."""
+    from khub.core import entity
+    from khub.core.workspace import init_workspace
+
+    ws = tmp_path / "ws"
+    init_workspace("build-hub", ws)
+    entity.update(ws, "prd", {"draft": "true"})
+    report = check(ws)
+    assert report.missing_singletons == ["prd"] and report.draft_singletons == ["prd"]
+
+    entity.update(ws, "prd", {"draft": "false"})
+    entity.delete(ws, "prd")
+    absent = check(ws)
+    assert absent.missing_singletons == ["prd"] and absent.draft_singletons == []

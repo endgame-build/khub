@@ -310,12 +310,21 @@ def test_failure_under_format_json_is_json(fresh_ws: Path, monkeypatch: pytest.M
 
 
 @pytest.mark.integration
-def test_failure_without_json_stays_prose(fresh_ws: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """The human path is unchanged: one line on stderr, no JSON envelope."""
+def test_failure_matches_the_success_output_gate(
+    fresh_ws: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Failures use the same gate as successes: JSON under --format json OR on any
+    pipe, prose on a TTY. Keying failures on --format alone meant a piped agent got a
+    JSON record when the command worked and prose when it did not."""
     monkeypatch.chdir(fresh_ws)
-    result = runner.invoke(app, ["get", "ghost-entity"])
-    assert result.exit_code == 1
-    assert not result.output.strip().startswith("{")
+
+    piped = runner.invoke(app, ["get", "ghost-entity"])  # CliRunner is not a TTY
+    assert piped.exit_code == 1
+    assert json.loads(piped.output)["error"]["code"] == "lookup_error"
+
+    tty = runner.invoke(app, ["get", "ghost-entity"], env={"FORCE_COLOR": "1"})
+    assert tty.exit_code == 1
+    assert not tty.output.strip().startswith("{")
 
 
 @pytest.mark.integration

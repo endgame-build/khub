@@ -57,6 +57,8 @@ def guard(fn: Callable[_P, _R]) -> Callable[_P, _R]:
             return fn(*args, **kwargs)
         except LocatedError as err:
             _fail(err.message, code=err.code, fmt=kwargs.get("fmt"))
+        except BrokenPipeError:
+            raise  # `khub schema | head` is not an error; never dress it as one
         except OSError as err:
             _fail(f"{type(err).__name__}: {err}", code="os_error", fmt=kwargs.get("fmt"))
         raise AssertionError("unreachable")  # _fail always raises
@@ -65,8 +67,13 @@ def guard(fn: Callable[_P, _R]) -> Callable[_P, _R]:
 
 
 def _fail(message: str, *, code: str, fmt: object) -> None:
-    """Render one failure in the shape the caller asked for, then exit 1."""
-    if fmt == "json":
+    """Render one failure in the shape the caller asked for, then exit 1.
+
+    Uses the same gate as ``emit``: machine output under ``--format json`` OR on any
+    non-TTY. A caller that gets a JSON record on success must not get prose on
+    failure — that asymmetry is what made the agent path parse error text.
+    """
+    if want_json(fmt if isinstance(fmt, str) else "text"):
         typer.echo(json.dumps({"error": {"code": code, "message": message}}))
     else:
         typer.echo(message, err=True)

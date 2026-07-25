@@ -444,3 +444,17 @@ def test_reinit_still_restores_what_is_actually_missing(tmp_path: Path) -> None:
     assert (ws / ".khub" / "templates" / "adr.yaml").is_file()
     assert "roadmap" in result.singletons_created
     assert ".khub/templates/adr.yaml" not in result.preserved
+
+
+@pytest.mark.unit
+def test_reinit_refuses_a_different_preset(tmp_path: Path) -> None:
+    """Preserving the schema means scaffolding another preset over it would mint
+    directories and singletons for types the active schema does not declare —
+    orphan files no read verb can see and `check` cannot flag."""
+    ws = tmp_path / "ws"
+    init_workspace("firm-ops", ws)
+    with pytest.raises(LocatedError) as err:
+        init_workspace("build-hub", ws, force=True)
+    assert err.value.code == "preset_mismatch"
+    assert not (ws / "knowledge" / "product" / "prd.md").exists()
+    assert "firm-ops" in (ws / ".khub" / "config.yaml").read_text()

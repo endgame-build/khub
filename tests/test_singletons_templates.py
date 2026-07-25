@@ -259,14 +259,24 @@ def test_check_reports_missing_required_singleton(ws: Path) -> None:
 @pytest.mark.unit
 def test_empty_sections_means_no_body_contract(tmp_path: Path) -> None:
     """`sections: []` is the explicit way to say "template, but no required headings".
-    It used to error, while deleting the file entirely was fine — so there was no way
-    to declare an empty contract."""
+    It must stay a template: returning None read as "no template at all" to `init` and
+    `add`, so a REQUIRED singleton with an empty contract silently stopped being
+    created — the file was never written and `check` then failed on its absence."""
     from khub.core.template import load_template, template_path
 
     ws = tmp_path / "ws"
     init_workspace("build-hub", ws)
-    template_path(ws, "adr").write_text("title: x\nsections: []\n")
-    assert load_template(ws, "adr") is None
+    template_path(ws, "prd").write_text("title: Product requirements\nsections: []\n")
+
+    tpl = load_template(ws, "prd")
+    assert tpl is not None and tpl.sections == ()
+    assert tpl.title == "Product requirements"  # the title still seeds `add`
+
+    # and the required singleton is still scaffolded by a re-init
+    (ws / "knowledge" / "product" / "prd.md").unlink()
+    init_workspace("build-hub", ws, force=True)
+    assert (ws / "knowledge" / "product" / "prd.md").is_file()
+    assert check(ws).missing_singletons == []
 
 
 @pytest.mark.unit

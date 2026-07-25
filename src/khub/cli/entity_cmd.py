@@ -182,24 +182,16 @@ def remove_command(
                 "type": result.type,
                 "slug": result.slug,
                 "removed": True,
-            }))
+            }, default=str))
         else:
             typer.echo(f"Removed {result.type} '{result.slug}'")
         return
+    refusal = LocatedError.inbound_edge_refusal(result.type, result.slug, len(result.inbound))
     if fmt == "json":
-        typer.echo(json.dumps({
-            "id": f"{result.type}/{result.slug}",
-            "removed": False,
-            "inbound": [
-                {"id": f"{e.source_type}/{e.source_slug}", "predicate": e.predicate}
-                for e in result.inbound
-            ],
-        }))
-        raise typer.Exit(1)
-    typer.echo(
-        LocatedError.inbound_edge_refusal(result.type, result.slug, len(result.inbound)).message,
-        err=True,
-    )
+        # A refusal is a failure: let `guard` render the shared {"error": …} envelope
+        # rather than a bespoke payload no other command emits.
+        raise refusal
+    typer.echo(refusal.message, err=True)
     for edge in result.inbound:
         typer.echo(f"  {edge.source_type}/{edge.source_slug} --{edge.predicate}-->", err=True)
     raise typer.Exit(1)

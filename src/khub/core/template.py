@@ -105,7 +105,10 @@ def load_template(root: Path, type_: str) -> BodyTemplate | None:
     if not isinstance(raw_sections, list):
         raise _invalid(type_, "'sections' must be a list")
     if not raw_sections:
-        return None  # declared, deliberately empty: no headings required
+        # Declared, deliberately empty: no headings required — but still a template,
+        # so `add` seeds the title and `init` still creates the singleton. Returning
+        # None here read as "no template at all" to both callers.
+        return BodyTemplate(type=type_, title=data.get("title"), sections=())
     sections: list[Section] = []
     for i, entry in enumerate(raw_sections):
         if not isinstance(entry, dict):

@@ -66,6 +66,19 @@ class InitResult:
     preserved: tuple[str, ...] = ()
 
 
+def _existing_preset(target: Path) -> str | None:
+    """The preset a workspace was scaffolded from, or None if it is not one yet."""
+    config = target / ".khub" / "config.yaml"
+    if not config.is_file():
+        return None
+    try:
+        data = load_yaml(config)
+    except Exception:  # noqa: BLE001 — an unreadable config must not block a re-init
+        return None
+    value = data.get("preset") if isinstance(data, dict) else None
+    return str(value) if value else None
+
+
 def known_presets(source: Path | None = None) -> list[str]:
     """The presets resolvable from ``source`` (or the packaged presets).
 
@@ -104,6 +117,19 @@ def init_workspace(
     # target without --force. Nothing on disk changes until both pass.
     preset_path = resolve_preset(preset, preset_source)
     target = Path(path)
+    # Since 0.11.0 a re-init preserves the workspace's schema, so scaffolding a
+    # DIFFERENT preset over it would lay down directories and singletons for types
+    # the active schema does not declare — orphan files no verb can see. Refuse.
+    existing = _existing_preset(target)
+    if existing is not None and existing != preset:
+        raise LocatedError(
+            code="preset_mismatch",
+            message=(
+                f"{target} is a '{existing}' workspace; refusing to scaffold '{preset}' over it. "
+                f"Its .khub/schema.yaml is workspace-owned and would be kept, leaving files for "
+                f"types the schema does not declare."
+            ),
+        )
     if target.exists() and any(target.iterdir()) and not force:
         raise LocatedError.target_not_empty(str(path))
     # Snapshot pre-existing entity files so the cutover guarantee is measured, not
