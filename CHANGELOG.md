@@ -17,6 +17,11 @@ Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelo
   enum exactly or the schema is rejected at resolve time. An explicit `--id` is
   untouched. build-lite and build-hub declare the prefixes their docs already used in
   prose (`ad-`, `fr-`, `cst-`, `cmp-`, `fs-`, `wp-`, …); firm-ops declares none.
+  `validate` holds entities to the scheme: a slug that does not follow it, or whose
+  prefix disagrees with the attribute that chose it (a `fr-` file whose `kind` says
+  `constraint`), is an error on field `id` — a disagreement no other gate can see,
+  since the enum is legal and every relation resolves. Types declaring no prefix are
+  unchecked, so existing corpora keep their bare slugs.
   See [`docs/schema.md`](docs/schema.md#enumerated-ids).
 
 - **`kb/` — build-lite standalone**, a separate, dependency-free

@@ -225,9 +225,9 @@ diffs the results — `validate` and `check` payloads on clean and broken corpor
 the open-schema/`--strict` pair, `query` identity, `status` counts, `search`
 ranking scores, and the bytes of `index.md`.
 
-Matching khub cost the checks kb had invented, and one of them is a real loss: it
-no longer reports a `fr-` file whose `kind` says `constraint`. The right home for
-that is khub's own `check`, where both tools would get it.
+Matching khub cost the checks kb had invented. One of them was worth keeping — a
+`fr-` file whose `kind` says `constraint` — so it moved into khub's `validate`
+rather than being dropped, and both tools now have it.
 
 The one invariant that was never negotiable: **the graph is derived, never
 stored**, which is why the walks compute inverses on every call.

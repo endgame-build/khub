@@ -606,6 +606,11 @@ def _entity_findings(corpus: Corpus, e: Entity, *, strict: bool) -> Iterable[Fin
             elif spec["to"] != "any" and hit.type != spec["to"]:
                 yield err("wrong_type", f"{pred} -> {target} is a {hit.type}, wants {spec['to']}", pred)
 
+    if not schema.is_singleton(e.type):
+        reason = _id_error(schema, e)
+        if reason:
+            yield err("bad_id", reason, "id")
+
     missing = [k for k, spec in known.items() if spec.get("required") and not e.fm.get(k)]
     if missing:
         yield Finding(GAP, "incomplete", e.slug, "missing " + ", ".join(sorted(missing)))
@@ -623,6 +628,32 @@ def _entity_findings(corpus: Corpus, e: Entity, *, strict: bool) -> Iterable[Fin
     resolved_out = [t for _, t in corpus.out_edges(e.slug) if t in corpus.entities]
     if swept and not resolved_out and not corpus.in_edges(e.slug):
         yield Finding(GAP, "orphan", e.slug, "no relation in or out")
+
+
+ENUMERATED_ID = re.compile(r"^([a-z][a-z0-9]*)-(\d{3,})-[a-z0-9-]+$")
+
+
+def _id_error(schema: Schema, e: Entity) -> str | None:
+    """khub's id gate: the slug must agree with the type's declared id_prefix.
+
+    Only types that declare one are checked, and an entity whose deciding attribute
+    is unset is skipped — `incomplete` already names that cause.
+    """
+    prefixes = schema.prefixes(e.type)
+    if not prefixes:
+        return None
+    expected = schema.prefix_for(e.type, e.fm)
+    if expected is None:
+        return None
+    match = ENUMERATED_ID.match(e.slug)
+    if match is None:
+        return f"slug does not follow this type's id scheme ({'|'.join(prefixes)}-NNN-slug)"
+    if match.group(1) != expected:
+        spec = schema.types[e.type].get("id_prefix")
+        by = spec["by"] if isinstance(spec, dict) else None
+        deciding = f" for {by} '{e.fm.get(by)}'" if by else ""
+        return f"slug says '{match.group(1)}-' but the schema mints '{expected}-'{deciding}"
+    return None
 
 
 def _attr_problem(spec: dict[str, Any], value: Any) -> str | None:
@@ -691,7 +722,7 @@ def _cycle_findings(corpus: Corpus) -> Iterable[Finding]:
 # `check` adds the graph-wide gates on top. Same finding, same command, either tool.
 VALIDATE_CODES = {
     "malformed", "duplicate_id", "unknown_field", "bad_value",
-    "cardinality", "self_link", "dangling", "wrong_type", "body_shape",
+    "cardinality", "self_link", "dangling", "wrong_type", "body_shape", "bad_id",
 }
 
 

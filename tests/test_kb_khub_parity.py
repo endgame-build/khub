@@ -138,6 +138,32 @@ def test_an_undeclared_key_passes_both_and_fails_both_under_strict(
     assert {e["id"] for e in ours["errors"]} == {e["id"] for e in theirs["errors"]}
 
 
+@pytest.mark.e2e
+def test_the_id_gate_agrees(kb: Any, corpus: Path) -> None:
+    """A `fr-` file whose kind says constraint: same error, same field, same exit."""
+    path = corpus / "knowledge" / "requirements" / "fr-001-pay-by-card.md"
+    path.write_text(path.read_text().replace("kind: functional", "kind: constraint"))
+
+    ours, our_code = kb_json(kb, corpus, "validate")
+    theirs, their_code = khub_json(corpus, "validate")
+    assert our_code == their_code == 1
+    assert ours["errors"] == theirs["errors"]
+    assert theirs["errors"][0]["field"] == "id"
+    assert "cst-" in theirs["errors"][0]["reason"]
+
+
+@pytest.mark.e2e
+def test_a_hand_named_file_fails_the_id_gate_in_both(kb: Any, corpus: Path) -> None:
+    (corpus / "knowledge" / "decisions" / "nonsense.md").write_text(
+        "---\ntype: adr\ntitle: Hand named\nstatus: proposed\ncreated: 2026-07-25\n---\n\n"
+        "## Context\n\n## Decision\n\n## Consequences\n"
+    )
+    ours, our_code = kb_json(kb, corpus, "validate")
+    theirs, their_code = khub_json(corpus, "validate")
+    assert our_code == their_code == 1
+    assert ours["errors"] == theirs["errors"]
+
+
 # -------------------------------------------------------------------- the reads
 
 

@@ -287,8 +287,8 @@ created: 2026-07-25
     (root / "knowledge/prd.md").unlink()
 
     found = set(codes(root)[kb.ERROR])
-    assert found == {"bad_value", "body_shape", "cycle", "dangling", "malformed",
-                     "missing", "stray"}, found
+    assert found == {"bad_id", "bad_value", "body_shape", "cycle", "dangling",
+                     "malformed", "missing", "stray"}, found
     assert run(root, "check") == 1
 
 
@@ -373,7 +373,8 @@ def test_explicit_id_bypasses_minting() -> None:
 
 def test_a_missing_kind_reports_its_cause_once() -> None:
     """The prefix depends on `kind`; with none set no id can be right, and
-    `incomplete` already names the cause. Reporting bad_id too says it twice."""
+    `incomplete` already names the cause. khub skips the id gate for the same
+    reason — reporting bad_id too would say it twice."""
     root = fresh()
     write(root / "knowledge/requirements/001-no-kind.md", """
 ---
@@ -387,9 +388,9 @@ created: 2026-07-25
     assert "incomplete" in found[kb.GAP]
 
 
-def test_an_unenumerated_filename_is_not_an_error() -> None:
-    """kb mints `ad-NNN-slug`, but khub does not police a hand-named file and
-    neither does kb — the two gates have to agree."""
+def test_a_hand_named_file_fails_the_id_gate() -> None:
+    """khub gained this gate so both tools have it — a hand-named file in a type
+    that declares a prefix is a `validate` error, field `id`, in either tool."""
     root = fresh()
     write(root / "knowledge/decisions/nonsense.md", """
 ---
@@ -403,7 +404,7 @@ created: 2026-07-25
 ## Decision
 ## Consequences
 """)
-    assert codes(root)[kb.ERROR] == []
+    assert "bad_id" in codes(root)[kb.ERROR]
 
 
 def test_get_edit_remove_and_status() -> None:

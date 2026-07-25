@@ -300,11 +300,11 @@ def test_scoped_validate_ignores_another_types_broken_template(tmp_path: Path, m
 
     ws = tmp_path / "ws"
     init_workspace("build-hub", ws)
-    create(ws, "capability", {"title": "Cap"}, id_="cap")
+    create(ws, "capability", {"title": "Cap"}, id_="cap-001-cap")
     template_path(ws, "adr").write_text("sections:\n- heading: [unclosed\n  hint: broken\n")
     monkeypatch.chdir(ws)
 
-    scoped = runner.invoke(app, ["validate", "capability/cap", "--format", "json"])
+    scoped = runner.invoke(app, ["validate", "capability/cap-001-cap", "--format", "json"])
     assert scoped.exit_code == 0, scoped.output
 
     whole = runner.invoke(app, ["validate", "--format", "json"])

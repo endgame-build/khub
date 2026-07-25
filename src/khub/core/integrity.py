@@ -265,8 +265,11 @@ def _validate_entity(
     *,
     strict: bool,
 ) -> list[FieldError]:
-    """Every error on one entity — present fields, relations, and strict keys."""
+    """Every error on one entity — its id, present fields, relations, strict keys."""
     errors: list[FieldError] = []
+    reason = _id_error(rtype, slug, meta)
+    if reason:
+        errors.append(FieldError(type_, slug, "id", reason))
     for key, value in meta.items():
         if key in rtype.attributes:
             reason = _attr_error(rtype.attributes[key], value)
@@ -278,6 +281,41 @@ def _validate_entity(
             errors.append(FieldError(type_, slug, key, "undeclared key rejected under --strict"))
         # else: an undeclared key is an allowed extension — left unchecked.
     return errors
+
+
+_ENUMERATED_ID = re.compile(r"^([a-z][a-z0-9]*)-(\d{3,})-[a-z0-9-]+$")
+
+
+def _id_error(rtype: ResolvedType, slug: str, meta: dict[str, Any]) -> str | None:
+    """A reason if the slug disagrees with the type's declared ``id_prefix``, else None.
+
+    Only types that DECLARE a prefix are checked: a type without one mints a plain
+    ``NNN-slug`` today, but corpora predate that and their bare slugs are legal.
+
+    The point is the by-value form. ``requirement`` mints ``fr-`` for a functional and
+    ``cst-`` for a constraint, so the prefix carries the kind — and an entity whose
+    kind was edited afterwards, or whose file was hand-named, now says one thing in
+    its filename and another in its frontmatter. That disagreement is invisible to
+    every other gate: the enum is legal, the relations resolve, nothing dangles.
+
+    A singleton is skipped (its slug is its type name), and so is an entity whose
+    ``by`` attribute is absent — a missing ``kind`` is already reported by `check` as
+    incomplete, and no id could be right until it is set.
+    """
+    prefix_decl = rtype.id_prefix
+    if prefix_decl is None or rtype.storage.layout == "singleton":
+        return None
+    expected = prefix_decl.resolve(meta)
+    if expected is None:
+        return None  # the deciding attribute is unset; `check` reports that instead
+    match = _ENUMERATED_ID.match(slug)
+    if match is None:
+        shape = "|".join(prefix_decl.all)
+        return f"slug does not follow this type's id scheme ({shape}-NNN-slug)"
+    if match.group(1) != expected:
+        deciding = f" for {prefix_decl.by} '{meta.get(prefix_decl.by)}'" if prefix_decl.by else ""
+        return f"slug says '{match.group(1)}-' but the schema mints '{expected}-'{deciding}"
+    return None
 
 
 def _attr_error(attr: ResolvedAttribute, value: Any) -> str | None:
