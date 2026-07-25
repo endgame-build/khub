@@ -21,7 +21,7 @@ specs/                        fs-NNN                      what we are building n
 `kb` does the four things you cannot do for yourself. Everything else — reading,
 searching, writing prose — use your own tools, they are better at it.
 
-Run it as `kb`. If that is not on PATH, it is `python3 build-lite/scripts/kb.py`
+Run it as `kb`. If that is not on PATH, it is `python3 kb/scripts/kb.py`
 from the project root; run it once with no arguments to see the verb list.
 
 ```bash
@@ -37,7 +37,7 @@ kb check                   # sweep the whole corpus. Run it before you finish.
 
 1. `kb new` the entity — it mints `ad-007-<slug>`, the frontmatter, and the body
    template with a hint comment under each heading. The whole vocabulary lives in
-   `build-lite/scripts/build.schema.yaml`; `kb schema` prints it.
+   `kb/scripts/build.schema.yaml`; `kb schema` prints it.
 2. Open the file and write the prose. Replace the hint comments; keep the `##`
    headings and their order.
 3. `kb link` every relation. Edit frontmatter by hand only for plain attributes.

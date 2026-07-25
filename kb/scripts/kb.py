@@ -9,7 +9,7 @@ Everything else (read, search, write prose) the agent already does with its own
 tools, so it is not here.
 
 Stdlib only. It reads `build.schema.yaml` and `templates/` from its own
-directory — or from `<workspace>/.build-lite/` when a project overrides them —
+directory — or from `<workspace>/.kb/` when a project overrides them —
 and hardcodes no type, field or predicate.
 
 Frontmatter profile
@@ -407,7 +407,7 @@ def load_schema(root: Path) -> Schema:
     local = root / ".build-lite" / SCHEMA_FILE
     path = local if local.is_file() else HERE / SCHEMA_FILE
     if not path.is_file():
-        raise Bad(f"no {SCHEMA_FILE} beside {HERE / 'kb.py'} or under {root}/.build-lite/")
+        raise Bad(f"no {SCHEMA_FILE} beside {HERE / 'kb.py'} or under {root}/.kb/")
     return Schema(load_yaml(path.read_text()))
 
 

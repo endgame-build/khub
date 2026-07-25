@@ -1,19 +1,19 @@
 #!/bin/sh
-# Wire a dropped-in build-lite/ into the agent that will use it.
+# Wire a dropped-in kb/ into the agent that will use it.
 #
 # None of this is required if your opencode.json can name the skill directory
 # in place — that is the zero-copy path, and it installs nothing:
 #
-#     { "skills": { "paths": ["build-lite/skills"] } }
+#     { "skills": { "paths": ["kb/skills"] } }
 #
 # Otherwise opencode only looks in .opencode/skills, .claude/skills and
 # .agents/skills, so the skill has to be copied into one of them. That is what
 # this does. Idempotent: re-run it to upgrade.
 #
-#   build-lite/install.sh                    -> ./.opencode/skills/kb
-#   build-lite/install.sh --claude --agents     also the other two locations
-#   build-lite/install.sh --global           -> $XDG_CONFIG_HOME/opencode/skills
-#   build-lite/install.sh --bin ~/.local/bin    symlink `kb` onto PATH
+#   kb/install.sh                    -> ./.opencode/skills/kb
+#   kb/install.sh --claude --agents     also the other two locations
+#   kb/install.sh --global           -> $XDG_CONFIG_HOME/opencode/skills
+#   kb/install.sh --bin ~/.local/bin    symlink `kb` onto PATH
 #
 # Only the skill is copied. scripts/ stays where you dropped it: kb.py resolves
 # build.schema.yaml and templates/ relative to itself, so it runs from anywhere.

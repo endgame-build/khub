@@ -1,6 +1,6 @@
 """build-lite standalone: contract drift against khub, and the graduation claim.
 
-`build-lite/` is a separate implementation with its own reader and its own gate,
+`kb/` is a separate implementation with its own reader and its own gate,
 so no code is shared with khub. Two things are, and this pins both:
 
 1. **The contract.** `build.schema.yaml` is khub's `core.yaml` base plus the
@@ -30,8 +30,10 @@ from khub.core.integrity import validate as khub_validate
 from khub.core.template import load_template
 from khub.core.workspace import init_workspace
 
-STANDALONE = Path(__file__).resolve().parents[1] / "build-lite"
+REPO = Path(__file__).resolve().parents[1]
+STANDALONE = REPO / "kb"
 SCRIPTS = STANDALONE / "scripts"
+PRESETS = REPO / "src" / "khub" / "presets"
 PRESET = "build-lite"
 
 # The one documented departure from khub's scaffold. Anything else is drift.
@@ -84,6 +86,43 @@ def test_entities_match_khub(scaffold: Path) -> None:
             if key in DELTA_TYPE_KEYS:
                 continue
             assert value == canonical[type_][key], f"{type_}.{key} drifted from the preset"
+
+
+def _diff(khub: Any, shipped: Any, path: str = "") -> list[str]:
+    """Every leaf difference between two loaded documents, deepest key named."""
+    if isinstance(khub, dict) and isinstance(shipped, dict):
+        out: list[str] = []
+        for key in sorted(set(khub) | set(shipped)):
+            where = f"{path}{key}"
+            if key not in khub:
+                out.append(f"+ {where} (only in the drop-in)")
+            elif key not in shipped:
+                out.append(f"- {where} (missing from the drop-in)")
+            else:
+                out += _diff(khub[key], shipped[key], f"{where}.")
+        return out
+    if khub != shipped:
+        return [f"~ {path.rstrip('.')}: khub={khub!r} drop-in={shipped!r}"]
+    return []
+
+
+@pytest.mark.integration
+def test_shipped_schema_is_core_plus_preset_verbatim() -> None:
+    """1:1 against the preset SOURCES, not just the scaffold they flatten into.
+
+    Everything — key sets at every depth, enum member order, `acyclic`, `inverse`,
+    paths, `required`, `orphan` — must be identical, and `id_prefix` is the only
+    key the drop-in is allowed to add.
+    """
+    combined = {
+        "base": _load(PRESETS / "core.yaml")["base"],
+        **_load(PRESETS / PRESET / "schema.yaml"),
+    }
+    shipped = _load(SCRIPTS / "build.schema.yaml")
+
+    assert set(shipped) == set(combined), "top-level keys must match core.yaml + the preset"
+    allowed = {f"+ entities.{t}.id_prefix (only in the drop-in)" for t in combined["entities"]}
+    assert set(_diff(combined, shipped)) <= allowed, "\n".join(_diff(combined, shipped))
 
 
 @pytest.mark.integration

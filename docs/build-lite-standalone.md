@@ -6,7 +6,7 @@ script. ~850 lines of code where khub is 7,000, no dependencies where khub has
 six, and byte-compatible output so a corpus that outgrows it graduates by running
 `khub init build-lite` over the same files.**
 
-The working implementation is in [`build-lite/`](../build-lite/README.md). This
+The working implementation is in [`kb/`](../kb/README.md). This
 page is why it has the shape it has, and what was considered instead.
 
 ## The question this answers
@@ -85,16 +85,16 @@ The recommendation is the second row, and the deliverable is **one directory you
 drop into a project**, holding the two things that install to different places:
 
 ```
-build-lite/
-  skills/kb/SKILL.md   what the agent reads: the ontology, the routing
-                               rules, the loop                       (95 lines)
+kb/
+  skills/kb/SKILL.md    what the agent reads: the ontology, the routing
+                        rules, the loop                          (95 lines)
   scripts/
-    kb.py                      scaffold + check + walk, stdlib only (~850 lines)
-    build.schema.yaml          khub's core base + the six types, combined
-    templates/*.md             4 body templates; their `##` headings are the
-                               body contract
-  install.sh                   wires the skill into .opencode/skills
-  test_kb.py                   17 tests
+    kb.py               scaffold + check + walk, stdlib only     (~850 lines)
+    build.schema.yaml   khub's core base + the six types, combined
+    templates/*.md      4 body templates; their `##` headings are the
+                        body contract
+  install.sh            wires the skill into .opencode/skills
+  test_kb.py            17 tests
 ```
 
 Only the skill has to move, because `.opencode/skills`, `.claude/skills` and
@@ -102,7 +102,7 @@ Only the skill has to move, because `.opencode/skills`, `.claude/skills` and
 lands — `kb.py` resolves its schema and templates relative to itself. And there
 is a zero-copy path: opencode's `skills.paths` config key takes directories
 (relative entries resolve against the project root, scanned for `**/SKILL.md`),
-so `{"skills": {"paths": ["build-lite/skills"]}}` loads the skill in place with
+so `{"skills": {"paths": ["kb/skills"]}}` loads the skill in place with
 no install step at all. That key is implemented but undocumented, hence the
 install script as the guaranteed route.
 
@@ -158,7 +158,7 @@ TypeScript were read instead):
   `"kb *": "allow"` after it, and prefer not to pipe.
 - **There are no PostToolUse hooks.** The analogue is a plugin's
   `tool.execute.after`, which can append to the tool's own output — ~30 lines,
-  in [`build-lite/README.md`](../build-lite/README.md#optional-make-the-gate-ambient),
+  in [`kb/README.md`](../kb/README.md#optional-make-the-gate-ambient),
   turning the gate from something the agent must remember into something ambient.
   (The `experimental.hook.file_edited` key visible in opencode's SDK types is a
   stale artifact — no runtime code reads it. Formatters can run a command on
@@ -213,7 +213,7 @@ holds at this scale. They are listed so the next reader does not "fix" them:
 The invariant that is *strengthened*: schema-genericity. `kb.py` contains no type
 name, no field name, and no predicate. Every one comes from `build.schema.yaml`,
 which is why adding a field is a data edit — a project can even override the
-shipped copy at `.build-lite/build.schema.yaml` without touching the drop-in —
+shipped copy at `.kb/build.schema.yaml` without touching the drop-in —
 and why the add-back ladder in
 [`build-lite-preset.md`](build-lite-preset.md) still works here.
 
@@ -224,7 +224,7 @@ and why the add-back ladder in
 | implementation | 1,013 lines, 1 file (847 non-blank) | 6,990 lines, 40 modules |
 | tests | 339 lines, 17 tests | 8,135 lines |
 | runtime dependencies | 0 | 6 |
-| install | `cp -r build-lite/` into the project | `uv tool install git+ssh://…` |
+| install | `cp -r kb/` into the project | `uv tool install git+ssh://…` |
 | commands | 8 | 30 |
 
 The tests are shaped around the fact that **the checker is the product**: one

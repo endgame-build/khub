@@ -6,7 +6,7 @@ Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelo
 
 ### Added
 
-- **`build-lite/` — build-lite standalone**, a separate, dependency-free
+- **`kb/` — build-lite standalone**, a separate, dependency-free
   implementation of the `build-lite` preset for one build project driven by
   opencode. A drop-in directory: `skills/kb/SKILL.md` for the agent, and
   `scripts/` holding `kb.py`, `build.schema.yaml` and the Markdown body templates.

@@ -1,30 +1,52 @@
-# build-lite
+# kb
 
 **A drop-in typed doc corpus for one build project.** Six kinds of document held
 as Markdown in git next to the code, a skill that teaches an agent to use them,
 and one script that scaffolds, checks and walks them.
 
 Self-contained: copy this directory into a project and it works. Stdlib Python
-3.11+, no packages to install, no dependency on khub. The rationale — what was
-cut and why — is in [`docs/build-lite-standalone.md`](../docs/build-lite-standalone.md).
+3.11+, no packages to install, no dependency on khub. The ontology is khub's
+`build-lite` preset; the rationale — what was cut and why — is in
+[`docs/build-lite-standalone.md`](../docs/build-lite-standalone.md).
 
 ```
-build-lite/
-  skills/kb/SKILL.md   what the agent reads
+kb/
+  skills/kb/SKILL.md      what the agent reads: ontology, routing rules, the loop
   scripts/
-    kb.py                      scaffold + check + walk
-    build.schema.yaml          the whole contract: khub's core base + the six types
-    templates/*.md             body templates; their ## headings are the body contract
-  install.sh                   wires the skill into .opencode/skills (or copy it yourself)
-  test_kb.py                   17 tests, no pytest required
+    kb.py                 the tool — scaffold + check + walk, stdlib only
+    build.schema.yaml     the whole contract: khub's core base + the six types
+    templates/*.md        body templates; their ## headings are the body contract
+  install.sh              wires the skill into .opencode/skills (or copy it yourself)
+  test_kb.py              17 tests, no pytest required
 ```
+
+## The eight commands
+
+| | |
+|---|---|
+| `kb init` | scaffold the corpus directories and the two narrative documents |
+| `kb schema` | the ontology: types, fields, enums, edges. Read before writing frontmatter |
+| `kb new <type> "<title>" [--set f=v]` | mint one conforming entity file, print its id |
+| `kb link <id> <predicate> <target>` | add a schema-checked relation |
+| `kb unlink <id> <predicate> <target>` | remove one |
+| `kb ls [type] [--where f=v] [--has p] [--missing p] [--tag t]` | list entities, filtered; `--missing` is the gap query |
+| `kb links <id> [--predicate p] [--depth n] [--direction in\|out\|both]` | edges in and out, **including the derived inverses**; `--depth` is the blast radius |
+| `kb check [--strict] [--json]` | sweep the corpus. Errors break, gaps do not |
+
+Bare `kb` prints the list. `-C/--root` targets another workspace; `--json` is on
+`ls`, `links`, `check` and `schema`.
+
+There is deliberately no `get`, no `search`, no `edit`, no `--body`: reading,
+grepping and writing prose are things the agent's own tools do better. What is
+here is what they cannot do — the reverse edge, the exhaustive sweep, a
+deterministic id, one uniform shape across sessions.
 
 ## Drop it in
 
 ```bash
-cp -r build-lite /path/to/your/project/
+cp -r kb /path/to/your/project/
 cd /path/to/your/project
-build-lite/install.sh --bin ~/.local/bin
+kb/install.sh --bin ~/.local/bin
 kb init && kb check
 ```
 
@@ -32,7 +54,7 @@ If your opencode config can point at the skill directly, skip the install
 entirely — this is the zero-copy path:
 
 ```json
-{ "skills": { "paths": ["build-lite/skills"] } }
+{ "skills": { "paths": ["kb/skills"] } }
 ```
 
 Then allow the command. The catch-all goes **first**, because opencode's last
@@ -75,16 +97,21 @@ specs/                    fs-NNN               what is being built
 `scripts/build.schema.yaml` is khub's `core.yaml` base block and its build-lite
 preset combined into one file, in khub's own vocabulary. It is the only thing to
 edit when a project needs a field — `kb.py` names no type, field or predicate.
-A project can override the shipped copy at `.build-lite/build.schema.yaml` (and
-`.build-lite/templates/<type>.md`) without touching this directory.
+A project can override the shipped copy at `.kb/build.schema.yaml` (and
+`.kb/templates/<type>.md`) without touching this directory.
 
-One deliberate delta from what `khub init build-lite` generates: `id_prefix` is
-added per type, because khub mints slugs from titles while `kb` mints enumerated
-ids and checks the prefix against the entity's `kind`. Everything else is khub's
-verbatim, including attributes `kb` never reads — a closed schema and a deleted
-attribute do not mix. `tests/test_build_lite_standalone.py` in the khub repo
-fails on any second delta, and on any drift in the body templates, which are
-generated from the preset's own renderer.
+It is **1:1 with `presets/core.yaml` + `presets/build-lite/schema.yaml`**, with
+exactly one addition: `id_prefix` per type, because khub mints slugs from titles
+while `kb` mints enumerated ids and checks the prefix against the entity's `kind`.
+Nothing else differs at any depth — same `version`, same base block, same enum
+member order, same `acyclic` and `inverse` declarations. Attributes `kb` never
+reads (`draft`, `author`, `sources`, `references`) stay declared: a closed schema
+and a deleted attribute do not mix — drop one and every entity khub writes becomes
+an `unknown_field` error.
+
+`tests/test_build_lite_standalone.py` in the khub repo enforces that. It diffs
+this file against the preset sources key by key, fails on any second delta, and
+regenerates the body templates from khub's own renderer.
 
 Frontmatter is a deliberately small YAML subset — flat `key: value`, `[a, b]`, or
 `- item` lines; no nesting, no multi-line scalars, no trailing comments. That is
@@ -100,7 +127,7 @@ rewritten.
 
 opencode has no PostToolUse hook, but a plugin's `tool.execute.after` can append
 to a tool's own output, so the agent sees breakage it just caused in the same
-turn. Save as `.opencode/plugins/build-lite-check.ts`:
+turn. Save as `.opencode/plugins/kb-check.ts`:
 
 ```ts
 import type { Plugin } from "@opencode-ai/plugin"
@@ -112,7 +139,7 @@ export const BuildLiteCheck: Plugin = async ({ $, worktree }) => ({
   "tool.execute.after": async (input, output) => {
     if (!WRITERS.includes(input.tool)) return
     if (!CORPUS.test(JSON.stringify(input ?? {}) + JSON.stringify(output?.metadata ?? {}))) return
-    const raw = await $`python3 ${worktree}/build-lite/scripts/kb.py check --json`
+    const raw = await $`python3 ${worktree}/kb/scripts/kb.py check --json`
       .cwd(worktree).nothrow().quiet().text()
     let errors: { code: string; where: string; message: string }[] = []
     try { errors = JSON.parse(raw).errors ?? [] } catch { return }
@@ -133,7 +160,7 @@ description: Show the build-lite corpus state and fix what is broken
 ---
 The doc corpus right now:
 
-!`python3 build-lite/scripts/kb.py check`
+!`python3 kb/scripts/kb.py check`
 
 Fix every error. Then fix the gaps caused by recent work; report what you left.
 ```
@@ -141,7 +168,7 @@ Fix every error. Then fix the gaps caused by recent work; report what you left.
 ## Test
 
 ```bash
-python3 build-lite/test_kb.py     # no pytest required
+python3 kb/test_kb.py     # no pytest required
 uv run pytest build-lite          # under the repo's runner; also runs the
                                   # differential check against ruamel.yaml
 ```
