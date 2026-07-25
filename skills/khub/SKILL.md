@@ -41,7 +41,11 @@ triggers: when the moment occurs, record it and say you did. Propose the record 
 than asking permission for each one — capture is never blocked, and a `--draft` entity is the
 right answer when you are unsure it belongs.
 
-A stated fact about the system is a write. A question about the system is a query.
+A stated fact about the system is a write, whatever the wording. "note it", "write it down",
+"log it", "FYI", "heads up", "for the record" — and a bare statement with no instruction at all
+— all mean record it. Do that, then say what you recorded and its id. Answering "Noted." without
+a record does not complete the task, and neither does asking which file to write to: entities are
+written with `khub add`, never by choosing a path. A question about the system is a query.
 
 ## Write
 

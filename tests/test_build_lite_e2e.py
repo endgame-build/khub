@@ -355,6 +355,11 @@ def test_the_wired_block_carries_the_triggers_and_the_cli_rule(
     assert "Record as you go" in block
     for type_ in ("prd", "arc42", "requirement", "adr", "component", "feature-spec"):
         assert f"- `{type_}` —" in block, f"{type_} trigger missing from the block"
+    # Measured: "Note it." produced "Noted." and no record 5/5, while "Record it." on the
+    # identical fact recorded 5/5 — a vocabulary gap, not a capability one. The block has to
+    # map the synonyms or it only works for one verb.
+    assert "is a capture request, whatever the wording" in block
+    assert '"Noted." without a record does not complete the task' in block
     assert "Every write goes through the CLI" in block
     assert "run `khub validate` on it immediately" in block
     assert "query it, do not grep it" in block

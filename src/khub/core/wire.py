@@ -56,9 +56,18 @@ def _when_to_record(whens: dict[str, str] | None) -> list[str]:
     if not whens:
         return []
     return [
-        "Record as you go — when one of these moments occurs, capture it without being asked:",
+        "Record as you go — when one of these moments occurs, capture it:",
         "",
         *[f"- `{t}` — {w}" for t, w in whens.items()],
+        "",
+        (
+            "A stated fact about the system is a capture request, whatever the wording. "
+            '"note it", "write it down", "log it", "FYI", "heads up", "for the record" — and a '
+            "bare statement with no instruction at all — all mean record it. Do that, then say "
+            "what you recorded and its id. Answering \"Noted.\" without a record does not "
+            "complete the task, and neither does asking which file to write to: entities are "
+            "written with `khub add`, never by choosing a path."
+        ),
         "",
     ]
 
