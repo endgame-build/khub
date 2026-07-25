@@ -2,6 +2,27 @@
 
 Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); khub is pre-release.
 
+## [0.17.1] — 2026-07-25
+
+Repository only — no behaviour change.
+
+### Fixed
+
+- **`__init__.py` said 0.14.1 while `pyproject.toml` said 0.17.0.** Three releases bumped
+  one and not the other, so CI's version-consistency step was red and the 0.15.0–0.17.0
+  tags carry the drift. Nothing at runtime was affected — `cli/main.py` prefers installed
+  metadata, and `khub --version` from the v0.17.0 tag reports 0.17.0 — only the fallback
+  constant was stale.
+
+### Added
+
+- **`smoke.sh`** — 73 assertions over the CLI itself: build-lite, build-hub and firm-ops,
+  every command with its exit code, the wired block's content (capture cues, the singleton
+  links, CLAUDE.md's import directive and its absence in AGENTS.md), and the
+  misplaced-entity gate. The unit suite proves the core; this proves the binary. khub had
+  no such harness — the previous one lived in `kb/smoke.sh` and left with kb. Runs in CI
+  after pytest.
+
 ## [0.17.0] — 2026-07-25
 
 ### Changed
