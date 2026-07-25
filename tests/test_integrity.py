@@ -517,3 +517,20 @@ def test_draft_required_singleton_is_reported_missing(tmp_path: Path) -> None:
     report = check(ws)
     assert report.missing_singletons == ["prd"]
     assert not report.passed
+
+
+@pytest.mark.unit
+def test_empty_string_fails_validate_like_check_treats_it(fresh_ws: Path, seed: Seed) -> None:
+    """khub's rule: null means absent (passes validate, `check` reports it); '' is
+    malformed. `check` already counted '' as missing and the write path already
+    rejected it for an enum, but validate let it through for a text field — so the
+    two gates disagreed about the same byte."""
+    seed(fresh_ws, "clients/blank.md", type="client", name="", created="2026-01-01")
+    seed(fresh_ws, "clients/absent.md", type="client", created="2026-01-01")  # null/omitted
+
+    errors = {(e.id, e.field) for e in validate(fresh_ws).errors}
+    assert ("client/blank", "name") in errors
+    assert ("client/absent", "name") not in errors  # absent is a completeness concern
+
+    incomplete = {i.id for i in check(fresh_ws).incomplete}
+    assert {"client/blank", "client/absent"} <= incomplete  # check reports both

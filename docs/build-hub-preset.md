@@ -16,8 +16,11 @@ duplicated as entities.
 Preset version **0.2.0**. Twenty-one entity types (sixteen graph records + five narrative
 singletons). Seventeen relation predicates in twenty-four declarations beyond the four universal
 edges from the core base (`domain.depends_on` narrows the universal edge to a typed
-`domain → domain`). The preset is a directory: `schema.yaml` + `templates/*.yaml` — one body
-template per md type, flattened to `.khub/templates/` at init.
+`domain → domain`). The preset is a directory: `schema.yaml` + `templates/*.yaml`, flattened to
+`.khub/templates/` at init. Fifteen of the eighteen md types ship a body template;
+`entity`, `component` and `external-system` deliberately do not — they are
+name-keyed records whose shape is their frontmatter, so `add` writes them with an
+empty body and `validate` holds them to no heading contract.
 
 **Spoke repos carry no khub workspace.** A spoke is code plus one plain `entities.yaml`
 field-schema file (validated by the spoke's own CI, `resource`-linked from hub entity records).
@@ -74,9 +77,13 @@ One rule decides file vs collection: **prose a human reviews → one file per re
 slug; homogeneous wiring → a registry collection row, name-keyed** (the registry file is the
 enumeration).
 
+**Slugs are lowercase.** `add --id` slugifies whatever you pass and id resolution is
+case-sensitive, so `--id CAP-001-login` is stored — and must be looked up — as
+`cap-001-login`. Write the lowercase form everywhere.
+
 | Form | Types · slug scheme |
 |---|---|
-| File, ID-enumerated | adr `AD-NNN-slug` · pdr `PD-NNN-slug` · boundary `BOUND-NNN-slug` · quality-attribute `QA-NNN-slug` · requirement `FR-NNN`/`CST-NNN` · capability `CAP-NNN-slug` · component `CMP-NNN-slug` · feature-spec `FS-NNN-slug` · test-spec `TS-NNN-slug` · work-package `WP-NNN-slug` |
+| File, ID-enumerated | adr `ad-NNN-slug` · pdr `pd-NNN-slug` · boundary `bound-NNN-slug` · quality-attribute `qa-NNN-slug` · requirement `fr-NNN`/`cst-NNN` · capability `cap-NNN-slug` · component `cmp-NNN-slug` · feature-spec `fs-NNN-slug` · test-spec `ts-NNN-slug` · work-package `wp-NNN-slug` |
 | File, name-keyed | domain · entity · contract · external-system (natural-name identity; contracts name-keyed so `consumes: readings-api` reads) |
 | Collection (yaml) | `knowledge/architecture/repos.yaml` · `knowledge/architecture/baselines.yaml` |
 | Singleton (md) | prd · roadmap · glossary · arc42 · erd — one fixed file, slug = type name; prd is `required: true` |

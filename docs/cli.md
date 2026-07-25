@@ -21,6 +21,14 @@ Read commands include `draft` entities in scope and surface each entity's `orpha
 
 Every input is a flag or an argument; a missing one is a usage error (exit 2), never a question. khub shipped an interactive wizard through 0.8.0 — `init` picked a preset, `add`/`edit` walked the schema — behind a gate that switched it off for agents, pipes, and CI. The gate meant the wizard was dead weight on every agent invocation, which is the invocation khub is built for, so 0.9.0 removed both it and the `--agent` flag that disabled it. Output still adapts to the reader: a Rich table on a TTY, JSON on a pipe or under `--format json`.
 
+### Failures
+
+Every command renders a failure as one line on stderr and exits 1. Under
+`--format json` the failure is a JSON document instead —
+`{"error": {"code", "message"}}` — so an agent that asked for machine output never
+has to parse prose. A usage error (an unknown flag, a missing argument) is Click's
+exit 2 and stays plain text.
+
 ### JSON record shape
 
 Every JSON record that identifies an entity carries the qualified `id` = `"type/slug"` plus separate `type` and `slug` keys, uniform across `query`, `search`, `add`, `get`, `edit`, `neighbors`, `impact`, `history`, `stale`, and the `validate`/`check` error rows. For example, `khub get initech-pov --format json` emits `{"id": "opportunity/initech-pov", "type": "opportunity", "slug": "initech-pov", …}`. (`check`'s `orphans` are qualified `type/slug`; `strays` are file paths, `path` or `path#slug`.)
@@ -65,7 +73,7 @@ A type stores its entities as `md` (the default: YAML frontmatter + prose body),
 
 | Command | Args and options | Returns / does |
 |---|---|---|
-| `khub init <preset> [path=.]` | `--preset-source <path>`, `--name <name>`, `--force`, `--no-wire`, `--format <text\|json>` (json emits resolved provenance) | scaffold a workspace from a preset directory (`schema.yaml` + `templates/`), flatten templates to `.khub/templates/`, create missing md singletons from their templates (creations only), then wire the selected agent files. `--no-wire` skips the tail. Prints the `khub install-skills` hint (`skill_hint` in the JSON payload); installs nothing |
+| `khub init <preset> [path=.]` | `--preset-source <path>`, `--name <name>`, `--force`, `--no-wire`, `--format <text\|json>` (json emits resolved provenance) | scaffold a workspace from a preset directory (`schema.yaml` + `templates/`), flatten templates to `.khub/templates/`, create missing md singletons from their templates (creations only), then wire the selected agent files. `--no-wire` skips the tail. Prints the `khub install-skills` hint (`skill_hint` in the JSON payload); installs nothing. Re-running over an existing workspace preserves anything workspace-owned (`.khub/schema.yaml`, `.khub/config.yaml`, `.khub/templates/*.yaml`) and reports it as `preserved`; only genuinely missing files are recreated. Refreshing from a newer preset is an upgrade, not a scaffold |
 | `khub schema` | `--format` | the full effective schema: types, fields, enums, relations, layout/format/nesting per type, and provenance (source preset + version) |
 | `khub schema types` | `--format` | type list (view of the above) |
 | `khub schema show <type>` | `--format` | one type's fields, enums, required, relations, layout (view) |
@@ -79,7 +87,7 @@ A type stores its entities as `md` (the default: YAML frontmatter + prose body),
 | `khub add <type>` | `--<field> <value>` (repeatable; schema or extension), `--id <slug>`, `--draft`, `--body <text>`, `--body-file <path>` (`-` for stdin; not both), `--no-template`, `--strict`, `--format text\|json` (emits the written record) | mint a slug, write a well-formed entity (active by default; `--draft` marks it unpublished); a templated md type seeds its body from `.khub/templates/<type>.yaml`; a singleton's slug is its type name; print its id |
 | `khub get <id>` | `--format json\|table\|raw`, `--edges` | print an entity; `--edges` includes derived inverse edges |
 | `khub edit <id> <field> <value>` | or `--<field> <value>` (repeatable), `--body <text>` (`''` clears) / `--body-file` (not both), `--strict`, `--format text\|json` (emits the updated record) | edit fields, bump `updated`, re-validate |
-| `khub remove <id>` | `--force` | delete an entity; refuses while an inbound edge resolves to it, unless `--force` |
+| `khub remove <id>` | `--force` | delete an entity; refuses while an inbound edge resolves to it, unless `--force`, `--format` |
 | `khub link <id> <predicate> <target>` | | add a schema-checked relation |
 | `khub unlink <id> <predicate> <target>` | | remove a relation |
 
@@ -103,7 +111,7 @@ A type stores its entities as `md` (the default: YAML frontmatter + prose body),
 | Command | Args and options | Does |
 |---|---|---|
 | `khub validate [target=all]` | `--strict`, `--format` | per-entity well-formedness and referential integrity over the declared subset (default: whole workspace). Never writes — repairing a missing date is `khub backfill` |
-| `khub check` | `--strict`, `--format` | graph-wide: relations resolve, required-completeness for `active`, no stray files (non-entities inside a type layout; reference docs outside type layouts are skipped), no edge cycles. Orphans (zero relations) are always reported but fail the gate only under `--strict`: a fully disconnected entity can be legitimate (a dormant client whose engagements were archived) |
+| `khub check` | `--strict`, `--format` | graph-wide: relations resolve, required-completeness for `active`, no stray files (non-entities inside a type layout; reference docs outside type layouts are skipped), no edge cycles. Orphans (zero relations) are always reported but fail the gate only under `--strict`: a fully disconnected entity can be legitimate (a dormant client whose engagements were archived). A freshly scaffolded workspace fails `--strict` out of the box: its narrative singletons have no edges yet, so every one is an orphan. `--format json` reports `strict` so a consumer can tell an informational orphan list from the reason the gate failed |
 | `khub stale` | `--days <n>` (default: the workspace `stale_days`, 90 in firm-ops), `--format` | entities past an `updated` threshold; dates backfilled from `git log` |
 
 ## Projection and output

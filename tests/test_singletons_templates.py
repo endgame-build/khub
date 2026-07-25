@@ -280,3 +280,22 @@ def test_missing_sections_key_is_still_an_error(tmp_path: Path) -> None:
     template_path(ws, "adr").write_text("title: x\n")
     with pytest.raises(LocatedError):
         load_template(ws, "adr")
+
+
+@pytest.mark.integration
+def test_scoped_validate_ignores_another_types_broken_template(tmp_path: Path, monkeypatch) -> None:
+    """`validate <entity>` reported an unrelated type's template error and exited 1, so
+    an agent validating its own entity got a failure it did not cause."""
+    from khub.core.template import template_path
+
+    ws = tmp_path / "ws"
+    init_workspace("build-hub", ws)
+    create(ws, "capability", {"title": "Cap"}, id_="cap")
+    template_path(ws, "adr").write_text("sections:\n- heading: [unclosed\n  hint: broken\n")
+    monkeypatch.chdir(ws)
+
+    scoped = runner.invoke(app, ["validate", "capability/cap", "--format", "json"])
+    assert scoped.exit_code == 0, scoped.output
+
+    whole = runner.invoke(app, ["validate", "--format", "json"])
+    assert whole.exit_code == 1  # still surfaced workspace-wide

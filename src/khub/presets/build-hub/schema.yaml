@@ -20,7 +20,8 @@
 #    (capabilities, requirements). solution-spec is dropped. The work spine is
 #    three flat ID-enumerated dirs: specs/{feature-specs,test-specs,work-packages}.
 #  - Storage-form rule: prose a human reviews = one file per record with an
-#    ID-enumerated slug (AD-/PD-/BOUND-/QA-/FR-/CST-/CAP-/CMP-/FS-/TS-/WP-NNN-slug);
+#    ID-enumerated slug, lowercase (ad-/pd-/bound-/qa-/fr-/cst-/cap-/cmp-/fs-/ts-/wp-NNN-slug
+#    — `add --id` slugifies and lookup is case-sensitive, so uppercase would not resolve);
 #    homogeneous wiring = a collection row, name-keyed (repos.yaml,
 #    baselines.yaml — the registry file is the enumeration). domain, entity,
 #    contract, external-system are name-keyed files (natural-name identity).

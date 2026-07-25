@@ -147,6 +147,11 @@ def _body_structure_errors(
     for type_, rtype in resolved.types.items():
         if rtype.storage.fmt != "md" or rtype.storage.layout == "collection":
             continue
+        # Honour the target selector: `validate capability/cap` reported an unrelated
+        # type's broken template and exited 1, so an agent checking its own entity got
+        # a failure it did not cause and could not act on.
+        if not _type_in_target(type_, target):
+            continue
         # A broken template must not abort the run: validate's contract is to
         # collect every finding. Report it once, on the type, and move on.
         try:
@@ -186,6 +191,13 @@ def _body_structure_errors(
                     )
                 )
     return errors
+
+
+def _type_in_target(type_: str, target: str | None) -> bool:
+    """Whether a whole TYPE is in scope — for findings reported per type, not per node."""
+    if target is None:
+        return True
+    return target.split("/", 1)[0] == type_
 
 
 def _in_target(node: tuple[str, str], target: str | None) -> bool:
@@ -277,6 +289,12 @@ def _attr_error(attr: ResolvedAttribute, value: Any) -> str | None:
     """
     if value is None:
         return None  # an absent value is a completeness concern, not well-formedness
+    if isinstance(value, str) and not value.strip():
+        # `check` already counts '' as missing (via `present`), and the write path
+        # already rejects it for an enum. validate let it through for a plain text
+        # field, so the two gates disagreed about the same byte. null is the way to
+        # say "absent" — it passes validate and is what backfill scaffolds.
+        return f"{attr.name} is empty; omit the field or write null, not ''"
     if attr.enum is not None:
         if str(value) not in attr.enum:
             return f"'{value}' is not a valid {attr.name} ({', '.join(attr.enum)})"

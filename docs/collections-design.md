@@ -100,6 +100,11 @@ upgrade when a real corpus hits a 500-row file with one typo.
 - **`backfill`**: skips collection types and reports the skip; row-level date
   attribution (first/last commit in which the row's value changed) is planned
   but not yet implemented: it needs the per-rev row diff sketched below.
+- **Round-trip, precisely.** yaml preserves key order and comments — the document
+  header, comments between rows, and comments after the last row all survive a
+  write. One authored key does not: a row's own `slug:` key is redundant with the
+  mapping key that already names it, so it is dropped from the row on load and
+  re-emitted only for jsonl, where it is the identity.
 - **Row-level git attribution** (shipped as `khub log <row-id>` until 0.9.0, when
   `log` was removed; kept here as the design for row-dated `backfill`): parse the
   collection blob at `rev` and `rev^` (a `{slug: row}` frontmatter read), diff the

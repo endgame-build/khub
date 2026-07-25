@@ -209,6 +209,7 @@ $ khub remove [OPTIONS] [ID]
 **Options**:
 
 * `--force`: Delete despite inbound edges (leaves them dangling).
+* `--format <str>`: text or json (emits the removed record).  [default: text]
 * `--help`: Show this message and exit.
 
 ## `khub query`
