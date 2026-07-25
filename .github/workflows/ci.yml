@@ -23,6 +23,12 @@ jobs:
       - run: uv run ruff check src tests
       - run: uv run mypy
       - run: uv run pytest
+      # The unit suite proves the core; this proves the binary — every command over
+      # both build presets, with exit codes asserted. It caught nothing on its first
+      # run, which is the point: it exists so the next change cannot break the CLI
+      # quietly.
+      - name: CLI smoke
+        run: bash smoke.sh
       - name: CLI reference is current
         run: |
           uv run typer --app app khub.cli.main utils docs --name khub --output docs/cli-reference.md
