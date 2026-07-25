@@ -125,4 +125,6 @@ def _check_payload(report: CheckReport) -> dict[str, Any]:
         "cycles": report.cycles,
         "suppressed_dangling": report.suppressed_dangling,
         "missing_singletons": report.missing_singletons,
+        # Say which gate ran: `orphans` populated with passed=true means default mode.
+        "strict": report.strict,
     }

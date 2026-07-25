@@ -292,3 +292,47 @@ def test_missing_input_never_reads_stdin(fresh_ws: Path, argv: list[str]) -> Non
         timeout=30,
     )
     assert result.returncode == 2, result.stderr
+
+
+# --- failures are machine-readable under --format json (0.11.0) ----------------
+
+
+@pytest.mark.integration
+def test_failure_under_format_json_is_json(fresh_ws: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """An agent that asked for machine output should not have to parse prose to learn
+    what went wrong. `guard` echoed err.message regardless of --format."""
+    monkeypatch.chdir(fresh_ws)
+    result = runner.invoke(app, ["get", "ghost-entity", "--format", "json"])
+    assert result.exit_code == 1
+    payload = json.loads(result.output)
+    assert payload["error"]["code"]
+    assert "ghost-entity" in payload["error"]["message"]
+
+
+@pytest.mark.integration
+def test_failure_without_json_stays_prose(fresh_ws: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """The human path is unchanged: one line on stderr, no JSON envelope."""
+    monkeypatch.chdir(fresh_ws)
+    result = runner.invoke(app, ["get", "ghost-entity"])
+    assert result.exit_code == 1
+    assert not result.output.strip().startswith("{")
+
+
+@pytest.mark.integration
+def test_remove_accepts_format_json(fresh_ws: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """`remove` was the one write verb with no --format, breaking a JSON-driven loop."""
+    monkeypatch.chdir(fresh_ws)
+    runner.invoke(app, ["add", "client", "--name", "Acme", "--id", "acme"])
+    result = runner.invoke(app, ["remove", "acme", "--format", "json"])
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload == {"id": "client/acme", "type": "client", "slug": "acme", "removed": True}
+
+
+@pytest.mark.integration
+def test_check_payload_reports_strict(fresh_ws: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """`orphans` populated with passed=true is only interpretable if you know the mode."""
+    monkeypatch.chdir(fresh_ws)
+    assert json.loads(runner.invoke(app, ["check", "--format", "json"]).output)["strict"] is False
+    strict = runner.invoke(app, ["check", "--strict", "--format", "json"])
+    assert json.loads(strict.output)["strict"] is True

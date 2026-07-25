@@ -42,17 +42,35 @@ class CliState:
 
 
 def guard(fn: Callable[_P, _R]) -> Callable[_P, _R]:
-    """Decorate a command function with the LocatedError → stderr + exit 1 boundary."""
+    """Decorate a command function with the error → stderr + exit 1 boundary.
+
+    Under ``--format json`` the failure is emitted as a JSON document too: an agent
+    that asked for machine output should not have to parse prose to find out what
+    went wrong. An ``OSError`` is rendered the same way rather than as a traceback —
+    a read-only directory or a vanished file is an environment condition, not a bug
+    the user should read a stack trace for.
+    """
 
     @functools.wraps(fn)
     def wrapper(*args: _P.args, **kwargs: _P.kwargs) -> _R:
         try:
             return fn(*args, **kwargs)
         except LocatedError as err:
-            typer.echo(err.message, err=True)
-            raise typer.Exit(1) from None
+            _fail(err.message, code=err.code, fmt=kwargs.get("fmt"))
+        except OSError as err:
+            _fail(f"{type(err).__name__}: {err}", code="os_error", fmt=kwargs.get("fmt"))
+        raise AssertionError("unreachable")  # _fail always raises
 
     return wrapper
+
+
+def _fail(message: str, *, code: str, fmt: object) -> None:
+    """Render one failure in the shape the caller asked for, then exit 1."""
+    if fmt == "json":
+        typer.echo(json.dumps({"error": {"code": code, "message": message}}))
+    else:
+        typer.echo(message, err=True)
+    raise typer.Exit(1) from None
 
 
 def resolve_root(ctx: typer.Context) -> Path:

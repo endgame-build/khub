@@ -166,6 +166,7 @@ def remove_command(
     ctx: typer.Context,
     id_: str | None = typer.Argument(None, metavar="ID", help="A bare slug, or type/slug on ambiguity."),
     force: bool = typer.Option(False, "--force", help="Delete despite inbound edges (leaves them dangling)."),
+    fmt: str = typer.Option("text", "--format", help="text or json (emits the removed record)."),
 ) -> None:
     """Remove an entity, guarded by inbound edges: khub remove old-fragment [--force]."""
     root = resolve_root(ctx)
@@ -175,8 +176,26 @@ def remove_command(
     result = delete(root, id_, force=force)
 
     if result.removed:
-        typer.echo(f"Removed {result.type} '{result.slug}'")
+        if fmt == "json":
+            typer.echo(json.dumps({
+                "id": f"{result.type}/{result.slug}",
+                "type": result.type,
+                "slug": result.slug,
+                "removed": True,
+            }))
+        else:
+            typer.echo(f"Removed {result.type} '{result.slug}'")
         return
+    if fmt == "json":
+        typer.echo(json.dumps({
+            "id": f"{result.type}/{result.slug}",
+            "removed": False,
+            "inbound": [
+                {"id": f"{e.source_type}/{e.source_slug}", "predicate": e.predicate}
+                for e in result.inbound
+            ],
+        }))
+        raise typer.Exit(1)
     typer.echo(
         LocatedError.inbound_edge_refusal(result.type, result.slug, len(result.inbound)).message,
         err=True,
