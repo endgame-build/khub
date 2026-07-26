@@ -2,6 +2,18 @@
 
 Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); khub is pre-release.
 
+## [0.18.0] — 2026-07-26
+
+### Changed
+
+- **Bare `khub wire` now writes both context files, creating either that is missing.** It
+  used to update only files that already existed and create none, so a repo carrying just
+  `CLAUDE.md` stayed invisible to every agent that reads `AGENTS.md` — and a repo with
+  neither got a hint instead of a wiring. `--target` still narrows to one file, an
+  existing file still keeps everything outside the markers, and a re-run is still
+  `unchanged`. The "No CLAUDE.md or AGENTS.md to wire" hint is gone: there is no such
+  state any more. `init` is unaffected — it already wired both.
+
 ## [0.17.1] — 2026-07-25
 
 Repository only — no behaviour change.

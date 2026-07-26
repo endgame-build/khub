@@ -36,12 +36,6 @@ def wire_command(
     claude, agents = _resolve_target(target)
     result = wire(root, claude=claude, agents=agents, dry_run=dry_run)
 
-    if not result.outcomes:
-        typer.echo(
-            "No CLAUDE.md or AGENTS.md to wire. Pass --target claude|agents|both to create one.",
-            err=True,
-        )
-        return
     if dry_run:
         typer.echo(result.preview)
         return

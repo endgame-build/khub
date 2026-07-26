@@ -184,10 +184,11 @@ def wire(
 ) -> WireResult:
     """Wire the workspace at ``root`` into agent context files.
 
-    With ``claude``/``agents`` set, those files are the targets and are created if
-    missing. With neither set, the targets are whichever of ``CLAUDE.md`` / ``AGENTS.md``
-    already exist (updated in place; none created). Writes each target unless the content
-    is unchanged (or ``dry_run`` is set). Idempotent.
+    With ``claude``/``agents`` set, those files are the targets. With neither set, both
+    are — and either that is missing is created, so a repo carrying only one context file
+    (or neither) ends up wired for every agent that reads it rather than silently for
+    some. Writes each target unless the content is unchanged (or ``dry_run`` is set).
+    Idempotent.
     """
     prov = provenance(root)
     resolved = load_schema(root)
@@ -205,7 +206,7 @@ def wire(
         chosen = {"CLAUDE.md": claude, "AGENTS.md": agents}
         targets = [(p, b) for p, b in candidates if chosen[p.name]]
     else:
-        targets = [(p, b) for p, b in candidates if p.exists()]
+        targets = candidates
 
     outcomes: list[WireOutcome] = []
     previews: list[str] = []

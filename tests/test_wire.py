@@ -43,12 +43,15 @@ def test_wire_agents_pointer_not_import(fresh_ws: Path) -> None:
 
 
 @pytest.mark.integration
-def test_wire_bare_updates_existing_only(fresh_ws: Path) -> None:
+def test_wire_bare_creates_the_file_that_is_missing(fresh_ws: Path) -> None:
+    """A repo carrying only one context file was wired only for the agents that read
+    that one; the other stayed blind to a workspace sitting right there."""
     wire(fresh_ws, claude=True)  # seed CLAUDE.md
-    result = wire(fresh_ws)  # bare: update existing, create nothing
-    assert {o.path.name for o in result.outcomes} == {"CLAUDE.md"}
-    assert result.outcomes[0].action == "unchanged"
-    assert not (fresh_ws / "AGENTS.md").exists()  # bare wire never creates AGENTS.md
+    result = wire(fresh_ws)  # bare: updates CLAUDE.md, creates AGENTS.md
+    assert {o.path.name for o in result.outcomes} == {"CLAUDE.md", "AGENTS.md"}
+    actions = {o.path.name: o.action for o in result.outcomes}
+    assert actions == {"CLAUDE.md": "unchanged", "AGENTS.md": "created"}
+    assert (fresh_ws / "AGENTS.md").is_file()
 
 
 @pytest.mark.integration
@@ -59,11 +62,10 @@ def test_wire_bare_updates_both_when_both_exist(fresh_ws: Path) -> None:
 
 
 @pytest.mark.integration
-def test_wire_bare_noop_when_none(fresh_ws: Path) -> None:
-    result = wire(fresh_ws)  # nothing exists → nothing to do
-    assert result.outcomes == []
-    assert not (fresh_ws / "CLAUDE.md").exists()
-    assert not (fresh_ws / "AGENTS.md").exists()
+def test_wire_bare_seeds_both_when_neither_exists(fresh_ws: Path) -> None:
+    result = wire(fresh_ws)
+    assert [o.action for o in result.outcomes] == ["created", "created"]
+    assert (fresh_ws / "CLAUDE.md").is_file() and (fresh_ws / "AGENTS.md").is_file()
 
 
 @pytest.mark.integration
@@ -88,12 +90,12 @@ def test_singleton_cues_carry_their_file_link(tmp_path: Path) -> None:
 
 
 def test_wire_is_idempotent(fresh_ws: Path) -> None:
-    wire(fresh_ws, claude=True)
+    wire(fresh_ws)
     before = (fresh_ws / "CLAUDE.md").read_text(encoding="utf-8")
-    result = wire(fresh_ws)  # bare re-wire of the existing file
+    result = wire(fresh_ws)  # bare re-wire
     after = (fresh_ws / "CLAUDE.md").read_text(encoding="utf-8")
     assert after == before
-    assert [o.action for o in result.outcomes] == ["unchanged"]
+    assert [o.action for o in result.outcomes] == ["unchanged", "unchanged"]
 
 
 @pytest.mark.integration
@@ -109,7 +111,8 @@ def test_wire_replaces_block_preserving_surroundings(fresh_ws: Path) -> None:
     assert "stale khub block" not in text
     assert "@.khub/schema.yaml" in text
     assert text.count(BEGIN) == 1 and text.count(END) == 1
-    assert [o.action for o in result.outcomes] == ["updated"]
+    actions = {o.path.name: o.action for o in result.outcomes}
+    assert actions == {"CLAUDE.md": "updated", "AGENTS.md": "created"}
 
 
 @pytest.mark.integration
@@ -134,11 +137,12 @@ def test_wire_cli_target_both_creates(fresh_ws: Path) -> None:
 
 
 @pytest.mark.integration
-def test_wire_cli_bare_hint_when_none(fresh_ws: Path) -> None:
+def test_wire_cli_bare_seeds_both(fresh_ws: Path) -> None:
+    """There is no "nothing to wire" state any more — bare wire always has both."""
     result = runner.invoke(app, ["-C", str(fresh_ws), "wire"])
     assert result.exit_code == 0
-    assert "No CLAUDE.md or AGENTS.md" in result.output
-    assert not (fresh_ws / "CLAUDE.md").exists()
+    assert "created CLAUDE.md" in result.output and "created AGENTS.md" in result.output
+    assert (fresh_ws / "CLAUDE.md").is_file() and (fresh_ws / "AGENTS.md").is_file()
 
 
 @pytest.mark.integration

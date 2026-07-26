@@ -96,6 +96,9 @@ has  "CLAUDE: schema import"       "$L/CLAUDE.md" "@.khub/schema.yaml"
 has  "AGENTS: same links"          "$L/AGENTS.md" "[knowledge/prd.md](knowledge/prd.md)"
 hasnt "AGENTS: no import directive" "$L/AGENTS.md" "@.khub/schema.yaml"
 ok 0 "re-wire is a no-op"          $KHUB -C "$L" wire
+rm -f "$L/AGENTS.md"
+ok 0 "bare wire recreates the missing file" $KHUB -C "$L" wire
+has "AGENTS.md is back"            "$L/AGENTS.md" "Record as you go"
 
 # -------------------------------------------------------------------- build-hub
 say "khub · build-hub"
