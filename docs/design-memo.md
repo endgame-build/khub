@@ -35,7 +35,16 @@ The core library is the only place logic lives. The CLI, skill, and any future M
 
 ### Schema
 
-The schema is authored in khub's own vocabulary. A `base` block holds the attributes and relations every entity carries (`type`, `draft`, `author`, `created`/`updated`, `tags`, the OKF fields, the `any → any` edges); khub merges it into every entity at resolve time, so a type declares only its domain delta and may override a base attribute by redeclaring it. `entities` hold the types, each with `attributes` (scalars and enums), `relations` (typed edges, `to:` a single type, a list of types, or `any`), and storage config (`layout`/`format`; nesting is not yet supported). The base is not a declared dependency: `khub init` writes the `base` block as a header into the engagement's `schema.yaml`, alongside the preset's entities.
+The schema is authored in khub's own vocabulary, not in a description logic. This
+is the deliberate inversion of the usual ontology workflow, and the reason is well
+documented: domain experts "are rarely versed in model or ontology development, and
+do not know the formal languages or logic that express ontological concepts," and
+asking one to work in OWL "may result in errors or omissions, or in the expert
+becoming frustrated and losing interest entirely" (Westerinen & Tauber, *Ontology
+Development by Domain Experts (Without Using the "O" Word)*, Applied Ontology, IOS
+Press; see [`ontograph-review.md`](ontograph-review.md)). khub's schema is the
+rendering that fits how the expert works; any RDF/OWL projection is derived from it
+and never the authoring surface. A `base` block holds the attributes and relations every entity carries (`type`, `draft`, `author`, `created`/`updated`, `tags`, the OKF fields, the `any → any` edges); khub merges it into every entity at resolve time, so a type declares only its domain delta and may override a base attribute by redeclaring it. `entities` hold the types, each with `attributes` (scalars and enums), `relations` (typed edges, `to:` a single type, a list of types, or `any`), and storage config (`layout`/`format`; nesting is not yet supported). The base is not a declared dependency: `khub init` writes the `base` block as a header into the engagement's `schema.yaml`, alongside the preset's entities.
 
 ```yaml
 # core.yaml

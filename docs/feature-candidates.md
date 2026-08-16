@@ -4,8 +4,8 @@
 for reference; numbering is stable (do not renumber when pruning — mark items
 `dropped` instead).
 
-Compiled from a comparative review (2026-08) of three external projects against
-khub's design memo and code:
+Compiled from comparative reviews (2026-08) of the external projects below
+against khub's design memo and code:
 
 | Source tag | Project | One-line characterization |
 |---|---|---|
@@ -13,10 +13,14 @@ khub's design memo and code:
 | **[oo]** | [fabio-rovai/open-ontologies](https://github.com/fabio-rovai/open-ontologies) | Rust MCP server + CLI for OWL/RDF ontology engineering; "server provides validation and scaffolding, the connected LLM does the intelligence." Strongest on schema-*evolution* governance (Terraform-style plan/lock/apply/drift) and ontology QA (lint, align, competency questions). |
 | **[sem]** | [semantica-agi/semantica](https://github.com/semantica-agi/semantica) | Extraction-first knowledge-graph pipeline ("open-source Palantir for agents"): ingest → NER/relation extraction → conflict detection → KG → provenance/decision intelligence. khub's thesis inverted (bottom-up extraction into a DB vs. top-down authoring in git); useful mainly as ingestion-path and temporal-query inspiration. |
 | **[mds]** | [jackchuka/mdschema](https://github.com/jackchuka/mdschema) | Go CLI validating Markdown *document structure* against a YAML schema (headings, code blocks, tables, link integrity, basic frontmatter typing). Rejected as an engine — no relations, no graph, second schema dialect — but its rule vocabulary informs body content assertions (#49). |
+| **[og]** | [NinePts/OntoGraph](https://github.com/NinePts/OntoGraph) | Java/Spring Boot service graphing OWL ontologies to GraphML in four notations (custom, Graffoo, VOWL, UML), via Stardog and hand layout in yEd. **Dead since Jan 2019 and unbuildable** — rejected as a tool, a port, and a dependency. Contributes one visualization idea (#58), a peer-reviewed citation for khub's "domain experts don't speak OWL" premise, and a caveated OWL test corpus. Full review: [`ontograph-review.md`](ontograph-review.md). |
+| **[iwe]** | [iwe-org/iwe](https://github.com/iwe-org/iwe) | Rust markdown knowledge graph with CLI + LSP + MCP over one core library. khub's closest independent sibling on architecture: markdown-in-git as truth, derived in-memory graph, schema as machine-checked policy, agent as first-class writer. Validates documents in isolation (no referential integrity, untyped edges), so it is no threat to the graph layer — but it is ahead on agent write-safety, body-shape validation, and context assembly. Full review: [`iwe-comparison.md`](iwe-comparison.md). |
 
-Full comparative analysis lives in the review session; this file records only
-the actionable candidates. Effort: **S** ≈ a day or less, **M** ≈ days,
-**L** ≈ a week+. Status: `proposed` unless marked.
+Full comparative analysis lives in the review session, except for **[iwe]** and
+**[og]**, which have written reviews at [`iwe-comparison.md`](iwe-comparison.md)
+and [`ontograph-review.md`](ontograph-review.md); this file records only the
+actionable candidates. Effort: **S** ≈ a day or less,
+**M** ≈ days, **L** ≈ a week+. Status: `proposed` unless marked.
 
 ---
 
@@ -248,6 +252,130 @@ open-ontologies contributes the blast-radius/lock framing.
     mdschema itself stays rejected as an engine (see source table). Absorbs
     the remainder of #16.
 
+## I. Agent write-safety and retrieval [iwe]
+
+From the IWE review ([`iwe-comparison.md`](iwe-comparison.md)). The theme: khub
+leads on the graph contract and trails on what happens *around* a write — how an
+agent proves it knows what it is about to change, what it learns when the write
+lands, and how it assembles context in one call instead of five.
+
+50. **`expect` guards + surface-level strictness** [iwe, M] — Every mutating
+    verb accepts `--expect N` or `--expect min:max`, asserting how many
+    entities the operation will write; a mismatch fails the whole operation
+    before anything is written and names the actual count plus each entity that
+    matched. The borrowed insight is that **strictness belongs to the surface,
+    not the grammar**: guards stay optional for a human at a terminal with git
+    behind them, the CLI opts in with `--strict`, and the planned MCP server is
+    *always strict with no opt-out* — an unguarded mutation is refused with the
+    missing guards named. `--dry-run` is exempt and is how the count is learned:
+    dry-run, read the matched set, pin `--expect`, re-run. Highest-value item in
+    the IWE review; the natural gate on #21 (`bulk`) and on any MCP write verb.
+51. **Validate-all-then-write atomicity** [iwe, M; pairs with #21, #34] — A
+    multi-entity operation resolves every target and validates every write
+    against the pre-operation state *before* touching disk, in a fixed order
+    (parse → per-entity validation → referential integrity → cross-write
+    conflict → `expect`), and any failure aborts the whole operation. Today
+    khub's write path is per-entity, so a partial bulk edit is possible. IWE
+    additionally forbids two applications from touching overlapping extents and
+    reports the offending pair; khub's analogue is two writes to the same
+    entity in one operation.
+52. **Session-scoped integrity warnings on write results** [iwe, S] — Write
+    verbs return standing `check` findings alongside their result — one line
+    per finding, `<id> › <rule>: <message>` — reported **once per session**, so
+    the first write surfaces the workspace's existing debt and later writes
+    surface only what changed. Advisory, never blocking (khub's `validate` and
+    `check` gates stay exactly as they are); the point is that an agent
+    currently has to *choose* to run `check` and therefore does not. Pairs with
+    #39's output contract and #40's receipts.
+53. **`khub retrieve` — one-call context assembly** [iwe, M] — The read verb
+    khub is missing. Today an agent composes `search` + `get` + `neighbors` by
+    hand and manages its own budget. `retrieve` takes seeds (a search string, a
+    filter, or explicit ids), an expansion spec mapping each predicate — or
+    direction — to a depth, `--limit` capping seeds *before* expansion, and
+    `--max-entities` capping the result *after* expansion by trimming periphery
+    first, returning seeds in relevance order followed by the expansion. A
+    token budget is the version worth arguing about: it makes the verb
+    context-window-aware, and it is the only place in khub that would need a
+    tokenizer.
+54. **Near-duplicate detection** [iwe, M] — A `check` finding (or a `stats`
+    subcommand) for entities that duplicate one another, behind IWE's three
+    gates, which are what make it usable rather than noisy: **mutual** (each
+    must be mostly made of the other's content, so a short entity contained in
+    a long one is not reported), **comparable size** (both above a floor and
+    within ~2× of each other), and **near-identical** (self-normalized BM25
+    above a tunable threshold, default 0.85). Reuses the FTS5 index already
+    built per invocation.
+55. **Cardinality predicates over relations** [iwe, S–M; feeds #37] — Query
+    support for the *count* of related entities, not just their existence:
+    zero-inbound (orphans), zero-outbound (leaves), "5 or more inbound", "at
+    least 2 active projects within 3 hops". IWE spells this `$size` on each
+    relational operator, composable with a target filter and depth bounds. The
+    payoff is that most `check` findings become expressible as ordinary
+    queries, which is what custom per-preset check rules (#37) need if they are
+    not to become a second dialect.
+56. **Universal `--dry-run`** [iwe, S] — Every mutating verb previews. `backfill`
+    and `wire` have it; `add`/`edit`/`link`/`unlink`/`remove` and anything from
+    #21 or #34 should too, with one shared preview shape. Cheap on its own and
+    load-bearing for #50, since dry-run is how an agent learns the count it
+    must then assert.
+57. **MCP surface shape** [iwe, S; with the planned MCP server] — Settle the
+    shape before building it, using IWE's as the reference: tools for the read,
+    write and refactor verbs; **prompts** for the recurring workflows (explore
+    the graph, review an entity in context, propose a restructuring);
+    **resources** for the stable reads (`khub://entity/{id}`,
+    `khub://schema`, `khub://status`) so a client can subscribe rather than
+    poll; **file watching** so editor and agent edits reach the in-memory index
+    without a restart; and per-tool `dry_run` throughout. Composes with #42's
+    exposure filter and #50's always-strict writes.
+
+## J. Schema visualization [og]
+
+From the OntoGraph review ([`ontograph-review.md`](ontograph-review.md)). One
+candidate; the rest of that repo is rejected.
+
+58. **`khub viz --aspect schema|instances|both`** [og, S–M; completes #11] —
+    `viz` renders the *instance* graph today: entities as nodes, predicates as
+    edges, per-type coloring, `--type` to narrow. There is no way to render the
+    **schema** — the types, their legal predicates, which relations are
+    required, cardinality, union targets. A reader can see the entities and not
+    the ontology, which is backwards for a tool whose thesis is that the schema
+    is the operational setup. `--aspect schema` draws the resolved schema
+    (everything needed is already in `ResolvedSchema`); `--aspect instances` is
+    today's behavior and stays the default; `--aspect both` is the UML-style
+    combined view, types with their attributes above the instances that realize
+    them. Reuses the existing Cytoscape serialization and inlined-library render
+    in `core/viz.py` — the new work is the schema walk and the notation, not the
+    output path.
+
+    OntoGraph's design rationale is the part worth keeping: it generates
+    separate graphs per aspect *"to reduce the number of nodes and edges on any
+    single graph, and thereby reduce crowding and help focus the semantics."*
+    Supporting findings from the accompanying paper: VOWL was designed for
+    "casual ontology users with only little training"; graphs beat indented
+    trees for holding attention and for showing overviews and multiple
+    inheritance (Fu, Noy & Storey, 2013); and every aspect — classes,
+    hierarchies, instances, relationships, properties — needs to be visualizable
+    for an ontology to be understood (Katifori et al., 2003). Borrow the visual
+    grammar for subclassing, domain/range and cardinality from Graffoo/VOWL;
+    ignore the OWL constructs khub does not have.
+
+## Reinforcements to existing items
+
+Where a reviewed project ships a working design for a candidate already on this
+list. No new numbers — recorded so the design work is not redone:
+
+| Item | Source | What it contributes |
+|---|---|---|
+| **#11** schema docs | [og] | The rendered schema wants a picture, not just a table — #58 is the visual half of the same artifact, and both kill the hand-maintained-preset-doc drift class. Ship them together. |
+| **#44** RDF mapping memo | [og] | A peer-reviewed citation for the position the memo takes: domain experts "do not know the formal languages or logic that express ontological concepts," and pushing OWL at them "may result in errors or omissions, or in the expert becoming frustrated and losing interest entirely" (Westerinen & Tauber, *Applied Ontology*). This is the argument for RDF as a derived projection and never the authoring surface — worth quoting in the memo's opening rather than asserting the boundary unsupported. |
+| **#13** schema discover | [iwe] | The output contract: per field, type distribution with percentages, coverage count/percent, distinct count, value histogram capped at 100. The *enumerable-value* rule is the good part — only null/bool/number and `[A-Za-z0-9_.-/]+` strings count toward distinct and appear in the histogram, so titles and URLs are counted but never enumerated. |
+| **#49** body assertions | [iwe] | A specified dialect (`document-schema.org/draft/2026-06`) covering ordered sections, occurrence counts, header patterns, seven block types, list item shapes, and token budgets, with an ordered greedy no-backtracking matching algorithm and load-time rejection of unreachable entries. See the open follow-up in the review: adopt the dialect or extend khub's template vocabulary, but decide it deliberately. |
+| **#21** bulk | [iwe] | Filter + `$set`/`$unset`, dry-run to learn counts, guards to assert them, atomic per entity. Effectively #21 + #50 + #51 as one verb. |
+| **#28** `--where` filters | [iwe] | A shipped grammar to copy from: bare equality with array-membership semantics, `$eq $ne $gt $gte $lt $lte $in $nin $exists $all $size`, `$and $or $nor`, dotted paths, and no implicit type coercion. |
+| **#18** `--under <node>` | [iwe] | Generalized: a relational operator taking a *filter* as its anchor plus `minDepth`/`maxDepth`, so "everything under this project" and "everything under any active project" are the same construct. |
+| **#39** output contract | [iwe] | Adopt the exit-code trichotomy: `0` clean, `1` findings, `2` configuration or schema error printed to stderr *before* any entity is examined. khub currently overloads `2` as usage error; a broken `schema.yaml` and a workspace with findings should not look the same to CI. Also worth copying: violations carry a machine path into the schema plus the failing keyword. |
+| **#42** MCP exposure filter | [iwe] | Pairs with #50 — "read-only khub for a reviewer agent" and "writes must carry guards" are the same policy surface. |
+
 ---
 
 ## Explicitly rejected
@@ -266,12 +394,45 @@ solves a problem khub's corpus does not have:
   point); learned suppression (#35 is the explicit version); version-storage
   subsystems (git is this).
 
+From the IWE review, with reasons in [`iwe-comparison.md`](iwe-comparison.md):
+
+- Path-glob schema binding (the ontology would become implicit in the
+  filesystem; type-binding is the invariant).
+- A block-level mutation surface for entity bodies (frontmatter-first entities;
+  body editing is the editor's job — only the *validation* vocabulary transfers,
+  as #49).
+- `extract`/`inline` body refactoring (wants owned children, #14, first; no
+  candidate number until then).
+- `normalize` as a corpus verb (the ruamel round-trip is the write discipline,
+  and frontmatter-slug relations have no link titles to resync).
+- An LSP surface (a real gap, a large project, not now).
+- Untyped inclusion/reference edges (khub's typed predicates dominate).
+
+From the OntoGraph review, with reasons in [`ontograph-review.md`](ontograph-review.md):
+
+- OntoGraph itself, in every form — as a dependency (Java/Spring Boot 1.5.6, both
+  its artifact repositories sunset, unbuildable since ~2021), as a service (requires
+  Stardog, a commercial triple store, against the no-database invariant), and as a
+  port (GraphML needing hand layout in yEd is strictly worse than the self-contained
+  Cytoscape HTML `viz` already emits).
+- Full-OWL construct coverage as a conformance target for #45 — its testcases reach
+  `owl:oneOf`, `complementOf`, `withRestrictions`, `onDatatype`, transitive and
+  asymmetric properties, nested unions. Use them to check that what khub *emits*
+  round-trips; never as a bar to clear (#44 rejects full OWL deliberately).
+
 ## Shortlist (reviewer's recommendation)
 
 - **Highest leverage:** the migration cluster **#1–3** (with #4 folded in) —
   the biggest named gap, with a proven same-substrate design to port.
-- **Best value/effort:** **#13** (discover), **#9** (bundles).
-- **Cheap-wins batch:** **#27, #30, #38, #39**.
+- **Highest leverage on the agent surface:** **#50** (guards + surface
+  strictness), with **#56** as its prerequisite and **#51** as its completion.
+  The one place a competitor is demonstrably ahead of khub.
+- **Best value/effort:** **#13** (discover), **#9** (bundles), **#55**
+  (cardinality — small, and it unblocks #37), **#58 + #11** shipped as one
+  (the schema rendered as a doc and as a diagram).
+- **Cheap-wins batch:** **#27, #30, #38, #39, #52, #56**.
 - **Protects the IP:** **#10** (competency questions make presets testable).
+- **Decide before the MCP server exists:** **#57** (surface shape), **#53**
+  (`retrieve`) — both are much cheaper to design in than to retrofit.
 - **Hold** until the workflow question is deliberately reopened: **#22/#23**.
 - **G (#44–46)** is agreed and proceeds independently.
