@@ -63,6 +63,33 @@ func DuplicateType(type_ string) *Located {
 	return &Located{Code: "duplicate_type", Message: fmt.Sprintf("Duplicate type '%s'", type_), Type: type_}
 }
 
+// CollectionPathCollision is two collection types resolving to one inventory
+// file. Accepting it broke three things at once: each type's `query` claimed
+// the other's rows, `check` saw both, and the write lock is keyed per TYPE
+// (.khub/generated/locks/<type>.lock) while the file is shared — so two
+// writers took different locks and could interleave on the same bytes. That
+// last one is why this is rejected at resolve time rather than reported by
+// `check`: by the time a report exists the file may already be torn.
+func CollectionPathCollision(relpath string, types []string) *Located {
+	return &Located{
+		Code: "collection_path_collision",
+		Message: fmt.Sprintf(
+			"Collection types %s all store at '%s'. Give each collection type its own "+
+				"path: rows are claimed by every type pointing at the file, and the write "+
+				"lock is keyed per type, so concurrent writes are not serialized.",
+			strings.Join(quoteAll(types), ", "), relpath),
+		Type: types[0],
+	}
+}
+
+func quoteAll(ss []string) []string {
+	out := make([]string, len(ss))
+	for i, s := range ss {
+		out[i] = "'" + s + "'"
+	}
+	return out
+}
+
 // --- workspace ---------------------------------------------------------------
 
 func UnknownPreset(name string, known []string) *Located {

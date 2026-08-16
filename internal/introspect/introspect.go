@@ -60,7 +60,7 @@ func TypeView(resolved *schema.ResolvedSchema, name, preset string) (*omap.Map, 
 		sort.Strings(known)
 		return nil, errs.UnknownType(name, preset, known)
 	}
-	return typeView(rtype), nil
+	return typeView(resolved, rtype), nil
 }
 
 // SchemaView renders the full effective schema plus source provenance.
@@ -70,7 +70,7 @@ func SchemaView(resolved *schema.ResolvedSchema, provenance *omap.Map) *omap.Map
 	types := []any{}
 	for _, name := range resolved.Types.Keys() {
 		rtype, _ := resolved.Types.Get(name)
-		types = append(types, typeView(rtype))
+		types = append(types, typeView(resolved, rtype))
 	}
 	out.Set("types", types)
 	return out
@@ -140,6 +140,47 @@ func EdgesView(resolved *schema.ResolvedSchema) []any {
 		r := rows[sig]
 		out = append(out, edgeView(r.rel, r.sources))
 	}
+	// The derived half of the graph. Every declared inverse is a real read
+	// surface (`get --edges`, `query --has/--missing`) that this listing used to
+	// omit entirely, so a caller enumerating edges saw only the stored
+	// direction. `from` is the type that answers to the inverse; `to` is where
+	// the stored edge came from.
+	// One row per derived DECLARATION, aggregated across every type carrying it:
+	// `from` is the types answering to the inverse, `to` the union of types
+	// storing the forward edge. Aggregating matters — build-hub declares
+	// `supersedes` on adr, feature-spec and pdr, and reporting only whichever
+	// was seen first would understate the surface.
+	var derivedOrder []string
+	agg := map[string]*derivedInverse{}
+	froms := map[string][]string{}
+	for _, tname := range resolved.Types.Keys() {
+		for _, d := range derivedInversesFor(resolved, tname) {
+			key := fmt.Sprintf("%s|%s|%s|%t", d.predicate, d.forward, d.kind, d.acyclic)
+			cur, seen := agg[key]
+			if !seen {
+				copied := d
+				agg[key] = &copied
+				derivedOrder = append(derivedOrder, key)
+				cur = &copied
+			}
+			for _, src := range d.sources {
+				if !containsStr(cur.sources, src) {
+					cur.sources = append(cur.sources, src)
+				}
+			}
+			if !containsStr(froms[key], tname) {
+				froms[key] = append(froms[key], tname)
+			}
+		}
+	}
+	sort.Strings(derivedOrder)
+	for _, key := range derivedOrder {
+		d := agg[key]
+		sort.Strings(d.sources)
+		from := froms[key]
+		sort.Strings(from)
+		out = append(out, derivedEdgeView(*d, from))
+	}
 	return out
 }
 
@@ -168,7 +209,7 @@ func signature(rel *schema.ResolvedRelation) string {
 		rel.Predicate, rel.Targets, rel.Kind, rel.Many, rel.Required, inv, rel.Acyclic)
 }
 
-func typeView(rtype *schema.ResolvedType) *omap.Map {
+func typeView(resolved *schema.ResolvedSchema, rtype *schema.ResolvedType) *omap.Map {
 	v := omap.New()
 	v.Set("name", rtype.Name)
 	v.Set("layout", rtype.Storage.Layout)
@@ -203,6 +244,12 @@ func typeView(rtype *schema.ResolvedType) *omap.Map {
 		r, _ := rtype.Relations.Get(name)
 		rels = append(rels, relationView(r))
 	}
+	// Stored relations first, in declaration order, then the derived inverses
+	// alphabetically — so an existing caller reading relations[0] keeps reading
+	// what it always read.
+	for _, d := range derivedInversesFor(resolved, rtype.Name) {
+		rels = append(rels, derivedRelationView(d))
+	}
 	v.Set("relations", rels)
 	return v
 }
@@ -216,7 +263,116 @@ func relationView(rel *schema.ResolvedRelation) *omap.Map {
 	r.Set("required", rel.Required)
 	r.Set("inverse", strPtr(rel.Inverse))
 	r.Set("acyclic", rel.Acyclic)
+	r.Set("derived", false)
 	return r
+}
+
+// derivedInverse is one inverse predicate a type carries but does not store.
+//
+// `supersedes: {to: adr, inverse: superseded}` means an adr answers to
+// `superseded` — `get --edges` returns it and `query --missing superseded`
+// filters on it — while nothing writes it to disk. Introspection listed only
+// the stored side, so the one surface skills/khub/SKILL.md tells agents to
+// build writes from ("never from a hardcoded shape") omitted predicates those
+// same agents are allowed to use.
+type derivedInverse struct {
+	predicate string
+	sources   []string // types whose forward relation points here
+	forward   string   // the stored predicate this inverts
+	kind      string
+	acyclic   bool
+}
+
+// derivedInversesFor returns the inverse predicates typeName answers to.
+//
+// The membership rule is query.inverseSources read forwards: a relation's
+// inverse lands on a type when the relation can actually point AT that type —
+// `kind: any`, or the type is among its declared targets. Anything looser would
+// advertise a predicate that filters nothing.
+func derivedInversesFor(resolved *schema.ResolvedSchema, typeName string) []derivedInverse {
+	// Keyed by the whole declaration, not the inverse NAME — the same reason
+	// EdgesView keys stored rows by signature. Two forwards may share one
+	// inverse (`blocks` and `depends_on` both inverting to `blocked_by`), and
+	// first-seen-wins would report one, silently drop the other, and attribute
+	// the survivor's kind and acyclic flag to both.
+	byDecl := map[string]*derivedInverse{}
+	var order []string
+	for _, sname := range resolved.Types.Keys() {
+		stype, _ := resolved.Types.Get(sname)
+		for _, p := range stype.Relations.Keys() {
+			rel, _ := stype.Relations.Get(p)
+			if rel.Inverse == nil {
+				continue
+			}
+			if rel.Kind != schema.KindAny && !containsStr(rel.Targets, typeName) {
+				continue
+			}
+			key := fmt.Sprintf("%s|%s|%s|%t", *rel.Inverse, rel.Predicate, rel.Kind, rel.Acyclic)
+			d, seen := byDecl[key]
+			if !seen {
+				d = &derivedInverse{
+					predicate: *rel.Inverse, forward: rel.Predicate,
+					kind: rel.Kind, acyclic: rel.Acyclic,
+				}
+				byDecl[key] = d
+				order = append(order, key)
+			}
+			if !containsStr(d.sources, sname) {
+				d.sources = append(d.sources, sname)
+			}
+		}
+	}
+	sort.Strings(order)
+	out := make([]derivedInverse, 0, len(order))
+	for _, k := range order {
+		d := byDecl[k]
+		sort.Strings(d.sources)
+		out = append(out, *d)
+	}
+	return out
+}
+
+// derivedEdgeView is edgeView's peer for the derived half: `from` is the types
+// answering to the inverse, `to` the types storing the forward edge. A peer
+// rather than copying keys out of derivedRelationView by name, because key
+// order is contract and a renamed key would have gone silently nil.
+func derivedEdgeView(d derivedInverse, from []string) *omap.Map {
+	e := omap.New()
+	e.Set("predicate", d.predicate)
+	e.Set("from", toAny(from))
+	e.Set("to", toAny(d.sources))
+	e.Set("kind", d.kind)
+	e.Set("many", true)
+	e.Set("required", false)
+	e.Set("inverse", d.forward)
+	e.Set("acyclic", d.acyclic)
+	e.Set("derived", true)
+	return e
+}
+
+// derivedRelationView renders an inverse in the same shape as a stored
+// relation. `many` is always true and `required` always false: any number of
+// entities may point at this one, and inbound edges cannot be mandated.
+func derivedRelationView(d derivedInverse) *omap.Map {
+	r := omap.New()
+	r.Set("predicate", d.predicate)
+	r.Set("to", toAny(d.sources))
+	r.Set("kind", d.kind)
+	r.Set("many", true)
+	r.Set("required", false)
+	r.Set("inverse", d.forward)
+	r.Set("acyclic", d.acyclic)
+	r.Set("derived", true)
+	return r
+}
+
+func containsStr(ss []string, want string) bool {
+	for _, s := range ss {
+		if s == want {
+			return true
+		}
+	}
+	return false
 }
 
 func edgeView(rel *schema.ResolvedRelation, sources []string) *omap.Map {

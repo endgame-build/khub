@@ -2,6 +2,38 @@
 
 Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); khub is pre-release.
 
+## [Unreleased]
+
+### Added
+
+- **Schema introspection lists derived inverse predicates** (#14). A declared inverse has been
+  a first-class read surface since v0.11.0 — `get --edges` returns it, `query --has/--missing`
+  accepts it — but `schema show` and `schema edges` omitted it, so the one discovery surface
+  `skills/khub/SKILL.md` tells agents to build writes from hid predicates those agents may use.
+  Every relation row now carries `derived`; stored relations keep their declaration order and
+  come first.
+- **Two collection types resolving to one file are rejected** (#15), at schema-resolve time
+  rather than by `check`. Sharing an inventory file made each type's `query` claim the other's
+  rows, and the write lock is keyed per type — so two writers took different locks on one file.
+  New error code `collection_path_collision`.
+
+### Changed
+
+- **`reindex --dry-run` previews an incomplete graph instead of refusing** (#16). It writes
+  nothing, and its purpose is to show what the index would become — which is exactly what is
+  wanted while diagnosing the bad merge that caused the malformed file. A stderr line names the
+  files it could not see; a real `reindex` still refuses.
+- **A path that cannot exist as addressed reports `internal_path_error`, not `os_error`** (#18).
+  The blanket catch exists so a read-only directory reads as one clean line, but the bug that
+  motivated it was itself an OSError — `delete()` built `prd.md/prd.md` for a singleton and the
+  loud failure is what exposed it. ENOTDIR, EISDIR and ENAMETOOLONG now get their own code. The
+  errno cannot distinguish khub's mistake from a file placed where a directory belongs, so the
+  message names both.
+- **`--id` is documented as required for types you do not title** (#17). Without a `name` or
+  `title` the slug is minted from the TYPE NAME (`repo`, `repo-2`), and those meaningless keys
+  are what every later `link` and `get` must use. The fallback itself is unchanged and
+  deliberate: it is what keeps capture from being blocked on naming something.
+
 ## [0.19.0] — 2026-08-16
 
 ### Changed

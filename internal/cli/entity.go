@@ -32,7 +32,7 @@ func registerAdd(root *cobra.Command) {
 	// The second docstring paragraph, which Typer prints under the usage line.
 	cmd.Long = cmd.Short + "\n\nA missing TYPE is a usage error; every field is a flag."
 	cmd.DisableFlagParsing = true
-	cmd.Flags().StringVar(&id, "id", "", "Explicit slug (else minted from name/type).")
+	cmd.Flags().StringVar(&id, "id", "", "Explicit slug. Without it the slug is minted from name/title, or from the TYPE NAME when neither is set (fragment -> 002-fragment) — so pass --id for a type you do not title.")
 	cmd.Flags().BoolVar(&draft, "draft", false, "Mark the entity unpublished (default: active).")
 	cmd.Flags().BoolVar(&strict, "strict", false, "Reject fields the schema does not declare.")
 	cmd.Flags().StringVar(&bodyText, "body", "", "Body prose as a string.")

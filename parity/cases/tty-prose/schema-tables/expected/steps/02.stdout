@@ -1,6 +1,6 @@
-[3m                               requirement (file)                               [0m
+ requirement (file)
 ┏━━━━━━━━━━━━━┳━━━━━━━━━━━━━┳━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━┓
-┃[1m [0m[1mfield      [0m[1m [0m┃[1m [0m[1mtype       [0m[1m [0m┃[1m [0m[1mrequired[0m[1m [0m┃[1m [0m[1menum                 [0m[1m [0m┃[1m [0m[1mnotes        [0m[1m [0m┃
+┃ field       │ type        │ required │ enum                  │ notes         ┃
 ┡━━━━━━━━━━━━━╇━━━━━━━━━━━━━╇━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━┩
 │ type        │ text        │ ✓        │                       │               │
 │ draft       │ bool        │          │                       │ default False │

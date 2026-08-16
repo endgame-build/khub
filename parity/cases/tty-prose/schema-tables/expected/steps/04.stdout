@@ -1,11 +1,11 @@
-[3m            schema: build-lite@0.1.0             [0m
+ schema: build-lite@0.1.0
 ┏━━━━━━━━━━━━━━┳━━━━━━━━┳━━━━━━━━━━━┳━━━━━━━━━━━┓
-┃[1m [0m[1mtype        [0m[1m [0m┃[1m [0m[1mfields[0m[1m [0m┃[1m [0m[1mrelations[0m[1m [0m┃[1m [0m[1mlayout   [0m[1m [0m┃
+┃ type         │ fields │ relations │ layout    ┃
 ┡━━━━━━━━━━━━━━╇━━━━━━━━╇━━━━━━━━━━━╇━━━━━━━━━━━┩
-│ prd          │      9 │         4 │ singleton │
-│ arc42        │      9 │         4 │ singleton │
-│ requirement  │     10 │         5 │ file      │
-│ adr          │     10 │         6 │ file      │
-│ component    │     12 │         4 │ file      │
-│ feature-spec │     10 │         6 │ file      │
+│ prd          │ 9      │ 4         │ singleton │
+│ arc42        │ 9      │ 4         │ singleton │
+│ requirement  │ 10     │ 5         │ file      │
+│ adr          │ 10     │ 7         │ file      │
+│ component    │ 12     │ 4         │ file      │
+│ feature-spec │ 10     │ 7         │ file      │
 └──────────────┴────────┴───────────┴───────────┘

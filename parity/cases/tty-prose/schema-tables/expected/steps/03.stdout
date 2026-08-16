@@ -1,6 +1,6 @@
-[3m                                     edges                                      [0m
+ edges
 ┏━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━┳━━━━━━┳━━━━━━━━━━┳━━━━━━━━━━━━━━━┓
-┃[1m [0m[1mpredicate   [0m[1m [0m┃[1m [0m[1mfrom        [0m[1m [0m┃[1m [0m[1mto          [0m[1m [0m┃[1m [0m[1mcard[0m[1m [0m┃[1m [0m[1mrequired[0m[1m [0m┃[1m [0m[1mnotes        [0m[1m [0m┃
+┃ predicate    │ from         │ to           │ card │ required │ notes         ┃
 ┡━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━╇━━━━━━╇━━━━━━━━━━╇━━━━━━━━━━━━━━━┩
 │ affects      │ adr          │ any          │ many │          │               │
 │ depends_on   │ any          │ any          │ many │          │ acyclic       │
@@ -14,5 +14,8 @@
 │              │              │              │      │          │ acyclic       │
 │ supersedes   │ feature-spec │ feature-spec │ one  │          │ inverse       │
 │              │              │              │      │          │ superseded;   │
+│              │              │              │      │          │ acyclic       │
+│ superseded   │ adr,         │ adr,         │ many │          │ inverse       │
+│              │ feature-spec │ feature-spec │      │          │ supersedes;   │
 │              │              │              │      │          │ acyclic       │
 └──────────────┴──────────────┴──────────────┴──────┴──────────┴───────────────┘

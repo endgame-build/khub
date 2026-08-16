@@ -462,3 +462,26 @@ it. Restored, with its two Python couplings replaced: it reads the version from
 checkout into `.eval-bin/` on PATH instead of running `uv tool install --force`
 against the operator's global tool directory (which was the more invasive of the
 two behaviours anyway).
+
+## D19 — three of the six colour references are spent
+
+**Date 2026-08-16.** D17 named the surviving Python-recorded SGR as the reference
+for when colour lands: those fixtures carry Rich's `ESC[3m` title, `ESC[1m`
+headers and right-aligned numeric columns, and `tty-layout-free` absorbs the
+difference against khub's monochrome output.
+
+Implementing #14 spent three of them. `tty-prose/schema-tables` steps 02–04 now
+list derived inverse predicates — a row Python never produced and, with the
+implementation deleted, never can. Re-recording from the binary was the only
+option; the alternative was hand-authoring bytes attributing output to an
+implementation that never emitted it.
+
+What survives: `tty-prose/{get,query,status}-table` step 09. Nothing unique was
+lost — all three retain the same Rich vocabulary (italic title, bold header
+cells, `┃` header separators, right-aligned numerics) that the schema tables
+demonstrated.
+
+The lesson for the rest: **a fixture carrying Python bytes is spent the moment
+its content changes.** Re-recording is correct when it happens, but the colour
+work should read what remains before adding a feature that touches
+`get`, `query` or `status` table output, because that would leave nothing.

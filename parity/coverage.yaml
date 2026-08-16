@@ -146,6 +146,7 @@ error_codes:
 - ambiguity_error
 - bad_search_query
 - bad_target
+- collection_path_collision
 - body_field_reserved
 - bool_violation
 - cardinality_violation
@@ -157,6 +158,7 @@ error_codes:
 - filter_error
 - fts_unavailable
 - illegal_predicate
+- internal_path_error
 - inbound_edge_refusal
 - invalid_schema
 - invalid_slug

@@ -10,7 +10,10 @@
 │   TYPE      <str>  The entity type to create.                                │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 ╭─ Options ────────────────────────────────────────────────────────────────────╮
-│ --id                 <str>  Explicit slug (else minted from name/type).      │
+│ --id                 <str>  Explicit slug. Without it the slug is minted     │
+│                             from name/title, or from the TYPE NAME when      │
+│                             neither is set (fragment -> 002-fragment) — so   │
+│                             pass --id for a type you do not title.           │
 │ --draft                     Mark the entity unpublished (default: active).   │
 │ --strict                    Reject fields the schema does not declare.       │
 │ --body               <str>  Body prose as a string.                          │

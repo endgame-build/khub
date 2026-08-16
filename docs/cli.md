@@ -51,6 +51,7 @@ The write verbs (`add`, `edit`, `link`, `unlink`, `remove`) reject malformed inp
 - **An ambiguous bare target is rejected**: when a slug names entities of two types, qualify it as `type/slug`.
 - **Malformed dates and booleans are rejected** on write (a non-ISO date, a non-boolean for a `bool` field).
 - **A self-link is rejected**: an entity cannot link to itself.
+- **Without `--id`**, the slug is minted from `name`, then `title`, and falls back to the **type name** when neither carries a value — `khub add fragment --stage raw` mints `002-fragment`. That fallback is deliberate, so capture is never blocked on naming something. It does mean a type you never title produces ids that carry no information (`repo`, `repo-2`), and those are the keys every later `link` and `get` must use: **pass `--id` for a type you do not title.**
 - **An explicit `--id` that collides** with an existing entity of the type is rejected (minting auto-suffixes; an explicit id does not).
 - **An over-long slug is rejected.**
 

@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -31,6 +32,23 @@ func registerReindex(root *cobra.Command) {
 					return err
 				}
 				if dryRun {
+					// Name what the preview could not see. The diff below is
+					// derived from an incomplete graph, so showing it without
+					// this line would imply the index is fine to write — and a
+					// real reindex will still refuse.
+					if len(result.Malformed) > 0 {
+						shown := result.Malformed
+						more := ""
+						if len(shown) > 3 {
+							more = fmt.Sprintf(" (+%d more)", len(shown)-3)
+							shown = shown[:3]
+						}
+						fmt.Fprintf(os.Stderr,
+							"Previewing over %d unparseable file(s) — %s%s. "+
+								"They contribute nothing to this diff, and `khub reindex` "+
+								"will refuse until they parse. Run `khub check` for the list.\n",
+							len(result.Malformed), strings.Join(shown, ", "), more)
+					}
 					// An empty diff means the index already matches; say so rather
 					// than print nothing.
 					if result.Diff != "" {

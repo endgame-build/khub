@@ -1,0 +1,18 @@
+# A path that cannot exist as addressed gets its own code, not the os_error
+# envelope every permission and missing-file failure shares.
+#
+# The blanket OSError catch exists so a read-only directory reads as one clean
+# line instead of a stack trace. But the bug that motivated it was itself an
+# OSError — delete() built `knowledge/product/prd.md/prd.md` for a singleton and
+# raised ENOTDIR, and the loud failure is what made the bad path obvious.
+# Folding that into the same tidy envelope hides khub's own defects in the
+# channel meant for the user's environment.
+#
+# ENOTDIR cannot be told apart from a user putting a file where a directory
+# belongs — same errno either way — so the message names both causes rather
+# than blaming khub. What it must NOT do is look identical to a permission
+# error, which is what this pins.
+steps:
+- argv: ["init", "build-lite", ".", "--no-wire"]
+- sh: "rm -rf knowledge/requirements && printf 'not a directory' > knowledge/requirements"
+- argv: ["add", "requirement", "--title", "Boom", "--kind", "functional", "--format", "json"]

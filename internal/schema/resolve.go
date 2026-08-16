@@ -100,7 +100,37 @@ func Resolve(schemaFiles []string) (*ResolvedSchema, error) {
 		}
 		baseRelations.Set(rn, rr)
 	}
-	return &ResolvedSchema{Types: types, BaseAttributes: baseAttributes, BaseRelations: baseRelations}, nil
+	resolved := &ResolvedSchema{Types: types, BaseAttributes: baseAttributes, BaseRelations: baseRelations}
+	if err := checkCollectionPaths(resolved); err != nil {
+		return nil, err
+	}
+	return resolved, nil
+}
+
+// checkCollectionPaths rejects two collection types resolving to one inventory
+// file. Nothing downstream can recover from it: the scan hands every row to
+// both types, and the per-type lock does not serialize writers who share the
+// file. Enforced here because Resolve is the one gate every surface passes.
+func checkCollectionPaths(resolved *ResolvedSchema) error {
+	byPath := map[string][]string{}
+	var order []string
+	for _, name := range resolved.Types.Keys() {
+		t, _ := resolved.Types.Get(name)
+		if t.Storage.Layout != LayoutCollection {
+			continue
+		}
+		rel := t.CollectionRelpath()
+		if len(byPath[rel]) == 0 {
+			order = append(order, rel)
+		}
+		byPath[rel] = append(byPath[rel], name)
+	}
+	for _, rel := range order {
+		if names := byPath[rel]; len(names) > 1 {
+			return errs.CollectionPathCollision(rel, names)
+		}
+	}
+	return nil
 }
 
 // LoadYAML is resolve.load_yaml: a safe-load of one YAML document into an

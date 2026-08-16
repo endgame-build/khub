@@ -85,7 +85,7 @@ case-sensitive, so `--id CAP-001-login` is stored — and must be looked up — 
 |---|---|
 | File, ID-enumerated | adr `ad-NNN-slug` · pdr `pd-NNN-slug` · boundary `bound-NNN-slug` · quality-attribute `qa-NNN-slug` · requirement `fr-NNN`/`cst-NNN` · capability `cap-NNN-slug` · component `cmp-NNN-slug` · feature-spec `fs-NNN-slug` · test-spec `ts-NNN-slug` · work-package `wp-NNN-slug` |
 | File, name-keyed | domain · entity · contract (natural-name identity; contracts name-keyed so `consumes: readings-api` reads) |
-| Collection (yaml) | `knowledge/architecture/repos.yaml` · `knowledge/architecture/baselines.yaml` |
+| Collection (yaml) | `knowledge/architecture/repos.yaml` · `knowledge/architecture/baselines.yaml` — **pass `--id`**: neither type is titled in practice, so without one the slug is minted from the type name (`repo`, `repo-2`) and those meaningless keys are what every later `link` and `get` must use |
 | Singleton (md) | prd · roadmap · glossary · arc42 · erd — one fixed file, slug = type name; prd is `required: true` |
 
 ## What every entity carries

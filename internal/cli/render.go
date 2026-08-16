@@ -97,10 +97,53 @@ func Guard(fmt_ string, fn func() error) error {
 	if isEPIPE(err) {
 		return err // `khub schema | head` is not a failure; never dress it as one
 	}
+	if isPathConstructionBug(err) {
+		// NOT dressed as os_error. The catch below exists so a read-only
+		// directory or a vanished file reads as one clean line — but the bug
+		// that motivated it was itself an OSError: delete() built
+		// `knowledge/product/prd.md/prd.md` for a singleton and raised
+		// ENOTDIR, and it was the loud failure that made the bad path obvious.
+		// Folding that into the same tidy envelope hides khub's own defects in
+		// the channel meant for the user's environment. ENOTDIR, EISDIR and
+		// ENAMETOOLONG cannot be caused by a well-formed path, so they are
+		// reported as what they are.
+		return Fail(pathBugMessage(err), "internal_path_error", fmt_)
+	}
 	if isOSError(err) {
 		return Fail(osErrorMessage(err), "os_error", fmt_)
 	}
 	return err
+}
+
+// isPathConstructionBug reports errno values that mean khub assembled a path
+// that cannot exist, rather than the filesystem refusing a valid one.
+func isPathConstructionBug(err error) bool {
+	pe, ok := err.(*os.PathError)
+	if !ok {
+		return false
+	}
+	switch errnoOf(pe.Err) {
+	case int(syscall.ENOTDIR), int(syscall.EISDIR), int(syscall.ENAMETOOLONG):
+		return true
+	}
+	return false
+}
+
+// pathBugMessage names the path and both causes. The errno cannot tell them
+// apart — a file sitting where a directory belongs produces exactly the same
+// ENOTDIR as khub joining a filename onto a file — so claiming khub is at
+// fault would be wrong about half the time. Naming the path is what diagnoses
+// either one.
+func pathBugMessage(err error) string {
+	pe := err.(*os.PathError)
+	// The errno's own text carries the specific fault (Not a directory / Is a
+	// directory / File name too long); the prose used to hardcode the ENOTDIR
+	// case, which read as false for the other two this branch also matches.
+	return fmt.Sprintf(
+		"Cannot %s '%s': %s. That path cannot exist as addressed. "+
+			"If you did not create it, khub built the path wrong — "+
+			"please report it with this line.",
+		pe.Op, pe.Path, strerror(pe.Err))
 }
 
 func isEPIPE(err error) bool { return errors.Is(err, syscall.EPIPE) }

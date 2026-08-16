@@ -1,0 +1,18 @@
+# Two collection types resolving to ONE inventory file is rejected at schema
+# resolve time, not reported later by `check`.
+#
+# Accepting it broke three things at once: each type's `query` claimed the
+# other's rows, `check` counted both, and the write lock is keyed per TYPE
+# (.khub/generated/locks/<type>.lock) while the file is shared — so two writers
+# took different locks and could interleave on the same bytes. That last one is
+# why this refuses up front: by the time a report could name the problem the
+# file may already be torn.
+#
+# The refusal must hit every surface, which is why a read (`schema types`) and
+# a write (`add`) are both asserted.
+steps:
+- argv: ["init", "build-hub", ".", "--no-wire"]
+- sh: "printf '  widget:\\n    layout: collection\\n    format: yaml\\n    path: knowledge/architecture/repos.yaml\\n    attributes:\\n      name: {type: text}\\n' >> .khub/schema.yaml"
+- argv: ["schema", "types", "--format", "json"]
+- argv: ["add", "repo", "--id", "r1", "--repo", "x/y", "--status", "active", "--format", "json"]
+- argv: ["status", "--format", "json"]

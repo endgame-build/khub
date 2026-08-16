@@ -42,12 +42,16 @@ type Result struct {
 	Content string
 	Diff    string
 	Wrote   bool
+	// Malformed is the unparseable files a dry run previewed OVER. Empty on a
+	// real reindex, which refuses instead. The caller must surface it: the
+	// preview is honest only if it says what the graph is missing.
+	Malformed []string
 }
 
 // Reindex is reindex.reindex: regenerate index.md from the live graph;
 // dry-run diffs and writes nothing.
 func Reindex(root string, dryRun bool) (*Result, error) {
-	content, count, err := BuildIndexDoc(root)
+	content, count, malformed, err := buildIndexDoc(root, dryRun)
 	if err != nil {
 		return nil, err
 	}
@@ -59,7 +63,10 @@ func Reindex(root string, dryRun bool) (*Result, error) {
 		}
 		diff := unifiedDiff(
 			splitLinesKeepEnds(current), splitLinesKeepEnds(content), IndexName, IndexName)
-		return &Result{Count: count, Path: path, Content: content, Diff: diff, Wrote: false}, nil
+		return &Result{
+			Count: count, Path: path, Content: content, Diff: diff,
+			Wrote: false, Malformed: malformed,
+		}, nil
 	}
 	if err := os.WriteFile(path, []byte(content), 0o666); err != nil {
 		return nil, err
@@ -71,20 +78,38 @@ func Reindex(root string, dryRun bool) (*Result, error) {
 // entity count, derived from the live graph. The prior index.md is never read
 // as input (derived-not-stored, PRJ-001).
 func BuildIndexDoc(root string) (string, int, error) {
+	content, count, _, err := buildIndexDoc(root, false)
+	return content, count, err
+}
+
+// buildIndexDoc derives the index. `preview` relaxes the malformed-scan
+// refusal.
+//
+// A real reindex must refuse an incomplete scan: writing an index.md with a
+// whole type silently missing is the failure that refusal exists to prevent.
+// A dry run writes nothing and exists to show what the index WOULD become —
+// which is exactly what someone wants while diagnosing the bad merge that
+// caused the malformed file. Refusing there withheld the diagnostic at the
+// moment it was most useful. The preview returns the malformed list so the
+// caller can say what it could not see.
+func buildIndexDoc(root string, preview bool) (string, int, []string, error) {
 	resolved, err := introspect.LoadSchema(root)
 	if err != nil {
-		return "", 0, err
+		return "", 0, nil, err
 	}
 	scanned, err := index.Build(root, resolved)
 	if err != nil {
-		return "", 0, err
+		return "", 0, nil, err
 	}
-	if err := index.RejectMalformed(scanned, "reindex"); err != nil {
-		return "", 0, err
+	if !preview {
+		if err := index.RejectMalformed(scanned, "reindex"); err != nil {
+			return "", 0, nil, err
+		}
 	}
+	malformed := append([]string{}, scanned.Malformed...)
 	idx := index.Filter(scanned, index.StrayNodes(scanned)) // strays are not entities
 	g := graph.BuildGraph(idx)
-	return RenderIndex(root, resolved, idx, g), len(idx.Nodes), nil
+	return RenderIndex(root, resolved, idx, g), len(idx.Nodes), malformed, nil
 }
 
 // Group is one section of the rendered index: a type and the slugs under it.

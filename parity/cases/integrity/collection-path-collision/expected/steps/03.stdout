@@ -1,0 +1,1 @@
+{"error": {"code": "collection_path_collision", "message": "Collection types 'repo', 'widget' all store at 'knowledge/architecture/repos.yaml'. Give each collection type its own path: rows are claimed by every type pointing at the file, and the write lock is keyed per type, so concurrent writes are not serialized."}}
