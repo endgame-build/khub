@@ -1,9 +1,20 @@
 version: 2
 updates:
-  - package-ecosystem: "uv"
+  # Was "uv" until the Go cutover. That ecosystem needs a pyproject.toml/uv.lock
+  # to resolve against, so once those were deleted Dependabot kept opening
+  # weekly PRs for ruff and typer that failed on arrival.
+  - package-ecosystem: "gomod"
     directory: "/"
     schedule:
       interval: "weekly"
+    groups:
+      # khub pins its dependencies deliberately — goccy is parser-only, gonum is
+      # used for cycle enumeration alone, ncruces/go-sqlite3 is the pure-Go wasm
+      # build that keeps CGO off. Grouping patch and minor bumps into one PR
+      # keeps the review on "did the fixtures still pass" rather than on five
+      # separate one-line diffs.
+      go-minor-and-patch:
+        update-types: ["minor", "patch"]
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
