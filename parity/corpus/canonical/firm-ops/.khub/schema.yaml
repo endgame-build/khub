@@ -1,0 +1,312 @@
+# khub-preset: firm-ops@0.1.0
+base:
+  attributes:
+    type:
+      type: text
+      required: true
+    draft:
+      type: bool
+      default: false
+    author:
+      type: text
+    created:
+      type: date
+      required: true
+    updated:
+      type: date
+    title:
+      type: text
+    description:
+      type: text
+    resource:
+      type: text
+    tags:
+      type: list
+  relations:
+    related:
+      to: any
+      many: true
+    sources:
+      to: any
+      many: true
+    references:
+      to: any
+      many: true
+    depends_on:
+      to: any
+      many: true
+      acyclic: true
+entities:
+  opportunity:
+    when: a possible piece of work with a named client is first mentioned — record it at 'we might', not at 'we won'
+    layout: folder
+    path: opportunities
+    attributes:
+      name:
+        type: text
+        required: true
+      stage:
+        enum:
+        - prospect
+        - proposal-sent
+        - won
+        - signed
+        - lost
+        required: true
+      source:
+        enum:
+        - event
+        - referral
+        - outbound
+        - inbound
+        - partner
+        - existing-client
+      crm_id:
+        type: text
+        pattern: ^[0-9]+$
+      notes_folder:
+        type: text
+      notes_folder_id:
+        type: text
+      updated:
+        required: true
+    relations:
+      client:
+        to: client
+        required: true
+      owner:
+        to: person
+        required: true
+      partner:
+        to: partnership
+  project:
+    when: work is agreed and has an owner; the opportunity that produced it becomes its origin
+    layout: folder
+    path: projects
+    attributes:
+      active:
+        type: bool
+        default: true
+      source:
+        enum:
+        - event
+        - referral
+        - outbound
+        - inbound
+        - partner
+        - existing-client
+      external_repo:
+        type: text
+        pattern: ^endgame-build/[a-z0-9-]+$
+      crm_id:
+        type: text
+        pattern: ^[0-9]+$
+      budget_id:
+        type: text
+        pattern: ^[0-9]+$
+      notes_folder:
+        type: text
+      notes_folder_id:
+        type: text
+      updated:
+        required: true
+    relations:
+      client:
+        to: client
+        required: true
+      owner:
+        to: person
+        required: true
+      team:
+        to: person
+        many: true
+      origin_opportunity:
+        to: opportunity
+      partner:
+        to: partnership
+  meeting:
+    when: a call happens that produced a decision, a commitment, or a next step
+    layout: file
+    path: meetings
+    attributes:
+      created:
+        required: false
+      date:
+        type: datetime
+        required: true
+      call_type:
+        enum:
+        - client
+        - sales
+        - partner
+        - internal
+        required: true
+      source:
+        enum:
+        - recording
+        - manual
+        required: true
+      note_id:
+        type: text
+      attendees:
+        type: list
+    relations:
+      engagement:
+        to:
+        - opportunity
+        - project
+        - partnership
+        required: true
+      transcript:
+        to: transcript
+      owner:
+        to: person
+  transcript:
+    when: a recording or written record of a call exists and needs to be findable later
+    layout: file
+    path: transcripts
+    attributes:
+      created:
+        required: false
+      source:
+        enum:
+        - recording
+        required: true
+      note_id:
+        type: text
+        required: true
+      date:
+        type: datetime
+        required: true
+      title:
+        required: true
+      creator:
+        type: text
+        required: true
+      creator_email:
+        type: text
+        required: true
+      notes_folder:
+        type: text
+        required: true
+      notes_folder_id:
+        type: text
+      calendar_event_id:
+        type: text
+      attendees:
+        type: list
+  fragment:
+    when: something worth keeping is said that fits no other type yet — a signal, a quote, an observation
+    layout: file
+    path: fragments
+    attributes:
+      stage:
+        enum:
+        - raw
+        - mature
+        - synthesis
+        - promoted
+        required: true
+      promoted_to:
+        type: text
+      confidence:
+        type: number
+    relations:
+      owner:
+        to: person
+        required: true
+  case-study:
+    when: delivered work becomes a story worth telling outside the firm
+    layout: file
+    path: case-studies
+    attributes:
+      published:
+        type: bool
+        required: true
+      industry:
+        type: text
+      phase:
+        enum:
+        - diagnose
+        - prove
+        - scale
+        - full-cycle
+      updated:
+        required: true
+    relations:
+      client:
+        to: client
+        required: true
+      source_project:
+        to: project
+  partnership:
+    when: a standing relationship with another firm is established or changes
+    layout: folder
+    path: partnerships
+    attributes:
+      partner:
+        type: text
+        required: true
+      active:
+        type: bool
+        default: true
+      primary_contact:
+        type: text
+      notes_folder:
+        type: text
+      notes_folder_id:
+        type: text
+      updated:
+        required: true
+    relations:
+      owner:
+        to: person
+        required: true
+      related_opportunities:
+        to: opportunity
+        many: true
+      related_projects:
+        to: project
+        many: true
+  person:
+    when: a human is named who we will refer to again — ours, a client's, or a partner's
+    layout: file
+    path: identity/team
+    attributes:
+      name:
+        type: text
+        required: true
+      role:
+        enum:
+        - consultant
+        - engineer
+        - manager
+        - partner
+        required: true
+      department:
+        enum:
+        - engineering
+        - consulting
+        - delivery-management
+        - people
+        - sales
+  client:
+    when: an organisation is named that we work with, pitch to, or are introduced to
+    layout: file
+    path: clients
+    attributes:
+      name:
+        type: text
+        required: true
+      industry:
+        type: text
+      crm_id:
+        type: text
+        pattern: ^[0-9]+$
+      website:
+        type: text
+      updated:
+        required: true
+    relations:
+      partner:
+        to: partnership

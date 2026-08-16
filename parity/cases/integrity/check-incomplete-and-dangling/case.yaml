@@ -1,0 +1,9 @@
+steps:
+- argv: ["init", "build-lite", ".", "--no-wire"]
+- argv: ["add", "adr", "--title", "No status"]
+- argv: ["add", "requirement", "--title", "T", "--kind", "functional"]
+- argv: ["add", "feature-spec", "--title", "F", "--status", "planned"]
+- argv: ["link", "fs-001-f", "requirements", "fr-001-t"]
+- argv: ["remove", "fr-001-t", "--force"]
+- argv: ["check"]
+- argv: ["check", "--format", "json"]

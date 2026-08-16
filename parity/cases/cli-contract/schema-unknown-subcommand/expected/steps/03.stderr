@@ -1,0 +1,5 @@
+Usage: khub schema show [OPTIONS] {type}
+Try 'khub schema show --help' for help.
+╭─ Error ──────────────────────────────────────────────────────────────────────╮
+│ Missing argument 'type'.                                                     │
+╰──────────────────────────────────────────────────────────────────────────────╯

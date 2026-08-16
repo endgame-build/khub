@@ -1,0 +1,6 @@
+name: build-hub
+preset: build-hub
+version: 0.3.0
+source: null
+defaults:
+  stale_days: 90

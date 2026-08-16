@@ -1,0 +1,4 @@
+title: Glossary
+sections:
+- heading: Terms
+  hint: one entry per term - definition + owning domain; entity slugs link the graph

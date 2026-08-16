@@ -1,0 +1,9 @@
+steps:
+- argv: ["init", "build-lite", ".", "--no-wire"]
+- argv: ["add", "adr", "--title", "No status at all", "--format", "json"]
+- argv: ["get", "ad-001-no-status-at-all", "--format", "raw"]
+- argv: ["add", "component", "--format", "json"]
+- argv: ["validate"]
+- argv: ["check"]
+- argv: ["link", "ad-001-no-status-at-all", "affects", "does-not-exist"]
+- argv: ["status"]

@@ -1,0 +1,14 @@
+                                                                                
+ Usage: khub viz [OPTIONS]                                                      
+                                                                                
+ Render the typed graph to a self-contained Cytoscape HTML: khub viz [--out F]  
+ [--open] [--type T].                                                           
+                                                                                
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --out         <str>  Output path for the HTML (default viz.html).            │
+│                      [default: viz.html]                                     │
+│ --open               Open the written file in the default browser.           │
+│ --type        <str>  Render only that type and its incident edges.           │
+│ --help               Show this message and exit.                             │
+╰──────────────────────────────────────────────────────────────────────────────╯
+

@@ -1,0 +1,16 @@
+title: Product requirements
+sections:
+- heading: Vision
+  hint: one paragraph - the product in three sentences
+- heading: Target user
+  hint: who operates this, in their words
+- heading: Functional requirements
+  hint: narrate and link fr-NNN slugs inline; coverage is a graph check
+- heading: Non-goals
+  hint: what this product deliberately does not do
+- heading: Glossary
+  hint: the ubiquitous language - term, one line each
+- heading: Roadmap
+  hint: what lands in what order, and what each order buys
+- heading: Success metrics
+  hint: how we know it works - measurable, dated

@@ -1,0 +1,12 @@
+[3m component/cmp-001-api  [0m
+┏━━━━━━━━━┳━━━━━━━━━━━━┓
+┃[1m [0m[1mfield  [0m[1m [0m┃[1m [0m[1mvalue     [0m[1m [0m┃
+┡━━━━━━━━━╇━━━━━━━━━━━━┩
+│ type    │ component  │
+│ created │ 2026-01-15 │
+│ updated │ 2026-01-15 │
+│ draft   │ False      │
+│ title   │ API        │
+│ kind    │ service    │
+│ stack   │ python     │
+└─────────┴────────────┘

@@ -1,0 +1,54 @@
+{"scalar": "yes", "pyyaml": {"t": "bool", "v": true}, "ruamel": {"t": "str", "v": "yes"}}
+{"scalar": "no", "pyyaml": {"t": "bool", "v": false}, "ruamel": {"t": "str", "v": "no"}}
+{"scalar": "on", "pyyaml": {"t": "bool", "v": true}, "ruamel": {"t": "str", "v": "on"}}
+{"scalar": "off", "pyyaml": {"t": "bool", "v": false}, "ruamel": {"t": "str", "v": "off"}}
+{"scalar": "Yes", "pyyaml": {"t": "bool", "v": true}, "ruamel": {"t": "str", "v": "Yes"}}
+{"scalar": "NO", "pyyaml": {"t": "bool", "v": false}, "ruamel": {"t": "str", "v": "NO"}}
+{"scalar": "On", "pyyaml": {"t": "bool", "v": true}, "ruamel": {"t": "str", "v": "On"}}
+{"scalar": "y", "pyyaml": {"t": "str", "v": "y"}, "ruamel": {"t": "str", "v": "y"}}
+{"scalar": "n", "pyyaml": {"t": "str", "v": "n"}, "ruamel": {"t": "str", "v": "n"}}
+{"scalar": "Y", "pyyaml": {"t": "str", "v": "Y"}, "ruamel": {"t": "str", "v": "Y"}}
+{"scalar": "N", "pyyaml": {"t": "str", "v": "N"}, "ruamel": {"t": "str", "v": "N"}}
+{"scalar": "true", "pyyaml": {"t": "bool", "v": true}, "ruamel": {"t": "bool", "v": true}}
+{"scalar": "True", "pyyaml": {"t": "bool", "v": true}, "ruamel": {"t": "bool", "v": true}}
+{"scalar": "TRUE", "pyyaml": {"t": "bool", "v": true}, "ruamel": {"t": "bool", "v": true}}
+{"scalar": "false", "pyyaml": {"t": "bool", "v": false}, "ruamel": {"t": "bool", "v": false}}
+{"scalar": "null", "pyyaml": {"t": "null"}, "ruamel": {"t": "null"}}
+{"scalar": "Null", "pyyaml": {"t": "null"}, "ruamel": {"t": "null"}}
+{"scalar": "NULL", "pyyaml": {"t": "null"}, "ruamel": {"t": "null"}}
+{"scalar": "~", "pyyaml": {"t": "null"}, "ruamel": {"t": "null"}}
+{"scalar": "017", "pyyaml": {"t": "int", "v": "15"}, "ruamel": {"t": "int", "v": "17"}}
+{"scalar": "0o17", "pyyaml": {"t": "str", "v": "0o17"}, "ruamel": {"t": "int", "v": "15"}}
+{"scalar": "0x1f", "pyyaml": {"t": "int", "v": "31"}, "ruamel": {"t": "int", "v": "31"}}
+{"scalar": "0b101", "pyyaml": {"t": "int", "v": "5"}, "ruamel": {"t": "int", "v": "5"}}
+{"scalar": "1_000", "pyyaml": {"t": "int", "v": "1000"}, "ruamel": {"t": "int", "v": "1000"}}
+{"scalar": "1:30", "pyyaml": {"t": "int", "v": "90"}, "ruamel": {"t": "str", "v": "1:30"}}
+{"scalar": "1:30:30", "pyyaml": {"t": "int", "v": "5430"}, "ruamel": {"t": "str", "v": "1:30:30"}}
+{"scalar": "2026-01-15", "pyyaml": {"t": "date", "v": "2026-01-15"}, "ruamel": {"t": "date", "v": "2026-01-15"}}
+{"scalar": "2026-01-15T10:00:00", "pyyaml": {"t": "datetime", "v": "2026-01-15T10:00:00"}, "ruamel": {"t": "datetime", "v": "2026-01-15T10:00:00"}}
+{"scalar": "2026-01-15 10:00:00", "pyyaml": {"t": "datetime", "v": "2026-01-15T10:00:00"}, "ruamel": {"t": "datetime", "v": "2026-01-15T10:00:00"}}
+{"scalar": "2026-01-15T10:00:00Z", "pyyaml": {"t": "datetime", "v": "2026-01-15T10:00:00+00:00"}, "ruamel": {"t": "datetime", "v": "2026-01-15T10:00:00+00:00"}}
+{"scalar": "2026-01-15T10:00:00+02:00", "pyyaml": {"t": "datetime", "v": "2026-01-15T10:00:00+02:00"}, "ruamel": {"t": "datetime", "v": "2026-01-15T10:00:00+02:00"}}
+{"scalar": "2026-1-5", "pyyaml": {"t": "str", "v": "2026-1-5"}, "ruamel": {"t": "str", "v": "2026-1-5"}}
+{"scalar": "1", "pyyaml": {"t": "int", "v": "1"}, "ruamel": {"t": "int", "v": "1"}}
+{"scalar": "-1", "pyyaml": {"t": "int", "v": "-1"}, "ruamel": {"t": "int", "v": "-1"}}
+{"scalar": "+1", "pyyaml": {"t": "int", "v": "1"}, "ruamel": {"t": "int", "v": "1"}}
+{"scalar": "1.5", "pyyaml": {"t": "float", "v": "1.5"}, "ruamel": {"t": "float", "v": "1.5"}}
+{"scalar": ".5", "pyyaml": {"t": "float", "v": "0.5"}, "ruamel": {"t": "float", "v": "0.5"}}
+{"scalar": "5.", "pyyaml": {"t": "float", "v": "5.0"}, "ruamel": {"t": "float", "v": "5.0"}}
+{"scalar": "1e5", "pyyaml": {"t": "str", "v": "1e5"}, "ruamel": {"t": "float", "v": "100000.0"}}
+{"scalar": "1E5", "pyyaml": {"t": "str", "v": "1E5"}, "ruamel": {"t": "float", "v": "100000.0"}}
+{"scalar": "-.inf", "pyyaml": {"t": "float", "v": "-inf"}, "ruamel": {"t": "float", "v": "-inf"}}
+{"scalar": ".inf", "pyyaml": {"t": "float", "v": "inf"}, "ruamel": {"t": "float", "v": "inf"}}
+{"scalar": ".NaN", "pyyaml": {"t": "float", "v": "nan"}, "ruamel": {"t": "float", "v": "nan"}}
+{"scalar": ".nan", "pyyaml": {"t": "float", "v": "nan"}, "ruamel": {"t": "float", "v": "nan"}}
+{"scalar": "1.5e-3", "pyyaml": {"t": "float", "v": "0.0015"}, "ruamel": {"t": "float", "v": "0.0015"}}
+{"scalar": "0", "pyyaml": {"t": "int", "v": "0"}, "ruamel": {"t": "int", "v": "0"}}
+{"scalar": "-0", "pyyaml": {"t": "int", "v": "0"}, "ruamel": {"t": "int", "v": "0"}}
+{"scalar": "017x", "pyyaml": {"t": "str", "v": "017x"}, "ruamel": {"t": "str", "v": "017x"}}
+{"scalar": "=", "pyyaml": {"t": "error", "v": "ConstructorError"}, "ruamel": {"t": "error", "v": "ConstructorError"}}
+{"scalar": "<<", "pyyaml": {"t": "error", "v": "ConstructorError"}, "ruamel": {"t": "error", "v": "ConstructorError"}}
+{"scalar": "café", "pyyaml": {"t": "str", "v": "café"}, "ruamel": {"t": "str", "v": "café"}}
+{"scalar": "a b", "pyyaml": {"t": "str", "v": "a b"}, "ruamel": {"t": "str", "v": "a b"}}
+{"scalar": "", "pyyaml": {"t": "null"}, "ruamel": {"t": "null"}}
+{"scalar": "100000000000000000000000000", "pyyaml": {"t": "int", "v": "100000000000000000000000000"}, "ruamel": {"t": "int", "v": "100000000000000000000000000"}}

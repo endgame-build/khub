@@ -1,0 +1,5 @@
+# Typer builds the app without a `help` COMMAND, so `khub help` is an unknown
+# command (exit 2) — cobra registers one by default and would exit 0.
+steps:
+- argv: ["help"]
+- argv: ["help", "status"]

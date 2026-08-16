@@ -1,0 +1,15 @@
+                                                                                
+ Usage: khub wire [OPTIONS]                                                     
+                                                                                
+ Wire the workspace into agent context files (CLAUDE.md gets a                  
+ ``@.khub/schema.yaml`` import; AGENTS.md gets a schema pointer). Bare ``wire`` 
+ updates whichever already exist.                                               
+                                                                                
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --target         <str>  Create and wire a specific file: claude, agents, or  │
+│                         both. Omit to update the agent files that already    │
+│                         exist.                                               │
+│ --dry-run               Print the block(s); write nothing.                   │
+│ --help                  Show this message and exit.                          │
+╰──────────────────────────────────────────────────────────────────────────────╯
+

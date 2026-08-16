@@ -9,36 +9,62 @@ derived from this repo so the wiring under test is always the latest version.
 from __future__ import annotations
 
 import json
+import os
+import re
 import shutil
 import subprocess
-import tomllib
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
 SKILLS_SRC = REPO / "skills"
+# The harness builds khub here and prepends it to PATH, so the agents under
+# test invoke this checkout rather than whatever khub the operator has
+# installed globally.
+BIN_DIR = REPO / ".eval-bin"
 
 
 def _run(cmd: list[str], cwd: Path | None = None, check: bool = True) -> subprocess.CompletedProcess[str]:
     return subprocess.run(cmd, cwd=cwd, check=check, text=True, capture_output=True)
 
 
+_VERSION_RE = re.compile(r'Version\s*=\s*"([^"]+)"')
+
+
 def repo_version() -> str:
-    data = tomllib.loads((REPO / "pyproject.toml").read_text())
-    return str(data["project"]["version"])
+    """The version constant in internal/version/version.go.
+
+    khub was a Python package through 0.18.0 and this read pyproject.toml. That
+    file is gone; one Go constant is the single source of truth now.
+    """
+    src = (REPO / "internal" / "version" / "version.go").read_text()
+    m = _VERSION_RE.search(src)
+    if not m:
+        raise SystemExit("cannot find the Version constant in internal/version/version.go")
+    return m.group(1)
 
 
 def preflight() -> str:
-    """Force-reinstall khub from this repo and assert the CLI is that version.
+    """Build khub from this repo onto PATH and assert the CLI is that build.
 
-    The agents call bare `khub` on PATH; this makes that binary the code under
-    test and aborts if a stale/shadowing khub wins. Returns the pinned version.
+    The agents call bare `khub`; this makes the current checkout the code under
+    test and aborts if a stale or shadowing khub wins. Returns the version.
+
+    This used to run `uv tool install --force`, which mutated the operator's
+    global uv tool directory. Building into a directory this harness owns and
+    prepending it to PATH is both less invasive and exactly what a Go repo
+    makes cheap.
     """
-    _run(["uv", "tool", "install", "--force", str(REPO)])
+    BIN_DIR.mkdir(parents=True, exist_ok=True)
+    _run(["go", "build", "-o", str(BIN_DIR / "khub"), "./cmd/khub"], cwd=REPO)
+    os.environ["PATH"] = f"{BIN_DIR}{os.pathsep}{os.environ['PATH']}"
+
     which = _run(["which", "khub"]).stdout.strip()
     ver = _run(["khub", "--version"]).stdout.strip()
     want = repo_version()
     if ver != want:
         raise SystemExit(f"khub version mismatch: PATH khub is {ver!r} at {which}, repo is {want!r}")
+    if not which.startswith(str(BIN_DIR)):
+        raise SystemExit(f"a shadowing khub won on PATH: {which}")
     return ver
 
 

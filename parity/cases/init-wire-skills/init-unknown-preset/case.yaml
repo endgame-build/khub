@@ -1,0 +1,2 @@
+steps:
+- argv: ["init", "not-a-preset"]

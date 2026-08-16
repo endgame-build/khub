@@ -1,0 +1,1 @@
+{"count": 4, "errors": [{"id": "requirement/bad", "type": "requirement", "slug": "bad", "field": "kind", "reason": "'nonsense' is not a valid kind (functional, constraint, business-rule)"}]}

@@ -1,0 +1,1 @@
+{"error": {"code": "cardinality_violation", "message": "Predicate 'supersedes' is single-valued; `khub edit <id> supersedes <target>` replaces the current value"}}

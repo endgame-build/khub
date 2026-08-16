@@ -11,19 +11,27 @@ Install the khub CLI on this machine, then set up the current project so any age
 
 ## 1. Install the CLI
 
-khub needs `uv` and Python 3.11+. Install the pinned release from the private repo (SSH key, or HTTPS with a token):
+khub is a single static binary with no runtime prerequisites. Install the pinned release:
 
 ```bash
-uv tool install git+ssh://git@github.com/endgame-build/khub@v0.18.0
+KHUB_VERSION=0.18.0 curl -fsSL https://khub.end.game/install.sh | sh
 ```
 
-Then confirm it resolves:
+That installs to `~/.local/bin`. Then confirm it resolves:
 
 ```bash
 khub --version
 ```
 
-If `uv` or Python 3.11+ is missing, report the prerequisite error and stop; install nothing partial.
+If `khub` is not found, `~/.local/bin` is not on PATH — the installer prints the
+line to add.
+
+khub's repo is private, so the installer needs a GitHub credential to reach the
+release. It finds one automatically if the machine has `gh` logged in, a
+`GITHUB_TOKEN` in the environment, or a GitHub HTTPS credential in its keychain;
+if it finds none it says so and names the options. An SSH key does not work for
+this. If the download fails or the checksum does not match, report the error and
+stop; install nothing partial.
 
 ## 2. Set up the project
 

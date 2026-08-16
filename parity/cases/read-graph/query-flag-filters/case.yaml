@@ -1,0 +1,10 @@
+steps:
+- argv: ["init", "build-lite", ".", "--no-wire"]
+- argv: ["add", "component", "--title", "Island", "--kind", "external", "--tags", "infra, vendor"]
+- argv: ["add", "component", "--title", "Used", "--kind", "service", "--draft"]
+- argv: ["query", "--tag", "infra"]
+- argv: ["query", "--orphan"]
+- argv: ["query", "--stale"]
+- argv: ["query", "--active"]
+- argv: ["query", "--draft"]
+- argv: ["query", "--type", "component", "--kind", "external"]

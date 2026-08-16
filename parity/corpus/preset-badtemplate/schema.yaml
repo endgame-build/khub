@@ -1,0 +1,14 @@
+# preset-badtemplate — a preset shipping a malformed body template for a
+# SINGLETON type. init seeds md singletons from their templates, and that path
+# is unguarded, so this is the one route by which template_invalid reaches the
+# CLI as an error envelope (add swallows it; validate reports it as a finding).
+version: "0.1.0"
+
+entities:
+  charter:
+    layout: singleton
+    path: charter.md
+    orphan: true
+    when: parity corpus
+    attributes:
+      title: { required: true }

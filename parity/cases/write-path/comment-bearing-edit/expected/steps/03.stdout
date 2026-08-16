@@ -1,0 +1,13 @@
+---
+# header
+type: fragment
+quoted: "plain word"
+empty:
+tags:
+  - a
+  - b
+note: keep   # inline
+stage: raw
+updated: 2026-01-15
+---
+Body.

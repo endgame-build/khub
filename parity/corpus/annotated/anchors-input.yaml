@@ -1,0 +1,9 @@
+defaults: &d
+  created: 2026-01-15
+plainanchor: &d2026 2026-01-15
+row-a:
+  <<: *d
+  title: A
+row-b:
+  created: *d2026
+  title: B

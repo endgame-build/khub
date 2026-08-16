@@ -1,0 +1,283 @@
+// Package skill ports src/khub/core/skill.py: installing khub's agent skills
+// by copying them out of the package. The Python module resolves its source
+// from the wheel or a dev checkout; here the caller passes the skills tree as
+// an fs.FS (the embedded skills FS, or os.DirFS over a checkout), so
+// skills_dir()/skills_missing have no Go counterpart. Installed skills are
+// managed copies; the sync is additive — files khub no longer ships are left
+// in place.
+package skill
+
+import (
+	"bytes"
+	"fmt"
+	"io/fs"
+	"os"
+	"path"
+	"path/filepath"
+	"sort"
+	"strings"
+
+	"github.com/endgame-build/khub/internal/errs"
+)
+
+// TARGETS: where each agent family reads project-local skills. Order is
+// contract — it fixes the default install order and the error-message list.
+var (
+	targetOrder = []string{"claude", "agents", "opencode"}
+	targetDirs  = map[string]string{
+		"claude":   ".claude/skills",
+		"agents":   ".agents/skills",
+		"opencode": ".opencode/skills",
+	}
+)
+
+// TargetNames lists the known --target values in their declared order.
+func TargetNames() []string { return append([]string(nil), targetOrder...) }
+
+// GlobalDir is skill.global_dir: the machine-wide directory target reads,
+// for --global. Only opencode's differs from its project path (XDG config
+// root honoured).
+func GlobalDir(target string) (string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	if target == "opencode" {
+		base := filepath.Join(home, ".config")
+		if xdg := os.Getenv("XDG_CONFIG_HOME"); xdg != "" {
+			base = xdg
+		}
+		return filepath.Join(base, "opencode", "skills"), nil
+	}
+	rel, ok := targetDirs[target]
+	if !ok {
+		return "", fmt.Errorf("unknown target %q", target)
+	}
+	return filepath.Join(home, rel), nil
+}
+
+// AvailableSkills is skill.available_skills: every skill the source tree
+// ships, by directory name, sorted.
+func AvailableSkills(source fs.FS) ([]string, error) {
+	matches, err := fs.Glob(source, "*/SKILL.md")
+	if err != nil {
+		return nil, err
+	}
+	names := make([]string, 0, len(matches))
+	for _, m := range matches {
+		names = append(names, path.Dir(m))
+	}
+	sort.Strings(names)
+	return names, nil
+}
+
+// Write is skill.SkillWrite: one destination file and what happened to it.
+// Path is workspace-relative under project scope, absolute under --global;
+// Action is "created" | "updated" | "unchanged".
+type Write struct {
+	Path   string
+	Action string
+}
+
+// Report is skill.SkillReport: the outcome of one install. The CLI JSON
+// contract is {scope, skills, dry_run, writes:[{path, action}]} with Scope
+// "project" | "global".
+type Report struct {
+	Scope  string
+	Skills []string
+	Writes []Write
+	DryRun bool
+}
+
+// Options carries install_skills' keyword arguments. Nil Skills/Targets mean
+// "all", in shipped/declared order respectively.
+type Options struct {
+	Skills  []string
+	Targets []string
+	Global  bool
+	DryRun  bool
+}
+
+// Install is skill.install_skills: copy the named skills from source into the
+// target directories under root (or $HOME under Global). Every file is
+// byte-compared before it is written, so a re-install reports "unchanged" and
+// leaves mtimes alone; DryRun reports the same writes without touching disk.
+// root is required for project scope ("" is Python's None) and unused under
+// Global.
+func Install(source fs.FS, root string, opt Options) (*Report, error) {
+	if root == "" && !opt.Global {
+		return nil, errs.New("missing_root", "A project-scope skill install needs a workspace root")
+	}
+
+	avail, err := AvailableSkills(source)
+	if err != nil {
+		return nil, err
+	}
+	wanted := avail
+	if len(opt.Skills) > 0 {
+		wanted = append([]string(nil), opt.Skills...)
+	}
+	if err := rejectUnknown(wanted, avail, "skill"); err != nil {
+		return nil, err
+	}
+	chosen := targetOrder
+	if len(opt.Targets) > 0 {
+		chosen = append([]string(nil), opt.Targets...)
+	}
+	if err := rejectUnknown(chosen, targetOrder, "target"); err != nil {
+		return nil, err
+	}
+
+	writes := []Write{}
+	for _, target := range chosen {
+		var destRoot string
+		if opt.Global {
+			destRoot, err = GlobalDir(target)
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			destRoot = filepath.Join(root, filepath.FromSlash(targetDirs[target]))
+		}
+		for _, name := range wanted {
+			// Paths report absolute under --global: relative to $HOME they would
+			// be byte-identical to a project install.
+			base := root
+			if opt.Global {
+				base = ""
+			}
+			ws, serr := syncSkill(source, name, filepath.Join(destRoot, name), base, opt.DryRun)
+			if serr != nil {
+				return nil, serr
+			}
+			writes = append(writes, ws...)
+			if !opt.Global && !opt.DryRun {
+				// Ignore only what khub owns, never the whole skills dir.
+				line := targetDirs[target] + "/" + name + "/"
+				if gerr := appendGitignore(filepath.Join(root, ".gitignore"), line); gerr != nil {
+					return nil, gerr
+				}
+			}
+		}
+	}
+
+	scope := "project"
+	if opt.Global {
+		scope = "global"
+	}
+	return &Report{Scope: scope, Skills: wanted, Writes: writes, DryRun: opt.DryRun}, nil
+}
+
+// syncSkill is skill._sync_skill: copy one skill directory, one action per
+// file. fs.WalkDir's sorted depth-first order equals Python's
+// sorted(src.rglob("*")) — both are lexicographic over path components.
+func syncSkill(source fs.FS, name, dest, base string, dryRun bool) ([]Write, error) {
+	var files []string
+	err := fs.WalkDir(source, name, func(p string, d fs.DirEntry, werr error) error {
+		if werr != nil {
+			return werr
+		}
+		if !d.IsDir() {
+			files = append(files, p)
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	writes := make([]Write, 0, len(files))
+	for _, p := range files {
+		rel := strings.TrimPrefix(p, name+"/")
+		target := filepath.Join(dest, filepath.FromSlash(rel))
+		payload, rerr := fs.ReadFile(source, p)
+		if rerr != nil {
+			return nil, rerr
+		}
+		var action string
+		if _, serr := os.Stat(target); serr != nil {
+			action = "created"
+		} else {
+			existing, eerr := os.ReadFile(target)
+			if eerr != nil {
+				return nil, eerr
+			}
+			if bytes.Equal(existing, payload) {
+				action = "unchanged"
+			} else {
+				action = "updated"
+			}
+		}
+		if !dryRun && action != "unchanged" {
+			if merr := os.MkdirAll(filepath.Dir(target), 0o777); merr != nil {
+				return nil, merr
+			}
+			if werr := os.WriteFile(target, payload, 0o666); werr != nil {
+				return nil, werr
+			}
+		}
+		writes = append(writes, Write{Path: display(target, base), Action: action})
+	}
+	return writes, nil
+}
+
+// display is skill._display: workspace-relative under project scope; the
+// path itself when base is "" (--global) or the path escapes base.
+func display(p, base string) string {
+	if base == "" {
+		return p
+	}
+	rel, err := filepath.Rel(base, p)
+	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return p
+	}
+	return rel
+}
+
+// rejectUnknown is skill._reject_unknown, message byte-for-byte.
+func rejectUnknown(given, known []string, kind string) error {
+	var unknown []string
+	for _, g := range given {
+		found := false
+		for _, k := range known {
+			if g == k {
+				found = true
+				break
+			}
+		}
+		if !found {
+			unknown = append(unknown, g)
+		}
+	}
+	if len(unknown) == 0 {
+		return nil
+	}
+	sort.Strings(unknown)
+	return errs.New(
+		"unknown_"+kind,
+		fmt.Sprintf("Unknown %s: %s. Known %ss: %s",
+			kind, strings.Join(unknown, ", "), kind, strings.Join(known, ", ")),
+	)
+}
+
+// appendGitignore is a package-private port of workspace._append_gitignore
+// (the Python module imports it from core.workspace): append one line unless
+// it is already present, preserving the file's trailing-newline shape.
+func appendGitignore(gitignore, line string) error {
+	existing := ""
+	if b, err := os.ReadFile(gitignore); err == nil {
+		existing = string(b)
+	} else if !os.IsNotExist(err) {
+		return err
+	}
+	for _, l := range strings.Split(existing, "\n") {
+		if strings.TrimSuffix(l, "\r") == line {
+			return nil
+		}
+	}
+	sep := ""
+	if existing != "" && !strings.HasSuffix(existing, "\n") {
+		sep = "\n"
+	}
+	return os.WriteFile(gitignore, []byte(existing+sep+line+"\n"), 0o666)
+}

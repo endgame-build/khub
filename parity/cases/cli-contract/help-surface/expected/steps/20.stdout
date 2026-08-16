@@ -1,0 +1,13 @@
+                                                                                
+ Usage: khub backfill [OPTIONS]                                                 
+                                                                                
+ Backfill missing dates and frontmatter: khub backfill [--type T] [--dry-run].  
+                                                                                
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --type           <str>  Add missing per-type frontmatter scaffolding for     │
+│                         that type.                                           │
+│ --dry-run               List the entities and fields that would change;      │
+│                         write nothing.                                       │
+│ --help                  Show this message and exit.                          │
+╰──────────────────────────────────────────────────────────────────────────────╯
+

@@ -1,0 +1,18 @@
+[3m                                     edges                                      [0m
+┏━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━┳━━━━━━┳━━━━━━━━━━┳━━━━━━━━━━━━━━━┓
+┃[1m [0m[1mpredicate   [0m[1m [0m┃[1m [0m[1mfrom        [0m[1m [0m┃[1m [0m[1mto          [0m[1m [0m┃[1m [0m[1mcard[0m[1m [0m┃[1m [0m[1mrequired[0m[1m [0m┃[1m [0m[1mnotes        [0m[1m [0m┃
+┡━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━╇━━━━━━╇━━━━━━━━━━╇━━━━━━━━━━━━━━━┩
+│ affects      │ adr          │ any          │ many │          │               │
+│ depends_on   │ any          │ any          │ many │          │ acyclic       │
+│ realized_in  │ requirement  │ component    │ many │          │               │
+│ references   │ any          │ any          │ many │          │               │
+│ related      │ any          │ any          │ many │          │               │
+│ requirements │ feature-spec │ requirement  │ many │          │               │
+│ sources      │ any          │ any          │ many │          │               │
+│ supersedes   │ adr          │ adr          │ one  │          │ inverse       │
+│              │              │              │      │          │ superseded;   │
+│              │              │              │      │          │ acyclic       │
+│ supersedes   │ feature-spec │ feature-spec │ one  │          │ inverse       │
+│              │              │              │      │          │ superseded;   │
+│              │              │              │      │          │ acyclic       │
+└──────────────┴──────────────┴──────────────┴──────┴──────────┴───────────────┘

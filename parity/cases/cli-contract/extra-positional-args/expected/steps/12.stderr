@@ -1,0 +1,5 @@
+Usage: khub impact [OPTIONS] {ID}
+Try 'khub impact --help' for help.
+╭─ Error ──────────────────────────────────────────────────────────────────────╮
+│ Got unexpected extra argument(s) (b)                                         │
+╰──────────────────────────────────────────────────────────────────────────────╯

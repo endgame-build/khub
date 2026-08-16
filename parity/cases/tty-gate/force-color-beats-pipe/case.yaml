@@ -1,0 +1,27 @@
+# Rung 2's TRUE branch: FORCE_COLOR set-and-NON-EMPTY on a PIPE.
+#
+# The sibling case pins the FALSE branch (empty value beats a real terminal).
+# This is the other half, and it can only be shown on a pipe: on a terminal
+# isatty already says true, so a non-empty FORCE_COLOR would agree with the rung
+# below it and prove nothing about precedence. Here isatty says false and the
+# output must still be human — the flag has to win.
+#
+# TTY_COMPATIBLE is set EMPTY on purpose. Rung 1 only fires on the exact
+# strings "0" and "1", so an empty value has to fall through to rung 2 rather
+# than being read as a false; if that ever changes, this case goes JSON and
+# fails.
+#
+# TERM=dumb keeps colour out of the recorded bytes, so this pins the GATE
+# (human vs JSON) and not the styling. Colour is a separate, still-open
+# question — see D17.
+mode: pipe
+env:
+  TTY_COMPATIBLE: ""
+  FORCE_COLOR: "1"
+  TERM: dumb
+steps:
+- argv: ["init", "build-lite", ".", "--no-wire"]
+- argv: ["add", "component", "--title", "API", "--kind", "service"]
+- argv: ["query", "--type", "component"]
+- argv: ["status"]
+- argv: ["schema", "types"]

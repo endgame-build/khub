@@ -1,0 +1,4 @@
+steps:
+- argv: ["init", "build-hub", ".", "--no-wire"]
+- argv: ["add", "repo", "--title", "Bad", "--repo", "no spaces allowed", "--status", "active"]
+- argv: ["add", "repo", "--title", "Good", "--repo", "org/name", "--status", "active", "--format", "json"]

@@ -1,0 +1,15 @@
+                                                                                
+ Usage: khub get [OPTIONS] [ID]                                                 
+                                                                                
+ Read an entity's frontmatter and body, optionally with derived edges.          
+                                                                                
+╭─ Arguments ──────────────────────────────────────────────────────────────────╮
+│   ID      <str>  A bare slug, or type/slug on ambiguity.                     │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --edges                Include stored and derived edges.                     │
+│ --format        <str>  json, table, raw, or text (Rich on a TTY).            │
+│                        [default: text]                                       │
+│ --help                 Show this message and exit.                           │
+╰──────────────────────────────────────────────────────────────────────────────╯
+

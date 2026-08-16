@@ -1,0 +1,1 @@
+{"error": {"code": "preset_mismatch", "message": ". is a 'build-lite' workspace; refusing to scaffold 'firm-ops' over it. Its .khub/schema.yaml is workspace-owned and would be kept, leaving files for types the schema does not declare."}}

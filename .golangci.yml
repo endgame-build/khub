@@ -1,0 +1,34 @@
+# The choke-point rule from docs/go-port-plan.md: the serialization canon is the
+# only place bytes are shaped, so only internal/canon may reach for a YAML
+# library. Everything else goes through canon's loaders and dumpers.
+version: "2"
+
+linters:
+  # ONLY the choke-point rule. golangci v2 runs its default set unless told
+  # otherwise, so without this the step named "choke-point lint" silently
+  # enforced errcheck and friends across the whole tree — adopting a repo-wide
+  # standard as a side effect of a targeted rule. Broadening the linter set is
+  # a deliberate decision, not a default.
+  default: none
+  enable:
+    - depguard
+  settings:
+    depguard:
+      rules:
+        yaml-choke-point:
+          list-mode: lax
+          files:
+            - "!**/internal/canon/*.go"
+            - "!**/parity/yamlgate/**"
+            - "!**/parity/runner/*.go"
+          deny:
+            - pkg: github.com/goccy/go-yaml
+              desc: "only internal/canon may import a YAML library (go-port-plan choke-point rule)"
+            - pkg: gopkg.in/yaml.v2
+              desc: "only internal/canon may import a YAML library (go-port-plan choke-point rule)"
+            - pkg: gopkg.in/yaml.v3
+              desc: "only internal/canon may import a YAML library (go-port-plan choke-point rule)"
+            - pkg: go.yaml.in/yaml
+              desc: "only internal/canon may import a YAML library (go-port-plan choke-point rule)"
+            - pkg: sigs.k8s.io/yaml
+              desc: "only internal/canon may import a YAML library (go-port-plan choke-point rule)"

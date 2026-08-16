@@ -1,0 +1,8 @@
+steps:
+- argv: ["init", "build-lite", ".", "--no-wire"]
+- argv: ["add", "adr", "--title", "One", "--status", "accepted"]
+- argv: ["add", "adr", "--title", "Two", "--status", "accepted"]
+- argv: ["link", "ad-002-two", "supersedes", "ad-001-one"]
+- argv: ["history", "ad-002-two"]
+- argv: ["history", "ad-001-one"]
+- argv: ["get", "ad-001-one", "--edges", "--format", "json"]

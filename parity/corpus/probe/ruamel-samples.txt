@@ -1,0 +1,186 @@
+##### plain :: RT
+type: client
+name: Acme
+
+##### plain :: SAFE4096
+type: client
+name: Acme
+
+##### long80 :: RT
+note: 'word word word word word word word word word word word word word word word
+  word word word word word word word word word word word word word word word '
+
+##### long80 :: SAFE4096
+note: 'word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word '
+
+##### long-token :: RT
+url: 
+  https://example.com/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+
+##### long-token :: SAFE4096
+url: https://example.com/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+
+##### colon :: RT
+title: 'a: b'
+
+##### colon :: SAFE4096
+title: 'a: b'
+
+##### hash :: RT
+t: 'a # not a comment'
+
+##### hash :: SAFE4096
+t: 'a # not a comment'
+
+##### trailing-nl :: RT
+body: "line1\nline2\n"
+
+##### trailing-nl :: SAFE4096
+body: "line1\nline2\n"
+
+##### multiline :: RT
+body: "line1\nline2"
+
+##### multiline :: SAFE4096
+body: "line1\nline2"
+
+##### date :: RT
+created: 2026-01-15
+
+##### date :: SAFE4096
+created: 2026-01-15
+
+##### bools-null :: RT
+draft: true
+x: false
+n: null
+
+##### bools-null :: SAFE4096
+draft: true
+x: false
+n: null
+
+##### ints-floats :: RT
+a: 1
+b: 0.8
+c: 1e+16
+d: 1e-07
+big: 1000000000000000000000000000000
+
+##### ints-floats :: SAFE4096
+a: 1
+b: 0.8
+c: 1e+16
+d: 1e-07
+big: 1000000000000000000000000000000
+
+##### list :: RT
+tags:
+- a
+- b
+empty: []
+emptymap: {}
+
+##### list :: SAFE4096
+tags:
+- a
+- b
+empty: []
+emptymap: {}
+
+##### nested :: RT
+m:
+  k: v
+  l:
+  - 1
+  - 2
+
+##### nested :: SAFE4096
+m:
+  k: v
+  l:
+  - 1
+  - 2
+
+##### unicode :: RT
+s: café — ß
+
+##### unicode :: SAFE4096
+s: café — ß
+
+##### quote-y :: RT
+a: yes
+b: no
+c: on
+d: '017'
+e: '0o17'
+f: 1:30
+g: '2026-01-15'
+h: 'null'
+i: 'true'
+
+##### quote-y :: SAFE4096
+a: yes
+b: no
+c: on
+d: '017'
+e: '0o17'
+f: 1:30
+g: '2026-01-15'
+h: 'null'
+i: 'true'
+
+##### leading-space :: RT
+s: ' x '
+
+##### leading-space :: SAFE4096
+s: ' x '
+
+##### single-quote-in :: RT
+s: it's
+
+##### single-quote-in :: SAFE4096
+s: it's
+
+##### double-quote-in :: RT
+s: say "hi"
+
+##### double-quote-in :: SAFE4096
+s: say "hi"
+
+##### star-amp :: RT
+a: '*x'
+b: '&y'
+c: '!z'
+d: '%w'
+e: '@v'
+
+##### star-amp :: SAFE4096
+a: '*x'
+b: '&y'
+c: '!z'
+d: '%w'
+e: '@v'
+
+##### seq-of-maps :: RT
+rows:
+- a: 1
+  b: 2
+- a: 3
+
+##### seq-of-maps :: SAFE4096
+rows:
+- a: 1
+  b: 2
+- a: 3
+
+##### long-list-item :: RT
+tags:
+- short
+- 'x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x
+  x x x x x x x x x x '
+
+##### long-list-item :: SAFE4096
+tags:
+- short
+- 'x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x '

@@ -1,0 +1,22 @@
+[3m                               requirement (file)                               [0m
+┏━━━━━━━━━━━━━┳━━━━━━━━━━━━━┳━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━┓
+┃[1m [0m[1mfield      [0m[1m [0m┃[1m [0m[1mtype       [0m[1m [0m┃[1m [0m[1mrequired[0m[1m [0m┃[1m [0m[1menum                 [0m[1m [0m┃[1m [0m[1mnotes        [0m[1m [0m┃
+┡━━━━━━━━━━━━━╇━━━━━━━━━━━━━╇━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━┩
+│ type        │ text        │ ✓        │                       │               │
+│ draft       │ bool        │          │                       │ default False │
+│ author      │ text        │          │                       │               │
+│ created     │ date        │ ✓        │                       │               │
+│ updated     │ date        │          │                       │               │
+│ title       │ text        │ ✓        │                       │               │
+│ description │ text        │          │                       │               │
+│ resource    │ text        │          │                       │               │
+│ tags        │ list        │          │                       │               │
+│ kind        │ text        │ ✓        │ functional,           │               │
+│             │             │          │ constraint,           │               │
+│             │             │          │ business-rule         │               │
+│ related     │ → any       │          │ any                   │               │
+│ sources     │ → any       │          │ any                   │               │
+│ references  │ → any       │          │ any                   │               │
+│ depends_on  │ → any       │          │ any                   │ acyclic       │
+│ realized_in │ → component │          │ typed                 │               │
+└─────────────┴─────────────┴──────────┴───────────────────────┴───────────────┘

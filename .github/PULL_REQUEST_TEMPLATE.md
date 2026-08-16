@@ -4,9 +4,13 @@
 
 ## Checklist
 
-- [ ] `uv run pytest` passes
-- [ ] `uv run ruff check src tests` is clean
-- [ ] `uv run mypy` is clean
+- [ ] `go test ./...` passes
+- [ ] `gofmt -l ./cmd ./internal ./parity` prints nothing; `go vet ./...` is clean
+- [ ] `./parity-run -bin "$PWD/khub" -cases parity/cases` passes
+- [ ] `./parity-run -coverage parity/coverage.yaml -cases parity/cases -subset-of "$PWD/khub"` reports no gaps
+- [ ] `bash smoke.sh` passes
+- [ ] Any re-recorded fixture bytes are **intended**, and the commit says why
 - [ ] `CHANGELOG.md` updated (if user-facing)
-- [ ] Docs updated (if the command surface or schema changed)
-- [ ] Surfaces stay schema-generic — no per-type branching in `cli/`; logic lives in `core/`
+- [ ] Docs updated (if the command surface or schema changed — regenerate with
+      `bash parity/tools/gen_cli_reference.sh`)
+- [ ] Surfaces stay schema-generic — no per-type branching in `internal/cli/`

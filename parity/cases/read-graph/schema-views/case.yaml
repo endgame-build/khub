@@ -1,0 +1,6 @@
+steps:
+- argv: ["init", "build-lite", ".", "--no-wire"]
+- argv: ["schema"]
+- argv: ["schema", "types"]
+- argv: ["schema", "show", "requirement"]
+- argv: ["schema", "edges"]

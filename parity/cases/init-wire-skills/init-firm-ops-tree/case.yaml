@@ -1,0 +1,2 @@
+steps:
+- argv: ["init", "firm-ops", ".", "--no-wire", "--format", "json"]

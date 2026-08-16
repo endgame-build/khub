@@ -1,0 +1,3 @@
+mode: human
+steps:
+- argv: ["status"]

@@ -1,0 +1,20 @@
+# Rung ORDER: TTY_COMPATIBLE=0 on a real terminal must still yield JSON.
+#
+# The ladder is TTY_COMPATIBLE → FORCE_COLOR → isatty, and until pty mode
+# existed the last rung was never true during a fixture run, so nothing proved
+# the first rung actually WINS rather than merely agreeing. Here stdout is a
+# genuine pty and the answer is still machine output — which is also the
+# contract an agent relies on when it exports TTY_COMPATIBLE=0 in a terminal
+# session.
+#
+# Byte-pinned: JSON carries no layout, so no normalizer.
+mode: pty
+env:
+  TTY_COMPATIBLE: "0"
+steps:
+- argv: ["init", "build-lite", ".", "--no-wire"]
+- argv: ["add", "component", "--title", "API", "--kind", "service"]
+- argv: ["query", "--type", "component"]
+- argv: ["get", "cmp-001-api"]
+- argv: ["status"]
+- argv: ["get", "cmp-404-nope"]

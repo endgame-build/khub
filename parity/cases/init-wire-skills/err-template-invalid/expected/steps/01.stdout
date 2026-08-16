@@ -1,0 +1,1 @@
+{"error": {"code": "template_invalid", "message": "Template for 'charter' (.khub/templates/charter.yaml): top level must be a mapping with a 'sections' list"}}

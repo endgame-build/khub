@@ -1,0 +1,31 @@
+# Every command has a fixed arity. A token past the declared arguments is a
+# Click usage error (exit 2), never a silently ignored extra — cobra's default
+# Args is ArbitraryArgs, which accepted all of these. add/edit/query are the
+# exception: their leftovers become fields, so a stray token is a field with no
+# value.
+steps:
+- argv: ["init", "build-lite", ".", "--no-wire"]
+- argv: ["status", "foo"]
+- argv: ["status", "foo", "bar"]
+- argv: ["check", "x"]
+- argv: ["get", "a", "b"]
+- argv: ["link", "a", "b", "c", "d"]
+- argv: ["unlink", "a", "b", "c", "d"]
+- argv: ["remove", "a", "b"]
+- argv: ["validate", "a", "b"]
+- argv: ["search", "a", "b"]
+- argv: ["neighbors", "a", "b"]
+- argv: ["impact", "a", "b"]
+- argv: ["history", "a", "b"]
+- argv: ["stale", "x"]
+- argv: ["reindex", "x"]
+- argv: ["viz", "x"]
+- argv: ["backfill", "x"]
+- argv: ["wire", "x"]
+- argv: ["install-skills", "x"]
+- argv: ["init", "a", "b", "c"]
+- argv: ["schema", "types", "foo"]
+- argv: ["schema", "show", "a", "b"]
+- argv: ["schema", "edges", "x"]
+- argv: ["add", "prd", "extra"]
+- argv: ["query", "foo"]

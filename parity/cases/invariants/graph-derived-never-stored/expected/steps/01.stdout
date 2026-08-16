@@ -1,0 +1,1 @@
+{"path": ".", "preset": "preset-bespoke", "version": "0.1.0", "name": "ws", "source": "%REPO%/parity/corpus", "entity_files_modified": 0, "seeded_over_corpus": false, "singletons_created": [], "preserved": [], "skill_hint": "khub install-skills"}

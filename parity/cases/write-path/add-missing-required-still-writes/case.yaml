@@ -1,0 +1,5 @@
+steps:
+- argv: ["init", "build-lite", ".", "--no-wire"]
+- argv: ["add", "adr", "--title", "Only title"]
+- argv: ["get", "ad-001-only-title", "--format", "json"]
+- argv: ["check"]

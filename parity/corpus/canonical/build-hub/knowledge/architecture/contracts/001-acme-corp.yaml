@@ -1,0 +1,16 @@
+type: contract
+created: 2026-01-15
+updated: 2026-01-15
+draft: false
+author: Acme Corp
+title: Acme Corp
+description: Acme Corp
+resource: Acme Corp
+tags:
+- alpha
+- beta
+kind: api
+status: proposed
+facet_id: Acme Corp
+x_note: café — ß straße
+body: "Body line one.\n\nSecond — paragraph 0.\n"

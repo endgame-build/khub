@@ -1,0 +1,10 @@
+steps:
+- argv: ["init", "build-lite", ".", "--no-wire"]
+- argv: ["add", "requirement", "--title", "Alpha", "--kind", "functional"]
+- argv: ["add", "component", "--title", "Beta", "--kind", "service"]
+- argv: ["reindex", "--dry-run"]
+- argv: ["reindex"]
+- argv: ["reindex"]
+- argv: ["reindex", "--dry-run"]
+- argv: ["add", "adr", "--title", "Gamma", "--status", "accepted"]
+- argv: ["reindex", "--dry-run"]

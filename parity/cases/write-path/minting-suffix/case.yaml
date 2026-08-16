@@ -1,0 +1,5 @@
+steps:
+- argv: ["init", "build-lite", ".", "--no-wire"]
+- argv: ["add", "requirement", "--title", "Same", "--kind", "functional"]
+- argv: ["add", "requirement", "--title", "Same", "--kind", "functional"]
+- argv: ["query", "--type", "requirement", "--format", "ids"]

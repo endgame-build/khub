@@ -2,6 +2,26 @@
 
 Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); khub is pre-release.
 
+## [0.19.0] — 2026-08-16
+
+### Changed
+
+- **khub is a Go binary.** The Python implementation is retired; a single static binary
+  replaces `uv tool install`, starting roughly 8x faster and needing no interpreter. The
+  CLI surface, JSON contracts, exit codes and on-disk bytes are unchanged — the port was
+  developed against a suite of recorded fixtures that pinned all four, and it passes them
+  unaided along with a 50-seed x 40-command differential against the Python build.
+- **All datetimes render ISO 8601 on every surface** (#42). `--format json` used to emit
+  `2026-05-01 13:00:00+02:00` for a datetime while the file it had just read said
+  `2026-05-01T13:00:00+02:00`, because the CLI encoder stringified where the disk encoder
+  called `isoformat()`. The space form is not ISO 8601, so `Date.parse`, Go's
+  `time.RFC3339` and older `datetime.fromisoformat` all rejected or mishandled it.
+  Anything parsing the old form sees a changed string. Plain `date` values are unaffected,
+  which is why this survived so long.
+- **`khub edit` preserves more of a hand-written file.** The Go writer splices only the
+  tokens whose values changed, so a deliberately quoted scalar, a bare `empty:`, and an
+  author's sequence indentation all survive an edit that previously normalized them.
+
 ## [0.18.0] — 2026-07-26
 
 ### Changed

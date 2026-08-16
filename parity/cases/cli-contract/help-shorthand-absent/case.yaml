@@ -1,0 +1,5 @@
+# Click registers only --help; cobra adds a -h shorthand by default.
+steps:
+- argv: ["-h"]
+- argv: ["schema", "-h"]
+- argv: ["status", "-h"]

@@ -1,0 +1,10 @@
+steps:
+- argv: ["init", "build-lite", ".", "--no-wire"]
+- sh: "printf \"entities:\\n  ghost:\\n    layout: file\\n    path: g\\n    relations:\\n      to_missing: {to: nowhere}\\n\" > .khub/schema.yaml"
+- argv: ["status"]
+- sh: "printf \"base: {attributes: {type: {type: text}}}\\nentities: {x: {layout: file, path: x, sneaky_construct: 1}}\\n\" > .khub/schema.yaml"
+- argv: ["status"]
+- sh: "printf \"{{{{not yaml\" > .khub/schema.yaml"
+- argv: ["status"]
+- sh: "rm .khub/schema.yaml"
+- argv: ["status"]

@@ -1,0 +1,5 @@
+Usage: khub link [OPTIONS] [ID] [PREDICATE] [TARGET]
+Try 'khub link --help' for help.
+╭─ Error ──────────────────────────────────────────────────────────────────────╮
+│ Got unexpected extra argument(s) (d)                                         │
+╰──────────────────────────────────────────────────────────────────────────────╯

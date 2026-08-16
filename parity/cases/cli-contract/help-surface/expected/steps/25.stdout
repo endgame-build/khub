@@ -1,0 +1,13 @@
+                                                                                
+ Usage: khub schema show [OPTIONS] {type}                                       
+                                                                                
+ Detail one type: fields, enums, required flags, relations, layout.             
+                                                                                
+╭─ Arguments ──────────────────────────────────────────────────────────────────╮
+│ *    type      <str>  Type name. [required]                                  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --format        <str>  text (Rich table on a TTY) or json. [default: text]   │
+│ --help                 Show this message and exit.                           │
+╰──────────────────────────────────────────────────────────────────────────────╯
+

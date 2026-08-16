@@ -1,0 +1,6 @@
+steps:
+- argv: ["init", "build-lite", ".", "--no-wire"]
+- argv: ["add", "requirement", "--title", "R", "--kind", "functional"]
+- sh: "printf -- \"---\\nbroken: [\\n---\\n\" > knowledge/requirements/bad.md"
+- argv: ["reindex"]
+- argv: ["viz"]

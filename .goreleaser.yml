@@ -1,0 +1,74 @@
+# goreleaser builds the four binaries a khub release ships.
+#
+# CGO stays off everywhere, which is what makes cross-compiling trivial: the
+# SQLite behind `khub search` is ncruces/go-sqlite3 (a wasm build, pure Go), so
+# nothing here needs a C toolchain or a per-platform runner.
+#
+# Windows is deliberately absent. khub serializes collection writes with an
+# advisory lock; the Windows path would be LockFileEx, which no khub has ever
+# shipped or been tested against, so the target is out of scope rather than
+# quietly half-supported.
+version: 2
+
+project_name: khub
+
+builds:
+  - id: khub
+    main: ./cmd/khub
+    binary: khub
+    env:
+      - CGO_ENABLED=0
+    goos: [darwin, linux]
+    goarch: [amd64, arm64]
+    flags:
+      - -trimpath
+    ldflags:
+      # internal/version.Version is the single source of truth now that the
+      # pyproject/__init__ pair is gone; the tag supplies it at build time.
+      - -s -w -X github.com/endgame-build/khub/internal/version.Version={{ .Version }}
+
+archives:
+  - id: khub
+    # Deliberately NO version in the name. GitHub serves
+    # /releases/latest/download/<asset> to anyone, resolving "latest"
+    # server-side — but only if the asset name is known in advance, which a
+    # version in it would prevent. Keeping the name version-free is what lets
+    # install.sh fetch a release with plain curl and no API call, no JSON
+    # parser, and no version file. The version still identifies the release (the
+    # tag) and the build (`khub --version`).
+    #
+    # install.sh derives this name from `uname -s`/`uname -m`, so the template
+    # and that script have to move together.
+    name_template: "khub_{{ .Os }}_{{ .Arch }}"
+    formats: [tar.gz]
+    files:
+      - LICENSE
+      - README.md
+      - CHANGELOG.md
+
+checksum:
+  # install.sh verifies the downloaded archive against this file before it
+  # unpacks anything.
+  name_template: "checksums.txt"
+  algorithm: sha256
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-snapshot"
+
+changelog:
+  # CHANGELOG.md is written by hand and ships in the archive; a generated commit
+  # list on top of it would just be noise.
+  disable: true
+
+release:
+  github:
+    owner: endgame-build
+    name: khub
+  # The repo is private, so these assets need a token to fetch. install.sh
+  # supplies one from the user's own gh/keychain and pulls them straight from
+  # here through the API — there is no mirror. The day the repo goes public the
+  # same assets become anonymously fetchable at
+  # /releases/latest/download/<name>, which is why the archive names above carry
+  # no version.
+  draft: false
+  prerelease: auto

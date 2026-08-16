@@ -1,0 +1,23 @@
+# scalar resolution zoo — ruamel 1.2 semantics are the contract
+a: yes
+b: no
+c: on
+d: off
+e: 017
+f: 0o17
+g: 1:30
+h: 2026-01-15
+i: .inf
+j: .nan
+k: null
+l: ~
+m: 1_000
+lit: |
+  line one
+  line two
+fold: >
+  folded text
+  joined
+keep: |+
+
+trailing: value

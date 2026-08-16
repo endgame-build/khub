@@ -1,0 +1,1 @@
+{"id": "widget/wg-001-flange", "type": "widget", "slug": "wg-001-flange", "predicate": "bolts_onto", "target": "001-sprocket", "changed": true}

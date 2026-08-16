@@ -1,0 +1,5 @@
+Usage: khub neighbors [OPTIONS] {ID}
+Try 'khub neighbors --help' for help.
+╭─ Error ──────────────────────────────────────────────────────────────────────╮
+│ Got unexpected extra argument(s) (b)                                         │
+╰──────────────────────────────────────────────────────────────────────────────╯

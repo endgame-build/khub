@@ -1,0 +1,17 @@
+# Rung ORDER again, middle rung: FORCE_COLOR set-and-EMPTY on a real terminal.
+#
+# https://force-color.org/ makes an empty value mean "no colour", and both
+# implementations read it as a hard false (`fc != ""` in Go, `force_color != ""`
+# in Rich) that short-circuits before isatty. So a genuine pty must still get
+# JSON. The empty-string spelling is the whole point: any NON-empty value would
+# agree with isatty here and prove nothing about precedence.
+#
+# Byte-pinned: JSON carries no layout, so no normalizer.
+mode: pty
+env:
+  FORCE_COLOR: ""
+steps:
+- argv: ["init", "build-lite", ".", "--no-wire"]
+- argv: ["add", "component", "--title", "API", "--kind", "service"]
+- argv: ["query", "--type", "component"]
+- argv: ["status"]

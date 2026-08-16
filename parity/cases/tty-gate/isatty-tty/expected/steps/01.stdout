@@ -1,0 +1,5 @@
+Initialized build-lite workspace at .
+created singletons: prd, arc42
+
+Agent skill not installed. To install:
+  khub install-skills

@@ -1,0 +1,1 @@
+{"scope": "project", "skills": ["khub"], "dry_run": false, "writes": [{"path": ".claude/skills/khub/SKILL.md", "action": "created"}]}

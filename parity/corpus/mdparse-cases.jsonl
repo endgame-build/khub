@@ -1,0 +1,21 @@
+{"text": "loose notes, not an entity\n", "error": null, "meta": {}, "body": "loose notes, not an entity"}
+{"text": "", "error": null, "meta": {}, "body": ""}
+{"text": "   \n\n  ", "error": null, "meta": {}, "body": ""}
+{"text": "---\nunterminated\n", "error": null, "meta": {}, "body": "---\nunterminated"}
+{"text": "---\ntype: note\n---\nbody\n", "error": null, "meta": {"type": "note"}, "body": "body"}
+{"text": "----\ntype: x\n----\nbody\n", "error": null, "meta": {"type": "x"}, "body": "body"}
+{"text": "--- \ntype: y\n---\nb\n", "error": null, "meta": {"type": "y"}, "body": "b"}
+{"text": "\n\n---\ntype: z\n---\nb\n", "error": null, "meta": {"type": "z"}, "body": "b"}
+{"text": "---\n- a\n- b\n---\nbody\n", "error": null, "meta": {}, "body": "body"}
+{"text": "---\n---\nempty fm\n", "error": null, "meta": {}, "body": "empty fm"}
+{"text": "---\ntype: note\n---\n", "error": null, "meta": {"type": "note"}, "body": ""}
+{"text": "---\ntype: note\n---\n\n\n  body with space  \n\n", "error": null, "meta": {"type": "note"}, "body": "body with space"}
+{"text": "no fence but --- inside\ntext\n", "error": null, "meta": {}, "body": "no fence but --- inside\ntext"}
+{"text": "---\ntype: note\nnested:\n  a: 1\n---\nbody\n", "error": null, "meta": {"type": "note", "nested": "{'a': 1}"}, "body": "body"}
+{"text": "﻿---\ntype: bom\n---\nb\n", "error": null, "meta": {}, "body": "﻿---\ntype: bom\n---\nb"}
+{"text": "text before\n---\ntype: late\n---\nafter\n", "error": null, "meta": {}, "body": "text before\n---\ntype: late\n---\nafter"}
+{"text": "---\ndraft: yes\n---\nb\n", "error": null, "meta": {"draft": true}, "body": "b"}
+{"text": "-----\ntype: five\n-----\nb\n", "error": null, "meta": {"type": "five"}, "body": "b"}
+{"text": "---\r\ntype: crlf\r\ntitle: t\r\n---\r\nbody\r\n", "error": null, "meta": {"type": "crlf", "title": "t"}, "body": "body"}
+{"text": "--- \ntype: trailing-space\n--- \nbody\n", "error": null, "meta": {"type": "trailing-space"}, "body": "body"}
+{"text": "---\t\ntype: trailing-tab\n---\nbody\n", "error": null, "meta": {"type": "trailing-tab"}, "body": "body"}

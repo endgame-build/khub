@@ -1,0 +1,26 @@
+                                                                                
+ Usage: khub add [OPTIONS] [TYPE]                                               
+                                                                                
+ Create an entity: khub add opportunity --client initech --owner noor --stage   
+ prospect.                                                                      
+                                                                                
+ A missing TYPE is a usage error; every field is a flag.                        
+                                                                                
+╭─ Arguments ──────────────────────────────────────────────────────────────────╮
+│   TYPE      <str>  The entity type to create.                                │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --id                 <str>  Explicit slug (else minted from name/type).      │
+│ --draft                     Mark the entity unpublished (default: active).   │
+│ --strict                    Reject fields the schema does not declare.       │
+│ --body               <str>  Body prose as a string.                          │
+│ --body-file          <str>  Read the body from a file ('-' for stdin).       │
+│ --no-template               Start with an empty body. Refused on a type that │
+│                             HAS a template, since the result would fail      │
+│                             validate; use --body to supply your own          │
+│                             sections.                                        │
+│ --format             <str>  text or json (emits the written record).         │
+│                             [default: text]                                  │
+│ --help                      Show this message and exit.                      │
+╰──────────────────────────────────────────────────────────────────────────────╯
+

@@ -1,0 +1,21 @@
+# The isatty rung of the output gate, on a REAL terminal.
+#
+# `mode: pty` sets neither TTY_COMPATIBLE nor FORCE_COLOR, so the only thing
+# that can turn these reads into tables is stdout.isatty(). Every step below
+# omits --format on purpose; the last one re-adds it to show the flag still
+# wins on a terminal.
+#
+# Twin case: tty-gate/isatty-pipe runs the same seven steps down a real pipe
+# and must produce JSON. Between them they pin both branches of the rung.
+mode: pty
+normalize:
+- tty-layout-free
+steps:
+- argv: ["init", "build-lite", ".", "--no-wire"]
+- argv: ["add", "requirement", "--title", "Auth required", "--kind", "functional"]
+- argv: ["add", "component", "--title", "API", "--kind", "service", "--stack", "python"]
+- argv: ["link", "fr-001-auth-required", "realized_in", "cmp-001-api"]
+- argv: ["query", "--type", "component"]
+- argv: ["get", "cmp-001-api", "--edges"]
+- argv: ["status"]
+- argv: ["query", "--type", "component", "--format", "json"]

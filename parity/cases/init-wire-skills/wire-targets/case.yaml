@@ -1,0 +1,7 @@
+steps:
+- argv: ["init", "build-lite", ".", "--no-wire"]
+- argv: ["wire", "--dry-run"]
+- argv: ["wire"]
+- argv: ["wire"]
+- argv: ["wire", "--target", "claude"]
+- argv: ["wire", "--target", "bogus"]

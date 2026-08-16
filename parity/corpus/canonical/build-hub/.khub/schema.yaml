@@ -1,0 +1,415 @@
+# khub-preset: build-hub@0.3.0
+base:
+  attributes:
+    type:
+      type: text
+      required: true
+    draft:
+      type: bool
+      default: false
+    author:
+      type: text
+    created:
+      type: date
+      required: true
+    updated:
+      type: date
+    title:
+      type: text
+    description:
+      type: text
+    resource:
+      type: text
+    tags:
+      type: list
+  relations:
+    related:
+      to: any
+      many: true
+    sources:
+      to: any
+      many: true
+    references:
+      to: any
+      many: true
+    depends_on:
+      to: any
+      many: true
+      acyclic: true
+entities:
+  prd:
+    when: someone states what the product is for, who it serves, or what is deliberately out of scope — edit [knowledge/product/prd.md](knowledge/product/prd.md), never add a second
+    layout: singleton
+    path: knowledge/product/prd.md
+    required: true
+    orphan: true
+    attributes:
+      title:
+        required: true
+  roadmap:
+    when: sequencing or priority across releases is decided or changes — edit [knowledge/product/roadmap.md](knowledge/product/roadmap.md), never add a second
+    layout: singleton
+    path: knowledge/product/roadmap.md
+    orphan: true
+    attributes:
+      title:
+        required: true
+  glossary:
+    when: a domain word is used in a way that a newcomer would misread — edit [knowledge/product/glossary.md](knowledge/product/glossary.md), never add a second
+    layout: singleton
+    path: knowledge/product/glossary.md
+    orphan: true
+    attributes:
+      title:
+        required: true
+  arc42:
+    when: the shape of the system is described or changes — context, building blocks, data model, a crosscutting concern — edit [knowledge/architecture/arc42.md](knowledge/architecture/arc42.md)
+    layout: singleton
+    path: knowledge/architecture/arc42.md
+    orphan: true
+    attributes:
+      title:
+        required: true
+  erd:
+    when: the relationships between stored entities are described or change — edit [knowledge/architecture/erd.md](knowledge/architecture/erd.md), never add a second
+    layout: singleton
+    path: knowledge/architecture/erd.md
+    orphan: true
+    attributes:
+      title:
+        required: true
+  capability:
+    when: a coherent chunk of product value is named as a thing the system does
+    layout: file
+    path: knowledge/product/capabilities
+    id_prefix: cap
+    attributes:
+      title:
+        required: true
+      facet_id:
+        type: text
+  requirement:
+    when: a rule is stated that the system must satisfy or must never violate — 'must', 'never', 'always' are the tells
+    layout: file
+    path: knowledge/product/requirements
+    id_prefix:
+      by: kind
+      map:
+        functional: fr
+        constraint: cst
+        business-rule: br
+    attributes:
+      title:
+        required: true
+      kind:
+        enum:
+        - functional
+        - constraint
+        - business-rule
+        required: true
+      facet_id:
+        type: text
+    relations:
+      capabilities:
+        to: capability
+        many: true
+      realized_in:
+        to: repo
+        many: true
+  pdr:
+    when: a product-level choice is made about behaviour or scope, as opposed to implementation
+    layout: file
+    path: knowledge/product/decisions
+    id_prefix: pd
+    attributes:
+      title:
+        required: true
+      status:
+        enum:
+        - proposed
+        - accepted
+        - rejected
+        required: true
+    relations:
+      supersedes:
+        to: pdr
+        inverse: superseded
+        acyclic: true
+      affects:
+        to: any
+        many: true
+  adr:
+    when: a technical choice is made, rejected, or revisited between real alternatives — including what we are NOT doing
+    layout: file
+    path: knowledge/architecture/decisions
+    id_prefix: ad
+    attributes:
+      title:
+        required: true
+      status:
+        enum:
+        - proposed
+        - accepted
+        - rejected
+        required: true
+      facet_id:
+        type: text
+    relations:
+      supersedes:
+        to: adr
+        inverse: superseded
+        acyclic: true
+      affects:
+        to: any
+        many: true
+      drivers:
+        to: quality-attribute
+        many: true
+      produces:
+        to: boundary
+        many: true
+  domain:
+    when: a bounded area of the problem space is named as having its own language and rules
+    layout: file
+    path: knowledge/architecture/domains
+    attributes:
+      title:
+        required: true
+      tier:
+        enum:
+        - core
+        - supporting
+        - generic
+      stage:
+        type: text
+      relationship:
+        enum:
+        - conformist
+        - customer-supplier
+        - partnership
+        - shared-kernel
+        - acl
+    relations:
+      depends_on:
+        to: domain
+        many: true
+      reads:
+        to: entity
+        many: true
+  entity:
+    when: a thing the system stores is identified, with an owner and a lifecycle
+    layout: file
+    path: knowledge/architecture/entities
+    attributes:
+      title:
+        required: true
+    relations:
+      owner:
+        to: domain
+        required: true
+  boundary:
+    when: a limit is stated that separates what we control from what we do not
+    layout: file
+    path: knowledge/architecture/boundaries
+    id_prefix: bound
+    attributes:
+      title:
+        required: true
+      scope:
+        enum:
+        - domain
+        - api
+        - data
+        - system
+      stage:
+        type: text
+      enforcement:
+        enum:
+        - architecture-test
+        - ci-gate
+        - linter
+        - code-review
+        - manual
+      rule:
+        required: true
+    relations:
+      affects:
+        to: any
+        many: true
+  quality-attribute:
+    when: a non-functional target is named — latency, availability, throughput — with a number worth holding to
+    layout: file
+    path: knowledge/architecture/quality-attributes
+    id_prefix: qa
+    attributes:
+      title:
+        required: true
+      category:
+        type: text
+      stage:
+        type: text
+      scenario:
+        required: true
+      measurement:
+        type: text
+      enforcement:
+        enum:
+        - architecture-test
+        - ci-gate
+        - linter
+        - code-review
+        - manual
+        - monitoring-alert
+    relations:
+      applies_to:
+        to:
+        - domain
+        - component
+        many: true
+  component:
+    when: a part of the system is named as a thing that can break, be owned, or be swapped
+    layout: file
+    path: knowledge/architecture/components
+    id_prefix: cmp
+    attributes:
+      title:
+        required: true
+      kind:
+        enum:
+        - service
+        - library
+        - external
+        required: true
+      stack:
+        type: text
+    relations:
+      repo:
+        to: repo
+      domains:
+        to: domain
+        many: true
+      consumes:
+        to: contract
+        many: true
+        inverse: consumed_by
+  repo:
+    when: a codebase is named that holds part of this system
+    layout: collection
+    path: knowledge/architecture/repos.yaml
+    attributes:
+      repo:
+        type: text
+        required: true
+        pattern: ^[a-z0-9._-]+/[a-z0-9._-]+$
+      status:
+        enum:
+        - active
+        - archived
+        required: true
+  contract:
+    when: an interface between two parts is agreed, published, or versioned
+    layout: file
+    format: yaml
+    path: knowledge/architecture/contracts
+    attributes:
+      title:
+        required: true
+      kind:
+        enum:
+        - api
+        - events
+        - data
+        required: true
+      status:
+        enum:
+        - proposed
+        - active
+        - deprecated
+        required: true
+      facet_id:
+        type: text
+    relations:
+      provider:
+        to: component
+        required: true
+  baseline:
+    when: a measurement is taken that later work will be compared against
+    layout: collection
+    path: knowledge/architecture/baselines.yaml
+    attributes:
+      metric:
+        type: text
+        required: true
+      value:
+        type: text
+        required: true
+      direction:
+        enum:
+        - at-least
+        - at-most
+      as_of:
+        type: date
+      source:
+        type: text
+    relations:
+      component:
+        to: component
+  feature-spec:
+    when: work is proposed, started, finished, or dropped — record at proposed, then edit `status`
+    layout: file
+    path: specs/feature-specs
+    id_prefix: fs
+    attributes:
+      title:
+        required: true
+      status:
+        enum:
+        - planned
+        - active
+        - done
+        - dropped
+        required: true
+    relations:
+      capabilities:
+        to: capability
+        many: true
+      requirements:
+        to: requirement
+        many: true
+      supersedes:
+        to: feature-spec
+        inverse: superseded
+        acyclic: true
+  test-spec:
+    when: a way of proving a requirement holds is agreed
+    layout: file
+    path: specs/test-specs
+    id_prefix: ts
+    attributes:
+      title:
+        required: true
+    relations:
+      verifies:
+        to: feature-spec
+        required: true
+  work-package:
+    when: a feature is split into a unit one person or agent can finish
+    layout: file
+    path: specs/work-packages
+    id_prefix: wp
+    attributes:
+      title:
+        required: true
+      status:
+        enum:
+        - planned
+        - active
+        - done
+        - dropped
+        required: true
+    relations:
+      feature:
+        to: feature-spec
+        required: true
+      repo:
+        to: repo

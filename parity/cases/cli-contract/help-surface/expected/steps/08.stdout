@@ -1,0 +1,15 @@
+                                                                                
+ Usage: khub unlink [OPTIONS] [ID] [PREDICATE] [TARGET]                         
+                                                                                
+ Remove a relation: khub unlink initech-pov partner northwind.                  
+                                                                                
+╭─ Arguments ──────────────────────────────────────────────────────────────────╮
+│   ID             <str>                                                       │
+│   PREDICATE      <str>                                                       │
+│   TARGET         <str>                                                       │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --format        <str>  text or json (emits the edge record). [default: text] │
+│ --help                 Show this message and exit.                           │
+╰──────────────────────────────────────────────────────────────────────────────╯
+

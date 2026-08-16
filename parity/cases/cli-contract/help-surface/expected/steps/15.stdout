@@ -1,0 +1,14 @@
+                                                                                
+ Usage: khub validate [OPTIONS] [TARGET]                                        
+                                                                                
+ Validate entities: khub validate [TARGET] [--strict].                          
+                                                                                
+╭─ Arguments ──────────────────────────────────────────────────────────────────╮
+│   TARGET      <str>  A type or type/slug; default: all.                      │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --strict               Close the schema: reject undeclared keys.             │
+│ --format        <str>  text (Rich on a TTY) or json. [default: text]         │
+│ --help                 Show this message and exit.                           │
+╰──────────────────────────────────────────────────────────────────────────────╯
+

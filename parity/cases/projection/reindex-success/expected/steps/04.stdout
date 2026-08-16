@@ -1,0 +1,25 @@
+--- index.md
++++ index.md
+@@ -0,0 +1,22 @@
++---
++okf_version: '0.1'
++entity_count: 4
++---
++# Index
++
++## prd
++
++- [Product requirements](knowledge/prd.md)
++
++## arc42
++
++- [Architecture](knowledge/arc42.md)
++
++## requirement
++
++- [Alpha](knowledge/requirements/fr-001-alpha.md)
++
++## component
++
++- [Beta](knowledge/components/cmp-001-beta.md)
++

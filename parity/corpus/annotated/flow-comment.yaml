@@ -1,0 +1,4 @@
+title: Flow style holder
+inline: {a: 1, b: 2}  # comment on a flow mapping
+flowlist: [x, y]      # comment on a flow sequence
+after: value

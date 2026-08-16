@@ -17,3 +17,16 @@ build/
 
 # macOS
 .DS_Store
+
+# Built binaries. `go build ./parity/runner` names its output after the
+# package directory, so /runner joins the list of things a plain build drops
+# in the repo root.
+/khub
+/yamlgate
+/runner
+/.eval-bin/
+# wrangler drops this when deploying Pages from a local checkout.
+/.wrangler/
+parity/corpus/real/
+/parity-run
+/parity-run-pty

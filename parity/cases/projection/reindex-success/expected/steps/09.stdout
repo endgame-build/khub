@@ -1,0 +1,21 @@
+--- index.md
++++ index.md
+@@ -1,6 +1,6 @@
+ ---
+ okf_version: '0.1'
+-entity_count: 4
++entity_count: 5
+ ---
+ # Index
+ 
+@@ -16,6 +16,10 @@
+ 
+ - [Alpha](knowledge/requirements/fr-001-alpha.md)
+ 
++## adr
++
++- [Gamma](knowledge/decisions/ad-001-gamma.md)
++
+ ## component
+ 
+ - [Beta](knowledge/components/cmp-001-beta.md)

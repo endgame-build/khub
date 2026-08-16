@@ -1,0 +1,5 @@
+Usage: khub history [OPTIONS] {ID}
+Try 'khub history --help' for help.
+╭─ Error ──────────────────────────────────────────────────────────────────────╮
+│ Got unexpected extra argument(s) (b)                                         │
+╰──────────────────────────────────────────────────────────────────────────────╯

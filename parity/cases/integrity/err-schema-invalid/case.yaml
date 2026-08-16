@@ -1,0 +1,6 @@
+steps:
+- argv: ["init", "build-lite", ".", "--no-wire"]
+- sh: "printf \"base:\\n  attributes:\\n    type: {type: text}\\nentities:\\n  x:\\n    layout: bogus\\n    path: x\\n\" > .khub/schema.yaml"
+- argv: ["status"]
+- sh: "printf \"base:\\n  attributes:\\n    type: {type: text}\\nentities:\\n  x:\\n    layout: file\\n    path: x\\n    relations:\\n      broken: {to: nowhere}\\n\" > .khub/schema.yaml"
+- argv: ["status"]

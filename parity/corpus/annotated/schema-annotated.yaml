@@ -1,0 +1,12 @@
+# khub-preset: annotated@0.1.0
+# engagement-specific overrides live below — keep comments on edits
+base:
+  attributes:
+    type: {type: text, required: true}   # discriminator
+    created: {type: date, required: true}
+entities:
+  note:
+    layout: file      # one file per record
+    path: notes
+    attributes:
+      title: {required: true}

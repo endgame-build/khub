@@ -1,0 +1,19 @@
+# A control character anywhere in the document makes it malformed: PyYAML's
+# and ruamel's Reader reject non-printables outright. goccy accepts them, which
+# silently turned a malformed file into a live entity in Go — found by the
+# differential fuzzer as a one-entity difference in `status` counts.
+#
+# The 0x01 byte is written with the OCTAL escape, not \x01. The runner executes
+# `sh` steps through `sh -c`, which is dash on Ubuntu, and dash's printf does not
+# implement \xHH — it emitted the four literal characters instead, so the file
+# was well-formed and every assertion below inverted. POSIX printf specifies the
+# octal form, and both shells write the same byte for it. Caught by the macOS CI
+# leg passing while linux failed.
+steps:
+- argv: ["init", "firm-ops", ".", "--no-wire"]
+- sh: "mkdir -p fragments && printf -- '---\\ntype: fragment\\ncreated: 2026-01-15\\nname: aaa\\001bbb\\n---\\nbody\\n' > fragments/ctrl.md"
+- argv: ["status", "--format", "json"]
+- argv: ["check", "--format", "json"]
+- argv: ["validate", "--format", "json"]
+- argv: ["query", "--type", "fragment", "--format", "json"]
+- argv: ["get", "fragment/ctrl", "--format", "json"]

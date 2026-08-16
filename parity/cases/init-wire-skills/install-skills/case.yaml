@@ -1,0 +1,5 @@
+steps:
+- argv: ["init", "build-lite", ".", "--no-wire"]
+- argv: ["install-skills", "--dry-run", "--format", "json"]
+- argv: ["install-skills", "--format", "json"]
+- argv: ["install-skills", "--format", "json"]

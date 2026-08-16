@@ -1,0 +1,44 @@
+001-acme-corp:
+  created: 2026-01-15
+  updated: 2026-01-15
+  draft: false
+  author: Acme Corp
+  title: Acme Corp
+  description: Acme Corp
+  resource: Acme Corp
+  tags:
+  - alpha
+  - beta
+  repo: org/name
+  status: active
+  x_note: café — ß straße
+  body: "Body line one.\n\nSecond — paragraph 0.\n"
+002-caf-stra-e:
+  created: 2026-01-15
+  updated: 2026-01-15
+  draft: false
+  author: café — ß straße
+  title: café — ß straße
+  description: café — ß straße
+  resource: café — ß straße
+  tags:
+  - alpha
+  - beta
+  repo: org/name
+  status: archived
+  x_note: "a: colon and # hash and 'quote'"
+003-a-colon-and-hash-and-quote:
+  created: 2026-01-15
+  updated: 2026-01-15
+  draft: true
+  author: "a: colon and # hash and 'quote'"
+  title: "a: colon and # hash and 'quote'"
+  description: "a: colon and # hash and 'quote'"
+  resource: "a: colon and # hash and 'quote'"
+  tags:
+  - alpha
+  - beta
+  repo: org/name
+  status: active
+  x_note: 'word word word word word word word word word word word word word word word
+    word word word word word word word word word word word word word word word '

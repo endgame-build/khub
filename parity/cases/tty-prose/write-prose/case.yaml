@@ -1,0 +1,6 @@
+mode: human
+normalize:
+- tty-layout-free
+steps:
+- argv: ["init", "build-lite", ".", "--no-wire"]
+- argv: ["add", "requirement", "--title", "H", "--kind", "functional"]

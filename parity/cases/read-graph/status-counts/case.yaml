@@ -1,0 +1,10 @@
+steps:
+- argv: ["init", "build-lite", ".", "--no-wire"]
+- argv: ["add", "requirement", "--title", "Auth required", "--kind", "functional"]
+- argv: ["add", "component", "--title", "API", "--kind", "service", "--stack", "python"]
+- argv: ["add", "component", "--title", "Web", "--kind", "service"]
+- argv: ["add", "adr", "--title", "Use JWT", "--status", "accepted"]
+- argv: ["link", "fr-001-auth-required", "realized_in", "cmp-001-api"]
+- argv: ["link", "cmp-002-web", "depends_on", "cmp-001-api"]
+- argv: ["link", "ad-001-use-jwt", "affects", "cmp-001-api"]
+- argv: ["status"]

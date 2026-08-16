@@ -1,0 +1,7 @@
+# The --help FLAG renders the same Rich help as a bare invocation but exits 0
+# and carries one extra trailing newline (Click echoes the rendered text; the
+# no_args_is_help path does not). A group's help lists its subcommands.
+steps:
+- argv: ["--help"]
+- argv: ["schema", "--help"]
+- argv: ["status", "--help"]

@@ -1,0 +1,1 @@
+{"error": {"code": "bool_violation", "message": "'not-a-bool' is not a valid boolean (true/false, yes/no, 1/0, on/off)"}}

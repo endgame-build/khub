@@ -1,0 +1,9 @@
+ec9b399104e5dd366e2ba41a1de03d49eae7a1c26ce2dd22d000dc6e0e36c637 - .gitignore
+91fcb9e681c44047d466d29371be49d87d73c10d58b4bf23125c4878208eeca0 - .khub/config.yaml
+812f5c9b6230f2c5456ec04ea91571e335157cc9dbd111e7c4cb93a881c8d987 - .khub/schema.yaml
+c8d791eed22be837682fc7e10922c6149f807186ea1d244380c8ad8f721610a3 - .khub/templates/adr.yaml
+5b5a8ddee5e4ce03cc82e7967ec3cd6fed41651b787956effd74638f61dfc58d - .khub/templates/arc42.yaml
+0d61510b3debfe7af0928b0b23c894c14f7ffb6116f6b984c4851d2b185ea197 - .khub/templates/feature-spec.yaml
+62b8cbe56a07fefb27f24471bbd9f7c9e4975b640022e8a7c51f531b254eae5a - .khub/templates/prd.yaml
+e214f1c374fcb7e83f3eddac492d8db0624c0a9487b6cd18cd1a5d2f1bf9266d - knowledge/arc42.md
+aeaf2cd39ea7e57bf8ca1ba029acc469a6fb08b3e5d3ba540729a3b014d22971 - knowledge/prd.md

@@ -1,0 +1,12 @@
+steps:
+- argv: ["init", "build-lite", ".", "--no-wire"]
+- argv: ["add", "requirement", "--title", "Draft one", "--kind", "functional", "--draft", "--format", "json"]
+- argv: ["add", "requirement", "--title", "Active one", "--kind", "functional", "--format", "json"]
+- argv: ["edit", "fr-001-draft-one", "description", "edited while draft"]
+- argv: ["link", "fr-001-draft-one", "related", "fr-002-active-one"]
+- argv: ["get", "fr-001-draft-one", "--format", "json"]
+- argv: ["check"]
+- argv: ["edit", "fr-001-draft-one", "draft", "false"]
+- argv: ["get", "fr-001-draft-one", "--format", "json"]
+- argv: ["query", "--draft"]
+- argv: ["query", "--active"]

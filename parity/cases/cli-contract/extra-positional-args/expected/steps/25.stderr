@@ -1,0 +1,5 @@
+Usage: khub query [OPTIONS]
+Try 'khub query --help' for help.
+╭─ Error ──────────────────────────────────────────────────────────────────────╮
+│ Invalid value: Field 'foo' has no value                                      │
+╰──────────────────────────────────────────────────────────────────────────────╯

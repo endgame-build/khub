@@ -12,20 +12,53 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - name: Install uv
-        uses: astral-sh/setup-uv@v9.0.0
         with:
-          python-version: "3.12"
-          enable-cache: true
-      - run: uv sync
-      - run: uv run ruff check src tests
-      - run: uv run mypy
-      - run: uv run pytest
-      - run: uv build
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v3
+          # goreleaser needs the full history to resolve the tag it is building.
+          fetch-depth: 0
+      - uses: actions/setup-go@v6
         with:
-          files: |
-            dist/*.whl
-            dist/*.tar.gz
-          generate_release_notes: true
+          go-version: "1.25"
+          cache: true
+      # A tag is not a promise that CI ran on this commit — someone can tag an
+      # older one. The gates are cheap next to shipping a broken binary.
+      - name: Gates
+        run: |
+          go test ./...
+          go build -o khub ./cmd/khub
+          go build -o parity-run ./parity/runner
+          ./parity-run -bin "$PWD/khub" -cases parity/cases
+          bash smoke.sh
+      - name: The tag and internal/version agree
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          built=$(./khub --version)
+          # The release binary takes its version from -ldflags, so this compares
+          # the tag against the constant a plain `go build` bakes in. They drift
+          # apart silently otherwise — which is exactly what happened between
+          # pyproject.toml and __init__.py for four minors.
+          test "$tag" = "$built" || {
+            echo "tag $tag != internal/version $built"; exit 1; }
+      - uses: goreleaser/goreleaser-action@v6
+        with:
+          version: "~> v2"
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # The repo is private, so install.sh reaches these assets through the API
+      # with a token. This proves that path on every release, using the same
+      # script a user runs — not a reimplementation of it.
+      - name: Install through install.sh, exactly as a user would
+        env:
+          KHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Pin the tag being built. Without it install.sh resolves
+          # /releases/latest, and with `prerelease: auto` a -rc tag leaves that
+          # pointing at the previous stable — the assert below would then fail
+          # for the wrong reason, or pass while proving nothing about this tag.
+          KHUB_VERSION: ${{ github.ref_name }}
+        run: |
+          KHUB_INSTALL_DIR=/tmp/khub-verify sh install.sh
+          got=$(/tmp/khub-verify/khub --version)
+          test "$got" = "${GITHUB_REF_NAME#v}" || {
+            echo "installed $got, expected ${GITHUB_REF_NAME#v}"; exit 1; }
+          /tmp/khub-verify/khub --help >/dev/null

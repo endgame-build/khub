@@ -6,7 +6,7 @@
 
 khub is **structured, schema-bound context management for analytical and operational work**, a semantic, ontology-aligned context hub for agents. It gives an AI agent typed, validated, queryable context (structured memory it navigates and writes back to) instead of unstructured documents stuffed into a context window.
 
-One generic engine: every entity is one Markdown file with YAML frontmatter, held in git. A khub schema defines the entity types, their attributes, and legal relations, and is resolved in memory for validation. A Python core library provides schema-validated CRUD and graph queries. A generic CLI (`khub`) and a Claude Code skill are thin, schema-driven surfaces over that library. khub is an Open Knowledge Format (OKF) implementation and extension: its Markdown entities are OKF concepts, and khub adds a typed schema, a graph, and the serialization formats and collections OKF lacks on top of its Markdown-only model. Any workspace projects to a conformant OKF bundle.
+One generic engine: every entity is one Markdown file with YAML frontmatter, held in git. A khub schema defines the entity types, their attributes, and legal relations, and is resolved in memory for validation. A Go core provides schema-validated CRUD and graph queries. A generic CLI (`khub`) and a Claude Code skill are thin, schema-driven surfaces over that core. khub is an Open Knowledge Format (OKF) implementation and extension: its Markdown entities are OKF concepts, and khub adds a typed schema, a graph, and the serialization formats and collections OKF lacks on top of its Markdown-only model. Any workspace projects to a conformant OKF bundle.
 
 **The schema is the operational setup.** It configures what a given hub is *for*. The engine knows nothing about engineering, consulting, or research; the schema does. Swap the schema, and the same engine becomes a different operational hub.
 
@@ -27,11 +27,11 @@ Both are first-class, symmetric writers of the same graph through the same libra
 |---|-------|------|
 | 1 | Source of truth | Markdown + YAML frontmatter, git |
 | 2 | Ontology | khub schema (entities/attributes/relations), resolved in memory |
-| 3 | Core library | Python: validate / create / get / update / delete / link / query |
+| 3 | Core | Go (`internal/`): validate / create / get / update / delete / link / query |
 | 4 | Graph projection | In-memory index; in-memory per-invocation FTS5 search; persisted SQLite (nodes/edges) planned; no graph engine |
 | 5 | Access | Generic CLI (`khub`) + Claude Code skill (MCP later) |
 
-The core library is the only place logic lives. The CLI, skill, and any future MCP server are thin, schema-introspecting adapters over it. Adding or changing a type is an edit to the ontology, with no surface code changes.
+The core is the only place logic lives. The CLI, skill, and any future MCP server are thin, schema-introspecting adapters over it. Adding or changing a type is an edit to the ontology, with no surface code changes.
 
 ### Schema
 
@@ -71,16 +71,16 @@ The concrete stack under the five layers. Each pick stays dependency-light and e
 | Concern | Choice | Why |
 |---------|--------|-----|
 | Schema | khub YAML → `ResolvedSchema` (the native resolver) | authors write entities/attributes/relations; the resolver merges the base and produces the in-memory contract every surface reads |
-| Validation | native (`schema_model.py` meta-schema + runtime field/relation checks) | precise errors that feed `validate`; no generated code |
-| Frontmatter | **`python-frontmatter`** to read, **`ruamel.yaml`** to write | round-trip writes preserve key order and comments, so `khub set` produces a minimal git diff |
-| In-memory graph | **`networkx`** adjacency index | `descendants`/`ancestors` give blast radius and supersession chains; cycle detection backs `check` |
-| Projection | **SQLite** + **FTS5** (stdlib `sqlite3`) | full-text search (`khub search`, in-memory per invocation, zero new dependency); persisted `nodes`/`edges` tables planned; HQ already proved the shape |
+| Validation | native (`internal/schema/vocab.go` meta-schema + runtime field/relation checks) | precise errors that feed `validate`; no generated code |
+| Frontmatter | **`internal/canon`** — **`goccy/go-yaml`** parses, khub's own emitter writes | an edit rewrites only the tokens whose values moved, so key order, comments and the author's quoting all survive and `khub edit` produces a minimal git diff. The emitter reproduces ruamel.yaml byte-for-byte because the on-disk shape is a contract, not a preference |
+| In-memory graph | khub's own ordered adjacency; **`gonum`** for cycles only | `descendants`/`ancestors` give blast radius and supersession chains; cycle detection backs `check`. Adjacency is insertion-ordered because walk determinism is contract |
+| Projection | **SQLite** + **FTS5** via **`ncruces/go-sqlite3`** | full-text search (`khub search`, in-memory per invocation, never stale); persisted `nodes`/`edges` tables planned. A pure-Go wasm build, which is why CGO stays off and all four release targets cross-compile without a C toolchain |
 | Graph engine (if ever) | embedded graph engine (oxigraph or a kuzu fork) | considered and not adopted; kuzu was archived Oct 2025 (Apple acqui-hire), so a fork or oxigraph would be the path, and a server stays unjustified while the corpus is small |
-| CLI | **Typer** + **Rich** | type-driven commands, `--format json` for the agent, trees and tables for a human |
+| CLI | **`cobra`** + **`pflag`** | declarative commands, `--format json` for the agent, trees and tables for a human; the panel and table rendering is khub's own |
 | Git history | `git` over `subprocess` | `stale` and `backfill` read commit dates; git is present, so no library dependency |
-| Tooling | **uv**, **Ruff**, **mypy**, **pytest** | a golden-corpus test runs khub against an HQ snapshot and asserts it validates and checks cleanly (a functional cutover, judged on its own output) |
+| Tooling | **Go**, **gofmt**, **go vet**, **golangci-lint**, `go test` | a golden-corpus test runs khub against an HQ snapshot and asserts it validates and checks cleanly (a functional cutover, judged on its own output) |
 
-Python 3.11+, shipped as a `khub` console script (`uv tool install`). Agent skills, thin `SKILL.md` files over the same commands, ship as package data and install with `khub install-skills`; an MCP server exposing the same verbs is planned, its tool schemas emitted natively from the resolved schema.
+Go, shipped as a single static binary (`curl -fsSL https://khub.end.game/install.sh | sh`). It was a Python console script through 0.18.0; the rewrite bought no features, it removed the interpreter from every install. Agent skills, thin `SKILL.md` files over the same commands, are embedded in the binary and install with `khub install-skills`; an MCP server exposing the same verbs is planned, its tool schemas emitted natively from the resolved schema.
 
 Two eval tiers: deterministic golden-file tests cover the engine (the HQ functional-cutover test above), and an OKF-style fuzzy goldens-eval scores the LLM ingestion layer: precision and recall over extracted types and edges, gated on `khub check`.
 
@@ -116,7 +116,7 @@ Two eval tiers: deterministic golden-file tests cover the engine (the HQ functio
   - `khub check`: graph-wide over the active (`draft: false`) subgraph. Relations resolve, required-completeness holds for `active` entities (computed from the schema; an active-but-incomplete entity is reported), a `draft` does not satisfy a required relation, no orphans (entities with no inbound or outbound relation), no dangling edges, and no stray files (a file inside a type's layout that is not a valid entity of that type; reference docs outside the type layouts are skipped).
   - `khub stale`: entities whose `updated` is past a threshold; dates backfilled from `git log`.
 
-  A fourth signal, `khub log` (git history rendered at ontology altitude), shipped in v1 and was removed in 0.9.0. Rendering commits as entities and touched predicates — including per-row attribution for collection types — was over half of `core/gitlog.py` and answered a question `khub history` (the supersession chain) and `git log -- <path>` already answer between them.
+  A fourth signal, `khub log` (git history rendered at ontology altitude), shipped in v1 and was removed in 0.9.0. Rendering commits as entities and touched predicates — including per-row attribution for collection types — was over half of `internal/gitlog/` and answered a question `khub history` (the supersession chain) and `git log -- <path>` already answer between them.
 
 ### Command Surface
 
@@ -177,15 +177,29 @@ The schema header stamps provenance (`# khub-preset: engineering@1.0.0`). The en
 
 ## Distribution
 
-khub ships as a Python package and runs through `uv`. The zero-install path mirrors `npx`, straight from the private repo over git:
+khub ships as a single static binary, fetched by a one-line installer. There is no runtime to provision first:
 
 ```
-uvx --from git+ssh://git@github.com/endgame-build/khub@v0.11.0 khub init firm-ops ./my-hub
-uv tool install git+ssh://git@github.com/endgame-build/khub@v0.11.0   # install once, then reuse
+curl -fsSL https://khub.end.game/install.sh | sh   # install once, then reuse
+khub init firm-ops ./my-hub
 khub init engineering ./acme-hub
 ```
 
-Everything stays private for now. `uvx` and `uv tool install` run from the private repo over git, authenticating with an SSH key or an HTTPS token (uv delegates auth to git). A public PyPI release and the bare `uvx khub` shorthand wait until there is a reason to open the engine.
+Everything stays private — the repo, the releases, the binaries. Only
+`install.sh` is public, deployed from this repo to Cloudflare Pages on merge and
+served at `khub.end.game`, and it holds no secrets: it
+detects the platform, fetches a release asset, checks it against the release's
+own `checksums.txt`, and moves one file into place. It authenticates using
+whatever the machine already has (`gh`, a token, an HTTPS credential in the
+keychain), so the install command itself carries none.
+
+The script is deliberately written so that **going open source is a visibility
+flip, not an installer rewrite**: with no token it falls back to GitHub's
+anonymous `releases/latest/download/` URL, which is exactly what a public repo
+serves. That path needs no API call and no JSON parser, so opening the engine
+removes a dependency rather than migrating anyone. The question it defers is
+worth naming: a published binary would carry the embedded presets and skills,
+so those bytes leave the private repo the moment releases become public.
 
 **Engine and presets.** For now the engine and presets are collocated in this single private repo. The engine is generic plumbing; the presets are the IP, so they will most likely split into their own private repo later, pulled into `init` through `khub init --preset-source <private>`. Open-core (a public engine with private presets) stays a later option.
 

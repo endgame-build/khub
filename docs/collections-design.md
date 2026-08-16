@@ -6,7 +6,7 @@ documents the implemented behavior; deviations would be bugs. Single-file
 collections, one `[inventory].[json|jsonl|yaml]` file holding every entity of
 a type as a row, per the design-memo storage grammar (design-memo.md:89-101).
 
-The framing invariant: the `Index` (`core/index.py`) is the format seam. Every
+The framing invariant: the `Index` (`internal/index/`) is the format seam. Every
 graph semantic (draft, edges, derived inverses, orphans, required-completeness,
 query, viz, reindex, search-over-meta) is defined over `(type, slug)` + meta
 and **does not change**. The contract below covers only how rows are read,

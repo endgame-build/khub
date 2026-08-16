@@ -8,7 +8,7 @@ set -uo pipefail
 
 REPO=$(cd "$(dirname "$0")" && pwd)
 WORK=${1:-/tmp/khub-smoke}
-KHUB="uv run --project $REPO khub"
+KHUB="${KHUB:-$REPO/khub}"   # the built binary; override to smoke another build
 FAILED=0
 CASES=0
 

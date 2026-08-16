@@ -1,0 +1,1 @@
+{"error": {"code": "target_not_empty", "message": "Target . is not empty. Pass --force to scaffold alongside the existing files; no file already there is modified"}}

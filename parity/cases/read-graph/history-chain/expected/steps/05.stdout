@@ -1,0 +1,1 @@
+[{"id": "adr/ad-002-two", "type": "adr", "slug": "ad-002-two", "superseded_by": null}, {"id": "adr/ad-001-one", "type": "adr", "slug": "ad-001-one", "superseded_by": "adr/ad-002-two"}]

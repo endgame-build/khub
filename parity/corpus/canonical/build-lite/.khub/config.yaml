@@ -1,0 +1,6 @@
+name: build-lite
+preset: build-lite
+version: 0.1.0
+source: null
+defaults:
+  stale_days: 90

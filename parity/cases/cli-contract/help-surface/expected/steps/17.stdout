@@ -1,0 +1,13 @@
+                                                                                
+ Usage: khub stale [OPTIONS]                                                    
+                                                                                
+ List entities past the `updated` threshold, oldest first: khub stale [--days   
+ N].                                                                            
+                                                                                
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --days          <int>  Staleness threshold in days; default: the workspace's │
+│                        stale_days.                                           │
+│ --format        <str>  text (Rich table on a TTY) or json. [default: text]   │
+│ --help                 Show this message and exit.                           │
+╰──────────────────────────────────────────────────────────────────────────────╯
+

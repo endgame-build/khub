@@ -1,0 +1,3 @@
+steps:
+- sh: "touch existing.txt"
+- argv: ["init", "build-lite"]

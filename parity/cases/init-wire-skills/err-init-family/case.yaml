@@ -1,0 +1,4 @@
+steps:
+- argv: ["init", "build-lite", ".", "--no-wire"]
+- argv: ["init", "firm-ops", ".", "--force", "--no-wire"]
+- argv: ["init", "build-lite", "deeper/nested/dir", "--no-wire", "--format", "json"]

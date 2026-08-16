@@ -1,0 +1,5 @@
+steps:
+- argv: ["init", "firm-ops", ".", "--no-wire"]
+- sh: "mkdir -p fragments && printf -- '---\n# header\ntype: fragment\nquoted: \"plain word\"\nempty:\ntags:\n  - a\n  - b\nnote: keep   # inline\n---\nBody.\n' > fragments/hand.md"
+- argv: ["edit", "fragment/hand", "stage", "raw", "--format", "json"]
+- argv: ["get", "fragment/hand", "--format", "raw"]

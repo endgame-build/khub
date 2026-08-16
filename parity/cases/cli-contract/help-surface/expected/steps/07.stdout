@@ -1,0 +1,15 @@
+                                                                                
+ Usage: khub link [OPTIONS] [ID] [PREDICATE] [TARGET]                           
+                                                                                
+ Add a relation: khub link initech-pov partner northwind.                       
+                                                                                
+╭─ Arguments ──────────────────────────────────────────────────────────────────╮
+│   ID             <str>                                                       │
+│   PREDICATE      <str>                                                       │
+│   TARGET         <str>                                                       │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --format        <str>  text or json (emits the edge record). [default: text] │
+│ --help                 Show this message and exit.                           │
+╰──────────────────────────────────────────────────────────────────────────────╯
+

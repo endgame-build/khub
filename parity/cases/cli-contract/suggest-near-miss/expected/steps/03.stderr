@@ -1,0 +1,5 @@
+Usage: khub [OPTIONS] COMMAND [ARGS]...
+Try 'khub --help' for help.
+╭─ Error ──────────────────────────────────────────────────────────────────────╮
+│ No such command 'serach'. Did you mean 'search'?                             │
+╰──────────────────────────────────────────────────────────────────────────────╯

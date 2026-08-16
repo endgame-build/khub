@@ -1,0 +1,18 @@
+[3m          status          [0m
+┏━━━━━━━━━━━━━━━━┳━━━━━━━┓
+┃[1m [0m[1mtype          [0m[1m [0m┃[1m [0m[1mcount[0m[1m [0m┃
+┡━━━━━━━━━━━━━━━━╇━━━━━━━┩
+│ prd            │     1 │
+│ arc42          │     1 │
+│ requirement    │     1 │
+│ adr            │     1 │
+│ component      │     2 │
+│ feature-spec   │     0 │
+├────────────────┼───────┤
+│ draft / active │ 0 / 6 │
+│ orphan         │     0 │
+│ stale          │     0 │
+│ stray          │     0 │
+│ malformed      │     0 │
+│ OKF-conformant │   yes │
+└────────────────┴───────┘

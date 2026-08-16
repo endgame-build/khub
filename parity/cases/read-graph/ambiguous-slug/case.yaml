@@ -1,0 +1,6 @@
+steps:
+- argv: ["init", "build-lite", ".", "--no-wire"]
+- argv: ["add", "requirement", "--id", "dup", "--title", "R", "--kind", "functional"]
+- argv: ["add", "component", "--id", "dup", "--title", "C", "--kind", "service"]
+- argv: ["get", "dup"]
+- argv: ["get", "component/dup", "--format", "json"]

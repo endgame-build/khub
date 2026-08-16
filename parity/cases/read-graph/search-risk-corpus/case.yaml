@@ -1,0 +1,11 @@
+steps:
+- argv: ["init", "preset-cells", ".", "--no-wire", "--preset-source", "PRESETSRC"]
+- argv: ["add", "note", "--title", "Caf\u00e9 r\u00e9sum\u00e9", "--body", "na\u00efve caf\u00e9 stra\u00dfe"]
+- argv: ["add", "note", "--title", "cafe plain", "--body", "cafe resume"]
+- argv: ["add", "note", "--title", "tie one", "--body", "shared token alpha"]
+- argv: ["add", "note", "--title", "tie two", "--body", "shared token alpha"]
+- argv: ["search", "cafe"]
+- argv: ["search", "caf\u00e9"]
+- argv: ["search", "shared"]
+- argv: ["search", "stra\u00dfe"]
+- argv: ["search", "((("]

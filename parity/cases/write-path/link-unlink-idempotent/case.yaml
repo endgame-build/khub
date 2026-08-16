@@ -1,0 +1,8 @@
+steps:
+- argv: ["init", "build-lite", ".", "--no-wire"]
+- argv: ["add", "requirement", "--title", "A", "--kind", "functional"]
+- argv: ["add", "requirement", "--title", "B", "--kind", "functional"]
+- argv: ["link", "fr-001-a", "related", "fr-002-b", "--format", "json"]
+- argv: ["link", "fr-001-a", "related", "fr-002-b", "--format", "json"]
+- argv: ["unlink", "fr-001-a", "related", "fr-002-b", "--format", "json"]
+- argv: ["unlink", "fr-001-a", "related", "fr-002-b", "--format", "json"]

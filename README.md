@@ -1,7 +1,7 @@
 # khub
 
 ![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)
-![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)
+![Go 1.25+](https://img.shields.io/badge/go-1.25%2B-00ADD8.svg)
 
 **Schema-bound, agent-facing context management.**
 
@@ -9,7 +9,7 @@ khub gives an AI agent typed, validated, queryable context (structured memory it
 
 ![khub: an agent captures into a schema-bound graph that lives on disk as heterogeneous git storage](docs/img/architecture.svg)
 
-One generic engine: entities live in git as Markdown with YAML frontmatter (the default), as `.json`/`.yaml` documents, or as rows of a single-file collection, per-type schema config. The khub schema is the contract: types, attributes, and legal relations, authored in YAML and resolved in memory. A Python core library provides schema-validated CRUD and graph queries; a generic `khub` CLI and a Claude Code skill are thin, schema-driven surfaces over it. The graph is a projection rebuilt from the Markdown on demand; no database is ever the source of truth.
+One generic engine: entities live in git as Markdown with YAML frontmatter (the default), as `.json`/`.yaml` documents, or as rows of a single-file collection, per-type schema config. The khub schema is the contract: types, attributes, and legal relations, authored in YAML and resolved in memory. A Go core provides schema-validated CRUD and graph queries; a generic `khub` CLI and a Claude Code skill are thin, schema-driven surfaces over it. It ships as one static binary — no runtime to install. The graph is a projection rebuilt from the Markdown on demand; no database is ever the source of truth.
 
 Built on top of the [Open Knowledge Format (OKF)](https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/main/okf/SPEC.md). khub's Markdown entities are OKF concepts; on top, khub adds a typed schema, a graph, and the serialization formats and collections OKF lacks. Any workspace projects to a conformant OKF bundle.
 
@@ -29,10 +29,10 @@ Full command surface and JSON contracts: [`docs/cli.md`](docs/cli.md). Feature h
 
 ## Quickstart
 
-khub is a `khub` console script (Python 3.11+). Install it, then seed a workspace from a preset:
+khub is a single static binary — no runtime, no interpreter. Install it, then seed a workspace from a preset:
 
 ```bash
-uv tool install git+ssh://git@github.com/endgame-build/khub@v0.11.0   # or clone + uv sync
+curl -fsSL https://khub.end.game/install.sh | sh   # ~/.local/bin/khub; or build: go build -o khub ./cmd/khub
 khub init firm-ops ./my-hub          # scaffold .khub/ (+ templates, singletons), wire agent files
 cd my-hub
 khub install-skills                  # copy the agent skills in (offline, no Node)
@@ -82,10 +82,10 @@ A preset is a canonical ontology for one domain — a directory holding its `sch
 
 khub ships two skills: `khub` (the read and write verbs) and `setup` (install the CLI, set up a project). They work in Claude Code, opencode, Cursor, Codex, Gemini CLI, and any other agent that reads a `SKILL.md`.
 
-**Option 1 — the CLI, then its skills.** A file copy out of the installed package: offline, no Node, safe to re-run.
+**Option 1 — the CLI, then its skills.** A file copy out of the binary itself: offline, no Node, safe to re-run.
 
 ```bash
-uv tool install git+ssh://git@github.com/endgame-build/khub@v0.11.0
+curl -fsSL https://khub.end.game/install.sh | sh
 khub install-skills
 ```
 

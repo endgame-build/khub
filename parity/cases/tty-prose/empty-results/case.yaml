@@ -1,0 +1,12 @@
+mode: human
+normalize:
+- tty-layout-free
+steps:
+- argv: ["init", "build-lite", ".", "--no-wire"]
+- argv: ["add", "requirement", "--title", "Lonely", "--kind", "functional"]
+- argv: ["neighbors", "fr-001-lonely"]
+- argv: ["history", "fr-001-lonely", "--predicate", "supersedes"]
+- argv: ["impact", "fr-001-lonely"]
+- argv: ["stale"]
+- argv: ["search", "zzzznomatch"]
+- argv: ["query", "--type", "adr"]

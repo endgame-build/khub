@@ -1,0 +1,5 @@
+Usage: khub add [OPTIONS] [TYPE]
+Try 'khub add --help' for help.
+╭─ Error ──────────────────────────────────────────────────────────────────────╮
+│ Invalid value: Field 'extra' has no value                                    │
+╰──────────────────────────────────────────────────────────────────────────────╯

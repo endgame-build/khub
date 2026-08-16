@@ -1,0 +1,8 @@
+mode: human
+normalize:
+- tty-layout-free
+steps:
+- argv: ["init", "build-lite", ".", "--no-wire"]
+- argv: ["schema", "show", "requirement"]
+- argv: ["schema", "edges"]
+- argv: ["schema"]

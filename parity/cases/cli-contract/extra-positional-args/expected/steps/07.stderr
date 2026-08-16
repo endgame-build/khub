@@ -1,0 +1,5 @@
+Usage: khub unlink [OPTIONS] [ID] [PREDICATE] [TARGET]
+Try 'khub unlink --help' for help.
+╭─ Error ──────────────────────────────────────────────────────────────────────╮
+│ Got unexpected extra argument(s) (d)                                         │
+╰──────────────────────────────────────────────────────────────────────────────╯

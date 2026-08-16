@@ -1,0 +1,5 @@
+steps:
+- argv: ["init", "build-lite", ".", "--no-wire"]
+- sh: "rm knowledge/prd.md"
+- argv: ["check"]
+- argv: ["check", "--format", "json"]

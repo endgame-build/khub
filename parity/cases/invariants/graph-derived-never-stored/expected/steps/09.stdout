@@ -1,0 +1,1 @@
+[{"id": "gizmo/001-a", "type": "gizmo", "slug": "001-a", "title": "A", "score": -1.2571428571428573e-06, "snippet": "A", "path": "nested/deep/gizmos/001-a.md"}, {"id": "gizmo/002-b", "type": "gizmo", "slug": "002-b", "title": "B", "score": -8.301886792452831e-07, "snippet": "001-a", "path": "nested/deep/gizmos/002-b.md"}]

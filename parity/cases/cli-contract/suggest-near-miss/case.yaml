@@ -1,0 +1,31 @@
+# A mistyped command or option gets one suggestion; a RETIRED surface gets none.
+#
+# The second half is the point. `log`, `path`, `build`, `export`, `diff-preset`
+# and `rename` are gone for good, and `validate --fix` / `neighbors --both` with
+# them. Pointing someone at whichever surviving name happens to sort nearest
+# would read as "you nearly had it" for a command that was deliberately removed,
+# so the edit budget is two and every retired name sits at three or more from
+# its nearest neighbour. This case pins both halves: loosening the budget later
+# would start suggesting for the retired list and fail here.
+steps:
+# Typos — one suggestion each.
+- argv: ["chekc"]
+- argv: ["stat"]
+- argv: ["serach"]
+- argv: ["nieghbors"]
+- argv: ["valdate"]
+# Retired commands — bare message, exit 2, no suggestion.
+- argv: ["log"]
+- argv: ["path"]
+- argv: ["build"]
+- argv: ["diff-preset"]
+- argv: ["rename"]
+# Retired options — same rule at the flag level.
+- argv: ["validate", "--fix"]
+- argv: ["neighbors", "--both"]
+# A mistyped option on a command that does NOT take dynamic fields.
+- argv: ["stale", "--dais"]
+- argv: ["stale", "--forrmat"]
+# Unknown subcommand of a group, and a mistyped one.
+- argv: ["schema", "bogus"]
+- argv: ["schema", "edgs"]

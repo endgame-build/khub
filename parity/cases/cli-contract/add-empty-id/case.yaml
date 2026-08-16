@@ -1,0 +1,10 @@
+# `--id ""` is an explicit, invalid slug — not the absence of --id. On a
+# singleton it is an id that is not the type name; elsewhere it is a slug that
+# cannot be minted. Both are located failures (exit 1), and both are raised
+# AFTER the unknown-type and referential-integrity gates.
+steps:
+- argv: ["init", "build-lite", ".", "--no-wire"]
+- argv: ["add", "prd", "--id", ""]
+- argv: ["add", "requirement", "--id", "", "--title", "R", "--kind", "functional"]
+- argv: ["add", "bogustype", "--id", ""]
+- argv: ["add", "requirement", "--id", "", "--related", "ghost"]

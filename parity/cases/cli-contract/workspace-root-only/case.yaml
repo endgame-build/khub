@@ -1,0 +1,23 @@
+# -C/--workspace is an option on the ROOT group only. It binds before the
+# command name and is NOT inherited: `khub status -C /x` is "No such option".
+# On add/edit/query — which run with ignore_unknown_options — Click hands the
+# raw "-C" back as a leftover, so it lands as the FIELD `_C`.
+#
+# The tail pins the group parse itself: an option with no value reports before
+# a Context exists (bare box, no usage line), and options with no command are
+# "Missing command." rather than the no-args help body.
+steps:
+- argv: ["init", "build-lite", ".", "--no-wire"]
+- argv: ["-C", ".", "schema", "types"]
+- argv: ["--workspace", ".", "schema", "types"]
+- argv: ["--workspace=.", "schema", "types"]
+- argv: ["schema", "types", "-C", "."]
+- argv: ["check", "-C", "."]
+- argv: ["schema", "-C", "."]
+- argv: ["get", "prd", "-C", "."]
+- argv: ["add", "requirement", "-C", "/x", "--title", "R", "--kind", "functional"]
+- argv: ["query", "-C", "/x"]
+- argv: ["-C"]
+- argv: ["--workspace"]
+- argv: ["-C", "."]
+- argv: ["--"]

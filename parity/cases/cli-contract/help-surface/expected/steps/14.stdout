@@ -1,0 +1,17 @@
+                                                                                
+ Usage: khub history [OPTIONS] {ID}                                             
+                                                                                
+ Trace supersession lineage: khub history decision-0012 [--limit 3].            
+                                                                                
+╭─ Arguments ──────────────────────────────────────────────────────────────────╮
+│ *    ID      <str>  A bare slug, or type/slug on ambiguity. [required]       │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --predicate        <str>  The self-referential edge to follow.               │
+│                           [default: supersedes]                              │
+│ --limit            <int>  Cap to the N most recent links.                    │
+│ --format           <str>  text (Rich table on a TTY) or json.                │
+│                           [default: text]                                    │
+│ --help                    Show this message and exit.                        │
+╰──────────────────────────────────────────────────────────────────────────────╯
+

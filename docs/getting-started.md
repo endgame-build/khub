@@ -4,24 +4,28 @@ This walkthrough builds a tiny firm-ops hub from nothing (one client, one person
 
 ## Install
 
-khub is a `khub` console script and needs Python 3.11+. Two ways in.
+khub is a single static binary — no runtime, no interpreter. Two ways in.
 
-Install it as a tool (the repo is private, so this needs SSH access to the org; HTTPS with a token works too):
+Install it (the repo is private, so the installer needs a GitHub credential; it
+finds one automatically if you have `gh` logged in, a `GITHUB_TOKEN` set, or a
+GitHub HTTPS credential in your keychain):
 
 ```bash
-uv tool install git+ssh://git@github.com/endgame-build/khub@v0.11.0
+curl -fsSL https://khub.end.game/install.sh | sh
 ```
 
-Or clone and run from the checkout:
+That drops a single binary in `~/.local/bin` — no interpreter, no runtime. Pin a
+version with `KHUB_VERSION=0.19.0`, or choose the directory with
+`KHUB_INSTALL_DIR`. Or build from a checkout:
 
 ```bash
 git clone git@github.com:endgame-build/khub.git
 cd khub
-uv sync
-uv run khub --help    # prefix every command below with `uv run`
+go build -o khub ./cmd/khub
+./khub --help    # prefix every command below with `./`
 ```
 
-The rest of this guide writes `khub …`. If you cloned, read that as `uv run khub …`; the output is the same.
+The rest of this guide writes `khub …`. If you built from source, read that as `./khub …`; the output is the same.
 
 This walkthrough passes every value as a flag, which is the only way khub takes input: it never prompts, so a missing argument is a usage error rather than a question. That is also exactly how an agent drives it — pipe the output or add `--format json` to get machine-readable records.
 

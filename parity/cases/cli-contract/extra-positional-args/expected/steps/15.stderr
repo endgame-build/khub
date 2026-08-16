@@ -1,0 +1,5 @@
+Usage: khub reindex [OPTIONS]
+Try 'khub reindex --help' for help.
+╭─ Error ──────────────────────────────────────────────────────────────────────╮
+│ Got unexpected extra argument(s) (x)                                         │
+╰──────────────────────────────────────────────────────────────────────────────╯

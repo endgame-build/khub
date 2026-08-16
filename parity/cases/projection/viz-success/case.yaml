@@ -1,0 +1,8 @@
+steps:
+- argv: ["init", "build-lite", ".", "--no-wire"]
+- argv: ["add", "component", "--title", "A", "--kind", "service"]
+- argv: ["add", "component", "--title", "B", "--kind", "service"]
+- argv: ["link", "cmp-001-a", "depends_on", "cmp-002-b"]
+- argv: ["viz"]
+- argv: ["viz", "--out", "custom.html"]
+- argv: ["viz", "--type", "component"]

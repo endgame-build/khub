@@ -1,0 +1,8 @@
+steps:
+- argv: ["init", "preset-cells", ".", "--no-wire", "--preset-source", "PRESETSRC"]
+- argv: ["add", "repo", "--title", "ok"]
+- sh: "printf %s\\\\n \"not json at all\" >> repos.jsonl"
+- argv: ["validate"]
+- argv: ["check"]
+- argv: ["add", "repo", "--title", "blocked"]
+- argv: ["status"]

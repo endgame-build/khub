@@ -1,0 +1,13 @@
+# registry header: do not hand-edit lightly
+# second header line
+001-acme:
+  created: 2026-01-15
+  title: Acme    # inline on a row field
+  stack: python
+# between-rows comment attached below
+002-globex:
+  created: 2026-01-15
+  title: Globex
+  tags:
+  - vendor   # inline in a row list
+# trailing comment after the last row

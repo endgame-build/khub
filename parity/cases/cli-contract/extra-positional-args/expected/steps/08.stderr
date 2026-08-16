@@ -1,0 +1,5 @@
+Usage: khub remove [OPTIONS] [ID]
+Try 'khub remove --help' for help.
+╭─ Error ──────────────────────────────────────────────────────────────────────╮
+│ Got unexpected extra argument(s) (b)                                         │
+╰──────────────────────────────────────────────────────────────────────────────╯

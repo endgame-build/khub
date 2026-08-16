@@ -1,0 +1,8 @@
+# The schema sub-app is a GROUP: an unmatched token is an unknown command, not
+# a stray argument (cobra's legacyArgs only says so for a parentless command,
+# so `khub schema bogus` printed the whole schema and exited 0). A missing
+# required TYPE routes through Click's boxed usage error like every other one.
+steps:
+- argv: ["init", "build-lite", ".", "--no-wire"]
+- argv: ["schema", "bogus"]
+- argv: ["schema", "show"]

@@ -1,0 +1,11 @@
+# Each schema subcommand declares its OWN --format. The group's flag stops at
+# the group, so `khub schema --format json types` still prints the Rich table:
+# a single shared (persistent) flag leaked the choice into the subcommand.
+mode: human
+normalize:
+- tty-layout-free
+steps:
+- argv: ["init", "build-lite", ".", "--no-wire"]
+- argv: ["schema", "--format", "json", "types"]
+- argv: ["schema", "types", "--format", "json"]
+- argv: ["schema", "--format", "json"]

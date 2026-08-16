@@ -1,0 +1,7 @@
+# --version is EAGER on the root group: it prints and exits before the command
+# name is resolved, so `khub --version status` is the version, exit 0. An
+# unknown option still wins, because the parser reaches it first.
+steps:
+- argv: ["--version", "status"]
+- argv: ["--version", "bogus-command"]
+- argv: ["--bogus", "--version"]

@@ -1,0 +1,68 @@
+{"kind": "str", "v": "", "present": false, "is_bool": false, "as_bool": false, "is_number": false, "is_dateish": false}
+{"kind": "str", "v": " ", "present": false, "is_bool": false, "as_bool": false, "is_number": false, "is_dateish": false}
+{"kind": "str", "v": "x", "present": true, "is_bool": false, "as_bool": false, "is_number": false, "is_dateish": false}
+{"kind": "str", "v": "true", "present": true, "is_bool": true, "as_bool": true, "is_number": false, "is_dateish": false}
+{"kind": "str", "v": "TRUE", "present": true, "is_bool": true, "as_bool": true, "is_number": false, "is_dateish": false}
+{"kind": "str", "v": " True ", "present": true, "is_bool": true, "as_bool": true, "is_number": false, "is_dateish": false}
+{"kind": "str", "v": "yes", "present": true, "is_bool": true, "as_bool": true, "is_number": false, "is_dateish": false}
+{"kind": "str", "v": "no", "present": true, "is_bool": true, "as_bool": false, "is_number": false, "is_dateish": false}
+{"kind": "str", "v": "on", "present": true, "is_bool": true, "as_bool": true, "is_number": false, "is_dateish": false}
+{"kind": "str", "v": "off", "present": true, "is_bool": true, "as_bool": false, "is_number": false, "is_dateish": false}
+{"kind": "str", "v": "0", "present": true, "is_bool": true, "as_bool": false, "is_number": true, "is_dateish": false}
+{"kind": "str", "v": "1", "present": true, "is_bool": true, "as_bool": true, "is_number": true, "is_dateish": false}
+{"kind": "str", "v": "2", "present": true, "is_bool": false, "as_bool": false, "is_number": true, "is_dateish": false}
+{"kind": "str", "v": "-1", "present": true, "is_bool": false, "as_bool": false, "is_number": true, "is_dateish": false}
+{"kind": "str", "v": "0.5", "present": true, "is_bool": false, "as_bool": false, "is_number": true, "is_dateish": false}
+{"kind": "str", "v": " 1.5 ", "present": true, "is_bool": false, "as_bool": false, "is_number": true, "is_dateish": false}
+{"kind": "str", "v": "1_000", "present": true, "is_bool": false, "as_bool": false, "is_number": true, "is_dateish": false}
+{"kind": "str", "v": "1_0_0", "present": true, "is_bool": false, "as_bool": false, "is_number": true, "is_dateish": false}
+{"kind": "str", "v": "_1", "present": true, "is_bool": false, "as_bool": false, "is_number": false, "is_dateish": false}
+{"kind": "str", "v": "1_", "present": true, "is_bool": false, "as_bool": false, "is_number": false, "is_dateish": false}
+{"kind": "str", "v": "1__0", "present": true, "is_bool": false, "as_bool": false, "is_number": false, "is_dateish": false}
+{"kind": "str", "v": "inf", "present": true, "is_bool": false, "as_bool": false, "is_number": false, "is_dateish": false}
+{"kind": "str", "v": "-inf", "present": true, "is_bool": false, "as_bool": false, "is_number": false, "is_dateish": false}
+{"kind": "str", "v": "Infinity", "present": true, "is_bool": false, "as_bool": false, "is_number": false, "is_dateish": false}
+{"kind": "str", "v": "nan", "present": true, "is_bool": false, "as_bool": false, "is_number": false, "is_dateish": false}
+{"kind": "str", "v": "NaN", "present": true, "is_bool": false, "as_bool": false, "is_number": false, "is_dateish": false}
+{"kind": "str", "v": "1e5", "present": true, "is_bool": false, "as_bool": false, "is_number": true, "is_dateish": false}
+{"kind": "str", "v": "1e999", "present": true, "is_bool": false, "as_bool": false, "is_number": false, "is_dateish": false}
+{"kind": "str", "v": "0x1f", "present": true, "is_bool": false, "as_bool": false, "is_number": false, "is_dateish": false}
+{"kind": "str", "v": "017", "present": true, "is_bool": false, "as_bool": false, "is_number": true, "is_dateish": false}
+{"kind": "str", "v": "0o17", "present": true, "is_bool": false, "as_bool": false, "is_number": false, "is_dateish": false}
+{"kind": "str", "v": "1:30", "present": true, "is_bool": false, "as_bool": false, "is_number": false, "is_dateish": false}
+{"kind": "str", "v": "2026-01-15", "present": true, "is_bool": false, "as_bool": false, "is_number": false, "is_dateish": true}
+{"kind": "str", "v": "2026-1-5", "present": true, "is_bool": false, "as_bool": false, "is_number": false, "is_dateish": false}
+{"kind": "str", "v": "20260115", "present": true, "is_bool": false, "as_bool": false, "is_number": true, "is_dateish": true}
+{"kind": "str", "v": "2026-01-15T10:00", "present": true, "is_bool": false, "as_bool": false, "is_number": false, "is_dateish": true}
+{"kind": "str", "v": "2026-01-15T10:00:00", "present": true, "is_bool": false, "as_bool": false, "is_number": false, "is_dateish": true}
+{"kind": "str", "v": "2026-01-15 10:00:00", "present": true, "is_bool": false, "as_bool": false, "is_number": false, "is_dateish": true}
+{"kind": "str", "v": "2026-01-15T10:00:00+02:00", "present": true, "is_bool": false, "as_bool": false, "is_number": false, "is_dateish": true}
+{"kind": "str", "v": "2026-01-15T10:00:00Z", "present": true, "is_bool": false, "as_bool": false, "is_number": false, "is_dateish": true}
+{"kind": "str", "v": "2026-W03-1", "present": true, "is_bool": false, "as_bool": false, "is_number": false, "is_dateish": true}
+{"kind": "str", "v": "not a date", "present": true, "is_bool": false, "as_bool": false, "is_number": false, "is_dateish": false}
+{"kind": "str", "v": "2026-13-01", "present": true, "is_bool": false, "as_bool": false, "is_number": false, "is_dateish": false}
+{"kind": "str", "v": "2026-01-32", "present": true, "is_bool": false, "as_bool": false, "is_number": false, "is_dateish": false}
+{"kind": "str", "v": "15-01-2026", "present": true, "is_bool": false, "as_bool": false, "is_number": false, "is_dateish": false}
+{"kind": "str", "v": "café", "present": true, "is_bool": false, "as_bool": false, "is_number": false, "is_dateish": false}
+{"kind": "str", "v": "1.5.2", "present": true, "is_bool": false, "as_bool": false, "is_number": false, "is_dateish": false}
+{"kind": "str", "v": "--5", "present": true, "is_bool": false, "as_bool": false, "is_number": false, "is_dateish": false}
+{"kind": "str", "v": "+5", "present": true, "is_bool": false, "as_bool": false, "is_number": true, "is_dateish": false}
+{"kind": "str", "v": "5.", "present": true, "is_bool": false, "as_bool": false, "is_number": true, "is_dateish": false}
+{"kind": "str", "v": ".5", "present": true, "is_bool": false, "as_bool": false, "is_number": true, "is_dateish": false}
+{"kind": "str", "v": "5e", "present": true, "is_bool": false, "as_bool": false, "is_number": false, "is_dateish": false}
+{"kind": "str", "v": "e5", "present": true, "is_bool": false, "as_bool": false, "is_number": false, "is_dateish": false}
+{"kind": "str", "v": "  ", "present": false, "is_bool": false, "as_bool": false, "is_number": false, "is_dateish": false}
+{"kind": "str", "v": "\t", "present": false, "is_bool": false, "as_bool": false, "is_number": false, "is_dateish": false}
+{"kind": "str", "v": "None", "present": true, "is_bool": false, "as_bool": false, "is_number": false, "is_dateish": false}
+{"kind": "str", "v": "null", "present": true, "is_bool": false, "as_bool": false, "is_number": false, "is_dateish": false}
+{"kind": "py", "v": null, "present": false, "is_bool": false, "as_bool": false, "is_number": false, "is_dateish": false}
+{"kind": "py", "v": true, "present": true, "is_bool": true, "as_bool": true, "is_number": false, "is_dateish": false}
+{"kind": "py", "v": false, "present": true, "is_bool": true, "as_bool": false, "is_number": false, "is_dateish": false}
+{"kind": "py", "v": 0, "present": true, "is_bool": false, "as_bool": false, "is_number": true, "is_dateish": false}
+{"kind": "py", "v": 1, "present": true, "is_bool": false, "as_bool": true, "is_number": true, "is_dateish": false}
+{"kind": "py", "v": -3, "present": true, "is_bool": false, "as_bool": true, "is_number": true, "is_dateish": false}
+{"kind": "py", "v": 0.5, "present": true, "is_bool": false, "as_bool": true, "is_number": true, "is_dateish": false}
+{"kind": "py", "v": [], "present": false, "is_bool": false, "as_bool": false, "is_number": false, "is_dateish": false}
+{"kind": "py", "v": ["a"], "present": true, "is_bool": false, "as_bool": true, "is_number": false, "is_dateish": false}
+{"kind": "py", "v": {}, "present": true, "is_bool": false, "as_bool": false, "is_number": false, "is_dateish": false}
+{"kind": "py", "v": {"k": 1}, "present": true, "is_bool": false, "as_bool": true, "is_number": false, "is_dateish": false}

@@ -1,0 +1,6 @@
+steps:
+- argv: ["init", "build-lite", ".", "--no-wire"]
+- argv: ["add", "requirement", "--title", "R", "--kind", "functional"]
+- sh: "chmod 500 knowledge/requirements"
+- argv: ["add", "requirement", "--title", "T", "--kind", "functional"]
+- sh: "chmod 755 knowledge/requirements"

@@ -1,0 +1,10 @@
+                                                                                
+ Usage: khub status [OPTIONS]                                                   
+                                                                                
+ Summarize the workspace: counts, draft/active, orphan/stale, OKF conformance.  
+                                                                                
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --format        <str>  text (Rich table on a TTY) or json. [default: text]   │
+│ --help                 Show this message and exit.                           │
+╰──────────────────────────────────────────────────────────────────────────────╯
+

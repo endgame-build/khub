@@ -1,0 +1,5 @@
+steps:
+- argv: ["init", "build-lite", ".", "--no-wire"]
+- argv: ["add", "component", "--title", "Island", "--kind", "external"]
+- argv: ["check"]
+- argv: ["check", "--strict"]

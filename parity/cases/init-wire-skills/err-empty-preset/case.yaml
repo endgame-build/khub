@@ -1,0 +1,2 @@
+steps:
+- argv: ["init", "preset-empty", ".", "--no-wire", "--preset-source", "PRESETSRC"]

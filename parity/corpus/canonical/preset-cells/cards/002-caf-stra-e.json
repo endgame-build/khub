@@ -1,0 +1,16 @@
+{
+  "type": "card",
+  "created": "2026-01-15",
+  "updated": "2026-01-15",
+  "draft": false,
+  "author": "café — ß straße",
+  "title": "café — ß straße",
+  "description": "café — ß straße",
+  "resource": "café — ß straße",
+  "tags": [
+    "alpha",
+    "beta"
+  ],
+  "x_note": "a: colon and # hash and 'quote'",
+  "body": "Body line one.\n\nSecond — paragraph 1.\n"
+}

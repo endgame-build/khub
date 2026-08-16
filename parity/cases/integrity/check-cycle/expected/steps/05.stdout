@@ -1,0 +1,1 @@
+{"id": "component/cmp-002-b", "type": "component", "slug": "cmp-002-b", "predicate": "depends_on", "target": "cmp-001-a", "changed": true}

@@ -1,0 +1,5 @@
+steps:
+- argv: ["init", "preset-cells", ".", "--no-wire", "--preset-source", "PRESETSRC"]
+- sh: "touch repos.jsonl"
+- argv: ["query", "--type", "repo"]
+- argv: ["status"]

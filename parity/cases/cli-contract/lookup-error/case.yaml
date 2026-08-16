@@ -1,0 +1,3 @@
+steps:
+- argv: ["init", "build-lite", ".", "--no-wire"]
+- argv: ["get", "nope"]

@@ -1,0 +1,1 @@
+{"path": "deeper/nested/dir", "preset": "build-lite", "version": "0.1.0", "name": "dir", "source": null, "entity_files_modified": 0, "seeded_over_corpus": false, "singletons_created": ["prd", "arc42"], "preserved": [], "skill_hint": "khub -C deeper/nested/dir install-skills"}

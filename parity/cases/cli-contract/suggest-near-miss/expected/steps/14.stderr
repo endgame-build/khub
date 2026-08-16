@@ -1,0 +1,5 @@
+Usage: khub stale [OPTIONS]
+Try 'khub stale --help' for help.
+╭─ Error ──────────────────────────────────────────────────────────────────────╮
+│ No such option: --forrmat Did you mean '--format'?                           │
+╰──────────────────────────────────────────────────────────────────────────────╯

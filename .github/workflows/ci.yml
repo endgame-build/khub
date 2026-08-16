@@ -5,53 +5,104 @@ on:
     branches: [main]
   pull_request:
 
+# khub is a Go binary. The Python implementation and its `check` job (ruff,
+# mypy, pytest, the Typer doc generator, the wheel build) were retired at
+# cutover; every gate they held is now held by a step below.
 jobs:
-  check:
-    runs-on: ubuntu-latest
+  go:
+    # darwin is where khub is actually used, and until the cutover nothing but a
+    # laptop asserted it: every gate ran on linux only. The port touches file
+    # locking, path handling and terminal detection, which are exactly the three
+    # things that differ between the two — so both run every gate, and neither is
+    # allowed to cancel the other's evidence.
+    runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.11", "3.12", "3.13"]
+        os: [ubuntu-latest, macos-latest]
     steps:
       - uses: actions/checkout@v7
-      - name: Install uv
-        uses: astral-sh/setup-uv@v9.0.0
+      - uses: actions/setup-go@v6
         with:
-          python-version: ${{ matrix.python-version }}
-          enable-cache: true
-      - run: uv sync
-      - run: uv run ruff check src tests
-      - run: uv run mypy
-      - run: uv run pytest
-      # The unit suite proves the core; this proves the binary — every command over
-      # both build presets, with exit codes asserted. It caught nothing on its first
-      # run, which is the point: it exists so the next change cannot break the CLI
-      # quietly.
+          go-version: "1.25"
+          cache: true
+      - name: gofmt
+        run: |
+          unformatted=$(gofmt -l ./cmd ./internal ./parity)
+          test -z "$unformatted" || { echo "gofmt needed on:"; echo "$unformatted"; exit 1; }
+      - run: go vet ./...
+      - name: Choke-point lint (only internal/canon may import a YAML library)
+        uses: golangci/golangci-lint-action@v9
+        with:
+          version: latest
+      - run: go test ./...
+      - name: Build
+        run: |
+          go build -o khub ./cmd/khub
+          go build -o parity-run ./parity/runner
+      # The recorded bytes are the spec. Before the cutover they described
+      # Python and this step proved the port grew into them; now they describe
+      # khub itself and the same run is the regression suite.
+      #
+      # UNAIDED: no -setup-bin, no -ported. Every verb is implemented, so the
+      # binary runs every step of every fixture itself.
+      - name: Every fixture passes, unaided
+        run: ./parity-run -bin "$PWD/khub" -cases parity/cases
+      # Appendix A: every command, flag, error code, format special, and mode
+      # must map to at least one recorded fixture. Fails on any gap.
+      - name: Coverage gate
+        run: |
+          # -subset-of also asserts the binary offers no command the coverage
+          # table does not know about (cobra ships `completion` by default).
+          ./parity-run -coverage parity/coverage.yaml -cases parity/cases -subset-of "$PWD/khub"
+      # The fixtures prove the core; this proves the binary end to end — every
+      # command over both build presets, with exit codes asserted.
       - name: CLI smoke
         run: bash smoke.sh
+      # Replaces the Typer doc generator, which read the Python app's
+      # decorators. This regenerates from what the binary prints, so the
+      # reference cannot advertise a flag the CLI does not have.
       - name: CLI reference is current
         run: |
-          uv run typer --app app khub.cli.main utils docs --name khub --output docs/cli-reference.md
+          bash parity/tools/gen_cli_reference.sh
           git diff --exit-code docs/cli-reference.md
-      # __version__ is only a fallback (cli/main.py prefers installed metadata), so it
-      # drifted four minors unnoticed. Nothing else asserts the two agree.
-      - name: Version is consistent
+      # The M0 YAML gate is a standing regression, not a one-off: the emitter
+      # must keep reproducing ruamel byte-for-byte, because that is khub's
+      # on-disk format and not an artifact of the retired implementation.
+      # Both legs assert real numbers: a mis-pathed corpus (0 files) or any
+      # diff fails.
+      - name: YAML round-trip gate
+        shell: bash
         run: |
-          python3 -c "
-          import pathlib, re, tomllib
-          pkg = tomllib.loads(pathlib.Path('pyproject.toml').read_text())['project']['version']
-          src = re.search(r'__version__ = \"([^\"]+)\"', pathlib.Path('src/khub/__init__.py').read_text())[1]
-          assert pkg == src, f'pyproject {pkg} != __init__ {src}'
-          print(f'version {pkg} consistent')"
-      # The suite cannot catch this: `skills_dir()` falls back to the repo's
-      # skills/ in a dev checkout, so a broken force-include leaves every test
-      # green while the built wheel ships without skills. Only a build shows it.
-      - name: Wheel carries the skills
-        run: |
-          uv build
-          python3 -c "
-          import glob, zipfile
-          names = zipfile.ZipFile(glob.glob('dist/*.whl')[0]).namelist()
-          for want in ('khub/skills/khub/SKILL.md', 'khub/skills/setup/SKILL.md'):
-              assert want in names, f'{want} missing from wheel'
-          print('wheel carries both skills')"
+          set -euo pipefail
+          go build -o yamlgate ./parity/yamlgate
+          ./yamlgate parity/corpus | tee gate.txt
+          files=$(sed -n 's/^files: //p' gate.txt)
+          test "$files" -ge 130 || { echo "corpus shrank to $files files"; exit 1; }
+          grep -qE "^t1c: ok=$files diff=0 error=0 skip=0$" gate.txt
+          grep -qE "^t2: ok=[0-9]+ diff=0 error=0" gate.txt
+          emit=$(go run ./parity/yamlgate/emit | tail -1)
+          echo "$emit"
+          # "T3: rt N/M  safe P/Q" — every case must pass on both profiles.
+          set -- $(echo "$emit" | tr '/' ' ' | awk '{print $3, $4, $6, $7}')
+          test "$1" = "$2" && test "$3" = "$4" && test "$1" -ge 1000 \
+            || { echo "T3 regression: $emit"; exit 1; }
+
+  # install.sh is served from https://khub.end.game/install.sh so the install
+  # command can stay a plain `curl … | sh` while the repo is private: the
+  # SCRIPT is public, the binaries it fetches are not. It is deployed to
+  # Cloudflare by publish-install.yml on merge.
+  #
+  # This job lints it. It deliberately does NOT diff against the published
+  # copy: a PR that edits install.sh is *supposed* to differ from what is live
+  # until it merges, so that check would fail exactly the PRs that change the
+  # file. publish-install.yml verifies the deployed copy instead, after
+  # deploying it.
+  install-script:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: shellcheck
+        run: shellcheck install.sh
+      - name: POSIX sh syntax
+        run: sh -n install.sh

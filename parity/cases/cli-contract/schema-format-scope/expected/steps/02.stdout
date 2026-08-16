@@ -1,0 +1,11 @@
+[3m     types      [0m
+┏━━━━━━━━━━━━━━┓
+┃[1m [0m[1mtype        [0m[1m [0m┃
+┡━━━━━━━━━━━━━━┩
+│ prd          │
+│ arc42        │
+│ requirement  │
+│ adr          │
+│ component    │
+│ feature-spec │
+└──────────────┘

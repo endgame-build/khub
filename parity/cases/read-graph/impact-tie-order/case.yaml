@@ -1,0 +1,11 @@
+steps:
+- argv: ["init", "build-lite", ".", "--no-wire"]
+- argv: ["add", "component", "--title", "Root", "--kind", "service"]
+- argv: ["add", "component", "--title", "a-b", "--kind", "service"]
+- argv: ["add", "component", "--id", "a-slash-b", "--title", "ab2", "--kind", "service"]
+- argv: ["add", "component", "--title", "Zed", "--kind", "service"]
+- argv: ["link", "cmp-002-a-b", "depends_on", "cmp-001-root"]
+- argv: ["link", "a-slash-b", "depends_on", "cmp-001-root"]
+- argv: ["link", "cmp-004-zed", "depends_on", "cmp-001-root"]
+- argv: ["impact", "cmp-001-root", "--reverse"]
+- argv: ["neighbors", "cmp-001-root", "--in", "--depth", "2"]

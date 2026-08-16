@@ -1,0 +1,12 @@
+title: Feature spec
+sections:
+- heading: Summary
+  hint: the bounded change, three sentences
+- heading: Scope
+  hint: in / out - explicit
+- heading: Behaviour
+  hint: EARS statements or user stories
+- heading: Acceptance criteria
+  hint: testable; TS cases map here
+- heading: Dependencies
+  hint: contracts, capabilities, other feature-specs

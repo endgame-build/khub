@@ -1,0 +1,25 @@
+                                                                                
+ Usage: khub init [OPTIONS] [preset] [path]                                     
+                                                                                
+ Scaffold a workspace from a preset and wire it into the agent context files.   
+                                                                                
+ A missing PRESET is a usage error; PATH defaults to the working directory.     
+ Installing the agent skill is a separate step: ``khub install-skills``.        
+                                                                                
+╭─ Arguments ──────────────────────────────────────────────────────────────────╮
+│   preset      <str>   Named preset to seed from (e.g. firm-ops).             │
+│   path        <path>  Target directory (default: .).                         │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --preset-source        <path>  Where to resolve the preset if not packaged   │
+│                                with khub.                                    │
+│ --name                 <str>   Workspace name (default: the target dir       │
+│                                name).                                        │
+│ --force                        Scaffold into a non-empty target.             │
+│ --no-wire                      Skip wiring the schema into the agent files.  │
+│ --format               <str>   text confirmation (default); json emits       │
+│                                resolved provenance.                          │
+│                                [default: text]                               │
+│ --help                         Show this message and exit.                   │
+╰──────────────────────────────────────────────────────────────────────────────╯
+

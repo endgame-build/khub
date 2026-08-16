@@ -1,0 +1,7 @@
+mode: human
+normalize:
+- tty-layout-free
+steps:
+- argv: ["init", "build-lite", ".", "--no-wire"]
+- argv: ["add", "adr", "--title", "No status"]
+- argv: ["check"]

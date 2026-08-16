@@ -1,0 +1,1 @@
+{"error": {"code": "template_required", "message": "Type 'adr' has a body template, so --no-template would create an entity `khub validate` rejects. Omit the flag, or pass --body with the template's sections"}}

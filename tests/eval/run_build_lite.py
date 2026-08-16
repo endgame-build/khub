@@ -5,9 +5,9 @@ from base.py, but overrides the three things that are firm-ops-shaped. Nothing i
 base.py or run.py is edited, so the delta this needs upstream is exactly this file.
 
 What it overrides and why:
-  1. preflight  — base.preflight() runs `uv tool install --force <REPO>`, which
-     REPLACES the operator's global khub. Here we assert instead of install: the
-     caller puts the pinned khub first on PATH and we verify it won.
+  1. preflight  — base.preflight() builds THIS checkout and prepends it to
+     PATH. Here we assert instead of build: the caller puts the pinned khub
+     first on PATH and we verify it won.
   2. build_wired — base.build_wired() hardcodes `khub init firm-ops`. Here the
      preset is a parameter, and the workspace can be laid down INSIDE a copy of a
      real code repo, so the agent has actual source to read while it captures.
@@ -182,9 +182,9 @@ def run_task(ws: Path, prompt: str, log: Path, model: str, timeout: int, max_tur
 def preflight_pinned() -> str:
     """Assert the PATH khub is the build under test. Never installs.
 
-    base.preflight() force-installs into the operator's global uv tool dir. That is
-    wrong for a run driven off a repo COPY: it would silently swap the real khub.
-    The caller is expected to put the pinned venv's bin first on PATH.
+    base.preflight() builds the checkout it lives in. That is wrong for a run
+    driven off a repo COPY: it would build the wrong tree. The caller is
+    expected to put the pinned build's directory first on PATH.
     """
     which = _run(["which", "khub"]).stdout.strip()
     ver = _run(["khub", "--version"]).stdout.strip()

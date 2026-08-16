@@ -1,0 +1,13 @@
+ec9b399104e5dd366e2ba41a1de03d49eae7a1c26ce2dd22d000dc6e0e36c637 - .gitignore
+67c6bdfa75f16500dda008af953fc5e9ea8d81dd5190abfcc9b0bcdff7fe0907 - .khub/config.yaml
+812f5c9b6230f2c5456ec04ea91571e335157cc9dbd111e7c4cb93a881c8d987 - .khub/schema.yaml
+c8d791eed22be837682fc7e10922c6149f807186ea1d244380c8ad8f721610a3 - .khub/templates/adr.yaml
+5b5a8ddee5e4ce03cc82e7967ec3cd6fed41651b787956effd74638f61dfc58d - .khub/templates/arc42.yaml
+0d61510b3debfe7af0928b0b23c894c14f7ffb6116f6b984c4851d2b185ea197 - .khub/templates/feature-spec.yaml
+62b8cbe56a07fefb27f24471bbd9f7c9e4975b640022e8a7c51f531b254eae5a - .khub/templates/prd.yaml
+e214f1c374fcb7e83f3eddac492d8db0624c0a9487b6cd18cd1a5d2f1bf9266d - knowledge/arc42.md
+fa26560467013268d16136c6009cfbb85b64779d65005b2c5ca697ff18a4e31a - knowledge/components/a-slash-b.md
+fe43425eddfeb72f73a2f3407cd6cd273d73f6717090ecccfe97ea63397377c6 - knowledge/components/cmp-001-root.md
+26e992f12c27a30254dfbc0b381dc67edcd7460117a8a33a81ed5f6ddc54da21 - knowledge/components/cmp-002-a-b.md
+4d26ebeebc50558964088aea0a9d8e9a1a94cad853f0ebdce0f98582277a6689 - knowledge/components/cmp-003-zed.md
+aeaf2cd39ea7e57bf8ca1ba029acc469a6fb08b3e5d3ba540729a3b014d22971 - knowledge/prd.md

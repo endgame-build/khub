@@ -1,0 +1,6 @@
+name: firm-ops
+preset: firm-ops
+version: 0.1.0
+source: null
+defaults:
+  stale_days: 90

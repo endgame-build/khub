@@ -1,0 +1,1 @@
+{"error": {"code": "enum_violation", "message": "'bogus' is not a valid kind (functional, constraint, business-rule)"}}

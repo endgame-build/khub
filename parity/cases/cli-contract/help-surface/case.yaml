@@ -1,0 +1,36 @@
+# Pins the whole --help surface: the root listing (whose order is the
+# registration order in cli/root.go) and every subcommand's own help.
+#
+# This replaces the retired "CLI reference is current" CI step, which ran Typer's
+# doc generator against the Python app and diffed docs/cli-reference.md. With
+# Python gone there is no generator to diff against, so the help text itself is
+# recorded here — a flag added, removed or reworded shows up as a fixture diff
+# rather than as a silent docs drift. docs/cli-reference.md is regenerated from
+# these same commands by parity/tools/gen_cli_reference.sh.
+steps:
+- argv: ["--help"]
+- argv: ["init", "--help"]
+- argv: ["status", "--help"]
+- argv: ["add", "--help"]
+- argv: ["get", "--help"]
+- argv: ["edit", "--help"]
+- argv: ["link", "--help"]
+- argv: ["unlink", "--help"]
+- argv: ["remove", "--help"]
+- argv: ["query", "--help"]
+- argv: ["search", "--help"]
+- argv: ["neighbors", "--help"]
+- argv: ["impact", "--help"]
+- argv: ["history", "--help"]
+- argv: ["validate", "--help"]
+- argv: ["check", "--help"]
+- argv: ["stale", "--help"]
+- argv: ["reindex", "--help"]
+- argv: ["viz", "--help"]
+- argv: ["backfill", "--help"]
+- argv: ["wire", "--help"]
+- argv: ["install-skills", "--help"]
+- argv: ["schema", "--help"]
+- argv: ["schema", "types", "--help"]
+- argv: ["schema", "show", "--help"]
+- argv: ["schema", "edges", "--help"]

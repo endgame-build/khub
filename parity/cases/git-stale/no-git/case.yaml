@@ -1,0 +1,5 @@
+steps:
+- argv: ["init", "build-lite", ".", "--no-wire"]
+- argv: ["add", "requirement", "--title", "N", "--kind", "functional"]
+- argv: ["stale"]
+- argv: ["backfill"]

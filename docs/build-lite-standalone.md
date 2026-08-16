@@ -1,5 +1,12 @@
 # build-lite, standalone
 
+> **Baseline note, 2026-08-16.** This was written while khub was a Python
+> package, and several arguments below weigh khub's dependency count and
+> install cost against a standalone script. khub is a single static binary
+> now, installed by one `curl`, so that side of the comparison is much
+> lighter than the tables here assume. The reasoning about what build-lite
+> actually needs is unaffected.
+
 **A separate, tiny implementation of the build-lite preset for one build project
 driven by opencode: a drop-in directory holding a skill and one stdlib Python
 script. ~850 lines of code where khub is 7,000, no dependencies where khub has
@@ -80,7 +87,7 @@ plugin runs it automatically after every corpus edit.
 | **Skill + one CLI script** ✅ | one file, one language runtime | **Recommended.** Works in opencode, Claude Code, a bare terminal, a pre-commit hook, and CI — the same four commands. Nothing about it is opencode-specific, which is what makes it survive the next tool change. |
 | **opencode custom tools** (`.opencode/tools/*.ts`) | TypeScript + a yaml dep; opencode-only; every tool's schema sits in context permanently | A wrapper worth adding *if* bash approval friction bites. Not the base: it cannot run in CI, and typed args stop mattering once the verbs take two arguments each. |
 | **MCP server** | a process, a protocol, always-on tool schemas | Over-serving. Its advantage is cross-agent reach, and a CLI already has that more cheaply. Revisit only if the corpus is driven from a hosted agent with no shell. |
-| **Full khub + build-lite preset** (status quo) | 7,000 lines, 6 deps, `uv tool install`, search/viz/backfill/collections/presets unused | The graduation target, not the daily driver. Its generality is real value at a firm's scale and dead weight at one project's. |
+| **Full khub + build-lite preset** (status quo) | 7,000 lines, one static binary, `curl … | sh`, search/viz/backfill/collections/presets unused | The graduation target, not the daily driver. Its generality is real value at a firm's scale and dead weight at one project's. |
 
 The recommendation is the second row, and the deliverable is **one directory you
 drop into a project**, holding the two things that install to different places:
@@ -251,7 +258,7 @@ and why the add-back ladder in
 | implementation | 1,013 lines, 1 file (847 non-blank) | 6,990 lines, 40 modules |
 | tests | 339 lines, 17 tests | 8,135 lines |
 | runtime dependencies | 0 | 6 |
-| install | `cp -r kb/` into the project | `uv tool install git+ssh://…` |
+| install | `cp -r kb/` into the project | `curl -fsSL https://khub.end.game/install.sh \| sh` |
 | commands | 8 | 30 |
 
 The tests are shaped around the fact that **the checker is the product**: one
@@ -338,8 +345,9 @@ For `kb` itself a `.pyz` is strictly worse than what it already is. One stdlib
 file is readable, greppable, diffable in git, and editable in place — and
 `build.schema.yaml` sitting next to it *is meant to be edited*. Zipping that shut
 trades every one of those properties for a packaging problem the tool does not
-have. If someone wants full khub without installing it, `uvx --from
-git+ssh://…/khub khub` already does that today.
+have. And "without installing it" stopped meaning much once khub became a single
+static binary: `curl -fsSL https://khub.end.game/install.sh | sh` drops one file and needs
+no runtime.
 
 ## Graduation
 

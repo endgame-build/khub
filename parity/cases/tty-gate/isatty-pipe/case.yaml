@@ -1,0 +1,22 @@
+# The isatty rung again, false branch: a real pipe with no env hint.
+#
+# Every other pipe-mode case pins the FIRST rung — baseEnv gives `mode: pipe`
+# a TTY_COMPATIBLE=0, which short-circuits the ladder before isatty is ever
+# reached. Setting the key to empty here neutralises that rung (Rich reads
+# `environ.get("TTY_COMPATIBLE", "")` and Go switches on Getenv, so empty and
+# unset are the same fall-through) without inventing a mode. os/exec keeps the
+# LAST value for a duplicate key, so this overrides baseEnv's.
+#
+# What is left is FORCE_COLOR (unset) then stdout.isatty() (a pipe) — so these
+# reads must come back as JSON. Same seven steps as tty-gate/isatty-tty.
+mode: pipe
+env:
+  TTY_COMPATIBLE: ""
+steps:
+- argv: ["init", "build-lite", ".", "--no-wire"]
+- argv: ["add", "requirement", "--title", "Auth required", "--kind", "functional"]
+- argv: ["add", "component", "--title", "API", "--kind", "service", "--stack", "python"]
+- argv: ["link", "fr-001-auth-required", "realized_in", "cmp-001-api"]
+- argv: ["query", "--type", "component"]
+- argv: ["get", "cmp-001-api", "--edges"]
+- argv: ["status"]

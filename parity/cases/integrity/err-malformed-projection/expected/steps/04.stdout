@@ -1,0 +1,1 @@
+{"error": {"code": "malformed_projection", "message": "Refusing to render the graph: 1 file(s) could not be parsed, so the graph is incomplete \u2014 knowledge/requirements/bad.md. Run `khub check` for the list."}}

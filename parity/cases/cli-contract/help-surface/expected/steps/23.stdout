@@ -1,0 +1,15 @@
+                                                                                
+ Usage: khub schema [OPTIONS] COMMAND [ARGS]...                                 
+                                                                                
+ Introspect the active schema.                                                  
+                                                                                
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --format        <str>  text (Rich table on a TTY) or json. [default: text]   │
+│ --help                 Show this message and exit.                           │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Commands ───────────────────────────────────────────────────────────────────╮
+│ types  List the declared type names.                                         │
+│ show   Detail one type: fields, enums, required flags, relations, layout.    │
+│ edges  List the relation vocabulary by predicate.                            │
+╰──────────────────────────────────────────────────────────────────────────────╯
+

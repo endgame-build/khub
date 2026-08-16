@@ -1,0 +1,10 @@
+steps:
+- argv: ["init", "preset-cells", ".", "--no-wire", "--preset-source", "PRESETSRC"]
+- argv: ["add", "repo", "--title", "khub", "--stack", "go", "--format", "json"]
+- argv: ["add", "vendor", "--title", "Neon", "--format", "json"]
+- argv: ["add", "account", "--title", "Acme", "--format", "json"]
+- argv: ["edit", "repo/001-khub", "stack", "python", "--format", "json"]
+- argv: ["get", "repo/001-khub", "--format", "raw"]
+- argv: ["get", "vendor/001-neon", "--format", "raw"]
+- argv: ["remove", "account/001-acme", "--force", "--format", "json"]
+- argv: ["query", "--type", "repo", "--format", "json"]

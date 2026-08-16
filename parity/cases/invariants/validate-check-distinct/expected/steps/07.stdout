@@ -1,0 +1,1 @@
+{"count": 4, "errors": [{"id": "adr/ad-002-bad", "type": "adr", "slug": "ad-002-bad", "field": "status", "reason": "'nonsense' is not a valid status (proposed, accepted, rejected)"}, {"id": "adr/ad-002-bad", "type": "adr", "slug": "ad-002-bad", "field": "body", "reason": "missing or out-of-order section '## Context' (template adr.yaml requires its headings in order)"}]}

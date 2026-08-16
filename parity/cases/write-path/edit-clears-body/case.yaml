@@ -1,0 +1,5 @@
+steps:
+- argv: ["init", "build-lite", ".", "--no-wire"]
+- argv: ["add", "requirement", "--title", "E", "--kind", "functional", "--body", "Has body."]
+- argv: ["edit", "fr-001-e", "--body", ""]
+- argv: ["get", "fr-001-e", "--format", "raw"]

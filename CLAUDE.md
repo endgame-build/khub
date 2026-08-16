@@ -7,8 +7,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 Schema-bound, agent-facing context management. Entities live in git as Markdown
 (YAML frontmatter + body), as `.json`/`.yaml` documents, or as rows of a
 single-file collection. A khub schema (authored in khub's own vocabulary) is the
-contract; the core library does schema-validated CRUD
-and graph queries; the CLI is a thin adapter over it.
+contract; the core packages do schema-validated CRUD and graph queries; the CLI
+is a thin adapter over them.
+
+khub is a single static Go binary. It was a Python package through 0.18.0; that
+implementation was retired at the Go cutover and is recoverable from git history.
+Comments across `internal/` still cite the Python module each package ports
+(`core/entity.py`, `cli/_render.py`) — those citations are deliberate provenance,
+not stale references.
 
 Read before non-trivial work: `docs/design-memo.md` (rationale + invariants),
 `docs/cli.md` (full command surface + JSON contracts), `docs/collections-design.md`.
@@ -16,39 +22,64 @@ Read before non-trivial work: `docs/design-memo.md` (rationale + invariants),
 ## Commands
 
 ```bash
-uv sync                        # install dev deps
-uv run pytest                  # full suite
-uv run pytest -m unit          # markers: unit | integration | e2e
-uv run pytest tests/test_query.py::test_name   # single test
-uv run ruff check src tests
-uv run mypy                    # strict; files = src/khub
-uv run khub <cmd>              # run the CLI against cwd's workspace
+go build -o khub ./cmd/khub    # build the CLI
+go test ./...                  # full suite
+go test ./internal/query/ -run TestName     # single test
+gofmt -l ./cmd ./internal ./parity          # must print nothing
+go vet ./...
+golangci-lint run              # the choke-point rules (see below)
+./khub <cmd>                   # run against cwd's workspace
 ```
 
-mypy is `strict = true`. Ruff line-length 100. Third-party modules without stubs
-are listed under `[[tool.mypy.overrides]]` — add there, don't sprinkle `# type: ignore`.
+The parity suite is the executable spec:
+
+```bash
+go build -o parity-run ./parity/runner
+./parity-run -bin "$PWD/khub"                                    # every fixture
+./parity-run -bin "$PWD/khub" -coverage parity/coverage.yaml -subset-of "$PWD/khub"
+./parity-run -bin "$PWD/khub" -record -only <family>/<case>      # re-record one case
+bash smoke.sh                                                    # end-to-end, both build presets
+bash parity/tools/gen_cli_reference.sh                           # regenerate docs/cli-reference.md
+```
+
+`parity/cases/**/expected/` holds raw bytes — stdout, stderr, exit code, and a
+tree manifest per step. **Those bytes are the contract.** A change that moves
+them is a behaviour change: re-record deliberately, review the diff, and say why
+in the commit. Never re-record to make a red suite green.
 
 ## Architecture
 
-Five layers (design-memo). **All logic lives in `core/`; every surface is a thin,
-schema-introspecting adapter with zero per-type code.**
+Five layers (design-memo). **All logic lives in `internal/`; every surface is a
+thin, schema-introspecting adapter with zero per-type code.**
 
 1. **Truth** — Markdown + YAML frontmatter in git. One entity = one file (or one
    collection row). No database is ever the source of truth.
-2. **Ontology** — `core/resolve.py` merges the `base` block into every type and
-   parses khub-vocabulary YAML into a `ResolvedSchema` (`core/model.py`).
-3. **Core library** (`core/`) — the write verbs (`entity.py`), integrity
-   (`integrity.py`), graph walks (`graph.py`), query/search (`query.py`,
-   `search.py`), git-derived history (`gitlog.py`), projection (`reindex.py`,
-   `viz.py`, `backfill.py`), formats/collections (`formats.py`).
-4. **Graph projection** — in-memory `networkx` MultiDiGraph, rebuilt per call.
-   FTS5 search is in-memory per invocation (never stale). No persisted DB in v1.
-5. **Access** — `cli/main.py` wires one `*_cmd.py` per command group over the
-   core verbs. A Claude Code skill and MCP server are the same-shape surfaces.
+2. **Ontology** — `internal/schema/resolve.go` merges the `base` block into every
+   type and parses khub-vocabulary YAML into a `ResolvedSchema`
+   (`internal/schema/model.go`).
+3. **Core** — the write verbs (`internal/entity/`), integrity
+   (`internal/integrity/{validate,check}.go`), graph walks (`internal/graph/`),
+   query/search (`internal/query/`, `internal/search/`), git-derived history
+   (`internal/gitlog/`), projection (`internal/reindex/`, `internal/viz/`,
+   `internal/backfill/`), serialization and collections (`internal/canon/`).
+4. **Graph projection** — an in-memory ordered adjacency rebuilt per call; gonum
+   is used for cycle enumeration only. FTS5 search is in-memory per invocation
+   (never stale). No persisted index.
+5. **Access** — `internal/cli/root.go` wires one `*.go` per command group over
+   the core verbs.
 
 Adding or changing an entity type is a schema edit — **no surface code changes.**
-If you find yourself branching on a type name in `cli/` or a surface, that's the
-bug; push it into the schema or the generic core path.
+If you find yourself branching on a type name in `internal/cli/`, that's the bug;
+push it into the schema or the generic core path.
+
+### Choke-point rules (lint-enforced)
+
+- Only `internal/canon` may import a YAML library.
+- Only `internal/canon/jsonio.go` writes JSON bytes — never `encoding/json` on an
+  output path. khub emits three distinct JSON dialects (CLI stdout, on-disk,
+  jsonl row) and `encoding/json` matches none of them.
+- `omap.Map` at every API boundary, never `map[string]any`. Key order is
+  contract — JSON field order, frontmatter canon, schema declaration order.
 
 ### Invariants that shape every change
 
@@ -69,18 +100,29 @@ bug; push it into the schema or the generic core path.
   prose in a reserved `body` field. Collection writes are lock-serialized
   (`.khub/generated/locks/`, gitignored) and land via atomic replace.
 
-## YAML — always `ruamel.yaml`, never PyYAML
+Each invariant has a sentinel fixture under `parity/cases/invariants/`.
 
-See `.claude/rules/yaml.md`. PyYAML is not a declared dependency; `ruamel.yaml` is
-the declared library. Canonical loaders/dumpers: `core/resolve.py` (safe load),
-`core/workspace.py` (order-preserving).
+## The on-disk YAML format is ruamel-shaped
+
+`internal/canon` reproduces ruamel.yaml's emitter byte-for-byte — both profiles
+(round-trip at width 80, safe at width 4096) — and its 1.1-vs-1.2 scalar
+resolution split. This is a property of **khub's file format**, not a leftover of
+the Python implementation: entities must stay diff-stable for git and readable by
+anything else that touches them.
+
+`parity/yamlgate` is the standing regression for it (`go run ./parity/yamlgate
+parity/corpus`), and `parity/tools/gen_*_cases.py` regenerate its corpora.
+See `.claude/rules/yaml.md`.
 
 ## Presets
 
-`src/khub/presets/core.yaml` (the `base` block) + one preset DIRECTORY per
-domain (`firm-ops/schema.yaml`, `build-hub/schema.yaml` + optional
-`<preset>/templates/*.yaml` body templates). `khub init` flattens core + a
-preset into an engagement's `.khub/schema.yaml` and copies the preset's
-templates to `.khub/templates/`. The preset is the source of truth for its
-schema; planning specs may drift from it (see `docs/firm-ops-preset.md`,
-`docs/build-hub-preset.md`).
+`presets/core.yaml` (the `base` block) + one preset DIRECTORY per domain
+(`firm-ops/schema.yaml`, `build-hub/schema.yaml` + optional
+`<preset>/templates/*.yaml` body templates). `khub init` flattens core + a preset
+into an engagement's `.khub/schema.yaml` and copies the preset's templates to
+`.khub/templates/`. The tree is embedded into the binary by `embed.go` at the
+module root (a `//go:embed` pattern cannot contain `..`, so the embed cannot live
+under `internal/`).
+
+The preset is the source of truth for its schema; planning specs may drift from
+it (see `docs/firm-ops-preset.md`, `docs/build-hub-preset.md`).

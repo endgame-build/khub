@@ -1,0 +1,4 @@
+steps:
+- argv: ["init", "build-lite", ".", "--no-wire"]
+- argv: ["add", "requirement", "--title", "\u00df \u0130stanbul Caf\u00e9", "--kind", "functional", "--format", "json"]
+- argv: ["query", "--type", "requirement", "--format", "ids"]

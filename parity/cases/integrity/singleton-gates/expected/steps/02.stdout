@@ -1,0 +1,1 @@
+{"passed": false, "incomplete": [], "orphans": [], "dangling": [], "strays": [], "misplaced": [], "malformed": [], "cycles": [], "suppressed_dangling": 0, "missing_singletons": ["prd"], "draft_singletons": [], "draft_required_singletons": [], "strict": false}

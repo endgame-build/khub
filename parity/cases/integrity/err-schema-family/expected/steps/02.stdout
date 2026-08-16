@@ -1,0 +1,1 @@
+{"error": {"code": "missing_base", "message": "Schema declares entities but no base block; base attributes are missing"}}
