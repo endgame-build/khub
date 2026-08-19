@@ -359,3 +359,18 @@ func TestBlankAttributeClearsToNull(t *testing.T) {
 		t.Fatalf("name = %#v, want null", got)
 	}
 }
+
+func TestPatternMatchTimeoutFires(t *testing.T) {
+	// Schema `pattern`s are author-supplied and regexp2 backtracks with no
+	// linear-time guarantee: without fullMatch's MatchTimeout this exact
+	// pattern/input pair runs for centuries, hanging the write verb. The
+	// guard is the error; if a future edit drops the timeout, this test
+	// hangs until `go test`'s own deadline kills the run — loudly.
+	_, err := fullMatch(`(a+)+$`, strings.Repeat("a", 36)+"b")
+	if err == nil {
+		t.Fatal("catastrophic pattern returned no error; MatchTimeout is not set")
+	}
+	if !strings.Contains(err.Error(), "timeout") {
+		t.Fatalf("err = %v, want match timeout", err)
+	}
+}
