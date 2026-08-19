@@ -15,10 +15,13 @@ against khub's design memo and code:
 | **[mds]** | [jackchuka/mdschema](https://github.com/jackchuka/mdschema) | Go CLI validating Markdown *document structure* against a YAML schema (headings, code blocks, tables, link integrity, basic frontmatter typing). Rejected as an engine — no relations, no graph, second schema dialect — but its rule vocabulary informs body content assertions (#49). |
 | **[og]** | [NinePts/OntoGraph](https://github.com/NinePts/OntoGraph) | Java/Spring Boot service graphing OWL ontologies to GraphML in four notations (custom, Graffoo, VOWL, UML), via Stardog and hand layout in yEd. **Dead since Jan 2019 and unbuildable** — rejected as a tool, a port, and a dependency. Contributes one visualization idea (#58), a peer-reviewed citation for khub's "domain experts don't speak OWL" premise, and a caveated OWL test corpus. Full review: [`ontograph-review.md`](ontograph-review.md). |
 | **[iwe]** | [iwe-org/iwe](https://github.com/iwe-org/iwe) | Rust markdown knowledge graph with CLI + LSP + MCP over one core library. khub's closest independent sibling on architecture: markdown-in-git as truth, derived in-memory graph, schema as machine-checked policy, agent as first-class writer. Validates documents in isolation (no referential integrity, untyped edges), so it is no threat to the graph layer — but it is ahead on agent write-safety, body-shape validation, and context assembly. Full review: [`iwe-comparison.md`](iwe-comparison.md). |
+| **[kag]** | [OpenSPG/KAG](https://github.com/OpenSPG/KAG) | LLM+KG question-answering framework from Ant Group (paper arXiv:2409.13731): builds a mutual-indexed, schema-constrained knowledge graph from documents, answers via a logical-form solver over graph + text. khub's thesis met from the opposite direction — it *reconstructs* the structure khub *authors* — over the stack khub rejects (server, graph store, vector store, models in the loop). Rejected as runtime and dependency; contributes the ingestion alignment pass (#59), the retrieval eval tier (#60), and graph-shaped search hits (#61). Full review: [`kag-review.md`](kag-review.md). |
 
-Full comparative analysis lives in the review session, except for **[iwe]** and
-**[og]**, which have written reviews at [`iwe-comparison.md`](iwe-comparison.md)
-and [`ontograph-review.md`](ontograph-review.md); this file records only the
+Full comparative analysis lives in the review session, except for **[iwe]**,
+**[og]**, and **[kag]**, which have written reviews at
+[`iwe-comparison.md`](iwe-comparison.md),
+[`ontograph-review.md`](ontograph-review.md), and
+[`kag-review.md`](kag-review.md); this file records only the
 actionable candidates. Effort: **S** ≈ a day or less,
 **M** ≈ days, **L** ≈ a week+. Status: `proposed` unless marked.
 
@@ -359,6 +362,54 @@ candidate; the rest of that repo is rejected.
     grammar for subclassing, domain/range and cardinality from Graffoo/VOWL;
     ignore the OWL constructs khub does not have.
 
+## K. Ingestion alignment & retrieval evaluation [kag]
+
+From the KAG review ([`kag-review.md`](kag-review.md)). The theme: KAG's
+runtime is rejected whole; what transfers are decisions at khub's two open
+edges — what happens between extraction and write when unstructured sources
+enter, and how retrieval quality is measured and surfaced.
+
+59. **Ingestion alignment pass — link before write** [kag, M; design note now,
+    with #25/#26] — KAG's builder separates extraction from *alignment*:
+    mentions are normalized and linked against existing nodes before anything
+    is written, because unaligned extraction mints duplicate nodes ("knowledge
+    alignment to alleviate noise" is the paper's phrase, and the stage that
+    makes the rest of its pipeline usable). khub's ingestion path (facet, OKF
+    consume) needs the same pass, khub-shaped: for each extracted reference,
+    resolve down a ladder — exact `(type, slug)` → alias (#15) → `source_id` →
+    FTS5 candidates scored against title/aliases, *proposed but never
+    auto-merged* — and mint anything unresolved as a new **draft** entity
+    carrying `source_id` and extraction provenance. Referential integrity
+    holds on write (the target exists), capture is never blocked, identity is
+    never guessed silently, and `check` surfaces the new drafts for review.
+    Same-entity candidates ride #25's conflict report extended from field
+    values to identity (entity/ours/theirs/evidence). Linker precision/recall
+    joins type/edge precision/recall in the planned ingestion goldens-eval.
+    KAG 0.7's lightweight-build result (89% token cost cut, minimal loss) is
+    the supporting argument for shipping a cheap single-pass mode alongside
+    the thorough one from day one.
+60. **Multi-hop retrieval eval over a live corpus** [kag, S–M; extends #10] —
+    KAG publishes multi-hop QA scores (EM/F1 on HotpotQA/2wiki/MuSiQue) with
+    every release, which is why its claims are credible. khub's equivalent
+    tier is missing: a question set over the HQ corpus whose answers require
+    composing verbs across 2–3 hops ("which active projects depend on a
+    component whose owner left this quarter?"), run agent-in-the-loop through
+    the skill + CLI, scored fuzzily (graded key facts, LLM-judged), tracked as
+    a trend, non-blocking in CI. Distinct from #10, which pins deterministic
+    question↔query pairs: this tier scores the *agent's composition* of the
+    surface, and is the eval that would catch a retrieval-hostile regression —
+    an output-shape change that breaks verb chaining — which the parity suite,
+    pinning bytes rather than usefulness, cannot see.
+61. **Search hits are graph nodes** [kag, S] — khub's structural answer to
+    KAG's mutual index is that a text hit *is* a node — but `search` output
+    stops at `title`, `score`, `snippet`, `path`, with no `draft`/`orphan`/
+    `stale` flags (docs/cli.md). Add the flags the other reads carry plus a
+    one-hop digest — per-predicate out/in edge counts — so an agent picks
+    which hit to walk without a round of `get`s. KAG's chunk→node pivot as one
+    output-shape change; the interim step toward #53, reusing the projection
+    `search` already builds per invocation. Output-shape change = deliberate
+    parity re-record.
+
 ## Reinforcements to existing items
 
 Where a reviewed project ships a working design for a candidate already on this
@@ -375,6 +426,14 @@ list. No new numbers — recorded so the design work is not redone:
 | **#18** `--under <node>` | [iwe] | Generalized: a relational operator taking a *filter* as its anchor plus `minDepth`/`maxDepth`, so "everything under this project" and "everything under any active project" are the same construct. |
 | **#39** output contract | [iwe] | Adopt the exit-code trichotomy: `0` clean, `1` findings, `2` configuration or schema error printed to stderr *before* any entity is examined. khub currently overloads `2` as usage error; a broken `schema.yaml` and a workspace with findings should not look the same to CI. Also worth copying: violations carry a machine path into the schema plus the failing keyword. |
 | **#42** MCP exposure filter | [iwe] | Pairs with #50 — "read-only khub for a reviewer agent" and "writes must carry guards" are the same policy surface. |
+| **#41** skill as decision guidance | [kag] | The solver's retrieval cascade, ported from code to prose: exact first (`get`, `query --type --<field>`), then graph (`neighbors`/`impact`), then lexical (`search`), then body read — and iterate only on a *named* gap ("X unresolved"), never re-plan blind. KAG's static-vs-iterative planner split maps to "plan the calls for a closed ask; loop with reflection for an open one." |
+| **#53** `retrieve` | [kag] | Third independent convergence (after IWE) on one-call context assembly: seeds, then neighborhood. KAG's mutual-index retrieval adds the ordering rationale — snippet and structure must arrive *together*, or the reader spends calls reassembling them. |
+| **#57** MCP surface shape | [kag] | A counter-reference: KAG's MCP endpoint serves *answers* (the solver); khub's must serve *evidence* (the primitives) — the client is the planner. KAG 0.8's knowledge-bases-decoupled-from-apps confirms workspace-per-engagement as the right granularity. |
+| **#26** extraction scaffold | [kag] | Schema-constrained extraction validated at industrial scale, against the same alternative khub rejects (schema-free openIE). The scaffold prompt derives from the resolved schema; ship a lightweight single-pass mode first (KAG 0.7: 89% cost cut, minimal loss). |
+| **#25** ingestion conflict policy | [kag] | Alignment extends the conflict report from field values to *identity*: same-entity candidates are proposed with evidence, never auto-merged. Fold into the design note; #59 is the mechanism. |
+| **#15** aliases as identity surface | [kag] | KAG needs a synonym/concept layer at query time because identity was never authored; khub resolves aliases at authoring time instead — #15 is KAG's alignment stage collapsed into the identity surface, and #59's second resolution rung. Raises #15's priority. |
+| **#10** competency questions | [kag] | Benchmark discipline: once #60 exists, publish per-preset scores alongside the preset, KAG-style — the preset's claim to encode judgment becomes a measured claim. |
+| **#39** output contract | [kag] | Reflection needs machine-actionable misses: "0 matches" plus nearest candidates is what lets an agent iterate instead of abandoning — the same error DTO as did-you-mean, doing retrieval duty. |
 
 ---
 
@@ -408,6 +467,25 @@ From the IWE review, with reasons in [`iwe-comparison.md`](iwe-comparison.md):
 - An LSP surface (a real gap, a large project, not now).
 - Untyped inclusion/reference edges (khub's typed predicates dominate).
 
+From the KAG review, with reasons in [`kag-review.md`](kag-review.md):
+
+- The runtime in every form — OpenSPG server, graph store, vector store,
+  Docker Compose (a store becomes truth; the static binary becomes a
+  deployment).
+- An in-engine solver and logical-form DSL (khub's consumer is the planner;
+  the cascade survives as skill guidance, #41).
+- Schema-free/openIE extraction (unauthored facts don't exist; ingestion is
+  schema-constrained only).
+- The concept-normalization layer (khub's taxonomy is types + enums + tags;
+  noise is refused at the write gate, not absorbed semantically after the
+  fact).
+- Fine-tuned pipeline models (khub ships no model; the frontier agent it
+  serves is the model).
+- AtomicQuery-style question indexing (wants embeddings and an LLM at index
+  time; #10 is the schema-level cousin).
+- Predicate semantics beyond `acyclic` + declared inverses (they exist to feed
+  inference, which stays rejected; khub's two are already shipped).
+
 From the OntoGraph review, with reasons in [`ontograph-review.md`](ontograph-review.md):
 
 - OntoGraph itself, in every form — as a dependency (Java/Spring Boot 1.5.6, both
@@ -434,5 +512,8 @@ From the OntoGraph review, with reasons in [`ontograph-review.md`](ontograph-rev
 - **Protects the IP:** **#10** (competency questions make presets testable).
 - **Decide before the MCP server exists:** **#57** (surface shape), **#53**
   (`retrieve`) — both are much cheaper to design in than to retrofit.
+- **Decide before ingestion exists:** **#59** (the alignment ladder, one
+  design note with #25/#26) — same retrofit argument; **#60** gives the
+  retrieval surface the eval tier the parity suite cannot provide.
 - **Hold** until the workflow question is deliberately reopened: **#22/#23**.
 - **G (#44–46)** is agreed and proceeds independently.
