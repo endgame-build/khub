@@ -9,7 +9,10 @@
 // change inode behavior git and editors observe, so it stays a plain write.
 package fsio
 
-import "os"
+import (
+	"os"
+	"path/filepath"
+)
 
 // AtomicWrite replaces path's contents via a temp sibling: write, flush, fsync,
 // rename. The temp name is Python's `path.with_name(path.name + ".tmp")`, and
@@ -39,7 +42,19 @@ func AtomicWrite(path string, data []byte) (err error) {
 	if err = fh.Close(); err != nil {
 		return err
 	}
-	return os.Rename(tmp, path)
+	if err = os.Rename(tmp, path); err != nil {
+		return err
+	}
+	// The rename is not durable until the directory entry is synced: fsyncing
+	// the file alone leaves a crash window where the old name still points at
+	// the old inode on ext4/xfs. Failure here is reported, not rolled back —
+	// the data landed, only its durability is in question.
+	dir, err := os.Open(filepath.Dir(path))
+	if err != nil {
+		return err
+	}
+	defer dir.Close()
+	return dir.Sync()
 }
 
 // WriteNew creates path exclusively — Python's `path.open("x")`. The O_EXCL

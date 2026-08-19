@@ -388,11 +388,18 @@ func validateAttr(attr *schema.ResolvedAttribute, raw, storageFmt string) (any, 
 // fullMatch emulates Python re.fullmatch. User patterns may use constructs RE2
 // rejects (backreferences, lookaround), so the regexp2 engine compiles them
 // wrapped in \A(?:…)\z (go-port-plan R1).
+//
+// regexp2 is a backtracking engine with no linear-time guarantee, and it checks
+// no deadline unless MatchTimeout is set. Schema `pattern`s are author-supplied,
+// so without the timeout a catastrophically backtracking pattern hangs the
+// write verb forever. One second is orders of magnitude above any legitimate
+// single-value match.
 func fullMatch(pattern, s string) (bool, error) {
 	re, err := regexp2.Compile(`\A(?:`+pattern+`)\z`, regexp2.None)
 	if err != nil {
 		return false, err
 	}
+	re.MatchTimeout = time.Second
 	return re.MatchString(s)
 }
 

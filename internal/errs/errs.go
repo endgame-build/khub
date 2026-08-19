@@ -205,7 +205,7 @@ func UnknownFilterField(field, type_ string) *Located {
 func FTSUnavailable(detail string) *Located {
 	return &Located{
 		Code:    "fts_unavailable",
-		Message: fmt.Sprintf("SQLite FTS5 is unavailable in this Python build (%s)", detail),
+		Message: fmt.Sprintf("SQLite FTS5 is unavailable in this build (%s)", detail),
 	}
 }
 

@@ -32,11 +32,10 @@ package canon
 // are lost for the one document that needs an inexpressible change" instead of
 // today's "comments are always lost".
 //
-// A comment-free document deliberately takes the fallback too: the emitter is
-// the byte-pinned path, and splicing there would preserve hand-authored
-// formatting (quote style, `key:` for a null, sequence indentation) that ruamel
-// NORMALIZES on write — a parity regression bought for nothing. The splice
-// only earns its keep when there is a comment to protect.
+// Every document takes the splice path, comment-bearing or not: re-emitting a
+// comment-free document looked harmless but silently rewrote VALUES ruamel
+// round-trips verbatim (`017` → `17`, `.inf` → `+.Inf`). See the policy note
+// inside SpliceMapping.
 
 import (
 	"errors"
@@ -454,15 +453,6 @@ func reconcat(toks token.Tokens, src string) string {
 		out += "\n"
 	}
 	return out
-}
-
-func carriesComment(toks token.Tokens) bool {
-	for _, tok := range toks {
-		if tok.Type == token.CommentType {
-			return true
-		}
-	}
-	return false
 }
 
 // breakChars is the YAML line-break set the emitter also recognises.
