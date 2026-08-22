@@ -15,14 +15,16 @@ against khub's design memo and code:
 | **[mds]** | [jackchuka/mdschema](https://github.com/jackchuka/mdschema) | Go CLI validating Markdown *document structure* against a YAML schema (headings, code blocks, tables, link integrity, basic frontmatter typing). Rejected as an engine — no relations, no graph, second schema dialect — but its rule vocabulary informs body content assertions (#49). |
 | **[og]** | [NinePts/OntoGraph](https://github.com/NinePts/OntoGraph) | Java/Spring Boot service graphing OWL ontologies to GraphML in four notations (custom, Graffoo, VOWL, UML), via Stardog and hand layout in yEd. **Dead since Jan 2019 and unbuildable** — rejected as a tool, a port, and a dependency. Contributes one visualization idea (#58), a peer-reviewed citation for khub's "domain experts don't speak OWL" premise, and a caveated OWL test corpus. Full review: [`ontograph-review.md`](ontograph-review.md). |
 | **[iwe]** | [iwe-org/iwe](https://github.com/iwe-org/iwe) | Rust markdown knowledge graph with CLI + LSP + MCP over one core library. khub's closest independent sibling on architecture: markdown-in-git as truth, derived in-memory graph, schema as machine-checked policy, agent as first-class writer. Validates documents in isolation (no referential integrity, untyped edges), so it is no threat to the graph layer — but it is ahead on agent write-safety, body-shape validation, and context assembly. Full review: [`iwe-comparison.md`](iwe-comparison.md). |
+| **[bm]** | [basicmachines-co/basic-memory](https://github.com/basicmachines-co/basic-memory) | Python MCP-first personal AI memory on khub's exact substrate (markdown + frontmatter as truth, derived graph, agent + human as symmetric writers) with the opposite position on every axis above it: schema inferred and advisory, relations as freeform body wikilinks, persisted synced index, commercial cloud/teams layer. No new candidates; reinforces #13, #53, #57, #59. Full review: [`basicmemory-comparison.md`](basicmemory-comparison.md). |
 | **[kag]** | [OpenSPG/KAG](https://github.com/OpenSPG/KAG) | LLM+KG question-answering framework from Ant Group (paper arXiv:2409.13731): builds a mutual-indexed, schema-constrained knowledge graph from documents, answers via a logical-form solver over graph + text. khub's thesis met from the opposite direction — it *reconstructs* the structure khub *authors* — over the stack khub rejects (server, graph store, vector store, models in the loop). Rejected as runtime and dependency; contributes the ingestion alignment pass (#59), the retrieval eval tier (#60), and graph-shaped search hits (#61). Full review: [`kag-review.md`](kag-review.md). |
 
 Full comparative analysis lives in the review session, except for **[iwe]**,
-**[og]**, and **[kag]**, which have written reviews at
+**[og]**, **[kag]**, and **[bm]**, which have written reviews at
 [`iwe-comparison.md`](iwe-comparison.md),
-[`ontograph-review.md`](ontograph-review.md), and
-[`kag-review.md`](kag-review.md); this file records only the
-actionable candidates. Effort: **S** ≈ a day or less,
+[`ontograph-review.md`](ontograph-review.md),
+[`kag-review.md`](kag-review.md), and
+[`basicmemory-comparison.md`](basicmemory-comparison.md); this file records
+only the actionable candidates. Effort: **S** ≈ a day or less,
 **M** ≈ days, **L** ≈ a week+. Status: `proposed` unless marked.
 
 ---
