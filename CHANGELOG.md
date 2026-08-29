@@ -4,6 +4,8 @@ Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [0.20.0] — 2026-08-29
+
 ### Changed
 
 - **khub distributes through npm.** One package, `@endgame-build/khub`,

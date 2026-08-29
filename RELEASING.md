@@ -7,17 +7,28 @@ builds four binaries and publishes them; nothing is uploaded by hand.
    `CHANGELOG.md` (Keep a Changelog format). That constant is the single source
    of truth — the release build injects the tag over it with `-ldflags`, and CI
    fails the release if the two disagree.
-2. Run the gates. All of them must pass before you tag:
+2. Re-record the two fixtures that pin the version string. `khub --version` is
+   part of the CLI contract, so bumping the constant in step 1 turns them red
+   by construction — this is the one re-record a release always needs, and it
+   is deliberate:
+   ```bash
+   go build -o khub ./cmd/khub && go build -o parity-run ./parity/runner
+   ./parity-run -bin "$PWD/khub" -record -only cli-contract/version
+   ./parity-run -bin "$PWD/khub" -record -only cli-contract/version-eager
+   ```
+   Three lines should move, each the version string. Anything else means the
+   bump touched something it should not have.
+3. Run the gates. All of them must pass before you tag:
    ```bash
    go test ./...
-   go build -o khub ./cmd/khub && go build -o parity-run ./parity/runner
    ./parity-run -bin "$PWD/khub" -cases parity/cases
    ./parity-run -coverage parity/coverage.yaml -cases parity/cases -subset-of "$PWD/khub"
    bash smoke.sh
+   npm/smoke.sh
    ```
-3. Commit on a branch, then merge to `main` (fast-forward or PR).
-4. Tag the release commit on `main`: `git tag -a vX.Y.Z -m "khub vX.Y.Z: <summary>"`.
-5. Push both: `git push origin main && git push origin vX.Y.Z`.
+4. Commit on a branch, then merge to `main` (fast-forward or PR).
+5. Tag the release commit on `main`: `git tag -a vX.Y.Z -m "khub vX.Y.Z: <summary>"`.
+6. Push both: `git push origin main && git push origin vX.Y.Z`.
 
 The tag triggers `.github/workflows/release.yml`, which re-runs the gates,
 builds darwin and linux on amd64 and arm64 with goreleaser, attaches the
