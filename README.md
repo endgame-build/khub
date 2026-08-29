@@ -29,14 +29,16 @@ Full command surface and JSON contracts: [`docs/cli.md`](docs/cli.md). Feature h
 
 ## Quickstart
 
-khub is a single static binary — no runtime, no interpreter. Install it, then seed a workspace from a preset:
+khub is a single static binary, distributed through npm as `@endgame-build/khub` — one package carrying a prebuilt binary per platform, with a launcher that picks the matching one. Pin it per repo — one khub version per repo, reviewed in git — then seed a workspace from a preset:
 
 ```bash
-curl -fsSL https://khub.end.game/install.sh | sh   # ~/.local/bin/khub; or build: go build -o khub ./cmd/khub
-khub init firm-ops ./my-hub          # scaffold .khub/ (+ templates, singletons), wire agent files
+npm install -D @endgame-build/khub       # exact per-repo pin (or: npx @endgame-build/khub@latest)
+npx khub init firm-ops ./my-hub          # scaffold .khub/ (+ templates, singletons), wire agent files
 cd my-hub
-khub install-skills                  # copy the agent skills in (offline, no Node)
+npx khub install-skills                  # copy the agent skills in (offline)
 ```
+
+For a machine-global install, `npm install -g @endgame-build/khub`; or build from source: `go build -o khub ./cmd/khub`. While the repo is private the packages live on GitHub Packages, so npm needs the `@endgame-build` scope mapped there plus a token with `read:packages` — two `npm config set` commands, in [`docs/getting-started.md`](docs/getting-started.md#install). Upgrading a repo is a one-line `package.json` bump in a PR: any on-disk byte changes a release makes land in that reviewed commit, not in everyone's unrelated diffs.
 
 Author entities. Referential integrity hard-fails on write (a relation to a missing target is rejected), but a missing field never blocks capture:
 
@@ -82,11 +84,11 @@ A preset is a canonical ontology for one domain — a directory holding its `sch
 
 khub ships two skills: `khub` (the read and write verbs) and `setup` (install the CLI, set up a project). They work in Claude Code, opencode, Cursor, Codex, Gemini CLI, and any other agent that reads a `SKILL.md`.
 
-**Option 1 — the CLI, then its skills.** A file copy out of the binary itself: offline, no Node, safe to re-run.
+**Option 1 — the CLI, then its skills.** A file copy out of the binary itself: offline, safe to re-run.
 
 ```bash
-curl -fsSL https://khub.end.game/install.sh | sh
-khub install-skills
+npm install -D @endgame-build/khub
+npx khub install-skills
 ```
 
 That writes both skills into `.claude/skills/`, `.agents/skills/`, and `.opencode/skills/`, and gitignores them (they are reproducible from the CLI). Narrow it with `--target claude|agents|opencode` or `--skill khub|setup`; `--global` installs into your home directories instead, once per machine; `--dry-run` shows the writes first.

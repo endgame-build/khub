@@ -19,90 +19,79 @@ builds four binaries and publishes them; nothing is uploaded by hand.
 4. Tag the release commit on `main`: `git tag -a vX.Y.Z -m "khub vX.Y.Z: <summary>"`.
 5. Push both: `git push origin main && git push origin vX.Y.Z`.
 
-The tag triggers `.github/workflows/release.yml`, which re-runs the gates, builds
-darwin and linux on amd64 and arm64 with goreleaser, attaches the archives and
-`checksums.txt` to the GitHub release, and then **installs through `install.sh`
-itself** — the same script a user runs — asserting the installed binary reports
-the tag.
+The tag triggers `.github/workflows/release.yml`, which re-runs the gates,
+builds darwin and linux on amd64 and arm64 with goreleaser, attaches the
+archives and `checksums.txt` to the GitHub release, then assembles and
+publishes the npm package (`@endgame-build/khub`, carrying all four binaries)
+to GitHub Packages — a stable tag under the `latest` dist-tag, a
+hyphenated tag (`v0.20.0-rc1`) under `next`, so a prerelease never becomes
+what a bare install resolves. It then proves the channel through both real
+consumer paths — a machine-global `npm install -g` and a scratch per-repo
+`npm install`, each pinned to the tag and each asserting the installed khub
+reports it. The global step also runs `khub --help`, and retries briefly:
+it is the first read after publish, and registry propagation is not instant.
 
 Consumers install with:
 
 ```bash
-curl -fsSL https://khub.end.game/install.sh | sh                     # latest
-KHUB_VERSION=X.Y.Z curl -fsSL https://khub.end.game/install.sh | sh  # pinned
+npm install -D @endgame-build/khub                # per-repo pin — the primary form
+npm install -D @endgame-build/khub@X.Y.Z          # bump/downgrade a repo, in a PR
+npm install -g @endgame-build/khub                # machine-global
 ```
 
-## How the private repo still serves a public one-liner
+## How the private repo serves the channel
 
-Only `install.sh` is public. The binaries stay in this repo's releases, which
-404 to anyone without a token. The script supplies that token from whatever the
-machine already has — `KHUB_TOKEN`/`GITHUB_TOKEN`/`GH_TOKEN`, then
-`gh auth token`, then `git credential fill` against the OS keychain — so the
-install command carries no credential. An SSH key does **not** work: it
-authenticates git-over-SSH, and the REST API ignores it.
+Nothing about khub is public. The packages live on GitHub Packages, which
+requires a token with `read:packages` while the repo is private, so every
+consumer configures npm once:
 
-Archive names carry no version (`khub_darwin_arm64.tar.gz`). That is what makes
-GitHub's anonymous `releases/latest/download/<asset>` URL usable the day this
-repo goes public, with no API call and no JSON parser.
+```bash
+npm config set @endgame-build:registry https://npm.pkg.github.com
+npm config set //npm.pkg.github.com/:_authToken "$(gh auth token)"
+```
 
-### Publishing install.sh
+There used to be a hosted `install.sh` that sourced that token from the
+machine automatically. It was deleted: a script whose job is to find a
+repo-scoped GitHub token is the most valuable thing an attacker could replace,
+and it existed to wrap one command. An SSH key does **not** work here either:
+it authenticates git-over-SSH, and the npm registry ignores it.
 
-Automatic. `.github/workflows/publish-install.yml` deploys `install.sh` to
-Cloudflare Pages on every merge to `main` that touches it, then fetches
-`https://khub.end.game/install.sh` and diffs it against the commit to confirm
-the deploy actually landed (retrying, since propagation is not instant). It also
-publishes the file as the apex `index.html`, so `curl -fsSL https://khub.end.game | sh`
-works as well.
-
-This repo is the single source of truth and that workflow is the only writer, so
-the live copy cannot drift. Nothing is uploaded by hand.
-
-Needs two repository secrets — `CLOUDFLARE_API_TOKEN` and
-`CLOUDFLARE_ACCOUNT_ID` — and optionally the `CLOUDFLARE_PAGES_PROJECT`
-variable if the Pages project is not named `khub`. Without them the job warns
-and skips rather than failing, so the repo works before Cloudflare is wired up.
-Re-publish after a token rotation with **Run workflow** on that workflow; no
-commit needed.
-
-Note that CI does *not* diff a PR's `install.sh` against the live copy: a PR
-that edits the file is supposed to differ until it merges. CI lints it;
-publishing verifies it.
+Archive names still carry no version (`khub_darwin_arm64.tar.gz`):
+`npm/build-packages.sh` derives them the same way the retired downloader
+did, so the template in `.goreleaser.yml` and that script have to move
+together.
 
 ## Dry run
 
 `goreleaser release --snapshot --clean --skip=publish` builds all four archives
-into `dist/` without touching git or GitHub. To exercise the installer against
-them, serve a directory that mirrors GitHub's URL shape and point the script at
-it:
+into `dist/` without touching git or GitHub. To exercise the npm packaging
+against them (the assembler refuses `-snapshot`, so name a real-looking
+version), assemble, pack, and install locally:
 
 ```bash
-mkdir -p /tmp/m/endgame-build/khub/releases/latest/download
-cp dist/*.tar.gz dist/checksums.txt /tmp/m/endgame-build/khub/releases/latest/download/
-(cd /tmp/m && python3 -m http.server 8772 &)
-KHUB_BASE_URL=http://localhost:8772 KHUB_INSTALL_DIR=/tmp/khub-test sh install.sh
+npm/build-packages.sh X.Y.Z dist /tmp/khub-pkgs
+cd "$(mktemp -d)" && npm init -y >/dev/null
+npm pack /tmp/khub-pkgs/khub            # tarball, not the dir: `npm install <dir>`
+npm install ./*.tgz                     # symlinks a file: dep and so bypasses
+npx --no-install khub --version         # package.json's `files` allowlist entirely
 ```
 
-`KHUB_API_URL` is the equivalent seam for the token path.
+`npm/smoke.sh` does all of that against fixture tarballs and needs no
+goreleaser run — CI runs it on every PR, and it is the faster check when you
+have only changed the packaging. Release CI exercises the real artifacts.
 
 ## When khub goes open source
 
-This is what the installer's two-path design exists for:
+1. Flip repository visibility to public. GitHub Packages under a public repo
+   serves reads without a token, so existing `.npmrc` registry mappings keep
+   working and the token line stops being needed.
+2. Decide whether to also publish to public npmjs.com (where `@endgame/khub`
+   is claimable as a rename) — a wider audience and no registry mapping at
+   all, at the cost of a second publish target.
+3. Docs — drop the `npm config set` / token setup from the install
+   instructions; `npm install -D @endgame-build/khub` starts working bare.
 
-1. Flip repository visibility to public.
-2. `install.sh` — **no change.** With no token it already uses the anonymous
-   path; it simply stops needing one.
-3. Docs — drop the token fallbacks. `curl -fsSL https://khub.end.game/install.sh | sh`
-   was already the primary and keeps working untouched.
-4. Optional cleanup: delete the token branch from `install.sh` along with its
-   `gh`/`jq`/`python3` requirement.
-
-**The install command never changes.** Going public removes a dependency; it
-does not migrate anyone.
-
-Before flipping, settle one thing: a public release means the binaries are
+Before flipping, settle one thing: public packages mean the binaries are
 publicly downloadable, and a binary carries the embedded `firm-ops` and
 `build-hub` presets and the skill files. The source and those bytes become
 public together.
-
-The `setup` skill pins a version in `skills/setup/SKILL.md`; bump it there when
-you cut a release so an agent following that skill installs the matching one.

@@ -32,13 +32,14 @@ archives:
     # Deliberately NO version in the name. GitHub serves
     # /releases/latest/download/<asset> to anyone, resolving "latest"
     # server-side — but only if the asset name is known in advance, which a
-    # version in it would prevent. Keeping the name version-free is what lets
-    # install.sh fetch a release with plain curl and no API call, no JSON
-    # parser, and no version file. The version still identifies the release (the
-    # tag) and the build (`khub --version`).
+    # version in it would prevent. That keeps `/releases/latest/download/<name>`
+    # working with plain curl and no API call the day the repo goes public. The
+    # version still identifies the release (the tag) and the build
+    # (`khub --version`).
     #
-    # install.sh derives this name from `uname -s`/`uname -m`, so the template
-    # and that script have to move together.
+    # npm/build-packages.sh derives this name from its platform table, so the
+    # template and that script have to move together. Nothing else consumes
+    # these assets: they are inputs to the npm package, not a channel.
     name_template: "khub_{{ .Os }}_{{ .Arch }}"
     formats: [tar.gz]
     files:
@@ -47,8 +48,8 @@ archives:
       - CHANGELOG.md
 
 checksum:
-  # install.sh verifies the downloaded archive against this file before it
-  # unpacks anything.
+  # npm/build-packages.sh verifies every archive against this file before it
+  # unpacks one into the npm package's binaries/ directory.
   name_template: "checksums.txt"
   algorithm: sha256
 
@@ -64,10 +65,10 @@ release:
   github:
     owner: endgame-build
     name: khub
-  # The repo is private, so these assets need a token to fetch. install.sh
-  # supplies one from the user's own gh/keychain and pulls them straight from
-  # here through the API — there is no mirror. The day the repo goes public the
-  # same assets become anonymously fetchable at
+  # The repo is private, so these assets need a token to fetch. Users do not
+  # fetch them directly any more — release CI turns them into the npm packages
+  # (docs/npm-distribution.md) in the same run that built them. The day the repo
+  # goes public they become anonymously fetchable at
   # /releases/latest/download/<name>, which is why the archive names above carry
   # no version.
   draft: false

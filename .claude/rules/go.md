@@ -58,9 +58,12 @@ precisely because it iterates maps internally.
 ## Provenance comments stay; rotted strings are bugs
 
 Comments citing the Python module a package ports are deliberate provenance —
-keep them. A **shipped string** describing Python is a bug regardless of how
-faithfully a fixture preserves it (see `errs.go` "Python build",
-`wire.go` "uv tool install" — both wrong, one fixture-pinned).
+keep them (`search.go` "The Python build either has FTS5 compiled in",
+`gitlog.go` "Python builds no env" are correct as comments and must stay). A
+**shipped string** describing the retired implementation is the opposite: a bug
+regardless of how faithfully a fixture preserves it. `wire.go`'s "uv tool
+install" hint was the last one; replacing it with the npm command was a
+deliberate fixture re-record. Grep before adding an install hint anywhere.
 
 ## Layout
 

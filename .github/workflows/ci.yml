@@ -88,21 +88,23 @@ jobs:
           test "$1" = "$2" && test "$3" = "$4" && test "$1" -ge 1000 \
             || { echo "T3 regression: $emit"; exit 1; }
 
-  # install.sh is served from https://khub.end.game/install.sh so the install
-  # command can stay a plain `curl … | sh` while the repo is private: the
-  # SCRIPT is public, the binaries it fetches are not. It is deployed to
-  # Cloudflare by publish-install.yml on merge.
-  #
-  # This job lints it. It deliberately does NOT diff against the published
-  # copy: a PR that edits install.sh is *supposed* to differ from what is live
-  # until it merges, so that check would fail exactly the PRs that change the
-  # file. publish-install.yml verifies the deployed copy instead, after
-  # deploying it.
-  install-script:
+  # The npm package is khub's only distribution channel. This job lints the
+  # scripts that assemble it and smoke-tests the result end to end.
+  npm-package:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
       - name: shellcheck
-        run: shellcheck install.sh
+        run: shellcheck npm/build-packages.sh npm/smoke.sh
       - name: POSIX sh syntax
-        run: sh -n install.sh
+        run: |
+          sh -n npm/build-packages.sh
+          sh -n npm/smoke.sh
+      - name: Launcher shim parses
+        run: node --check npm/khub/bin/khub.js
+      # The real package is assembled from goreleaser artifacts on a tag
+      # (release.yml). npm/smoke.sh proves the assembler itself on every PR,
+      # over fixture tarballs. It lives in a file, not inline here, so it is
+      # runnable locally and covered by the shellcheck step above.
+      - name: Assembly smoke over fixture tarballs
+        run: npm/smoke.sh

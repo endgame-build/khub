@@ -80,7 +80,7 @@ The concrete stack under the five layers. Each pick stays dependency-light and e
 | Git history | `git` over `subprocess` | `stale` and `backfill` read commit dates; git is present, so no library dependency |
 | Tooling | **Go**, **gofmt**, **go vet**, **golangci-lint**, `go test` | a golden-corpus test runs khub against an HQ snapshot and asserts it validates and checks cleanly (a functional cutover, judged on its own output) |
 
-Go, shipped as a single static binary (`curl -fsSL https://khub.end.game/install.sh | sh`). It was a Python console script through 0.18.0; the rewrite bought no features, it removed the interpreter from every install. Agent skills, thin `SKILL.md` files over the same commands, are embedded in the binary and install with `khub install-skills`; an MCP server exposing the same verbs is planned, its tool schemas emitted natively from the resolved schema.
+Go, shipped as a single static binary (`npm install -D @endgame-build/khub`). It was a Python console script through 0.18.0; the rewrite bought no features, it removed the interpreter from every install. Agent skills, thin `SKILL.md` files over the same commands, are embedded in the binary and install with `khub install-skills`; an MCP server exposing the same verbs is planned, its tool schemas emitted natively from the resolved schema.
 
 Two eval tiers: deterministic golden-file tests cover the engine (the HQ functional-cutover test above), and an OKF-style fuzzy goldens-eval scores the LLM ingestion layer: precision and recall over extracted types and edges, gated on `khub check`.
 
@@ -177,29 +177,43 @@ The schema header stamps provenance (`# khub-preset: engineering@1.0.0`). The en
 
 ## Distribution
 
-khub ships as a single static binary, fetched by a one-line installer. There is no runtime to provision first:
+khub ships as a single static binary, distributed through npm as one package,
+`@endgame-build/khub`, carrying a prebuilt binary per platform behind a
+launcher that picks the matching one (full spec:
+[`npm-distribution.md`](npm-distribution.md)).
+The primary install is a pinned dev dependency of the workspace repo:
 
 ```
-curl -fsSL https://khub.end.game/install.sh | sh   # install once, then reuse
-khub init firm-ops ./my-hub
-khub init engineering ./acme-hub
+npm install -D @endgame-build/khub    # one khub version per repo, reviewed in git
+npx khub init firm-ops ./my-hub
 ```
 
-Everything stays private — the repo, the releases, the binaries. Only
-`install.sh` is public, deployed from this repo to Cloudflare Pages on merge and
-served at `khub.end.game`, and it holds no secrets: it
-detects the platform, fetches a release asset, checks it against the release's
-own `checksums.txt`, and moves one file into place. It authenticates using
-whatever the machine already has (`gh`, a token, an HTTPS credential in the
-keychain), so the install command itself carries none.
+The pin is the point. khub's on-disk bytes are a contract, so two people
+running different khub versions against one corpus produce silent byte drift
+in files neither edited; `package.json` makes the version a reviewed,
+per-repo fact, and upgrading a repo is a one-line PR whose diff carries any
+byte changes that release makes. Side-by-side versions across repos need no
+machinery — each repo's `node_modules` holds its own.
 
-The script is deliberately written so that **going open source is a visibility
-flip, not an installer rewrite**: with no token it falls back to GitHub's
-anonymous `releases/latest/download/` URL, which is exactly what a public repo
-serves. That path needs no API call and no JSON parser, so opening the engine
-removes a dependency rather than migrating anyone. The question it defers is
-worth naming: a published binary would carry the embedded presets and skills,
-so those bytes leave the private repo the moment releases become public.
+This deliberately replaces the earlier one-line release downloader rather
+than joining it: the lesson of the removed plugin marketplace — no second
+distribution channel for the same files — cuts against the downloader too.
+A hosted `khub.end.game/install.sh` briefly survived as a bootstrap over
+`npm install -g`, then went the same way and for the same reason — plus a
+sharper one: a script whose job is to find a repo-scoped GitHub token is the
+most valuable thing an attacker could replace, and it wrapped a single
+command. A machine-global install is `npm install -g @endgame-build/khub`. The
+GitHub release assets are the package build's input, not a channel. What was traded away: the downloader's
+zero-prerequisite property — npm is now the baseline, which the primary
+consumers (agents in Node-bearing sandboxes, developer machines) already
+meet.
+
+Everything stays private — the repo, the packages (GitHub Packages, read via
+a token the machine already has). Going public is a visibility flip here
+too: reads stop needing the token, and public npmjs.com becomes an option.
+The question that flip defers is worth naming: a published binary carries
+the embedded presets and skills, so those bytes leave the private repo the
+moment the packages become public.
 
 **Engine and presets.** For now the engine and presets are collocated in this single private repo. The engine is generic plumbing; the presets are the IP, so they will most likely split into their own private repo later, pulled into `init` through `khub init --preset-source <private>`. Open-core (a public engine with private presets) stays a later option.
 

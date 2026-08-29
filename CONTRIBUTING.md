@@ -30,6 +30,16 @@ go build -o parity-run ./parity/runner
 bash smoke.sh                                                    # end to end, both build presets
 ```
 
+The distribution channel has its own gates, which CI runs as the
+`npm-package` job:
+
+```bash
+shellcheck npm/build-packages.sh npm/smoke.sh
+node --check npm/khub/bin/khub.js
+npm/smoke.sh                         # assemble the npm package over fixture
+                                     # tarballs, pack it, install it, run it
+```
+
 Run one test with `go test ./internal/query/ -run TestName`.
 
 Two more that only matter when you touch what they cover:

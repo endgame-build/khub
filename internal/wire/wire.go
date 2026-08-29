@@ -193,8 +193,8 @@ func BuildBlock(preset, version string, types []string, importSupported bool, wh
 			"JSON by default; a table is only for a TTY. (`reindex`, `viz`, `backfill` "+
 			"and `wire` are operator commands and print prose.)",
 		"",
-		"Not installed? `uv tool install git+ssh://git@github.com/endgame-build/khub`, "+
-			"then `khub install-skills`.",
+		"Not installed? `npm install -D @endgame-build/khub`, "+
+			"then `npx khub install-skills`.",
 		End,
 	)
 	return strings.Join(lines, "\n")

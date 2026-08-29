@@ -6,6 +6,8 @@ on:
 
 permissions:
   contents: write
+  # The npm packages publish to GitHub Packages with the built-in token.
+  packages: write
 
 jobs:
   release:
@@ -45,20 +47,57 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # The repo is private, so install.sh reaches these assets through the API
-      # with a token. This proves that path on every release, using the same
-      # script a user runs — not a reimplementation of it.
-      - name: Install through install.sh, exactly as a user would
+      # setup-node writes a userconfig whose auth reads NODE_AUTH_TOKEN at
+      # publish time — the blessed way to authenticate npm in Actions.
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+          registry-url: "https://npm.pkg.github.com"
+          scope: "@endgame-build"
+      - name: Assemble the npm package from the goreleaser artifacts
+        run: npm/build-packages.sh "${GITHUB_REF_NAME#v}" dist npm/dist
+      - name: Publish to GitHub Packages
         env:
-          KHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # Pin the tag being built. Without it install.sh resolves
-          # /releases/latest, and with `prerelease: auto` a -rc tag leaves that
-          # pointing at the previous stable — the assert below would then fail
-          # for the wrong reason, or pass while proving nothing about this tag.
-          KHUB_VERSION: ${{ github.ref_name }}
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          KHUB_INSTALL_DIR=/tmp/khub-verify sh install.sh
-          got=$(/tmp/khub-verify/khub --version)
+          # A prerelease tag must never become what a bare install resolves:
+          # stable tags publish under `latest`, anything with a hyphen
+          # (v0.20.0-rc1) under `next` — the npm spelling of the concern
+          # `prerelease: auto` already handles for the GitHub release.
+          dist_tag=latest
+          case "$GITHUB_REF_NAME" in *-*) dist_tag=next ;; esac
+          npm publish --tag "$dist_tag" ./npm/dist/khub
+
+      # Prove the channel end to end, through both paths a user takes — a
+      # machine-global install and a per-repo pin — not a reimplementation.
+      - name: Global install resolves the exact version
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Pin the tag being built: on an -rc tag, `latest` still resolves to
+          # the previous stable (by design, see the publish step above), so an
+          # unpinned install would prove nothing about this tag.
+          #
+          # Registry propagation is not instant; retry briefly before failing.
+          # This is the first read after publish, so the retry lives here.
+          for i in 1 2 3; do
+            npm install -g --no-audit --no-fund \
+              "@endgame-build/khub@${GITHUB_REF_NAME#v}" && break
+            test "$i" = 3 && exit 1
+            sleep 10
+          done
+          prefix=$(npm prefix -g)
+          got=$("$prefix/bin/khub" --version)
           test "$got" = "${GITHUB_REF_NAME#v}" || {
             echo "installed $got, expected ${GITHUB_REF_NAME#v}"; exit 1; }
-          /tmp/khub-verify/khub --help >/dev/null
+          "$prefix/bin/khub" --help >/dev/null
+      - name: Per-repo install resolves the exact version
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir /tmp/khub-pin && cd /tmp/khub-pin
+          npm init -y >/dev/null
+          npm install --no-audit --no-fund "@endgame-build/khub@${GITHUB_REF_NAME#v}"
+          got=$(npx khub --version)
+          test "$got" = "${GITHUB_REF_NAME#v}" || {
+            echo "resolved $got, expected ${GITHUB_REF_NAME#v}"; exit 1; }

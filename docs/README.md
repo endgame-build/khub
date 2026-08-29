@@ -23,6 +23,7 @@ khub's docs, organized by [Diátaxis](https://diataxis.fr): learning, tasks, ref
 
 - [Concepts](concepts.md) — the mental model in seven ideas: Markdown is truth, the derived graph, validate vs check, and more.
 - [Design memo](design-memo.md) — rationale, the five-layer engine, technology choices, and the invariants every change preserves.
+- [npm distribution](npm-distribution.md) — the distribution channel: one npm package, per-repo exact pinning via `devDependencies`, the publish pipeline, and why npm is the only way in.
 - [build-lite, standalone](build-lite-standalone.md) — the preset reimplemented as one skill plus one dependency-free script for opencode: what earns code when the only caller is an agent, what was cut, and why the corpus still graduates to khub.
 - [IWE, feature by feature](iwe-comparison.md) — the closest independent sibling reviewed against khub: where the architectures converge, why its document-only validation is no threat to the graph contract, and the eight things worth taking.
 - [OntoGraph, reviewed](ontograph-review.md) — an OWL visualization service, dead since 2019 and unbuildable: why it is rejected as a tool, and the three things worth taking anyway (a schema-diagram idea, a peer-reviewed citation, a caveated test corpus).

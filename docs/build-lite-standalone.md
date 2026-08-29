@@ -258,7 +258,7 @@ and why the add-back ladder in
 | implementation | 1,013 lines, 1 file (847 non-blank) | 6,990 lines, 40 modules |
 | tests | 339 lines, 17 tests | 8,135 lines |
 | runtime dependencies | 0 | 6 |
-| install | `cp -r kb/` into the project | `curl -fsSL https://khub.end.game/install.sh \| sh` |
+| install | `cp -r kb/` into the project | `npm install -D @endgame-build/khub` |
 | commands | 8 | 30 |
 
 The tests are shaped around the fact that **the checker is the product**: one
@@ -346,8 +346,8 @@ file is readable, greppable, diffable in git, and editable in place — and
 `build.schema.yaml` sitting next to it *is meant to be edited*. Zipping that shut
 trades every one of those properties for a packaging problem the tool does not
 have. And "without installing it" stopped meaning much once khub became a single
-static binary: `curl -fsSL https://khub.end.game/install.sh | sh` drops one file and needs
-no runtime.
+static binary: `npm install -D @endgame-build/khub` pins one reviewed line in
+`package.json` and needs no runtime beyond the npm the repo already uses.
 
 ## Graduation
 

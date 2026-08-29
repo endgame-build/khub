@@ -438,8 +438,8 @@ behaviour to be at parity with — R9 said as much when the risk was first filed
 Every other cutover criterion compares the port against something real. This one
 would compare it against nothing.
 
-So `.goreleaser.yml` builds darwin and linux only, `install.sh` refuses any other
-`uname -s`, and the criterion is struck rather than left open for someone to
+So `.goreleaser.yml` builds darwin and linux only, the npm launcher refuses any
+platform it ships no binary for, and the criterion is struck rather than left open for someone to
 mistake for pending work. Adding Windows later is a feature with its own testing
 story, not a box to tick here.
 

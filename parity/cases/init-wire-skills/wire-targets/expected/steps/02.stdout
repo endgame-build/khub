@@ -30,7 +30,7 @@ Reading the graph is a khub operation too — query it, do not grep it:
 - Write: `khub add <type> --<field> <v>`, `khub edit <id> <field> <v>`, `khub link <id> <pred> <target>`, `khub unlink`, `khub remove <id>`. Capture is never blocked; `--draft` marks an entity unpublished.
 - Every read and every write above takes `--format json`. Piped output is JSON by default; a table is only for a TTY. (`reindex`, `viz`, `backfill` and `wire` are operator commands and print prose.)
 
-Not installed? `uv tool install git+ssh://git@github.com/endgame-build/khub`, then `khub install-skills`.
+Not installed? `npm install -D @endgame-build/khub`, then `npx khub install-skills`.
 <!-- khub:end -->
 
 # AGENTS.md
@@ -63,5 +63,5 @@ Reading the graph is a khub operation too — query it, do not grep it:
 - Write: `khub add <type> --<field> <v>`, `khub edit <id> <field> <v>`, `khub link <id> <pred> <target>`, `khub unlink`, `khub remove <id>`. Capture is never blocked; `--draft` marks an entity unpublished.
 - Every read and every write above takes `--format json`. Piped output is JSON by default; a table is only for a TTY. (`reindex`, `viz`, `backfill` and `wire` are operator commands and print prose.)
 
-Not installed? `uv tool install git+ssh://git@github.com/endgame-build/khub`, then `khub install-skills`.
+Not installed? `npm install -D @endgame-build/khub`, then `npx khub install-skills`.
 <!-- khub:end -->

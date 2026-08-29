@@ -136,7 +136,7 @@ prose/tables/trees stay pinned. Deliberate re-record of the help fixtures
 | 2 | D12 help gate · wire.go half of D8 · D4 if any fixture has non-ASCII cells | yes — one commit each, rationale in message |
 | 3 | D5 batched git log (measure first) | no |
 | 4 | Test layer, value order: revive `-differential` (654 LOC dead oracle) → 4 canon fuzz targets → gofmt idempotency loop → `-record` safety rails (`CUE_UPDATE=diff`-style preview, content diff) → binary coverage via `GOCOVERDIR` → cross-process lock test → NFC/NFD fixture + normalization policy | no |
-| 5 | Lint per `.claude/rules/go.md` (staticcheck −ST1005, errorlint, unused, errcheck+preset; depguard ratchets verified green today: `encoding/json`→canon only, cobra→cli only, cli→cmd only, forbidigo on `fmt.Print*` outside cli) · CI gaps per `.claude/rules/ci-release.md`, starting with wrangler pinning | no |
+| 5 | Lint per `.claude/rules/go.md` (staticcheck −ST1005, errorlint, unused, errcheck+preset; depguard ratchets verified green today: `encoding/json`→canon only, cobra→cli only, cli→cmd only, forbidigo on `fmt.Print*` outside cli) · CI gaps per `.claude/rules/ci-release.md`, starting with immutable releases | no |
 
 Verification for every stage: the CONTRIBUTING.md gates, plus
 `./parity-run -bin "$PWD/khub" -cases parity/cases` clean **before** commit

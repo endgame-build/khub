@@ -42,6 +42,14 @@ bash smoke.sh                                                    # end-to-end, b
 bash parity/tools/gen_cli_reference.sh                           # regenerate docs/cli-reference.md
 ```
 
+The npm channel has its own gates (CI runs these as the `npm-package` job):
+
+```bash
+shellcheck npm/build-packages.sh npm/smoke.sh
+node --check npm/khub/bin/khub.js
+npm/smoke.sh                   # assemble, pack, install and run the npm package
+```
+
 `parity/cases/**/expected/` holds raw bytes — stdout, stderr, exit code, and a
 tree manifest per step. **Those bytes are the contract.** A change that moves
 them is a behaviour change: re-record deliberately, review the diff, and say why

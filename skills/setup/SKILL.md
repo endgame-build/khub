@@ -11,27 +11,42 @@ Install the khub CLI on this machine, then set up the current project so any age
 
 ## 1. Install the CLI
 
-khub is a single static binary with no runtime prerequisites. Install the pinned release:
+khub is a single static binary distributed through npm as
+`@endgame-build/khub`. In a repo, install it as a pinned dev dependency — one
+khub version per repo, reviewed in git:
 
 ```bash
-KHUB_VERSION=0.18.0 curl -fsSL https://khub.end.game/install.sh | sh
+npm install -D @endgame-build/khub
+npx khub --version
 ```
 
-That installs to `~/.local/bin`. Then confirm it resolves:
+If the project already pins khub in `package.json`, just `npm ci` (or
+`npm install`) and use `npx khub`. For a machine-global install instead:
 
 ```bash
-khub --version
+npm install -g @endgame-build/khub
 ```
 
-If `khub` is not found, `~/.local/bin` is not on PATH — the installer prints the
-line to add.
+khub's packages live on GitHub Packages, which is private today, so npm needs
+the scope mapped and a GitHub token with `read:packages` — two lines in
+`~/.npmrc`:
 
-khub's repo is private, so the installer needs a GitHub credential to reach the
-release. It finds one automatically if the machine has `gh` logged in, a
-`GITHUB_TOKEN` in the environment, or a GitHub HTTPS credential in its keychain;
-if it finds none it says so and names the options. An SSH key does not work for
-this. If the download fails or the checksum does not match, report the error and
-stop; install nothing partial.
+```
+@endgame-build:registry=https://npm.pkg.github.com
+//npm.pkg.github.com/:_authToken=<token>
+```
+
+**Do not write those yourself.** If the install fails with a 401 or 404, that
+file is missing or its token lacks the `read:packages` scope — report exactly
+that, name the scope, and stop. Configuring a credential is the human's call,
+not yours.
+
+An SSH key does **not** work for the registry, even though it does work for
+`npx skills add git@github.com:endgame-build/khub.git -s setup`. Having just
+succeeded at that, SSH is the wrong guess to reach for next.
+
+If the install fails for any other reason, report the error and stop; install
+nothing partial.
 
 ## 2. Set up the project
 

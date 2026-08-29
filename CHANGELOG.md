@@ -4,6 +4,22 @@ Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+### Changed
+
+- **khub distributes through npm.** One package, `@endgame-build/khub`,
+  carrying a prebuilt binary per platform behind a dependency-free launcher,
+  published to GitHub Packages on every release tag. The primary install is a
+  per-repo `devDependencies` pin — one khub version per repo, upgraded by a
+  reviewed one-line PR — which is what keeps khub's byte-stable output
+  contract from drifting between teammates. npm is the only channel: the curl
+  downloader, `install.sh`, its Cloudflare Pages hosting at `khub.end.game`
+  and the `publish-install` workflow are all deleted — a script designed to
+  locate a repo-scoped GitHub token was khub's largest attack surface, and it
+  wrapped one command. A machine-global install is `npm install -g
+  @endgame-build/khub`. The wired agent block and the `setup` skill now give
+  the npm instructions (the wired block had still said `uv tool install`,
+  wrong since the Go cutover). Spec: `docs/npm-distribution.md`.
+
 ### Added
 
 - **Schema introspection lists derived inverse predicates** (#14). A declared inverse has been

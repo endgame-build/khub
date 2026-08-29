@@ -4,19 +4,41 @@ This walkthrough builds a tiny firm-ops hub from nothing (one client, one person
 
 ## Install
 
-khub is a single static binary — no runtime, no interpreter. Two ways in.
-
-Install it (the repo is private, so the installer needs a GitHub credential; it
-finds one automatically if you have `gh` logged in, a `GITHUB_TOKEN` set, or a
-GitHub HTTPS credential in your keychain):
+khub is a single static binary, distributed through npm as
+`@endgame-build/khub` — one package carrying a prebuilt binary per platform,
+with a launcher that picks the matching one. Install it as a pinned dev
+dependency of the repo you are working in, so everyone (and every agent)
+touching that repo runs the same khub:
 
 ```bash
-curl -fsSL https://khub.end.game/install.sh | sh
+npm install -D @endgame-build/khub
+npx khub --version
 ```
 
-That drops a single binary in `~/.local/bin` — no interpreter, no runtime. Pin a
-version with `KHUB_VERSION=0.19.0`, or choose the directory with
-`KHUB_INSTALL_DIR`. Or build from a checkout:
+The packages live on GitHub Packages while the repo is private, so npm needs
+the scope mapped there and a GitHub token with `read:packages`. Two commands,
+once per machine:
+
+```bash
+npm config set @endgame-build:registry https://npm.pkg.github.com
+npm config set //npm.pkg.github.com/:_authToken "$(gh auth token)"
+```
+
+Without the GitHub CLI, generate a token with `read:packages` at
+[github.com/settings/tokens](https://github.com/settings/tokens) and put the
+two lines in `~/.npmrc` by hand:
+
+```
+@endgame-build:registry=https://npm.pkg.github.com
+//npm.pkg.github.com/:_authToken=<token>
+```
+
+An SSH key does not work here — the npm registry API ignores it. (It *does*
+work for `npx skills add git@github.com:endgame-build/khub.git -s setup`, which
+is how an agent bootstraps a machine that has no khub yet.)
+
+For a machine-global install instead, `npm install -g @endgame-build/khub`,
+optionally pinned with `@0.19.0`. Or build from a checkout:
 
 ```bash
 git clone git@github.com:endgame-build/khub.git
@@ -25,7 +47,7 @@ go build -o khub ./cmd/khub
 ./khub --help    # prefix every command below with `./`
 ```
 
-The rest of this guide writes `khub …`. If you built from source, read that as `./khub …`; the output is the same.
+The rest of this guide writes `khub …`. With the per-repo install read that as `npx khub …`; with a global install, as `khub …`; if you built from source, as `./khub …`. The output is the same.
 
 This walkthrough passes every value as a flag, which is the only way khub takes input: it never prompts, so a missing argument is a usage error rather than a question. That is also exactly how an agent drives it — pipe the output or add `--format json` to get machine-readable records.
 
@@ -84,7 +106,7 @@ updated AGENTS.md
 
 Bare `khub wire` updates whichever agent files already exist. `khub wire --target claude|agents|both` creates a specific one (`CLAUDE.md` gets the import, `AGENTS.md` the pointer).
 
-Now install khub's agent skills. This is a file copy out of the installed package — no network, no Node, and safe to re-run:
+Now install khub's agent skills. This is a file copy out of the installed package — no network, and safe to re-run:
 
 ```bash
 khub install-skills
