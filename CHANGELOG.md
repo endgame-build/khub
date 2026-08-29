@@ -4,6 +4,27 @@ Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [0.21.0] — 2026-08-29
+
+### Changed
+
+- **khub is Apache-2.0; MIT is retired.** Both are permissive and neither restricts what
+  anyone may do with khub, so nothing about who may use it changes — what changes is how
+  much the license says. Apache-2.0 grants a patent license in writing and terminates it
+  for anyone who sues over the code (§3); MIT grants none and is silent, leaving the
+  question to be argued rather than answered. It also writes down three things MIT leaves
+  unwritten: contributions arrive under the same terms without a separate CLA (§5), the
+  grant does not extend to the name (§6), and a redistributor is told exactly what to
+  carry (§4) — so khub can travel inside someone else's deliverable without anyone
+  guessing at the obligation. ENDGAME holds copyright on every commit and MIT permits
+  sublicensing, so the change required no consent-gathering. Not retroactive: every
+  release through 0.20.0 stays MIT under the terms it shipped with, and the
+  `@endgame-build/khub` versions already published keep the `"license": "MIT"` they carry
+  — an npm version is immutable and none is being re-published. The README badge and the
+  npm package's `license` field move with the file; every dependency is MIT, MIT-0,
+  BSD-3-Clause or Apache-2.0, and neither Apache-2.0 dependency ships a NOTICE, so khub
+  has none to propagate.
+
 ## [0.20.0] — 2026-08-29
 
 ### Changed

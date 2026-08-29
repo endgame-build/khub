@@ -1,6 +1,6 @@
 # khub
 
-![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)
+![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-blue.svg)
 ![Go 1.25+](https://img.shields.io/badge/go-1.25%2B-00ADD8.svg)
 
 **Schema-bound, agent-facing context management.**
@@ -114,4 +114,4 @@ Use option 2 on a machine with no khub yet; option 1 is what you re-run afterwar
 
 ## License
 
-MIT — see [`LICENSE`](LICENSE).
+Apache License 2.0 — see [`LICENSE`](LICENSE).

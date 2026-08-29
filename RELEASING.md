@@ -93,6 +93,9 @@ have only changed the packaging. Release CI exercises the real artifacts.
 
 ## When khub goes open source
 
+The license is already settled: Apache-2.0 since 0.21.0, in the root `LICENSE`.
+Nothing about going public re-opens it.
+
 1. Flip repository visibility to public. GitHub Packages under a public repo
    serves reads without a token, so existing `.npmrc` registry mappings keep
    working and the token line stops being needed.
