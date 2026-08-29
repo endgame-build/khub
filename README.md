@@ -29,7 +29,16 @@ Full command surface and JSON contracts: [`docs/cli.md`](docs/cli.md). Feature h
 
 ## Quickstart
 
-khub is a single static binary, distributed through npm as `@endgame-build/khub` — one package carrying a prebuilt binary per platform, with a launcher that picks the matching one. Pin it per repo — one khub version per repo, reviewed in git — then seed a workspace from a preset:
+khub is a single static binary, distributed through npm as `@endgame-build/khub` — one package carrying a prebuilt binary per platform, with a launcher that picks the matching one. Pin it per repo — one khub version per repo, reviewed in git.
+
+The packages are **private** — they live on GitHub Packages under this repo, so npm needs the scope mapped and a token with `read:packages` before it can resolve anything. Once per machine:
+
+```bash
+npm config set @endgame-build:registry https://npm.pkg.github.com
+npm config set //npm.pkg.github.com/:_authToken "$(gh auth token)"
+```
+
+Without that, the next command fails with `401 Unauthorized`. Then:
 
 ```bash
 npm install -D @endgame-build/khub       # exact per-repo pin (or: npx @endgame-build/khub@latest)
@@ -38,7 +47,7 @@ cd my-hub
 npx khub install-skills                  # copy the agent skills in (offline)
 ```
 
-For a machine-global install, `npm install -g @endgame-build/khub`; or build from source: `go build -o khub ./cmd/khub`. While the repo is private the packages live on GitHub Packages, so npm needs the `@endgame-build` scope mapped there plus a token with `read:packages` — two `npm config set` commands, in [`docs/getting-started.md`](docs/getting-started.md#install). Upgrading a repo is a one-line `package.json` bump in a PR: any on-disk byte changes a release makes land in that reviewed commit, not in everyone's unrelated diffs.
+For a machine-global install, `npm install -g @endgame-build/khub`; or build from source: `go build -o khub ./cmd/khub`. More on tokens and scopes: [`docs/getting-started.md`](docs/getting-started.md#install). Upgrading a repo is a one-line `package.json` bump in a PR: any on-disk byte changes a release makes land in that reviewed commit, not in everyone's unrelated diffs.
 
 Author entities. Referential integrity hard-fails on write (a relation to a missing target is rejected), but a missing field never blocks capture:
 
