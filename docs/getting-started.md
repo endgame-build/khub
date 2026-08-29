@@ -24,6 +24,12 @@ npm config set @endgame-build:registry https://npm.pkg.github.com
 npm config set //npm.pkg.github.com/:_authToken "$(gh auth token)"
 ```
 
+If npm is not configured, `npm install -D @endgame-build/khub` fails with
+`404 Not Found` — npm looks on npmjs.org, where the `@endgame-build` scope does
+not exist, so the error reads as though the package is missing rather than
+private. With the scope mapped but no valid token you get `401 Unauthorized`
+instead.
+
 Without the GitHub CLI, generate a token with `read:packages` at
 [github.com/settings/tokens](https://github.com/settings/tokens) and put the
 two lines in `~/.npmrc` by hand:

@@ -38,7 +38,7 @@ npm config set @endgame-build:registry https://npm.pkg.github.com
 npm config set //npm.pkg.github.com/:_authToken "$(gh auth token)"
 ```
 
-Without that, the next command fails with `401 Unauthorized`. Then:
+Without that, the next command fails — with `404 Not Found` if npm has no scope mapping at all (it looks on npmjs.org, where the scope does not exist), or `401 Unauthorized` if the scope is mapped but the token is missing or lacks `read:packages`. Then:
 
 ```bash
 npm install -D @endgame-build/khub       # exact per-repo pin (or: npx @endgame-build/khub@latest)
