@@ -34,7 +34,9 @@ jobs:
       - name: Choke-point lint (only internal/canon may import a YAML library)
         uses: golangci/golangci-lint-action@v9
         with:
-          version: latest
+          # Pinned, not `latest`: a linter release could turn the tree red
+          # with no commit of ours, and the choke-point rules are a gate.
+          version: "v2.13.2"
       - run: go test ./...
       - name: Build
         run: |

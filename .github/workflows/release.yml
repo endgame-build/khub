@@ -40,7 +40,11 @@ jobs:
           # pyproject.toml and __init__.py for four minors.
           test "$tag" = "$built" || {
             echo "tag $tag != internal/version $built"; exit 1; }
-      - uses: goreleaser/goreleaser-action@v6
+      # v7 is the Node 24 runtime; v6 targeted Node 20, which GitHub now
+      # force-runs on 24. Its only breaking change is the runtime — the
+      # inputs below are unchanged. `version` pins the goreleaser TOOL,
+      # a separate axis from the action tag.
+      - uses: goreleaser/goreleaser-action@v7
         with:
           version: "~> v2"
           args: release --clean

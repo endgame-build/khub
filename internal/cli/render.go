@@ -118,6 +118,15 @@ func Guard(fmt_ string, fn func() error) error {
 
 // isPathConstructionBug reports errno values that mean khub assembled a path
 // that cannot exist, rather than the filesystem refusing a valid one.
+//
+// *os.PathError only, deliberately. os.Rename returns *os.LinkError and khub
+// calls it once (internal/fsio's collection swap), but no errno in the set
+// below can reach it: mutateCollection's in-lock ReadText catches EISDIR as a
+// read, its MkdirAll catches ENOTDIR, and OpenFile on the temp sibling —
+// four bytes longer than the destination — catches ENAMETOOLONG. EXDEV cannot
+// happen between siblings. What a rename does fail with (ENOSPC, EDQUOT, EIO,
+// EPERM) is the environment refusing a well-formed path, which is os_error and
+// belongs there. Handling LinkError here would be a branch nothing can take.
 func isPathConstructionBug(err error) bool {
 	pe, ok := asPathError(err)
 	if !ok {
