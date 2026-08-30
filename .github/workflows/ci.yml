@@ -5,11 +5,17 @@ on:
     branches: [main]
   pull_request:
 
+# Nothing here writes. Grants are per job, from a root that grants nothing, so
+# a new job starts with no token scope rather than inheriting the repo default.
+permissions: {}
+
 # khub is a Go binary. The Python implementation and its `check` job (ruff,
 # mypy, pytest, the Typer doc generator, the wheel build) were retired at
 # cutover; every gate they held is now held by a step below.
 jobs:
   go:
+    permissions:
+      contents: read
     # darwin is where khub is actually used, and until the cutover nothing but a
     # laptop asserted it: every gate ran on linux only. The port touches file
     # locking, path handling and terminal detection, which are exactly the three
@@ -31,6 +37,28 @@ jobs:
           unformatted=$(gofmt -l ./cmd ./internal ./parity)
           test -z "$unformatted" || { echo "gofmt needed on:"; echo "$unformatted"; exit 1; }
       - run: go vet ./...
+      # None of the three below is platform-dependent, and the matrix exists
+      # to test file locking, path handling and terminal detection — not to
+      # query a vulnerability database twice.
+      - name: go.mod is tidy
+        if: matrix.os == 'ubuntu-latest'
+        run: go mod tidy -diff
+      # Pinned, per .claude/rules/dependencies.md. Call-graph reachability, so
+      # it reports what khub actually calls rather than everything in go.sum —
+      # which is why ci-release.md prefers it to an SBOM. Note go-version above
+      # floats across 1.25 PATCHES deliberately: a stdlib advisory is fixed by
+      # picking up the patch release, and pinning it exactly would opt out.
+      - name: govulncheck
+        if: matrix.os == 'ubuntu-latest'
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.1.4 ./...
+      # The workflows are the third thing CI depends on, after the code and the
+      # packaging scripts, and nothing checked them. Lives here rather than in
+      # npm-package because that job has no Go toolchain — `go run` there would
+      # silently use whatever Go the runner ships. actionlint also runs
+      # shellcheck over every `run:` block.
+      - name: actionlint
+        if: matrix.os == 'ubuntu-latest'
+        run: go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12
       - name: Choke-point lint (only internal/canon may import a YAML library)
         uses: golangci/golangci-lint-action@v9
         with:
@@ -86,13 +114,26 @@ jobs:
           emit=$(go run ./parity/yamlgate/emit | tail -1)
           echo "$emit"
           # "T3: rt N/M  safe P/Q" — every case must pass on both profiles.
-          set -- $(echo "$emit" | tr '/' ' ' | awk '{print $3, $4, $6, $7}')
-          test "$1" = "$2" && test "$3" = "$4" && test "$1" -ge 1000 \
-            || { echo "T3 regression: $emit"; exit 1; }
+          read -r rt_ok rt_all safe_ok safe_all \
+            <<<"$(echo "$emit" | tr '/' ' ' | awk '{print $3, $4, $6, $7}')"
+          # Fail closed on anything unparsed. `read` leaves the vars empty
+          # rather than erroring, so without this an emit line that stopped
+          # matching would make every comparison below vacuous and the gate
+          # would go green on output it does not recognise.
+          case "$rt_ok$rt_all$safe_ok$safe_all" in
+            ''|*[!0-9]*) echo "T3 unparsed: $emit"; exit 1 ;;
+          esac
+          if [ "$rt_ok" != "$rt_all" ] || [ "$safe_ok" != "$safe_all" ] \
+            || [ "$rt_ok" -lt 1000 ]; then
+            echo "T3 regression: $emit"
+            exit 1
+          fi
 
   # The npm package is khub's only distribution channel. This job lints the
   # scripts that assemble it and smoke-tests the result end to end.
   npm-package:
+    permissions:
+      contents: read
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7

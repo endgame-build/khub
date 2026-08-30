@@ -105,3 +105,55 @@ jobs:
           got=$(npx khub --version)
           test "$got" = "${GITHUB_REF_NAME#v}" || {
             echo "resolved $got, expected ${GITHUB_REF_NAME#v}"; exit 1; }
+
+  # The linux artifact is executed above, before this workflow ends. The darwin
+  # one never was — both npm verifications run on ubuntu — and darwin is where
+  # khub is actually used. Two things go unproven without this: that the
+  # cross-compiled darwin/arm64 binary runs at all, and that the launcher picks
+  # it correctly.
+  #
+  # Apple Silicon refuses an arm64 binary carrying no signature at all, and
+  # .goreleaser.yml has no `signs:` block — but Go's own linker ad-hoc signs
+  # darwin/arm64, including when cross-compiling, which `codesign -dv` on a
+  # `-trimpath -s -w` build confirms: flags=0x20002(adhoc,linker-signed). So
+  # this is expected to pass. What it proves is the rest of the chain nobody
+  # had checked on darwin: that the launcher resolves the right binary and the
+  # package installs.
+  #
+  # Deliberately NOT signed here. Signing before running would change the
+  # artifact under test, so a green check would say nothing about the bytes
+  # that shipped. This runs exactly what was published.
+  #
+  # `needs: release` means a failure does not un-publish — the release is
+  # already out by then. This is a detector, not a gate; gating publish on it
+  # means reordering the workflow, which is a larger change than adding the eye.
+  verify-macos:
+    needs: release
+    runs-on: macos-latest
+    permissions:
+      # It never checks out; it installs the published package and runs it.
+      packages: read
+    steps:
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+          registry-url: "https://npm.pkg.github.com"
+          scope: "@endgame-build"
+      - name: The published darwin binary runs
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          # Same retry as the global install above: this is another first read
+          # after publish and registry propagation is not instant.
+          for i in 1 2 3; do
+            npm install -g --no-audit --no-fund \
+              "@endgame-build/khub@$version" && break
+            test "$i" = 3 && exit 1
+            sleep 10
+          done
+          prefix=$(npm prefix -g)
+          got=$("$prefix/bin/khub" --version)
+          test "$got" = "$version" || {
+            echo "installed $got, expected $version"; exit 1; }
+          "$prefix/bin/khub" --help >/dev/null

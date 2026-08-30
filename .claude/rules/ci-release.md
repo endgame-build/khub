@@ -39,7 +39,9 @@ Each is commented where it lives:
 - **Release verifies both consumer paths** — a global `npm install -g` pinned
   to the tag (which also runs `--help`, the only time a shipped binary is
   executed before release) and a scratch per-repo `npm install`. The global
-  one carries the propagation retry because it reads first.
+  one carries the propagation retry because it reads first. Both run on the
+  linux runner; `verify-macos` is a third verification, after publish rather
+  than before it — see gap 3.
 - **No hosted install script.** There was one, at `khub.end.game`, wrapping
   `npm install -g`. It was deleted rather than maintained: a script designed
   to locate a repo-scoped GitHub token is the highest-value thing an attacker
@@ -51,17 +53,52 @@ Each is commented where it lives:
 
 ## Gaps worth closing (risk per effort, descending)
 
+Closed items keep their reasoning rather than being deleted: the reason is what
+stops one being reopened, or quietly undone.
+
 1. **GitHub immutable releases** (repo setting) — the tj-actions tag-repoint
-   class, applied to khub's own artifacts.
-2. **`permissions: {}` root + per-job grants** in ci.yml.
-3. **Run the release install check on macos-latest too** — today the primary
-   platform's artifact is never executed before shipping (the npm verify runs
-   on the linux runner); darwin/arm64 needs a valid (ad-hoc) signature or the
-   kernel SIGKILLs.
-4. Pin `golangci-lint-action` `version:` (breaks on Go-minor skew).
-5. `govulncheck`, `go mod tidy -diff`, `actionlint` + `zizmor` in CI.
+   class, applied to khub's own artifacts. **Still open, and not closable from
+   a PR**: no such field is exposed on `gh api repos/endgame-build/khub` and
+   repository properties are empty, so it is a toggle under Settings → General
+   → Releases and nothing else.
+2. ~~**`permissions: {}` root + per-job grants** in ci.yml.~~ **Closed.** Root
+   grants nothing; `go` and `npm-package` each take `contents: read`, which is
+   all either needs. release.yml keeps its root `contents: write` +
+   `packages: write` — it is one job, so root already is per-job there, and
+   re-scoping the release path breaks a release rather than a PR.
+3. ~~**Run the release install check on macos-latest too**~~ **Closed, as a
+   detector.** `verify-macos` in release.yml installs the published package on
+   macos-latest and runs the binary. Two things to keep straight if it is ever
+   edited: it must NOT sign before running (signing changes the artifact under
+   test, so a green check would say nothing about the bytes that shipped), and
+   `needs: release` means it cannot un-publish — a failure reports, it does not
+   gate. Gating means reordering the workflow.
+
+   Note what it does and does not prove. khub's darwin binaries are NOT
+   unsigned: `.goreleaser.yml` has no `signs:` block, but Go's linker ad-hoc
+   signs darwin/arm64 itself, cross-compiled included — `codesign -dv` on a
+   `-trimpath -s -w` build reports `flags=0x20002(adhoc,linker-signed)`. So the
+   kernel was never going to refuse it, and the job is not rescuing an unsigned
+   artifact. What went unchecked until now is the rest of the chain on darwin:
+   that the launcher resolves the right binary out of the package, and that the
+   install works at all on the platform khub is actually used on.
+4. ~~Pin `golangci-lint-action` `version:`~~ **Closed** — `v2.13.2` (#63).
+   `version: latest` let a linter release turn the tree red with no commit of
+   ours, and the choke-point rules are a gate.
+5. ~~`govulncheck`, `go mod tidy -diff`, `actionlint`~~ **Closed**, ubuntu leg
+   only — none is platform-dependent and the matrix exists to test locking,
+   paths and terminal detection. Tool versions pinned per `dependencies.md`.
+   **`zizmor` deliberately left out**, not forgotten: it overlaps actionlint
+   across two workflow files, and it is not a Go tool — adding it puts a second
+   toolchain in CI for a repo whose whole posture is one static Go binary.
+   Revisit if the workflows grow.
 6. `mod_timestamp: "{{ .CommitTimestamp }}"` — deterministic archives make an
-   unexpected checksum change signal, not noise.
+   unexpected checksum change signal, not noise. **Still open.**
+
+Note `go-version: "1.25"` floats across 1.25 PATCH releases on purpose. A stdlib
+advisory is fixed by picking up the patch, so pinning it exactly would opt out
+of exactly what govulncheck is there to notice — the opposite of the tool pins
+above, and the distinction is deliberate.
 
 ## Rejected while private
 
