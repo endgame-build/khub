@@ -4,6 +4,32 @@ Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [0.22.1] — 2026-08-30
+
+Internal only: no command, schema, output or file-format change. Every entry
+below is invisible from the outside, which is why none of the three PRs behind
+it carried a changelog line of its own.
+
+### Fixed
+
+- **Errors are matched through `errors.Is`/`errors.As`, never through
+  `os.IsNotExist` or a bare type assertion.** Both stop matching the moment
+  anything wraps upstream, and khub's error text is fixture-pinned product, so
+  the failure would have arrived as changed output rather than a compile error.
+  One site was worse than the rest: `pathBugMessage` asserted unchecked and was
+  safe only because its caller gated on a matching predicate first — converting
+  one without the other would have turned a misprint into a panic. They now
+  share a single classifier. Three byte-identical hand-rolled `Unwrap()` walkers
+  went with it. No fixture byte moved; `internal/cli` gained its first test file
+  to pin what the corpus cannot see.
+
+### Changed
+
+- **CI pins that floated.** `goreleaser-action` moves to the Node 24 runtime
+  (v6 targeted Node 20, which GitHub had begun force-running on 24), and
+  `golangci-lint` is pinned instead of tracking `latest`, so a linter release
+  can no longer turn the tree red with no commit of ours.
+
 ## [0.22.0] — 2026-08-30
 
 ### BREAKING
