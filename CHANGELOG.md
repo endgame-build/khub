@@ -4,6 +4,8 @@ Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [0.22.0] — 2026-08-30
+
 ### BREAKING
 
 - **The workspace schema is three layer files, and the base block is embedded.**
