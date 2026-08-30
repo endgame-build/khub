@@ -19,6 +19,8 @@
 package wire
 
 import (
+	"errors"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -327,7 +329,7 @@ func Wire(root string, opt Options) (*Result, error) {
 		previews = append(previews, "# "+filepath.Base(c.path)+"\n"+c.block)
 		raw, readErr := os.ReadFile(c.path)
 		exists := readErr == nil
-		if readErr != nil && !os.IsNotExist(readErr) {
+		if readErr != nil && !errors.Is(readErr, fs.ErrNotExist) {
 			return nil, readErr
 		}
 		old := ""

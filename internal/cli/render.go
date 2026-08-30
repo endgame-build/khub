@@ -6,6 +6,7 @@ package cli
 import (
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"syscall"
 	"unicode"
@@ -164,11 +165,11 @@ func osErrorMessage(err error) string {
 	if pe, ok := err.(*os.PathError); ok {
 		name := "OSError"
 		switch {
-		case os.IsNotExist(pe):
+		case errors.Is(pe, fs.ErrNotExist):
 			name = "FileNotFoundError"
-		case os.IsPermission(pe):
+		case errors.Is(pe, fs.ErrPermission):
 			name = "PermissionError"
-		case os.IsExist(pe):
+		case errors.Is(pe, fs.ErrExist):
 			name = "FileExistsError"
 		}
 		errno := errnoOf(pe.Err)

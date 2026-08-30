@@ -9,6 +9,7 @@ package skill
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io/fs"
 	"os"
@@ -267,7 +268,7 @@ func appendGitignore(gitignore, line string) error {
 	existing := ""
 	if b, err := os.ReadFile(gitignore); err == nil {
 		existing = string(b)
-	} else if !os.IsNotExist(err) {
+	} else if !errors.Is(err, fs.ErrNotExist) {
 		return err
 	}
 	for _, l := range strings.Split(existing, "\n") {

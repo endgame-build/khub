@@ -19,6 +19,7 @@ package workspace
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io/fs"
 	"os"
@@ -436,7 +437,7 @@ func existingPreset(target string) (string, bool) {
 func isEmptyDir(target string) (bool, error) {
 	entries, err := os.ReadDir(osPath(target))
 	if err != nil {
-		if os.IsNotExist(err) {
+		if errors.Is(err, fs.ErrNotExist) {
 			return true, nil
 		}
 		return false, err
@@ -525,7 +526,7 @@ func appendGitignore(gitignore, line string) error {
 	existing := ""
 	if b, err := os.ReadFile(osPath(gitignore)); err == nil {
 		existing = string(b)
-	} else if !os.IsNotExist(err) {
+	} else if !errors.Is(err, fs.ErrNotExist) {
 		return err
 	}
 	for _, l := range strings.Split(existing, "\n") {
