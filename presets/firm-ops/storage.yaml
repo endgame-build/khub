@@ -1,0 +1,18 @@
+# firm-ops/storage.yaml — where and how each type's bytes land.
+#
+# `path` is the per-type inventory directory, from the capture's real HQ
+# layout: file -> {path}/{slug}.md ; folder -> {path}/{slug}/_index.md.
+# meetings, transcripts and fragments are flattened for MVP (HQ nested
+# */meetings/ and fragments/{owner}/). firm-ops declares no id_prefix, so its
+# entities are numbered without one (NNN-slug).
+
+storage:
+  opportunity: { layout: folder, path: opportunities }
+  project:     { layout: folder, path: projects }       # one entity per folder -> projects/{slug}/_index.md
+  meeting:     { layout: file,   path: meetings }
+  transcript:  { layout: file,   path: transcripts }
+  fragment:    { layout: file,   path: fragments }
+  case-study:  { layout: file,   path: case-studies }
+  partnership: { layout: folder, path: partnerships }
+  person:      { layout: file,   path: identity/team }
+  client:      { layout: file,   path: clients }

@@ -6,7 +6,6 @@ package schema
 // covered there / by fixtures.
 
 import (
-	"path/filepath"
 	"strings"
 	"testing"
 
@@ -16,16 +15,13 @@ import (
 func TestByValuePrefixMustMatchItsEnum(t *testing.T) {
 	// A map that misses an enum member would mint no id for that member.
 	doc := `
-base:
-  attributes:
-    type: { type: text, required: true }
-entities:
-  requirement:
-    layout: file
-    path: reqs
-    id_prefix: { by: kind, map: { functional: fr } }
-    attributes:
-      kind: { enum: [functional, constraint], required: true }
+ontology:
+  entities:
+    requirement:
+      attributes:
+        kind: { enum: [functional, constraint], required: true }
+storage:
+  requirement: { layout: file, path: reqs, id_prefix: { by: kind, map: { functional: fr } } }
 `
 	e := resolveLocated(t, doc)
 	if !strings.Contains(e.Message, "id_prefix.map must cover exactly kind's enum") {
@@ -43,16 +39,13 @@ entities:
 
 func TestByValuePrefixNeedsAnEnumAttribute(t *testing.T) {
 	doc := `
-base:
-  attributes:
-    type: { type: text, required: true }
-entities:
-  requirement:
-    layout: file
-    path: reqs
-    id_prefix: { by: nope, map: { a: x } }
-    attributes:
-      kind: { enum: [functional], required: true }
+ontology:
+  entities:
+    requirement:
+      attributes:
+        kind: { enum: [functional], required: true }
+storage:
+  requirement: { layout: file, path: reqs, id_prefix: { by: nope, map: { a: x } } }
 `
 	e := resolveLocated(t, doc)
 	if !strings.Contains(e.Message, "must name an attribute of this type that declares an enum") {
@@ -70,10 +63,10 @@ func TestAPrefixMustBeASlugToken(t *testing.T) {
 	for _, value := range []string{`''`, `'AD'`, `'a-d'`, `'1st'`, `'  '`} {
 		t.Run(value, func(t *testing.T) {
 			doc := `
-base:
-  attributes:
-    type: { type: text, required: true }
-entities:
+ontology:
+  entities:
+    a: {}
+storage:
   a:
     layout: file
     path: as
@@ -89,20 +82,30 @@ entities:
 func TestByValuePrefixMayDecideOnABaseAttribute(t *testing.T) {
 	// The deciding attribute can come from the base block, or be an override
 	// that tightens only `required` — neither is visible before the base is
-	// merged.
+	// merged. The base arrives as ResolveWith's document, the only legal source.
+	base := loadYAMLDoc(t, `
+ontology:
+  base:
+    attributes:
+      kind: { enum: [functional, constraint] }
+`)
 	doc := `
-base:
-  attributes:
-    kind: { enum: [functional, constraint] }
-entities:
+ontology:
+  entities:
+    requirement:
+      attributes:
+        kind: { required: true }
+storage:
   requirement:
     layout: file
     path: reqs
     id_prefix: { by: kind, map: { functional: fr, constraint: cst } }
-    attributes:
-      kind: { required: true }
 `
-	rtype := typeOf(t, resolveDocs(t, doc), "requirement")
+	resolved, err := ResolveWith(base, writeSchemaFiles(t, doc))
+	if err != nil {
+		t.Fatalf("ResolveWith: %v", err)
+	}
+	rtype := typeOf(t, resolved, "requirement")
 	if rtype.IdPrefix == nil {
 		t.Fatal("requirement.IdPrefix = nil")
 	}
@@ -156,12 +159,8 @@ func TestResolvedPrefixShapes(t *testing.T) {
 
 func TestEveryPresetPrefixIsDeclaredOnARealType(t *testing.T) {
 	// The presets' prose conventions (ad-, fr-, wp-) and their schemas agree.
-	presets := presetsDir(t)
 	for _, name := range []string{"build-lite", "build-hub", "firm-ops"} {
-		schema, err := Resolve([]string{
-			filepath.Join(presets, "core.yaml"),
-			filepath.Join(presets, name, "schema.yaml"),
-		})
+		schema, err := ResolveWith(corePresetDoc(t), presetPaths(t, name))
 		if err != nil {
 			t.Fatalf("%s failed to resolve: %v", name, err)
 		}

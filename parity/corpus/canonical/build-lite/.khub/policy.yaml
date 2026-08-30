@@ -1,0 +1,7 @@
+# khub-preset: build-lite@0.1.0
+policy:
+  prd:
+    required: true
+    orphan: true
+  arc42:
+    orphan: true

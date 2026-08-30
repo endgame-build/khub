@@ -1,0 +1,28 @@
+# preset-bespoke — deliberately unlike any shipped preset. Type names, paths and
+# predicates share nothing with firm-ops/build-hub/build-lite, so an
+# implementation carrying hardcoded per-type knowledge cannot pass the
+# schema-generic sentinel.
+version: "0.1.0"
+
+ontology:
+  entities:
+    widget:
+      when: a widget is named
+      attributes:
+        title: { required: true }
+        hue: { enum: [chartreuse, vermilion], required: true }
+      relations:
+        bolts_onto: { to: gizmo, many: true, acyclic: true }
+
+    gizmo:
+      when: a gizmo is named
+      attributes:
+        title: { required: true }
+        torque: { type: number }
+      relations:
+        supplants: { to: gizmo, inverse: supplanted, acyclic: true }
+
+    manifesto:
+      when: the doctrine changes
+      attributes:
+        title: { required: true }

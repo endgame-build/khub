@@ -1,1 +1,1 @@
-{"error": {"code": "schema_error", "message": "Cannot parse schema %WS%/.khub/schema.yaml: %WS%/.khub/schema.yaml: [1:2] could not find flow map content\n>  1 | {{{{not yaml\n        ^\n"}}
+{"error": {"code": "schema_error", "message": "Cannot parse schema: %WS%/.khub/ontology.yaml: [1:2] could not find flow map content\n>  1 | {{{{not yaml\n        ^\n"}}

@@ -142,6 +142,9 @@ commands:
 - name: 'schema edges'
   params:
   - '--format'
+- name: 'schema base'
+  params:
+  - '--format'
 error_codes:
 - ambiguity_error
 - bad_search_query
@@ -165,7 +168,9 @@ error_codes:
 - lookup_error
 - malformed_entity
 - malformed_projection
-- missing_base
+# missing_base: unreachable through the CLI since the ontology/policy/storage
+# split — LoadSchema always supplies the embedded base as the layered fallback,
+# and the legacy shape that could still trip it is deleted with legacy.go.
 - missing_root
 - no_workspace
 - number_violation

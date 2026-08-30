@@ -82,17 +82,19 @@ func (t *BodyTemplate) RequiredHeadings() []string {
 	return out
 }
 
-// TemplatePath is template.template_path.
-func TemplatePath(root, typeName string) string {
-	return filepath.Join(root, filepath.FromSlash(TemplatesDir), typeName+".yaml")
+// TemplatePath is template.template_path. stem is the template file's name
+// without extension — a type's declared `template:` name, or by convention the
+// type's own name (schema.ResolvedType.TemplateName resolves which).
+func TemplatePath(root, stem string) string {
+	return filepath.Join(root, filepath.FromSlash(TemplatesDir), stem+".yaml")
 }
 
 // LoadTemplate is template.load_template: the type's template, or (nil, nil)
 // when there is no body contract (no template file; a file declaring
 // `sections: []` still returns a template so add/init keep seeding). A
 // missing sections key is an error: the file declares nothing coherent.
-func LoadTemplate(root, typeName string) (*BodyTemplate, error) {
-	p := TemplatePath(root, typeName)
+func LoadTemplate(root, stem string) (*BodyTemplate, error) {
+	p := TemplatePath(root, stem)
 	fi, err := os.Stat(p)
 	if err != nil || !fi.Mode().IsRegular() {
 		return nil, nil
@@ -111,45 +113,45 @@ func LoadTemplate(root, typeName string) (*BodyTemplate, error) {
 	}
 	data, ok := topLevelMap(v)
 	if !ok {
-		return nil, invalid(typeName, "top level must be a mapping with a 'sections' list")
+		return nil, invalid(stem, "top level must be a mapping with a 'sections' list")
 	}
 	if unknown := keysOutside(data, topKeys); len(unknown) > 0 {
-		return nil, invalid(typeName, "unknown top-level keys: "+strings.Join(unknown, ", "))
+		return nil, invalid(stem, "unknown top-level keys: "+strings.Join(unknown, ", "))
 	}
 	rawSections, present := data.Get("sections")
 	if !present {
-		return nil, invalid(typeName, "'sections' is required (use `sections: []` for no body contract)")
+		return nil, invalid(stem, "'sections' is required (use `sections: []` for no body contract)")
 	}
 	list, isList := rawSections.([]any)
 	if !isList {
-		return nil, invalid(typeName, "'sections' must be a list")
+		return nil, invalid(stem, "'sections' must be a list")
 	}
 	titleAny, _ := data.Get("title")
 	title := scalarText(titleAny)
 	if len(list) == 0 {
 		// Declared, deliberately empty: no headings required — but still a
 		// template, so add seeds the title and init still creates the singleton.
-		return &BodyTemplate{Type: typeName, Title: title}, nil
+		return &BodyTemplate{Type: stem, Title: title}, nil
 	}
 	sections := make([]Section, 0, len(list))
 	for i, entryAny := range list {
 		entry, isMap := entryAny.(*omap.Map)
 		if !isMap {
-			return nil, invalid(typeName, fmt.Sprintf("sections[%d] must be a mapping with a 'heading'", i))
+			return nil, invalid(stem, fmt.Sprintf("sections[%d] must be a mapping with a 'heading'", i))
 		}
 		if reserved := keysInside(entry, reservedKeys); len(reserved) > 0 {
-			return nil, invalid(typeName, fmt.Sprintf(
+			return nil, invalid(stem, fmt.Sprintf(
 				"sections[%d] uses reserved key(s) %s — planned for a later version, not supported yet",
 				i, strings.Join(reserved, ", ")))
 		}
 		if unknown := keysOutside(entry, entryKeys); len(unknown) > 0 {
-			return nil, invalid(typeName, fmt.Sprintf(
+			return nil, invalid(stem, fmt.Sprintf(
 				"sections[%d] unknown key(s): %s", i, strings.Join(unknown, ", ")))
 		}
 		headingAny, _ := entry.Get("heading")
 		heading, isStr := headingAny.(string)
 		if !isStr || heading == "" {
-			return nil, invalid(typeName, fmt.Sprintf("sections[%d] needs a non-empty string 'heading'", i))
+			return nil, invalid(stem, fmt.Sprintf("sections[%d] needs a non-empty string 'heading'", i))
 		}
 		hintAny, _ := entry.Get("hint")
 		textAny, _ := entry.Get("text")
@@ -159,7 +161,7 @@ func LoadTemplate(root, typeName string) (*BodyTemplate, error) {
 			Text:    scalarText(textAny),
 		})
 	}
-	return &BodyTemplate{Type: typeName, Title: title, Sections: sections}, nil
+	return &BodyTemplate{Type: stem, Title: title, Sections: sections}, nil
 }
 
 // BodyH2s is template.body_h2s: the body's H2 headings, in order, numbering

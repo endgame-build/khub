@@ -92,9 +92,9 @@ say "khub · build-lite · the wired block"
 has  "CLAUDE: capture cues"        "$L/CLAUDE.md" "Record as you go"
 has  "CLAUDE: prd links its file"  "$L/CLAUDE.md" "[knowledge/prd.md](knowledge/prd.md)"
 has  "CLAUDE: arc42 links its file" "$L/CLAUDE.md" "[knowledge/arc42.md](knowledge/arc42.md)"
-has  "CLAUDE: schema import"       "$L/CLAUDE.md" "@.khub/schema.yaml"
+has  "CLAUDE: schema import"       "$L/CLAUDE.md" "@.khub/ontology.yaml"
 has  "AGENTS: same links"          "$L/AGENTS.md" "[knowledge/prd.md](knowledge/prd.md)"
-hasnt "AGENTS: no import directive" "$L/AGENTS.md" "@.khub/schema.yaml"
+hasnt "AGENTS: no import directive" "$L/AGENTS.md" "@.khub/ontology.yaml"
 ok 0 "re-wire is a no-op"          $KHUB -C "$L" wire
 rm -f "$L/AGENTS.md"
 ok 0 "bare wire recreates the missing file" $KHUB -C "$L" wire
@@ -144,7 +144,7 @@ $KHUB init build-lite . >/dev/null 2>&1
 $KHUB -C "$M" add component --title "API" --kind service >/dev/null 2>&1
 python3 - "$M" <<'PY'
 import pathlib, sys
-p = pathlib.Path(sys.argv[1]) / ".khub" / "schema.yaml"
+p = pathlib.Path(sys.argv[1]) / ".khub" / "storage.yaml"
 p.write_text(p.read_text().replace("path: knowledge/components",
                                    "path: knowledge/architecture/components"))
 PY

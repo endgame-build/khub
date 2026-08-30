@@ -12,20 +12,27 @@ import (
 	"testing"
 )
 
-const singletonPreset = `
+const singletonPresetOntology = `
 version: "0.1.0"
-entities:
-  prd:
-    layout: singleton
-    path: knowledge/prd.md
-    required: true
-    attributes:
-      title: { required: true }
-  note:
-    layout: file
-    path: notes
-    attributes:
-      title: { required: true }
+ontology:
+  entities:
+    prd:
+      attributes:
+        title: { required: true }
+    note:
+      attributes:
+        title: { required: true }
+`
+
+const singletonPresetStorage = `
+storage:
+  prd:  { layout: singleton, path: knowledge/prd.md }
+  note: { layout: file, path: notes }
+`
+
+const singletonPresetPolicy = `
+policy:
+  prd: { required: true }
 `
 
 const prdTemplate = `title: Product requirements
@@ -46,10 +53,12 @@ const noteTemplate = `sections:
 // templatedWS is the singleton-bearing fixture workspace with both templates.
 func templatedWS(t *testing.T) string {
 	t.Helper()
-	dir := writePreset(t, "fixture", singletonPreset, map[string]string{
-		"prd.yaml":  prdTemplate,
-		"note.yaml": noteTemplate,
-	})
+	dir := writePreset(t, "fixture",
+		singletonPresetOntology+singletonPresetPolicy+singletonPresetStorage,
+		map[string]string{
+			"prd.yaml":  prdTemplate,
+			"note.yaml": noteTemplate,
+		})
 	return newWSFrom(t, "fixture", dir)
 }
 

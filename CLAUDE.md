@@ -62,9 +62,13 @@ thin, schema-introspecting adapter with zero per-type code.**
 
 1. **Truth** — Markdown + YAML frontmatter in git. One entity = one file (or one
    collection row). No database is ever the source of truth.
-2. **Ontology** — `internal/schema/resolve.go` merges the `base` block into every
-   type and parses khub-vocabulary YAML into a `ResolvedSchema`
-   (`internal/schema/model.go`).
+2. **Ontology** — `internal/schema/resolve.go` merges the three authored layers
+   (`.khub/ontology.yaml` — the domain; `policy.yaml` — workspace gates;
+   `storage.yaml` — layouts/paths/prefixes/templates) with the base block
+   EMBEDDED in the binary (`presets/core/ontology.yaml`, never copied into a
+   workspace; an authored `ontology.base` is rejected — a type overrides a base
+   attribute by redeclaring it) into a `ResolvedSchema`
+   (`internal/schema/model.go`). Layers merge on top-level key, not filename.
 3. **Core** — the write verbs (`internal/entity/`), integrity
    (`internal/integrity/{validate,check}.go`), graph walks (`internal/graph/`),
    query/search (`internal/query/`, `internal/search/`), git-derived history
@@ -124,10 +128,11 @@ See `.claude/rules/yaml.md`.
 
 ## Presets
 
-`presets/core.yaml` (the `base` block) + one preset DIRECTORY per domain
-(`firm-ops/schema.yaml`, `build-hub/schema.yaml` + optional
-`<preset>/templates/*.yaml` body templates). `khub init` flattens core + a preset
-into an engagement's `.khub/schema.yaml` and copies the preset's templates to
+`presets/core/ontology.yaml` (the `base` block — embedded, supplied to every
+resolve, never copied into a workspace) + one preset DIRECTORY per domain
+(`<preset>/{ontology,policy,storage}.yaml` + optional
+`<preset>/templates/*.yaml` body templates). `khub init` copies a preset's three
+layer files into an engagement's `.khub/` and the templates to
 `.khub/templates/`. The tree is embedded into the binary by `embed.go` at the
 module root (a `//go:embed` pattern cannot contain `..`, so the embed cannot live
 under `internal/`).

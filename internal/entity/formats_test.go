@@ -14,13 +14,19 @@ import (
 )
 
 // addNonMDTypes declares a json and a yaml per-item type on a firm-ops
-// workspace, each with a date and a datetime attribute.
+// workspace, each with a date and a datetime attribute, editing the ontology
+// and storage layers the way an engagement extends its schema.
 func addNonMDTypes(t *testing.T, ws string) {
 	t.Helper()
-	sp := filepath.Join(ws, ".khub", "schema.yaml")
-	data := loadYAML(t, sp)
-	entitiesAny, _ := data.Get("entities")
+	op := filepath.Join(ws, ".khub", "ontology.yaml")
+	ontDoc := loadYAML(t, op)
+	ontAny, _ := ontDoc.Get("ontology")
+	entitiesAny, _ := ontAny.(*omap.Map).Get("entities")
 	entities := entitiesAny.(*omap.Map)
+	stp := filepath.Join(ws, ".khub", "storage.yaml")
+	stDoc := loadYAML(t, stp)
+	storageAny, _ := stDoc.Get("storage")
+	storage := storageAny.(*omap.Map)
 
 	for _, spec := range []struct{ name, format, path string }{
 		{"jnote", "json", "jnotes"},
@@ -30,15 +36,21 @@ func addNonMDTypes(t *testing.T, ws string) {
 		attrs.Set("when", kv("type", "datetime"))
 		attrs.Set("day", kv("type", "date"))
 		decl := omap.New()
-		decl.Set("layout", "file")
-		decl.Set("format", spec.format)
-		decl.Set("path", spec.path)
 		decl.Set("attributes", attrs)
 		entities.Set(spec.name, decl)
+
+		stDecl := omap.New()
+		stDecl.Set("layout", "file")
+		stDecl.Set("format", spec.format)
+		stDecl.Set("path", spec.path)
+		storage.Set(spec.name, stDecl)
 	}
-	text, err := canon.DumpWide(data)
+	text, err := canon.DumpWide(ontDoc)
 	requireNoError(t, err)
-	writeFile(t, sp, text)
+	writeFile(t, op, text)
+	text, err = canon.DumpWide(stDoc)
+	requireNoError(t, err)
+	writeFile(t, stp, text)
 }
 
 func TestJSONEntityBytes(t *testing.T) {

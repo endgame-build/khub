@@ -1,0 +1,2 @@
+policy:
+  manifesto: { required: true, orphan: true }

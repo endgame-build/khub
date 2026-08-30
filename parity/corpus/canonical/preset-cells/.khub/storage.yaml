@@ -1,0 +1,31 @@
+# khub-preset: preset-cells@0.1.0
+storage:
+  note:
+    layout: file
+    path: notes
+  card:
+    layout: file
+    format: json
+    path: cards
+  sheet:
+    layout: file
+    format: yaml
+    path: sheets
+  dossier:
+    layout: folder
+    path: dossiers
+  charter:
+    layout: singleton
+    path: charter.md
+  repo:
+    layout: collection
+    format: jsonl
+    path: repos.jsonl
+  vendor:
+    layout: collection
+    format: yaml
+    path: vendors.yaml
+  account:
+    layout: collection
+    format: json
+    path: accounts.json

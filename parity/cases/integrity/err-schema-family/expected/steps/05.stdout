@@ -1,1 +1,1 @@
-{"error": {"code": "schema_error", "message": "Cannot read schema %WS%/.khub/schema.yaml: file not found"}}
+{"error": {"code": "schema_error", "message": "Cannot read schema %WS%/.khub/ontology.yaml: file not found"}}

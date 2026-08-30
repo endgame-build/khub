@@ -1,0 +1,276 @@
+# build-hub/ontology.yaml — the domain model of the knowledge hub of a build project.
+#
+# 20 entity types; 17 relation predicates beyond the universal four from core
+# (23 declarations; domain.depends_on narrows the universal edge to domain→domain).
+# The hub is the single authority for every cross-repo fact: what the product
+# must do (requirement, capability), why it is shaped this way (adr, pdr), what
+# must hold (boundary, quality-attribute), what the system is (domain, entity,
+# component, repo, contract, baseline), and what to build
+# (feature-spec, test-spec, work-package). Spoke repos carry NO khub workspace —
+# code plus a plain entities.yaml field-schema file; every decision, repo-local
+# included, is a hub adr/pdr.
+#
+# Authoring decisions worth review (v0.2.0 — the paved-road-hub convergence):
+#  - feature-spec IS the feature record (the former `feature` container type is
+#    absorbed): it carries work status plus the placement/obligation edges
+#    (capabilities, requirements). solution-spec is dropped.
+#  - Contracts are HUB-AUTHORED entities; policy prose (idempotency, auth
+#    model, versioning) rides the reserved `body` field. No spoke birth, no
+#    sync. `provider` lives on the contract (required); `consumes` lives on
+#    each consuming component; consumed_by is computed.
+#  - entity.owner is single-valued and REQUIRED: the single-writer rule is
+#    schema-enforced — a second authoritative writer is unrepresentable.
+#    Field-level detail churns with code and lives in the owning spoke's
+#    entities.yaml, linked via `resource`, never restated hub-side.
+#  - component decomposes the classic topology block: kind/stack attrs, an
+#    optional `repo` edge (the component↔codebase mapping), `domains` it hosts,
+#    and the churny `consumes` side of contract edges. repo rows are a pure
+#    remotes record. domain.relationship is a PLAIN attribute qualifying that
+#    domain's depends_on posture (edge properties are not a khub feature).
+#  - There is no `external-system` type (v0.3.0): a vendor or neighbouring
+#    product is a `component` with `kind: external`. `kind` is REQUIRED because
+#    it is the sole carrier of the ownership boundary — what we can change vs
+#    what we can only react to — which `contract.provider`'s component |
+#    external-system union used to hold. The price is `component.repo`
+#    dropping from required to optional: an external has no codebase, and khub
+#    schemas cannot express "required unless kind: external". The
+#    component↔codebase mapping is now a review-time fact, not a `check` gate;
+#    an all-internal engagement may re-tighten it in its own workspace schema.
+#  - The five narrative documents ARE types — singletons: prd, roadmap,
+#    glossary (product-side) and arc42, erd (architecture-side). init creates
+#    each from its body template in templates/; validate holds every templated
+#    type's body to its template's section headings (ordered subsequence,
+#    extras allowed).
+#  - status enums stay coarse (planned/active/done/dropped) so tracker sync is
+#    a trivial mapping; no status field declares a `default` — `add` applies no
+#    schema defaults, so status is always an explicit statement.
+#  - `superseded` is never stored — computed inverse of the inbound
+#    `supersedes` edge, on adr, pdr, and feature-spec alike.
+#  - facet bootstrap: facet_id on capability / requirement / adr / contract is
+#    the legacy-import traceability spine (one-time curated promotion; reruns
+#    feed a reconcile report, never an overwrite). pdr carries none.
+#  - The per-code-repo counterpart preset (build-spoke) was REMOVED in v0.2.0:
+#    spokes carry no typed knowledge. Monorepo and multi-repo use this same
+#    preset — the corpus is layout-invariant; only delivery topology differs.
+#
+# Storage form (layouts, inventory paths, id prefixes, the contracts/specs
+# mechanics) lives in storage.yaml beside this file; the singleton gates
+# (prd required, the five orphan flags) live in policy.yaml.
+
+version: "0.3.0"
+
+ontology:
+  entities:
+
+    # ----------------------------------------- narrative singletons: the prose
+    prd:
+      when: >-
+        someone states what the product is for, who it serves, or what is deliberately out of
+        scope
+      attributes:
+        title: { required: true }
+
+    roadmap:
+      when: >-
+        sequencing or priority across releases is decided or changes
+      attributes:
+        title: { required: true }
+
+    glossary:
+      when: >-
+        a domain word is used in a way that a newcomer would misread
+      attributes:
+        title: { required: true }
+
+    arc42:
+      when: >-
+        the shape of the system is described or changes — context, building blocks, data
+        model, a crosscutting concern
+      attributes:
+        title: { required: true }
+
+    erd:
+      when: >-
+        the relationships between stored entities are described or change
+      attributes:
+        title: { required: true }
+
+    # ---------------------------------------------------------- product: what
+    capability:
+      when: >-
+        a coherent chunk of product value is named as a thing the system does
+      attributes:
+        title:    { required: true }   # override core OKF title -> required (slug source)
+        facet_id: { type: text }       # UCAP-XXX — joins the facet-synthesis inventory
+
+    requirement:
+      when: >-
+        a rule is stated that the system must satisfy or must never violate — 'must', 'never', 'always' are the tells
+      attributes:
+        title:    { required: true }
+        kind:     { enum: [functional, constraint, business-rule], required: true }
+        facet_id: { type: text }       # EARS-/CONST-XXX — import traceability
+      relations:
+        capabilities: { to: capability, many: true }
+        realized_in:  { to: repo, many: true }   # stored backstop: reality outside the work spine
+      # requirement prose (EARS-friendly) lives in the body; NFRs are
+      # quality-attribute entities, not requirements
+
+    pdr:
+      when: >-
+        a product-level choice is made about behaviour or scope, as opposed to implementation
+      attributes:
+        title:  { required: true }
+        status: { enum: [proposed, accepted, rejected], required: true }
+      relations:
+        supersedes: { to: pdr, inverse: superseded, acyclic: true }   # superseded is computed, never stored
+        affects:    { to: any, many: true }
+
+    # ---------------------------------------------------- architecture: how
+    adr:
+      when: >-
+        a technical choice is made, rejected, or revisited between real alternatives — including what we are NOT doing
+      attributes:
+        title:    { required: true }
+        status:   { enum: [proposed, accepted, rejected], required: true }
+        facet_id: { type: text }       # ADR-/TDD-XXX — import traceability
+      relations:
+        supersedes: { to: adr, inverse: superseded, acyclic: true }
+        affects:    { to: any, many: true }             # blast radius
+        drivers:    { to: quality-attribute, many: true }
+        produces:   { to: boundary, many: true }
+
+    domain:
+      when: >-
+        a bounded area of the problem space is named as having its own language and rules
+      attributes:
+        title:        { required: true }
+        tier:         { enum: [core, supporting, generic] }
+        stage:        { type: text }
+        relationship: { enum: [conformist, customer-supplier, partnership, shared-kernel, acl] }
+        # relationship qualifies this domain's depends_on posture (plain attr —
+        # khub relations carry no edge properties)
+      relations:
+        depends_on: { to: domain, many: true }   # override core any-edge; the cycle-checked predicate
+        reads:      { to: entity, many: true }   # read-only entities from other domains
+      # the domain body IS the blueprint narration: responsibilities, ubiquitous
+      # language, acceptance criteria
+
+    entity:
+      when: >-
+        a thing the system stores is identified, with an owner and a lifecycle
+      attributes:
+        title: { required: true }
+      relations:
+        owner: { to: domain, required: true }
+        # single-valued + required = single-writer schema-enforced; a second
+        # authoritative writer is unrepresentable
+      # identity + one-paragraph definition only; field detail lives in the owning
+      # spoke's entities.yaml via `resource`. ERD prose = entities/_index.md
+      # (skipped by the scan).
+
+    boundary:
+      when: >-
+        a limit is stated that separates what we control from what we do not
+      attributes:
+        title:       { required: true }
+        scope:       { enum: [domain, api, data, system] }
+        stage:       { type: text }
+        enforcement: { enum: [architecture-test, ci-gate, linter, code-review, manual] }
+        rule:        { required: true }   # the one-sentence invariant statement
+      relations:
+        affects: { to: any, many: true }
+
+    quality-attribute:
+      when: >-
+        a non-functional target is named — latency, availability, throughput — with a number worth holding to
+      attributes:
+        title:       { required: true }
+        category:    { type: text }       # reliability, security, performance, ...
+        stage:       { type: text }
+        scenario:    { required: true }   # the concrete, measurable situation
+        measurement: { type: text }
+        enforcement: { enum: [architecture-test, ci-gate, linter, code-review, manual, monitoring-alert] }
+      relations:
+        applies_to: { to: [domain, component], many: true }
+
+    component:
+      when: >-
+        a part of the system is named as a thing that can break, be owned, or be swapped
+      attributes:
+        title: { required: true }
+        kind:  { enum: [service, library, external], required: true }
+        stack: { type: text }                     # ours: the runtime; external: the vendor
+      relations:
+        repo:     { to: repo }                    # the component <-> codebase mapping; ours only
+        domains:  { to: domain, many: true }
+        consumes: { to: contract, many: true, inverse: consumed_by }   # churny side
+      # the body describes the deployable: stack rationale, operational notes.
+      # kind: external is a vendor or neighbouring product — no repo, `stack` names
+      # the vendor, base `resource` carries its API docs.
+
+    repo:
+      when: >-
+        a codebase is named that holds part of this system
+      attributes:
+        repo:   { type: text, required: true, pattern: '^[a-z0-9._-]+/[a-z0-9._-]+$' }
+        status: { enum: [active, archived], required: true }
+      # pure remotes record — an engagement tightens the pattern to its org
+
+    contract:
+      when: >-
+        an interface between two parts is agreed, published, or versioned
+      attributes:
+        title:    { required: true }
+        kind:     { enum: [api, events, data], required: true }
+        status:   { enum: [proposed, active, deprecated], required: true }
+        facet_id: { type: text }       # OAPI-XXX / AAPI-XXX — joins facet-contract output
+      relations:
+        provider: { to: component, required: true }
+      # hub-authored entity: policy prose (idempotency, auth, versioning) in
+      # `body`; the machine spec is a standalone file linked via `resource`.
+      # Name-keyed on purpose. A vendor-provided contract has a `kind: external`
+      # component as its provider.
+
+    baseline:
+      when: >-
+        a measurement is taken that later work will be compared against
+      attributes:
+        metric:    { type: text, required: true }   # test-coverage, p99-latency-ms, ...
+        value:     { type: text, required: true }   # text: accommodates "80" and "99.9%" alike
+        direction: { enum: [at-least, at-most] }
+        as_of:     { type: date }
+        source:    { type: text }    # the system of record the value derives from
+      relations:
+        component: { to: component }
+
+    # ----------------------------------------------- specs: delivery state
+    feature-spec:
+      when: >-
+        work is proposed, started, finished, or dropped — record at proposed, then edit `status`
+      attributes:
+        title:  { required: true }
+        status: { enum: [planned, active, done, dropped], required: true }
+      relations:
+        capabilities: { to: capability, many: true }    # placement: where in the system map
+        requirements: { to: requirement, many: true }   # obligation: what this change satisfies
+        supersedes:   { to: feature-spec, inverse: superseded, acyclic: true }
+      # the FS IS the feature record — there is no separate feature container
+
+    test-spec:
+      when: >-
+        a way of proving a requirement holds is agreed
+      attributes:
+        title: { required: true }
+      relations:
+        verifies: { to: feature-spec, required: true }   # green TS = "verified", not just merged
+
+    work-package:
+      when: >-
+        a feature is split into a unit one person or agent can finish
+      attributes:
+        title:  { required: true }
+        status: { enum: [planned, active, done, dropped], required: true }
+      relations:
+        feature: { to: feature-spec, required: true }
+        repo:    { to: repo }   # where the slice lands — one repo; a slice spanning repos gets split

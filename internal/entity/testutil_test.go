@@ -65,47 +65,27 @@ func newWS(t *testing.T, preset string) string {
 }
 
 // newWSFrom scaffolds a workspace from any preset directory (init's
-// --preset-source).
+// --preset-source): the layer files are copied verbatim, and the base arrives
+// embedded via LoadSchema, exactly as in a live workspace. A fixture preset's
+// ontology.yaml may carry all three layer blocks in one document — the merge
+// dispatches on top-level key, not filename.
 func newWSFrom(t *testing.T, preset, dir string) string {
 	t.Helper()
 	root := t.TempDir()
-	core := loadYAML(t, filepath.Join(presetsDir(t), "core.yaml"))
-	decl := loadYAML(t, filepath.Join(dir, preset, "schema.yaml"))
-
-	entities := omap.New()
-	if ce, ok := core.Get("entities"); ok {
-		if m, isMap := ce.(*omap.Map); isMap {
-			for _, k := range m.Keys() {
-				v, _ := m.Get(k)
-				entities.Set(k, v)
-			}
-		}
-	}
-	pe, _ := decl.Get("entities")
-	peMap, ok := pe.(*omap.Map)
-	if !ok {
-		t.Fatalf("preset %s declares no entities", preset)
-	}
-	for _, k := range peMap.Keys() {
-		v, _ := peMap.Get(k)
-		entities.Set(k, v)
-	}
-	base, _ := core.Get("base")
-	merged := omap.New()
-	merged.Set("base", base)
-	merged.Set("entities", entities)
+	mkdirAll(t, filepath.Join(root, ".khub"))
 
 	version := "0.0.0"
-	if v, has := decl.Get("version"); has && v != nil {
+	ont := loadYAML(t, filepath.Join(dir, preset, "ontology.yaml"))
+	if v, has := ont.Get("version"); has && v != nil {
 		version = scalarText(v)
 	}
-	schemaText, err := canon.DumpWide(merged)
-	if err != nil {
-		t.Fatal(err)
+	for _, layer := range []string{"ontology.yaml", "policy.yaml", "storage.yaml"} {
+		data, readErr := os.ReadFile(filepath.Join(dir, preset, layer))
+		if readErr != nil {
+			continue // policy/storage are optional layers
+		}
+		writeFile(t, filepath.Join(root, ".khub", layer), string(data))
 	}
-	mkdirAll(t, filepath.Join(root, ".khub"))
-	writeFile(t, filepath.Join(root, ".khub", "schema.yaml"),
-		"# khub-preset: "+preset+"@"+version+"\n"+schemaText)
 
 	defaults := omap.New()
 	defaults.Set("stale_days", int64(90))
@@ -135,12 +115,15 @@ func newWSFrom(t *testing.T, preset, dir string) string {
 }
 
 // writePreset lays down a throwaway preset directory (init's --preset-source
-// shape) and returns the directory holding it.
+// shape) and returns the directory holding it. schemaText is one layered
+// document (ontology/policy/storage blocks in any combination) — the merge
+// dispatches on top-level key, so one file carrying three blocks reads the
+// same as three files.
 func writePreset(t *testing.T, name, schemaText string, templates map[string]string) string {
 	t.Helper()
 	dir := t.TempDir()
 	mkdirAll(t, filepath.Join(dir, name))
-	writeFile(t, filepath.Join(dir, name, "schema.yaml"), schemaText)
+	writeFile(t, filepath.Join(dir, name, "ontology.yaml"), schemaText)
 	for file, text := range templates {
 		mkdirAll(t, filepath.Join(dir, name, "templates"))
 		writeFile(t, filepath.Join(dir, name, "templates", file), text)

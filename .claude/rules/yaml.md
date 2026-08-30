@@ -19,7 +19,7 @@ Two profiles, both pinned:
 | Profile | Width | Used for |
 |---|---|---|
 | round-trip | 80 | entity frontmatter, collections — the human-edited surface |
-| safe | 4096 | `.khub/schema.yaml` and friends, where long scalars stay on one line |
+| safe | 4096 | `.khub/{ontology,policy,storage}.yaml` and friends, where long scalars stay on one line |
 
 ## Why goccy is parser-only
 

@@ -230,11 +230,11 @@ func TestSearchIndexesScalarAttributeValues(t *testing.T) {
 func TestSearchCollectionRowCarriesLocator(t *testing.T) {
 	ws := wsFromSchema(t, `
 version: "0.1.0"
-entities:
-  widget:
-    layout: collection
-    format: yaml
-    path: inventory/widgets.yaml
+ontology:
+  entities:
+    widget: {}
+storage:
+  widget: { layout: collection, format: yaml, path: inventory/widgets.yaml }
 `)
 	seedRaw(t, ws, "inventory/widgets.yaml",
 		"w1:\n  type: widget\n  title: First Widget\n  body: a chrysanthemum lives here\n")

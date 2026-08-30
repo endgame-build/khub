@@ -1,0 +1,1 @@
+{"error": {"code": "invalid_schema", "message": "Invalid schema at ontology.base: the base block is khub-owned; override a base attribute by redeclaring it on the type (see `khub schema base`)"}}

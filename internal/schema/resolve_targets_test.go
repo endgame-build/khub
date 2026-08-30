@@ -6,7 +6,6 @@ package schema
 // the duplicate-key hard error.
 
 import (
-	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -15,13 +14,13 @@ func TestUnknownRelationTargetLocatedError(t *testing.T) {
 	// TS-SCH-001-03 / U06 / SCH-003: a relation targeting an unknown type is
 	// rejected with a located error carrying type/relation/target.
 	preset := `
-entities:
-  project:
-    layout: folder
-    relations:
-      owner: { to: persn }
+ontology:
+  entities:
+    project:
+      relations:
+        owner: { to: persn }
 `
-	e := resolveLocated(t, coreBase, preset)
+	e := resolveLocatedWithCore(t, preset)
 	if e.Code != "unknown_relation_target" {
 		t.Errorf("code = %q, want unknown_relation_target", e.Code)
 	}
@@ -38,14 +37,14 @@ func TestDeltaOnlyInheritance(t *testing.T) {
 	// TS-SCH-001-04 / U05: a type declares only its domain delta and inherits
 	// the base block (type, draft, created, updated, tags, OKF fields).
 	preset := `
-entities:
-  client:
-    layout: file
-    attributes:
-      name:     { required: true }
-      industry: {}
+ontology:
+  entities:
+    client:
+      attributes:
+        name:     { required: true }
+        industry: {}
 `
-	c := typeOf(t, resolveDocs(t, coreBase, preset), "client")
+	c := typeOf(t, resolveWithCore(t, preset), "client")
 	// domain delta
 	if !c.Attributes.Has("name") {
 		t.Error("client missing declared attr 'name'")
@@ -62,13 +61,10 @@ entities:
 }
 
 func TestAuthoredPresetsResolve(t *testing.T) {
-	// Integration: the authored core.yaml + firm-ops.yaml resolve to 9 types,
-	// with the post-review model (union engagement minus build; project.active).
-	presets := presetsDir(t)
-	schema, err := Resolve([]string{
-		filepath.Join(presets, "core.yaml"),
-		filepath.Join(presets, "firm-ops", "schema.yaml"),
-	})
+	// Integration: the authored core base + firm-ops layer files resolve to 9
+	// types, with the post-review model (union engagement minus build;
+	// project.active).
+	schema, err := ResolveWith(corePresetDoc(t), presetPaths(t, "firm-ops"))
 	if err != nil {
 		t.Fatalf("presets failed to resolve: %v", err)
 	}
@@ -110,18 +106,24 @@ func TestCrossFileEntityMergeLastWinsFirstPosition(t *testing.T) {
 	// resolve.py merges each file's entities into one dict: a redeclared name
 	// takes the later declaration (last wins) but keeps its first position —
 	// Python dict-update semantics.
-	first := coreBase + `
-entities:
-  a: { layout: file }
-  b: { layout: file }
+	first := `
+ontology:
+  entities:
+    a:
+      attributes:
+        kind: { type: text }
+    b: {}
 `
 	second := `
-entities:
-  a: { layout: folder }
+ontology:
+  entities:
+    a:
+      attributes:
+        kind: { type: number }
 `
 	schema := resolveDocs(t, first, second)
-	if got := typeOf(t, schema, "a").Storage.Layout; got != "folder" {
-		t.Errorf("a.layout = %q, want folder (last declaration wins)", got)
+	if got := attrOf(t, typeOf(t, schema, "a"), "kind").BaseType; got != "number" {
+		t.Errorf("a.kind = %q, want number (last declaration wins)", got)
 	}
 	if !eqStrings(schema.Types.Keys(), []string{"a", "b"}) {
 		t.Errorf("type order = %v, want [a b] (first position kept)", schema.Types.Keys())
@@ -132,12 +134,13 @@ func TestDuplicateTypeKeyIsAnError(t *testing.T) {
 	// A duplicate mapping key inside one file is a hard load error (ruamel
 	// DuplicateKeyError; goccy's default duplicate-key rejection) — never
 	// last-wins.
-	doc := coreBase + `
-entities:
-  a: { layout: file }
-  a: { layout: folder }
+	doc := `
+ontology:
+  entities:
+    a: { when: first }
+    a: { when: second }
 `
-	_, err := Resolve(writeSchemaFiles(t, doc))
+	_, err := ResolveWith(nil, writeSchemaFiles(t, doc))
 	if err == nil {
 		t.Fatal("Resolve succeeded; want a duplicate-key error")
 	}

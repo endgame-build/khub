@@ -1,0 +1,49 @@
+# khub-preset: preset-cells@0.1.0
+ontology:
+  entities:
+    note:
+      when: parity corpus
+      attributes:
+        title:
+          required: true
+    card:
+      when: parity corpus
+      attributes:
+        title:
+          required: true
+    sheet:
+      when: parity corpus
+      attributes:
+        title:
+          required: true
+    dossier:
+      when: parity corpus
+      attributes:
+        title:
+          required: true
+    charter:
+      when: parity corpus
+      attributes:
+        title:
+          required: true
+    repo:
+      when: parity corpus
+      attributes:
+        title:
+          required: true
+        stack:
+          type: text
+    vendor:
+      when: parity corpus
+      attributes:
+        title:
+          required: true
+    account:
+      when: parity corpus
+      attributes:
+        title:
+          required: true
+        amount:
+          type: number
+        due:
+          type: date

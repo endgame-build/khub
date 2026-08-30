@@ -9,6 +9,7 @@
 package integrity
 
 import (
+	"errors"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -22,6 +23,7 @@ import (
 	"github.com/endgame-build/khub/internal/introspect"
 	"github.com/endgame-build/khub/internal/omap"
 	"github.com/endgame-build/khub/internal/schema"
+	"github.com/endgame-build/khub/internal/template"
 	"github.com/endgame-build/khub/internal/values"
 )
 
@@ -73,8 +75,20 @@ type CheckReport struct {
 	Orphans    []string
 	Dangling   []Dangling
 	Strays     []string
-	Cycles     [][]string
-	Malformed  []string
+	// Template files no type claims — the mirror of a stray entity file: a
+	// stray is a non-entity inside a type's layout, this is a template inside
+	// .khub/templates/ that no type's effective template name (declared, or
+	// the type's own name by convention) resolves to. The one it usually
+	// catches is a renamed template, which would otherwise silently disable
+	// both add's scaffolding and validate's body contract.
+	StrayTemplates []string
+	// A declared `template:` name resolving to no file — the renamed-template
+	// hole seen from the claiming side. A `check` finding rather than a schema
+	// load error: capture is never blocked, so a broken template link must not
+	// take `add` down with it. Entries are "<type>: .khub/templates/<name>.yaml".
+	MissingTemplates []string
+	Cycles           [][]string
+	Malformed        []string
 	// Orphans are informational by default — a fully disconnected entity can be
 	// legitimate (a dormant client whose engagements were archived). Strict makes
 	// a fully connected graph a gate requirement.
@@ -108,6 +122,8 @@ func (r *CheckReport) Passed() bool {
 	return len(r.Incomplete) == 0 &&
 		len(r.Dangling) == 0 &&
 		len(r.Strays) == 0 &&
+		len(r.StrayTemplates) == 0 &&
+		len(r.MissingTemplates) == 0 &&
 		len(r.Cycles) == 0 &&
 		len(r.Malformed) == 0 &&
 		len(r.MissingSingletons) == 0 &&
@@ -234,6 +250,10 @@ func Check(root string, strict bool) (*CheckReport, error) {
 	if err != nil {
 		return nil, err
 	}
+	strayTemplates, missingTemplates, err := templateFindings(root, resolved)
+	if err != nil {
+		return nil, err
+	}
 	return &CheckReport{
 		Incomplete:              incomplete,
 		Orphans:                 orphans,
@@ -247,6 +267,8 @@ func Check(root string, strict bool) (*CheckReport, error) {
 		MissingSingletons:       missingSingletons,
 		DraftSingletons:         draftSingletons,
 		Misplaced:               misplaced,
+		StrayTemplates:          strayTemplates,
+		MissingTemplates:        missingTemplates,
 	}, nil
 }
 
@@ -264,6 +286,66 @@ func draftFlag(meta *omap.Map) any {
 var skipDirs = map[string]bool{
 	".git": true, ".khub": true, ".kb": true,
 	"node_modules": true, ".venv": true, "venv": true, "__pycache__": true,
+}
+
+// templateFindings sweeps the template link both ways.
+//
+// Strays: .khub/templates/*.yaml no type claims. Claimed = some type's
+// effective template name resolves to the file's stem — a declared `template:`
+// name or, by convention, the type's own name. A type declaring `template:
+// false` claims its conventional stem too: the opt-out deliberately leaves
+// that file unused, and the documented way to keep a template around must not
+// fail the gate.
+//
+// Missing: a declared `template:` name resolving to no file — the
+// renamed-template hole seen from the claiming side. The convention stays
+// soft (absence just means "not templated"), but an explicit name pointing at
+// nothing would silently disable add's seeding and validate's body contract.
+func templateFindings(root string, resolved *schema.ResolvedSchema) (strays, missing []string, err error) {
+	// One directory listing answers both questions: the stems that exist.
+	existing := map[string]bool{}
+	entries, err := os.ReadDir(filepath.Join(root, filepath.FromSlash(template.TemplatesDir)))
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return nil, nil, err
+	}
+	for _, e := range entries {
+		name := e.Name()
+		if e.IsDir() || !strings.HasSuffix(name, ".yaml") {
+			continue
+		}
+		existing[strings.TrimSuffix(name, ".yaml")] = true
+	}
+	claimed := map[string]bool{}
+	for _, tname := range resolved.Types.Keys() {
+		rt, _ := resolved.Types.Get(tname)
+		// Only a type that reads a template may claim a stem. Claiming from
+		// one that does not (a collection, or any non-md format) would shield
+		// the file it names from the stray sweep while no verb ever consults
+		// it — the renamed-template hole, seen from the claiming side.
+		if !rt.ReadsTemplate() {
+			continue
+		}
+		if rt.TemplateOff {
+			claimed[tname] = true
+			continue
+		}
+		stem := rt.TemplateName()
+		claimed[stem] = true
+		// The resolver's storage matrix guarantees a DECLARED template sits on
+		// a type that actually reads one (per-item/singleton md), so a missing
+		// file here is always a live break.
+		if rt.Template != nil && !existing[stem] {
+			missing = append(missing, tname+": "+template.TemplatesDir+"/"+stem+".yaml")
+		}
+	}
+	for stem := range existing {
+		if !claimed[stem] {
+			strays = append(strays, template.TemplatesDir+"/"+stem+".yaml")
+		}
+	}
+	sort.Strings(strays)
+	sort.Strings(missing)
+	return strays, missing, nil
 }
 
 // misplacedFiles is integrity._misplaced: markdown outside every layout whose
@@ -564,10 +646,11 @@ func danglingEdges(
 // alwaysAcyclic is integrity._ALWAYS_ACYCLIC.
 //
 // `depends_on` is acyclic by contract in every khub schema — it was hardcoded
-// before the flag existed. Keep it built in: schema.yaml is copied at init and
-// owned by the workspace, so a workspace created before the flag shipped
-// carries no `acyclic:` key, and keying purely off the schema would silently
-// switch cycle detection off for every one of them.
+// before the flag existed. Keep it built in: the base block declares
+// `acyclic: true` on it, but a type that redeclares the predicate owns that
+// declaration outright (relations whole-replace, never facet-merge), and
+// keying purely off the schema would let a redeclaration silently switch
+// cycle detection off.
 var alwaysAcyclic = []string{"depends_on"}
 
 // acyclicPredicates is integrity._acyclic_predicates: the built-in contract

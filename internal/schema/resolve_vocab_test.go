@@ -9,18 +9,20 @@ func TestWellFormedTypeResolves(t *testing.T) {
 	// TS-SCH-001-01 / U01 / U02: attributes, enums, typed relations, storage
 	// resolve; each relation's field name is its predicate.
 	preset := `
-entities:
-  client:  { layout: file }
-  person:  { layout: file }
-  project:
-    layout: folder
-    attributes:
-      stage: { enum: [diagnose, prove, scale, complete], required: true }
-    relations:
-      client: { to: client, required: true }
-      owner:  { to: person, required: true }
+ontology:
+  entities:
+    client: {}
+    person: {}
+    project:
+      attributes:
+        stage: { enum: [diagnose, prove, scale, complete], required: true }
+      relations:
+        client: { to: client, required: true }
+        owner:  { to: person, required: true }
+storage:
+  project: { layout: folder, path: projects }
 `
-	schema := resolveDocs(t, coreBase, preset)
+	schema := resolveWithCore(t, preset)
 	proj := typeOf(t, schema, "project")
 
 	// attributes accepted as scalars and enums
@@ -60,17 +62,17 @@ entities:
 func TestRelationTargetSingleListOrAny(t *testing.T) {
 	// U03 / SCH-003: a `to:` target may be a single type, a list (union), or `any`.
 	preset := `
-entities:
-  a: { layout: file }
-  b: { layout: file }
-  meeting:
-    layout: file
-    relations:
-      one:        { to: a }
-      engagement: { to: [a, b], required: true }
-      anything:   { to: any }
+ontology:
+  entities:
+    a: {}
+    b: {}
+    meeting:
+      relations:
+        one:        { to: a }
+        engagement: { to: [a, b], required: true }
+        anything:   { to: any }
 `
-	m := typeOf(t, resolveDocs(t, coreBase, preset), "meeting")
+	m := typeOf(t, resolveWithCore(t, preset), "meeting")
 	one := relOf(t, m, "one")
 	if one.Kind != KindTyped || !eqStrings(one.Targets, []string{"a"}) {
 		t.Errorf("one = %q %v", one.Kind, one.Targets)
@@ -91,16 +93,16 @@ func TestConstraintsCaptured(t *testing.T) {
 	// TS-SCH-001-02 (resolver capture): enum, pattern, and `many` cardinality
 	// are carried on the resolved model.
 	preset := `
-entities:
-  person: { layout: file }
-  thing:
-    layout: file
-    attributes:
-      airtable_id: { type: text, pattern: '^rec[A-Za-z0-9]+$' }
-    relations:
-      team: { to: person, many: true }
+ontology:
+  entities:
+    person: {}
+    thing:
+      attributes:
+        airtable_id: { type: text, pattern: '^rec[A-Za-z0-9]+$' }
+      relations:
+        team: { to: person, many: true }
 `
-	thing := typeOf(t, resolveDocs(t, coreBase, preset), "thing")
+	thing := typeOf(t, resolveWithCore(t, preset), "thing")
 	pat := attrOf(t, thing, "airtable_id").Pattern
 	if pat == nil || *pat != "^rec[A-Za-z0-9]+$" {
 		t.Errorf("airtable_id.Pattern = %v", pat)
@@ -114,17 +116,17 @@ func TestRejectSmuggledRawLinkML(t *testing.T) {
 	// U04 / SCH-001: a declaration using a raw LinkML construct (not khub
 	// vocab) is rejected with a located error.
 	preset := `
-entities:
-  thing:
-    layout: file
-    attributes:
-      name: { range: string }
+ontology:
+  entities:
+    thing:
+      attributes:
+        name: { range: string }
 `
-	e := resolveLocated(t, coreBase, preset)
+	e := resolveLocatedWithCore(t, preset)
 	if e.Code != "raw_linkml_smuggled" {
 		t.Errorf("code = %q, want raw_linkml_smuggled", e.Code)
 	}
-	want := "Unknown construct 'range' (not khub vocabulary) at entities.thing.attributes.name.range"
+	want := "Unknown construct 'range' (not khub vocabulary) at ontology.entities.thing.attributes.name.range"
 	if e.Message != want {
 		t.Errorf("message = %q, want %q", e.Message, want)
 	}
@@ -137,18 +139,18 @@ func TestOrphanFlagParsesOnAnyLayout(t *testing.T) {
 	// `orphan: true` declares that edge-less is a type's expected state. It
 	// defaults to false and, unlike `required`, is NOT singleton-only.
 	preset := `
-entities:
-  charter:
-    layout: singleton
-    path: charter.md
-    orphan: true
-  note:
-    layout: file
-    orphan: true
-  client:
-    layout: file
+ontology:
+  entities:
+    charter: {}
+    note: {}
+    client: {}
+policy:
+  charter: { orphan: true }
+  note: { orphan: true }
+storage:
+  charter: { layout: singleton, path: charter.md }
 `
-	schema := resolveDocs(t, coreBase, preset)
+	schema := resolveWithCore(t, preset)
 	if !typeOf(t, schema, "charter").Orphan {
 		t.Error("charter.Orphan = false, want true")
 	}

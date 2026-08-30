@@ -80,9 +80,11 @@ func TestWireCreatesClaudeMD(t *testing.T) {
 	text := read(t, filepath.Join(ws, "CLAUDE.md"))
 	for _, want := range []string{
 		Begin, End,
-		"@.khub/schema.yaml", // the Claude import — reason without the CLI
-		"firm-ops",           // the active preset
-		"`client`",           // a declared type, read from the live schema
+		"@.khub/ontology.yaml", // the Claude import — reason without the CLI
+		"@.khub/policy.yaml",
+		"@.khub/storage.yaml",
+		"firm-ops", // the active preset
+		"`client`", // a declared type, read from the live schema
 	} {
 		if !strings.Contains(text, want) {
 			t.Errorf("CLAUDE.md lacks %q", want)
@@ -103,11 +105,11 @@ func TestWireAgentsPointerNotImport(t *testing.T) {
 	if !strings.Contains(text, Begin) || !strings.Contains(text, End) {
 		t.Error("AGENTS.md has no managed block")
 	}
-	// AGENTS.md has no import directive — but it points at the schema file.
-	if strings.Contains(text, "@.khub/schema.yaml") {
+	// AGENTS.md has no import directive — but it points at the schema files.
+	if strings.Contains(text, "@.khub/ontology.yaml") {
 		t.Error("AGENTS.md carries the Claude import")
 	}
-	if !strings.Contains(text, ".khub/schema.yaml") || !strings.Contains(text, "`client`") {
+	if !strings.Contains(text, ".khub/ontology.yaml") || !strings.Contains(text, "`client`") {
 		t.Error("AGENTS.md lacks the schema pointer or the types")
 	}
 	if !reflect.DeepEqual(actionList(res), []string{"created"}) {
@@ -178,7 +180,7 @@ func TestWireReplacesBlockPreservingSurroundings(t *testing.T) {
 	}
 	res := mustWire(t, ws, Options{}) // CLAUDE.md exists → bare wire updates it in place
 	text := read(t, claude)
-	for _, want := range []string{"# Project", "House rules.", "More rules.", "@.khub/schema.yaml"} {
+	for _, want := range []string{"# Project", "House rules.", "More rules.", "@.khub/ontology.yaml"} {
 		if !strings.Contains(text, want) {
 			t.Errorf("CLAUDE.md lost %q", want)
 		}
@@ -219,7 +221,7 @@ func TestWireDryRunWritesNothing(t *testing.T) {
 	if exists(filepath.Join(ws, "CLAUDE.md")) {
 		t.Error("a dry run wrote CLAUDE.md")
 	}
-	if !strings.Contains(res.Preview, Begin) || !strings.Contains(res.Preview, "@.khub/schema.yaml") {
+	if !strings.Contains(res.Preview, Begin) || !strings.Contains(res.Preview, "@.khub/ontology.yaml") {
 		t.Error("the preview lacks the block")
 	}
 	if !reflect.DeepEqual(actionList(res), []string{"created"}) {
@@ -260,6 +262,9 @@ func TestSingletonCuesCarryTheirFileLink(t *testing.T) {
 	}
 }
 
+// threeLayers is the full-workspace shape most BuildBlock tests want.
+var threeLayers = []string{".khub/ontology.yaml", ".khub/policy.yaml", ".khub/storage.yaml"}
+
 func TestBuildBlockStampAndTypeListFallbacks(t *testing.T) {
 	// stamp = "preset@version", or the bare preset without a version, or
 	// "custom" without either; an empty type list reads "none declared yet".
@@ -270,12 +275,12 @@ func TestBuildBlockStampAndTypeListFallbacks(t *testing.T) {
 		{"firm-ops", "", "Preset: `firm-ops`."},
 		{"", "", "Preset: `custom`."},
 	} {
-		block := BuildBlock(tc.preset, tc.version, []string{"a"}, true, nil)
+		block := BuildBlock(BlockSpec{Preset: tc.preset, Version: tc.version, Types: []string{"a"}, Layers: threeLayers}, true)
 		if !strings.Contains(block, tc.want) {
 			t.Errorf("BuildBlock(%q,%q) lacks %q", tc.preset, tc.version, tc.want)
 		}
 	}
-	empty := BuildBlock("p", "1", nil, true, nil)
+	empty := BuildBlock(BlockSpec{Preset: "p", Version: "1", Layers: threeLayers}, true)
 	if !strings.Contains(empty, "Entity types: none declared yet.") {
 		t.Error("an empty type list has no fallback")
 	}
@@ -283,19 +288,45 @@ func TestBuildBlockStampAndTypeListFallbacks(t *testing.T) {
 	if strings.Contains(empty, "Record as you go") {
 		t.Error("the trigger section rendered without any when")
 	}
-	withWhen := BuildBlock("p", "1", []string{"a"}, true, []When{{Type: "a", Text: "it happens"}})
+	withWhen := BuildBlock(BlockSpec{Preset: "p", Version: "1", Types: []string{"a"}, Whens: []When{{Type: "a", Text: "it happens"}}, Layers: threeLayers}, true)
 	if !strings.Contains(withWhen, "- `a` — it happens") {
 		t.Error("the when line is missing")
 	}
 }
 
 func TestBuildBlockMarkersAndNoTrailingNewline(t *testing.T) {
-	block := BuildBlock("p", "1", []string{"a"}, false, nil)
+	block := BuildBlock(BlockSpec{Preset: "p", Version: "1", Types: []string{"a"}, Layers: threeLayers}, false)
 	if !strings.HasPrefix(block, Begin) || !strings.HasSuffix(block, End) {
 		t.Error("the block is not marker-delimited end to end")
 	}
-	if strings.Contains(block, "@.khub/schema.yaml") {
+	if strings.Contains(block, "@.khub/ontology.yaml") {
 		t.Error("importSupported=false emitted the import")
+	}
+}
+
+func TestBuildBlockRendersOnlyPresentLayers(t *testing.T) {
+	// Imports and links come from the workspace's ACTUAL layer files: a
+	// two-file workspace must not advertise an import Claude Code would report
+	// as broken.
+	two := []string{".khub/ontology.yaml", ".khub/storage.yaml"}
+	block := BuildBlock(BlockSpec{Preset: "p", Version: "1", Types: []string{"a"}, Layers: two}, true)
+	for _, want := range []string{"@.khub/ontology.yaml", "@.khub/storage.yaml"} {
+		if !strings.Contains(block, want) {
+			t.Errorf("block lacks %q", want)
+		}
+	}
+	if strings.Contains(block, ".khub/policy.yaml") {
+		t.Error("an absent layer file was imported or linked")
+	}
+}
+
+func TestCueLinkDestinationWithSpacesIsWrapped(t *testing.T) {
+	// A storage path may carry spaces; a bare markdown destination ends at the
+	// first one, so the destination side takes CommonMark's <...> form.
+	whens := []When{{Type: "prd", Text: "scope is stated", EditPath: "product docs/prd.md"}}
+	block := BuildBlock(BlockSpec{Preset: "p", Version: "1", Types: []string{"prd"}, Whens: whens, Layers: threeLayers}, true)
+	if !strings.Contains(block, "[product docs/prd.md](<product docs/prd.md>)") {
+		t.Error("a space-carrying edit path was not wrapped in <...>")
 	}
 }
 
@@ -307,8 +338,8 @@ func TestGoldenWiredFiles(t *testing.T) {
 	ws := freshWS(t, "build-lite")
 	mustWire(t, ws, Options{})
 	want := map[string]string{
-		"CLAUDE.md": "a23f3c96dc82eb67661a82acb26792dc26ac3357e8696e00f24ddae124f44521",
-		"AGENTS.md": "15596cc4273c20515c0226770cdf734dee5884d7b8f255542494f4bc99211edb",
+		"CLAUDE.md": "41753eb0fe728d9cde122836db47813f5ee745a55b43979936c0fed7bd19f46a",
+		"AGENTS.md": "06259d04e5d26e25a423ea3c02f69a388551c114df623525f643ab926ad88c02",
 	}
 	for name, digest := range want {
 		sum := sha256.Sum256([]byte(read(t, filepath.Join(ws, name))))

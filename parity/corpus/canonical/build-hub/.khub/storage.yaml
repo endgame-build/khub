@@ -1,0 +1,78 @@
+# khub-preset: build-hub@0.3.0
+storage:
+  prd:
+    layout: singleton
+    path: knowledge/product/prd.md
+  roadmap:
+    layout: singleton
+    path: knowledge/product/roadmap.md
+  glossary:
+    layout: singleton
+    path: knowledge/product/glossary.md
+  arc42:
+    layout: singleton
+    path: knowledge/architecture/arc42.md
+  erd:
+    layout: singleton
+    path: knowledge/architecture/erd.md
+  capability:
+    layout: file
+    path: knowledge/product/capabilities
+    id_prefix: cap
+  requirement:
+    layout: file
+    path: knowledge/product/requirements
+    id_prefix:
+      by: kind
+      map:
+        functional: fr
+        constraint: cst
+        business-rule: br
+  pdr:
+    layout: file
+    path: knowledge/product/decisions
+    id_prefix: pd
+  adr:
+    layout: file
+    path: knowledge/architecture/decisions
+    id_prefix: ad
+  domain:
+    layout: file
+    path: knowledge/architecture/domains
+  entity:
+    layout: file
+    path: knowledge/architecture/entities
+  boundary:
+    layout: file
+    path: knowledge/architecture/boundaries
+    id_prefix: bound
+  quality-attribute:
+    layout: file
+    path: knowledge/architecture/quality-attributes
+    id_prefix: qa
+  component:
+    layout: file
+    path: knowledge/architecture/components
+    id_prefix: cmp
+  repo:
+    layout: collection
+    path: knowledge/architecture/repos.yaml
+  contract:
+    layout: file
+    format: yaml
+    path: knowledge/architecture/contracts
+  baseline:
+    layout: collection
+    path: knowledge/architecture/baselines.yaml
+  feature-spec:
+    layout: file
+    path: specs/feature-specs
+    id_prefix: fs
+  test-spec:
+    layout: file
+    path: specs/test-specs
+    id_prefix: ts
+  work-package:
+    layout: file
+    path: specs/work-packages
+    id_prefix: wp

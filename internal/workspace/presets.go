@@ -1,14 +1,19 @@
-// Ports the preset-reading half of src/khub/core/workspace.py: loading
-// core.yaml + <preset>/schema.yaml off a preset tree and flattening them into
-// the one document init writes to .khub/schema.yaml. The registry itself
-// (known_presets / resolve_preset, PRESETS_DIR) lives in internal/presets so
-// --preset-source can swap the fs.FS; this file is the consumer.
+// Ports the preset-reading half of src/khub/core/workspace.py, post the
+// ontology/policy/storage split: loading a preset's three layer documents off
+// a preset tree for init to write into .khub/{ontology,policy,storage}.yaml.
+// The base block is NOT read here — it stays embedded in the binary and is
+// supplied to every resolve by introspect.LoadSchema, never copied into a
+// workspace. The registry itself (known_presets / resolve_preset, PRESETS_DIR)
+// lives in internal/presets so --preset-source can swap the fs.FS; this file
+// is the consumer.
 
 package workspace
 
 import (
+	"errors"
 	"fmt"
 	"io/fs"
+	"path"
 	"strings"
 
 	"github.com/endgame-build/khub/internal/canon"
@@ -17,58 +22,125 @@ import (
 	"github.com/endgame-build/khub/internal/presets"
 )
 
-// flattened is the merged schema document plus the provenance init stamps on
-// it: core's base block, core's entities overlaid by the preset's, and the
-// preset version that goes into the header and config.yaml.
+// flattened is the preset's three layer documents plus the provenance init
+// stamps on them. No base: the base block is embedded, not copied. No derived
+// views either — the tree/singleton passes read the RESOLVED schema of the
+// workspace init just scaffolded, so no field here can disagree with what the
+// binary will actually scan.
 type flattened struct {
-	Doc     *omap.Map // {"base": …, "entities": …} — the bytes init writes
-	Version string
-	// Entities is Doc["entities"], kept for the tree/singleton passes.
-	Entities *omap.Map
+	Ontology *omap.Map // {"ontology": …} — the bytes behind .khub/ontology.yaml
+	Policy   *omap.Map // {"policy": …} — always written, empty when the preset ships none
+	Storage  *omap.Map // {"storage": …} — always written, empty when the preset ships none
+	Version  string
 }
 
-// flatten is the core+preset merge: `{**core.entities, **preset.entities}`
-// under a doc that leads with core's base block. An entity-less preset is
-// rejected here, before anything is written.
-func flatten(name string, source fs.FS, schemaPath string) (*flattened, error) {
-	core, err := loadYAMLFS(presets.Embedded(), presets.CoreFile)
+// flatten reads a preset's three layer documents. An entity-less preset is
+// rejected here, before anything is written — and so is a preset declaring
+// `ontology.base`: the base block is khub-owned and embedded, and copying an
+// authored one into the workspace would scaffold a schema no command can load
+// (the resolver rejects it). The base is deliberately not loaded here: it is
+// supplied at resolve time.
+func flatten(name string, source fs.FS, ontologyPath string) (*flattened, error) {
+	ontDoc, err := loadYAMLFS(source, ontologyPath)
 	if err != nil {
 		return nil, err
 	}
-	presetData, err := loadYAMLFS(source, schemaPath)
-	if err != nil {
-		return nil, err
+	// The same top-level vocabulary the resolver enforces on workspace files:
+	// flatten regenerates the workspace copy from the `ontology:` block alone,
+	// so any other authored key would be dropped silently rather than caught.
+	for _, k := range ontDoc.Keys() {
+		if k != "ontology" && k != "version" {
+			return nil, errs.New("invalid_schema", fmt.Sprintf(
+				"Preset '%s' ontology.yaml: unknown top-level key '%s'", name, k))
+		}
 	}
 
 	version := "0.0.0"
-	if raw, ok := presetData.Get("version"); ok && !pyFalsy(raw) {
+	if raw, ok := ontDoc.Get("version"); ok && !pyFalsy(raw) {
 		version = pyScalarString(raw)
 	}
 
-	presetEntities, err := mappingOrNil(presetData, "entities")
+	ontology, err := mappingOrNil(ontDoc, "ontology")
 	if err != nil {
 		return nil, err
+	}
+	var presetEntities *omap.Map
+	if ontology != nil {
+		if _, has := ontology.Get("base"); has {
+			return nil, errs.New("invalid_schema", fmt.Sprintf(
+				"Preset '%s' declares ontology.base; the base block is khub-owned and embedded "+
+					"(see `khub schema base`) — override a base attribute by redeclaring it on the type", name))
+		}
+		presetEntities, err = mappingOrNil(ontology, "entities")
+		if err != nil {
+			return nil, err
+		}
 	}
 	if presetEntities == nil || presetEntities.Len() == 0 {
 		return nil, errs.New("empty_preset", fmt.Sprintf("Preset '%s' declares no entities", name))
 	}
 
-	// core.yaml is base-only in v1, so its `entities` is legitimately absent.
-	coreEntities, err := mappingOrNil(core, "entities")
+	// Policy and storage are optional layer files: absent reads as empty, and
+	// the workspace copy is written either way so every scaffold has the same
+	// three-file shape.
+	policyMap, err := layerMap(source, path.Join(name, presets.PolicyFile), "policy")
 	if err != nil {
 		return nil, err
 	}
-	entities := omap.New()
-	if coreEntities != nil {
-		copyInto(entities, coreEntities)
+	storageMap, err := layerMap(source, path.Join(name, presets.StorageFile), "storage")
+	if err != nil {
+		return nil, err
 	}
-	copyInto(entities, presetEntities)
 
-	doc := omap.New()
-	base, _ := core.Get("base") // absent reads as null, exactly like core.get("base")
-	doc.Set("base", base)
-	doc.Set("entities", entities)
-	return &flattened{Doc: doc, Version: version, Entities: entities}, nil
+	ontologyOut := omap.New()
+	ontologyOut.Set("ontology", ontology)
+	policyOut := omap.New()
+	policyOut.Set("policy", policyMap)
+	storageOut := omap.New()
+	storageOut.Set("storage", storageMap)
+	return &flattened{
+		Ontology: ontologyOut,
+		Policy:   policyOut,
+		Storage:  storageOut,
+		Version:  version,
+	}, nil
+}
+
+// layerMap reads one optional layer file's top-level mapping: an absent file,
+// an empty document, or a falsy `<key>:` value all read as an empty map.
+//
+// Only genuine absence is tolerant. A stat failure that is not "does not
+// exist" (a broken symlink, a permission error under --preset-source)
+// propagates rather than silently dropping the layer, and a non-empty
+// document that never says `<key>:` — the flat-authoring mistake, per-type
+// entries at the top level — is an error: writing `policy: {}` over it would
+// discard every gate the preset author declared, with no diagnostic anywhere.
+func layerMap(source fs.FS, relpath, key string) (*omap.Map, error) {
+	if _, err := fs.Stat(source, relpath); err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return omap.New(), nil
+		}
+		return nil, err
+	}
+	doc, err := loadYAMLFS(source, relpath)
+	if err != nil {
+		return nil, err
+	}
+	for _, k := range doc.Keys() {
+		if k != key && k != "version" {
+			return nil, errs.New("invalid_schema", fmt.Sprintf(
+				"Preset layer %s: unknown top-level key '%s' (the file carries a single '%s:' block)",
+				relpath, k, key))
+		}
+	}
+	m, err := mappingOrNil(doc, key)
+	if err != nil {
+		return nil, err
+	}
+	if m == nil {
+		return omap.New(), nil
+	}
+	return m, nil
 }
 
 // loadYAMLFS is resolve.load_yaml against an fs.FS instead of a path: a safe
@@ -107,33 +179,4 @@ func mappingOrNil(m *omap.Map, key string) (*omap.Map, error) {
 		return nil, fmt.Errorf("'%s' is not a mapping (got %T)", key, v)
 	}
 	return sub, nil
-}
-
-func copyInto(dst, src *omap.Map) {
-	for _, k := range src.Keys() {
-		v, _ := src.Get(k)
-		dst.Set(k, v)
-	}
-}
-
-// declOf reads one entity declaration as a mapping. A non-mapping declaration
-// has no keys to read, which is how Python's `decl.get(...)` chain behaves for
-// the paths init walks (it would raise; nothing in a shipped preset does this).
-func declOf(entities *omap.Map, name string) *omap.Map {
-	v, _ := entities.Get(name)
-	if m, ok := v.(*omap.Map); ok {
-		return m
-	}
-	return omap.New()
-}
-
-// declStr is decl.get(key) narrowed to the string the vocabulary declares:
-// absent/null read as "". Non-string scalars render as their Python str()
-// form (pyScalarString, shared with locate.go).
-func declStr(decl *omap.Map, key string) string {
-	v, ok := decl.Get(key)
-	if !ok || v == nil {
-		return ""
-	}
-	return pyScalarString(v)
 }

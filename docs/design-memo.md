@@ -44,22 +44,29 @@ becoming frustrated and losing interest entirely" (Westerinen & Tauber, *Ontolog
 Development by Domain Experts (Without Using the "O" Word)*, Applied Ontology, IOS
 Press; see [`ontograph-review.md`](ontograph-review.md)). khub's schema is the
 rendering that fits how the expert works; any RDF/OWL projection is derived from it
-and never the authoring surface. A `base` block holds the attributes and relations every entity carries (`type`, `draft`, `author`, `created`/`updated`, `tags`, the OKF fields, the `any → any` edges); khub merges it into every entity at resolve time, so a type declares only its domain delta and may override a base attribute by redeclaring it. `entities` hold the types, each with `attributes` (scalars and enums), `relations` (typed edges, `to:` a single type, a list of types, or `any`), and storage config (`layout`/`format`; nesting is not yet supported). The base is not a declared dependency: `khub init` writes the `base` block as a header into the engagement's `schema.yaml`, alongside the preset's entities.
+and never the authoring surface. The schema is split into three layer files — `ontology.yaml` (the domain: per-type `attributes`, `relations`, `when`), `policy.yaml` (this workspace's gates: `required`, `orphan`) and `storage.yaml` (`layout`/`format`/`path`/`id_prefix`/`template`) — merging at load time into one resolved contract. The `base` block (`type`, `draft`, `author`, `created`/`updated`, `tags`, the OKF fields, the `any → any` edges) is khub's own plumbing and ships EMBEDDED in the binary, supplied to every resolve and never copied into a workspace; an authored `ontology.base` is rejected outright — the base is not an authoring surface. A type declares only its domain delta and overrides a base attribute by redeclaring it. The split is what makes the ontology projectable: `ontology.yaml` carries purely the domain, which is what an RDF/SHACL export reads.
 
 ```yaml
-# core.yaml
-base:
-  attributes: { type: {required: true}, draft: {type: bool, default: false},
-                author: {}, created: {type: date, required: true}, updated: {type: date},
-                title: {}, description: {}, resource: {}, tags: {type: list} }
-  relations:  { related: {to: any, many: true}, sources: {to: any, many: true},
-                references: {to: any, many: true}, depends_on: {to: any, many: true} }
+# core/ontology.yaml  (embedded in the binary — supplied to every resolve, never copied)
+ontology:
+  base:
+    attributes: { type: {required: true}, draft: {type: bool, default: false},
+                  author: {}, created: {type: date, required: true}, updated: {type: date},
+                  title: {}, description: {}, resource: {}, tags: {type: list} }
+    relations:  { related: {to: any, many: true}, sources: {to: any, many: true},
+                  references: {to: any, many: true}, depends_on: {to: any, many: true, acyclic: true} }
 
-# firm-ops.yaml  (the base is written in by `khub init`, so schema.yaml is self-contained)
-entities:
-  client:  { layout: file,   attributes: { name: {required: true}, industry: {} } }
-  project: { layout: folder, attributes: { stage: {enum: [diagnose, prove, scale, complete], required: true} },
-             relations: { client: {to: client, required: true}, owner: {to: person, required: true} } }
+# firm-ops/ontology.yaml — purely the domain
+ontology:
+  entities:
+    client:  { attributes: { name: {required: true}, industry: {} } }
+    project: { attributes: { stage: {enum: [diagnose, prove, scale, complete], required: true} },
+               relations: { client: {to: client, required: true}, owner: {to: person, required: true} } }
+
+# firm-ops/storage.yaml — where bytes land
+storage:
+  client:  { layout: file,   path: clients }
+  project: { layout: folder, path: projects }
 ```
 
 khub validates natively from the resolved schema (a hand-written Pydantic meta-schema plus runtime field and relation checks). If an MCP server or editor integration later needs JSON Schema or typed models, khub emits them directly from the resolved schema; there is no separate compilation backend.
@@ -158,13 +165,15 @@ The CLI is a thin, schema-introspecting adapter over the core library's verbs: c
 
 The hub repo (this repo) holds the engine, the canonical presets, the skill, and an installer.
 
-`khub init <preset>` scaffolds a fresh workspace. It merges the hub's `core.yaml` and `<preset>.yaml` into one self-contained, editable `.khub/schema.yaml`, then lays down the entity tree. After init the engagement carries no runtime dependency on the hub.
+`khub init <preset>` scaffolds a fresh workspace. It copies the preset's three layer files into editable `.khub/{ontology,policy,storage}.yaml` (the base block stays embedded in the binary), then lays down the entity tree. After init the engagement carries no runtime dependency on the hub.
 
 ```
 engagement-repo/
   .khub/
     config.yaml        # workspace config: preset provenance + version, source, command defaults (format, stale_days)
-    schema.yaml        # core + preset flattened; the one file you edit
+    ontology.yaml      # the domain: types, attributes, relations, capture cues
+    policy.yaml        # workspace gates: required singletons, orphan exemptions
+    storage.yaml       # layouts, inventory paths, id prefixes, template links
     generated/         # collection locks, gitignored
   clients/             # entity type folders live at the workspace root, one per type,
   projects/            #   each laid out per the type's storage config (see Authoring and
@@ -173,7 +182,7 @@ engagement-repo/
   identity/team/       # person nodes; identity/ also holds untyped reference markdown
 ```
 
-The schema header stamps provenance (`# khub-preset: engineering@1.0.0`). The engagement owns `schema.yaml` outright: editing that one file (add a type, change an enum, override a type's layout) is the entire override mechanism, with no runtime tie to the hub. Pulling a preset improvement down, or promoting an override back up, is a planned sync mechanism: a layered git-subtree merge (the preset as a subtree plus an overrides patch), with `diff-preset` reporting the delta. Flattening is the current model; layering is the planned path.
+Each schema file stamps provenance (`# khub-preset: engineering@1.0.0`). The engagement owns the three layer files outright: editing them (add a type in ontology, change an enum, move a type's inventory in storage) is the entire override mechanism, with no runtime tie to the hub — only the base block arrives from the binary, and it is not authorable: a type overrides a base attribute by redeclaring it. Pulling a preset improvement down, or promoting an override back up, is a planned sync mechanism: a layered git-subtree merge (the preset as a subtree plus an overrides patch), with `diff-preset` reporting the delta. Flattening is the current model; layering is the planned path.
 
 ## Distribution
 
@@ -217,7 +226,7 @@ moment the packages become public.
 
 **Engine and presets.** For now the engine and presets are collocated in this single private repo. The engine is generic plumbing; the presets are the IP, so they will most likely split into their own private repo later, pulled into `init` through `khub init --preset-source <private>`. Open-core (a public engine with private presets) stays a later option.
 
-**Skill.** khub authors its agent skills in `skills/` at the repo root and ships them as package data, so `khub install-skills` is a file copy into the local agent directories — offline, idempotent, agent-agnostic. Two channels serve two moments: `npx skills add <repo> -s setup` bootstraps a machine that has no khub yet (root `skills/` is a container skills.sh discovers without a manifest), and `khub install-skills` is the steady state once the CLI exists. The Claude Code plugin marketplace this repo shipped through 0.9.x is gone: it was a second, Claude-only distribution channel for the same files, and it was the reason the skills lived outside the package. The skill is the agent's surface over the CLI verbs; `khub wire` links the schema into a project's agent files (`CLAUDE.md` with a `@.khub/schema.yaml` import, `AGENTS.md` with a schema pointer) so an agent reasons in the ontology even without the CLI.
+**Skill.** khub authors its agent skills in `skills/` at the repo root and ships them as package data, so `khub install-skills` is a file copy into the local agent directories — offline, idempotent, agent-agnostic. Two channels serve two moments: `npx skills add <repo> -s setup` bootstraps a machine that has no khub yet (root `skills/` is a container skills.sh discovers without a manifest), and `khub install-skills` is the steady state once the CLI exists. The Claude Code plugin marketplace this repo shipped through 0.9.x is gone: it was a second, Claude-only distribution channel for the same files, and it was the reason the skills lived outside the package. The skill is the agent's surface over the CLI verbs; `khub wire` links the schema into a project's agent files (`CLAUDE.md` with `@.khub/{ontology,policy,storage}.yaml` imports, `AGENTS.md` with schema pointers) so an agent reasons in the ontology even without the CLI.
 
 ## The Proving Ground
 

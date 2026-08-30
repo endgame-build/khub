@@ -1,0 +1,1 @@
+{"error": {"code": "schema_error", "message": "Cannot read schema %WS%/.khub/ontology.yaml: file not found (policy.yaml present, but ontology.yaml is the layer that declares types)"}}

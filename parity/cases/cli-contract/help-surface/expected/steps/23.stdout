@@ -11,5 +11,6 @@
 │ types  List the declared type names.                                         │
 │ show   Detail one type: fields, enums, required flags, relations, layout.    │
 │ edges  List the relation vocabulary by predicate.                            │
+│ base   Show the effective base block every type inherits.                    │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 

@@ -50,6 +50,12 @@ const IDPrefixPattern = `^[a-z][a-z0-9]*$`
 
 var idPrefixRE = regexp.MustCompile(IDPrefixPattern)
 
+// TemplateNamePattern constrains a declared template to a bare file stem —
+// resolved inside .khub/templates/, so a separator would escape the directory.
+const TemplateNamePattern = `^[a-z][a-z0-9-]*$`
+
+var templateNameRE = regexp.MustCompile(TemplateNamePattern)
+
 // AttrDecl is a scalar or enum attribute declaration. Type may be omitted on
 // an override (it is inherited from the base) or when Enum is given.
 type AttrDecl struct {
@@ -112,6 +118,15 @@ type TypeDecl struct {
 	Orphan bool
 	// Enumerated ids: `add` mints `<prefix>-NNN-<slug>` instead of a bare slug.
 	IdPrefix *IdPrefixSpec
+	// The declared template stem (.khub/templates/<name>.yaml). nil = the
+	// standing convention (the type's own name); see TemplateOff for the
+	// explicit opt-out. A NAME, never a path: templates live in one directory,
+	// which keeps init's copy and the per-file preserve trivial, and lets two
+	// types share one template.
+	Template *string
+	// `template: false` — explicitly untemplated even if a conventionally
+	// named file exists.
+	TemplateOff bool
 	// The moment this type should be captured, in one line of domain language.
 	When       *string
 	Attributes *Ordered[*AttrDecl]
@@ -124,10 +139,19 @@ type BaseBlock struct {
 	Relations  *Ordered[*RelationDecl]
 }
 
-// SchemaFile is a whole authored schema input (base header + entities).
+// SchemaFile is a whole authored schema input, post-merge: the base block plus
+// one merged TypeDecl per type — each type's ontology delta annotated with its
+// policy gates and storage config, joined by type name.
 type SchemaFile struct {
 	Base     *BaseBlock
 	Entities *Ordered[*TypeDecl]
+	// Names annotated by policy/storage that ontology never declared. Ontology
+	// is the layer that says which types EXIST; the other two only annotate. A
+	// name here is a typo or a stale entry, and Resolve turns it into a located
+	// error naming the layer — collected rather than raised inline so the whole
+	// document is walked first, as the vocabulary walk does everywhere else.
+	UnknownPolicy  []string
+	UnknownStorage []string
 }
 
 // --- the storage matrix (schema_model.TypeDecl._storage_matrix) --------------
@@ -139,10 +163,6 @@ func declHas[V any](m *Ordered[V], k string) bool { return m != nil && m.Has(k) 
 // cells. Error messages are byte-exact ValueError strings; the vocabulary walk
 // wraps them with pydantic's "Value error, " prefix.
 func (t *TypeDecl) storageMatrix() error {
-	if t.Required && t.Layout != "singleton" {
-		return errors.New("'required' is singleton-only (a required file/folder/collection " +
-			"type has no single artifact to require)")
-	}
 	switch t.Layout {
 	case "singleton":
 		if t.Path == nil || *t.Path == "" {
@@ -205,6 +225,15 @@ func (t *TypeDecl) storageMatrix() error {
 	if t.Format != "md" && (declHas(t.Attributes, "body") || declHas(t.Relations, "body")) {
 		return fmt.Errorf("'body' is reserved on a %s type (it is the prose channel); "+
 			"rename the field or use format: md", t.Format)
+	}
+	// Body templates exist only where a body does: per-item/singleton md. A
+	// `template:` key (the opt-out included) on a collection or non-md type
+	// configures something nothing ever reads — add seeds md only, validate
+	// skips non-md and collections — so it is a category error here, not a
+	// permanent `check` finding for a file no verb would consult.
+	if (t.Template != nil || t.TemplateOff) && (t.Layout == "collection" || t.Format != "md") {
+		return errors.New("'template' applies only to per-item and singleton md types " +
+			"(a collection or non-md type never reads a body template); drop the key")
 	}
 	return nil
 }
@@ -277,36 +306,93 @@ func msgPattern(pattern string) string {
 	return "String should match pattern '" + pattern + "'"
 }
 
-// validateSchemaFile is SchemaFile.model_validate: it walks the raw document,
-// collecting every error in pydantic's order (fields in declaration order,
-// then unknown keys in input order; a type's storage matrix runs only when its
-// own subtree validated).
+// validateSchemaFile is SchemaFile.model_validate: it walks the three-layer
+// shape and MERGES it into one TypeDecl per type.
+//
+// Ontology is walked first because it is the layer that declares which types
+// exist; policy and storage only annotate types already named there. The three
+// arrive already collected per layer (Resolve merges across files before
+// calling), so this sees one ontology/policy/storage block regardless of how
+// many documents supplied them — the layers dispatch on TOP-LEVEL KEY, never
+// on filename, which is what lets them arrive as three files or as three
+// blocks of one document with identical results.
+//
+// storageMatrix does NOT run here. It cross-checks fields from all three layers
+// (Required from policy, Layout/Path/Format from storage, Attributes/Relations
+// from ontology), so it can only run once the merge is complete — Resolve does
+// it, beside checkCollectionPaths.
 func validateSchemaFile(raw *omap.Map) (*SchemaFile, []vocabErr) {
 	c := &vocabCollector{}
 	sf := &SchemaFile{Entities: NewOrdered[*TypeDecl]()}
-	// Field order mirrors the model: base, then entities (pydantic validates
-	// by field declaration order, not input order).
-	if v, ok := raw.Get("base"); ok && v != nil {
-		sf.Base = buildBaseBlock(v, []string{"base"}, c)
-	}
-	if v, ok := raw.Get("entities"); ok && v != nil {
+
+	if v, ok := raw.Get("ontology"); ok && v != nil {
 		if m, isMap := v.(*omap.Map); isMap {
-			for _, name := range m.Keys() {
-				dv, _ := m.Get(name)
-				if td := buildTypeDecl(dv, []string{"entities", name}, c); td != nil {
-					sf.Entities.Set(name, td)
+			if bv, has := m.Get("base"); has && bv != nil {
+				sf.Base = buildBaseBlock(bv, []string{"ontology", "base"}, c)
+			}
+			if ev, has := m.Get("entities"); has && ev != nil {
+				if em, isEntMap := ev.(*omap.Map); isEntMap {
+					for _, name := range em.Keys() {
+						dv, _ := em.Get(name)
+						td := buildOntologyDecl(dv, []string{"ontology", "entities", name}, c)
+						if td != nil {
+							sf.Entities.Set(name, td)
+						}
+					}
+				} else {
+					c.add("dict_type", []string{"ontology", "entities"}, msgDict)
 				}
 			}
+			addExtras(m, []string{"ontology"}, c, "base", "entities")
 		} else {
-			c.add("dict_type", []string{"entities"}, msgDict)
+			c.add("dict_type", []string{"ontology"}, msgDict)
 		}
 	}
+
+	sf.UnknownPolicy = applyLayer(raw, "policy", sf, c, applyPolicyDecl)
+	sf.UnknownStorage = applyLayer(raw, "storage", sf, c, applyStorageDecl)
+
 	for _, k := range raw.Keys() {
-		if k != "base" && k != "entities" {
+		if k != "ontology" && k != "policy" && k != "storage" {
 			c.add("extra_forbidden", []string{k}, msgExtra)
 		}
 	}
 	return sf, c.list
+}
+
+// applyLayer walks one annotating layer (policy or storage), folding each entry
+// into the TypeDecl ontology already declared. Names with no ontology
+// declaration are returned rather than reported here — Resolve raises them as
+// located errors once it has seen every file.
+func applyLayer(
+	raw *omap.Map, layer string, sf *SchemaFile, c *vocabCollector,
+	apply func(*omap.Map, *TypeDecl, []string, *vocabCollector),
+) []string {
+	v, ok := raw.Get(layer)
+	if !ok || v == nil {
+		return nil
+	}
+	m, isMap := v.(*omap.Map)
+	if !isMap {
+		c.add("dict_type", []string{layer}, msgDict)
+		return nil
+	}
+	var unknown []string
+	for _, name := range m.Keys() {
+		dv, _ := m.Get(name)
+		td, declared := sf.Entities.Get(name)
+		if !declared {
+			unknown = append(unknown, name)
+			continue
+		}
+		dm, isDeclMap := dv.(*omap.Map)
+		if !isDeclMap {
+			c.add("model_type", []string{layer, name}, msgModel("TypeDecl"))
+			continue
+		}
+		apply(dm, td, []string{layer, name}, c)
+	}
+	return unknown
 }
 
 func buildBaseBlock(v any, loc []string, c *vocabCollector) *BaseBlock {
@@ -322,16 +408,47 @@ func buildBaseBlock(v any, loc []string, c *vocabCollector) *BaseBlock {
 	return bb
 }
 
-func buildTypeDecl(v any, loc []string, c *vocabCollector) *TypeDecl {
+// buildOntologyDecl walks a type's ONTOLOGY delta — what is true of the domain
+// regardless of khub: its attributes, its relations, and the one line of domain
+// language saying when to capture it.
+//
+// `acyclic` rides on the relation (see RelationDecl), not here and not in
+// policy: it is a property of the predicate, sitting beside to/many/inverse,
+// and true of the domain rather than of this workspace's gates.
+//
+// Format seeds to "md" so a type with no storage entry at all still resolves;
+// applyStorageDecl overwrites it when one exists.
+func buildOntologyDecl(v any, loc []string, c *vocabCollector) *TypeDecl {
 	m, ok := v.(*omap.Map)
 	if !ok {
 		c.add("model_type", loc, msgModel("TypeDecl"))
 		return nil
 	}
-	before := len(c.list)
 	td := &TypeDecl{Format: "md"}
+	td.When = takeStrOrNil(m, "when", loc, c)
+	td.Attributes = buildAttrMap(m, "attributes", loc, c)
+	td.Relations = buildRelationMap(m, "relations", loc, c)
+	addExtras(m, loc, c, "when", "attributes", "relations")
+	return td
+}
 
-	// layout: Literal, no default — required.
+// applyPolicyDecl folds a type's POLICY delta — the gates this workspace
+// demands of it — onto the declaration ontology already made.
+func applyPolicyDecl(m *omap.Map, td *TypeDecl, loc []string, c *vocabCollector) {
+	td.Required = takeBool(m, "required", loc, c)
+	td.Orphan = takeBool(m, "orphan", loc, c)
+	addExtras(m, loc, c, "required", "orphan")
+}
+
+// applyStorageDecl folds a type's STORAGE delta — where and how its bytes
+// materialize — onto the declaration ontology already made.
+//
+// `layout` is REQUIRED whenever a storage entry exists — the pre-split
+// strictness. The file/<type> default (storageDefaults) applies only to a type
+// with no storage entry at all: an entry that names a path but no layout is a
+// half-statement, and silently defaulting it to `file` would turn a forgotten
+// `layout: collection` into a directory of strays.
+func applyStorageDecl(m *omap.Map, td *TypeDecl, loc []string, c *vocabCollector) {
 	if lv, has := m.Get("layout"); has {
 		td.Layout = takeLiteral(lv, layoutLiterals, at(loc, "layout"), c)
 	} else {
@@ -346,26 +463,50 @@ func buildTypeDecl(v any, loc []string, c *vocabCollector) *TypeDecl {
 			c.add("string_type", at(loc, "format"), msgString)
 		}
 	}
-	td.Required = takeBool(m, "required", loc, c)
-	td.Orphan = takeBool(m, "orphan", loc, c)
 	if pv, has := m.Get("id_prefix"); has && pv != nil {
 		td.IdPrefix = buildIdPrefixSpec(pv, at(loc, "id_prefix"), c)
 	}
-	td.When = takeStrOrNil(m, "when", loc, c)
-	td.Attributes = buildAttrMap(m, "attributes", loc, c)
-	td.Relations = buildRelationMap(m, "relations", loc, c)
-	addExtras(m, loc, c,
-		"layout", "path", "format", "required", "orphan", "id_prefix", "when",
-		"attributes", "relations")
-
-	// The after-validator runs only when this model's own subtree validated
-	// (pydantic skips model validators on field errors).
-	if len(c.list) == before {
-		if err := td.storageMatrix(); err != nil {
-			c.add("value_error", loc, "Value error, "+err.Error())
+	if tv, has := m.Get("template"); has && tv != nil {
+		switch x := tv.(type) {
+		case string:
+			if templateNameRE.MatchString(x) {
+				td.Template = &x
+			} else {
+				c.add("string_pattern_mismatch", at(loc, "template"), msgPattern(TemplateNamePattern))
+			}
+		case bool:
+			if x {
+				// `template: true` declares nothing the convention does not.
+				c.add("string_type", at(loc, "template"), msgString)
+			} else {
+				td.TemplateOff = true
+			}
+		default:
+			c.add("string_type", at(loc, "template"), msgString)
 		}
 	}
-	return td
+	addExtras(m, loc, c, "layout", "path", "format", "id_prefix", "template")
+}
+
+// storageDefaults fills the storage config of a type no storage layer named:
+// one file per entity under a directory named for the type. Applied post-merge
+// so an ontology-only workspace resolves and runs.
+//
+// Only the per-item directory layouts default their path. A collection's or
+// singleton's path names a FILE: the collection default ({name}.{fmt}) lives in
+// CollectionRelpath and is applied at read time, and a singleton with no path
+// is a storage-matrix error — pre-filling either here would overwrite both
+// contracts.
+func (t *TypeDecl) storageDefaults(name string) {
+	if t.Layout == "" {
+		t.Layout = LayoutFile
+	}
+	if t.Layout == LayoutFile || t.Layout == LayoutFolder {
+		if t.Path == nil || *t.Path == "" {
+			p := name
+			t.Path = &p
+		}
+	}
 }
 
 func buildAttrDecl(v any, loc []string, c *vocabCollector) *AttrDecl {

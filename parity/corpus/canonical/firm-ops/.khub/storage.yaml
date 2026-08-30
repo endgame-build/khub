@@ -1,0 +1,29 @@
+# khub-preset: firm-ops@0.1.0
+storage:
+  opportunity:
+    layout: folder
+    path: opportunities
+  project:
+    layout: folder
+    path: projects
+  meeting:
+    layout: file
+    path: meetings
+  transcript:
+    layout: file
+    path: transcripts
+  fragment:
+    layout: file
+    path: fragments
+  case-study:
+    layout: file
+    path: case-studies
+  partnership:
+    layout: folder
+    path: partnerships
+  person:
+    layout: file
+    path: identity/team
+  client:
+    layout: file
+    path: clients

@@ -1,0 +1,7 @@
+# firm-ops/policy.yaml — what this workspace demands, per type.
+#
+# firm-ops declares no gates: no singleton is required and no type opts out of
+# the orphan sweep. The file ships empty so the preset's contract is explicit
+# rather than implied by absence.
+
+policy: {}

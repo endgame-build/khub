@@ -20,6 +20,7 @@ import (
 	"github.com/endgame-build/khub/internal/graph"
 	"github.com/endgame-build/khub/internal/index"
 	"github.com/endgame-build/khub/internal/introspect"
+	"github.com/endgame-build/khub/internal/mdlink"
 	"github.com/endgame-build/khub/internal/omap"
 	"github.com/endgame-build/khub/internal/schema"
 	"github.com/endgame-build/khub/internal/values"
@@ -201,10 +202,7 @@ func EntityLink(root string, resolved *schema.ResolvedSchema, tname, slug string
 	if err != nil {
 		link = entity.EntityPath(root, rtype, slug)
 	}
-	if strings.ContainsAny(link, " ()") {
-		return "<" + link + ">"
-	}
-	return link
+	return mdlink.LinkDest(link)
 }
 
 // label is reindex._label: a human label for a link — the title if set, else

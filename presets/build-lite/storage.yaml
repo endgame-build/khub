@@ -1,0 +1,27 @@
+# build-lite/storage.yaml — where and how each type's bytes land.
+#
+# Layout: one knowledge root plus specs/. knowledge/ is durable truth (the two
+# narrative singletons at its top level, then requirements/, decisions/,
+# components/); specs/ is delivery state.
+#
+# Storage form follows build-hub's rule: prose a human reviews = one file per
+# record with a lowercase ID-enumerated slug (ad-/fr-/cst-/br-/cmp-/fs-NNN-slug
+# — `add --id` slugifies and lookup is case-sensitive, so uppercase would not
+# resolve). No collections: lite has no homogeneous wiring left to keep in a
+# registry.
+#
+# Four of the six md types ship a body template (prd, arc42, adr,
+# feature-spec — templates/*.yaml). requirement and component deliberately do
+# not — one statement and one paragraph respectively, and every template
+# heading is a `validate` finding waiting to happen.
+
+storage:
+  prd:          { layout: singleton, path: knowledge/prd.md }
+  arc42:        { layout: singleton, path: knowledge/arc42.md }
+  requirement:
+    layout: file
+    path: knowledge/requirements
+    id_prefix: { by: kind, map: { functional: fr, constraint: cst, business-rule: br } }
+  adr:          { layout: file, path: knowledge/decisions,  id_prefix: ad }
+  component:    { layout: file, path: knowledge/components, id_prefix: cmp }
+  feature-spec: { layout: file, path: specs,                id_prefix: fs }

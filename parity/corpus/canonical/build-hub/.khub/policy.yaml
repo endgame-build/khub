@@ -1,0 +1,13 @@
+# khub-preset: build-hub@0.3.0
+policy:
+  prd:
+    required: true
+    orphan: true
+  roadmap:
+    orphan: true
+  glossary:
+    orphan: true
+  arc42:
+    orphan: true
+  erd:
+    orphan: true

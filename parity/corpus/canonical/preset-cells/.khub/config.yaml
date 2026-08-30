@@ -1,6 +1,6 @@
 name: preset-cells
 preset: preset-cells
 version: 0.1.0
-source: ./parity/corpus
+source: parity/corpus
 defaults:
   stale_days: 90

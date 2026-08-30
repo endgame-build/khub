@@ -21,12 +21,13 @@ import (
 // declares no supersession, so history needs its own preset.
 const historyPreset = `
 version: "0.1.0"
-entities:
-  decision:
-    layout: file
-    path: decisions
-    relations:
-      supersedes: { to: decision, inverse: superseded_by }
+ontology:
+  entities:
+    decision:
+      relations:
+        supersedes: { to: decision, inverse: superseded_by }
+storage:
+  decision: { layout: file, path: decisions }
 `
 
 // impactWS: a depends_on chain, a leaf, and a cycle — all on the universal edge.
@@ -154,13 +155,13 @@ func TestImpactPredicateOverride(t *testing.T) {
 func TestImpactOrderIsDepthThenTupleCompare(t *testing.T) {
 	ws := wsFromSchema(t, `
 version: "0.1.0"
-entities:
-  alpha:
-    layout: file
-    path: alpha
-  zeta:
-    layout: file
-    path: zeta
+ontology:
+  entities:
+    alpha: {}
+    zeta: {}
+storage:
+  alpha: { layout: file, path: alpha }
+  zeta:  { layout: file, path: zeta }
 `)
 	// One source fanning out to (zeta, aaa) and (alpha, zzz) at the same depth:
 	// a joined-string compare would put "alpha/zzz" first either way, but the

@@ -1,0 +1,37 @@
+# core/ontology.yaml — the khub base block, embedded in the binary.
+#
+# Every entity inherits these attributes and relations at resolve time (merged,
+# never copied into the type's declaration). A type declares only its domain
+# delta and may override a base attribute by redeclaring it.
+#
+# Since the ontology/policy/storage split this file is NEVER copied into a
+# workspace: LoadSchema supplies it from the embedded preset tree on every
+# resolve, so a workspace's ontology.yaml carries purely the domain. An
+# authored `ontology.base` is rejected — the base is khub-owned, and the
+# override mechanism is per-type: redeclare the attribute on the type
+# (read the effective block with `khub schema base`).
+#
+# Grammar:
+#   attributes: map keyed by name -> { type, required?, default?, enum?, pattern? }
+#               scalar `type` is one of text|number|date|datetime|bool|list (default text)
+#   relations:  map keyed by predicate -> { to, many?, required? }
+#               `to` is a type name, a list of type names, or `any`
+#               the field name IS the predicate; single by default, `many: true` for multi-valued
+
+ontology:
+  base:
+    attributes:
+      type:        { type: text, required: true }    # discriminator — each entity kind pins its value
+      draft:       { type: bool, default: false }    # lifecycle flag (default published)
+      author:      { type: text }                    # the writer — person or agent
+      created:     { type: date, required: true }
+      updated:     { type: date }
+      title:       { type: text }                    # OKF
+      description: { type: text }                    # OKF
+      resource:    { type: text }                    # OKF — canonical URI / link-out
+      tags:        { type: list }
+    relations:
+      related:     { to: any, many: true }
+      sources:     { to: any, many: true }
+      references:  { to: any, many: true }
+      depends_on:  { to: any, many: true, acyclic: true }

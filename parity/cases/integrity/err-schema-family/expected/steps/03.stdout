@@ -1,1 +1,1 @@
-{"error": {"code": "raw_linkml_smuggled", "message": "Unknown construct 'sneaky_construct' (not khub vocabulary) at entities.x.sneaky_construct"}}
+{"error": {"code": "raw_linkml_smuggled", "message": "Unknown construct 'sneaky_construct' (not khub vocabulary) at ontology.entities.x.sneaky_construct"}}

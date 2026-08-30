@@ -1,0 +1,4 @@
+storage:
+  widget:    { layout: file, path: zzz-widgets, id_prefix: wg }
+  gizmo:     { layout: file, path: nested/deep/gizmos }
+  manifesto: { layout: singleton, path: MANIFESTO.md }

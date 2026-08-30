@@ -1,1 +1,1 @@
-{"error": {"code": "missing_base", "message": "Schema declares entities but no base block; base attributes are missing"}}
+{"error": {"code": "unknown_relation_target", "message": "Type 'ghost' relation 'to_missing' targets unknown type 'nowhere'"}}

@@ -1,0 +1,29 @@
+# khub-preset: build-lite@0.1.0
+storage:
+  prd:
+    layout: singleton
+    path: knowledge/prd.md
+  arc42:
+    layout: singleton
+    path: knowledge/arc42.md
+  requirement:
+    layout: file
+    path: knowledge/requirements
+    id_prefix:
+      by: kind
+      map:
+        functional: fr
+        constraint: cst
+        business-rule: br
+  adr:
+    layout: file
+    path: knowledge/decisions
+    id_prefix: ad
+  component:
+    layout: file
+    path: knowledge/components
+    id_prefix: cmp
+  feature-spec:
+    layout: file
+    path: specs
+    id_prefix: fs

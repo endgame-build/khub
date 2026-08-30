@@ -134,8 +134,37 @@ type ResolvedType struct {
 	Orphan bool
 	// See TypeDecl.IdPrefix: `add` mints `<prefix>-NNN-<slug>` when this is set.
 	IdPrefix *IdPrefix
+	// See TypeDecl.Template / TemplateOff: the declared template stem and the
+	// explicit opt-out. Read through TemplateName.
+	Template    *string
+	TemplateOff bool
 	// See TypeDecl.When: the moment to capture this type, in domain language.
 	When *string
+}
+
+// TemplateName is the template file stem this type reads
+// (.khub/templates/<stem>.yaml), "" when the type is explicitly untemplated.
+// Undeclared falls back to the type's own name — the standing convention, so
+// a schema declaring nothing behaves exactly as before the key existed.
+func (t *ResolvedType) TemplateName() string {
+	if t.TemplateOff {
+		return ""
+	}
+	if t.Template != nil {
+		return *t.Template
+	}
+	return t.Name
+}
+
+// ReadsTemplate reports whether this type consults a body template at all.
+// Body templates exist only where a body does: per-item and singleton md.
+// The resolver already rejects a DECLARED `template:` on any other type
+// (the storage matrix), so this is what constrains the undeclared case —
+// without it every type claims its conventional stem, and a template file
+// sitting beside a collection type reads as claimed while no verb consults
+// it. `add`, `validate` and `check` all gate on this one predicate.
+func (t *ResolvedType) ReadsTemplate() bool {
+	return t.Storage.Fmt == "md" && t.Storage.Layout != LayoutCollection
 }
 
 // CollectionRelpath is the one workspace-relative path of a collection type's

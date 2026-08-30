@@ -23,48 +23,171 @@ import (
 	"github.com/endgame-build/khub/internal/omap"
 )
 
-// Resolve resolves authored schema files into a ResolvedSchema (WPK-000-1).
-// Later files override: the last base block wins whole; entity declarations
-// merge by name with last-wins (keeping the first file's declaration position,
-// like a Python dict update).
-func Resolve(schemaFiles []string) (*ResolvedSchema, error) {
-	var baseRaw any
-	entitiesRaw := omap.New()
+// schemaDoc is one authored document plus the file it came from. The name
+// travels with the mapping because every shape error names its file.
+type schemaDoc struct {
+	name string
+	m    *omap.Map
+}
+
+// authoredLayers is the three layer mappings, merged across every document and
+// each keeping its first declaration position.
+type authoredLayers struct {
+	entities *omap.Map
+	policy   *omap.Map
+	storage  *omap.Map
+}
+
+// mergeLayers folds every authored document into the three layer accumulators.
+// The merge dispatches on TOP-LEVEL KEY, never on filename, so the same three
+// layers resolve identically whether they arrive as three files or as three
+// blocks of one document.
+//
+// This is also the one altitude that still sees the authored shape, so it is
+// where the vocabulary's extra="forbid" is restored: the re-nest downstream
+// rebuilds the input from the three layer keys alone, and an unknown authored
+// key would otherwise vanish silently — a typo'd `entitles:` resolving to a
+// zero-type schema with no complaint. `version` is the one non-layer key an
+// authored document may carry (presets stamp it; workspace copies carry it in
+// the provenance comment instead).
+func mergeLayers(docs []schemaDoc) (*authoredLayers, error) {
+	out := &authoredLayers{entities: omap.New(), policy: omap.New(), storage: omap.New()}
+
+	// mergeInto folds one layer mapping into its accumulator, last-wins by name
+	// and keeping the first document's declaration position.
+	mergeInto := func(dst *omap.Map, v any, file, label string) error {
+		m, isMap := v.(*omap.Map)
+		if !isMap {
+			// Python crashes with an AttributeError here; Go surfaces a
+			// plain (uncoded) error instead.
+			return fmt.Errorf("schema file %s: '%s' is not a mapping", file, label)
+		}
+		for _, name := range m.Keys() {
+			dv, _ := m.Get(name)
+			dst.Set(name, dv)
+		}
+		return nil
+	}
+
+	pre := &vocabCollector{}
+	for _, d := range docs {
+		for _, k := range d.m.Keys() {
+			switch k {
+			case "ontology", "policy", "storage", "version":
+			default:
+				pre.add("extra_forbidden", []string{k}, msgExtra)
+			}
+		}
+		// ontology (entities) / policy / storage — the one authored shape.
+		if v, ok := d.m.Get("ontology"); ok && v != nil && !pyFalsy(v) {
+			om, isMap := v.(*omap.Map)
+			if !isMap {
+				return nil, fmt.Errorf("schema file %s: 'ontology' is not a mapping", d.name)
+			}
+			// The base block is khub-owned: it arrives as baseDoc (the embedded
+			// core document), never from an authored file — redefining it whole
+			// would silently change what every gate reads.
+			if _, has := om.Get("base"); has {
+				return nil, errs.New("invalid_schema",
+					"Invalid schema at ontology.base: the base block is khub-owned; "+
+						"override a base attribute by redeclaring it on the type "+
+						"(see `khub schema base`)")
+			}
+			for _, k := range om.Keys() {
+				if k != "entities" {
+					pre.add("extra_forbidden", []string{"ontology", k}, msgExtra)
+				}
+			}
+			if ev, has := om.Get("entities"); has && ev != nil && !pyFalsy(ev) {
+				if err := mergeInto(out.entities, ev, d.name, "ontology.entities"); err != nil {
+					return nil, err
+				}
+			}
+		}
+		for _, layer := range []struct {
+			key string
+			dst *omap.Map
+		}{{"policy", out.policy}, {"storage", out.storage}} {
+			if v, ok := d.m.Get(layer.key); ok && v != nil && !pyFalsy(v) {
+				if err := mergeInto(layer.dst, v, d.name, layer.key); err != nil {
+					return nil, err
+				}
+			}
+		}
+	}
+	if len(pre.list) > 0 {
+		return nil, smuggledError(pre.list)
+	}
+	return out, nil
+}
+
+// ResolveWith is Resolve with a pre-read base document — the embedded base
+// block, which khub owns and never copies into a workspace.
+//
+// baseDoc is the ONLY legal source of the base: an authored `ontology.base` is
+// rejected with a located error, because the base is khub's own plumbing (the
+// discriminator, the draft flag, the universal edges) and redefining it whole
+// would silently change what every gate reads. The override mechanism is
+// per-type: redeclare the attribute on the type (see `khub schema base`).
+//
+// It takes a document rather than a path so internal/schema never imports
+// internal/presets — the resolver stays pure, and who supplies the documents is
+// the caller's business (introspect.LoadSchema, which knows both the workspace
+// and the embedded tree, is the one that joins them).
+func ResolveWith(baseDoc *omap.Map, schemaFiles []string) (*ResolvedSchema, error) {
+	docs := make([]schemaDoc, 0, len(schemaFiles))
 	for _, f := range schemaFiles {
 		data, err := LoadYAML(f)
 		if err != nil {
 			return nil, err
 		}
-		if v, ok := data.Get("base"); ok && v != nil {
-			baseRaw = v
+		docs = append(docs, schemaDoc{name: f, m: data})
+	}
+
+	layers, err := mergeLayers(docs)
+	if err != nil {
+		return nil, err
+	}
+
+	var baseRaw any
+
+	// The base, from the one legal source. A supplied document that yields no
+	// base is a loud error, not an empty base: the caller passing one is
+	// promising khub's plumbing (the discriminator, the draft flag, the
+	// universal edges), and a mis-nested embedded document must fail here
+	// rather than let every gate silently change meaning.
+	if baseDoc != nil {
+		if ov, ok := baseDoc.Get("ontology"); ok && ov != nil {
+			if om, isMap := ov.(*omap.Map); isMap {
+				if bv, has := om.Get("base"); has && bv != nil {
+					baseRaw = bv
+				}
+			}
 		}
-		if v, ok := data.Get("entities"); ok && v != nil && !pyFalsy(v) {
-			m, isMap := v.(*omap.Map)
-			if !isMap {
-				// Python crashes with an AttributeError here; Go surfaces a
-				// plain (uncoded) error instead.
-				return nil, fmt.Errorf("schema file %s: 'entities' is not a mapping", f)
-			}
-			for _, name := range m.Keys() {
-				dv, _ := m.Get(name)
-				entitiesRaw.Set(name, dv)
-			}
+		if baseRaw == nil {
+			return nil, errs.New("schema_error", "Base document carries no ontology.base block")
 		}
 	}
 
+	// Re-nest for the vocabulary walk. The three layers are already merged
+	// across every document, so the walk sees one block per layer regardless of
+	// how many files supplied them.
 	raw := omap.New()
-	raw.Set("entities", entitiesRaw)
+	ontologyRaw := omap.New()
 	if baseRaw != nil {
-		raw.Set("base", baseRaw)
+		ontologyRaw.Set("base", baseRaw)
 	}
+	ontologyRaw.Set("entities", layers.entities)
+	raw.Set("ontology", ontologyRaw)
+	raw.Set("policy", layers.policy)
+	raw.Set("storage", layers.storage)
 
 	schema, verrs := validateSchemaFile(raw)
 	if len(verrs) > 0 {
 		return nil, smuggledError(verrs)
 	}
-
-	if schema.Entities.Len() > 0 && schema.Base == nil {
-		return nil, errs.MissingBase()
+	if err := finishLayered(schema); err != nil {
+		return nil, err
 	}
 
 	declared := map[string]bool{}
@@ -107,6 +230,50 @@ func Resolve(schemaFiles []string) (*ResolvedSchema, error) {
 	return resolved, nil
 }
 
+// finishLayered completes the layered merge: the cross-layer checks that can
+// only run once all three halves are in hand.
+//
+// The pre-split walk ran storageMatrix inline, because one subtree carried
+// every field it cross-checks. Layered, `required` arrives from policy,
+// `layout`/`path`/`format` from storage, and `attributes`/`relations` from
+// ontology — so the check has to wait for the merge. Storage defaults land
+// first, so a type that no storage layer named is still a complete declaration
+// by the time the matrix sees it.
+func finishLayered(sf *SchemaFile) error {
+	// Ontology declares which types exist; policy and storage only annotate.
+	// A name they carry that ontology never declared is a typo or a stale
+	// entry, and silently ignoring it would mean a gate or a path quietly not
+	// applying.
+	for _, layer := range []struct {
+		name  string
+		names []string
+	}{{"policy", sf.UnknownPolicy}, {"storage", sf.UnknownStorage}} {
+		if len(layer.names) > 0 {
+			return errs.New("invalid_schema", fmt.Sprintf(
+				"Invalid schema at %s.%s: no type '%s' is declared in ontology",
+				layer.name, layer.names[0], layer.names[0]))
+		}
+	}
+	for _, name := range sf.Entities.Keys() {
+		td, _ := sf.Entities.Get(name)
+		td.storageDefaults(name)
+		// `required` is the one cross-layer fact whose author sits in POLICY,
+		// so its violation is located there — a storage.<type> loc would send
+		// the user to a layer file that may not even mention the type.
+		if td.Required && td.Layout != LayoutSingleton {
+			return errs.New("invalid_schema", fmt.Sprintf(
+				"Invalid schema at policy.%s.required: Value error, "+
+					"'required' is singleton-only (a required file/folder/collection "+
+					"type has no single artifact to require)", name))
+		}
+		if err := td.storageMatrix(); err != nil {
+			return errs.New("invalid_schema", fmt.Sprintf(
+				"Invalid schema at storage.%s: Value error, %s", name, err.Error()))
+		}
+	}
+	return nil
+}
+
 // checkCollectionPaths rejects two collection types resolving to one inventory
 // file. Nothing downstream can recover from it: the scan hands every row to
 // both types, and the per-type lock does not serialize writers who share the
@@ -144,12 +311,20 @@ func LoadYAML(path string) (*omap.Map, error) {
 	if err != nil {
 		return nil, err
 	}
-	if len(strings.TrimSpace(string(data))) == 0 {
+	return ParseDoc(path, string(data))
+}
+
+// ParseDoc is LoadYAML over in-memory bytes — the one schema-document parse
+// path, so the embedded base inherits the same 1.2 resolution, falsy
+// collapse, duplicate-key rejection, and scalar normalization as every
+// authored layer file. name labels errors.
+func ParseDoc(name, text string) (*omap.Map, error) {
+	if len(strings.TrimSpace(text)) == 0 {
 		return omap.New(), nil
 	}
-	v, err := canon.LoadDocMode(string(data), canon.Mode12)
+	v, err := canon.LoadDocMode(text, canon.Mode12)
 	if err != nil {
-		return nil, fmt.Errorf("%s: %w", path, err)
+		return nil, fmt.Errorf("%s: %w", name, err)
 	}
 	root := fromYAML(v)
 	if pyFalsy(root) {
@@ -159,7 +334,7 @@ func LoadYAML(path string) (*omap.Map, error) {
 	if !ok {
 		// Python returns the non-mapping root and crashes on the first .get;
 		// Go names the problem instead.
-		return nil, fmt.Errorf("schema file %s: top level is not a mapping", path)
+		return nil, fmt.Errorf("schema file %s: top level is not a mapping", name)
 	}
 	return m, nil
 }
@@ -254,14 +429,16 @@ func resolveType(name string, decl *TypeDecl, base *BaseBlock, declared map[stri
 	}
 	storage := StorageConfig{Layout: decl.Layout, Path: decl.Path, Fmt: decl.Format}
 	return &ResolvedType{
-		Name:       name,
-		Storage:    storage,
-		Attributes: attributes,
-		Relations:  relations,
-		Required:   decl.Required,
-		Orphan:     decl.Orphan,
-		IdPrefix:   idPrefixOf(decl.IdPrefix),
-		When:       decl.When,
+		Name:        name,
+		Storage:     storage,
+		Attributes:  attributes,
+		Relations:   relations,
+		Required:    decl.Required,
+		Orphan:      decl.Orphan,
+		IdPrefix:    idPrefixOf(decl.IdPrefix),
+		Template:    decl.Template,
+		TemplateOff: decl.TemplateOff,
+		When:        decl.When,
 	}, nil
 }
 
@@ -412,7 +589,12 @@ func smuggledError(list []vocabErr) *errs.Located {
 		if e.kind == "extra_forbidden" {
 			construct := e.loc[len(e.loc)-1]
 			typeName := ""
-			if len(e.loc) > 1 && e.loc[0] == "entities" {
+			// The offending type's name: ontology.entities.<type>.… for the
+			// declaring layer, <layer>.<type>.… for the annotating ones.
+			switch {
+			case len(e.loc) > 2 && e.loc[0] == "ontology" && e.loc[1] == "entities":
+				typeName = e.loc[2]
+			case len(e.loc) > 1 && (e.loc[0] == "policy" || e.loc[0] == "storage"):
 				typeName = e.loc[1]
 			}
 			return errs.RawLinkMLSmuggled(typeName, construct, strings.Join(e.loc, "."))

@@ -31,13 +31,20 @@ only the actionable candidates. Effort: **S** ≈ a day or less,
 
 ## A. Schema evolution & migration
 
-The largest named gap: today, editing `schema.yaml` (or drifting from a preset)
+The largest named gap: today, editing a schema layer (or drifting from a preset)
 has zero guardrails. bwrb ships a working same-substrate migration engine;
 open-ontologies contributes the blast-radius/lock framing.
 
 1. **Schema snapshot + `khub schema diff`** [bwrb, M] — Keep
    `.khub/schema.applied.yaml`, the last-migrated snapshot; diff the current
    schema against it and report pending changes. Foundation for #2–#6.
+   *Post-split note: snapshot the RESOLVED schema, not the authored files —
+   three layer files and one document carrying three blocks resolve
+   identically, so an authored-file snapshot would report a pending migration
+   whenever the shape moved. The resolved form is what determines entity
+   validity, which is the question this snapshot exists to answer. And do not
+   adopt bwrb's `backups/` dir: khub's rollback is git (Principle 5), and a
+   backups dir under gitignored `.khub/generated/` would be untracked.*
 2. **Change classification** [bwrb, M] — Classify each schema change as
    *deterministic* (add field/option, widen single→many: auto-safe),
    *non-deterministic* (remove field, narrow enum: confirm; may drop data), or
@@ -83,7 +90,7 @@ open-ontologies contributes the blast-radius/lock framing.
 11. **`khub schema docs`** [sem+oo, S] — Render the resolved schema to
     Markdown (types, fields, enums, edges, requireds, layouts). Kills the
     hand-maintained preset-doc drift class; feeds `wire`.
-12. **JSON Schema for `.khub/schema.yaml`** [bwrb, S] — Emit a meta-schema
+12. **JSON Schema for the `.khub/` layer files** [bwrb, S] — Emit a meta-schema
     JSON Schema (`$schema` pointer) for editor validation/autocomplete.
     Nearly free from the Pydantic meta-schema.
 13. **`khub schema discover`** [bwrb, M] — Descriptive (never pass/fail)
@@ -229,12 +236,16 @@ open-ontologies contributes the blast-radius/lock framing.
     remaining authoritative.
 45. **RDF projection into `.khub/generated/schema.ttl`** [oo] — Regenerated
     like the compiled entity models (TBox+SHACL always; ABox behind a flag).
+    *Since the ontology/policy/storage split this projection is LOSSLESS over
+    the ontology layer: `ontology.yaml` is purely the domain (attributes,
+    relations, cues), so the export maps ~1:1 onto RDFS+SHACL with only the
+    policy/storage layers riding as `khub:` annotations.*
     External RDF tooling points at `.khub/generated/` and sees every
     workspace natively. Authoring format stays YAML; RDF is derived, never a
     second source of truth.
 46. **Profile-checked RDF import** [oo, phase 2] — Checker first ("is this
     Turtle in the khub profile; here is what isn't, named, never silently
-    dropped"); the full Turtle→`schema.yaml` importer only if preset
+    dropped"); the full Turtle→`ontology.yaml` importer only if preset
     authoring actually shifts to the RDF side.
 
 ## H. Engineering hygiene (internal)
@@ -426,7 +437,7 @@ list. No new numbers — recorded so the design work is not redone:
 | **#21** bulk | [iwe] | Filter + `$set`/`$unset`, dry-run to learn counts, guards to assert them, atomic per entity. Effectively #21 + #50 + #51 as one verb. |
 | **#28** `--where` filters | [iwe] | A shipped grammar to copy from: bare equality with array-membership semantics, `$eq $ne $gt $gte $lt $lte $in $nin $exists $all $size`, `$and $or $nor`, dotted paths, and no implicit type coercion. |
 | **#18** `--under <node>` | [iwe] | Generalized: a relational operator taking a *filter* as its anchor plus `minDepth`/`maxDepth`, so "everything under this project" and "everything under any active project" are the same construct. |
-| **#39** output contract | [iwe] | Adopt the exit-code trichotomy: `0` clean, `1` findings, `2` configuration or schema error printed to stderr *before* any entity is examined. khub currently overloads `2` as usage error; a broken `schema.yaml` and a workspace with findings should not look the same to CI. Also worth copying: violations carry a machine path into the schema plus the failing keyword. |
+| **#39** output contract | [iwe] | Adopt the exit-code trichotomy: `0` clean, `1` findings, `2` configuration or schema error printed to stderr *before* any entity is examined. khub currently overloads `2` as usage error; a broken schema and a workspace with findings should not look the same to CI. Also worth copying: violations carry a machine path into the schema plus the failing keyword. |
 | **#42** MCP exposure filter | [iwe] | Pairs with #50 — "read-only khub for a reviewer agent" and "writes must carry guards" are the same policy surface. |
 | **#41** skill as decision guidance | [kag] | The solver's retrieval cascade, ported from code to prose: exact first (`get`, `query --type --<field>`), then graph (`neighbors`/`impact`), then lexical (`search`), then body read — and iterate only on a *named* gap ("X unresolved"), never re-plan blind. KAG's static-vs-iterative planner split maps to "plan the calls for a closed ask; loop with reflection for an open one." |
 | **#53** `retrieve` | [kag] | Third independent convergence (after IWE) on one-call context assembly: seeds, then neighborhood. KAG's mutual-index retrieval adds the ordering rationale — snippet and structure must arrive *together*, or the reader spends calls reassembling them. |

@@ -3,10 +3,11 @@
 // directory path: the packaged tree is embedded, and `--preset-source <dir>`
 // swaps in os.DirFS with identical discovery logic.
 //
-// A preset is a DIRECTORY: <name>/schema.yaml plus an optional
-// <name>/templates/*.yaml. core.yaml (the base block) is never taken from a
-// --preset-source; it always comes from the packaged tree, exactly as Python
-// reads PRESETS_DIR / "core.yaml" unconditionally.
+// A preset is a DIRECTORY: <name>/ontology.yaml (the domain model, which also
+// declares the preset), optional <name>/policy.yaml and <name>/storage.yaml,
+// and an optional <name>/templates/*.yaml. core/ (the base block) is never
+// taken from a --preset-source and is never an installable preset; it always
+// comes from the packaged tree, supplied to every resolve by LoadSchema.
 package presets
 
 import (
@@ -19,18 +20,38 @@ import (
 	"github.com/endgame-build/khub/internal/errs"
 )
 
-// CoreFile is the base-block document at the root of the preset tree.
-const CoreFile = "core.yaml"
+// coreDir is the reserved directory holding the base block. It matches the
+// same */ontology.yaml glob the presets do, so discovery must skip it by name
+// — otherwise the base block would list as an installable preset.
+const coreDir = "core"
 
-// SchemaFile is the per-preset schema document, relative to the preset dir.
-const SchemaFile = "schema.yaml"
+// OntologyFile is the per-preset domain model, relative to the preset dir. Its
+// presence is what makes a directory a preset, and it carries the preset
+// `version:`.
+const OntologyFile = "ontology.yaml"
+
+// CorePath is the base-block document in the preset tree — embedded in the
+// binary and supplied to every resolve, never copied into a workspace. It is
+// a path, not a file name, and is built from the two constants rather than
+// spelled out, so the reserved directory is named in exactly one place. The
+// separator is a literal "/" because this addresses an io/fs tree, where the
+// separator is always "/" whatever the host. `//go:embed` in embed.go cannot
+// read it (patterns are literals), so that file spells `presets/core/` itself.
+const CorePath = coreDir + "/" + OntologyFile
+
+// PolicyFile and StorageFile are the per-preset gate and storage layers,
+// relative to the preset dir. Both optional: absent reads as empty.
+const (
+	PolicyFile  = "policy.yaml"
+	StorageFile = "storage.yaml"
+)
 
 // TemplatesDir is the per-preset body-template directory, relative to the
 // preset dir.
 const TemplatesDir = "templates"
 
 // Embedded is the packaged preset tree — PRESETS_DIR. Paths are relative to
-// the tree root ("core.yaml", "build-lite/schema.yaml", …).
+// the tree root ("core/ontology.yaml", "build-lite/ontology.yaml", …).
 func Embedded() fs.FS {
 	sub, err := fs.Sub(khub.PresetsData, "presets")
 	if err != nil {
@@ -55,24 +76,34 @@ func Source(dir string) fs.FS {
 }
 
 // Known is known_presets: the preset names resolvable from source, sorted.
-// Discovery is the same glob Python runs — "*/schema.yaml", parent name.
+// Discovery globs "*/ontology.yaml" and takes the parent name, skipping the
+// reserved core directory — the base block matches the same glob but is not a
+// preset anyone can init from.
 func Known(source fs.FS) []string {
-	matches, err := fs.Glob(source, "*/"+SchemaFile)
+	matches, err := fs.Glob(source, "*/"+OntologyFile)
 	if err != nil {
 		return nil // only a malformed pattern reaches here; ours is a literal
 	}
 	names := make([]string, 0, len(matches))
 	for _, m := range matches {
-		names = append(names, path.Dir(m))
+		if name := path.Dir(m); name != coreDir {
+			names = append(names, name)
+		}
 	}
 	sort.Strings(names)
 	return names
 }
 
-// Resolve is resolve_preset: the FS-relative path of <name>/schema.yaml, or
-// the unknown_preset error listing what source does offer.
+// Resolve is resolve_preset: the FS-relative path of <name>/ontology.yaml, or
+// the unknown_preset error listing what source does offer. The reserved core
+// directory is not resolvable — it is the base block, not a preset.
 func Resolve(name string, source fs.FS) (string, error) {
-	candidate := path.Join(name, SchemaFile)
+	// The reserved name first: core/ontology.yaml exists in the tree, so the
+	// stat would succeed — its result cannot matter here.
+	if name == coreDir {
+		return "", errs.UnknownPreset(name, Known(source))
+	}
+	candidate := path.Join(name, OntologyFile)
 	if _, err := fs.Stat(source, candidate); err != nil {
 		return "", errs.UnknownPreset(name, Known(source))
 	}

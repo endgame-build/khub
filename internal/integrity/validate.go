@@ -121,9 +121,25 @@ func bodyStructureErrors(
 	root string, resolved *schema.ResolvedSchema, valid *index.Index, target *string,
 ) ([]FieldError, error) {
 	errors := []FieldError{}
+	// Two types may share one declared stem; parse each template once per run
+	// and remember the outcome — the error too, since a broken shared template
+	// is still reported once per DECLARING type (the finding is the type's).
+	type tplResult struct {
+		tpl *template.BodyTemplate
+		err error
+	}
+	memo := map[string]tplResult{}
+	loadOnce := func(stem string) (*template.BodyTemplate, error) {
+		if r, ok := memo[stem]; ok {
+			return r.tpl, r.err
+		}
+		tpl, err := template.LoadTemplate(root, stem)
+		memo[stem] = tplResult{tpl: tpl, err: err}
+		return tpl, err
+	}
 	for _, tname := range resolved.Types.Keys() {
 		rtype, _ := resolved.Types.Get(tname)
-		if rtype.Storage.Fmt != "md" || rtype.Storage.Layout == schema.LayoutCollection {
+		if !rtype.ReadsTemplate() {
 			continue
 		}
 		// Honour the target selector: `validate capability/cap` reported an
@@ -132,9 +148,13 @@ func bodyStructureErrors(
 		if !typeInTarget(tname, target) {
 			continue
 		}
+		stem := rtype.TemplateName()
+		if stem == "" {
+			continue // template: false — explicitly untemplated
+		}
 		// A broken template must not abort the run: validate's contract is to
 		// collect every finding. Report it once, on the type, and move on.
-		tpl, err := template.LoadTemplate(root, tname)
+		tpl, err := loadOnce(stem)
 		if err != nil {
 			errors = append(errors, FieldError{tname, "*", "template", errReason(err)})
 			continue
@@ -160,7 +180,7 @@ func bodyStructureErrors(
 					Type: tname, Slug: node.Slug, Field: "body",
 					Reason: fmt.Sprintf(
 						"missing or out-of-order section '## %s' "+
-							"(template %s.yaml requires its headings in order)", missing, tname),
+							"(template %s.yaml requires its headings in order)", missing, stem),
 				})
 			}
 		}

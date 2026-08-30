@@ -16,8 +16,8 @@ duplicated as entities.
 Preset version **0.3.0**. Twenty entity types (fifteen graph records + five narrative
 singletons). Seventeen relation predicates in twenty-three declarations beyond the four universal
 edges from the core base (`domain.depends_on` narrows the universal edge to a typed
-`domain → domain`). The preset is a directory: `schema.yaml` + `templates/*.yaml`, flattened to
-`.khub/templates/` at init. Fifteen of the seventeen md types ship a body template;
+`domain → domain`). The preset is a directory: `{ontology,policy,storage}.yaml` + `templates/*.yaml`, copied to
+`.khub/` at init. Fifteen of the seventeen md types ship a body template;
 `entity` and `component` deliberately do not — they are
 name-keyed records whose shape is their frontmatter, so `add` writes them with an
 empty body and `validate` holds them to no heading contract.
@@ -90,7 +90,7 @@ case-sensitive, so `--id CAP-001-login` is stored — and must be looked up — 
 
 ## What every entity carries
 
-`khub init` merges `core.yaml` into the preset, so every build-hub entity carries the base block:
+The base block is embedded in the binary and merged into every type at resolve time (`khub schema base` prints it), so every build-hub entity carries it:
 attributes `type`, `draft`, `author`, `created`, `updated`, `title`, `description`, `resource`,
 `tags`; universal edges `related`, `sources`, `references`, `depends_on`. The tables below list
 only what build-hub adds or tightens. Every markdown type tightens `title` to required (it mints
@@ -260,6 +260,6 @@ concept.
 
 ## See also
 
-- [`schema.md`](schema.md) — author or extend types; `.khub/schema.yaml` is the editable copy.
+- [`schema.md`](schema.md) — author or extend types; the `.khub/` layer files are the editable copy.
 - [`firm-ops-preset.md`](firm-ops-preset.md) — the consulting-firm operating graph.
 - [`collections-design.md`](collections-design.md) — the registry row model.

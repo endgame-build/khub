@@ -12,7 +12,7 @@
 # a write (`add`) are both asserted.
 steps:
 - argv: ["init", "build-hub", ".", "--no-wire"]
-- sh: "printf '  widget:\\n    layout: collection\\n    format: yaml\\n    path: knowledge/architecture/repos.yaml\\n    attributes:\\n      name: {type: text}\\n' >> .khub/schema.yaml"
+- sh: "printf '    widget:\\n      attributes:\\n        name: {type: text}\\n' >> .khub/ontology.yaml && printf '  widget: {layout: collection, format: yaml, path: knowledge/architecture/repos.yaml}\\n' >> .khub/storage.yaml"
 - argv: ["schema", "types", "--format", "json"]
 - argv: ["add", "repo", "--id", "r1", "--repo", "x/y", "--status", "active", "--format", "json"]
 - argv: ["status", "--format", "json"]

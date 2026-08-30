@@ -1,0 +1,57 @@
+# build-hub/storage.yaml — where and how each type's bytes land.
+#
+# Layout: two knowledge roots. knowledge/{product,architecture} is durable
+# truth; specs/ at the workspace root is delivery state (different cadence; the
+# tracker sync flips work-package status, everything else is reviewed prose).
+# The work spine is three flat ID-enumerated dirs:
+# specs/{feature-specs,test-specs,work-packages}.
+#
+# Storage-form rule: prose a human reviews = one file per record with an
+# ID-enumerated slug, lowercase (ad-/pd-/bound-/qa-/fr-/cst-/br-/cap-/cmp-/fs-/ts-/wp-NNN-slug
+# — `add --id` slugifies and lookup is case-sensitive, so uppercase would not resolve);
+# homogeneous wiring = a collection row, name-keyed (repos.yaml,
+# baselines.yaml — the registry file is the enumeration). domain, entity,
+# contract are name-keyed files (natural-name identity).
+#
+# The five narrative singletons live one fixed file each (slug = type name):
+# prd, roadmap, glossary under knowledge/product/ and arc42, erd under
+# knowledge/architecture/. init creates each from its body template in
+# templates/.
+#
+# Contracts are yaml-format file entities (format: yaml; policy prose rides the
+# reserved `body` field). The machine spec (OpenAPI/AsyncAPI) is a standalone
+# file under contracts/specs/ — a SUBDIRECTORY, invisible to the single-level
+# scan — linked via `resource` so codegen and contract tests consume it
+# directly.
+
+storage:
+  # narrative singletons
+  prd:      { layout: singleton, path: knowledge/product/prd.md }
+  roadmap:  { layout: singleton, path: knowledge/product/roadmap.md }
+  glossary: { layout: singleton, path: knowledge/product/glossary.md }
+  arc42:    { layout: singleton, path: knowledge/architecture/arc42.md }
+  erd:      { layout: singleton, path: knowledge/architecture/erd.md }
+
+  # product: what
+  capability:  { layout: file, path: knowledge/product/capabilities, id_prefix: cap }
+  requirement:
+    layout: file
+    path: knowledge/product/requirements
+    id_prefix: { by: kind, map: { functional: fr, constraint: cst, business-rule: br } }
+  pdr:         { layout: file, path: knowledge/product/decisions, id_prefix: pd }
+
+  # architecture: how
+  adr:               { layout: file, path: knowledge/architecture/decisions, id_prefix: ad }
+  domain:            { layout: file, path: knowledge/architecture/domains }
+  entity:            { layout: file, path: knowledge/architecture/entities }
+  boundary:          { layout: file, path: knowledge/architecture/boundaries, id_prefix: bound }
+  quality-attribute: { layout: file, path: knowledge/architecture/quality-attributes, id_prefix: qa }
+  component:         { layout: file, path: knowledge/architecture/components, id_prefix: cmp }
+  repo:              { layout: collection, path: knowledge/architecture/repos.yaml }   # format derived from the path suffix
+  contract:          { layout: file, format: yaml, path: knowledge/architecture/contracts }
+  baseline:          { layout: collection, path: knowledge/architecture/baselines.yaml }
+
+  # specs: delivery state
+  feature-spec: { layout: file, path: specs/feature-specs, id_prefix: fs }
+  test-spec:    { layout: file, path: specs/test-specs,    id_prefix: ts }
+  work-package: { layout: file, path: specs/work-packages, id_prefix: wp }

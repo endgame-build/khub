@@ -1,6 +1,8 @@
 ec9b399104e5dd366e2ba41a1de03d49eae7a1c26ce2dd22d000dc6e0e36c637 - .gitignore
 a39c49cbe610a67d0e6786c8ba97650c99de1d6fa04fcfb62343855e37b3253a - .khub/config.yaml
-b661f09e00fcfff23e7ac1fcda47ce7fdf5cefe6aef5550c87fe915006b99991 - .khub/schema.yaml
+f4dc3a2e2f39902f929e077ac185bc2b4b2c45034b0abfafc6a1e5cf151d2d3e - .khub/ontology.yaml
+7149c92f3f97d2f690b78910a7ef77be1821e72c4acab61eb58c09a32625f5b0 - .khub/policy.yaml
+f022d97a1a2a91e11577eab310dc9faddd935bfebf29a11e3f2de1d8a1d8bd87 - .khub/storage.yaml
 bb5e129837a0a9abede89fdf61d0d9ba318f19c896d7804c8302973b97e69d1e - .khub/templates/adr.yaml
 822e40665a67f3c58a9e97858932161a10685f2dc266b42709de43fc9cf7505b - .khub/templates/arc42.yaml
 33f06d9a217e76b5f11b79fc1c303d8f7bd9573ce1e58835882b8f74207d1fd0 - .khub/templates/boundary.yaml

@@ -19,15 +19,19 @@ import (
 )
 
 // A minimal, self-contained preset for the fast paths (tests/test_init.py
-// NOTE_PRESET).
-const notePreset = `
+// NOTE_PRESET), in the three-layer shape.
+const notePresetOntology = `
 version: "9.9.9"
-entities:
-  note:
-    layout: file
-    path: notes
-    attributes:
-      body: { type: text }
+ontology:
+  entities:
+    note:
+      attributes:
+        body: { type: text }
+`
+
+const notePresetStorage = `
+storage:
+  note: { layout: file, path: notes }
 `
 
 // presetSource is the preset_source fixture: a directory holding the tiny
@@ -35,7 +39,8 @@ entities:
 func presetSource(t *testing.T) string {
 	t.Helper()
 	src := filepath.Join(t.TempDir(), "presets")
-	writeFile(t, filepath.Join(src, "note", "schema.yaml"), notePreset)
+	writeFile(t, filepath.Join(src, "note", "ontology.yaml"), notePresetOntology)
+	writeFile(t, filepath.Join(src, "note", "storage.yaml"), notePresetStorage)
 	return src
 }
 
@@ -92,15 +97,22 @@ func exists(path string) bool {
 // --- TS-WS-001-U02..U05 / U08: scaffold a workspace ------------------------------
 
 func TestFlattenWritesOneSchema(t *testing.T) {
-	// TS-WS-001-U02 (WS-001): core + preset flatten into one .khub/schema.yaml.
+	// TS-WS-001-U02 (WS-001): the preset's three layers land as three files,
+	// and the base block does NOT — it stays embedded in the binary.
 	ws := filepath.Join(t.TempDir(), "ws")
 	mustInit(t, "note", ws, InitOptions{PresetSource: presetSource(t)})
-	text := readFile(t, filepath.Join(ws, ".khub", "schema.yaml"))
-	if !strings.Contains(text, "\nbase:\n") {
-		t.Error("no base block")
+	text := readFile(t, filepath.Join(ws, ".khub", "ontology.yaml"))
+	if strings.Contains(text, "base:") {
+		t.Error("the base block was copied into the workspace")
 	}
-	if !strings.Contains(text, "\n  note:\n") {
+	if !strings.Contains(text, "    note:\n") {
 		t.Error("no preset entity")
+	}
+	if !strings.Contains(readFile(t, filepath.Join(ws, ".khub", "storage.yaml")), "note:") {
+		t.Error("no storage decl")
+	}
+	if !exists(filepath.Join(ws, ".khub", "policy.yaml")) {
+		t.Error("policy.yaml not written (empty layers still land)")
 	}
 }
 
@@ -108,9 +120,11 @@ func TestProvenanceHeaderStamped(t *testing.T) {
 	// TS-WS-001-U03 (WS-009): the schema header carries preset@version.
 	ws := filepath.Join(t.TempDir(), "ws")
 	mustInit(t, "note", ws, InitOptions{PresetSource: presetSource(t)})
-	head := strings.SplitN(readFile(t, filepath.Join(ws, ".khub", "schema.yaml")), "\n", 2)[0]
-	if head != "# khub-preset: note@9.9.9" {
-		t.Fatalf("header = %q", head)
+	for _, layer := range []string{"ontology.yaml", "policy.yaml", "storage.yaml"} {
+		head := strings.SplitN(readFile(t, filepath.Join(ws, ".khub", layer)), "\n", 2)[0]
+		if head != "# khub-preset: note@9.9.9" {
+			t.Fatalf("%s header = %q", layer, head)
+		}
 	}
 }
 
@@ -203,16 +217,17 @@ func TestSingletonPathsCreateOnlyTheirParent(t *testing.T) {
 	// directory and never the file itself, and creates nothing when the parent
 	// IS the target.
 	src := presetSource(t)
-	writeFile(t, filepath.Join(src, "cells", "schema.yaml"), `
+	writeFile(t, filepath.Join(src, "cells", "ontology.yaml"), `
 version: "1.0.0"
-entities:
-  charter:
-    layout: singleton
-    path: charter.md
-  row:
-    layout: collection
-    format: yaml
-    path: registry/rows.yaml
+ontology:
+  entities:
+    charter: {}
+    row: {}
+`)
+	writeFile(t, filepath.Join(src, "cells", "storage.yaml"), `
+storage:
+  charter: { layout: singleton, path: charter.md }
+  row: { layout: collection, format: yaml, path: registry/rows.yaml }
 `)
 	ws := filepath.Join(t.TempDir(), "ws")
 	mustInit(t, "cells", ws, InitOptions{PresetSource: src})
@@ -325,7 +340,8 @@ func TestEntityLessPresetRejected(t *testing.T) {
 	// A preset declaring no entities is rejected, not silently scaffolded
 	// empty — and the rejection lands before any write.
 	src := presetSource(t)
-	writeFile(t, filepath.Join(src, "hollow", "schema.yaml"), "version: \"1.0.0\"\nentities: {}\n")
+	writeFile(t, filepath.Join(src, "hollow", "ontology.yaml"),
+		"version: \"1.0.0\"\nontology: {entities: {}}\n")
 	ws := filepath.Join(t.TempDir(), "ws")
 	_, err := Init("hollow", ws, InitOptions{PresetSource: src})
 	l := located(t, err)
@@ -352,7 +368,7 @@ func TestReinitRefusesADifferentPreset(t *testing.T) {
 		t.Fatalf("code = %s", l.Code)
 	}
 	want := fmt.Sprintf("%s is a 'firm-ops' workspace; refusing to scaffold 'build-hub' over it. "+
-		"Its .khub/schema.yaml is workspace-owned and would be kept, leaving files for "+
+		"Its .khub schema files are workspace-owned and would be kept, leaving files for "+
 		"types the schema does not declare.", ws)
 	if l.Message != want {
 		t.Fatalf("message = %q", l.Message)
@@ -468,7 +484,7 @@ func TestEntityHashesSkipsVendorAndWorkspaceTrees(t *testing.T) {
 	dir := t.TempDir()
 	for _, rel := range []string{
 		"a.md", "b.json", "c.yaml", "d.jsonl",
-		".khub/schema.yaml", ".git/x.md", ".venv/y.json", "node_modules/p/package.json",
+		".khub/ontology.yaml", ".git/x.md", ".venv/y.json", "node_modules/p/package.json",
 	} {
 		writeFile(t, filepath.Join(dir, filepath.FromSlash(rel)), "x")
 	}
@@ -490,11 +506,11 @@ func TestEntityHashesSkipsVendorAndWorkspaceTrees(t *testing.T) {
 // --- re-init preserves workspace-owned files ---------------------------------------
 
 func TestForceReinitPreservesSchemaAndTemplates(t *testing.T) {
-	// The engagement owns .khub/schema.yaml outright — editing it IS the
+	// The engagement owns its layer files outright — editing them IS the
 	// override mechanism — and templates are workspace-owned after init.
 	ws := filepath.Join(t.TempDir(), "ws")
 	mustInit(t, "build-hub", ws, InitOptions{})
-	schemaPath := filepath.Join(ws, ".khub", "schema.yaml")
+	schemaPath := filepath.Join(ws, ".khub", "ontology.yaml")
 	tplPath := filepath.Join(ws, ".khub", "templates", "prd.yaml")
 	writeFile(t, schemaPath, readFile(t, schemaPath)+"\n# LOCAL OVERRIDE\n")
 	writeFile(t, tplPath, readFile(t, tplPath)+"\n# LOCAL TEMPLATE EDIT\n")
@@ -502,22 +518,25 @@ func TestForceReinitPreservesSchemaAndTemplates(t *testing.T) {
 	res := mustInit(t, "build-hub", ws, InitOptions{Force: true})
 
 	if !strings.Contains(readFile(t, schemaPath), "# LOCAL OVERRIDE") {
-		t.Error("schema.yaml was restored")
+		t.Error("ontology.yaml was restored")
 	}
 	if !strings.Contains(readFile(t, tplPath), "# LOCAL TEMPLATE EDIT") {
 		t.Error("the template was restored")
 	}
-	for _, want := range []string{".khub/schema.yaml", ".khub/config.yaml", ".khub/templates/prd.yaml"} {
+	for _, want := range []string{".khub/ontology.yaml", ".khub/policy.yaml", ".khub/storage.yaml",
+		".khub/config.yaml", ".khub/templates/prd.yaml"} {
 		if !contains(res.Preserved, want) {
 			t.Errorf("preserved lacks %s: %v", want, res.Preserved)
 		}
 	}
-	// Order is contract: schema, config, then templates by name.
-	if res.Preserved[0] != ".khub/schema.yaml" || res.Preserved[1] != ".khub/config.yaml" {
+	// Order is contract: the schema layers in write order, config, then
+	// templates by name.
+	if res.Preserved[0] != ".khub/ontology.yaml" || res.Preserved[1] != ".khub/policy.yaml" ||
+		res.Preserved[2] != ".khub/storage.yaml" || res.Preserved[3] != ".khub/config.yaml" {
 		t.Errorf("preserved order = %v", res.Preserved)
 	}
-	if !sort.StringsAreSorted(res.Preserved[2:]) {
-		t.Errorf("templates are not sorted: %v", res.Preserved[2:])
+	if !sort.StringsAreSorted(res.Preserved[4:]) {
+		t.Errorf("templates are not sorted: %v", res.Preserved[4:])
 	}
 }
 
@@ -557,16 +576,17 @@ func TestFailedInitLeavesNoPartialKhub(t *testing.T) {
 	// singleton — parity's preset-badtemplate, the one route by which
 	// template_invalid reaches init.
 	src := presetSource(t)
-	writeFile(t, filepath.Join(src, "bad", "schema.yaml"), `
+	writeFile(t, filepath.Join(src, "bad", "ontology.yaml"), `
 version: "0.1.0"
-entities:
-  charter:
-    layout: singleton
-    path: charter.md
-    orphan: true
-    attributes:
-      title: { required: true }
+ontology:
+  entities:
+    charter:
+      attributes:
+        title: { required: true }
 `)
+	writeFile(t, filepath.Join(src, "bad", "policy.yaml"), "policy:\n  charter: { orphan: true }\n")
+	writeFile(t, filepath.Join(src, "bad", "storage.yaml"),
+		"storage:\n  charter: { layout: singleton, path: charter.md }\n")
 	writeFile(t, filepath.Join(src, "bad", "templates", "charter.yaml"),
 		"- top level is a list, not a mapping\n")
 	ws := filepath.Join(t.TempDir(), "ws")
@@ -588,27 +608,73 @@ entities:
 }
 
 func TestFailedReinitKeepsAnExistingKhub(t *testing.T) {
-	// The unwind removes only the .khub this run created: a re-init that fails
-	// must not delete the workspace's own schema.
+	// The unwind removes only the .khub files this run WROTE: a re-init that
+	// fails must not delete the workspace's own schema. The failing shape is
+	// the mixed-generation one the post-scaffold resolve exists to catch — a
+	// preserved ontology beside a freshly written storage layer annotating a
+	// type that ontology never declared. Pre-resolve, this init reported
+	// success and left a workspace no command could load.
 	src := presetSource(t)
 	ws := filepath.Join(t.TempDir(), "ws")
 	mustInit(t, "note", ws, InitOptions{PresetSource: src})
-	schemaPath := filepath.Join(ws, ".khub", "schema.yaml")
+	schemaPath := filepath.Join(ws, ".khub", "ontology.yaml")
+	storagePath := filepath.Join(ws, ".khub", "storage.yaml")
 	before := readFile(t, schemaPath)
+	if err := os.Remove(storagePath); err != nil { // the workspace dropped its storage layer
+		t.Fatal(err)
+	}
 
-	// Same preset name, now shipping a broken singleton template.
-	writeFile(t, filepath.Join(src, "note", "schema.yaml"), notePreset+`
-  charter:
-    layout: singleton
-    path: charter.md
+	// Same preset name, moved on: its storage now annotates a type the
+	// workspace's preserved ontology does not declare.
+	writeFile(t, filepath.Join(src, "note", "storage.yaml"), notePresetStorage+`  ghost: { layout: file, path: ghosts }
 `)
-	writeFile(t, filepath.Join(src, "note", "templates", "charter.yaml"), "- a list\n")
 
-	if _, err := Init("note", ws, InitOptions{PresetSource: src, Force: true}); err == nil {
-		t.Fatal("expected template_invalid")
+	_, err := Init("note", ws, InitOptions{PresetSource: src, Force: true})
+	if err == nil {
+		t.Fatal("expected the mixed-generation resolve error")
+	}
+	if !strings.Contains(err.Error(), "ghost") {
+		t.Errorf("error %q does not name the undeclared type", err)
 	}
 	if !exists(schemaPath) || readFile(t, schemaPath) != before {
 		t.Error("the pre-existing .khub was destroyed")
+	}
+	if exists(storagePath) {
+		t.Error("the freshly written storage.yaml survived the unwind")
+	}
+}
+
+func TestInitRejectsAPresetDeclaringABase(t *testing.T) {
+	// The resolver forbids an authored ontology.base; flatten applies the same
+	// rule at the one place the workspace file gets authored, BEFORE anything
+	// is written — copying the block verbatim used to scaffold a workspace no
+	// command could load.
+	src := presetSource(t)
+	writeFile(t, filepath.Join(src, "based", "ontology.yaml"),
+		"ontology:\n  base:\n    attributes:\n      type: { type: text }\n  entities:\n    note: {}\n")
+	ws := filepath.Join(t.TempDir(), "ws")
+	_, err := Init("based", ws, InitOptions{PresetSource: src})
+	l := located(t, err)
+	if l.Code != "invalid_schema" || !strings.Contains(l.Message, "khub-owned") {
+		t.Fatalf("err = %s (%s)", l.Code, l.Message)
+	}
+	if exists(filepath.Join(ws, ".khub")) {
+		t.Error("the rejection must land before any write")
+	}
+}
+
+func TestInitRejectsAFlatLayerFile(t *testing.T) {
+	// A policy.yaml authored without the `policy:` wrapper — per-type entries
+	// at the top level, the natural mistake — used to be read as an EMPTY
+	// layer: init wrote `policy: {}` and every declared gate vanished with no
+	// diagnostic anywhere.
+	src := presetSource(t)
+	writeFile(t, filepath.Join(src, "note", "policy.yaml"), "note: { orphan: true }\n")
+	ws := filepath.Join(t.TempDir(), "ws")
+	_, err := Init("note", ws, InitOptions{PresetSource: src})
+	l := located(t, err)
+	if l.Code != "invalid_schema" || !strings.Contains(l.Message, "'policy:'") {
+		t.Fatalf("err = %s (%s)", l.Code, l.Message)
 	}
 }
 
@@ -673,7 +739,8 @@ func TestGoldenRerunPreserves(t *testing.T) {
 			t.Errorf("singletons_created = %v", res.SingletonsCreated)
 		}
 		want := []string{
-			".khub/schema.yaml", ".khub/config.yaml",
+			".khub/ontology.yaml", ".khub/policy.yaml", ".khub/storage.yaml",
+			".khub/config.yaml",
 			".khub/templates/adr.yaml", ".khub/templates/arc42.yaml",
 			".khub/templates/feature-spec.yaml", ".khub/templates/prd.yaml",
 		}

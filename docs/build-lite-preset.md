@@ -2,7 +2,7 @@
 
 **build-hub cut to necessity: six entity types for a small build project, and a documented order for growing back into the full preset.**
 
-Preset version **0.1.0**. Six entity types (four graph records + two narrative singletons). Four relation predicates in five declarations beyond the four universal edges from the core base. The preset is a directory: `schema.yaml` + `templates/*.yaml`, flattened to `.khub/templates/` at init. Four of the six md types ship a body template.
+Preset version **0.1.0**. Six entity types (four graph records + two narrative singletons). Four relation predicates in five declarations beyond the four universal edges from the core base. The preset is a directory: `{ontology,policy,storage}.yaml` + `templates/*.yaml`, copied to `.khub/` at init. Four of the six md types ship a body template.
 
 ```bash
 khub init build-lite ./my-hub
@@ -79,7 +79,7 @@ Fourteen build-hub types are absent. None of them were dropped without a home. (
 
 ## Add-back ladder
 
-Order matters more than the list — it is what makes lite an on-ramp rather than a dead end. Each step is a schema edit in your workspace's `.khub/schema.yaml`; no surface code changes.
+Order matters more than the list — it is what makes lite an on-ramp rather than a dead end. Each step is a schema edit in your workspace's `.khub/ontology.yaml` (plus a `storage.yaml` entry for where the type lands); no surface code changes.
 
 1. **`boundary` + `quality-attribute`** — the moment an invariant needs a named enforcement mechanism.
 2. **`contract`** — a second repo consuming an interface. It arrives alone: `contract.provider` targets `component`, and a vendor-provided contract names a `kind: external` component as its provider, exactly as in build-hub 0.3.0. Do **not** reintroduce `external-system` — build-hub no longer has it, and adding it here would produce a schema build-hub cannot absorb.
@@ -93,4 +93,4 @@ Order matters more than the list — it is what makes lite an on-ramp rather tha
 
 ## Design capture
 
-The `schema.yaml` header is the primary source: it carries every authoring decision, the full cut list with rationale, and the add-back ladder. This page is the reading copy.
+The `ontology.yaml` header is the primary source: it carries every authoring decision, the full cut list with rationale, and the add-back ladder. This page is the reading copy.

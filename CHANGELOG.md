@@ -4,6 +4,99 @@ Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+### BREAKING
+
+- **The workspace schema is three layer files, and the base block is embedded.**
+  `.khub/schema.yaml` is gone; a workspace now carries `.khub/ontology.yaml`
+  (the domain: per-type `attributes`, `relations`, `when`), `.khub/policy.yaml`
+  (`required`, `orphan`) and `.khub/storage.yaml` (`layout`, `path`, `format`,
+  `id_prefix`, `template`), merged at load time into the same resolved contract
+  as before — the layers merge on top-level key, so one file carrying all three
+  blocks also resolves. The `base` block ships embedded in the binary
+  (`khub schema base` prints it) and is never copied into a workspace; an
+  authored `ontology.base` is rejected — a type overrides a base attribute by
+  redeclaring it. Preset directories follow the same shape
+  (`<preset>/{ontology,policy,storage}.yaml`). The pre-split single-file layout
+  is not read; no live workspace was on it, so there is no migration. The split
+  exists so the ontology is a clean projection surface: `ontology.yaml` is
+  purely the domain, which is what an RDF/SHACL export or an external modeling
+  tool wants to see.
+- **`acyclic` moved with the split**: it rides on the relation in ontology (a
+  property of the predicate), while `required`/`orphan` are policy and
+  layout/path/format/id_prefix are storage. A policy or storage entry naming a
+  type ontology never declared is a resolve error.
+
+### Added
+
+- **Declared templates** — `storage.<type>.template: <name>` names the body
+  template (`.khub/templates/<name>.yaml`; a name, never a path), so two types
+  can share one and a rename cannot silently disable scaffolding and the body
+  contract: a declared name pointing at nothing is a `check` finding
+  (`missing_templates`) — capture is never blocked, so the broken link never
+  takes `add` down — and a template file no type claims is another
+  (`stray_templates`); both fail the gate. Undeclared keeps the convention (a
+  file named for the type); `template: false` opts out, and the opted-out type
+  still claims its conventional stem so keeping the file is not a finding.
+- **`khub schema base`** — print the effective base block (fields and
+  relations), since no workspace file carries it any more.
+- **Derived singleton cue links** — a `when` cue is pure domain language;
+  `khub wire` appends a singleton's edit target
+  (`— edit [knowledge/prd.md](knowledge/prd.md), never add a second`) derived
+  from its storage path at render time, so a moved file can never strand a
+  stale link in the ontology. `CLAUDE.md` imports the workspace's layer files
+  (only the ones that exist), and a link destination carrying spaces is
+  wrapped per CommonMark.
+- **Storage defaults** — a type declared in ontology with no storage entry
+  stores one file per entity under a directory named for the type. An entry
+  that exists must state its `layout` — the default is for wholly absent
+  entries, so a half-written entry cannot silently become `layout: file`.
+
+### Fixed
+
+- **Unknown schema keys are rejected again** — an unknown top-level key in a
+  layer file (`version` stays legal), or an unknown key inside `ontology:`,
+  is a resolve error instead of being silently dropped; a typo'd `entities:`
+  can no longer resolve to a zero-type schema with every gate green. A
+  workspace whose `.khub/` has `policy.yaml`/`storage.yaml` but no
+  `ontology.yaml` is likewise an error naming the missing declaring layer.
+  `khub init` holds preset files to the same vocabulary: a preset declaring
+  `ontology.base` is rejected before anything is written (copying it used to
+  scaffold a workspace no command could load), an unknown top-level key in
+  any preset layer file is an error, and a policy/storage file authored
+  without its `policy:`/`storage:` wrapper no longer reads as an empty layer
+  that silently drops every declared gate. A supplied base document that
+  yields no `ontology.base` is a loud error too.
+- **`template` is a storage-matrix cell** — declaring `template:` (the
+  `false` opt-out included) on a collection or non-md type is a schema
+  error: nothing ever reads a body template there, so the old behavior left
+  `check` permanently red over a file no verb would consult.
+- **init scaffolds from the resolved schema** — the entity tree and singleton
+  passes read the workspace's RESOLVED types (written and preserved layer
+  files alike, over the embedded base) instead of a hand-kept mirror of the
+  resolver's template and storage defaults. A re-init that would mix schema
+  generations (a preserved ontology beside a freshly written storage layer
+  annotating a type it never declared) now fails loudly, and the unwind
+  removes exactly the files that run wrote, leaving the workspace as it was.
+- **Schema errors name the failing file and layer** — a parse failure in
+  `policy.yaml`/`storage.yaml` is no longer headlined against
+  `ontology.yaml` (the wrap adds no path of its own; the underlying error
+  already carries one), and the `required`-is-singleton-only violation is
+  located at `policy.<type>.required`, the layer it is authored in, instead
+  of `storage.<type>`.
+- **`check` reports a template file no type can read** — the stray sweep let
+  every declared type claim a template stem whatever its layout or format,
+  while `add` and `validate` both skip non-md and collection types. So
+  `.khub/templates/<collection-type>.yaml` read as claimed and was never
+  reported, though no verb would ever consult it: the renamed-template hole
+  seen from the claiming side, which is the case `stray_templates` exists to
+  catch. One predicate now answers "does this type read a template?" for all
+  three verbs.
+- **A schema layer khub cannot examine reports the real cause** — an
+  unsearchable `.khub`, a dangling symlink or an I/O error all read as "the
+  file is absent", so khub blamed a missing `ontology.yaml`: the wrong cause,
+  and the one a reader acts on. An unreadable *file* was never affected — the
+  permission error already came from the read.
+
 ## [0.21.0] — 2026-08-29
 
 ### Changed

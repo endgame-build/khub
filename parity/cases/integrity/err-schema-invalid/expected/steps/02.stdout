@@ -1,1 +1,1 @@
-{"error": {"code": "invalid_schema", "message": "Invalid schema at entities.x.layout: Input should be 'file', 'folder', 'collection' or 'singleton'"}}
+{"error": {"code": "invalid_schema", "message": "Invalid schema at storage.x.layout: Input should be 'file', 'folder', 'collection' or 'singleton'"}}

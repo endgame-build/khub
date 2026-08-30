@@ -15,13 +15,15 @@ import (
 	"github.com/endgame-build/khub/internal/omap"
 )
 
-// addRepoType adds a `repo` collection type plus a project→repo edge, the way
-// tests/test_collections.py::_add_repo_type edits the workspace schema.
+// addRepoType adds a `repo` collection type plus a project→repo edge, editing
+// the workspace's ontology and storage layers the way an engagement extends
+// its schema.
 func addRepoType(t *testing.T, ws, format, path string) {
 	t.Helper()
-	sp := filepath.Join(ws, ".khub", "schema.yaml")
-	data := loadYAML(t, sp)
-	entitiesAny, _ := data.Get("entities")
+	op := filepath.Join(ws, ".khub", "ontology.yaml")
+	ontDoc := loadYAML(t, op)
+	ontAny, _ := ontDoc.Get("ontology")
+	entitiesAny, _ := ontAny.(*omap.Map).Get("entities")
 	entities := entitiesAny.(*omap.Map)
 
 	attrs := omap.New()
@@ -31,22 +33,32 @@ func addRepoType(t *testing.T, ws, format, path string) {
 	rels.Set("project", kv("to", "project"))
 
 	decl := omap.New()
-	decl.Set("layout", "collection")
-	decl.Set("format", format)
 	decl.Set("attributes", attrs)
 	decl.Set("relations", rels)
-	if path != "" {
-		decl.Set("path", path)
-	}
 	entities.Set("repo", decl)
 
 	projectAny, _ := entities.Get("project")
 	projectRels, _ := projectAny.(*omap.Map).Get("relations")
 	projectRels.(*omap.Map).Set("code", kv("to", "repo"))
 
-	text, err := canon.DumpWide(data)
+	text, err := canon.DumpWide(ontDoc)
 	requireNoError(t, err)
-	writeFile(t, sp, text)
+	writeFile(t, op, text)
+
+	stp := filepath.Join(ws, ".khub", "storage.yaml")
+	stDoc := loadYAML(t, stp)
+	storageAny, _ := stDoc.Get("storage")
+	storage := storageAny.(*omap.Map)
+	stDecl := omap.New()
+	stDecl.Set("layout", "collection")
+	stDecl.Set("format", format)
+	if path != "" {
+		stDecl.Set("path", path)
+	}
+	storage.Set("repo", stDecl)
+	text, err = canon.DumpWide(stDoc)
+	requireNoError(t, err)
+	writeFile(t, stp, text)
 }
 
 func collectionWS(t *testing.T) string {

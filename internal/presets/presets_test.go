@@ -14,7 +14,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/endgame-build/khub/internal/canon"
 	"github.com/endgame-build/khub/internal/errs"
+	"github.com/endgame-build/khub/internal/omap"
 	"github.com/endgame-build/khub/internal/schema"
 )
 
@@ -34,7 +36,7 @@ func TestResolveKnownPresetFromPackage(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got != "firm-ops/schema.yaml" {
+	if got != "firm-ops/ontology.yaml" {
 		t.Fatalf("Resolve = %q", got)
 	}
 }
@@ -43,13 +45,14 @@ func TestResolvePresetFromSource(t *testing.T) {
 	// TS-WS-001-U01: a preset resolves from --preset-source, through the same
 	// discovery logic over os.DirFS.
 	dir := t.TempDir()
-	mustWrite(t, filepath.Join(dir, "note", "schema.yaml"), "version: \"9.9.9\"\nentities: {note: {}}\n")
+	mustWrite(t, filepath.Join(dir, "note", "ontology.yaml"),
+		"version: \"9.9.9\"\nontology: {entities: {note: {}}}\n")
 	src := Source(dir)
 	got, err := Resolve("note", src)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got != "note/schema.yaml" {
+	if got != "note/ontology.yaml" {
 		t.Fatalf("Resolve = %q", got)
 	}
 	if k := Known(src); !reflect.DeepEqual(k, []string{"note"}) {
@@ -492,24 +495,23 @@ func TestEveryShippedPresetDeclaresACaptureTrigger(t *testing.T) {
 	}
 }
 
-func TestEverySingletonCueLinksItsOwnFile(t *testing.T) {
-	// A singleton's cue says "edit the existing document" — it has to say
-	// WHICH. The link is authored in the `when` prose rather than derived, so
-	// a moved singleton or a typo'd link fails here.
+func TestNoCueEmbedsAStorageLink(t *testing.T) {
+	// The inversion of the pre-split rule. A cue used to author its own file
+	// link, and a test held the link to the declared path — cross-layer string
+	// coupling that broke whenever a file moved. Since the split the cue is
+	// pure domain language (ontology) and `wire` derives the singleton's edit
+	// link from its storage path at render time, so a moved file can never
+	// strand a stale link. This holds the ontology side of that bargain: no
+	// cue smuggles a markdown link back in.
 	for _, preset := range Known(Embedded()) {
 		s := resolvePreset(t, preset)
 		for _, name := range s.Types.Keys() {
 			ty, _ := s.Types.Get(name)
-			if ty.Storage.Layout != schema.LayoutSingleton {
+			if ty.When == nil {
 				continue
 			}
-			when := ""
-			if ty.When != nil {
-				when = *ty.When
-			}
-			if ty.Storage.Path == nil || *ty.Storage.Path == "" ||
-				!strings.Contains(when, *ty.Storage.Path) {
-				t.Errorf("%s/%s: `when` does not link its own path", preset, name)
+			if strings.Contains(*ty.When, "](") {
+				t.Errorf("%s/%s: `when` embeds a markdown link; the layer split derives it from storage at render time", preset, name)
 			}
 		}
 	}
@@ -517,16 +519,35 @@ func TestEverySingletonCueLinksItsOwnFile(t *testing.T) {
 
 // --- helpers -------------------------------------------------------------------
 
-// resolvePreset materializes core.yaml + <preset>/schema.yaml out of the
-// embedded tree and resolves them, which is what `khub init` flattens.
+// resolvePreset materializes a preset's layer files out of the embedded tree
+// and resolves them over the embedded core base — supplied as ResolveWith's
+// base document, exactly as introspect.LoadSchema supplies it to a live
+// workspace (an authored ontology.base is forbidden).
 func resolvePreset(t *testing.T, preset string) *schema.ResolvedSchema {
 	t.Helper()
+	coreRaw, err := fs.ReadFile(Embedded(), CorePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	coreVal, err := canon.LoadDocMode(string(coreRaw), canon.Mode12)
+	if err != nil {
+		t.Fatalf("parse core base: %v", err)
+	}
+	coreDoc, ok := coreVal.(*omap.Map)
+	if !ok {
+		t.Fatalf("core base top level is %T, not a mapping", coreVal)
+	}
 	dir := t.TempDir()
-	core := filepath.Join(dir, "core.yaml")
-	spec := filepath.Join(dir, "schema.yaml")
-	copyOut(t, CoreFile, core)
-	copyOut(t, preset+"/"+SchemaFile, spec)
-	resolved, err := schema.Resolve([]string{core, spec})
+	var paths []string
+	for _, layer := range []string{OntologyFile, PolicyFile, StorageFile} {
+		if _, err := fs.Stat(Embedded(), preset+"/"+layer); err != nil {
+			continue // policy/storage are optional layers
+		}
+		dest := filepath.Join(dir, preset+"-"+layer)
+		copyOut(t, preset+"/"+layer, dest)
+		paths = append(paths, dest)
+	}
+	resolved, err := schema.ResolveWith(coreDoc, paths)
 	if err != nil {
 		t.Fatalf("%s: %v", preset, err)
 	}

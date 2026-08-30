@@ -8,7 +8,7 @@ Preset version **0.1.0**. Nine entity types. Fourteen relation predicates: ten d
 
 ## What every entity carries
 
-`khub init` merges `core.yaml` into the preset, so every firm-ops entity carries a base block on top of its own fields:
+The base block is embedded in the binary and merged into every type at resolve time (`khub schema base` prints it), so every firm-ops entity carries it on top of its own fields:
 
 - **Base attributes** — `type`, `draft`, `author`, `created`, `updated`, `title`, `description`, `resource`, and `tags`.
 - **Four universal edges** — `related`, `sources`, `references`, `depends_on`, each `any → any` and many-valued.

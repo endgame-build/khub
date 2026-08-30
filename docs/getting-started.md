@@ -61,7 +61,7 @@ To hand the setup to an agent instead, install the `setup` skill with `npx skill
 
 ## Seed a workspace
 
-`init` scaffolds a workspace from a preset — a directory holding the preset's `schema.yaml` and optional body `templates/`. The `firm-ops` preset is the HQ operations ontology: nine entity types (client, project, person, opportunity, meeting, and more) with typed relations between them. For software work there are two more: `build-hub` (20 types) and `build-lite` (6 — the same shape cut to necessity, and the better place to start). A preset with templates also gets them flattened to `.khub/templates/`, and every md `layout: singleton` type with a template is created on the spot (the `build-hub` preset seeds `prd.md`, `roadmap.md`, `glossary.md`, `arc42.md`, `erd.md` this way — creations only, an existing file is never touched).
+`init` scaffolds a workspace from a preset — a directory holding the preset's three schema layer files (`ontology.yaml`, `policy.yaml`, `storage.yaml`) and optional body `templates/`. The `firm-ops` preset is the HQ operations ontology: nine entity types (client, project, person, opportunity, meeting, and more) with typed relations between them. For software work there are two more: `build-hub` (20 types) and `build-lite` (6 — the same shape cut to necessity, and the better place to start). A preset with templates also gets them flattened to `.khub/templates/`, and every md `layout: singleton` type with a template is created on the spot (the `build-hub` preset seeds `prd.md`, `roadmap.md`, `glossary.md`, `arc42.md`, `erd.md` this way — creations only, an existing file is never touched).
 
 ```bash
 khub init firm-ops ./my-hub
@@ -88,18 +88,20 @@ init wrote a `.khub/` control directory and one folder per entity type:
 my-hub/
 ├── .khub/
 │   ├── config.yaml            # workspace name, preset, stale_days
-│   └── schema.yaml            # the effective schema: the contract every write is checked against
+│   ├── ontology.yaml          # the domain: types, attributes, relations, capture cues
+│   ├── policy.yaml            # workspace gates: required singletons, orphan exemptions
+│   └── storage.yaml           # layouts, inventory paths, id prefixes, template links
 ├── clients/
 ├── identity/team/             # person entities live here
 ├── projects/
 ├── opportunities/  partnerships/  meetings/  transcripts/  fragments/  case-studies/
 ```
 
-`schema.yaml` is the operational setup. It declares what a client, a person, and a project *are*: their fields, which are required, and the legal relations between types. Extend it as the work demands; for now the preset defaults are enough.
+`ontology.yaml` is the operational setup. It declares what a client, a person, and a project *are*: their fields, which are required, and the legal relations between types — `policy.yaml` and `storage.yaml` carry this workspace's gates and file layout beside it, and the base block every type inherits ships inside the khub binary (`khub schema base` prints it). Extend the files as the work demands; for now the preset defaults are enough.
 
 ## Wire it into your agent's context
 
-`init` already wrote a managed block to `my-hub/CLAUDE.md` and `my-hub/AGENTS.md`. In `CLAUDE.md` the block imports the schema (`@.khub/schema.yaml`, a Claude Code directive); in `AGENTS.md` (the cross-agent standard, which has no import) it points at the schema file to read. Both list the command surface, so any agent working in this repo loads the ontology into context before it runs a single khub command. When the schema changes, re-run the wiring in place:
+`init` already wrote a managed block to `my-hub/CLAUDE.md` and `my-hub/AGENTS.md`. In `CLAUDE.md` the block imports the schema (`@.khub/ontology.yaml` and its two siblings, a Claude Code directive); in `AGENTS.md` (the cross-agent standard, which has no import) it points at the schema files to read. Both list the command surface, so any agent working in this repo loads the ontology into context before it runs a single khub command. When the schema changes, re-run the wiring in place:
 
 ```bash
 khub wire

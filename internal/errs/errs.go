@@ -39,13 +39,6 @@ func UnknownTarget(type_, relation, target string) *Located {
 	}
 }
 
-func MissingBase() *Located {
-	return &Located{
-		Code:    "missing_base",
-		Message: "Schema declares entities but no base block; base attributes are missing",
-	}
-}
-
 func RawLinkMLSmuggled(type_, construct, location string) *Located {
 	where := ""
 	if location != "" {

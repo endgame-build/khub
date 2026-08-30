@@ -126,6 +126,12 @@ func checkPayload(report *integrity.CheckReport) *omap.Map {
 	}
 	payload.Set("dangling", dangling)
 	payload.Set("strays", strList(report.Strays))
+	// Template files no type claims — usually a renamed template, which would
+	// otherwise silently disable scaffolding and the body contract.
+	payload.Set("stray_templates", strList(report.StrayTemplates))
+	// The same hole from the claiming side: a declared `template:` name whose
+	// file does not exist.
+	payload.Set("missing_templates", strList(report.MissingTemplates))
 
 	// Files claiming a known type from outside every layout: unscanned, so
 	// invisible to every other finding here.
@@ -181,6 +187,12 @@ func checkHuman(report *integrity.CheckReport) {
 	}
 	for _, s := range report.Strays {
 		fmt.Printf("stray file %s\n", s)
+	}
+	for _, s := range report.StrayTemplates {
+		fmt.Printf("stray template %s: no type declares it and none is named for it\n", s)
+	}
+	for _, s := range report.MissingTemplates {
+		fmt.Printf("declared template %s does not exist\n", s)
 	}
 	for _, m := range report.Misplaced {
 		fmt.Printf("misplaced %s: declares type '%s' but sits outside %s — no command can see it\n",

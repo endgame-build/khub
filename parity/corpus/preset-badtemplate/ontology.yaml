@@ -4,11 +4,9 @@
 # CLI as an error envelope (add swallows it; validate reports it as a finding).
 version: "0.1.0"
 
-entities:
-  charter:
-    layout: singleton
-    path: charter.md
-    orphan: true
-    when: parity corpus
-    attributes:
-      title: { required: true }
+ontology:
+  entities:
+    charter:
+      when: parity corpus
+      attributes:
+        title: { required: true }

@@ -1,37 +1,132 @@
 // Package introspect ports core/introspect.py — pure reads over the resolved
-// .khub/schema.yaml. Every view derives from the compiled contract at runtime,
-// with no per-type code path (the schema-generic invariant).
+// workspace schema (.khub/{ontology,policy,storage}.yaml plus the embedded
+// base). Every view derives from the compiled contract at runtime, with no
+// per-type code path (the schema-generic invariant).
 package introspect
 
 import (
+	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 
 	"github.com/endgame-build/khub/internal/errs"
 	"github.com/endgame-build/khub/internal/omap"
+	"github.com/endgame-build/khub/internal/presets"
 	"github.com/endgame-build/khub/internal/schema"
 )
 
-// LoadSchema resolves the workspace's flattened .khub/schema.yaml. A missing
-// or unparseable file becomes a located schema_error naming the file.
-func LoadSchema(root string) (*schema.ResolvedSchema, error) {
-	path := filepath.Join(root, ".khub", "schema.yaml")
-	if _, err := os.Stat(path); err != nil {
-		return nil, errs.New("schema_error", fmt.Sprintf("Cannot read schema %s: file not found", path))
+// LayerFiles lists the schema layer files that exist in the workspace —
+// workspace-relative slash paths, in resolve order (the layer names come from
+// internal/presets, the vocabulary's owner). It is the one discovery walk
+// LoadSchemaLayers resolves from and wire builds its imports from, so the two
+// can never disagree about which files a workspace has. ontology.yaml, when
+// present, is always the first element — LoadSchemaLayers leans on that.
+//
+// A stat that fails for any reason OTHER than absence is returned, not read as
+// absence: an unsearchable .khub, a dangling symlink or an I/O error would
+// otherwise drop the layer silently and leave the caller reporting "file not
+// found" — the wrong cause, and the one a reader would act on. An unreadable
+// FILE is a different case and needs nothing here: stat succeeds on it, so the
+// real permission error surfaces from the read.
+func LayerFiles(root string) ([]string, error) {
+	var out []string
+	for _, name := range []string{presets.OntologyFile, presets.PolicyFile, presets.StorageFile} {
+		p := filepath.Join(root, ".khub", name)
+		fi, statErr := os.Stat(p)
+		if statErr != nil {
+			if errors.Is(statErr, fs.ErrNotExist) {
+				continue
+			}
+			return nil, errs.New("schema_error",
+				fmt.Sprintf("Cannot read schema %s: %s", p, statErr.Error()))
+		}
+		if fi.Mode().IsRegular() {
+			out = append(out, ".khub/"+name)
+		}
 	}
-	resolved, err := schema.Resolve([]string{path})
+	return out, nil
+}
+
+// LoadSchemaLayers resolves the workspace schema — whichever of
+// .khub/{ontology,policy,storage}.yaml exist, over the base block embedded in
+// the binary — and returns the layer files it resolved from, so a caller
+// rendering them (wire's imports) cannot disagree with what was resolved.
+// This is the one layer that knows both the workspace and the embedded tree,
+// so this is where they join. The embedded document is the only base source —
+// an authored `ontology.base` is a resolve error.
+//
+// ontology.yaml is required: it is the layer that declares which types exist,
+// so policy/storage without it is a half-workspace, not an empty one — quietly
+// resolving it to zero types would make every gate pass over a corpus the
+// schema no longer sees. A workspace with none of the three files gets the
+// ordinary schema_error naming ontology.yaml. There is no other layout: khub
+// supports no backward compatibility, so nothing else is detected or advised.
+func LoadSchemaLayers(root string) (*schema.ResolvedSchema, []string, error) {
+	layers, err := LayerFiles(root)
+	if err != nil {
+		return nil, nil, err
+	}
+	ontologyPath := filepath.Join(root, ".khub", presets.OntologyFile)
+	if len(layers) == 0 {
+		return nil, nil, errs.New("schema_error",
+			fmt.Sprintf("Cannot read schema %s: file not found", ontologyPath))
+	}
+	if layers[0] != ".khub/"+presets.OntologyFile {
+		others := make([]string, 0, len(layers))
+		for _, rel := range layers {
+			others = append(others, filepath.Base(rel))
+		}
+		return nil, nil, errs.New("schema_error", fmt.Sprintf(
+			"Cannot read schema %s: file not found (%s present, but ontology.yaml is the layer that declares types)",
+			ontologyPath, strings.Join(others, ", ")))
+	}
+	base, err := embeddedBase()
+	if err != nil {
+		return nil, nil, errs.New("schema_error", fmt.Sprintf("Cannot read embedded base: %s", err.Error()))
+	}
+	paths := make([]string, 0, len(layers))
+	for _, rel := range layers {
+		paths = append(paths, filepath.Join(root, filepath.FromSlash(rel)))
+	}
+	resolved, err := schema.ResolveWith(base, paths)
 	if err != nil {
 		var located *errs.Located
 		if asLocated(err, &located) {
-			return nil, err // resolver-level located errors pass through untouched
+			return nil, nil, err // resolver-level located errors pass through untouched
 		}
-		return nil, errs.New("schema_error", fmt.Sprintf("Cannot parse schema %s: %s", path, err.Error()))
+		// Every non-located resolver error already names its file (LoadYAML and
+		// the shape errors prefix the path), so the wrap adds no path of its
+		// own — headlining paths[0] blamed ontology.yaml for a failure in any
+		// sibling layer.
+		return nil, nil, errs.New("schema_error", fmt.Sprintf("Cannot parse schema: %s", err.Error()))
 	}
-	return resolved, nil
+	return resolved, layers, nil
 }
+
+// LoadSchema is LoadSchemaLayers for the callers that only want the contract.
+func LoadSchema(root string) (*schema.ResolvedSchema, error) {
+	resolved, _, err := LoadSchemaLayers(root)
+	return resolved, err
+}
+
+// embeddedBase loads the base block khub ships in the binary
+// (presets/core/ontology.yaml), once per process — the embedded bytes cannot
+// change under a running binary, and every resolve reads the document without
+// mutating it. Parsing goes through schema.ParseDoc, the same path every
+// authored layer file takes, so the embedded document gets the same scalar
+// normalization and duplicate-key rejection.
+var embeddedBase = sync.OnceValues(func() (*omap.Map, error) {
+	raw, err := fs.ReadFile(presets.Embedded(), presets.CorePath)
+	if err != nil {
+		return nil, err
+	}
+	return schema.ParseDoc(presets.CorePath, string(raw))
+})
 
 func asLocated(err error, target **errs.Located) bool {
 	for e := err; e != nil; {
@@ -61,6 +156,27 @@ func TypeView(resolved *schema.ResolvedSchema, name, preset string) (*omap.Map, 
 		return nil, errs.UnknownType(name, preset, known)
 	}
 	return typeView(resolved, rtype), nil
+}
+
+// BaseView renders the effective base block — the attributes and relations
+// every type inherits. Since the ontology/policy/storage split the base is
+// embedded in the binary and no workspace file carries (or may declare) it,
+// so this view is the one place to read it.
+func BaseView(resolved *schema.ResolvedSchema) *omap.Map {
+	v := omap.New()
+	fields := []any{}
+	for _, name := range resolved.BaseAttributes.Keys() {
+		a, _ := resolved.BaseAttributes.Get(name)
+		fields = append(fields, attrView(a))
+	}
+	v.Set("fields", fields)
+	rels := []any{}
+	for _, name := range resolved.BaseRelations.Keys() {
+		r, _ := resolved.BaseRelations.Get(name)
+		rels = append(rels, relationView(r))
+	}
+	v.Set("relations", rels)
+	return v
 }
 
 // SchemaView renders the full effective schema plus source provenance.
@@ -221,22 +337,7 @@ func typeView(resolved *schema.ResolvedSchema, rtype *schema.ResolvedType) *omap
 	fields := []any{}
 	for _, name := range rtype.Attributes.Keys() {
 		a, _ := rtype.Attributes.Get(name)
-		f := omap.New()
-		f.Set("name", a.Name)
-		f.Set("type", a.BaseType)
-		f.Set("required", a.Required)
-		if len(a.Enum) > 0 {
-			enum := []any{}
-			for _, e := range a.Enum {
-				enum = append(enum, e)
-			}
-			f.Set("enum", enum)
-		} else {
-			f.Set("enum", nil)
-		}
-		f.Set("pattern", strPtr(a.Pattern))
-		f.Set("default", a.Default)
-		fields = append(fields, f)
+		fields = append(fields, attrView(a))
 	}
 	v.Set("fields", fields)
 	rels := []any{}
@@ -252,6 +353,29 @@ func typeView(resolved *schema.ResolvedSchema, rtype *schema.ResolvedType) *omap
 	}
 	v.Set("relations", rels)
 	return v
+}
+
+// attrView renders one resolved attribute — the per-field JSON contract both
+// `schema show` (typeView) and `schema base` (BaseView) emit, kept in one
+// place the way relationView already is for relations: key order is contract,
+// and a second copy is how the two surfaces drift.
+func attrView(a *schema.ResolvedAttribute) *omap.Map {
+	f := omap.New()
+	f.Set("name", a.Name)
+	f.Set("type", a.BaseType)
+	f.Set("required", a.Required)
+	if len(a.Enum) > 0 {
+		enum := []any{}
+		for _, e := range a.Enum {
+			enum = append(enum, e)
+		}
+		f.Set("enum", enum)
+	} else {
+		f.Set("enum", nil)
+	}
+	f.Set("pattern", strPtr(a.Pattern))
+	f.Set("default", a.Default)
+	return f
 }
 
 func relationView(rel *schema.ResolvedRelation) *omap.Map {

@@ -4,16 +4,20 @@
 
 This repository is a [khub](https://github.com/endgame-build/khub) workspace: its domain is modeled as typed entities and typed relations, and the schema is the contract. Reason in that model.
 
-The ontology is imported below, so it loads into context even without running the khub CLI:
+The schema is imported below, so it loads into context even without running the khub CLI:
 
-@.khub/schema.yaml
+@.khub/ontology.yaml
 
-Schema file: [`.khub/schema.yaml`](.khub/schema.yaml). Preset: `build-lite@0.1.0`. Entity types: `prd`, `arc42`, `requirement`, `adr`, `component`, `feature-spec`.
+@.khub/policy.yaml
+
+@.khub/storage.yaml
+
+Schema files: [`.khub/ontology.yaml`](.khub/ontology.yaml) (the domain model), [`.khub/policy.yaml`](.khub/policy.yaml), [`.khub/storage.yaml`](.khub/storage.yaml). Preset: `build-lite@0.1.0`. Entity types: `prd`, `arc42`, `requirement`, `adr`, `component`, `feature-spec`.
 
 Record as you go — when one of these moments occurs, capture it:
 
 - `prd` — someone states what the product is for, who it serves, or what is deliberately out of scope — edit [knowledge/prd.md](knowledge/prd.md), never add a second
-- `arc42` — the shape of the system is described or changes — context, building blocks, data model, a crosscutting concern — edit [knowledge/arc42.md](knowledge/arc42.md)
+- `arc42` — the shape of the system is described or changes — context, building blocks, data model, a crosscutting concern — edit [knowledge/arc42.md](knowledge/arc42.md), never add a second
 - `requirement` — a rule is stated that the system must satisfy or must never violate. "must", "never", "always", "policy", "has to" are the tells; a stated invariant is a record, not a reply
 - `adr` — a choice is made, rejected, or revisited between real alternatives — including "we considered X and are not doing it". Capture the reasoning while it is still known
 - `component` — a part of the system is named as a thing that can break, be owned, or be swapped — a service, a library of ours, or a vendor dependency we sit on
@@ -39,14 +43,14 @@ Not installed? `npm install -D @endgame-build/khub`, then `npx khub install-skil
 
 This repository is a [khub](https://github.com/endgame-build/khub) workspace: its domain is modeled as typed entities and typed relations, and the schema is the contract. Reason in that model.
 
-The ontology is defined in the schema file below; read it to work in this model, even without running the khub CLI:
+The ontology is defined in the schema files below; read them to work in this model, even without running the khub CLI:
 
-Schema file: [`.khub/schema.yaml`](.khub/schema.yaml). Preset: `build-lite@0.1.0`. Entity types: `prd`, `arc42`, `requirement`, `adr`, `component`, `feature-spec`.
+Schema files: [`.khub/ontology.yaml`](.khub/ontology.yaml) (the domain model), [`.khub/policy.yaml`](.khub/policy.yaml), [`.khub/storage.yaml`](.khub/storage.yaml). Preset: `build-lite@0.1.0`. Entity types: `prd`, `arc42`, `requirement`, `adr`, `component`, `feature-spec`.
 
 Record as you go — when one of these moments occurs, capture it:
 
 - `prd` — someone states what the product is for, who it serves, or what is deliberately out of scope — edit [knowledge/prd.md](knowledge/prd.md), never add a second
-- `arc42` — the shape of the system is described or changes — context, building blocks, data model, a crosscutting concern — edit [knowledge/arc42.md](knowledge/arc42.md)
+- `arc42` — the shape of the system is described or changes — context, building blocks, data model, a crosscutting concern — edit [knowledge/arc42.md](knowledge/arc42.md), never add a second
 - `requirement` — a rule is stated that the system must satisfy or must never violate. "must", "never", "always", "policy", "has to" are the tells; a stated invariant is a record, not a reply
 - `adr` — a choice is made, rejected, or revisited between real alternatives — including "we considered X and are not doing it". Capture the reasoning while it is still known
 - `component` — a part of the system is named as a thing that can break, be owned, or be swapped — a service, a library of ours, or a vendor dependency we sit on

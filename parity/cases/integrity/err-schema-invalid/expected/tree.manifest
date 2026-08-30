@@ -1,6 +1,7 @@
 ec9b399104e5dd366e2ba41a1de03d49eae7a1c26ce2dd22d000dc6e0e36c637 - .gitignore
 67c6bdfa75f16500dda008af953fc5e9ea8d81dd5190abfcc9b0bcdff7fe0907 - .khub/config.yaml
-fa043e65531b07e3ff9e76bd4de2474e00265fcf89ba119be50e0c5e840f8a6a - .khub/schema.yaml
+582dc2bc48ccd52771a71890397a848cb088cda4daa51963514d603bea3af4de - .khub/ontology.yaml
+439d67a4c8836caf0e29e08293c6145b6813a0115a72bbdead93e5c464c8f72c - .khub/storage.yaml
 c8d791eed22be837682fc7e10922c6149f807186ea1d244380c8ad8f721610a3 - .khub/templates/adr.yaml
 5b5a8ddee5e4ce03cc82e7967ec3cd6fed41651b787956effd74638f61dfc58d - .khub/templates/arc42.yaml
 0d61510b3debfe7af0928b0b23c894c14f7ffb6116f6b984c4851d2b185ea197 - .khub/templates/feature-spec.yaml

@@ -299,17 +299,17 @@ func TestQueryTitleFallback(t *testing.T) {
 
 const inversePreset = `
 version: "0.1.0"
-entities:
-  adr:
-    layout: file
-    path: adrs
-    attributes:
-      status: { enum: [proposed, accepted, rejected] }
-    relations:
-      supersedes: { to: adr, inverse: superseded, acyclic: true }
-  repo:
-    layout: file
-    path: repos
+ontology:
+  entities:
+    adr:
+      attributes:
+        status: { enum: [proposed, accepted, rejected] }
+      relations:
+        supersedes: { to: adr, inverse: superseded, acyclic: true }
+    repo: {}
+storage:
+  adr:  { layout: file, path: adrs }
+  repo: { layout: file, path: repos }
 `
 
 func inverseWS(t *testing.T) string {
@@ -349,12 +349,13 @@ func TestUnknownPredicateIsStillRejected(t *testing.T) {
 func TestStoredForwardEdgeIsNeverShadowedByAnInverse(t *testing.T) {
 	ws := wsFromSchema(t, `
 version: "0.1.0"
-entities:
-  domain:
-    layout: file
-    path: domains
-    relations:
-      blocks: { to: any, many: true, inverse: depends_on }
+ontology:
+  entities:
+    domain:
+      relations:
+        blocks: { to: any, many: true, inverse: depends_on }
+storage:
+  domain: { layout: file, path: domains }
 `)
 	seed(t, ws, "domains/a.md", kv{"type", "domain"}, kv{"title", "A"}, kv{"depends_on", []any{"b"}})
 	seed(t, ws, "domains/b.md", kv{"type", "domain"}, kv{"title", "B"})

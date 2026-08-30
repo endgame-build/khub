@@ -23,7 +23,7 @@ python tests/eval/report.py /tmp/khub-eval/results.jsonl              # scorecar
   `--model` (default `sonnet`); `--judge` adds an LLM root-cause on off-rails ops.
 - Each task is one `claude -p ... --output-format stream-json --verbose
   --dangerously-skip-permissions`, cwd = the workspace, **without `--bare`** (so
-  the CLAUDE.md block + `@.khub/schema.yaml` import + skill load). Tasks run in
+  the CLAUDE.md block + the `@.khub/*.yaml` layer imports + skill load). Tasks run in
   order against an accumulating copy, so compounding failures are measured.
 
 ## Cost

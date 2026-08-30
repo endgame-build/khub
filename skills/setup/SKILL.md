@@ -70,7 +70,7 @@ That writes both skills into `.claude/skills/`, `.agents/skills/`, and `.opencod
 khub wire
 ```
 
-`wire` injects a managed block into the workspace's agent files (`CLAUDE.md` imports the schema via `@.khub/schema.yaml`; `AGENTS.md` points at the schema file) plus the command surface, so an agent reasons in the ontology even without running khub. Bare `wire` updates whichever files exist; `khub wire --target claude|agents|both` creates a specific one. Re-run after the schema changes; the block updates in place.
+`wire` injects a managed block into the workspace's agent files (`CLAUDE.md` imports whichever layer files the workspace has — `@.khub/ontology.yaml`, `@.khub/policy.yaml`, `@.khub/storage.yaml`; `AGENTS.md` points at them instead) plus the command surface, so an agent reasons in the ontology even without running khub. Bare `wire` updates whichever files exist; `khub wire --target claude|agents|both` creates a specific one. Re-run after the schema changes; the block updates in place.
 
 Run `khub install-skills` here too, so this workspace carries the skills.
 

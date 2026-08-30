@@ -18,12 +18,15 @@ package khub
 
 import "embed"
 
-// PresetsData embeds presets/: the core base block plus one directory per
-// preset (schema.yaml + optional templates/). Patterns stay explicit so a
-// stray file dropped into the tree cannot silently enter the binary.
+// PresetsData embeds presets/: the core base block (core/ontology.yaml, never
+// copied into a workspace) plus one directory per preset — ontology.yaml with
+// optional policy.yaml / storage.yaml / templates/. Patterns stay explicit so a
+// stray file dropped into the tree cannot silently enter the binary; the first
+// also covers core/ontology.yaml.
 //
-//go:embed presets/core.yaml
-//go:embed presets/*/schema.yaml
+//go:embed presets/*/ontology.yaml
+//go:embed presets/*/policy.yaml
+//go:embed presets/*/storage.yaml
 //go:embed presets/*/templates
 var PresetsData embed.FS
 

@@ -1,5 +1,5 @@
 // wire.go ports cli/wire_cmd.py: link the workspace into the agent context
-// files. CLAUDE.md gets a `@.khub/schema.yaml` import; AGENTS.md gets a schema
+// files. CLAUDE.md gets `@.khub/*.yaml` schema imports; AGENTS.md gets schema
 // pointer. Bare `wire` updates whichever already exist.
 package cli
 
@@ -16,8 +16,8 @@ func registerWire(root *cobra.Command) {
 	var target string
 	var dryRun bool
 	cmd := newCmd("wire",
-		"Wire the workspace into agent context files (CLAUDE.md gets a ``@.khub/schema.yaml``\n"+
-			"import; AGENTS.md gets a schema pointer). Bare ``wire`` updates whichever already exist.",
+		"Wire the workspace into agent context files (CLAUDE.md gets ``@`` imports of the\n"+
+			"schema layer files; AGENTS.md gets a schema pointer). Bare ``wire`` updates whichever already exist.",
 		"", func(cmd *cobra.Command, args []string) error {
 			return Guard("text", func() error {
 				ws, err := resolveRoot()

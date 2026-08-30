@@ -1,0 +1,2 @@
+storage:
+  charter: { layout: singleton, path: charter.md }

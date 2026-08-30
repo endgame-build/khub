@@ -1,0 +1,10 @@
+# Every layout x format cell, one type each.
+storage:
+  note:    { layout: file, path: notes }                        # file x md (the default cell)
+  card:    { layout: file, format: json, path: cards }          # file x json
+  sheet:   { layout: file, format: yaml, path: sheets }         # file x yaml
+  dossier: { layout: folder, path: dossiers }                   # folder x md
+  charter: { layout: singleton, path: charter.md }              # singleton x md
+  repo:    { layout: collection, format: jsonl, path: repos.jsonl }   # collection x jsonl
+  vendor:  { layout: collection, format: yaml, path: vendors.yaml }   # collection x yaml
+  account: { layout: collection, format: json, path: accounts.json }  # collection x json

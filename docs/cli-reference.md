@@ -54,9 +54,9 @@ $ khub --help
 │ backfill        Backfill missing dates and frontmatter: khub backfill        │
 │                 [--type T] [--dry-run].                                      │
 │ wire            Wire the workspace into agent context files (CLAUDE.md gets  │
-│                 a ``@.khub/schema.yaml``                                     │
-│                 import; AGENTS.md gets a schema pointer). Bare ``wire``      │
-│                 updates whichever already exist.                             │
+│                 ``@`` imports of the                                         │
+│                 schema layer files; AGENTS.md gets a schema pointer). Bare   │
+│                 ``wire`` updates whichever already exist.                    │
 │ install-skills  Install khub's agent skills: khub install-skills [--target   │
 │                 agents] [--global].                                          │
 │ schema          Introspect the active schema.                                │
@@ -499,8 +499,8 @@ $ khub wire --help
 
  Usage: khub wire [OPTIONS]
 
- Wire the workspace into agent context files (CLAUDE.md gets a
- ``@.khub/schema.yaml`` import; AGENTS.md gets a schema pointer). Bare ``wire``
+ Wire the workspace into agent context files (CLAUDE.md gets ``@`` imports of
+ the schema layer files; AGENTS.md gets a schema pointer). Bare ``wire``
  updates whichever already exist.
 
 ╭─ Options ────────────────────────────────────────────────────────────────────╮
@@ -553,6 +553,7 @@ $ khub schema --help
 │ types  List the declared type names.                                         │
 │ show   Detail one type: fields, enums, required flags, relations, layout.    │
 │ edges  List the relation vocabulary by predicate.                            │
+│ base   Show the effective base block every type inherits.                    │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 
 ```
@@ -600,6 +601,22 @@ $ khub schema edges --help
  Usage: khub schema edges [OPTIONS]
 
  List the relation vocabulary by predicate.
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --format        <str>  text (Rich table on a TTY) or json. [default: text]   │
+│ --help                 Show this message and exit.                           │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+```
+
+## khub schema base
+
+```console
+$ khub schema base --help
+
+ Usage: khub schema base [OPTIONS]
+
+ Show the effective base block every type inherits.
 
 ╭─ Options ────────────────────────────────────────────────────────────────────╮
 │ --format        <str>  text (Rich table on a TTY) or json. [default: text]   │

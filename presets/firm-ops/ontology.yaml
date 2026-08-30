@@ -1,0 +1,172 @@
+# firm-ops/ontology.yaml — the domain model of the khub firm-ops preset
+# (port of firm-hq's hq.schema.yml).
+#
+# 9 entity types; 10 firm-ops relation predicates (+ the 4 universal edges
+# inherited from core: related / sources / references / depends_on) = 14 total.
+# Authored from docs/firm-ops-preset.md (the authoritative capture). The base
+# block (type, draft, author, created, updated, title, description, resource,
+# tags + the universal edges) is embedded in the binary since the
+# ontology/policy/storage split — never copied here.
+#
+# Authoring decisions worth review (they interpret or extend the documented vocab):
+#  - partnership.primary_contact: hq.schema.yml declares object{name,role,email}
+#    but live data is a scalar string -> modeled as `text` for v1 (validates real data).
+#  - fragment: keyed on `owner` (edge->person, required) per hq.schema.yml — the
+#    capture doc says `author`, which is wrong against the source schema.
+#  - One enum per (type, field): `stage` and `source` differ across types; each
+#    is inlined on its type and the compiler emits distinct enums.
+#  - Lifecycle model (post-capture refinement): opportunity.stage = CRM
+#    "Sales" pipeline stages (prospect / proposal-sent / won / signed / lost — the
+#    deal system of record); project carries `active: bool` (default true) instead
+#    of a stage enum. HQ opportunity files are remapped to the CRM stages at
+#    cutover (an expected migration, not a schema break — the old values are gone).
+#  - build dropped (v1): HQ's product/engineering engagement had 0 live entities
+#    and — after the stage change — differed from project only by `tech_stack`; the
+#    project/build distinction and `tech_stack` are not carried in v1.
+#  - decision & isms-doc dropped (v1, 0 live). Dropping decision removes firm-ops's
+#    supersedes / derived superseded_by / affects — the engine still supports
+#    derived inverses (tested generically); firm-ops no longer demonstrates them.
+#  - Universal edges (related/sources/references/depends_on) are NOT redeclared
+#    here — they come from core and are available on every type.
+#  - Porting notes applied: (1) draft from core over HQ stage/status; (2) partner
+#    from-list includes client; (3) meeting.engagement explicit union, meetings
+#    flat; (4) slug = id, external ids carried as alias attributes.
+#  - `created`: core makes it required, but HQ meeting/transcript have no `created`
+#    field, so they override it to optional (read-only HQ validation cannot backfill).
+#
+# Storage form (layouts, inventory paths) lives in storage.yaml beside this
+# file; firm-ops declares no per-type gates, so policy.yaml is empty.
+
+version: "0.1.0"   # preset semver, stamped into workspace provenance at `khub init`
+
+ontology:
+  entities:
+
+    # ---------------------------------------------------------------- pipeline
+    opportunity:
+      when: >-
+        a possible piece of work with a named client is first mentioned — record it at 'we might', not at 'we won'
+      attributes:
+        name:   { type: text, required: true }   # deal name = slug source (like client/person; base `title` also mints)
+        stage:  { enum: [prospect, proposal-sent, won, signed, lost], required: true }   # CRM "Sales" pipeline stages (deal system of record)
+        source: { enum: [event, referral, outbound, inbound, northwind, existing-client] }
+        crm_id:     { type: text, pattern: '^[0-9]+$' }   # CRM deal id (confidence lives in CRM, not duplicated here)
+        notes_folder:    { type: text }
+        notes_folder_id: { type: text }
+        updated:           { required: true }
+      relations:
+        client:  { to: client,      required: true }
+        owner:   { to: person,      required: true }
+        partner: { to: partnership }
+
+    # ---------------------------------------------------------------- delivery
+    project:
+      when: >-
+        work is agreed and has an owner; the opportunity that produced it becomes its origin
+      attributes:
+        active: { type: bool, default: true }   # engagement ongoing? — replaces HQ's per-stage lifecycle
+        source: { enum: [event, referral, outbound, inbound, northwind, existing-client] }
+        external_repo:        { type: text, pattern: '^endgame-build/[a-z0-9-]+$' }   # required per frontmatter.md; absent on internal projects
+        crm_id:        { type: text, pattern: '^[0-9]+$' }
+        budget_id: { type: text, pattern: '^[0-9]+$' }
+        notes_folder:       { type: text }
+        notes_folder_id:    { type: text }
+        updated:              { required: true }
+      relations:
+        client:             { to: client,  required: true }
+        owner:              { to: person,  required: true }
+        team:               { to: person,  many: true }
+        origin_opportunity: { to: opportunity }
+        partner:            { to: partnership }
+
+    # ---------------------------------------------------------------- activity
+    meeting:
+      when: >-
+        a call happens that produced a decision, a commitment, or a next step
+      attributes:
+        created:   { required: false }   # HQ meetings carry no `created` — relax base-required (read-only validate can't backfill)
+        date:      { type: datetime, required: true }   # datetime: HQ stores ISO datetimes here (a data choice; the compiler also handles a date-named field on its own)
+        call_type: { enum: [client, sales, partner, internal], required: true }
+        source:    { enum: [recording, manual], required: true }
+        note_id:   { type: text }
+        attendees: { type: list }   # items { name, email }
+      relations:
+        engagement: { to: [opportunity, project, partnership], required: true }   # union edge
+        transcript: { to: transcript }
+        owner:      { to: person }
+
+    transcript:
+      when: >-
+        a recording or written record of a call exists and needs to be findable later
+      attributes:
+        created:           { required: false }   # HQ transcripts carry no `created` — relax base-required (read-only validate can't backfill)
+        source:            { enum: [recording], required: true }   # const in HQ
+        note_id:           { type: text, required: true }
+        date:              { type: datetime, required: true }
+        title:             { required: true }   # override core OKF title -> required
+        creator:           { type: text, required: true }
+        creator_email:     { type: text, required: true }   # format: email (not strictly validated in v1)
+        notes_folder:    { type: text, required: true }
+        notes_folder_id: { type: text }
+        calendar_event_id: { type: text }
+        attendees:         { type: list }   # items { name, email }
+
+    fragment:
+      when: >-
+        something worth keeping is said that fits no other type yet — a signal, a quote, an observation
+      attributes:
+        stage:       { enum: [raw, mature, synthesis, promoted], required: true }
+        promoted_to: { type: text }   # reference-area path — a resource link-out, NOT an edge (porting)
+        confidence:  { type: number }
+      relations:
+        owner: { to: person, required: true }   # HQ keys the writer on owner (edge->person), not author
+      # related / sources are the universal core edges (inherited, not redeclared)
+
+    # ---------------------------------------------------------------- outcomes
+    case-study:
+      when: >-
+        delivered work becomes a story worth telling outside the firm
+      attributes:
+        published: { type: bool, required: true }
+        industry:  { type: text }
+        phase:     { enum: [diagnose, prove, scale, full-cycle] }
+        updated:   { required: true }
+      relations:
+        client:         { to: client, required: true }
+        source_project: { to: project }   # typed edge (was project|build; build folded out)
+
+    # ---------------------------------------------------------------- directory
+    partnership:
+      when: >-
+        a standing relationship with another firm is established or changes
+      attributes:
+        partner:           { type: text, required: true }   # partner name = slug source (not an edge)
+        active:            { type: bool, default: true }   # engagement ongoing? — consistent with project (HQ stage data remapped at cutover)
+        primary_contact:   { type: text }   # HQ schema says object{name,role,email}; live data is a scalar string -> text for v1
+        notes_folder:    { type: text }
+        notes_folder_id: { type: text }
+        updated:           { required: true }
+      relations:
+        owner:                 { to: person, required: true }
+        related_opportunities: { to: opportunity, many: true }
+        related_projects:      { to: project, many: true }
+
+    person:
+      when: >-
+        a human is named who we will refer to again — ours, a client's, or a partner's
+      attributes:
+        name:       { type: text, required: true }
+        role:       { enum: [consultant, engineer, manager, partner], required: true }   # v1 firm roles; HQ person data remapped at cutover
+        department: { enum: [engineering, consulting, delivery-management, people, sales] }
+
+    client:
+      when: >-
+        an organisation is named that we work with, pitch to, or are introduced to
+      attributes:
+        name:          { type: text, required: true }
+        industry:      { type: text }
+        crm_id: { type: text, pattern: '^[0-9]+$' }
+        website:       { type: text }
+        updated:       { required: true }
+      relations:
+        partner: { to: partnership }   # from-list now includes client (porting note 5)

@@ -1,0 +1,43 @@
+# preset-cells — parity-corpus preset covering every layout x format storage cell.
+# Not a product preset; exists so the M0 gate and golden fixtures exercise
+# file/folder/singleton x md/json/yaml plus collection x json/jsonl/yaml.
+# The cells themselves live in storage.yaml beside this file.
+version: "0.1.0"
+
+ontology:
+  entities:
+    note:
+      when: parity corpus
+      attributes:
+        title: { required: true }
+    card:
+      when: parity corpus
+      attributes:
+        title: { required: true }
+    sheet:
+      when: parity corpus
+      attributes:
+        title: { required: true }
+    dossier:
+      when: parity corpus
+      attributes:
+        title: { required: true }
+    charter:
+      when: parity corpus
+      attributes:
+        title: { required: true }
+    repo:
+      when: parity corpus
+      attributes:
+        title: { required: true }
+        stack: { type: text }
+    vendor:
+      when: parity corpus
+      attributes:
+        title: { required: true }
+    account:
+      when: parity corpus
+      attributes:
+        title: { required: true }
+        amount: { type: number }
+        due: { type: date }

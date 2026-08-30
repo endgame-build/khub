@@ -1,0 +1,7 @@
+# `schema base`: the effective base block every type inherits. Since the
+# ontology/policy/storage split the base is embedded in the binary and no
+# workspace file carries it, so this view is its one readable surface.
+steps:
+- argv: ["init", "build-lite", ".", "--no-wire"]
+- argv: ["schema", "base", "--format", "json"]
+- argv: ["schema", "base", "--format", "text"]

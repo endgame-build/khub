@@ -74,8 +74,8 @@ func Create(root, typeName string, opts CreateOpts) (*CreateResult, error) {
 	// body starts from the scaffold (--no-template opts out). A broken template
 	// never blocks capture — seed nothing and let validate report the template.
 	body := opts.Body
-	if strings.TrimSpace(body) == "" && rtype.Storage.Fmt == "md" {
-		tpl, terr := template.LoadTemplate(root, typeName)
+	if stem := rtype.TemplateName(); strings.TrimSpace(body) == "" && rtype.ReadsTemplate() && stem != "" {
+		tpl, terr := template.LoadTemplate(root, stem)
 		if terr != nil {
 			tpl = nil // validate carries the template finding
 		}

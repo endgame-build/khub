@@ -24,7 +24,7 @@ func registerSchema(root *cobra.Command) {
 	// FormatOpt per command. A single shared (persistent) flag would let
 	// `khub schema --format json types` push the group's choice into `types`,
 	// which Click never does.
-	var groupFormat, typesFormat, showFormat, edgesFormat string
+	var groupFormat, typesFormat, showFormat, edgesFormat, baseFormat string
 	schemaCmd := newCmd("schema", "Introspect the active schema.", "COMMAND [ARGS]...",
 		func(cmd *cobra.Command, args []string) error {
 			return Guard(groupFormat, func() error { return schemaFull(groupFormat) })
@@ -52,6 +52,13 @@ func registerSchema(root *cobra.Command) {
 	showCmd.Args = clickArity(1)
 	showCmd.Flags().StringVar(&showFormat, "format", "text", formatHelp)
 
+	baseCmd := newCmd("base", "Show the effective base block every type inherits.", "",
+		func(cmd *cobra.Command, args []string) error {
+			return Guard(baseFormat, func() error { return schemaBase(baseFormat) })
+		})
+	baseCmd.Args = clickArity(0)
+	baseCmd.Flags().StringVar(&baseFormat, "format", "text", formatHelp)
+
 	edgesCmd := newCmd("edges", "List the relation vocabulary by predicate.", "",
 		func(cmd *cobra.Command, args []string) error {
 			return Guard(edgesFormat, func() error { return schemaEdges(edgesFormat) })
@@ -59,7 +66,7 @@ func registerSchema(root *cobra.Command) {
 	edgesCmd.Args = clickArity(0)
 	edgesCmd.Flags().StringVar(&edgesFormat, "format", "text", formatHelp)
 
-	schemaCmd.AddCommand(typesCmd, showCmd, edgesCmd)
+	schemaCmd.AddCommand(typesCmd, showCmd, edgesCmd, baseCmd)
 	root.AddCommand(schemaCmd)
 }
 
@@ -105,6 +112,23 @@ func schemaFull(format string) error {
 	})
 }
 
+// schemaBase prints the effective base block. Since the ontology/policy/
+// storage split the base is embedded in the binary and no workspace file
+// carries (or may declare) it, so this is the readable surface for it.
+func schemaBase(format string) error {
+	_, resolved, err := loadResolved()
+	if err != nil {
+		return err
+	}
+	view := introspect.BaseView(resolved)
+	return Emit(view, format, func() {
+		rows := appendRows([][]string{}, view, "fields", fieldRow)
+		printTable("base fields", []string{"field", "type", "required", "enum", "notes"}, rows)
+		relRows := appendRows([][]string{}, view, "relations", relationRow)
+		printTable("base relations", []string{"predicate", "to", "required", "kind", "notes"}, relRows)
+	})
+}
+
 func schemaTypes(format string) error {
 	_, resolved, err := loadResolved()
 	if err != nil {
@@ -139,20 +163,23 @@ func schemaShow(name, format string) error {
 	}
 	return Emit(view, format, func() {
 		layout, _ := view.Get("layout")
-		rows := [][]string{}
-		fields, _ := view.Get("fields")
-		for _, f := range fields.([]any) {
-			fv := f.(*omap.Map)
-			rows = append(rows, fieldRow(fv))
-		}
-		rels, _ := view.Get("relations")
-		for _, r := range rels.([]any) {
-			rv := r.(*omap.Map)
-			rows = append(rows, relationRow(rv))
-		}
+		rows := appendRows([][]string{}, view, "fields", fieldRow)
+		rows = appendRows(rows, view, "relations", relationRow)
 		printTable(fmt.Sprintf("%s (%v)", name, layout),
 			[]string{"field", "type", "required", "enum", "notes"}, rows)
 	})
+}
+
+// appendRows renders one row per element of the view's `key` list. The two
+// schema tables differ in where the rows land and under which header — `base`
+// builds two tables, `show` one — never in how a row is built, so this is the
+// whole of what they share (fieldRow and relationRow were already common).
+func appendRows(dst [][]string, view *omap.Map, key string, row func(*omap.Map) []string) [][]string {
+	v, _ := view.Get(key)
+	for _, e := range v.([]any) {
+		dst = append(dst, row(e.(*omap.Map)))
+	}
+	return dst
 }
 
 func fieldRow(fv *omap.Map) []string {

@@ -17,11 +17,12 @@ func TestMergeBaseIntoEveryEntity(t *testing.T) {
 	// are merged into every type; draft defaults to false; merge is at
 	// resolve time.
 	preset := `
-entities:
-  client:  { layout: file }
-  project: { layout: folder }
+ontology:
+  entities:
+    client: {}
+    project: {}
 `
-	schema := resolveDocs(t, coreBase, preset)
+	schema := resolveWithCore(t, preset)
 	for _, name := range []string{"client", "project"} {
 		rt := typeOf(t, schema, name)
 		for _, a := range baseAttrs {
@@ -52,14 +53,14 @@ func TestOverrideBaseAttribute(t *testing.T) {
 	// TS-SCH-002-02 / U02: a type overrides a base attribute by redeclaring
 	// it; siblings stay inherited unchanged.
 	preset := `
-entities:
-  a:
-    layout: file
-    attributes:
-      updated: { required: true }
-  b: { layout: file }
+ontology:
+  entities:
+    a:
+      attributes:
+        updated: { required: true }
+    b: {}
 `
-	schema := resolveDocs(t, coreBase, preset)
+	schema := resolveWithCore(t, preset)
 	aUpdated := attrOf(t, typeOf(t, schema, "a"), "updated")
 	if !aUpdated.Required {
 		t.Error("a.updated.Required = false, want true")
@@ -79,7 +80,7 @@ entities:
 
 func TestDraftAndTypeGuaranteed(t *testing.T) {
 	// U03 / SCH-006: every entity carries `type` and the boolean `draft` flag.
-	schema := resolveDocs(t, coreBase, "entities: { a: { layout: file } }")
+	schema := resolveWithCore(t, "ontology: { entities: { a: {} } }")
 	a := typeOf(t, schema, "a")
 	if !a.Attributes.Has("type") {
 		t.Error("a missing attribute 'type'")
@@ -89,15 +90,68 @@ func TestDraftAndTypeGuaranteed(t *testing.T) {
 	}
 }
 
-func TestMissingBaseBlockRejected(t *testing.T) {
-	// TS-SCH-002-03 / U04: entities with no base block present is rejected.
-	e := resolveLocated(t, "entities: { a: { layout: file } }")
-	if e.Code != "missing_base" {
-		t.Errorf("code = %q, want missing_base", e.Code)
+func TestEmbeddedBaseIsTheOnlyBaseSource(t *testing.T) {
+	// The base block is embedded in the binary and supplied by the caller as
+	// ResolveWith's base document — the ONLY legal source. An authored
+	// ontology.base is rejected with an error teaching the real override path
+	// (redeclare the attribute on the type); the base is khub's own plumbing,
+	// and redefining it whole would silently change what every gate reads.
+	base := loadYAMLDoc(t, coreBase)
+
+	paths := writeSchemaFiles(t, "ontology: { entities: { a: {} } }")
+	withBase, err := ResolveWith(base, paths)
+	if err != nil {
+		t.Fatalf("ResolveWith: %v", err)
 	}
-	want := "Schema declares entities but no base block; base attributes are missing"
-	if e.Message != want {
-		t.Errorf("message = %q, want %q", e.Message, want)
+	if !typeOf(t, withBase, "a").Attributes.Has("created") {
+		t.Error("the embedded base was not merged")
+	}
+
+	declared := `
+ontology:
+  base:
+    attributes:
+      type: { type: text, required: true }
+  entities:
+    a: {}
+`
+	wantMsg := "Invalid schema at ontology.base: the base block is khub-owned; " +
+		"override a base attribute by redeclaring it on the type (see `khub schema base`)"
+	for name, doc := range map[string]string{
+		"declared": declared,
+		// Even an EMPTY authored base is the author reaching for the block.
+		"empty": "ontology:\n  base: {}\n  entities:\n    a: {}\n",
+	} {
+		_, err = ResolveWith(base, writeSchemaFiles(t, doc))
+		le := asLocatedErr(t, err)
+		if le.Code != "invalid_schema" {
+			t.Errorf("%s base: code = %q, want invalid_schema", name, le.Code)
+		}
+		if le.Message != wantMsg {
+			t.Errorf("%s base: message = %q,\nwant %q", name, le.Message, wantMsg)
+		}
+	}
+
+	// A SUPPLIED document that yields no base is a loud error, never a silent
+	// empty base: the caller passing one is promising khub's plumbing, and a
+	// mis-nested embedded document must fail here rather than let every gate
+	// quietly change meaning.
+	_, err = ResolveWith(loadYAMLDoc(t, "ontology:\n  entities: {}\n"),
+		writeSchemaFiles(t, "ontology: { entities: { a: {} } }"))
+	yieldErr := asLocatedErr(t, err)
+	if yieldErr.Code != "schema_error" ||
+		yieldErr.Message != "Base document carries no ontology.base block" {
+		t.Errorf("base-less base doc: %s (%s)", yieldErr.Code, yieldErr.Message)
+	}
+
+	// No base document at all, no authored base: entities resolve against an
+	// empty base — a nil base document is the base-less fixture path.
+	bare, err := ResolveWith(nil, writeSchemaFiles(t, "ontology: { entities: { a: {} } }"))
+	if err != nil {
+		t.Fatalf("Resolve: %v", err)
+	}
+	if bare.BaseAttributes.Len() != 0 {
+		t.Errorf("bare base attrs = %v, want none", bare.BaseAttributes.Keys())
 	}
 }
 
@@ -105,11 +159,12 @@ func TestUniversalEdgesWithoutRedeclaration(t *testing.T) {
 	// TS-SCH-002-04 / U05: the universal edges are available on every type
 	// without that type redeclaring the predicate.
 	preset := `
-entities:
-  a: { layout: file }
-  b: { layout: file }
+ontology:
+  entities:
+    a: {}
+    b: {}
 `
-	schema := resolveDocs(t, coreBase, preset)
+	schema := resolveWithCore(t, preset)
 	if !typeOf(t, schema, "a").Relations.Has("related") {
 		t.Error("a missing universal edge 'related'")
 	}
@@ -123,17 +178,16 @@ func TestRequiredFalseOverrideBeatsInheritedTrue(t *testing.T) {
 	// `required: false` wins over the base's true, while an override that
 	// stays silent inherits it. firm-ops relies on this for meeting.created.
 	preset := `
-entities:
-  meeting:
-    layout: file
-    attributes:
-      created: { required: false }
-  client:
-    layout: file
-    attributes:
-      created: {}
+ontology:
+  entities:
+    meeting:
+      attributes:
+        created: { required: false }
+    client:
+      attributes:
+        created: {}
 `
-	schema := resolveDocs(t, coreBase, preset)
+	schema := resolveWithCore(t, preset)
 	meeting := attrOf(t, typeOf(t, schema, "meeting"), "created")
 	if meeting.Required {
 		t.Error("meeting.created.Required = true; explicit false must beat inherited true")

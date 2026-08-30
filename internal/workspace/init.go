@@ -1,7 +1,8 @@
 // Ports src/khub/core/workspace.py — the scaffolder (WPK-001-1).
 //
-// Init flattens core + a named preset (a DIRECTORY: <name>/schema.yaml plus an
-// optional <name>/templates/*.yaml) into one editable .khub/schema.yaml (+
+// Init scaffolds a workspace from a named preset (a DIRECTORY:
+// <name>/ontology.yaml plus optional policy.yaml / storage.yaml /
+// templates/*.yaml) into editable .khub/{ontology,policy,storage}.yaml (+
 // .khub/templates/), stamps provenance, writes config.yaml, gitignores
 // .khub/generated/, and lays down the entity tree — including CREATING each md
 // singleton that has a template and does not exist yet. It never MODIFIES an
@@ -27,8 +28,10 @@ import (
 
 	"github.com/endgame-build/khub/internal/canon"
 	"github.com/endgame-build/khub/internal/errs"
+	"github.com/endgame-build/khub/internal/introspect"
 	"github.com/endgame-build/khub/internal/omap"
 	"github.com/endgame-build/khub/internal/presets"
+	"github.com/endgame-build/khub/internal/schema"
 	"github.com/endgame-build/khub/internal/template"
 )
 
@@ -53,10 +56,10 @@ type InitResult struct {
 	// never overwrites.
 	SingletonsCreated []string
 	// Preserved lists workspace-owned files a re-init left alone
-	// (.khub/schema.yaml, .khub/config.yaml, .khub/templates/*.yaml). The
-	// engagement owns these outright — editing schema.yaml IS the override
-	// mechanism — so a re-scaffold reports them instead of silently restoring
-	// the preset's copy.
+	// (.khub/{ontology,policy,storage}.yaml, .khub/config.yaml,
+	// .khub/templates/*.yaml). The engagement owns these outright — editing
+	// them IS the override mechanism — so a re-scaffold reports them instead
+	// of silently restoring the preset's copy.
 	Preserved []string
 }
 
@@ -97,7 +100,7 @@ func Init(preset, path string, opt InitOptions) (*InitResult, error) {
 	if existing, ok := existingPreset(target); ok && existing != preset {
 		return nil, errs.New("preset_mismatch", fmt.Sprintf(
 			"%s is a '%s' workspace; refusing to scaffold '%s' over it. "+
-				"Its .khub/schema.yaml is workspace-owned and would be kept, leaving files for "+
+				"Its .khub schema files are workspace-owned and would be kept, leaving files for "+
 				"types the schema does not declare.", osPath(target), existing, preset))
 	}
 	empty, err := isEmptyDir(target)
@@ -125,16 +128,23 @@ func Init(preset, path string, opt InitOptions) (*InitResult, error) {
 	khubDir := pyJoin(target, ".khub")
 	createdKhub := !pathExists(khubDir)
 	var createdSingletons []singleton
-	wsName, preserved, err := scaffold(target, khubDir, preset, merged, source, opt, &createdSingletons)
+	var writtenKhub []string
+	wsName, preserved, err := scaffold(target, khubDir, preset, merged, source, opt, &createdSingletons, &writtenKhub)
 	if err != nil {
 		// Best-effort unwind (not full atomicity — dirs/.gitignore may remain):
-		// drop the partial .khub/ we just created, and any singleton files this
-		// run minted outside it.
+		// drop the partial .khub/ we just created, any singleton files this run
+		// minted outside it, and — on a re-init, where .khub/ predates us — the
+		// individual files this run wrote into it, so a failed re-init leaves
+		// the workspace's schema exactly as it was.
 		for _, s := range createdSingletons {
 			_ = os.Remove(osPath(s.path))
 		}
 		if createdKhub {
 			_ = os.RemoveAll(osPath(khubDir))
+		} else {
+			for _, p := range writtenKhub {
+				_ = os.Remove(osPath(p))
+			}
 		}
 		return nil, err
 	}
@@ -175,13 +185,16 @@ type singleton struct {
 }
 
 // scaffold is the body of init_workspace's try block: every write, in order.
-// Anything it returns an error from is unwound by the caller.
+// Anything it returns an error from is unwound by the caller; written collects
+// the .khub files THIS run created so a re-init failure can remove exactly
+// them.
 func scaffold(
 	target, khubDir, preset string,
 	merged *flattened,
 	source fs.FS,
 	opt InitOptions,
 	created *[]singleton,
+	written *[]string,
 ) (string, []string, error) {
 	if err := os.MkdirAll(osPath(khubDir), 0o777); err != nil {
 		return "", nil, err
@@ -189,21 +202,32 @@ func scaffold(
 	preserved := []string{}
 
 	// Creations only, the same rule entity files and singletons already follow:
-	// the workspace owns schema.yaml, so a re-init must not restore the preset
-	// over local edits. Refreshing from a newer preset is an upgrade, not a
-	// scaffold.
-	schemaPath := pyJoin(khubDir, "schema.yaml")
-	if pathExists(schemaPath) {
-		preserved = append(preserved, ".khub/schema.yaml")
-	} else {
-		body, err := canon.DumpWide(merged.Doc)
+	// the workspace owns its schema layer files, so a re-init must not restore
+	// the preset over local edits. Refreshing from a newer preset is an
+	// upgrade, not a scaffold. Each file carries the provenance header; the
+	// base block is embedded in the binary and never written here.
+	header := fmt.Sprintf("# khub-preset: %s@%s\n", preset, merged.Version)
+	for _, layer := range []struct {
+		file string
+		doc  *omap.Map
+	}{
+		{"ontology.yaml", merged.Ontology},
+		{"policy.yaml", merged.Policy},
+		{"storage.yaml", merged.Storage},
+	} {
+		layerPath := pyJoin(khubDir, layer.file)
+		if pathExists(layerPath) {
+			preserved = append(preserved, ".khub/"+layer.file)
+			continue
+		}
+		body, err := canon.DumpWide(layer.doc)
 		if err != nil {
 			return "", nil, err
 		}
-		header := fmt.Sprintf("# khub-preset: %s@%s\n", preset, merged.Version)
-		if err := writeText(schemaPath, header+body); err != nil {
+		if err := writeText(layerPath, header+body); err != nil {
 			return "", nil, err
 		}
+		*written = append(*written, layerPath)
 	}
 
 	wsName := opt.Name
@@ -236,6 +260,7 @@ func scaffold(
 		if err := writeText(configPath, body); err != nil {
 			return "", nil, err
 		}
+		*written = append(*written, configPath)
 	}
 
 	if err := appendGitignore(pyJoin(target, ".gitignore"), generatedIgnore); err != nil {
@@ -243,7 +268,8 @@ func scaffold(
 	}
 
 	// Flatten the preset's templates (if any) into the workspace-owned copy —
-	// the same editable-copy relationship schema.yaml has with the preset.
+	// the same editable-copy relationship the three layer files have with the
+	// preset.
 	// The directory is created on `is_dir()` alone, so a preset shipping an
 	// empty templates/ still lands an empty .khub/templates/.
 	if presets.HasTemplates(preset, source) {
@@ -265,13 +291,26 @@ func scaffold(
 			if err := writeText(dest, string(payload)); err != nil {
 				return "", nil, err
 			}
+			*written = append(*written, dest)
 		}
 	}
 
-	if err := layDownTree(target, merged.Entities); err != nil {
+	// Resolve the workspace that now exists on disk — written and preserved
+	// layer files alike, over the embedded base — and drive the tree and
+	// singleton passes off the RESOLVED types. The scaffold then matches what
+	// every later command scans by construction rather than by a hand-kept
+	// mirror of the resolver's defaults; and a schema that cannot resolve (a
+	// re-init preserving one generation's ontology beside another's storage)
+	// fails HERE, loudly, instead of minting a green init over a workspace no
+	// command can load.
+	resolved, err := introspect.LoadSchema(osPath(target))
+	if err != nil {
 		return "", nil, err
 	}
-	if err := createSingletons(target, merged.Entities, created); err != nil {
+	if err := layDownTree(target, resolved); err != nil {
+		return "", nil, err
+	}
+	if err := createSingletons(target, resolved, created); err != nil {
 		return "", nil, err
 	}
 	return wsName, preserved, nil
@@ -281,25 +320,28 @@ func scaffold(
 // layouts need the dir; a collection's or singleton's path names a FILE —
 // create only its parent, never the file: a missing collection or singleton is
 // legitimately zero entities.
-func layDownTree(target string, entities *omap.Map) error {
-	for _, typeName := range entities.Keys() {
-		decl := declOf(entities, typeName)
-		layout := declStr(decl, "layout")
-		declPath := declStr(decl, "path")
-		switch {
-		case layout == "collection" || layout == "singleton":
-			rel := declPath
-			if rel == "" {
-				rel = typeName + "." + declStr(decl, "format")
+//
+// The pass reads the RESOLVED schema, so layouts, defaulted paths and the
+// collection {type}.{format} fallback are the resolver's own — the scaffolded
+// tree matches what every later command scans by construction.
+func layDownTree(target string, resolved *schema.ResolvedSchema) error {
+	for _, typeName := range resolved.Types.Keys() {
+		rt, _ := resolved.Types.Get(typeName)
+		switch rt.Storage.Layout {
+		case schema.LayoutCollection, schema.LayoutSingleton:
+			rel := rt.CollectionRelpath()
+			if rt.Storage.Layout == schema.LayoutSingleton {
+				rel = *rt.Storage.Path // the matrix guarantees a singleton's path
 			}
-			cpath := pyJoin(target, rel)
+			cpath := pyJoin(target, filepath.ToSlash(rel))
 			if parent := pyParent(cpath); parent != target {
 				if err := os.MkdirAll(osPath(parent), 0o777); err != nil {
 					return err
 				}
 			}
-		case declPath != "":
-			if err := os.MkdirAll(osPath(pyJoin(target, declPath)), 0o777); err != nil {
+		default:
+			// file/folder: storageDefaults guarantees a non-empty path.
+			if err := os.MkdirAll(osPath(pyJoin(target, *rt.Storage.Path)), 0o777); err != nil {
 				return err
 			}
 		}
@@ -311,19 +353,24 @@ func layDownTree(target string, entities *omap.Map) error {
 // exist yet — frontmatter + scaffolded body. Creations only: an existing file
 // is never touched (WS-003 as amended). It appends to created as it goes so
 // the caller can roll creations back on failure.
-func createSingletons(target string, entities *omap.Map, created *[]singleton) error {
+func createSingletons(target string, resolved *schema.ResolvedSchema, created *[]singleton) error {
 	today := today()
-	for _, name := range entities.Keys() {
-		decl := declOf(entities, name)
-		declPath := declStr(decl, "path")
-		if declStr(decl, "layout") != "singleton" || declPath == "" {
+	for _, name := range resolved.Types.Keys() {
+		rt, _ := resolved.Types.Get(name)
+		if rt.Storage.Layout != schema.LayoutSingleton {
 			continue
 		}
-		spath := pyJoin(target, declPath)
+		spath := pyJoin(target, *rt.Storage.Path)
 		if pySuffix(pyName(spath)) != ".md" || pathExists(spath) {
 			continue
 		}
-		tpl, err := template.LoadTemplate(target, name)
+		// The resolver's own template link: the declared stem, the type's name
+		// by convention, or "" for the `template: false` opt-out.
+		stem := rt.TemplateName()
+		if stem == "" {
+			continue
+		}
+		tpl, err := template.LoadTemplate(target, stem)
 		if err != nil {
 			return err
 		}

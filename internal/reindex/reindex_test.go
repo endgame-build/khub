@@ -197,9 +197,9 @@ func TestReindexEscapesMarkdownTitle(t *testing.T) {
 func TestEntityLinkWrapsProblematicPaths(t *testing.T) {
 	root := t.TempDir()
 	resolved := resolveInline(t,
-		"entities:\n"+
-			"  doc:\n    layout: file\n    path: 'my docs'\n"+
-			"  note:\n    layout: file\n    path: clean\n")
+		"ontology:\n  entities:\n    doc: {}\n    note: {}\n"+
+			"storage:\n  doc: { layout: file, path: 'my docs' }\n"+
+			"  note: { layout: file, path: clean }\n")
 	cases := []struct{ typeName, want string }{
 		{"doc", "<my docs/foo.md>"},
 		{"note", "clean/foo.md"},
@@ -249,40 +249,29 @@ func frontmatterOf(t *testing.T, content string) *omap.Map {
 	return meta
 }
 
-// resolveInline flattens the core base block over an inline preset, the way
-// init does, and resolves it — conftest.py's write_schema + resolve.
+// resolveInline resolves a layered inline doc over the embedded core base,
+// the way LoadSchema does for a live workspace: the core document goes to
+// ResolveWith as the base doc — an authored ontology.base is forbidden.
 func resolveInline(t *testing.T, presetYAML string) *schema.ResolvedSchema {
 	t.Helper()
-	corePath := filepath.Join("..", "..", "presets", "core.yaml")
-	raw, err := os.ReadFile(corePath)
+	coreRaw, err := os.ReadFile(filepath.Join("..", "..", "presets", "core", "ontology.yaml"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	coreDoc, err := canon.LoadDoc(string(raw))
+	coreVal, err := canon.LoadDocMode(string(coreRaw), canon.Mode12)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("parse core base: %v", err)
 	}
-	specDoc, err := canon.LoadDoc(presetYAML)
-	if err != nil {
-		t.Fatal(err)
-	}
-	core, _ := coreDoc.(*omap.Map)
-	spec, _ := specDoc.(*omap.Map)
-	base, _ := core.Get("base")
-	entities, _ := spec.Get("entities")
-	merged := omap.New()
-	merged.Set("base", base)
-	merged.Set("entities", entities)
-	text, err := canon.DumpWide(merged)
-	if err != nil {
-		t.Fatal(err)
+	coreDoc, ok := coreVal.(*omap.Map)
+	if !ok {
+		t.Fatalf("core base top level is %T, not a mapping", coreVal)
 	}
 	dir := t.TempDir()
-	path := filepath.Join(dir, "schema.yaml")
-	if err := os.WriteFile(path, []byte(text), 0o644); err != nil {
+	path := filepath.Join(dir, "ontology.yaml")
+	if err := os.WriteFile(path, []byte(presetYAML), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	resolved, err := schema.Resolve([]string{path})
+	resolved, err := schema.ResolveWith(coreDoc, []string{path})
 	if err != nil {
 		t.Fatalf("resolve inline schema: %v", err)
 	}

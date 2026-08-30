@@ -256,11 +256,17 @@ func TestCheckDependsOnStaysAcyclicWithAndWithoutTheFlag(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			root := wsFor(t, "build-hub")
 			if stripFlag {
-				text := readRaw(t, root, ".khub/schema.yaml")
+				// The base block (and its acyclic flag) is embedded in the
+				// binary now, so the workspace files are what a stripped
+				// schema looks like; assert none of them smuggles the flag
+				// back in. build-hub's domain.depends_on redeclares the edge
+				// WITHOUT acyclic (relations whole-replace), so cycle
+				// detection below rests on the built-in backstop alone.
+				text := readRaw(t, root, ".khub/ontology.yaml")
 				text = strings.ReplaceAll(text, ", acyclic: true", "")
 				text = strings.ReplaceAll(text, "acyclic: true", "")
-				writeRaw(t, root, ".khub/schema.yaml", text)
-				if strings.Contains(readRaw(t, root, ".khub/schema.yaml"), "acyclic") {
+				writeRaw(t, root, ".khub/ontology.yaml", text)
+				if strings.Contains(readRaw(t, root, ".khub/ontology.yaml"), "acyclic") {
 					t.Fatal("the flag survived the strip")
 				}
 			}
@@ -357,14 +363,17 @@ func TestOrphanFlaggedTypeStillReportsCompleteness(t *testing.T) {
 func TestUnflaggedSingletonIsStillSwept(t *testing.T) {
 	root := t.TempDir()
 	presetDir := t.TempDir()
-	writeRaw(t, presetDir, "mini/schema.yaml",
+	writeRaw(t, presetDir, "mini/ontology.yaml",
 		"version: '0.1.0'\n"+
-			"entities:\n"+
-			"  charter:\n"+
-			"    layout: singleton\n"+
-			"    path: charter.md\n"+ // no `orphan: true` — deliberately
-			"    attributes:\n"+
-			"      title: { required: true }\n")
+			"ontology:\n"+
+			"  entities:\n"+
+			"    charter:\n"+
+			"      attributes:\n"+
+			"        title: { required: true }\n")
+	// no policy.yaml: no `orphan: true` — deliberately
+	writeRaw(t, presetDir, "mini/storage.yaml",
+		"storage:\n"+
+			"  charter: { layout: singleton, path: charter.md }\n")
 	initFrom(t, root, "mini", presetDir)
 	// init mints a singleton only from a body template, and `mini` ships none.
 	create(t, root, "charter", "", "title", "Charter")
@@ -488,8 +497,8 @@ func TestMisplacedReportsAFileTheScanCannotReach(t *testing.T) {
 	create(t, root, "component", "", "title", "API", "kind", "service")
 
 	// The schema now looks somewhere else; the file does not move.
-	text := readRaw(t, root, ".khub/schema.yaml")
-	writeRaw(t, root, ".khub/schema.yaml", strings.ReplaceAll(text,
+	text := readRaw(t, root, ".khub/storage.yaml")
+	writeRaw(t, root, ".khub/storage.yaml", strings.ReplaceAll(text,
 		"path: knowledge/components", "path: knowledge/architecture/components"))
 
 	report := mustCheck(t, root, false)

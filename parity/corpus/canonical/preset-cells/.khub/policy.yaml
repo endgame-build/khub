@@ -1,0 +1,4 @@
+# khub-preset: preset-cells@0.1.0
+policy:
+  charter:
+    orphan: true

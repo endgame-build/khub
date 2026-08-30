@@ -231,14 +231,15 @@ func TestUnterminatedFenceIsAStrayNotMalformed(t *testing.T) {
 func TestOrphanTrueTypeIsExempt(t *testing.T) {
 	ws := wsFromSchema(t, `
 version: "0.1.0"
-entities:
-  note:
-    layout: file
-    path: notes
-    orphan: true
-  thing:
-    layout: file
-    path: things
+ontology:
+  entities:
+    note: {}
+    thing: {}
+policy:
+  note: { orphan: true }
+storage:
+  note:  { layout: file, path: notes }
+  thing: { layout: file, path: things }
 `)
 	seed(t, ws, "notes/n1.md", kv{"type", "note"}, kv{"title", "N"})
 	seed(t, ws, "things/t1.md", kv{"type", "thing"}, kv{"title", "T"})

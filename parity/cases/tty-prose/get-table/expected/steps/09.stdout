@@ -1,6 +1,6 @@
-[3m component/cmp-001-api  [0m
+ component/cmp-001-api
 ┏━━━━━━━━━┳━━━━━━━━━━━━┓
-┃[1m [0m[1mfield  [0m[1m [0m┃[1m [0m[1mvalue     [0m[1m [0m┃
+┃ field   │ value      ┃
 ┡━━━━━━━━━╇━━━━━━━━━━━━┩
 │ type    │ component  │
 │ created │ 2026-01-15 │
