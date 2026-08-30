@@ -6,6 +6,7 @@ package integrity
 // directly so the gate sees them.
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"sort"
@@ -230,7 +231,7 @@ func cycleSet(cycle []string) []string {
 
 func locatedCode(err error) string {
 	var l *errs.Located
-	if asLocated(err, &l) {
+	if errors.As(err, &l) {
 		return l.Code
 	}
 	return ""

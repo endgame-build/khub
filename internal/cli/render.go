@@ -119,7 +119,7 @@ func Guard(fmt_ string, fn func() error) error {
 // isPathConstructionBug reports errno values that mean khub assembled a path
 // that cannot exist, rather than the filesystem refusing a valid one.
 func isPathConstructionBug(err error) bool {
-	pe, ok := err.(*os.PathError)
+	pe, ok := asPathError(err)
 	if !ok {
 		return false
 	}
@@ -136,7 +136,13 @@ func isPathConstructionBug(err error) bool {
 // fault would be wrong about half the time. Naming the path is what diagnoses
 // either one.
 func pathBugMessage(err error) string {
-	pe := err.(*os.PathError)
+	pe, ok := asPathError(err)
+	if !ok {
+		// Unreachable through Guard, which gates on isPathConstructionBug —
+		// but the two match through one helper precisely so this stays a
+		// message rather than a panic if that order ever changes.
+		return fmt.Sprintf("OSError: %s", err.Error())
+	}
 	// The errno's own text carries the specific fault (Not a directory / Is a
 	// directory / File name too long); the prose used to hardcode the ENOTDIR
 	// case, which read as false for the other two this branch also matches.
@@ -149,20 +155,31 @@ func pathBugMessage(err error) string {
 
 func isEPIPE(err error) bool { return errors.Is(err, syscall.EPIPE) }
 
+// asPathError is the one place that decides what counts as a *os.PathError.
+// The guard (isPathConstructionBug) and the two renderers all go through it so
+// they cannot disagree: a guard matching more broadly than its renderer used to
+// mean a panic, not a misprint. errors.As rather than an assertion, per
+// .claude/rules/go.md — an assertion stops matching the day anything wraps.
+func asPathError(err error) (*os.PathError, bool) {
+	var pe *os.PathError
+	return pe, errors.As(err, &pe)
+}
+
 func isOSError(err error) bool {
-	// *os.PathError, *os.LinkError, syscall errors — the OSError family
-	switch err.(type) {
-	case *os.PathError, *os.LinkError, *os.SyscallError:
-		return true
-	}
-	return false
+	// *os.PathError, *os.LinkError, syscall errors — the OSError family.
+	// osErrorMessage renders detail for the first only and falls through to
+	// the plain envelope for the other two; that asymmetry is deliberate.
+	var pe *os.PathError
+	var le *os.LinkError
+	var se *os.SyscallError
+	return errors.As(err, &pe) || errors.As(err, &le) || errors.As(err, &se)
 }
 
 // osErrorMessage mirrors f"{type(err).__name__}: {err}". Python's OSError
 // str is "[Errno N] message: 'path'"; the closest faithful Go rendering is
 // pinned by fixtures — PermissionError/FileNotFoundError map from errno.
 func osErrorMessage(err error) string {
-	if pe, ok := err.(*os.PathError); ok {
+	if pe, ok := asPathError(err); ok {
 		name := "OSError"
 		switch {
 		case errors.Is(pe, fs.ErrNotExist):

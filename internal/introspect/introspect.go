@@ -96,7 +96,7 @@ func LoadSchemaLayers(root string) (*schema.ResolvedSchema, []string, error) {
 	resolved, err := schema.ResolveWith(base, paths)
 	if err != nil {
 		var located *errs.Located
-		if asLocated(err, &located) {
+		if errors.As(err, &located) {
 			return nil, nil, err // resolver-level located errors pass through untouched
 		}
 		// Every non-located resolver error already names its file (LoadYAML and
@@ -127,21 +127,6 @@ var embeddedBase = sync.OnceValues(func() (*omap.Map, error) {
 	}
 	return schema.ParseDoc(presets.CorePath, string(raw))
 })
-
-func asLocated(err error, target **errs.Located) bool {
-	for e := err; e != nil; {
-		if l, ok := e.(*errs.Located); ok {
-			*target = l
-			return true
-		}
-		u, ok := e.(interface{ Unwrap() error })
-		if !ok {
-			return false
-		}
-		e = u.Unwrap()
-	}
-	return false
-}
 
 // TypesList returns the declared type names in declaration order.
 func TypesList(resolved *schema.ResolvedSchema) []string { return resolved.Types.Keys() }

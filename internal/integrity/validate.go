@@ -8,6 +8,7 @@
 package integrity
 
 import (
+	"errors"
 	"fmt"
 	"regexp"
 	"sort"
@@ -205,25 +206,10 @@ func readBody(path string) (string, bool) {
 // errReason is Python's `getattr(err, "message", None) or str(err)`.
 func errReason(err error) string {
 	var located *errs.Located
-	if asLocated(err, &located) && located.Message != "" {
+	if errors.As(err, &located) && located.Message != "" {
 		return located.Message
 	}
 	return err.Error()
-}
-
-func asLocated(err error, target **errs.Located) bool {
-	for e := err; e != nil; {
-		if l, ok := e.(*errs.Located); ok {
-			*target = l
-			return true
-		}
-		u, ok := e.(interface{ Unwrap() error })
-		if !ok {
-			return false
-		}
-		e = u.Unwrap()
-	}
-	return false
 }
 
 // typeInTarget is integrity._type_in_target: whether a whole TYPE is in scope —

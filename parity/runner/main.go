@@ -21,6 +21,7 @@ package main
 
 import (
 	"crypto/sha256"
+	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -433,7 +434,8 @@ func runStepWith(bin, ws string, env []string, st step, mode string) (stdout, st
 	runErr := cmd.Run()
 	code = 0
 	if runErr != nil {
-		if ee, okc := runErr.(*exec.ExitError); okc {
+		var ee *exec.ExitError
+		if errors.As(runErr, &ee) {
 			code = ee.ExitCode()
 		} else {
 			return nil, nil, 0, runErr

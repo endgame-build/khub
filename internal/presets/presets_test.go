@@ -6,6 +6,7 @@
 package presets
 
 import (
+	"errors"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -64,7 +65,7 @@ func TestUnknownPresetListsKnown(t *testing.T) {
 	// TS-WS-001-U06: an unknown preset is rejected, listing the known presets.
 	_, err := Resolve("bogus", Embedded())
 	var located *errs.Located
-	if !asLocated(err, &located) {
+	if !errors.As(err, &located) {
 		t.Fatalf("err = %v", err)
 	}
 	if located.Code != "unknown_preset" {
@@ -673,21 +674,6 @@ func contains(ss []string, s string) bool {
 		if x == s {
 			return true
 		}
-	}
-	return false
-}
-
-func asLocated(err error, target **errs.Located) bool {
-	for e := err; e != nil; {
-		if l, ok := e.(*errs.Located); ok {
-			*target = l
-			return true
-		}
-		u, ok := e.(interface{ Unwrap() error })
-		if !ok {
-			return false
-		}
-		e = u.Unwrap()
 	}
 	return false
 }

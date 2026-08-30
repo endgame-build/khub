@@ -5,6 +5,7 @@ package introspect
 // failure must not collapse into the same answer.
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -41,7 +42,7 @@ func TestLayerFilesReportsAStatFailureAsItself(t *testing.T) {
 		t.Fatal("a stat failure was reported as absence")
 	}
 	var located *errs.Located
-	if !asLocated(err, &located) {
+	if !errors.As(err, &located) {
 		t.Fatalf("err is %T, want *errs.Located: %v", err, err)
 	}
 	if located.Code != "schema_error" {
