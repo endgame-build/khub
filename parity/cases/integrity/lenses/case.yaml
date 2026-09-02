@@ -1,0 +1,15 @@
+# Lenses gated on frontmatter (`when:`): a non-functional requirement gets the
+# `measurable` lens and not `violation`, a constraint the reverse, and a proposed
+# adr gains `proposed`. The TTY prose and --format json carry the same filtered
+# set, in the template's `after:` order.
+mode: human
+steps:
+- argv: ["init", "build-lite", ".", "--no-wire"]
+- argv: ["add", "requirement", "--title", "Fast", "--kind", "non-functional"]
+- argv: ["add", "requirement", "--title", "Bounded", "--kind", "constraint"]
+- argv: ["add", "adr", "--title", "Maybe", "--status", "proposed"]
+- argv: ["validate", "requirement/req-fast"]
+- argv: ["validate", "requirement/req-fast", "--format", "json"]
+- argv: ["validate", "requirement/req-bounded", "--format", "json"]
+- argv: ["validate", "adr/ad-2026-01-15-maybe"]
+- argv: ["validate", "adr/ad-2026-01-15-maybe", "--format", "json"]

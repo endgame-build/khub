@@ -1,1 +1,1 @@
-{"count": 0, "errors": [{"id": "fragment/ctrl", "type": "fragment", "slug": "ctrl", "field": "frontmatter", "reason": "could not parse frontmatter of fragments/ctrl.md"}]}
+{"count": 0, "errors": [{"id": "fragment/ctrl", "type": "fragment", "slug": "ctrl", "field": "frontmatter", "reason": "could not parse frontmatter of fragments/ctrl.md"}], "gaps": [], "body": null, "lenses": []}

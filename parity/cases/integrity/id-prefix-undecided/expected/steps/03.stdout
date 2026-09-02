@@ -1,0 +1,1 @@
+{"error": {"code": "id_prefix_undecided", "message": "Type 'part' needs --kind <bolt|nut> to mint an id; pass it, or name the entity with --id <slug>"}}

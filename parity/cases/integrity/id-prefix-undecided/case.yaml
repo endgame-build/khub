@@ -1,0 +1,11 @@
+# The by-value id_prefix form (parity/corpus/preset-bykind): the prefix comes
+# from `kind`, so an add that leaves it unset has nothing to mint and refuses
+# (exit 2) rather than writing an unprefixed slug; with it, each kind mints its
+# own prefix and validate accepts both.
+steps:
+- argv: ["init", "preset-bykind", ".", "--no-wire", "--preset-source", "PRESETSRC"]
+- argv: ["schema", "show", "part", "--format", "json"]
+- argv: ["add", "part", "--title", "Hex"]
+- argv: ["add", "part", "--title", "Hex", "--kind", "bolt"]
+- argv: ["add", "part", "--title", "Wing", "--kind", "nut"]
+- argv: ["validate"]

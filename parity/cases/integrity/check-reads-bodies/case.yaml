@@ -1,0 +1,11 @@
+# check reads bodies, not only frontmatter: a required heading that survives only
+# inside an HTML comment is a `body_shape` failure, and a template that no longer
+# parses is one `template_invalid` finding for the whole type (`adr/*`) rather
+# than one per entity.
+steps:
+- argv: ["init", "build-lite", ".", "--no-wire"]
+- argv: ["add", "adr", "--title", "Hidden", "--status", "accepted"]
+- sh: "perl -pi -e 's/^## Context$/<!-- ## Context -->/' knowledge/decisions/ad-2026-01-15-hidden.md"
+- argv: ["check", "--format", "json"]
+- sh: "printf 'sections: [\\n' > .khub/templates/adr.yaml"
+- argv: ["check", "--format", "json"]
