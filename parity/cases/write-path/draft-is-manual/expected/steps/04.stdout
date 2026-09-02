@@ -1,1 +1,1 @@
-{"error": {"code": "self_link", "message": "Cannot link 'cst-001-d' to itself via 'related'"}}
+{"error": {"code": "self_link", "message": "Cannot link 'req-d' to itself via 'related'"}}

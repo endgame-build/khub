@@ -2,5 +2,5 @@ steps:
 - argv: ["init", "build-lite", ".", "--no-wire"]
 - argv: ["add", "adr", "--title", "One", "--status", "accepted"]
 - argv: ["add", "adr", "--title", "Two", "--status", "accepted"]
-- argv: ["add", "adr", "--title", "Three", "--status", "accepted", "--supersedes", "ad-001-one, ad-002-two"]
-- argv: ["add", "adr", "--title", "Four", "--status", "accepted", "--supersedes", "ad-001-one"]
+- argv: ["add", "adr", "--title", "Three", "--status", "accepted", "--supersedes", "ad-2026-01-15-one, ad-2026-01-15-two"]
+- argv: ["add", "adr", "--title", "Four", "--status", "accepted", "--supersedes", "ad-2026-01-15-one"]

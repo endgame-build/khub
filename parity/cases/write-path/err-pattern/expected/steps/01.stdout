@@ -1,1 +1,1 @@
-{"path": ".", "preset": "build-hub", "version": "0.3.0", "name": "ws", "source": null, "entity_files_modified": 0, "seeded_over_corpus": false, "singletons_created": ["prd", "roadmap", "glossary", "arc42", "erd"], "preserved": [], "skill_hint": "khub install-skills"}
+{"path": ".", "preset": "build-hub", "version": "0.4.0", "name": "ws", "source": null, "entity_files_modified": 0, "seeded_over_corpus": false, "singletons_created": ["prd", "roadmap", "glossary", "arc42", "erd"], "preserved": [], "index": "created", "skill_hint": "khub install-skills"}
