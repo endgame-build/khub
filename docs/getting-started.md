@@ -61,7 +61,7 @@ To hand the setup to an agent instead, install the `setup` skill with `npx skill
 
 ## Seed a workspace
 
-`init` scaffolds a workspace from a preset — a directory holding the preset's three schema layer files (`ontology.yaml`, `policy.yaml`, `storage.yaml`) and optional body `templates/`. The `firm-ops` preset is the HQ operations ontology: nine entity types (client, project, person, opportunity, meeting, and more) with typed relations between them. For software work there are two more: `build-hub` (20 types) and `build-lite` (6 — the same shape cut to necessity, and the better place to start). A preset with templates also gets them flattened to `.khub/templates/`, and every md `layout: singleton` type with a template is created on the spot (the `build-hub` preset seeds `prd.md`, `roadmap.md`, `glossary.md`, `arc42.md`, `erd.md` this way — creations only, an existing file is never touched).
+`init` scaffolds a workspace from a preset — a directory holding the preset's three schema layer files (`ontology.yaml`, `policy.yaml`, `storage.yaml`) and optional body `templates/`. The `firm-ops` preset is the HQ operations ontology: nine entity types (client, project, person, opportunity, meeting, and more) with typed relations between them. For software work there are two more: `build-hub` (20 types) and `build-lite` (7 — the same shape cut to necessity, and the better place to start). A preset with templates also gets them flattened to `.khub/templates/`, and every md `layout: singleton` type with a template is created on the spot (the `build-hub` preset seeds `prd.md`, `roadmap.md`, `glossary.md`, `arc42.md`, `erd.md` this way — creations only, an existing file is never touched).
 
 ```bash
 khub init firm-ops ./my-hub
@@ -71,6 +71,7 @@ khub init firm-ops ./my-hub
 Initialized firm-ops workspace at my-hub
 created CLAUDE.md
 created AGENTS.md
+index.md created
 
 Agent skill not installed. To install:
   khub install-skills
@@ -80,7 +81,7 @@ Agent skill not installed. To install:
 cd my-hub
 ```
 
-`init` does two things: it scaffolds the tree and wires the schema into your agent files (`CLAUDE.md` and `AGENTS.md`; next section). Pass `--no-wire` to skip the wire tail. Installing the agent skills is a separate step, `khub install-skills` — scaffolding a workspace and populating your agent directories are different decisions, so `init` names the command rather than running it.
+`init` does three things: it scaffolds the tree, wires the schema into your agent files (`CLAUDE.md` and `AGENTS.md`; next section), and writes the first `index.md` — the one-file view of the corpus an agent reads before anything else. Pass `--no-wire` to skip the wire tail. Installing the agent skills is a separate step, `khub install-skills` — scaffolding a workspace and populating your agent directories are different decisions, so `init` names the command rather than running it.
 
 init wrote a `.khub/` control directory and one folder per entity type:
 
@@ -122,7 +123,7 @@ khub install-skills
 
 Both skills (`khub` and `setup`) land in `.claude/skills/`, `.agents/skills/`, and `.opencode/skills/`, covering Claude Code, opencode, Cursor, Codex, and the rest. Narrow it with `--target claude|agents|opencode` or `--skill khub|setup`, preview with `--dry-run`, or pass `--global` to install into your home directories once per machine instead.
 
-khub gitignores the installed directories for you: the copies are reproducible from the CLI, so committing them would be committing a duplicate. Re-run the command after upgrading khub to re-sync them — an edited copy is overwritten, so make changes in the repo's `skills/`, not in an installed one.
+khub gitignores the installed directories for you: the copies are reproducible from the CLI, so committing them would be committing a duplicate. After upgrading khub, run `khub upgrade` instead: it refreshes `.khub/` from the preset (an edited file is kept in `<name>.bak`), scaffolds what the ontology gained, re-installs the skills and re-wires the agent files in one pass. An edited skill copy is overwritten either way, so make changes in the repo's `skills/`, not in an installed one.
 
 On a machine with no khub yet, the same skills install straight from the repo with [`npx skills`](https://skills.sh) (Node and repo access required):
 

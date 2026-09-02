@@ -22,6 +22,8 @@ environment is the easiest way to get it, e.g.
 | `concurrency.py` | N processes writing one collection at once — exercises the flock path a byte-diff cannot see | takes the binary path as an argument |
 | `seed_adversarial.py` | Plants hostile fixtures (exotic scalars, CRLF, comments) into a workspace for fuzz runs | takes a workspace path |
 
+The scale fixture is not here: `parity/scale/` is Go (generator, timed smoke, growth bench over a ~550-entity corpus) and needs only the toolchain — see its README.
+
 The four generators keep earning their place because **khub's on-disk format is
 still ruamel-shaped**. That is a property of the file format, not a leftover of
 the Python implementation: entities written by khub must stay readable and

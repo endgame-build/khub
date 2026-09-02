@@ -285,7 +285,7 @@ What the family pins, all of it previously untested:
 |---|---|---|
 | `tty-gate/isatty-tty` | pty | no `--format` on a real terminal → human tables (and `--format json` still wins there) |
 | `tty-gate/isatty-pipe` | pipe, `TTY_COMPATIBLE: ""` | the same seven steps down a real pipe with the env rung neutralised → JSON |
-| `tty-gate/tty-compatible-beats-isatty` | pty, `TTY_COMPATIBLE: "0"` | rung 1 BEATS a real terminal — including the failure shape: envelope on stdout, empty stderr, exit 1 |
+| `tty-gate/tty-compatible-beats-isatty` | pty, `TTY_COMPATIBLE: "0"` | rung 1 BEATS a real terminal — including the failure shape: envelope on stdout, empty stderr, exit 2 |
 | `tty-gate/force-color-beats-isatty` | pty, `FORCE_COLOR: ""` | rung 2 set-and-empty beats a real terminal (`FORCE_COLOR` appeared in no case at all before this) |
 
 `isatty-pipe` neutralises `baseEnv`'s `TTY_COMPATIBLE=0` by declaring the key
@@ -485,3 +485,103 @@ The lesson for the rest: **a fixture carrying Python bytes is spent the moment
 its content changes.** Re-recording is correct when it happens, but the colour
 work should read what remains before adding a feature that touches
 `get`, `query` or `status` table output, because that would leave nothing.
+
+## D20 — ids drop the ordinal; `id_date` takes its place
+
+**Date 2026-09-02.** Port of kb 0.14.0, Globex's live downstream of build-lite.
+Its changelog recorded the failure khub's scheme shared: `<prefix>-NNN-<slug>`
+took `NNN` from a directory scan, so two branches that each added an entity
+minted the same ordinal and collided on merge, and git could not tell the two
+files apart. The ordinal is gone from every preset. An id is now
+`<prefix>-<YYYY-MM-DD>-<slug>`, prefix and date each optional per type
+(`id_prefix`, and the new `id_date`, in storage), so minting is a pure function
+of schema, type, frontmatter and title: no directory read, no `-N` retry. A
+minted slug that already exists is refused naming `--id`; O_EXCL stays the race
+gate. `validate` gains a three-arm id gate: the prefix agrees with the deciding
+field, the date is present when `id_date` says so, and a retired `NNN-` ordinal
+is rejected with a message naming `git mv`. firm-ops declares neither and mints
+bare slugs.
+
+Re-recorded: every family. Argv rewritten by hand where a fixture spelled an
+ordinal id (write-path, read-graph, cli-contract, invariants, tty-prose,
+tty-gate, git-stale, integrity, projection, collections); manifests and
+stdout moved in all eleven families because the recorded bytes carried the
+ids. Under the pinned clock every `ad-NNN-` became `ad-2026-01-15-<slug>`. New:
+`integrity/id-scheme`, `integrity/id-prefix-undecided`.
+
+## D21 — refusals exit 2, gates exit 1
+
+**Date 2026-09-02.** Every `Located` failure (a refused write, a bad reference,
+a usage error) exits 2 with the JSON envelope unchanged; `validate` and `check`
+alone exit 1 when their gate fails. Before this a refused `add` and a failed
+`check` shared exit 1. The split is what an agent does next: on 2 the call was
+wrong and nothing was written, so correct the call; on 1 the workspace is
+wrong, so fix the workspace. D15's table row for `tty-compatible-beats-isatty`
+is corrected in place, since its failure shape is a refusal.
+
+Re-recorded: every `.exit` that held `1` on a non-gate step — cli-contract,
+write-path, integrity, init-wire-skills, read-graph, collections, invariants,
+tty-gate. New: `cli-contract/refusal-exits-2`.
+
+## D22 — `validate` and `check` read bodies; `thin` never fails a gate
+
+**Date 2026-09-02.** `validate` splits `errors` from `gaps` (payload keys
+`count, errors, gaps, body, lenses`); its exit follows `errors` alone, and a
+single `type/slug` target of a templated type fills `body` (word counts per
+section) and `lenses` (the applicable review questions, ordered). `check` loads
+each type's template once and gains `template_invalid` and `body_shape` as
+errors and `thin` as an informational bucket. `thin` is the last payload key
+because it is the one bucket `passed` never consults, `--strict` included. A
+gap is a section rule the author has not met yet (too few words, a forbidden
+phrase, a missing code block); it is information for the writer, and a gate
+that failed on it would block capture, which khub never does.
+
+Re-recorded: every step that prints either payload — `integrity/*`,
+`invariants/*` (`validate-check-distinct` among them), `cli-contract`,
+`collections`, `write-path`, and the text form in `tty-prose/check-prose`.
+New: `integrity/body-rules`, `integrity/lenses`, `integrity/check-reads-bodies`.
+
+## D23 — `init` writes `index.md`
+
+**Date 2026-09-02.** `khub init` ends by running the projection `reindex`
+runs, so a fresh workspace already has an index for an agent's first look; a
+malformed file makes the tail skip with a stderr note and the scaffold stands.
+`upgrade` runs the same tail. The library `workspace.Init` does not write the
+index: the tail lives in `internal/cli` because `reindex → entity → workspace`
+would cycle, and the golden-tree unit tests (`internal/workspace/golden_test.go`,
+an external test package for the same reason, and `internal/wire`) run the same
+tail so they keep asserting exactly what the CLI records.
+
+Re-recorded: every case that runs `init` gains one `index.md` line in its
+`tree.manifest` (106 cases across all eleven families); its JSON payload gains
+`index` before `skill_hint`, and the text form prints `index.md created`.
+
+## D24 — `search` indexes comment-stripped bodies
+
+**Date 2026-09-02.** A scaffolded body is mostly `<!-- hint -->` prose, and
+indexing it made every fresh ADR a hit for every word in its own template. The
+FTS body now strips terminated HTML comments before indexing (replaced by one
+space so snippets stay readable; an unterminated `<!--` tail is kept) and keeps
+fenced code. Ranking moves wherever a hint used to match.
+
+Re-recorded: `read-graph/search-basic` — step 09 loses the `arc42/arc42` hit
+that matched only a hint comment, and the BM25 scores move. `read-graph/
+search-risk-corpus` was checked byte-neutral for search: its only changes are
+D21's exit code and D23's `index` key.
+
+## D25 — the command list gains `upgrade`
+
+**Date 2026-09-02.** `khub upgrade` replaces `.khub/{ontology,policy,storage}.yaml`
+and `.khub/templates/*.yaml` from the embedded preset named in `config.yaml`
+(an edited file goes to `<name>.bak` first), scaffolds what the ontology
+gained, re-installs skills, re-wires and restamps the version; `--no-schema`
+keeps `.khub/` and reports `schema_drift`. It is registered directly after
+`init`, so it is the second command in every help listing.
+
+Re-recorded: `cli-contract/{bare-invocation,help-flag,help-surface}`;
+`help-surface` gains `["upgrade", "--help"]` after `init --help`, which
+renumbers every later step and adds step 27. New: `init-wire-skills/{upgrade,
+upgrade-no-schema,upgrade-no-preset,upgrade-prose}`, and
+`init-wire-skills/skills-replace` for the `install-skills` change that landed
+with it (a skill directory is replaced, not overlaid, so files a release no
+longer ships are removed and reported as `removed`).

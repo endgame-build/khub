@@ -27,9 +27,8 @@ write atomicity).
   implemented.
 - `slug` and `type` become **reserved field names**: a type declaring an
   attribute or relation so named is rejected when the schema resolves (firm-ops declares neither).
-- Minting retries the `-N` suffix against a **fresh read under the write lock**
-  (the O_EXCL replacement); an explicit `--id` collision refuses (`slug_taken`),
-  never auto-suffixes. Both unchanged in spirit.
+- A taken slug refuses against a **fresh read under the write lock** (the
+  O_EXCL replacement), `slug_taken`, minted or explicit — nothing is suffixed.
 - design-memo:88 amendment when this ships: the globally-unique storage key is
   the file path for `file`/`folder` layouts, the `(collection-path, slug)` pair
   for collections.

@@ -19,6 +19,8 @@ $ khub --help
 ╭─ Commands ───────────────────────────────────────────────────────────────────╮
 │ init            Scaffold a workspace from a preset and wire it into the      │
 │                 agent context files.                                         │
+│ upgrade         Refresh an existing workspace: the shipped schema and        │
+│                 templates, new scaffolds, the skills, the wire block.        │
 │ status          Summarize the workspace: counts, draft/active, orphan/stale, │
 │                 OKF conformance.                                             │
 │ add             Create an entity: khub add opportunity --client initech      │
@@ -44,7 +46,7 @@ $ khub --help
 │                 [--limit 3].                                                 │
 │ validate        Validate entities: khub validate [TARGET] [--strict].        │
 │ check           Check the active graph: completeness, orphans, dangling      │
-│                 edges, strays, cycles.                                       │
+│                 edges, strays, cycles, bodies.                               │
 │ stale           List entities past the `updated` threshold, oldest first:    │
 │                 khub stale [--days N].                                       │
 │ reindex         Regenerate the OKF index.md from the graph: khub reindex     │
@@ -95,6 +97,38 @@ $ khub init --help
 
 ```
 
+## khub upgrade
+
+```console
+$ khub upgrade --help
+
+ Usage: khub upgrade [OPTIONS]
+
+ Refresh an existing workspace: the shipped schema and templates, new
+ scaffolds, the skills, the wire block.
+
+ Replaces .khub/{ontology,policy,storage}.yaml and .khub/templates/*.yaml from
+ the preset recorded in .khub/config.yaml, copying an edited file to <name>.bak
+ first; then re-reads the schema, scaffolds what the ontology gained,
+ re-installs the agent skills, re-wires the agent files, and regenerates
+ index.md. Refuses outside a workspace: ``khub init`` scaffolds, ``khub
+ upgrade`` refreshes.
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --no-schema               Keep this workspace's .khub/ files — schema and    │
+│                           templates — as they are; report what the shipped   │
+│                           ontology has that they do not.                     │
+│ --no-skill                Skip refreshing the agent skills; scaffolds, wire  │
+│                           and index only.                                    │
+│ --no-wire                 Skip re-wiring CLAUDE.md and AGENTS.md.            │
+│ --format           <str>  text confirmation (default); json emits every      │
+│                           step's outcome.                                    │
+│                           [default: text]                                    │
+│ --help                    Show this message and exit.                        │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+```
+
 ## khub status
 
 ```console
@@ -127,18 +161,19 @@ $ khub add --help
 │   TYPE      <str>  The entity type to create.                                │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 ╭─ Options ────────────────────────────────────────────────────────────────────╮
-│ --id                 <str>  Explicit slug. Without it the slug is minted     │
-│                             from name/title, or from the TYPE NAME when      │
-│                             neither is set (fragment -> 002-fragment) — so   │
-│                             pass --id for a type you do not title.           │
+│ --id                 <str>  Explicit slug (slugified). Without it the id is  │
+│                             minted from name, then title, in the type's      │
+│                             scheme (`khub schema show TYPE` names it); a     │
+│                             type with neither refuses, so pass --id for a    │
+│                             type you do not title.                           │
 │ --draft                     Mark the entity unpublished (default: active).   │
 │ --strict                    Reject fields the schema does not declare.       │
 │ --body               <str>  Body prose as a string.                          │
 │ --body-file          <str>  Read the body from a file ('-' for stdin).       │
-│ --no-template               Start with an empty body. Refused on a type that │
-│                             HAS a template, since the result would fail      │
-│                             validate; use --body to supply your own          │
-│                             sections.                                        │
+│ --no-template               Start with an empty body. Refused on a type      │
+│                             whose template has a required heading, since the │
+│                             result would fail validate; use --body to supply │
+│                             your own sections.                               │
 │ --format             <str>  text or json (emits the written record).         │
 │                             [default: text]                                  │
 │ --help                      Show this message and exit.                      │
@@ -406,7 +441,8 @@ $ khub check --help
 
  Usage: khub check [OPTIONS]
 
- Check the active graph: completeness, orphans, dangling edges, strays, cycles.
+ Check the active graph: completeness, orphans, dangling edges, strays, cycles,
+ bodies.
 
 ╭─ Options ────────────────────────────────────────────────────────────────────╮
 │ --strict               Fail the gate on orphans too (default:                │

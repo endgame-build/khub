@@ -23,11 +23,14 @@ Every input is a flag or an argument; a missing one is a usage error (exit 2), n
 
 ### Failures
 
-Every command renders a failure as one line on stderr and exits 1. Under
-`--format json` the failure is a JSON document instead —
-`{"error": {"code", "message"}}` — so an agent that asked for machine output never
-has to parse prose. A usage error (an unknown flag, a missing argument) is Click's
-exit 2 and stays plain text.
+Every refused call renders one line on stderr and exits 2: the call was
+malformed, or would have written something the schema forbids, and nothing was
+written — correct it and retry. Under `--format json` the failure is a JSON
+document instead — `{"error": {"code", "message"}}` — so an agent that asked for
+machine output never has to parse prose. A usage error (an unknown flag, a
+missing argument) is also exit 2 and stays plain text. Exit 1 is reserved for a
+gate that ran and failed (`validate`, `check`): there the workspace is what is
+wrong, not the call, and the report names what to fix.
 
 ### JSON record shape
 
@@ -41,7 +44,7 @@ khub validates the **schema-declared subset** of an entity and leaves everything
 2. **`required` is a completeness gate.** A missing required field or relation does not reject the write; the entity is still saved, active by default. Capture is never blocked. `check` enforces required-completeness over the `active` subgraph and reports an active-but-incomplete entity.
 3. **Extensions are free.** Any key the schema does not declare is accepted with any value, validated against nothing, and preserved verbatim on round-trip.
 4. **`--strict` closes the schema.** `validate --strict` (and `add`/`edit --strict`) rejects unknown keys, for when a closed contract is wanted. Run `validate --strict` in CI: by rule 3 a typo'd field name is captured silently and no default gate reports it.
-5. **Templated types hold their body shape.** When `.khub/templates/<type>.yaml` exists, `validate` requires the template's section headings in every instance body as an ordered subsequence (extras allowed) — reported as a `body` finding, never blocking a write. `check` additionally reports a `required: true` singleton whose file is absent.
+5. **Templated types hold their body shape; their body content is reported, never gated.** When a type reads a template (`.khub/templates/<stem>.yaml` — the storage `template:` name, or the type's own name), `validate` requires the template's non-optional section headings in every instance body as an ordered subsequence (extras allowed) — a `body` **error** (`body_shape`), never blocking a write — and evaluates each section's rules (`word_count`, `required_text`, `forbidden_text`, `code_blocks`): every violation is a `body` **gap** (`body_rule`), reported but never failing the gate, `--strict` included. A template that does not parse is one `template` error against the type (`<type>/*`), and that type's bodies go unjudged. `check` reports the same three: `template_invalid` and `body_shape` fail it, `body_rule` lands in the informational `thin` list. `check` additionally reports a `required: true` singleton whose file is absent. See "Body templates" below.
 
 ### Write semantics
 
@@ -51,8 +54,8 @@ The write verbs (`add`, `edit`, `link`, `unlink`, `remove`) reject malformed inp
 - **An ambiguous bare target is rejected**: when a slug names entities of two types, qualify it as `type/slug`.
 - **Malformed dates and booleans are rejected** on write (a non-ISO date, a non-boolean for a `bool` field).
 - **A self-link is rejected**: an entity cannot link to itself.
-- **Without `--id`**, the slug is minted from `name`, then `title`, and falls back to the **type name** when neither carries a value — `khub add fragment --stage raw` mints `002-fragment`. That fallback is deliberate, so capture is never blocked on naming something. It does mean a type you never title produces ids that carry no information (`repo`, `repo-2`), and those are the keys every later `link` and `get` must use: **pass `--id` for a type you do not title.**
-- **An explicit `--id` that collides** with an existing entity of the type is rejected (minting auto-suffixes; an explicit id does not).
+- **Without `--id`**, the id is minted from `name`, then `title`, in the type's scheme (`<prefix>-<YYYY-MM-DD>-<slug>`, each part optional per type — `khub schema show <type>` prints it as `id_shape`; see [Ids](schema.md#ids-id_prefix-id_date-in-storage)). Minting reads no siblings, so it never races across branches. A type with neither `name` nor `title` **refuses** (`no_slug_source`): there is no type-name fallback any more, so **pass `--id` for a type you do not title.** A by-value `id_prefix` whose deciding attribute is unset refuses too (`id_prefix_undecided`, naming the flag).
+- **A slug already taken is rejected, minted or explicit** — nothing is ever auto-suffixed. The same title mints the same id, so the refusal names the way out: `pass --id <slug> to name this one differently`.
 - **An over-long slug is rejected.**
 
 `link` and `unlink` are idempotent and report the no-op rather than pretend to act:
@@ -70,14 +73,21 @@ A type stores its entities as `md` (the default: YAML frontmatter + prose body),
 
 `layout: collection` stores every entity of a type as a row in ONE file (`format: json|jsonl|yaml`; `path` names the file, default `{type}.{format}`, and the format may be derived from the path's extension). Row identity: yaml/json collections are mappings keyed by slug; jsonl rows carry a reserved `slug` key. Rows may omit `type` (the schema binding supplies it; a disagreeing `type` makes the row a stray, reported as `path#slug`). Every verb and gate works on rows; `add`/`get`/`edit` JSON records additionally carry `locator: "path#slug"`, and `get --format raw` prints only the row. Writes are serialized by a per-type lock under `.khub/generated/locks/` (gitignored via `.khub/generated/`) and land via an atomic replace; a crash never leaves a torn file. A missing or empty collection file is zero entities; any bad row makes the whole file malformed: no rows load, writes to the type refuse, and derivative dangling reports are suppressed into the malformed finding (`check` emits `suppressed_dangling`). Git semantics: `stale` judges a row only on its own `updated` (undated rows are skipped, never given the file's commit date); `backfill` skips collection types and says so. See `docs/collections-design.md` for the full contract.
 
+### Body templates
+
+`.khub/templates/<stem>.yaml` is a per-type body contract, read only by per-item and singleton `md` types (a `template:` name in storage picks the stem; `template: false` opts out). Top-level keys: `title`, `hint` (leads the scaffolded body as a `<!-- -->` comment), `sections`, `lenses`. `sections: []` declares no heading contract; a missing key is an error. Each section takes `heading` (required), `hint` (scaffolded as a comment), `text` (scaffolded literally), `optional` (scaffolded like any other, never required — and when absent, none of its rules are evaluated), `word_count: {min, max}`, `required_text` and `forbidden_text` (lists of literals, matched case-insensitively, or `{pattern: <regex>}`), and `code_blocks: [{lang, min, max}]` (a rule with neither bound is refused; `lang` absent counts every fenced block). `repeat`, `pattern`, `images`, `lists`, `tables`, `min_tokens`, `max_tokens`, `budget` are reserved and refused rather than ignored. Rules read prose only — HTML comments and fenced code are blanked — an empty section is skipped unless it holds a fenced block, and each CJK character counts as one word. Headings match as an ordered subsequence: a declared heading is a prefix of some body H2 (leading `1.`/`2)` numbering stripped, up to three spaces of indent allowed), a `##` inside a comment or a fence is not a heading, and an unmatched heading does not advance the cursor. A template's own scaffold satisfies every rule it declares.
+
+`lenses` is a list of review prompts khub never answers — `{code, instruction, name?, section?, when?, after?}`. `when: {<field>: <value> | [<values>]}` limits a lens to entities whose frontmatter, with schema defaults resolved in, carries one of the values (compared as the scalars would be written to disk, so a bool meets a bool and a date meets its ISO string); the field must be one the type declares. `section` must name a declared heading. `after` names the lens codes this one follows; lenses are emitted in declaration order adjusted so every `after` holds (a cycle, an unknown code, a repeated code and an unknown key are all `template_invalid`). Findings: `body_shape` (a non-optional heading missing or out of order) is an error in `validate` and fails `check`; `body_rule` (`'## <heading>' <complaint>`) is a gap in `validate` and `thin` in `check` — reported, never gating.
+
 ## Workspace
 
 | Command | Args and options | Returns / does |
 |---|---|---|
-| `khub init <preset> [path=.]` | `--preset-source <path>`, `--name <name>`, `--force`, `--no-wire`, `--format <text\|json>` (json emits resolved provenance) | scaffold a workspace from a preset directory (`{ontology,policy,storage}.yaml` + `templates/`), copy templates to `.khub/templates/`, create missing md singletons from their templates (creations only), then wire the selected agent files. `--no-wire` skips the tail. Prints the `khub install-skills` hint (`skill_hint` in the JSON payload); installs nothing. Re-running over an existing workspace preserves anything workspace-owned (`.khub/{ontology,policy,storage}.yaml`, `.khub/config.yaml`, `.khub/templates/*.yaml`) and reports it as `preserved`; only genuinely missing files are recreated. Refreshing from a newer preset is an upgrade, not a scaffold |
+| `khub init <preset> [path=.]` | `--preset-source <path>`, `--name <name>`, `--force`, `--no-wire`, `--format <text\|json>` (json emits resolved provenance) | scaffold a workspace from a preset directory (`{ontology,policy,storage}.yaml` + `templates/`), copy templates to `.khub/templates/`, create missing md singletons from their templates (creations only), wire the selected agent files, then write `index.md` (reported as `index`: `created`/`updated`/`unchanged`, or `index_error` with a stderr `index skipped:` note when the scan holds malformed files). `--no-wire` skips the wire tail. Prints the `khub install-skills` hint (`skill_hint` in the JSON payload); installs nothing. Re-running over an existing workspace preserves anything workspace-owned (`.khub/{ontology,policy,storage}.yaml`, `.khub/config.yaml`, `.khub/templates/*.yaml`) and reports it as `preserved`; only genuinely missing files are recreated. Refreshing from a newer preset is `khub upgrade`, not a scaffold |
+| `khub upgrade` | `--no-schema`, `--no-skill`, `--no-wire`, `--format <text\|json>` | bring an existing workspace up to the khub on PATH. Replaces `.khub/{ontology,policy,storage}.yaml` and `.khub/templates/*.yaml` from the preset recorded in `.khub/config.yaml` (an edited file is copied to `<name>.bak` first; a file the workspace never had is `created` with no backup; an unchanged file is not reported), restamps the config `version`, re-reads the schema, scaffolds directories and singletons the ontology gained, then re-installs the skills, re-wires the agent files and regenerates `index.md` — each tail non-fatal, reported as `skills_error`/`wire_error`/`index_error`. `--no-schema` keeps `.khub/` as it is and reports `schema_drift` (shipped types the workspace ontology lacks). Refuses outside a workspace (`no_workspace`) or in one whose config records no preset (`no_preset`). JSON: `{path, preset, version_from, version_to, config: [{name, action, backup}], singletons_created, schema_drift, skills, wire, index}` |
 | `khub schema` | `--format` | the full effective schema: types, fields, enums, relations, layout/format/nesting per type, and provenance (source preset + version) |
 | `khub schema types` | `--format` | type list (view of the above) |
-| `khub schema show <type>` | `--format` | one type's fields, enums, required, relations, layout, and `when` — the moment to capture it (view) |
+| `khub schema show <type>` | `--format` | one type's fields, enums, required, relations, layout, id scheme (`id_prefix`, `id_date`, and the rendered `id_shape` — `ad-YYYY-MM-DD-slug`; `null` on a singleton), and `when` — the moment to capture it (view) |
 | `khub schema edges` | `--format` | the relation vocabulary (view) |
 | `khub schema base` | `--format` | the effective base block every type inherits — embedded in the binary since the layer split, so no workspace file carries it (view) |
 | `khub status` | `--format` | counts per type, draft vs active, orphan and stale counts, OKF-conformance flag (projectable-to-OKF) |
@@ -86,7 +96,7 @@ A type stores its entities as `md` (the default: YAML frontmatter + prose body),
 
 | Command | Args and options | Does |
 |---|---|---|
-| `khub add <type>` | `--<field> <value>` (repeatable; schema or extension), `--id <slug>`, `--draft`, `--body <text>`, `--body-file <path>` (`-` for stdin; not both), `--no-template` (refused on a type that has a template — it would create an entity `validate` rejects), `--strict`, `--format text\|json` (emits the written record) | mint an id — `<prefix>-NNN-<slug>` where the type declares `id_prefix`, else `NNN-<slug>`; an explicit `--id` is used verbatim — write a well-formed entity (active by default; `--draft` marks it unpublished); a templated md type seeds its body from `.khub/templates/<type>.yaml`; a singleton's slug is its type name; print its id |
+| `khub add <type>` | `--<field> <value>` (repeatable; schema or extension), `--id <slug>`, `--draft`, `--body <text>`, `--body-file <path>` (`-` for stdin; not both), `--no-template` (start with an empty body; refused on a type whose template has a required heading, since the result would fail `validate` — use `--body` to supply your own sections), `--strict`, `--format text\|json` (emits the written record) | mint an id from `name`/`title` — `<prefix>-<YYYY-MM-DD>-<slug>`, prefix and date each per the type's `id_prefix`/`id_date`; an explicit `--id` is slugified and used as given; a taken slug refuses — write a well-formed entity (active by default; `--draft` marks it unpublished); a templated md type seeds its body from `.khub/templates/<type>.yaml`; a singleton's slug is its type name; print its id |
 | `khub get <id>` | `--format json\|table\|raw`, `--edges` | print an entity; `--edges` includes derived inverse edges |
 | `khub edit <id> <field> <value>` | or `--<field> <value>` (repeatable), `--body <text>` (`''` clears) / `--body-file` (not both), `--strict`, `--format text\|json` (emits the updated record) | edit fields, bump `updated`, re-validate |
 | `khub remove <id>` | `--force`, `--format text\|json` (emits the removed record) | delete an entity; refuses while an inbound edge resolves to it, unless `--force` |
@@ -112,9 +122,119 @@ A type stores its entities as `md` (the default: YAML frontmatter + prose body),
 
 | Command | Args and options | Does |
 |---|---|---|
-| `khub validate [target=all]` | `--strict`, `--format` | per-entity well-formedness and referential integrity over the declared subset (default: whole workspace). Never writes — repairing a missing date is `khub backfill` |
-| `khub check` | `--strict`, `--format` | graph-wide: relations resolve, required-completeness for `active`, no stray files (non-entities inside a type layout), no stray templates (`.khub/templates/*.yaml` no type claims — the renamed-template case, which would otherwise silently disable scaffolding and the body contract; a `template: false` type claims its conventional stem, so the opted-out file is not a finding), no missing declared templates (a storage `template:` name whose file does not exist — `missing_templates`; the same hole from the claiming side, kept a `check` finding so a broken link never blocks capture), no misplaced entities (a file outside every layout whose frontmatter names a declared type — reference docs carrying no `type`, or an unknown one, are still skipped), no edge cycles. Orphans (zero relations) are always reported but fail the gate only under `--strict`: a fully disconnected entity can be legitimate (a dormant client whose engagements were archived). A type declaring `orphan: true` in the schema is exempt from the sweep entirely — edge-less is its expected state, so it is never reported and never fails `--strict` (build-hub's narrative singletons declare it; without it a freshly scaffolded workspace could not pass `--strict` at all). The same rule governs `query --orphan` and the `status` orphan count. `--format json` reports `strict` so a consumer can tell an informational orphan list from the reason the gate failed. Singletons are reported in two disjoint lists: `missing_singletons` (a `required: true` type with no file) and `draft_singletons` (any singleton present but unpublished — including a non-required one, which otherwise leaves the active subgraph with no signal at all). Only `draft_required_singletons`, the subset of the latter, fails the gate |
+| `khub validate [target=all]` | `--strict`, `--format` | per-entity well-formedness and referential integrity over the declared subset (default: whole workspace). JSON `{count, errors, gaps, body, lenses}`: `errors` alone gate (exit 1); `gaps` are body-rule findings (`'## <heading>' <complaint>`), reported and never gating; `body` (`{words, sections: [{heading, words}]}`, prose word counts with comments and fenced code excluded) and `lenses` (`[{code, name, section, instruction}]`, the review prompts that apply, in template order) are filled only for a single `type/slug` target of a templated md type — `null` and `[]` otherwise. Text: `<id>: <field>: <reason>` per error, `<id>: - <field>: <reason>` per gap, then `Validated N entities; E errors, G gaps`, then `Body: N words (Heading n, …)` and one `Lens <code> [## <section>]: <name>` per lens with its instruction indented two spaces beneath. Never writes — repairing a missing date is `khub backfill` |
+| `khub check` | `--strict`, `--format` | graph-wide: relations resolve, required-completeness for `active`, no stray files (non-entities inside a type layout), no stray templates (`.khub/templates/*.yaml` no type claims — the renamed-template case, which would otherwise silently disable scaffolding and the body contract; a `template: false` type claims its conventional stem, so the opted-out file is not a finding), no missing declared templates (a storage `template:` name whose file does not exist — `missing_templates`; the same hole from the claiming side, kept a `check` finding so a broken link never blocks capture), no misplaced entities (a file outside every layout whose frontmatter names a declared type — reference docs carrying no `type`, or an unknown one, are still skipped), no edge cycles. Orphans (zero relations) are always reported but fail the gate only under `--strict`: a fully disconnected entity can be legitimate (a dormant client whose engagements were archived). A type declaring `orphan: true` in the schema is exempt from the sweep entirely — edge-less is its expected state, so it is never reported and never fails `--strict` (build-hub's narrative singletons declare it; without it a freshly scaffolded workspace could not pass `--strict` at all). The same rule governs `query --orphan` and the `status` orphan count. `--format json` reports `strict` so a consumer can tell an informational orphan list from the reason the gate failed. Singletons are reported in two disjoint lists: `missing_singletons` (a `required: true` type with no file) and `draft_singletons` (any singleton present but unpublished — including a non-required one, which otherwise leaves the active subgraph with no signal at all). Only `draft_required_singletons`, the subset of the latter, fails the gate. Bodies are read too, over every templated md type: `template_invalid` (a template that exists but does not parse — one row per type, `{id: "<type>/*", type, slug: "*", reason}`) and `body_shape` (a non-optional heading missing or out of order, `{id, type, slug, reason}`) fail the gate; `thin` (a section rule the prose does not satisfy, same shape) is informational — never consulted by `passed`, `--strict` included — and is the last JSON key, after `strict`. Text prints `template_invalid <type>/*: <reason>` and `body_shape <id>: <reason>` after the declared-template lines, and `thin <id>: <reason>` last (`… (informational)` before `Graph check passed` on the passing path) |
 | `khub stale` | `--days <n>` (default: the workspace `stale_days`, 90 in firm-ops), `--format` | entities past an `updated` threshold; dates backfilled from `git log` |
+
+### Reading check output
+
+Every finding carries a stable location — the `field` on a `validate` row, the bucket on a `check` payload. Other tools key on these, so they do not change without a release note. The body findings are defined under [Body templates](#body-templates).
+
+| finding | severity | in `validate` | in `check` | what it means, and what to do |
+|---|---|---|---|---|
+| `frontmatter` | error | yes | `malformed` | the file's frontmatter could not be parsed (a broken fence, unparseable YAML); the rest of the workspace still resolves — fix the file |
+| `id` | error | yes | no | the slug disagrees with the id scheme its type declares: no prefix this type mints, a prefix that disagrees with the deciding attribute, no date on an `id_date` type, or the retired `NNN-` ordinal — the message names the shape; `git mv` the file, then fix references to it |
+| `<attribute>` | error | yes | no | an enum, `pattern`, scalar-type or empty-string violation (`'x' is not a valid kind (a, b)`, `'x' does not match the pattern for repo (…)`, `'x' is not a valid date for as_of`, `kind is empty; omit the field or write null, not ''`) — `khub schema show <type>` shows what is allowed |
+| `<predicate>` cardinality | error | yes | no | `single-valued relation has multiple values` — `unlink` the extra |
+| `<predicate>` dangling | error | yes | `dangling` | `no <type> '<x>' to satisfy relation '<predicate>'` — create the target, or `unlink` |
+| `<predicate>` ambiguous | error | yes | no | `'<x>' is ambiguous — qualify as type/slug (candidates: …)` — a hand-written bare slug naming entities of two types; the write path already refuses it |
+| `<key>` undeclared | error under `--strict` | yes | no | `undeclared key rejected under --strict` — a typo, or drop it; without `--strict` it is a free extension nothing reports |
+| `template` (`template_invalid`) | error | yes | `template_invalid` | the type's template does not parse; the message names the key. One row per type (`<type>/*`) — that type's bodies go unjudged until it is fixed, and `add` seeds an empty body |
+| `body` (`body_shape`) | error | yes | `body_shape` | a non-optional `##` heading is missing or out of declared order — `missing or out-of-order section '## X' (template x.yaml requires its headings in order)` |
+| `body` (`body_rule`) | gap | yes, in `gaps` | `thin` | a section rule is unmet — `'## X' 4 words of prose, at least 15 asked for`, `'## X' says nothing matching 'we chose'`, `'## X' uses /\btbd\b/`, `'## X' 0 mermaid block(s), at least 1 asked for`. Never fails a gate, `--strict` included |
+| self-link | refused on write | no | no | `add`/`link` refuse an entity linking to itself (exit 2); a hand-authored one resolves and passes, which is one reason writes go through the CLI |
+| `strays` | error | no | yes | a file inside a type layout whose `type:` disagrees (a collection row reports as `path#slug`); it is not in the graph at all |
+| `stray_templates` | error | no | yes | a `.khub/templates/*.yaml` no type claims — usually a renamed template; rename it back or point a storage `template:` at it |
+| `missing_templates` | error | no | yes | a storage `template:` name whose file does not exist |
+| `misplaced` | error | no | yes | Markdown outside every layout whose frontmatter names a declared type — no command can see it; move it under the layout the row names as `expected` |
+| `cycles` | error | no | yes | a cycle over a predicate declared `acyclic` — `unlink` one edge |
+| `missing_singletons` | error | no | yes | a `required: true` singleton has no file — `khub init` or `khub upgrade` scaffolds it |
+| `draft_singletons` | gap; error for `draft_required_singletons` | no | yes | a singleton present but `draft: true`; only a required one fails the gate — `edit <type> draft false` publishes |
+| `incomplete` | error | no | yes | an active entity with a required field or relation empty (`missing_fields`, `missing_relations`) — legal to write, wrong to publish; fill it, or `edit <id> draft true` |
+| `orphans` | gap; error under `--strict` | no | yes | no relation in or out; a type declaring `orphan: true` is exempt and never listed |
+| `thin` | informational | no | yes | the corpus-wide `body_rule` gaps, `{id, type, slug, reason}`; never affects `passed` |
+
+**Exit codes.** `0` clean · `1` the gate failed · `2` a refusal or a usage error. `check` returns 0 when only gaps remain, which is what makes it safe to run on every commit; `--strict` makes orphans fail too — and only orphans. `body_rule` stays informational under `--strict` on purpose: otherwise every rule a template gained would turn a green corpus red on upgrade, and nobody would declare one.
+
+### Payload shapes
+
+**`khub validate --format json`** — `{count, errors, gaps, body, lenses}`. `field` is the frontmatter key at fault, which is what a caller has to act on. The exit code follows `errors` alone; `body` and `lenses` are populated only when `validate` was given a single `<type>/<slug>` of a templated md type, and are `null` / `[]` otherwise — a whole-corpus run would put hundreds of section counts and a repeated checklist in front of someone who asked about one file.
+
+```json
+{
+  "count": 1,
+  "errors": [
+    {
+      "id": "repo/rp-001-api",
+      "type": "repo",
+      "slug": "rp-001-api",
+      "field": "id",
+      "reason": "slug uses the retired '001-' ordinal scheme; this type mints rp-slug — `git mv` the file to drop the ordinal, then fix references to it"
+    }
+  ],
+  "gaps": [
+    {
+      "id": "adr/ad-2026-01-15-use-postgres",
+      "type": "adr",
+      "slug": "ad-2026-01-15-use-postgres",
+      "field": "body",
+      "reason": "'## Decision' 4 words of prose, at least 15 asked for"
+    }
+  ],
+  "body": {
+    "words": 8,
+    "sections": [{"heading": "Context", "words": 4}, {"heading": "Decision", "words": 4}]
+  },
+  "lenses": [
+    {
+      "code": "alternatives",
+      "name": "A real alternative, not a strawman",
+      "section": null,
+      "instruction": "A decision with one option on the table is a description, not a decision. …"
+    }
+  ]
+}
+```
+
+**`khub check --format json`** — gate on `passed`, or on the exit code. `incomplete` rows carry `{id, type, slug, missing_fields, missing_relations}`; `dangling` `{id, type, slug, predicate, target}`; `misplaced` `{path, type, expected}`; `template_invalid`, `body_shape` and `thin` `{id, type, slug, reason}` (a `template_invalid` row's id is `<type>/*`). `thin` comes last, after `strict`, because it is the one bucket that never affects `passed`.
+
+```json
+{
+  "passed": false,
+  "incomplete": [],
+  "orphans": ["requirement/req-settle-within-300ms", "repo/rp-api"],
+  "dangling": [
+    {
+      "id": "requirement/req-settle-within-300ms",
+      "type": "requirement",
+      "slug": "req-settle-within-300ms",
+      "predicate": "realized_in",
+      "target": "cmp-public-api"
+    }
+  ],
+  "strays": [],
+  "stray_templates": [],
+  "missing_templates": [],
+  "template_invalid": [],
+  "body_shape": [],
+  "misplaced": [],
+  "malformed": [],
+  "cycles": [],
+  "suppressed_dangling": 0,
+  "missing_singletons": [],
+  "draft_singletons": [],
+  "draft_required_singletons": [],
+  "strict": false,
+  "thin": [
+    {
+      "id": "adr/ad-2026-01-15-use-postgres",
+      "type": "adr",
+      "slug": "ad-2026-01-15-use-postgres",
+      "reason": "'## Decision' 4 words of prose, at least 15 asked for"
+    }
+  ]
+}
+```
 
 ## Projection and output
 
@@ -124,8 +244,8 @@ A type stores its entities as `md` (the default: YAML frontmatter + prose body),
 | `khub viz` | `--out <file.html=viz.html>`, `--open`, `--type <t>` | self-contained Cytoscape HTML over the typed graph |
 | `khub backfill` | `--type <t>`, `--dry-run` | add missing frontmatter and dates from `git log` |
 | `khub wire` | `--target <claude\|agents\|both>`, `--dry-run` | inject a managed khub block into the workspace's agent files. Bare `wire` writes both `CLAUDE.md` and `AGENTS.md`, creating either that is missing; `--target` creates a specific file. `CLAUDE.md` gets `@.khub/{ontology,policy,storage}.yaml` imports; `AGENTS.md` (no import directive) gets schema pointers. Both carry the command surface, so an agent reasons in the workspace ontology even without running khub. Idempotent, minimal-diff |
-| `khub install-skills` | `--target <claude\|agents\|opencode>` (repeatable), `--skill <name>` (repeatable), `--global`, `--dry-run`, `--format` | copy khub's agent skills (`khub`, `setup`) out of the installed package into the local skill directories. No network, no Node — the skills are package data. Default targets are `.claude/skills/`, `.agents/skills/`, and `.opencode/skills/` under the workspace; `--global` writes the home equivalents (`~/.claude/skills/`, `~/.agents/skills/`, `~/.config/opencode/skills/`) instead. Idempotent: every file is compared first and reported `created`/`updated`/`unchanged`, so a re-run after upgrading khub re-syncs the copies. Project scope also gitignores the three directories (the copies are reproducible from the CLI). An installed copy is managed — edits belong in the repo's `skills/`, not in the installed file |
+| `khub install-skills` | `--target <claude\|agents\|opencode>` (repeatable), `--skill <name>` (repeatable), `--global`, `--dry-run`, `--format` | copy khub's agent skills (`khub`, `setup`) out of the installed package into the local skill directories. No network, no Node — the skills are package data. Default targets are `.claude/skills/`, `.agents/skills/`, and `.opencode/skills/` under the workspace; `--global` writes the home equivalents (`~/.claude/skills/`, `~/.agents/skills/`, `~/.config/opencode/skills/`) instead. Idempotent: every file is compared first and reported `created`/`updated`/`unchanged`, so a re-run after upgrading khub re-syncs the copies. Each skill directory is replaced, not overlaid: a file under it that khub no longer ships is reported `removed` and deleted (a `--dry-run` reports it and deletes nothing), so a release that renames or drops a file does not leave the old copy beside the new one for the agent to read both. Project scope also gitignores the three directories (the copies are reproducible from the CLI). An installed copy is managed — edits belong in the repo's `skills/`, not in the installed file |
 
-`khub init` runs `wire` as a tail. Installing the agent skill is a separate command, `khub install-skills` — until 0.9.0 it was a second init tail, which made scaffolding depend on Node and on SSH access to the skill repo.
+`khub init` runs `wire` and the index write as tails; `khub upgrade` runs `install-skills`, `wire` and the index write as tails. Installing the agent skill is a separate command, `khub install-skills` — until 0.9.0 it was a second init tail, which made scaffolding depend on Node and on SSH access to the skill repo.
 
 *Planned verbs (not yet shipped): `path`, `build`, `export --okf`, `diff-preset`, `rename`. See the repo for status.*
