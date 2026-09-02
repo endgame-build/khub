@@ -7,6 +7,7 @@
 │ requirement    │ 1     │
 │ adr            │ 0     │
 │ component      │ 1     │
+│ repo           │ 0     │
 │ feature-spec   │ 0     │
 │ draft / active │ 0 / 4 │
 │ orphan         │ 0     │

@@ -1,1 +1,1 @@
-{"id": "requirement/fr-001-auth-required", "type": "requirement", "slug": "fr-001-auth-required", "predicate": "realized_in", "target": "cmp-001-api", "changed": true}
+{"id": "requirement/req-auth-required", "type": "requirement", "slug": "req-auth-required", "predicate": "realized_in", "target": "cmp-api", "changed": true}

@@ -1,1 +1,1 @@
-Linked fr-001-auth-required --realized_in--> cmp-001-api
+Linked req-auth-required --realized_in--> cmp-api
