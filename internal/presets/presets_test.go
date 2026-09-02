@@ -90,14 +90,18 @@ func TestUnknownPresetSourceResolvesNothing(t *testing.T) {
 }
 
 func TestTemplatesShipPerPreset(t *testing.T) {
-	// test_build_lite.test_four_templates_ship: prd, arc42, adr and
-	// feature-spec carry a heading contract; requirement and component
-	// deliberately do not. firm-ops ships none at all.
+	// kb test_every_shipped_template_parses: every build-lite md type ships a
+	// template — prd, arc42, adr and feature-spec carry a heading contract;
+	// requirement (`sections: []`), component and repo (optional sections
+	// only) carry a hint and lenses instead. firm-ops ships none at all.
 	for _, tc := range []struct {
 		preset string
 		want   []string
 	}{
-		{"build-lite", []string{"adr.yaml", "arc42.yaml", "feature-spec.yaml", "prd.yaml"}},
+		{"build-lite", []string{
+			"adr.yaml", "arc42.yaml", "component.yaml", "feature-spec.yaml",
+			"prd.yaml", "repo.yaml", "requirement.yaml",
+		}},
 		{"firm-ops", nil},
 	} {
 		var got []string
@@ -108,8 +112,10 @@ func TestTemplatesShipPerPreset(t *testing.T) {
 			t.Errorf("%s templates = %v, want %v", tc.preset, got, tc.want)
 		}
 	}
-	if n := len(Templates("build-hub", Embedded())); n != 15 {
-		t.Errorf("build-hub templates = %d, want 15", n)
+	// Sixteen of build-hub's seventeen md types: component gained one with the
+	// kb port; entity alone stays a frontmatter-shaped record with no body contract.
+	if n := len(Templates("build-hub", Embedded())); n != 16 {
+		t.Errorf("build-hub templates = %d, want 16", n)
 	}
 }
 
@@ -166,14 +172,14 @@ func TestBuildLitePreset(t *testing.T) {
 	s := resolvePreset(t, "build-lite")
 	singletons := []string{"prd", "arc42"}
 
-	assertTypeSet(t, s, []string{"prd", "arc42", "requirement", "adr", "component", "feature-spec"})
-	// The fourteen build-hub types lite drops are absent, not renamed.
+	assertTypeSet(t, s, []string{"prd", "arc42", "requirement", "adr", "component", "repo", "feature-spec"})
+	// The thirteen build-hub types lite drops are absent, not renamed.
 	cut := []string{
 		"roadmap", "glossary", "erd", "capability", "pdr", "boundary",
-		"quality-attribute", "domain", "entity", "repo", "contract",
+		"quality-attribute", "domain", "entity", "contract",
 		"baseline", "test-spec", "work-package",
 	}
-	if len(cut) != 14 {
+	if len(cut) != 13 {
 		t.Fatalf("cut list drifted: %d", len(cut))
 	}
 	for _, name := range append(cut, "external-system") {
@@ -181,11 +187,11 @@ func TestBuildLitePreset(t *testing.T) {
 			t.Errorf("cut type %s is back", name)
 		}
 	}
-	// Four predicate names beyond the universal four; five declarations
+	// Five predicate names beyond the universal four; six declarations
 	// (supersedes is declared on both adr and feature-spec).
-	assertPredicates(t, s, []string{"affects", "realized_in", "requirements", "supersedes"})
-	if n := countDeclarations(s); n != 5 {
-		t.Errorf("declarations = %d, want 5", n)
+	assertPredicates(t, s, []string{"affects", "realized_in", "repo", "requirements", "supersedes"})
+	if n := countDeclarations(s); n != 6 {
+		t.Errorf("declarations = %d, want 6", n)
 	}
 
 	// Two narrative docs; prd is the required one — check fails without it.
@@ -211,7 +217,7 @@ func TestBuildLitePreset(t *testing.T) {
 	}
 	assertPath(t, s, "prd", "knowledge/prd.md")
 	assertPath(t, s, "arc42", "knowledge/arc42.md")
-	for _, name := range []string{"requirement", "adr", "component", "feature-spec"} {
+	for _, name := range []string{"requirement", "adr", "component", "repo", "feature-spec"} {
 		if typeOf(t, s, name).Orphan {
 			t.Errorf("%s opts out of the orphan sweep", name)
 		}
@@ -221,7 +227,7 @@ func TestBuildLitePreset(t *testing.T) {
 	}
 
 	// boundary and quality-attribute collapse into requirement.kind.
-	assertEnum(t, s, "requirement", "kind", []string{"functional", "constraint", "business-rule"})
+	assertEnum(t, s, "requirement", "kind", []string{"functional", "non-functional", "constraint", "business-rule"})
 	if !attr(t, s, "requirement", "kind").Required {
 		t.Error("requirement.kind is not required")
 	}
@@ -229,18 +235,30 @@ func TestBuildLitePreset(t *testing.T) {
 	if !reflect.DeepEqual(realized.Targets, []string{"component"}) || !realized.Many {
 		t.Errorf("requirement.realized_in = %v many=%v", realized.Targets, realized.Many)
 	}
-	// component carries the ownership boundary; repo is a plain attribute.
+	// component carries the ownership boundary; repo is an optional edge to
+	// the registry (an external has none).
 	assertEnum(t, s, "component", "kind", []string{"service", "library", "external"})
 	if !attr(t, s, "component", "kind").Required {
 		t.Error("component.kind is not required")
 	}
-	if a := attr(t, s, "component", "repo"); a.BaseType != "text" || a.Required {
-		t.Errorf("component.repo = %s required=%v", a.BaseType, a.Required)
+	if typeOf(t, s, "component").Attributes.Has("repo") {
+		t.Error("component.repo is still a text attribute")
 	}
-	for _, p := range []string{"repo", "consumes"} {
-		if typeOf(t, s, "component").Relations.Has(p) {
-			t.Errorf("component declares relation %s", p)
-		}
+	if r := relation(t, s, "component", "repo"); !reflect.DeepEqual(r.Targets, []string{"repo"}) || r.Many || r.Required {
+		t.Errorf("component.repo = %v many=%v required=%v", r.Targets, r.Many, r.Required)
+	}
+	if typeOf(t, s, "component").Relations.Has("consumes") {
+		t.Error("component declares relation consumes")
+	}
+	// repo is the codebase registry: name, status, and a title to mint from.
+	assertPath(t, s, "repo", "knowledge/repos")
+	if a := attr(t, s, "repo", "repo"); a.BaseType != "text" || !a.Required ||
+		a.Pattern == nil || *a.Pattern != `^[a-z0-9._-]+(/[a-z0-9._-]+)+$` {
+		t.Errorf("repo.repo = %s required=%v pattern=%v", a.BaseType, a.Required, a.Pattern)
+	}
+	assertEnum(t, s, "repo", "status", []string{"active", "archived"})
+	if !attr(t, s, "repo", "status").Required || !attr(t, s, "repo", "title").Required {
+		t.Error("repo.status / repo.title are not both required")
 	}
 	// adr is the only decision type; affects is the blast-radius query.
 	assertEnum(t, s, "adr", "status", []string{"proposed", "accepted", "rejected"})

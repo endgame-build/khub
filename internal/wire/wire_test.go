@@ -15,6 +15,7 @@ import (
 	"testing"
 
 	"github.com/endgame-build/khub/internal/errs"
+	"github.com/endgame-build/khub/internal/reindex"
 	"github.com/endgame-build/khub/internal/workspace"
 )
 
@@ -338,8 +339,8 @@ func TestGoldenWiredFiles(t *testing.T) {
 	ws := freshWS(t, "build-lite")
 	mustWire(t, ws, Options{})
 	want := map[string]string{
-		"CLAUDE.md": "41753eb0fe728d9cde122836db47813f5ee745a55b43979936c0fed7bd19f46a",
-		"AGENTS.md": "06259d04e5d26e25a423ea3c02f69a388551c114df623525f643ab926ad88c02",
+		"CLAUDE.md": "ad5fa175025dbe625a4efd60b5b5d2df58f698e70effd2e9739b70c8b2e05081",
+		"AGENTS.md": "2079da519a27331186386565e9fc83d1a2041050472e407d526f1d1434016b11",
 	}
 	for name, digest := range want {
 		sum := sha256.Sum256([]byte(read(t, filepath.Join(ws, name))))
@@ -364,7 +365,8 @@ func TestGoldenWiredFiles(t *testing.T) {
 func TestGoldenInitWireTailTree(t *testing.T) {
 	// parity/cases/init-wire-skills/init-wire-tail: the whole scaffold plus the
 	// wire tail init runs (claude AND agents, explicitly — not the bare form),
-	// checked against the recorded manifest.
+	// then the index tail (internal/cli/init.go indexTail), checked against the
+	// recorded manifest.
 	t.Setenv("KHUB_PARITY_NOW", "2026-01-15")
 	ws := filepath.Join(t.TempDir(), "ws")
 	if err := os.MkdirAll(ws, 0o777); err != nil {
@@ -377,6 +379,9 @@ func TestGoldenInitWireTailTree(t *testing.T) {
 	wired := mustWire(t, res.Path, Options{Claude: true, Agents: true})
 	if !reflect.DeepEqual(actionList(wired), []string{"created", "created"}) {
 		t.Errorf("wire tail actions = %v", actionList(wired))
+	}
+	if _, err := reindex.Reindex(res.Path, false); err != nil {
+		t.Fatalf("Reindex: %v", err)
 	}
 	assertManifest(t, ws, "init-wire-tail")
 }

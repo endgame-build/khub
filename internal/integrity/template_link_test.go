@@ -59,8 +59,8 @@ func TestDeclaredTemplateSharedAndEnforced(t *testing.T) {
 	root := templateLinkWS(t, true)
 	// Both declaring types are held to the shared contract; the opted-out one
 	// is not, even though nothing named for it exists either.
-	writeRaw(t, root, "pdrs/001-a.md", "---\ntype: pdr\ntitle: A\ncreated: 2026-01-01\n---\n\n## Context\n")
-	writeRaw(t, root, "memos/001-m.md", "---\ntype: memo\ntitle: M\ncreated: 2026-01-01\n---\n\nfreeform\n")
+	writeRaw(t, root, "pdrs/a.md", "---\ntype: pdr\ntitle: A\ncreated: 2026-01-01\n---\n\n## Context\n")
+	writeRaw(t, root, "memos/m.md", "---\ntype: memo\ntitle: M\ncreated: 2026-01-01\n---\n\nfreeform\n")
 	report, err := Validate(root, nil, false)
 	if err != nil {
 		t.Fatal(err)

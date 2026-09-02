@@ -153,7 +153,8 @@ func TestCollectionGetReturnsTheRow(t *testing.T) {
 	}
 }
 
-// a second add mints past the taken slug; an explicit --id collision refuses.
+// a row mints from its title like any entity; a repeated title and an explicit
+// --id collision both refuse — nothing is suffixed, the in-lock read gates it.
 func TestCollectionMintAndCollision(t *testing.T) {
 	ws := collectionWS(t)
 	_, err := Create(ws, "repo", CreateOpts{
@@ -161,15 +162,23 @@ func TestCollectionMintAndCollision(t *testing.T) {
 	requireNoError(t, err)
 
 	minted, err := Create(ws, "repo", CreateOpts{
-		Fields: fields("repo", "endgame-build/x", "status", "active"), UseTemplate: true})
+		Fields: fields("title", "X", "repo", "endgame-build/x", "status", "active"), UseTemplate: true})
 	requireNoError(t, err)
-	if minted.Slug != "001-repo" {
+	if minted.Slug != "x" {
 		t.Fatalf("minted slug = %q", minted.Slug)
 	}
 	_, err = Create(ws, "repo", CreateOpts{
-		Fields: fields("repo", "endgame-build/y"), ID: "acme", UseTemplate: true})
+		Fields: fields("title", "X", "repo", "endgame-build/x2"), UseTemplate: true})
 	e := requireCode(t, err, "slug_taken")
+	requireMessageContains(t, e,
+		"Slug 'x' already exists in repo; pass --id <slug> to name this one differently")
+	_, err = Create(ws, "repo", CreateOpts{
+		Fields: fields("repo", "endgame-build/y"), ID: "acme", UseTemplate: true})
+	e = requireCode(t, err, "slug_taken")
 	requireMessageContains(t, e, "already taken")
+	_, err = Create(ws, "repo", CreateOpts{
+		Fields: fields("repo", "endgame-build/z"), UseTemplate: true})
+	requireCode(t, err, "no_slug_source")
 }
 
 // editing one row leaves the sibling row's line byte-identical; a no-op unlink
@@ -184,7 +193,7 @@ func TestCollectionEditIsRowLocal(t *testing.T) {
 		ID:     "acme", UseTemplate: true})
 	requireNoError(t, err)
 	_, err = Create(ws, "repo", CreateOpts{
-		Fields: fields("repo", "endgame-build/x", "status", "active"), UseTemplate: true})
+		Fields: fields("title", "X", "repo", "endgame-build/x", "status", "active"), UseTemplate: true})
 	requireNoError(t, err)
 
 	before := jsonlRows(t, file)
@@ -194,8 +203,8 @@ func TestCollectionEditIsRowLocal(t *testing.T) {
 		t.Fatalf("update locator = %q", res.Locator)
 	}
 	after := jsonlRows(t, file)
-	if after["001-repo"] != before["001-repo"] {
-		t.Fatalf("the sibling row moved:\n%s\n%s", before["001-repo"], after["001-repo"])
+	if after["x"] != before["x"] {
+		t.Fatalf("the sibling row moved:\n%s\n%s", before["x"], after["x"])
 	}
 	if after["acme"] == before["acme"] {
 		t.Fatal("the edited row did not change")
@@ -223,7 +232,7 @@ func TestCollectionRemoveRowOnly(t *testing.T) {
 		Fields: fields("repo", "endgame-build/acme"), ID: "acme", UseTemplate: true})
 	requireNoError(t, err)
 	_, err = Create(ws, "repo", CreateOpts{
-		Fields: fields("repo", "endgame-build/x"), UseTemplate: true})
+		Fields: fields("title", "X", "repo", "endgame-build/x"), UseTemplate: true})
 	requireNoError(t, err)
 
 	_, err = Link(ws, "demo", "code", "repo/acme")
@@ -244,7 +253,7 @@ func TestCollectionRemoveRowOnly(t *testing.T) {
 	if _, gone := rows.Get("acme"); gone {
 		t.Fatal("the row survived")
 	}
-	if _, kept := rows.Get("001-repo"); !kept {
+	if _, kept := rows.Get("x"); !kept {
 		t.Fatal("the file lost its other row")
 	}
 }

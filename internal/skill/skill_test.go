@@ -116,6 +116,63 @@ func TestDriftedFileIsUpdated(t *testing.T) {
 	}
 }
 
+func TestInstallRemovesFilesNoLongerShipped(t *testing.T) {
+	// Replace, never overlay: a release that renames or drops a file must not
+	// leave the old copy beside the new one for the agent to read both.
+	root := t.TempDir()
+	mustInstall(t, root, Options{Targets: []string{"claude"}, Skills: []string{"khub"}})
+	stray := filepath.Join(root, ".claude/skills/khub/FROM_AN_OLDER_RELEASE.md")
+	nested := filepath.Join(root, ".claude/skills/khub/refs/old.md")
+	for _, p := range []string{stray, nested} {
+		if err := os.MkdirAll(filepath.Dir(p), 0o777); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte("stale guidance"), 0o666); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	report := mustInstall(t, root, Options{Targets: []string{"claude"}, Skills: []string{"khub"}})
+	want := []Write{
+		{Path: ".claude/skills/khub/SKILL.md", Action: "unchanged"},
+		{Path: ".claude/skills/khub/FROM_AN_OLDER_RELEASE.md", Action: "removed"},
+		{Path: ".claude/skills/khub/refs/old.md", Action: "removed"},
+	}
+	if !reflect.DeepEqual(report.Writes, want) {
+		t.Errorf("writes = %v, want %v", report.Writes, want)
+	}
+	if exists(stray) || exists(nested) {
+		t.Error("a file khub no longer ships survived the install")
+	}
+	if exists(filepath.Dir(nested)) {
+		t.Error("the emptied refs/ directory was left behind")
+	}
+	if !exists(filepath.Join(root, ".claude/skills/khub/SKILL.md")) {
+		t.Error("the shipped file went with the stale ones")
+	}
+}
+
+func TestDryRunReportsRemovalsAndDeletesNothing(t *testing.T) {
+	root := t.TempDir()
+	mustInstall(t, root, Options{Targets: []string{"claude"}, Skills: []string{"khub"}})
+	stray := filepath.Join(root, ".claude/skills/khub/FROM_AN_OLDER_RELEASE.md")
+	if err := os.WriteFile(stray, []byte("stale guidance"), 0o666); err != nil {
+		t.Fatal(err)
+	}
+
+	report := mustInstall(t, root, Options{Targets: []string{"claude"}, Skills: []string{"khub"}, DryRun: true})
+	want := []Write{
+		{Path: ".claude/skills/khub/SKILL.md", Action: "unchanged"},
+		{Path: ".claude/skills/khub/FROM_AN_OLDER_RELEASE.md", Action: "removed"},
+	}
+	if !reflect.DeepEqual(report.Writes, want) {
+		t.Errorf("writes = %v, want %v", report.Writes, want)
+	}
+	if !exists(stray) {
+		t.Error("dry run removed a file")
+	}
+}
+
 func TestDryRunReportsAndWritesNothing(t *testing.T) {
 	root := t.TempDir()
 	report := mustInstall(t, root, Options{DryRun: true})

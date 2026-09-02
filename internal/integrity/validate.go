@@ -8,9 +8,11 @@
 package integrity
 
 import (
+	"cmp"
 	"errors"
 	"fmt"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 
@@ -37,7 +39,8 @@ type FieldError struct {
 func (e FieldError) ID() string { return e.Type + "/" + e.Slug }
 
 // ValidateReport is integrity.ValidateReport: how many typed entities were
-// validated, and every error found.
+// validated, every error found, and — split from the errors, gating nothing —
+// every gap (kb `cmd_validate`).
 //
 // Deliberately NOT a superset of CheckReport: the two gates carry different
 // findings and the JSON contract has no "fixed" key on this one — validate
@@ -45,9 +48,23 @@ func (e FieldError) ID() string { return e.Type + "/" + e.Slug }
 type ValidateReport struct {
 	Count  int // typed entities validated (reference markdown is never scanned)
 	Errors []FieldError
+	// Body-rule findings (`'## <heading>' <complaint>`): the document is what
+	// it claims to be, unfinished. Reported, never gating — every member of
+	// Errors used to be the only kind, and collapsing the two would make an
+	// unfinished body fail a gate documented as "1 means broken".
+	Gaps []FieldError
+	// Single-target only (a `type/slug` of a type that reads a template), nil
+	// otherwise: the body's prose word count and one entry per section. The
+	// metrics and lenses exist for a reviewer reading one document; computing
+	// them for a whole corpus would put hundreds of section counts and a
+	// repeated checklist in front of someone who asked about a file.
+	Body *template.SectionMetrics
+	// The lenses that apply to the single target, in template order; empty
+	// when there is no single target or its template did not load clean.
+	Lenses []template.LensView
 }
 
-// OK is ValidateReport.ok.
+// OK is ValidateReport.ok: no errors. Gaps do not count.
 func (r *ValidateReport) OK() bool { return len(r.Errors) == 0 }
 
 // Validate is integrity.validate: validate present declared fields and
@@ -70,25 +87,47 @@ func Validate(root string, target *string, strict bool) (*ValidateReport, error)
 
 	errors := []FieldError{}
 	count := 0
+	// The one entity a `type/slug` target names — kb `_reviewed`: the body
+	// metrics and lenses are computed for it alone.
+	var reviewed *index.Node
 	for _, node := range sortedNodes(valid) {
 		if !inTarget(node, target) {
 			continue
 		}
 		count++
+		if target != nil && strings.Contains(*target, "/") {
+			reviewed = &node
+		}
 		rtype, _ := resolved.Types.Get(node.Type)
 		errors = append(errors,
 			validateEntity(rtype, node.Type, node.Slug, valid.Meta[node], valid, strict)...)
 	}
 
-	// Body-structure contract: an md type with a workspace template requires the
+	// Body contract: an md type with a workspace template requires the
 	// template's section headings in every instance body, in order (extras
-	// allowed). The index carries frontmatter only, so bodies are re-read here —
-	// and only for templated types.
-	bodyErrors, err := bodyStructureErrors(root, resolved, valid, target)
-	if err != nil {
-		return nil, err
+	// allowed) — an error — and holds each section's prose to the template's
+	// rules — a gap. The index carries frontmatter only, so bodies are re-read
+	// here, and only for templated types.
+	body := bodyFindings(root, resolved, valid, target)
+	errors = append(errors, body.templateInvalid...)
+	errors = append(errors, body.shape...)
+
+	var metrics *template.SectionMetrics
+	lenses := []template.LensView{}
+	if reviewed != nil {
+		rtype, _ := resolved.Types.Get(reviewed.Type)
+		if rtype.ReadsTemplate() {
+			if text, ok := readBody(entity.EntityPath(root, rtype, reviewed.Slug)); ok {
+				m := template.Metrics(text)
+				metrics = &m
+			}
+			// Only a template that loaded clean can say which lenses apply; a
+			// broken one is already an error above.
+			if tpl := body.templates[reviewed.Type]; tpl != nil {
+				lenses = tpl.ApplicableLenses(lensFront(rtype, valid.Meta[*reviewed]))
+			}
+		}
 	}
-	errors = append(errors, bodyErrors...)
 
 	// A file inside a layout that could not be parsed is a frontmatter error, not
 	// a silent skip — one bad file is reported, never a raised parse error.
@@ -112,81 +151,9 @@ func Validate(root string, target *string, strict bool) (*ValidateReport, error)
 			}
 		}
 	}
-	return &ValidateReport{Count: count, Errors: errors}, nil
-}
-
-// bodyStructureErrors is integrity._body_structure_errors: per md entity of a
-// templated type, the first template heading missing (or out of order) in the
-// body's H2 sequence.
-func bodyStructureErrors(
-	root string, resolved *schema.ResolvedSchema, valid *index.Index, target *string,
-) ([]FieldError, error) {
-	errors := []FieldError{}
-	// Two types may share one declared stem; parse each template once per run
-	// and remember the outcome — the error too, since a broken shared template
-	// is still reported once per DECLARING type (the finding is the type's).
-	type tplResult struct {
-		tpl *template.BodyTemplate
-		err error
-	}
-	memo := map[string]tplResult{}
-	loadOnce := func(stem string) (*template.BodyTemplate, error) {
-		if r, ok := memo[stem]; ok {
-			return r.tpl, r.err
-		}
-		tpl, err := template.LoadTemplate(root, stem)
-		memo[stem] = tplResult{tpl: tpl, err: err}
-		return tpl, err
-	}
-	for _, tname := range resolved.Types.Keys() {
-		rtype, _ := resolved.Types.Get(tname)
-		if !rtype.ReadsTemplate() {
-			continue
-		}
-		// Honour the target selector: `validate capability/cap` reported an
-		// unrelated type's broken template and exited 1, so an agent checking its
-		// own entity got a failure it did not cause and could not act on.
-		if !typeInTarget(tname, target) {
-			continue
-		}
-		stem := rtype.TemplateName()
-		if stem == "" {
-			continue // template: false — explicitly untemplated
-		}
-		// A broken template must not abort the run: validate's contract is to
-		// collect every finding. Report it once, on the type, and move on.
-		tpl, err := loadOnce(stem)
-		if err != nil {
-			errors = append(errors, FieldError{tname, "*", "template", errReason(err)})
-			continue
-		}
-		if tpl == nil || len(tpl.Sections) == 0 {
-			continue // no template, or an explicitly empty contract
-		}
-		for _, node := range sortedNodes(valid) {
-			if node.Type != tname || !inTarget(node, target) {
-				continue
-			}
-			body, ok := readBody(entity.EntityPath(root, rtype, node.Slug))
-			if !ok {
-				// Frontmatter parsed (the node exists) but the full read failed;
-				// the scan did NOT flag this file, so stay loud here.
-				errors = append(errors, FieldError{
-					tname, node.Slug, "body", "body could not be read for the structure check",
-				})
-				continue
-			}
-			if missing, found := template.MissingHeading(tpl, body); found {
-				errors = append(errors, FieldError{
-					Type: tname, Slug: node.Slug, Field: "body",
-					Reason: fmt.Sprintf(
-						"missing or out-of-order section '## %s' "+
-							"(template %s.yaml requires its headings in order)", missing, stem),
-				})
-			}
-		}
-	}
-	return errors, nil
+	return &ValidateReport{
+		Count: count, Errors: errors, Gaps: body.gaps, Body: metrics, Lenses: lenses,
+	}, nil
 }
 
 // readBody is entity._read_doc narrowed to the body, guarded the way Python's
@@ -317,50 +284,98 @@ func validateEntity(
 	return errors
 }
 
-// enumeratedID is integrity._ENUMERATED_ID.
+// The retired scheme, `<prefix>-NNN-<slug>`, matched only so the finding that
+// rejects it can name the ordinal; and the dated opening `id_date` mints.
 //
 // Go's \d is ASCII where Python's is Unicode-wide; a slug is a filename token,
 // so the classes coincide for every value that can reach here.
-var enumeratedID = regexp.MustCompile(`^(?:([a-z][a-z0-9]*)-)?(\d+)-[a-z0-9-]+$`)
+var (
+	retiredOrdinal = regexp.MustCompile(`^(\d+)-([a-z0-9-]+)$`)
+	datedSlug      = regexp.MustCompile(`^(\d{4}-\d{2}-\d{2})-([a-z0-9-]+)$`)
+)
 
-// idError is integrity._id_error: a reason if the slug disagrees with the
-// type's declared id_prefix.
+// idError is the id gate: the slug must agree with the id scheme its type
+// declares (kb `_id_error`).
 //
-// Only types that DECLARE a prefix are checked. The point is the by-value form:
-// an entity whose deciding attribute was edited afterwards, or whose file was
-// hand-named, now says one thing in its filename and another in its
-// frontmatter — a disagreement every other gate is blind to.
+// Three independent arms — prefix, date, retired ordinal — reporting at most
+// one message, because validate prints one line per finding and two findings
+// for one slug would say the same thing twice. Every non-singleton type is
+// checked: a type declaring nothing still rejects the retired `NNN-` ordinal,
+// so a corpus that has not been migrated fails the gate rather than drifting.
+//
+// The prefix arm is the by-value form's point: an entity whose deciding
+// attribute was edited afterwards, or whose file was hand-named, says one
+// thing in its filename and another in its frontmatter — a disagreement every
+// other gate is blind to.
 func idError(rtype *schema.ResolvedType, slug string, meta *omap.Map) (string, bool) {
-	prefix := rtype.IdPrefix
-	if prefix == nil || rtype.Storage.Layout == schema.LayoutSingleton {
+	if rtype.Storage.Layout == schema.LayoutSingleton {
 		return "", false
 	}
-	expected, ok := prefix.Resolve(meta)
-	if !ok {
-		return "", false // the deciding attribute is unset; `check` reports that instead
-	}
-	m := enumeratedID.FindStringSubmatch(slug)
-	if m == nil {
-		return fmt.Sprintf(
-			"slug does not follow this type's id scheme (%s-NNN-slug)",
-			strings.Join(prefix.All(), "|")), true
-	}
-	if m[1] == "" {
-		// A bare `NNN-slug`: minted while the deciding attribute was still unset,
-		// which capture-is-never-blocked permits. Filling the attribute in later
-		// must not strand the entity behind a gate no verb can clear — khub has no
-		// rename. The ordinal is there; the prefix is a nicety it missed.
-		return "", false
-	}
-	if m[1] != expected {
-		deciding := ""
-		if prefix.By != nil {
-			deciding = fmt.Sprintf(" for %s '%s'", *prefix.By, pyStr(metaGet(meta, *prefix.By)))
+	shape := rtype.IdShape()
+	rest := slug
+
+	if prefix := rtype.IdPrefix; prefix != nil {
+		expected, ok := prefix.Resolve(meta)
+		if !ok {
+			// The deciding attribute is unset, so no prefix can be right and
+			// `check` already names the cause as an incomplete entity.
+			return "", false
 		}
-		return fmt.Sprintf("slug says '%s-' but the schema mints '%s-'%s",
-			m[1], expected, deciding), true
+		// Longest first, so a declared `my-type` is not read as prefix `my`.
+		// Matching declared prefixes literally is also why a multi-word one
+		// works at all.
+		found := ""
+		for _, p := range longestFirst(prefix.All()) {
+			if strings.HasPrefix(slug, p+"-") {
+				found = p
+				break
+			}
+		}
+		if found == "" {
+			return fmt.Sprintf("slug does not start with a prefix this type mints (%s)", shape), true
+		}
+		if found != expected {
+			deciding := ""
+			if prefix.By != nil {
+				deciding = fmt.Sprintf(" for %s '%s'", *prefix.By, pyStr(metaGet(meta, *prefix.By)))
+			}
+			return fmt.Sprintf("slug says '%s-' but the schema mints '%s-'%s",
+				found, expected, deciding), true
+		}
+		rest = slug[len(found)+1:]
+	}
+
+	if rtype.IdDate {
+		// Presence only, never absence: slugBase slugifies the raw title, so a
+		// title like "2026 07 28 audit" legitimately mints a date-shaped opening
+		// on an undated type. Requiring its absence would reject correct ids.
+		m := datedSlug.FindStringSubmatch(rest)
+		if m == nil {
+			return fmt.Sprintf("slug carries no date — this type mints %s", shape), true
+		}
+		rest = m[2]
+	}
+
+	if m := retiredOrdinal.FindStringSubmatch(rest); m != nil {
+		// `<prefix>-NNN-<slug>` was retired. Telling it apart from a title that
+		// genuinely starts with digits costs one slugify: "404 handling"
+		// slugifies to `404-handling`, which the slug reproduces; "Public API"
+		// does not produce the `001-` in `cmp-001-public-api`.
+		source, _ := entity.SlugSource(meta)
+		if !strings.HasPrefix(entity.Slugify(source), m[1]+"-") {
+			return fmt.Sprintf("slug uses the retired '%s-' ordinal scheme; this type mints %s — "+
+				"`git mv` the file to drop the ordinal, then fix references to it", m[1], shape), true
+		}
 	}
 	return "", false
+}
+
+// longestFirst orders prefixes by descending length, stable so equal lengths
+// keep declaration order.
+func longestFirst(prefixes []string) []string {
+	out := slices.Clone(prefixes)
+	slices.SortStableFunc(out, func(a, b string) int { return cmp.Compare(len(b), len(a)) })
+	return out
 }
 
 // attrError is integrity._attr_error: a reason if value is illegal for attr.

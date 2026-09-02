@@ -1,19 +1,21 @@
 // init.go ports cli/init_cmd.py: scaffold a workspace from a preset, then wire
-// it into the agent context files. The wire tail is best-effort and skippable
-// (--no-wire); it never unwinds a successful scaffold.
+// it into the agent context files and write the first index.md. Both tails
+// are best-effort (the wire one skippable with --no-wire); neither unwinds a
+// successful scaffold.
 package cli
 
 import (
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
 
 	"github.com/spf13/cobra"
 
-	"github.com/endgame-build/khub/internal/errs"
 	"github.com/endgame-build/khub/internal/omap"
+	"github.com/endgame-build/khub/internal/reindex"
 	"github.com/endgame-build/khub/internal/wire"
 	"github.com/endgame-build/khub/internal/workspace"
 )
@@ -69,24 +71,17 @@ func registerInit(root *cobra.Command) {
 				}
 
 				// Best-effort tail: a wire hiccup does not unwind the scaffold above.
-				var wireResult *wire.Result
-				wireError := ""
+				var wireStep tail[wire.Result]
 				if !noWire { // no selection to make without a wizard: seed both files
-					res, werr := wire.Wire(result.Path, wire.Options{Claude: true, Agents: true})
-					switch {
-					case werr == nil:
-						wireResult = res
-					default:
-						var located *errs.Located
-						if errors.As(werr, &located) {
-							wireError = located.Message
-						} else {
-							wireError = werr.Error()
-						}
-					}
+					wireStep = tailOf(wire.Wire(result.Path, wire.Options{Claude: true, Agents: true}))
 				}
+				// The index is the cheapest read of the whole corpus, and a
+				// workspace that has never run `reindex` simply has none — so an
+				// agent's first look finds nothing. Written after the singletons
+				// above so it lists them.
+				indexStep := indexTail(result.Path)
 
-				payload := initPayload(result, wireResult, wireError)
+				payload := initPayload(result, wireStep, indexStep)
 				return Emit(payload, format, func() {
 					if result.SeededOverCorpus {
 						fmt.Printf("Initialized %s workspace; %d entity files modified\n",
@@ -101,20 +96,25 @@ func registerInit(root *cobra.Command) {
 						// Say it out loud: a re-init leaves the workspace's own schema
 						// and templates in place.
 						head := result.Preserved
-						tail := ""
+						more := ""
 						if len(head) > 3 {
-							head, tail = head[:3], " …"
+							head, more = head[:3], " …"
 						}
 						fmt.Printf("preserved %d workspace-owned file(s): %s%s\n",
-							len(result.Preserved), strings.Join(head, ", "), tail)
+							len(result.Preserved), strings.Join(head, ", "), more)
 					}
-					if wireResult != nil {
-						for _, outcome := range wireResult.Outcomes {
+					if wireStep.Result != nil {
+						for _, outcome := range wireStep.Result.Outcomes {
 							fmt.Printf("%s %s\n", outcome.Action, filepath.Base(outcome.Path))
 						}
 					}
-					if wireError != "" {
-						fmt.Fprintf(os.Stderr, "wire skipped: %s\n", wireError)
+					if wireStep.Err != "" {
+						fmt.Fprintf(os.Stderr, "wire skipped: %s\n", wireStep.Err)
+					}
+					if indexStep.Err != "" {
+						fmt.Fprintf(os.Stderr, "index skipped: %s\n", indexStep.Err)
+					} else {
+						fmt.Printf("index.md %s\n", *indexStep.Result)
 					}
 					fmt.Printf("\nAgent skill not installed. To install:\n  %s\n",
 						skillHintFor(result.Path))
@@ -134,9 +134,11 @@ func registerInit(root *cobra.Command) {
 	root.AddCommand(cmd)
 }
 
-// initPayload is dataclasses.asdict(result) in declaration order, with the wire
-// tail and the skill hint appended.
-func initPayload(result *workspace.InitResult, wireResult *wire.Result, wireError string) *omap.Map {
+// initPayload is dataclasses.asdict(result) in declaration order, then the
+// tails — `wire` only when it ran (a --no-wire run carries no wire key at
+// all), `index` always, each with its *_error right after it on failure —
+// and the skill hint.
+func initPayload(result *workspace.InitResult, wired tail[wire.Result], indexed tail[string]) *omap.Map {
 	payload := omap.New()
 	payload.Set("path", result.Path)
 	payload.Set("preset", result.Preset)
@@ -147,19 +149,41 @@ func initPayload(result *workspace.InitResult, wireResult *wire.Result, wireErro
 	payload.Set("seeded_over_corpus", result.SeededOverCorpus)
 	payload.Set("singletons_created", strList(result.SingletonsCreated))
 	payload.Set("preserved", strList(result.Preserved))
-	if wireResult != nil {
-		outcomes := make([]any, 0, len(wireResult.Outcomes))
-		for _, o := range wireResult.Outcomes {
-			record := omap.New()
-			record.Set("path", o.Path)
-			record.Set("action", o.Action)
-			outcomes = append(outcomes, record)
-		}
-		payload.Set("wire", outcomes)
-	}
-	if wireError != "" {
-		payload.Set("wire_error", wireError)
-	}
+	wired.set(payload, "wire", func(r *wire.Result) any { return wireOutcomes(r) }, false)
+	indexed.set(payload, "index", func(action *string) any { return *action }, true)
 	payload.Set("skill_hint", skillHintFor(result.Path))
 	return payload
+}
+
+// wireOutcomes renders a wire result's per-file outcomes as the `{path,
+// action}` list init and upgrade both carry under `wire`.
+func wireOutcomes(result *wire.Result) []any {
+	items := make([]pathAction, 0, len(result.Outcomes))
+	for _, o := range result.Outcomes {
+		items = append(items, pathAction{o.Path, o.Action})
+	}
+	return pathActionRecords(items)
+}
+
+// indexTail regenerates index.md at root after a scaffold, shared by init and
+// upgrade. Never fatal — a malformed file makes reindex refuse, and the
+// scaffold above stands either way — so it reports the action taken
+// ("created" | "updated" | "unchanged"), or the refusal's message.
+func indexTail(root string) tail[string] {
+	before, rerr := os.ReadFile(filepath.Join(root, reindex.IndexName))
+	if rerr != nil && !errors.Is(rerr, fs.ErrNotExist) {
+		return tail[string]{Err: tailError(rerr)}
+	}
+	result, err := reindex.Reindex(root, false)
+	if err != nil {
+		return tail[string]{Err: tailError(err)}
+	}
+	action := "updated"
+	switch {
+	case rerr != nil:
+		action = "created"
+	case string(before) == result.Content:
+		action = "unchanged"
+	}
+	return tail[string]{Result: &action}
 }

@@ -1,11 +1,16 @@
-// Package template ports src/khub/core/template.py — body templates (TPL-001).
-// A template is a per-type YAML file at .khub/templates/<type>.yaml; its
+// Package template ports src/khub/core/template.py — body templates (TPL-001)
+// — and, since the kb 0.14.0 port, kb's body-content layer over them. A
+// template is a per-type YAML file at .khub/templates/<type>.yaml; its
 // presence makes add/init seed new bodies from it and makes validate require
 // its section headings in every instance body as an ordered subsequence
-// (prefix-match, numbering stripped, extra headings allowed).
+// (prefix-match, numbering stripped, extra headings allowed). A section may
+// also carry rules about what belongs under it (word_count, required_text,
+// forbidden_text, code_blocks) and be declared optional; the file may carry a
+// top-level hint and a lens registry (lenses.go). Body scanning is body.go.
 //
-// The Python _FENCE regex uses a backreference (template.py:45), which RE2
-// cannot compile; fenceMask below is the equivalent hand-rolled line scanner.
+// Declared, not inferred. The file states the headings, so one file is both
+// the scaffold and the contract: an author edits the sections and both
+// change together.
 package template
 
 import (
@@ -13,10 +18,8 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
-	"sort"
-	"strconv"
+	"slices"
 	"strings"
-	"unicode"
 
 	"github.com/endgame-build/khub/internal/canon"
 	"github.com/endgame-build/khub/internal/errs"
@@ -27,40 +30,121 @@ import (
 const TemplatesDir = ".khub/templates"
 
 var (
-	entryKeys    = map[string]bool{"heading": true, "hint": true, "text": true}
-	reservedKeys = map[string]bool{
-		"optional": true, "repeat": true, "pattern": true,
-		"min_tokens": true, "max_tokens": true, "budget": true,
+	entryKeys = map[string]bool{
+		"heading": true, "hint": true, "text": true, "optional": true,
+		"word_count": true, "required_text": true, "forbidden_text": true,
+		"code_blocks": true,
 	}
-	topKeys = map[string]bool{"title": true, "sections": true}
+	// Reserved for later and rejected today with a clear error rather than
+	// silently ignored — a template that half-works is worse than one that
+	// says no.
+	reservedKeys = map[string]bool{
+		"repeat": true, "pattern": true, "min_tokens": true, "max_tokens": true, "budget": true,
+	}
+	topKeys = map[string]bool{"title": true, "hint": true, "sections": true, "lenses": true}
 
-	// Leading list numbering on a heading ("1.", "3)", "2.1"), stripped before
-	// matching (_NUMBERING; RE2-safe, ported as-is — Go \d/\s are ASCII where
-	// Python's are Unicode-wide, an authored-markdown non-difference).
-	numberingRE = regexp.MustCompile(`^\d+([.)]\d*)*[.)]?\s+`)
+	// Leading list numbering on a heading ("1.", "3)", "2.1)"), stripped
+	// before matching, so numbering a body's sections never breaks its
+	// contract (kb NUMBERING_RE). The trailing separator is REQUIRED: with it
+	// optional, `\d+\s+` swallowed the leading number of any heading that
+	// legitimately starts with one — "2026 goals" became "goals", so a
+	// template declaring that heading could never be satisfied by a body
+	// containing it verbatim. Go's \d and \s are ASCII where Python's are
+	// Unicode-wide — an authored-markdown non-difference, ported as-is.
+	numberingRE = regexp.MustCompile(`^\d+([.)]\d*)*[.)]\s+`)
 )
 
-// Section is one template entry: the required heading plus its scaffold
-// content. Hint and Text hold "" where Python holds None or any other falsy
-// value — render() treats them identically.
-type Section struct {
-	Heading string
-	Hint    string
-	Text    string
+// TextRule is one `required_text` / `forbidden_text` entry: a literal, or a
+// regex when Regex is non-nil (kb TextRule). Both forms are case-insensitive —
+// a rule about what an author must say is about the words, not their
+// capitalisation at the start of a sentence.
+type TextRule struct {
+	Source string
+	Regex  *regexp.Regexp
 }
 
-// BodyTemplate is a parsed body template: scaffold source and section
-// contract in one. Title is "" when the template declares none.
+// FoundIn reports whether the rule matches text (kb TextRule.found_in).
+func (r TextRule) FoundIn(text string) bool {
+	if r.Regex != nil {
+		return r.Regex.MatchString(text)
+	}
+	return strings.Contains(strings.ToLower(text), strings.ToLower(r.Source))
+}
+
+// String renders the rule the way a complaint names it: /src/ for a regex,
+// 'src' for a literal (kb TextRule.__str__).
+func (r TextRule) String() string {
+	if r.Regex != nil {
+		return "/" + r.Source + "/"
+	}
+	return "'" + r.Source + "'"
+}
+
+// CodeRule is one `code_blocks` entry: fenced blocks of Lang ("" = any
+// language), bounded below and/or above; a nil bound is unset (kb CodeRule).
+type CodeRule struct {
+	Lang string
+	Min  *int
+	Max  *int
+}
+
+// String names the rule's subject in a complaint (kb CodeRule.__str__):
+// "<lang> block(s)", or "code block(s)" when the rule is language-agnostic.
+func (r CodeRule) String() string {
+	if r.Lang != "" {
+		return r.Lang + " block(s)"
+	}
+	return "code block(s)"
+}
+
+// Section is one template entry: the heading plus its scaffold content and
+// its body-content rules. Hint and Text hold "" where Python holds None —
+// render() treats them identically. An Optional section is scaffolded but
+// never required; a nil word bound is unset.
+type Section struct {
+	Heading       string
+	Hint          string
+	Text          string
+	Optional      bool
+	MinWords      *int
+	MaxWords      *int
+	RequiredText  []TextRule
+	ForbiddenText []TextRule
+	CodeBlocks    []CodeRule
+}
+
+// HasRules reports whether the section declares any body-content rule.
+// Nil checks, not zero checks: `word_count: {max: 0}` is a real declaration
+// — "this section holds a diagram and nothing else" — and a zero that reads
+// as absent would parse, validate, and then never be enforced.
+func (s *Section) HasRules() bool {
+	return s.MinWords != nil || s.MaxWords != nil ||
+		len(s.RequiredText) > 0 || len(s.ForbiddenText) > 0 || len(s.CodeBlocks) > 0
+}
+
+// BodyTemplate is a parsed body template: scaffold source, section contract
+// and lenses in one. Title and Hint are "" when the template declares none.
 type BodyTemplate struct {
 	Type     string
 	Title    string
+	Hint     string
 	Sections []Section
+	Lenses   []Lens
 }
 
-// Render is BodyTemplate.render: the scaffolded body — each heading, then its
-// hint comment / text, blocks separated by blank lines.
+// Render is BodyTemplate.render: the scaffolded body — the top-level hint
+// comment when set, then each heading with its hint comment / text, blocks
+// separated by blank lines.
+//
+// Optional sections are scaffolded like any other — declaring one optional
+// says it may be absent from a finished body, not that an author should have
+// to remember it exists. The top-level hint leads, and is how a type with no
+// heading contract at all still gets to say what belongs in its body.
 func (t *BodyTemplate) Render() string {
 	var parts []string
+	if t.Hint != "" {
+		parts = append(parts, "<!-- "+t.Hint+" -->\n")
+	}
 	for _, s := range t.Sections {
 		parts = append(parts, "## "+s.Heading+"\n")
 		if s.Hint != "" {
@@ -73,11 +157,13 @@ func (t *BodyTemplate) Render() string {
 	return strings.Join(parts, "\n")
 }
 
-// RequiredHeadings lists the section headings in template order.
+// RequiredHeadings lists the non-optional section headings in template order.
 func (t *BodyTemplate) RequiredHeadings() []string {
-	out := make([]string, len(t.Sections))
-	for i, s := range t.Sections {
-		out[i] = s.Heading
+	out := make([]string, 0, len(t.Sections))
+	for _, s := range t.Sections {
+		if !s.Optional {
+			out = append(out, s.Heading)
+		}
 	}
 	return out
 }
@@ -93,7 +179,12 @@ func TemplatePath(root, stem string) string {
 // when there is no body contract (no template file; a file declaring
 // `sections: []` still returns a template so add/init keep seeding). A
 // missing sections key is an error: the file declares nothing coherent.
-func LoadTemplate(root, stem string) (*BodyTemplate, error) {
+//
+// fields is the owning type's declared field names
+// (schema.ResolvedType.FieldNames), the set a lens `when` clause may name. It
+// is always consulted: nil is a type declaring no fields, and a `when` naming
+// any field is refused against it.
+func LoadTemplate(root, stem string, fields []string) (*BodyTemplate, error) {
 	p := TemplatePath(root, stem)
 	fi, err := os.Stat(p)
 	if err != nil || !fi.Mode().IsRegular() {
@@ -116,7 +207,7 @@ func LoadTemplate(root, stem string) (*BodyTemplate, error) {
 		return nil, invalid(stem, "top level must be a mapping with a 'sections' list")
 	}
 	if unknown := keysOutside(data, topKeys); len(unknown) > 0 {
-		return nil, invalid(stem, "unknown top-level keys: "+strings.Join(unknown, ", "))
+		return nil, invalid(stem, "unknown top-level key(s): "+strings.Join(unknown, ", "))
 	}
 	rawSections, present := data.Get("sections")
 	if !present {
@@ -125,13 +216,6 @@ func LoadTemplate(root, stem string) (*BodyTemplate, error) {
 	list, isList := rawSections.([]any)
 	if !isList {
 		return nil, invalid(stem, "'sections' must be a list")
-	}
-	titleAny, _ := data.Get("title")
-	title := scalarText(titleAny)
-	if len(list) == 0 {
-		// Declared, deliberately empty: no headings required — but still a
-		// template, so add seeds the title and init still creates the singleton.
-		return &BodyTemplate{Type: stem, Title: title}, nil
 	}
 	sections := make([]Section, 0, len(list))
 	for i, entryAny := range list {
@@ -153,123 +237,237 @@ func LoadTemplate(root, stem string) (*BodyTemplate, error) {
 		if !isStr || heading == "" {
 			return nil, invalid(stem, fmt.Sprintf("sections[%d] needs a non-empty string 'heading'", i))
 		}
-		hintAny, _ := entry.Get("hint")
-		textAny, _ := entry.Get("text")
+		spot := fmt.Sprintf("sections[%d]", i)
+		// `hint` and `text` are rendered straight into a body, so a
+		// non-string here would parse clean and then break inside Render —
+		// out of `add`, long after the file that caused it went unreported.
+		hint, err := textValue(stem, spot, entry, "hint")
+		if err != nil {
+			return nil, err
+		}
+		text, err := textValue(stem, spot, entry, "text")
+		if err != nil {
+			return nil, err
+		}
+		optional := false
+		if optAny, has := entry.Get("optional"); has {
+			b, isBool := optAny.(bool)
+			if !isBool {
+				return nil, invalid(stem, spot+" 'optional' must be true or false")
+			}
+			optional = b
+		}
+		wc, _ := entry.Get("word_count")
+		low, high, err := wordBounds(stem, spot+" 'word_count'", wc)
+		if err != nil {
+			return nil, err
+		}
+		reqAny, _ := entry.Get("required_text")
+		required, err := textRules(stem, spot+" 'required_text'", reqAny)
+		if err != nil {
+			return nil, err
+		}
+		forbAny, _ := entry.Get("forbidden_text")
+		forbidden, err := textRules(stem, spot+" 'forbidden_text'", forbAny)
+		if err != nil {
+			return nil, err
+		}
+		cbAny, _ := entry.Get("code_blocks")
+		code, err := codeRules(stem, spot+" 'code_blocks'", cbAny)
+		if err != nil {
+			return nil, err
+		}
 		sections = append(sections, Section{
-			Heading: strings.TrimSpace(heading),
-			Hint:    scalarText(hintAny),
-			Text:    scalarText(textAny),
+			Heading:       strings.TrimSpace(heading),
+			Hint:          hint,
+			Text:          text,
+			Optional:      optional,
+			MinWords:      low,
+			MaxWords:      high,
+			RequiredText:  required,
+			ForbiddenText: forbidden,
+			CodeBlocks:    code,
 		})
 	}
-	return &BodyTemplate{Type: stem, Title: title, Sections: sections}, nil
-}
-
-// BodyH2s is template.body_h2s: the body's H2 headings, in order, numbering
-// stripped; fenced code ignored.
-func BodyH2s(body string) []string {
-	lines := strings.Split(body, "\n")
-	fenced := fenceMask(lines)
-	out := []string{}
-	for i, line := range lines {
-		if fenced[i] {
-			continue
-		}
-		h, ok := h2Heading(line)
-		if !ok {
-			continue
-		}
-		out = append(out, numberingRE.ReplaceAllString(strings.TrimSpace(h), ""))
+	title, err := textValue(stem, "", data, "title")
+	if err != nil {
+		return nil, err
 	}
-	return out
-}
-
-// MissingHeading is template.missing_heading: the first template heading not
-// found in order in body. ok=true carries a missing heading; ok=false is
-// Python's None (the contract is satisfied). Every template heading must
-// appear, in template order, as a prefix of some body H2 (numbering
-// stripped); extra body headings are allowed anywhere.
-func MissingHeading(t *BodyTemplate, body string) (string, bool) {
-	found := BodyH2s(body)
-	pos := 0
-	for _, required := range t.RequiredHeadings() {
-		for pos < len(found) && !strings.HasPrefix(found[pos], required) {
-			pos++
-		}
-		if pos == len(found) {
-			return required, true
-		}
-		pos++
+	hint, err := textValue(stem, "", data, "hint")
+	if err != nil {
+		return nil, err
 	}
-	return "", false
+	headings := make(map[string]bool, len(sections))
+	for _, s := range sections {
+		headings[s.Heading] = true
+	}
+	lensesAny, _ := data.Get("lenses")
+	lenses, err := loadLenses(stem, lensesAny, headings, fields)
+	if err != nil {
+		return nil, err
+	}
+	return &BodyTemplate{Type: stem, Title: title, Hint: hint, Sections: sections, Lenses: lenses}, nil
 }
 
-// fenceMask replaces the Python _FENCE regex: it marks every line belonging
-// to a closed fenced code block. A fence opens on a line starting with ```
-// or ~~~ (info string allowed); it closes on the nearest later line that is
-// exactly the same three-char marker followed only by non-newline whitespace.
-// An opening with no matching close fences nothing — its lines stay content,
-// and later markers are re-examined as openings, matching the regex's
-// backtracking exactly (a ## line inside a closed fence is content, never
-// structure).
-func fenceMask(lines []string) []bool {
-	mask := make([]bool, len(lines))
-	i := 0
-	for i < len(lines) {
-		marker, open := fenceOpen(lines[i])
-		if !open {
-			i++
-			continue
-		}
-		closedAt := -1
-		for j := i + 1; j < len(lines); j++ {
-			if fenceClose(lines[j], marker) {
-				closedAt = j
-				break
+// textValue reads an optional text key: absent or null reads as "", a string
+// as itself, anything else is refused as `'<key>' must be text, got <type>`
+// (Python's type name). spot prefixes the message for a section entry and is
+// "" at the top level.
+func textValue(stem, spot string, m *omap.Map, key string) (string, error) {
+	v, _ := m.Get(key)
+	switch x := v.(type) {
+	case nil:
+		return "", nil
+	case string:
+		return x, nil
+	}
+	where := fmt.Sprintf("'%s' must be text, got %s", key, canon.PyTypeName(v))
+	if spot != "" {
+		where = spot + " " + where
+	}
+	return "", invalid(stem, where)
+}
+
+// bound is kb _bound: a non-negative integer bound, or nil when unset. A
+// bool is not an int here (Python's isinstance(True, int) is true, so a bare
+// `min: true` would otherwise sail through as the bound 1 and quietly
+// enforce a rule nobody wrote).
+func bound(stem, where string, v any) (*int, error) {
+	var n int
+	switch x := v.(type) {
+	case nil:
+		return nil, nil
+	case int64:
+		n = int(x)
+	case int:
+		n = x
+	default:
+		return nil, invalid(stem, where+" must be a non-negative whole number")
+	}
+	if n < 0 {
+		return nil, invalid(stem, where+" must be a non-negative whole number")
+	}
+	return &n, nil
+}
+
+// wordBounds is kb _word_bounds: `word_count: {min, max}`, either key alone
+// or both.
+func wordBounds(stem, where string, v any) (low, high *int, err error) {
+	if v == nil {
+		return nil, nil, nil
+	}
+	m, isMap := v.(*omap.Map)
+	if !isMap {
+		return nil, nil, invalid(stem, where+" must be a mapping with 'min' and/or 'max'")
+	}
+	if unknown := keysOutside(m, map[string]bool{"min": true, "max": true}); len(unknown) > 0 {
+		return nil, nil, invalid(stem, where+" unknown key(s): "+strings.Join(unknown, ", "))
+	}
+	minAny, _ := m.Get("min")
+	if low, err = bound(stem, where+" 'min'", minAny); err != nil {
+		return nil, nil, err
+	}
+	maxAny, _ := m.Get("max")
+	if high, err = bound(stem, where+" 'max'", maxAny); err != nil {
+		return nil, nil, err
+	}
+	if low != nil && high != nil && *high < *low {
+		return nil, nil, invalid(stem, where+" 'max' is below 'min'")
+	}
+	return low, high, nil
+}
+
+// textRules is kb _text_rules: `required_text` / `forbidden_text`, a list of
+// literals and `{pattern: …}` maps. A pattern compiles case-insensitively
+// through RE2 (`(?i)` prefixed): no backreferences or lookaround, unlike
+// Python's re — a template leaning on either is refused as not compiling.
+func textRules(stem, where string, v any) ([]TextRule, error) {
+	if v == nil {
+		return nil, nil
+	}
+	list, isList := v.([]any)
+	if !isList {
+		return nil, invalid(stem, where+" must be a list of literals or {pattern: …}")
+	}
+	rules := make([]TextRule, 0, len(list))
+	for _, item := range list {
+		if s, isStr := item.(string); isStr {
+			if strings.TrimSpace(s) == "" {
+				return nil, invalid(stem, where+" has an empty literal")
 			}
-		}
-		if closedAt < 0 {
-			i++
+			rules = append(rules, TextRule{Source: s})
 			continue
 		}
-		for k := i; k <= closedAt; k++ {
-			mask[k] = true
+		m, isMap := item.(*omap.Map)
+		if !isMap || !slices.Equal(m.Keys(), []string{"pattern"}) {
+			return nil, invalid(stem, where+" entries are a literal or {pattern: …}")
 		}
-		i = closedAt + 1
-	}
-	return mask
-}
-
-func fenceOpen(line string) (string, bool) {
-	if strings.HasPrefix(line, "```") || strings.HasPrefix(line, "~~~") {
-		return line[:3], true
-	}
-	return "", false
-}
-
-func fenceClose(line, marker string) bool {
-	if !strings.HasPrefix(line, marker) {
-		return false
-	}
-	for _, r := range line[len(marker):] {
-		if !unicode.IsSpace(r) { // [^\S\n]* — \n cannot occur inside a split line
-			return false
+		srcAny, _ := m.Get("pattern")
+		source, isStr := srcAny.(string)
+		if !isStr || source == "" {
+			return nil, invalid(stem, where+" 'pattern' must be a non-empty string")
 		}
+		re, err := regexp.Compile("(?i)" + source)
+		if err != nil {
+			return nil, invalid(stem, fmt.Sprintf("%s pattern %s does not compile: %s", where, pyRepr(source), err))
+		}
+		rules = append(rules, TextRule{Source: source, Regex: re})
 	}
-	return true
+	return rules, nil
 }
 
-// h2Heading matches _H2 (`^##\s+(.*)$`) against one line: "##", at least one
-// whitespace rune, then the captured remainder.
-func h2Heading(line string) (string, bool) {
-	if !strings.HasPrefix(line, "##") {
-		return "", false
+// codeRules is kb _code_rules: `code_blocks`, a list of `{lang?, min?, max?}`
+// maps. A rule with neither bound is refused rather than accepted-and-inert,
+// because the shorthand it looks like — `{lang: mermaid}` for "requires a
+// diagram" — is exactly what someone means. Neither bound is implied:
+// `{lang: bash, max: 2}` reads as "at most two", and defaulting min to 1
+// would fire on a section that legitimately has none, and make `{max: 0}`
+// — the way to say a section holds no code at all — unsatisfiable.
+func codeRules(stem, where string, v any) ([]CodeRule, error) {
+	if v == nil {
+		return nil, nil
 	}
-	rest := line[2:]
-	trimmed := strings.TrimLeftFunc(rest, unicode.IsSpace)
-	if len(trimmed) == len(rest) { // no whitespace after "##": ###, ##Title, bare ##
-		return "", false
+	list, isList := v.([]any)
+	if !isList {
+		return nil, invalid(stem, where+" must be a list of {lang, min, max} mappings")
 	}
-	return trimmed, true
+	rules := make([]CodeRule, 0, len(list))
+	for i, item := range list {
+		spot := fmt.Sprintf("%s[%d]", where, i)
+		m, isMap := item.(*omap.Map)
+		if !isMap {
+			return nil, invalid(stem, spot+" must be a mapping with 'lang', 'min' or 'max'")
+		}
+		if unknown := keysOutside(m, map[string]bool{"lang": true, "min": true, "max": true}); len(unknown) > 0 {
+			return nil, invalid(stem, spot+" unknown key(s): "+strings.Join(unknown, ", "))
+		}
+		lang := ""
+		if langAny, _ := m.Get("lang"); langAny != nil {
+			s, isStr := langAny.(string)
+			if !isStr || strings.TrimSpace(s) == "" {
+				return nil, invalid(stem, spot+" 'lang' must be a non-empty string")
+			}
+			lang = strings.TrimSpace(s)
+		}
+		minAny, _ := m.Get("min")
+		low, err := bound(stem, spot+" 'min'", minAny)
+		if err != nil {
+			return nil, err
+		}
+		maxAny, _ := m.Get("max")
+		high, err := bound(stem, spot+" 'max'", maxAny)
+		if err != nil {
+			return nil, err
+		}
+		if low != nil && high != nil && *high < *low {
+			return nil, invalid(stem, spot+" 'max' is below 'min'")
+		}
+		if low == nil && high == nil {
+			return nil, invalid(stem, spot+" needs 'min' or 'max'")
+		}
+		rules = append(rules, CodeRule{Lang: lang, Min: low, Max: high})
+	}
+	return rules, nil
 }
 
 // keysOutside returns the map's keys not in allowed, sorted.
@@ -280,7 +478,7 @@ func keysOutside(m *omap.Map, allowed map[string]bool) []string {
 			out = append(out, k)
 		}
 	}
-	sort.Strings(out)
+	slices.Sort(out)
 	return out
 }
 
@@ -292,7 +490,7 @@ func keysInside(m *omap.Map, picked map[string]bool) []string {
 			out = append(out, k)
 		}
 	}
-	sort.Strings(out)
+	slices.Sort(out)
 	return out
 }
 
@@ -332,44 +530,6 @@ func topLevelMap(v any) (*omap.Map, bool) {
 		}
 	}
 	return nil, false
-}
-
-// scalarText renders an optional scalar (title/hint/text) the way Python's
-// truthiness-then-str() usage does: falsy values (None, "", 0, false) read
-// as "", anything else as its str() form.
-func scalarText(v any) string {
-	switch x := v.(type) {
-	case nil:
-		return ""
-	case string:
-		return x
-	case bool:
-		if x {
-			return "True"
-		}
-		return ""
-	case int64:
-		if x == 0 {
-			return ""
-		}
-		return strconv.FormatInt(x, 10)
-	case canon.BigInt:
-		if x.Literal == "0" {
-			return ""
-		}
-		return x.Literal
-	case float64:
-		if x == 0 {
-			return ""
-		}
-		return canon.PyFloatRepr(x)
-	case canon.Date:
-		return x.ISO
-	case canon.DateTime:
-		return x.ISO
-	default:
-		return fmt.Sprintf("%v", v)
-	}
 }
 
 func invalid(typeName, why string) *errs.Located {

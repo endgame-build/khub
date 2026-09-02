@@ -43,9 +43,9 @@ var (
 )
 
 // IDPrefixPattern is schema_model.ID_PREFIX_RE: a prefix is a slug token — it
-// is concatenated with the ordinal and the slugified title. An empty one would
-// mint a leading hyphen; a hyphenated one would make the prefix unreadable
-// back out of the id.
+// is concatenated with the date (when `id_date`) and the slugified title. An
+// empty one would mint a leading hyphen; a hyphenated one would make the
+// prefix unreadable back out of the id.
 const IDPrefixPattern = `^[a-z][a-z0-9]*$`
 
 var idPrefixRE = regexp.MustCompile(IDPrefixPattern)
@@ -116,8 +116,13 @@ type TypeDecl struct {
 	Required bool
 	// Opt out of the orphan sweep (see schema_model.TypeDecl.orphan).
 	Orphan bool
-	// Enumerated ids: `add` mints `<prefix>-NNN-<slug>` instead of a bare slug.
+	// Prefixed ids: `add` mints `<prefix>-<slug>` instead of a bare slug.
 	IdPrefix *IdPrefixSpec
+	// Dated ids: the minted id carries the day it was minted on
+	// (`<prefix>-<YYYY-MM-DD>-<slug>`). A flat sibling of IdPrefix, not part of
+	// it: the two resolve independently, so a by-value prefix and a date
+	// compose. Default false.
+	IdDate bool
 	// The declared template stem (.khub/templates/<name>.yaml). nil = the
 	// standing convention (the type's own name); see TemplateOff for the
 	// explicit opt-out. A NAME, never a path: templates live in one directory,
@@ -234,6 +239,13 @@ func (t *TypeDecl) storageMatrix() error {
 	if (t.Template != nil || t.TemplateOff) && (t.Layout == "collection" || t.Format != "md") {
 		return errors.New("'template' applies only to per-item and singleton md types " +
 			"(a collection or non-md type never reads a body template); drop the key")
+	}
+	// A singleton's id IS its type name, so an id scheme on one declares a
+	// prefix or a date no verb would ever mint — a category error here, not a
+	// permanent `check` finding.
+	if (t.IdPrefix != nil || t.IdDate) && t.Layout == "singleton" {
+		return errors.New("'id_prefix' and 'id_date' apply only to minting types " +
+			"(a singleton's id is its type name, so it mints nothing); drop the key")
 	}
 	return nil
 }
@@ -466,6 +478,7 @@ func applyStorageDecl(m *omap.Map, td *TypeDecl, loc []string, c *vocabCollector
 	if pv, has := m.Get("id_prefix"); has && pv != nil {
 		td.IdPrefix = buildIdPrefixSpec(pv, at(loc, "id_prefix"), c)
 	}
+	td.IdDate = takeBool(m, "id_date", loc, c)
 	if tv, has := m.Get("template"); has && tv != nil {
 		switch x := tv.(type) {
 		case string:
@@ -485,7 +498,7 @@ func applyStorageDecl(m *omap.Map, td *TypeDecl, loc []string, c *vocabCollector
 			c.add("string_type", at(loc, "template"), msgString)
 		}
 	}
-	addExtras(m, loc, c, "layout", "path", "format", "id_prefix", "template")
+	addExtras(m, loc, c, "layout", "path", "format", "id_prefix", "id_date", "template")
 }
 
 // storageDefaults fills the storage config of a type no storage layer named:

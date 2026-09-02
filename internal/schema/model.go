@@ -11,6 +11,8 @@ package schema
 
 import (
 	"fmt"
+	"slices"
+	"strings"
 
 	"github.com/endgame-build/khub/internal/omap"
 )
@@ -72,7 +74,7 @@ type PrefixMember struct {
 	Prefix string
 }
 
-// IdPrefix is a type's enumerated-id policy: a literal prefix, or one per enum
+// IdPrefix is a type's prefixed-id policy: a literal prefix, or one per enum
 // member. See TypeDecl.IdPrefix. By/Members are empty for the literal form.
 type IdPrefix struct {
 	Literal *string
@@ -132,8 +134,11 @@ type ResolvedType struct {
 	Required bool
 	// See TypeDecl.Orphan: this type's instances are exempt from the orphan sweep.
 	Orphan bool
-	// See TypeDecl.IdPrefix: `add` mints `<prefix>-NNN-<slug>` when this is set.
+	// See TypeDecl.IdPrefix: `add` mints `<prefix>-<slug>` when this is set.
 	IdPrefix *IdPrefix
+	// See TypeDecl.IdDate: the minted id carries its mint date,
+	// `<prefix>-<YYYY-MM-DD>-<slug>`.
+	IdDate bool
 	// See TypeDecl.Template / TemplateOff: the declared template stem and the
 	// explicit opt-out. Read through TemplateName.
 	Template    *string
@@ -165,6 +170,33 @@ func (t *ResolvedType) TemplateName() string {
 // it. `add`, `validate` and `check` all gate on this one predicate.
 func (t *ResolvedType) ReadsTemplate() bool {
 	return t.Storage.Fmt == "md" && t.Storage.Layout != LayoutCollection
+}
+
+// IdShape renders the id pattern this type declares — `fr|cst|br-slug`,
+// `ad-YYYY-MM-DD-slug`, `slug` — once, for every message that shows it. The
+// `bad_id` finding and `schema show` both name it, and a reader fixing a slug
+// against one while reading the other must not be told two things. A
+// singleton mints nothing and renders "".
+func (t *ResolvedType) IdShape() string {
+	if t.Storage.Layout == LayoutSingleton {
+		return ""
+	}
+	var parts []string
+	if t.IdPrefix != nil {
+		parts = append(parts, strings.Join(t.IdPrefix.All(), "|"))
+	}
+	if t.IdDate {
+		parts = append(parts, "YYYY-MM-DD")
+	}
+	parts = append(parts, "slug")
+	return strings.Join(parts, "-")
+}
+
+// FieldNames lists the type's declared field names — attributes, then
+// relations, each in declaration order. A template's lens `when` clauses are
+// validated against this set (template.LoadTemplate's fields parameter).
+func (t *ResolvedType) FieldNames() []string {
+	return slices.Concat(t.Attributes.Keys(), t.Relations.Keys())
 }
 
 // CollectionRelpath is the one workspace-relative path of a collection type's

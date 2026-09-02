@@ -21,8 +21,9 @@ const bodyKey = "body"
 // FmtOf returns the format a path stores: its suffix sans dot (.yml is NOT aliased).
 func FmtOf(path string) string { return strings.TrimPrefix(filepath.Ext(path), ".") }
 
-// pyTypeName maps a canon value to the Python type name khub's messages print.
-func pyTypeName(v any) string {
+// PyTypeName maps a canon value to the Python type name khub's messages print
+// — here and in the template layer's "'title' must be text, got int".
+func PyTypeName(v any) string {
 	switch v.(type) {
 	case nil:
 		return "NoneType"
@@ -108,7 +109,7 @@ func loadMapping(text, fmt_ string) (*omap.Map, error) {
 	m, ok := v.(*omap.Map)
 	if !ok {
 		return nil, errs.New("malformed_entity",
-			fmt.Sprintf("A %s entity must be a single mapping, got %s", fmt_, pyTypeName(v)))
+			fmt.Sprintf("A %s entity must be a single mapping, got %s", fmt_, PyTypeName(v)))
 	}
 	return m, nil
 }
@@ -127,7 +128,7 @@ func popBody(data *omap.Map, fmt_, ctx string) (string, error) {
 	}
 	return "", errs.New("malformed_entity",
 		fmt.Sprintf("%sthe reserved 'body' key of a %s entity must be a string, got %s",
-			ctx, fmt_, pyTypeName(raw)))
+			ctx, fmt_, PyTypeName(raw)))
 }
 
 // Render serializes a document in the format's native shape.
@@ -193,7 +194,7 @@ func LoadCollection(text, fmt_ string) (*omap.Map, error) {
 			row, ok := v.(*omap.Map)
 			if !ok {
 				return nil, errs.New("malformed_entity",
-					fmt.Sprintf("jsonl row %d is not an object (%s)", n+1, pyTypeName(v)))
+					fmt.Sprintf("jsonl row %d is not an object (%s)", n+1, PyTypeName(v)))
 			}
 			slugAny, has := row.Get("slug")
 			row.Delete("slug")
@@ -222,7 +223,7 @@ func LoadCollection(text, fmt_ string) (*omap.Map, error) {
 			row, ok := rowAny.(*omap.Map)
 			if !ok {
 				return nil, errs.New("malformed_entity",
-					fmt.Sprintf("row '%s' is not a mapping (%s)", key, pyTypeName(rowAny)))
+					fmt.Sprintf("row '%s' is not a mapping (%s)", key, PyTypeName(rowAny)))
 			}
 			if innerAny, has := row.Get("slug"); has {
 				row.Delete("slug")
@@ -241,7 +242,7 @@ func LoadCollection(text, fmt_ string) (*omap.Map, error) {
 			if _, isStr := raw.(string); !isStr {
 				return nil, errs.New("malformed_entity",
 					fmt.Sprintf("row '%s': the reserved 'body' key of a %s entity must be a string, got %s",
-						slug, fmt_, pyTypeName(raw)))
+						slug, fmt_, PyTypeName(raw)))
 			}
 		}
 	}

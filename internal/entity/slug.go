@@ -1,18 +1,14 @@
 // Port of the slug half of src/khub/core/entity.py: slugify, _slug_source,
-// _slug_base, _minted_base, _next_ordinal, _explicit_slug and _mint_and_write.
+// _slug_base and _explicit_slug. The ordinal machinery that sat beside them
+// (_minted_base, _next_ordinal, _mint_and_write) went with the `-NNN-` scheme;
+// see mintSlug for why.
 package entity
 
 import (
-	"errors"
 	"fmt"
-	"io/fs"
-	"os"
-	"path/filepath"
 	"regexp"
-	"strconv"
 
 	"github.com/endgame-build/khub/internal/errs"
-	"github.com/endgame-build/khub/internal/index"
 	"github.com/endgame-build/khub/internal/omap"
 	"github.com/endgame-build/khub/internal/schema"
 	"github.com/endgame-build/khub/internal/values"
@@ -23,10 +19,11 @@ import (
 // located error.
 const maxSlug = 100
 
-// ordinalWidth is the zero-padding of a minted ordinal (001, 045, 1200).
-const ordinalWidth = 3
-
 var slugStrip = regexp.MustCompile(`[^a-z0-9]+`)
+
+// isoDay is the YYYY-MM-DD opening of a date or datetime scalar — the part of
+// `created` a dated id carries.
+var isoDay = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}`)
 
 // slugify lowercases, collapses non-alphanumeric runs to single hyphens, and
 // trims hyphens. Python str.lower(), NOT casefold — target matching folds case,
@@ -36,18 +33,22 @@ func slugify(text string) string {
 	return trimHyphens(slugStrip.ReplaceAllString(lowered, "-"))
 }
 
-// slugSource is the string a minted slug derives from: a name, else a title,
-// else the type. firm-ops meetings/fragments carry no `name`, so the title
-// fallback keeps their slugs meaningful instead of collapsing every one to the
-// bare type name.
-func slugSource(typeName string, attrs *omap.Map) string {
+// SlugSource is the string a minted slug derives from: `name`, else `title`.
+// ok is false when neither carries a value. There is no type-name fallback:
+// it existed to keep capture unblocked while the ordinal told two untitled
+// entities apart, and without the ordinal it would mint one id per type.
+//
+// Exported for the id gate: validate tells a retired `NNN-` ordinal apart from
+// a title that genuinely starts with digits by slugifying the same source add
+// would have minted from.
+func SlugSource(attrs *omap.Map) (string, bool) {
 	for _, key := range []string{"name", "title"} {
 		value, ok := attrs.Get(key)
 		if ok && truthy(value) {
-			return values.Str(value)
+			return values.Str(value), true
 		}
 	}
-	return typeName
+	return "", false
 }
 
 // slugBase is a minted slug's base: slugified, non-empty, within the length cap.
@@ -64,105 +65,74 @@ func slugBase(source string) (string, error) {
 	return base, nil
 }
 
-// mintedBase is a minted slug: `<prefix>-<number>-<slug>`, or `<number>-<slug>`
-// with no prefix. Every minted id carries an ordinal, so a corpus reads in the
-// order it was authored and an entity can be named in prose by a short stable
-// handle (ad-004). The number is zero-padded to three and keeps counting past
-// it — 001, 045, 1200.
-func mintedBase(rtype *schema.ResolvedType, attrs *omap.Map, idx *index.Index) (string, error) {
-	base, err := slugBase(slugSource(rtype.Name, attrs))
+// chooseSlug is the slug a create writes under: an explicit --id, slugified
+// and capped exactly like a minted one, else the minted id.
+func chooseSlug(rtype *schema.ResolvedType, meta *omap.Map, id string) (string, error) {
+	if id != "" {
+		return slugBase(id)
+	}
+	return mintSlug(rtype, meta)
+}
+
+// mintSlug is `<prefix>-<YYYY-MM-DD>-<slug>`, with the prefix and the date each
+// optional per type (storage `id_prefix` and `id_date`).
+//
+// A pure function of the schema, the type and the frontmatter — it reads no
+// siblings. The ordinal it replaced was max(existing)+1 over an index scan, a
+// read-modify-write that two branches, worktrees or agents each won: the
+// filenames differed, so git merged both and nothing ever reported the
+// collision. Minting the same id twice is now a refusal (Create's index
+// pre-check and the O_EXCL write) or an add/add merge conflict on one
+// filename, which is the point.
+//
+// The date is the one this id was minted on, and it stays that even if
+// `created` is later edited. Do not add a check that the two agree: it would
+// fire on every legitimate edit and on every --id.
+func mintSlug(rtype *schema.ResolvedType, meta *omap.Map) (string, error) {
+	source, ok := SlugSource(meta)
+	if !ok {
+		return "", errs.NoSlugSource(rtype.Name)
+	}
+	base, err := slugBase(source)
 	if err != nil {
 		return "", err
-	}
-	prefix := ""
-	if rtype.IdPrefix != nil {
-		if p, ok := rtype.IdPrefix.Resolve(attrs); ok {
-			prefix = p
-		}
 	}
 	stem := ""
-	if prefix != "" {
+	if rtype.IdPrefix != nil {
+		prefix, resolved := rtype.IdPrefix.Resolve(meta)
+		if !resolved {
+			// Only the by-value form can fail to resolve — a literal always
+			// does — so By is set here. The ordinal used to stand in for the
+			// missing prefix (`NNN-slug`); without it there is nothing to mint.
+			return "", errs.IdPrefixUndecided(rtype.Name, *rtype.IdPrefix.By, memberValues(rtype.IdPrefix))
+		}
 		stem = prefix + "-"
 	}
-	ordinal := strconv.Itoa(nextOrdinal(idx, rtype.Name, prefix))
-	for len(ordinal) < ordinalWidth {
-		ordinal = "0" + ordinal
+	dated := ""
+	if rtype.IdDate {
+		dated = mintDate(meta) + "-"
 	}
-	return stem + ordinal + "-" + base, nil
+	return stem + dated + base, nil
 }
 
-// nextOrdinal is one past the highest ordinal in use for this type (and prefix,
-// if any). Counted per prefix, not per type: a requirement schema minting `fr-`
-// and `cst-` keeps two independent sequences, which is what makes the number
-// readable as "the fourth constraint" rather than an arbitrary position.
-func nextOrdinal(idx *index.Index, typeName, prefix string) int {
-	expr := `^(\d+)-`
-	if prefix != "" {
-		expr = `^` + regexp.QuoteMeta(prefix) + `-(\d+)-`
-	}
-	pattern := regexp.MustCompile(expr)
-	highest := 0
-	for node := range idx.Nodes {
-		if node.Type != typeName {
-			continue
-		}
-		m := pattern.FindStringSubmatch(node.Slug)
-		if m == nil {
-			continue
-		}
-		if n, err := strconv.Atoi(m[1]); err == nil && n > highest {
-			highest = n
+// mintDate is the day a dated id carries: the entity's `created` as assembled
+// by Create (so a --created override dates the id), else today — `--created ""`
+// clears the field to null, and the id still needs the day it was minted on.
+func mintDate(meta *omap.Map) string {
+	if v, has := meta.Get("created"); has && v != nil {
+		if s := values.Str(v); isoDay.MatchString(s) {
+			return s[:10]
 		}
 	}
-	return highest + 1
+	return today().ISO
 }
 
-// explicitSlug is an explicit --id's slug: slugified, capped, and unique — a
-// collision refuses. Unlike a minted slug an explicit id is never auto-suffixed:
-// the caller named it, so a within-type collision is an error to surface.
-func explicitSlug(id, typeName string, idx *index.Index) (string, error) {
-	base, err := slugBase(id)
-	if err != nil {
-		return "", err
+// memberValues lists the enum values a by-value prefix decides on, in declared
+// order — the `<functional|constraint|…>` a refusal names.
+func memberValues(p *schema.IdPrefix) []string {
+	out := make([]string, len(p.Members))
+	for i, m := range p.Members {
+		out[i] = m.Value
 	}
-	if idx.Nodes[index.Node{Type: typeName, Slug: base}] {
-		return "", slugTaken(base, typeName)
-	}
-	return base, nil
-}
-
-func slugTaken(slug, typeName string) *errs.Located {
-	return errs.New("slug_taken",
-		fmt.Sprintf("Slug '%s' is already taken in %s; choose another --id", slug, typeName))
-}
-
-// mintAndWrite picks the first free base/base-N slug and writes it with O_EXCL.
-// The index gives a cheap first guess; the exclusive create is the real gate, so
-// a second add racing to the same slug loses the O_EXCL and retries the next
-// suffix instead of clobbering the winner.
-func mintAndWrite(
-	root string, rtype *schema.ResolvedType, base, typeName string,
-	idx *index.Index, meta *omap.Map, body string,
-) (string, string, error) {
-	n, slug := 1, base
-	for {
-		if idx.Nodes[index.Node{Type: typeName, Slug: slug}] {
-			n++
-			slug = fmt.Sprintf("%s-%d", base, n)
-			continue
-		}
-		path := entityPath(root, rtype, slug)
-		if err := os.MkdirAll(filepath.Dir(path), 0o777); err != nil {
-			return "", "", err
-		}
-		err := writeNew(path, meta, body)
-		if err == nil {
-			return slug, path, nil
-		}
-		if !errors.Is(err, fs.ErrExist) {
-			return "", "", err
-		}
-		n++
-		slug = fmt.Sprintf("%s-%d", base, n)
-	}
+	return out
 }

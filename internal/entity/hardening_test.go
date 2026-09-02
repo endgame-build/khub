@@ -207,21 +207,23 @@ func TestBOMEntityIsEditable(t *testing.T) {
 	}
 }
 
-// fix 10: a no-name type mints from title, else from the type name.
-func TestSlugFromTitleThenType(t *testing.T) {
+// fix 10: a no-name type mints from title; with neither it refuses rather
+// than minting the type name (which, without an ordinal, is one id per type).
+func TestSlugFromTitleElseRefuses(t *testing.T) {
 	ws := newWS(t, "firm-ops")
 	people(t, ws)
 	titled, err := Create(ws, "fragment", CreateOpts{
 		Fields: fields("stage", "raw", "owner", "ann", "title", "My Note"), UseTemplate: true})
 	requireNoError(t, err)
-	if titled.Slug != "001-my-note" {
+	if titled.Slug != "my-note" {
 		t.Fatalf("title slug = %q", titled.Slug)
 	}
-	bare, err := Create(ws, "fragment", CreateOpts{
+	before := mdFiles(t, ws)
+	_, err = Create(ws, "fragment", CreateOpts{
 		Fields: fields("stage", "raw", "owner", "ann"), UseTemplate: true})
-	requireNoError(t, err)
-	if bare.Slug != "002-fragment" {
-		t.Fatalf("type slug = %q", bare.Slug)
+	requireCode(t, err, "no_slug_source")
+	if !equalStrings(mdFiles(t, ws), before) {
+		t.Fatal("the refused create wrote a file")
 	}
 }
 

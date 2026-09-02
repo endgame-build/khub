@@ -265,3 +265,22 @@ func TestSearchTiesBreakOnInsertionOrder(t *testing.T) {
 		t.Fatalf("ties must follow sorted-node insertion order, got %v", got)
 	}
 }
+
+// Two different judgements about the same body (kb
+// `test_the_search_index_drops_hints_and_keeps_code`). A hint is the template's
+// words, so indexing it made every fresh entity a strong hit for its own
+// scaffold. A fenced block is the author's — a mermaid diagram names the
+// components and a bash block names the command, and finding those is what
+// `khub search` is for.
+func TestSearchDropsHintCommentsAndKeepsCode(t *testing.T) {
+	ws := freshWS(t)
+	seedRaw(t, ws, "clients/scaffolded.md",
+		"---\ntype: client\nname: Scaffolded\ncreated: 2026-06-01\n---\n"+
+			"<!-- what it is responsible for -->\n\n```bash\ndocker compose up\n```\n")
+	if got := hitSlugs(mustSearch(t, ws, "docker", nil, 20)); !eq(got, []string{"scaffolded"}) {
+		t.Fatalf("a fenced block is not indexed: %v", got)
+	}
+	if got := hitSlugs(mustSearch(t, ws, "responsible", nil, 20)); len(got) != 0 {
+		t.Fatalf("a hint comment is indexed: %v", got)
+	}
+}
