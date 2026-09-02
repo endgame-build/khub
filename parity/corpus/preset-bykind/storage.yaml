@@ -1,0 +1,2 @@
+storage:
+  part: { layout: file, path: parts, id_prefix: { by: kind, map: { bolt: bl, nut: nt } } }
