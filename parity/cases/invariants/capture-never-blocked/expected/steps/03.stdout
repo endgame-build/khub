@@ -7,7 +7,11 @@ title: No status at all
 ---
 ## Context
 
-<!-- the forces; the constraint requirements (cst-NNN) that bind this -->
+<!-- the forces; the constraint requirements (req- slugs) that bind this -->
+
+## Alternatives
+
+<!-- what else was on the table, and what each would have cost — including doing nothing -->
 
 ## Decision
 
@@ -16,3 +20,7 @@ title: No status at all
 ## Consequences
 
 <!-- what gets easier, what gets harder; what this forecloses -->
+
+## Prevents
+
+<!-- the divergence this stops — what someone would otherwise reasonably have done -->

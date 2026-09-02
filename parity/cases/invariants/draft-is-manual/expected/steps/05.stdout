@@ -1,1 +1,1 @@
-{"id": "requirement/fr-001-draft-one", "type": "requirement", "slug": "fr-001-draft-one", "predicate": "related", "target": "fr-002-active-one", "changed": true}
+{"id": "requirement/req-draft-one", "type": "requirement", "slug": "req-draft-one", "predicate": "related", "target": "req-active-one", "changed": true}

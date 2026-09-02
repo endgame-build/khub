@@ -1,1 +1,1 @@
-[{"id": "gizmo/002-b", "type": "gizmo", "slug": "002-b", "superseded_by": null}, {"id": "gizmo/001-a", "type": "gizmo", "slug": "001-a", "superseded_by": "gizmo/002-b"}]
+[{"id": "gizmo/b", "type": "gizmo", "slug": "b", "superseded_by": null}, {"id": "gizmo/a", "type": "gizmo", "slug": "a", "superseded_by": "gizmo/b"}]

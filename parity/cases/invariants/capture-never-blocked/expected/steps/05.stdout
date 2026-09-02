@@ -1,1 +1,1 @@
-{"count": 4, "errors": []}
+{"error": {"code": "no_slug_source", "message": "Type 'component' has no name or title to mint an id from; pass --name or --title, or name it with --id <slug>"}}
