@@ -1,12 +1,29 @@
- component/cmp-001-api
-┏━━━━━━━━━┳━━━━━━━━━━━━┓
-┃ field   │ value      ┃
-┡━━━━━━━━━╇━━━━━━━━━━━━┩
-│ type    │ component  │
-│ created │ 2026-01-15 │
-│ updated │ 2026-01-15 │
-│ draft   │ False      │
-│ title   │ API        │
-│ kind    │ service    │
-│ stack   │ python     │
-└─────────┴────────────┘
+ component/cmp-api
+┏━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ field   │ value                                                              ┃
+┡━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┩
+│ type    │ component                                                          │
+│ created │ 2026-01-15                                                         │
+│ updated │ 2026-01-15                                                         │
+│ draft   │ False                                                              │
+│ title   │ API                                                                │
+│ kind    │ service                                                            │
+│ stack   │ python                                                             │
+│ body    │ <!-- one paragraph — what this is and where its boundary runs.     │
+│         │ `kind` says whether we can change it or only react to it;          │
+│         │ `depends_on` carries what breaks when it does. -->                 │
+│         │                                                                    │
+│         │ ## Responsibilities                                                │
+│         │                                                                    │
+│         │ <!-- what this owns, and — as sharply — what it deliberately does  │
+│         │ not -->                                                            │
+│         │                                                                    │
+│         │ ## Interfaces                                                      │
+│         │                                                                    │
+│         │ <!-- how callers reach it; hang the machine spec                   │
+│         │ (OpenAPI/AsyncAPI) off `resource` -->                              │
+│         │                                                                    │
+│         │ ## Operational notes                                               │
+│         │                                                                    │
+│         │ <!-- how it fails, how that shows up, and what to do about it -->  │
+└─────────┴────────────────────────────────────────────────────────────────────┘

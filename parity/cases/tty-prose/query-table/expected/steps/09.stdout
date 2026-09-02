@@ -1,7 +1,7 @@
  query
-┏━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━┳━━━━━━━┳━━━━━━━┳━━━━━━━━┳━━━━━━━┓
-┃ id                    │ type      │ title │ draft │ orphan │ stale ┃
-┡━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━╇━━━━━━━╇━━━━━━━╇━━━━━━━━╇━━━━━━━┩
-│ component/cmp-001-api │ component │ API   │ False │ False  │ False │
-│ component/cmp-002-web │ component │ Web   │ False │ False  │ False │
-└───────────────────────┴───────────┴───────┴───────┴────────┴───────┘
+┏━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━┳━━━━━━━┳━━━━━━━┳━━━━━━━━┳━━━━━━━┓
+┃ id                │ type      │ title │ draft │ orphan │ stale ┃
+┡━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━╇━━━━━━━╇━━━━━━━╇━━━━━━━━╇━━━━━━━┩
+│ component/cmp-api │ component │ API   │ False │ False  │ False │
+│ component/cmp-web │ component │ Web   │ False │ False  │ False │
+└───────────────────┴───────────┴───────┴───────┴────────┴───────┘
