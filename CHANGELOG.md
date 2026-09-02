@@ -2,7 +2,7 @@
 
 Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); khub is pre-release.
 
-## [Unreleased]
+## [0.23.0] — 2026-09-02
 
 The `-NNN-` ordinal is gone from minted ids and every refused call exits 2. Both
 change the corpus and the contract; every existing corpus needs the rename in
