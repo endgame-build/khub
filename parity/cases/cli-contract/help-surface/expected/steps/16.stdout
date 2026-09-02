@@ -1,11 +1,13 @@
                                                                                 
- Usage: khub check [OPTIONS]                                                    
+ Usage: khub validate [OPTIONS] [TARGET]                                        
                                                                                 
- Check the active graph: completeness, orphans, dangling edges, strays, cycles. 
+ Validate entities: khub validate [TARGET] [--strict].                          
                                                                                 
+╭─ Arguments ──────────────────────────────────────────────────────────────────╮
+│   TARGET      <str>  A type or type/slug; default: all.                      │
+╰──────────────────────────────────────────────────────────────────────────────╯
 ╭─ Options ────────────────────────────────────────────────────────────────────╮
-│ --strict               Fail the gate on orphans too (default:                │
-│                        informational).                                       │
+│ --strict               Close the schema: reject undeclared keys.             │
 │ --format        <str>  text (Rich on a TTY) or json. [default: text]         │
 │ --help                 Show this message and exit.                           │
 ╰──────────────────────────────────────────────────────────────────────────────╯

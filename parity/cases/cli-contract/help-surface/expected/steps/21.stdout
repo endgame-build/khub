@@ -1,15 +1,13 @@
                                                                                 
- Usage: khub wire [OPTIONS]                                                     
+ Usage: khub backfill [OPTIONS]                                                 
                                                                                 
- Wire the workspace into agent context files (CLAUDE.md gets ``@`` imports of   
- the schema layer files; AGENTS.md gets a schema pointer). Bare ``wire``        
- updates whichever already exist.                                               
+ Backfill missing dates and frontmatter: khub backfill [--type T] [--dry-run].  
                                                                                 
 ╭─ Options ────────────────────────────────────────────────────────────────────╮
-│ --target         <str>  Create and wire a specific file: claude, agents, or  │
-│                         both. Omit to update the agent files that already    │
-│                         exist.                                               │
-│ --dry-run               Print the block(s); write nothing.                   │
+│ --type           <str>  Add missing per-type frontmatter scaffolding for     │
+│                         that type.                                           │
+│ --dry-run               List the entities and fields that would change;      │
+│                         write nothing.                                       │
 │ --help                  Show this message and exit.                          │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 

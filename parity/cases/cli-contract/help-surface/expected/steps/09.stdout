@@ -1,16 +1,15 @@
                                                                                 
- Usage: khub remove [OPTIONS] [ID]                                              
+ Usage: khub unlink [OPTIONS] [ID] [PREDICATE] [TARGET]                         
                                                                                 
- Remove an entity, guarded by inbound edges: khub remove old-fragment           
- [--force].                                                                     
+ Remove a relation: khub unlink initech-pov partner northwind.                  
                                                                                 
 ╭─ Arguments ──────────────────────────────────────────────────────────────────╮
-│   ID      <str>  A bare slug, or type/slug on ambiguity.                     │
+│   ID             <str>                                                       │
+│   PREDICATE      <str>                                                       │
+│   TARGET         <str>                                                       │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 ╭─ Options ────────────────────────────────────────────────────────────────────╮
-│ --force                Delete despite inbound edges (leaves them dangling).  │
-│ --format        <str>  text or json (emits the removed record).              │
-│                        [default: text]                                       │
+│ --format        <str>  text or json (emits the edge record). [default: text] │
 │ --help                 Show this message and exit.                           │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 

@@ -12,6 +12,8 @@
 ╭─ Commands ───────────────────────────────────────────────────────────────────╮
 │ init            Scaffold a workspace from a preset and wire it into the      │
 │                 agent context files.                                         │
+│ upgrade         Refresh an existing workspace: the shipped schema and        │
+│                 templates, new scaffolds, the skills, the wire block.        │
 │ status          Summarize the workspace: counts, draft/active, orphan/stale, │
 │                 OKF conformance.                                             │
 │ add             Create an entity: khub add opportunity --client initech      │
@@ -37,7 +39,7 @@
 │                 [--limit 3].                                                 │
 │ validate        Validate entities: khub validate [TARGET] [--strict].        │
 │ check           Check the active graph: completeness, orphans, dangling      │
-│                 edges, strays, cycles.                                       │
+│                 edges, strays, cycles, bodies.                               │
 │ stale           List entities past the `updated` threshold, oldest first:    │
 │                 khub stale [--days N].                                       │
 │ reindex         Regenerate the OKF index.md from the graph: khub reindex     │

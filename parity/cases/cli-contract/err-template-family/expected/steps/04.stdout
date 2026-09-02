@@ -1,1 +1,1 @@
-{"count": 3, "errors": [{"id": "adr/*", "type": "adr", "slug": "*", "field": "template", "reason": "Template for 'adr' (.khub/templates/adr.yaml): top level must be a mapping with a 'sections' list"}]}
+{"count": 3, "errors": [{"id": "adr/*", "type": "adr", "slug": "*", "field": "template", "reason": "Template for 'adr' (.khub/templates/adr.yaml): top level must be a mapping with a 'sections' list"}], "gaps": [], "body": null, "lenses": []}

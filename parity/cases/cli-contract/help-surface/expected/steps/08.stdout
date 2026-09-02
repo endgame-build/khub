@@ -1,7 +1,7 @@
                                                                                 
- Usage: khub unlink [OPTIONS] [ID] [PREDICATE] [TARGET]                         
+ Usage: khub link [OPTIONS] [ID] [PREDICATE] [TARGET]                           
                                                                                 
- Remove a relation: khub unlink initech-pov partner northwind.                  
+ Add a relation: khub link initech-pov partner northwind.                       
                                                                                 
 ╭─ Arguments ──────────────────────────────────────────────────────────────────╮
 │   ID             <str>                                                       │

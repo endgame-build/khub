@@ -10,6 +10,7 @@
 steps:
 - argv: ["--help"]
 - argv: ["init", "--help"]
+- argv: ["upgrade", "--help"]
 - argv: ["status", "--help"]
 - argv: ["add", "--help"]
 - argv: ["get", "--help"]

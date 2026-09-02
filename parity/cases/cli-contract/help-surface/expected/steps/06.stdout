@@ -1,20 +1,15 @@
                                                                                 
- Usage: khub edit [OPTIONS] [ID]                                                
+ Usage: khub get [OPTIONS] [ID]                                                 
                                                                                 
- Edit an entity: khub edit initech-deal stage proposal-sent  (or --field        
- value).                                                                        
-                                                                                
- A missing ID is a usage error; the field and value are positional or flags.    
+ Read an entity's frontmatter and body, optionally with derived edges.          
                                                                                 
 ╭─ Arguments ──────────────────────────────────────────────────────────────────╮
 │   ID      <str>  A bare slug, or type/slug on ambiguity.                     │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 ╭─ Options ────────────────────────────────────────────────────────────────────╮
-│ --strict                  Reject fields the schema does not declare.         │
-│ --body             <str>  Replace the body with this string ('' clears it).  │
-│ --body-file        <str>  Replace the body from a file ('-' for stdin).      │
-│ --format           <str>  text or json (emits the updated record).           │
-│                           [default: text]                                    │
-│ --help                    Show this message and exit.                        │
+│ --edges                Include stored and derived edges.                     │
+│ --format        <str>  json, table, raw, or text (Rich on a TTY).            │
+│                        [default: text]                                       │
+│ --help                 Show this message and exit.                           │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 
