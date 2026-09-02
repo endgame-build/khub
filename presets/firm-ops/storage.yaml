@@ -3,8 +3,10 @@
 # `path` is the per-type inventory directory, from the capture's real HQ
 # layout: file -> {path}/{slug}.md ; folder -> {path}/{slug}/_index.md.
 # meetings, transcripts and fragments are flattened for MVP (HQ nested
-# */meetings/ and fragments/{owner}/). firm-ops declares no id_prefix, so its
-# entities are numbered without one (NNN-slug).
+# */meetings/ and fragments/{owner}/). firm-ops declares no id_prefix and no
+# id_date, so an id is the bare slug of the entity's name or title — every
+# type requires the one it mints from, and a repeated one is refused by `add`
+# (name it with --id).
 
 storage:
   opportunity: { layout: folder, path: opportunities }

@@ -7,4 +7,4 @@ sections:
 - heading: Read model
   hint: entities read from other domains, and via which contract
 - heading: Acceptance criteria
-  hint: cite boundaries (BOUND-NNN) the blueprint must hold
+  hint: cite the boundaries (bound- slugs) the blueprint must hold

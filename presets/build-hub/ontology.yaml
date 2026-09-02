@@ -57,7 +57,7 @@
 # mechanics) lives in storage.yaml beside this file; the singleton gates
 # (prd required, the five orphan flags) live in policy.yaml.
 
-version: "0.3.0"
+version: "0.4.0"
 
 ontology:
   entities:
@@ -213,7 +213,7 @@ ontology:
       when: >-
         a codebase is named that holds part of this system
       attributes:
-        repo:   { type: text, required: true, pattern: '^[a-z0-9._-]+/[a-z0-9._-]+$' }
+        repo:   { type: text, required: true, pattern: '^[a-z0-9._-]+(/[a-z0-9._-]+)+$' }   # org/name, nested groups allowed
         status: { enum: [active, archived], required: true }
       # pure remotes record — an engagement tightens the pattern to its org
 
