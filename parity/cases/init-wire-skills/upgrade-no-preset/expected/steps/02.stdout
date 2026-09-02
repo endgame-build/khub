@@ -1,0 +1,1 @@
+{"error": {"code": "no_preset", "message": "Workspace . records no preset in .khub/config.yaml; run khub init <preset> first"}}

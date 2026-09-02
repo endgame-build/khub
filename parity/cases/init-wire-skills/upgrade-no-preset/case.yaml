@@ -1,0 +1,6 @@
+# A config.yaml recording no preset has nothing to refresh from: upgrade refuses
+# (exit 2, no_preset) and names init.
+steps:
+- argv: ["init", "build-lite", ".", "--no-wire"]
+- sh: "perl -ni -e 'print unless /^preset:/' .khub/config.yaml"
+- argv: ["upgrade", "--format", "json"]
