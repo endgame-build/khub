@@ -1,1 +1,1 @@
-{"error": {"code": "pattern_violation", "message": "'no spaces allowed' does not match the pattern for repo (^[a-z0-9._-]+/[a-z0-9._-]+$)"}}
+{"error": {"code": "pattern_violation", "message": "'no spaces allowed' does not match the pattern for repo (^[a-z0-9._-]+(/[a-z0-9._-]+)+$)"}}

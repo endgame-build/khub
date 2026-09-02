@@ -207,25 +207,17 @@ func scaffold(
 	// the preset over local edits. Refreshing from a newer preset is an
 	// upgrade, not a scaffold. Each file carries the provenance header; the
 	// base block is embedded in the binary and never written here.
-	header := fmt.Sprintf("# khub-preset: %s@%s\n", preset, merged.Version)
-	for _, layer := range []struct {
-		file string
-		doc  *omap.Map
-	}{
-		{"ontology.yaml", merged.Ontology},
-		{"policy.yaml", merged.Policy},
-		{"storage.yaml", merged.Storage},
-	} {
-		layerPath := pyJoin(khubDir, layer.file)
+	for _, layer := range merged.layers() {
+		layerPath := pyJoin(khubDir, layer.File)
 		if pathExists(layerPath) {
-			preserved = append(preserved, ".khub/"+layer.file)
+			preserved = append(preserved, ".khub/"+layer.File)
 			continue
 		}
-		body, err := canon.DumpWide(layer.doc)
+		text, err := layerBytes(preset, merged.Version, layer.Doc)
 		if err != nil {
 			return "", nil, err
 		}
-		if err := writeText(layerPath, header+body); err != nil {
+		if err := writeText(layerPath, text); err != nil {
 			return "", nil, err
 		}
 		*written = append(*written, layerPath)
@@ -308,13 +300,54 @@ func scaffold(
 	if err != nil {
 		return "", nil, err
 	}
-	if err := layDownTree(target, resolved); err != nil {
-		return "", nil, err
-	}
-	if err := createSingletons(target, resolved, created); err != nil {
+	if err := provision(target, resolved, created); err != nil {
 		return "", nil, err
 	}
 	return wsName, preserved, nil
+}
+
+// layerDoc pairs one workspace layer file with the flattened document behind
+// it.
+type layerDoc struct {
+	File string
+	Doc  *omap.Map
+}
+
+// layers lists the three layer files in write order — the order init writes
+// them, a re-init reports them preserved, and upgrade compares them.
+func (f *flattened) layers() []layerDoc {
+	return []layerDoc{
+		{"ontology.yaml", f.Ontology},
+		{"policy.yaml", f.Policy},
+		{"storage.yaml", f.Storage},
+	}
+}
+
+// layerHeaderPrefix opens every scaffolded layer file; the rest of the line
+// is `<preset>@<version>`.
+const layerHeaderPrefix = "# khub-preset: "
+
+// layerBytes renders one layer file exactly as init writes it: the provenance
+// header over the wide dump. Upgrade builds its incoming bytes through this
+// same function, so the two verbs cannot disagree about what a shipped file
+// looks like — an upgrade over a fresh init reports nothing to do.
+func layerBytes(preset, version string, doc *omap.Map) (string, error) {
+	body, err := canon.DumpWide(doc)
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%s%s@%s\n", layerHeaderPrefix, preset, version) + body, nil
+}
+
+// provision is scaffold's tail, shared with upgrade: one directory per type
+// and each templated md singleton that is missing, both driven off the
+// RESOLVED schema. That sharing is the point of the split — a type the
+// ontology gained after the workspace was created still gets its directory.
+func provision(target string, resolved *schema.ResolvedSchema, created *[]singleton) error {
+	if err := layDownTree(target, resolved); err != nil {
+		return err
+	}
+	return createSingletons(target, resolved, created)
 }
 
 // layDownTree creates one directory per type's storage path. File and folder
@@ -371,7 +404,7 @@ func createSingletons(target string, resolved *schema.ResolvedSchema, created *[
 		if stem == "" {
 			continue
 		}
-		tpl, err := template.LoadTemplate(target, stem)
+		tpl, err := template.LoadTemplate(target, stem, rt.FieldNames())
 		if err != nil {
 			return err
 		}
@@ -453,8 +486,14 @@ var (
 	skipParts      = map[string]bool{".khub": true, ".git": true, ".venv": true, "node_modules": true}
 )
 
+// indexName is the generated OKF index at the workspace root
+// (reindex.IndexName; not imported — reindex depends on entity, which depends
+// on this package). It is a projection, never an entity: the CLI writes it as
+// an init tail, so a re-init must not count it as a corpus seeded over.
+const indexName = "index.md"
+
 // entityHashes is _entity_hashes: content hashes of entity-suffixed files,
-// keyed by relpath.
+// keyed by relpath. The root index.md is skipped (see indexName).
 //
 // The skip test runs against the FULL path's components, target's own
 // included — a workspace living under a directory named .git or node_modules
@@ -491,6 +530,9 @@ func entityHashes(target string) (map[string]string, error) {
 			}
 		}
 		if !hasEntitySuffix(d.Name()) {
+			return nil
+		}
+		if d.Name() == indexName && filepath.Dir(p) == root {
 			return nil
 		}
 		payload, rerr := os.ReadFile(p)

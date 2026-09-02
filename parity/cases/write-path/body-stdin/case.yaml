@@ -2,4 +2,4 @@ steps:
 - argv: ["init", "build-lite", ".", "--no-wire"]
 - argv: ["add", "requirement", "--title", "S", "--kind", "functional", "--body-file", "-"]
   stdin: "From stdin.\n\nSecond.\n"
-- argv: ["get", "fr-001-s", "--format", "raw"]
+- argv: ["get", "req-s", "--format", "raw"]

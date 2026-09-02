@@ -1,1 +1,1 @@
-{"id": "requirement/fr-001-a", "type": "requirement", "slug": "fr-001-a", "predicate": "related", "target": "fr-002-b", "changed": true}
+{"id": "requirement/req-a", "type": "requirement", "slug": "req-a", "predicate": "related", "target": "req-b", "changed": true}

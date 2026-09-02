@@ -1,1 +1,1 @@
-{"id": "adr/ad-001-use-jwt", "type": "adr", "slug": "ad-001-use-jwt", "predicate": "affects", "target": "cmp-001-api", "changed": true}
+{"id": "adr/ad-2026-01-15-use-jwt", "type": "adr", "slug": "ad-2026-01-15-use-jwt", "predicate": "affects", "target": "cmp-api", "changed": true}

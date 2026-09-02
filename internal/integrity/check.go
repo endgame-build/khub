@@ -87,8 +87,22 @@ type CheckReport struct {
 	// load error: capture is never blocked, so a broken template link must not
 	// take `add` down with it. Entries are "<type>: .khub/templates/<name>.yaml".
 	MissingTemplates []string
-	Cycles           [][]string
-	Malformed        []string
+	// A template that exists but does not parse — one finding against the
+	// TYPE (slug "*", field "template"), never repeated per body it was meant
+	// to judge. A contract that does not parse cannot judge a body, so that
+	// type's shape and rule checks go quiet while every other finding lands.
+	TemplateInvalid []FieldError
+	// A body whose required headings are missing or out of order: not the
+	// document it claims to be. Fails the gate.
+	BodyShape []FieldError
+	// A body whose prose does not satisfy a section rule: that document,
+	// unfinished. Informational — never consulted by Passed, `--strict`
+	// included. Every rule a template gained would otherwise turn a green
+	// corpus red on upgrade, which is the one thing that would stop anyone
+	// from declaring a rule at all.
+	Thin      []FieldError
+	Cycles    [][]string
+	Malformed []string
 	// Orphans are informational by default — a fully disconnected entity can be
 	// legitimate (a dormant client whose engagements were archived). Strict makes
 	// a fully connected graph a gate requirement.
@@ -124,6 +138,8 @@ func (r *CheckReport) Passed() bool {
 		len(r.Strays) == 0 &&
 		len(r.StrayTemplates) == 0 &&
 		len(r.MissingTemplates) == 0 &&
+		len(r.TemplateInvalid) == 0 &&
+		len(r.BodyShape) == 0 &&
 		len(r.Cycles) == 0 &&
 		len(r.Malformed) == 0 &&
 		len(r.MissingSingletons) == 0 &&
@@ -254,7 +270,13 @@ func Check(root string, strict bool) (*CheckReport, error) {
 	if err != nil {
 		return nil, err
 	}
+	// Bodies, over every valid node of every templated type — the same pass
+	// validate runs, whole-workspace.
+	body := bodyFindings(root, resolved, valid, nil)
 	return &CheckReport{
+		TemplateInvalid:         body.templateInvalid,
+		BodyShape:               body.shape,
+		Thin:                    body.gaps,
 		Incomplete:              incomplete,
 		Orphans:                 orphans,
 		Dangling:                dangling,

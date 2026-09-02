@@ -147,7 +147,7 @@ func TestCreateThenEditIsMinimalDiff(t *testing.T) {
 	ws := newWS(t, "firm-ops")
 	editPrereqs(t, ws)
 	res, err := Create(ws, "opportunity", CreateOpts{
-		Fields:      fields("client", "initech", "owner", "noor", "stage", "prospect"),
+		Fields:      fields("name", "Deal", "client", "initech", "owner", "noor", "stage", "prospect"),
 		UseTemplate: true})
 	requireNoError(t, err)
 	before := readFile(t, res.Path)

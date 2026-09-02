@@ -1,1 +1,1 @@
-{"id": "gizmo/002-b", "type": "gizmo", "slug": "002-b", "predicate": "supplants", "target": "001-a", "changed": true}
+{"id": "gizmo/b", "type": "gizmo", "slug": "b", "predicate": "supplants", "target": "a", "changed": true}

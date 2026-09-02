@@ -114,6 +114,18 @@ func NoWorkspace() *Located {
 	return &Located{Code: "no_workspace", Message: "No .khub workspace found. Run khub init <preset>"}
 }
 
+// NoPreset is the upgrade guard: a workspace whose config.yaml records no
+// preset has nothing to refresh from. Without it an upgrade would have to
+// guess which shipped preset to lay over the workspace's own schema.
+func NoPreset(path string) *Located {
+	return &Located{
+		Code: "no_preset",
+		Message: fmt.Sprintf("Workspace %s records no preset in .khub/config.yaml; "+
+			"run khub init <preset> first", path),
+		Target: path,
+	}
+}
+
 func BadTarget(value string) *Located {
 	return &Located{
 		Code:    "bad_target",
@@ -143,6 +155,44 @@ func InvalidSlug(source string) *Located {
 		Message: fmt.Sprintf("Cannot mint a slug from '%s'", source),
 		Target:  source,
 	}
+}
+
+// NoSlugSource is a type with neither `name` nor `title` set and no --id: there
+// is nothing to mint from. The type-name fallback went with the ordinal —
+// without one it would mint a single id per type.
+func NoSlugSource(type_ string) *Located {
+	return &Located{
+		Code: "no_slug_source",
+		Message: fmt.Sprintf("Type '%s' has no name or title to mint an id from; "+
+			"pass --name or --title, or name it with --id <slug>", type_),
+		Type: type_,
+	}
+}
+
+// IdPrefixUndecided is a by-value id_prefix whose deciding attribute is unset
+// at mint. Capture is never blocked, but an id has to come from something, and
+// the bare `NNN-slug` that used to stand in for the missing prefix is gone.
+func IdPrefixUndecided(type_, by string, members []string) *Located {
+	return &Located{
+		Code: "id_prefix_undecided",
+		Message: fmt.Sprintf("Type '%s' needs --%s <%s> to mint an id; "+
+			"pass it, or name the entity with --id <slug>", type_, by, strings.Join(members, "|")),
+		Type:     type_,
+		Relation: by,
+	}
+}
+
+// SlugTaken is a slug that already names an entity of the type. An explicit
+// --id is the caller's own collision; a minted one is the design working
+// (minting reads no siblings, so the same title mints the same id), and the
+// message names the way out.
+func SlugTaken(slug, type_ string, minted bool) *Located {
+	message := fmt.Sprintf("Slug '%s' is already taken in %s; choose another --id", slug, type_)
+	if minted {
+		message = fmt.Sprintf("Slug '%s' already exists in %s; "+
+			"pass --id <slug> to name this one differently", slug, type_)
+	}
+	return &Located{Code: "slug_taken", Message: message, Type: type_, Target: slug}
 }
 
 func StrictUnknownField(field string) *Located {

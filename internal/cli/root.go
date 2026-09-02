@@ -1,6 +1,6 @@
-// root.go ports cli/main.py: the command registry, the global options parsed
-// before the command name, and the exit-code trichotomy (0 success, 1 located
-// failure, 2 usage).
+// root.go ports cli/main.py: the command registry (help order: init, upgrade,
+// status, …), the global options parsed before the command name, and the
+// exit-code trichotomy (0 success, 1 a gate failed, 2 a refusal or usage error).
 package cli
 
 import (
@@ -215,6 +215,7 @@ func newRoot() *cobra.Command {
 	root.Args = clickNoSuchCommand
 
 	registerInit(root)
+	registerUpgrade(root)
 	registerStatus(root)
 	registerAdd(root)
 	registerGet(root)

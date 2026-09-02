@@ -1,0 +1,1 @@
+{"error": {"code": "slug_taken", "message": "Slug 'ad-2026-01-15-use-jwt' already exists in adr; pass --id <slug> to name this one differently"}}

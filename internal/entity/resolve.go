@@ -64,8 +64,8 @@ func sameTarget(a, b string) bool { return foldEqual(a, b) }
 // canonicalTarget is the spelling to STORE for a resolved target, preserving
 // the caller's qualified form.
 //
-// Resolution folds case, so storing the caller's raw string let `CMP-001-Api`
-// and `cmp-001-api` sit side by side as two parallel edges to ONE node, each
+// Resolution folds case, so storing the caller's raw string let `CMP-Api`
+// and `cmp-api` sit side by side as two parallel edges to ONE node, each
 // reporting changed: true — and made an unlink of the other spelling a silent
 // no-op. One node, one stored value.
 func canonicalTarget(target string, matches map[index.Node]bool) string {

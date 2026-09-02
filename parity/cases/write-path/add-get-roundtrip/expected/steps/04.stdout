@@ -6,3 +6,4 @@ draft: false
 title: Café — Straße
 kind: functional
 ---
+<!-- one statement, in the present tense, of what must hold. EARS reads well here: "When <trigger>, the system shall <response>." Say what is measured and what enforces it — a `non-functional` requirement without a number is a wish. Link `realized_in` to the component that satisfies it. -->

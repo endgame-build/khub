@@ -5,6 +5,6 @@ steps:
 - argv: ["validate", "--format", "json"]
 - argv: ["check"]
 - argv: ["check", "--format", "json"]
-- sh: "printf -- \"---\\ntype: adr\\ntitle: bad enum\\ncreated: 2026-01-15\\nstatus: nonsense\\n---\\n\" > knowledge/decisions/ad-002-bad.md"
+- sh: "printf -- \"---\\ntype: adr\\ntitle: bad enum\\ncreated: 2026-01-15\\nstatus: nonsense\\n---\\n\" > knowledge/decisions/ad-2026-01-15-bad.md"
 - argv: ["validate", "--format", "json"]
 - argv: ["check", "--format", "json"]

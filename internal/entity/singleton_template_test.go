@@ -151,7 +151,7 @@ func TestNoTemplateRefusedOnTemplatedType(t *testing.T) {
 	_, err := Create(ws, "note", CreateOpts{Fields: fields("title", "Third"), UseTemplate: false})
 	e := requireCode(t, err, "template_required")
 	requireMessageContains(t, e, "has a body template")
-	if _, statErr := os.Stat(filepath.Join(ws, "notes", "001-third.md")); statErr == nil {
+	if _, statErr := os.Stat(filepath.Join(ws, "notes", "third.md")); statErr == nil {
 		t.Fatal("the refused create wrote a file")
 	}
 }
@@ -159,8 +159,7 @@ func TestNoTemplateRefusedOnTemplatedType(t *testing.T) {
 // Capture is never blocked: a broken template seeds nothing and still writes.
 func TestAddNeverBlockedByBrokenTemplate(t *testing.T) {
 	ws := templatedWS(t)
-	writeFile(t, filepath.Join(ws, ".khub", "templates", "note.yaml"),
-		"sections:\n  - heading: Summary\n    optional: true\n")
+	writeFile(t, filepath.Join(ws, ".khub", "templates", "note.yaml"), "sections: 3\n")
 
 	res, err := Create(ws, "note", CreateOpts{
 		Fields: fields("title", "Still writes"), UseTemplate: true})

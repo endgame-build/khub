@@ -5,23 +5,28 @@
 # components/); specs/ is delivery state.
 #
 # Storage form follows build-hub's rule: prose a human reviews = one file per
-# record with a lowercase ID-enumerated slug (ad-/fr-/cst-/br-/cmp-/fs-NNN-slug
-# — `add --id` slugifies and lookup is case-sensitive, so uppercase would not
-# resolve). No collections: lite has no homogeneous wiring left to keep in a
-# registry.
+# record with a lowercase prefixed slug (req-/cmp-/fs-/rp-slug; adr is dated,
+# ad-YYYY-MM-DD-slug — `add --id` slugifies and lookup is case-sensitive, so
+# uppercase would not resolve). No collections: repos are a directory of md
+# files like everything else, so a repo carries prose (what the codebase holds,
+# how to run it) the way a component does.
 #
-# Four of the six md types ship a body template (prd, arc42, adr,
-# feature-spec — templates/*.yaml). requirement and component deliberately do
-# not — one statement and one paragraph respectively, and every template
-# heading is a `validate` finding waiting to happen.
+# Minting is a pure function of the schema, the frontmatter and the title — it
+# reads no siblings, so two branches minting the same title collide on one
+# filename (an add/add conflict git shows) instead of numbering past each other
+# silently. Only adr carries a date: a decision legitimately recurs under one
+# title ("use Postgres" is decided, superseded, revisited — that is what
+# `supersedes` is for); the other types are registries of what currently holds,
+# where a repeated title IS a duplicate and `add` refuses it. The date is the
+# day the id was minted and stays that even if `created` is later edited.
+#
+# Body templates live in templates/*.yaml, one per type that ships one.
 
 storage:
   prd:          { layout: singleton, path: knowledge/prd.md }
   arc42:        { layout: singleton, path: knowledge/arc42.md }
-  requirement:
-    layout: file
-    path: knowledge/requirements
-    id_prefix: { by: kind, map: { functional: fr, constraint: cst, business-rule: br } }
-  adr:          { layout: file, path: knowledge/decisions,  id_prefix: ad }
-  component:    { layout: file, path: knowledge/components, id_prefix: cmp }
-  feature-spec: { layout: file, path: specs,                id_prefix: fs }
+  requirement:  { layout: file, path: knowledge/requirements, id_prefix: req }
+  adr:          { layout: file, path: knowledge/decisions,    id_prefix: ad, id_date: true }
+  component:    { layout: file, path: knowledge/components,   id_prefix: cmp }
+  repo:         { layout: file, path: knowledge/repos,        id_prefix: rp }
+  feature-spec: { layout: file, path: specs,                  id_prefix: fs }

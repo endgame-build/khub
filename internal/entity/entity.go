@@ -75,22 +75,29 @@ func Create(root, typeName string, opts CreateOpts) (*CreateResult, error) {
 	// never blocks capture — seed nothing and let validate report the template.
 	body := opts.Body
 	if stem := rtype.TemplateName(); strings.TrimSpace(body) == "" && rtype.ReadsTemplate() && stem != "" {
-		tpl, terr := template.LoadTemplate(root, stem)
+		tpl, terr := template.LoadTemplate(root, stem, rtype.FieldNames())
 		if terr != nil {
 			tpl = nil // validate carries the template finding
 		}
-		if tpl != nil && len(tpl.Sections) > 0 {
+		if tpl != nil {
 			if !opts.UseTemplate {
-				// --no-template on a templated type produced an entity validate
-				// rejects on its very next run ("missing or out-of-order section
-				// '## X'"): a documented flag whose only outcome was a red
-				// workspace. Refuse instead.
-				return nil, errs.New("template_required", fmt.Sprintf(
-					"Type '%s' has a body template, so --no-template would create "+
-						"an entity `khub validate` rejects. Omit the flag, or pass --body "+
-						"with the template's sections", typeName))
+				// --no-template on a type with required headings produced an
+				// entity validate rejects on its very next run ("missing or
+				// out-of-order section '## X'"): a documented flag whose only
+				// outcome was a red workspace. Refuse instead. A template of
+				// optional sections or a bare hint requires nothing, so opting
+				// out of its scaffold is honoured.
+				if len(tpl.RequiredHeadings()) > 0 {
+					return nil, errs.New("template_required", fmt.Sprintf(
+						"Type '%s' has a body template, so --no-template would create "+
+							"an entity `khub validate` rejects. Omit the flag, or pass --body "+
+							"with the template's sections", typeName))
+				}
+			} else if scaffold := tpl.Render(); scaffold != "" {
+				// Seed whenever the template renders anything — a top-level
+				// hint alone is a scaffold, not only headings.
+				body = scaffold
 			}
-			body = tpl.Render()
 		}
 	}
 	body = mdNormalized(body, rtype)
@@ -166,17 +173,11 @@ func Create(root, typeName string, opts CreateOpts) (*CreateResult, error) {
 		return &CreateResult{Type: typeName, Slug: typeName, Path: path, Draft: isDraft}, nil
 
 	case schema.LayoutCollection:
-		var base string
-		if opts.ID != "" { // collections number too
-			base, err = slugBase(opts.ID)
-		} else {
-			base, err = mintedBase(rtype, part.attrs, idx)
-		}
+		slug, err := chooseSlug(rtype, meta, opts.ID)
 		if err != nil {
 			return nil, err
 		}
-		slug, err := createRow(root, rtype, typeName, meta, body, base, opts.ID != "")
-		if err != nil {
+		if err := createRow(root, rtype, typeName, meta, body, slug, opts.ID != ""); err != nil {
 			return nil, err
 		}
 		return &CreateResult{
@@ -188,48 +189,42 @@ func Create(root, typeName string, opts CreateOpts) (*CreateResult, error) {
 		}, nil
 	}
 
-	// Slug + O_EXCL write. An explicit --id collision refuses (never
-	// auto-suffixes); a minted slug retries on the next -N suffix if a
-	// concurrent add reached it first.
-	if opts.ID != "" {
-		slug, err := explicitSlug(opts.ID, typeName, idx)
-		if err != nil {
-			return nil, err
-		}
-		path := entityPath(root, rtype, slug)
-		if err := os.MkdirAll(filepath.Dir(path), 0o777); err != nil {
-			return nil, err
-		}
-		if err := writeNew(path, meta, body); err != nil {
-			if errors.Is(err, fs.ErrExist) {
-				return nil, slugTaken(slug, typeName)
-			}
-			return nil, err
-		}
-		return &CreateResult{Type: typeName, Slug: slug, Path: path, Draft: isDraft}, nil
-	}
-	base, err := mintedBase(rtype, part.attrs, idx)
+	// Slug + O_EXCL write. Minted after the frontmatter is assembled, so a
+	// --created override dates the id. Minting reads no siblings, so the same
+	// name or title mints the same slug twice: the index pre-check names the
+	// refusal cheaply, and the exclusive create is the real gate against a
+	// concurrent add. Neither an explicit nor a minted slug is ever suffixed.
+	slug, err := chooseSlug(rtype, meta, opts.ID)
 	if err != nil {
 		return nil, err
 	}
-	slug, path, err := mintAndWrite(root, rtype, base, typeName, idx, meta, body)
-	if err != nil {
+	explicit := opts.ID != ""
+	if idx.Nodes[index.Node{Type: typeName, Slug: slug}] {
+		return nil, errs.SlugTaken(slug, typeName, !explicit)
+	}
+	path := entityPath(root, rtype, slug)
+	if err := os.MkdirAll(filepath.Dir(path), 0o777); err != nil {
+		return nil, err
+	}
+	if err := writeNew(path, meta, body); err != nil {
+		if errors.Is(err, fs.ErrExist) {
+			return nil, errs.SlugTaken(slug, typeName, !explicit)
+		}
 		return nil, err
 	}
 	return &CreateResult{Type: typeName, Slug: slug, Path: path, Draft: isDraft}, nil
 }
 
-// createRow inserts one new row into a collection; returns the (minted or
-// explicit) slug.
+// createRow inserts one new row into a collection under slug.
 //
-// Uniqueness is gated by the fresh in-lock read, not the index: an explicit
-// --id collision refuses (never auto-suffixes) and a minted slug takes the first
-// free base/base-N. The row omits `type` (the collection's schema binding
-// supplies it at scan) and carries prose in the reserved `body` key.
+// Uniqueness is gated by the fresh in-lock read, not the index: a taken slug
+// refuses, minted or explicit — nothing is suffixed. The row omits `type` (the
+// collection's schema binding supplies it at scan) and carries prose in the
+// reserved `body` key.
 func createRow(
 	root string, rtype *schema.ResolvedType, typeName string,
-	meta *omap.Map, body, base string, explicit bool,
-) (string, error) {
+	meta *omap.Map, body, slug string, explicit bool,
+) error {
 	row := omap.New()
 	for _, k := range meta.Keys() {
 		if k == "type" {
@@ -241,32 +236,13 @@ func createRow(
 	if body != "" {
 		row.Set("body", body)
 	}
-	slug := ""
-	err := mutateCollection(root, rtype, func(rows *omap.Map) (bool, error) {
-		if explicit {
-			if _, taken := rows.Get(base); taken {
-				return false, slugTaken(base, typeName)
-			}
-			rows.Set(base, row)
-			slug = base
-			return true, nil
+	return mutateCollection(root, rtype, func(rows *omap.Map) (bool, error) {
+		if _, taken := rows.Get(slug); taken {
+			return false, errs.SlugTaken(slug, typeName, !explicit)
 		}
-		n, candidate := 1, base
-		for {
-			if _, taken := rows.Get(candidate); !taken {
-				break
-			}
-			n++
-			candidate = fmt.Sprintf("%s-%d", base, n)
-		}
-		rows.Set(candidate, row)
-		slug = candidate
+		rows.Set(slug, row)
 		return true, nil
 	})
-	if err != nil {
-		return "", err
-	}
-	return slug, nil
 }
 
 // partitioned splits raw fields into validated attributes, relation value-lists,

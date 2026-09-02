@@ -1,0 +1,15 @@
+# The id scheme: `schema show` names each type's shape; adr mints a dated id, so
+# the same title on the same day mints the same id and the second add refuses,
+# naming --id; a type with neither name nor title has nothing to mint from; and
+# the validate gate's two other arms — no date on a dated type, the retired
+# `NNN-` ordinal on a prefixed one — on files moved by hand to the old scheme.
+steps:
+- argv: ["init", "build-lite", ".", "--no-wire"]
+- argv: ["schema", "show", "adr", "--format", "json"]
+- argv: ["add", "adr", "--title", "Use JWT", "--status", "accepted"]
+- argv: ["add", "adr", "--title", "Use JWT", "--status", "accepted"]
+- argv: ["add", "component"]
+- argv: ["add", "adr", "--title", "Old", "--status", "accepted"]
+- argv: ["add", "component", "--title", "API", "--kind", "service"]
+- sh: "mv knowledge/decisions/ad-2026-01-15-old.md knowledge/decisions/ad-001-old.md && mv knowledge/components/cmp-api.md knowledge/components/cmp-001-api.md"
+- argv: ["validate"]

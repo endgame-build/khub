@@ -13,14 +13,15 @@ duplicated as entities.
 [`getting-started.md`](getting-started.md); to author or extend the types yourself, see
 [`schema.md`](schema.md).
 
-Preset version **0.3.0**. Twenty entity types (fifteen graph records + five narrative
+Preset version **0.4.0**. Twenty entity types (fifteen graph records + five narrative
 singletons). Seventeen relation predicates in twenty-three declarations beyond the four universal
 edges from the core base (`domain.depends_on` narrows the universal edge to a typed
 `domain → domain`). The preset is a directory: `{ontology,policy,storage}.yaml` + `templates/*.yaml`, copied to
-`.khub/` at init. Fifteen of the seventeen md types ship a body template;
-`entity` and `component` deliberately do not — they are
-name-keyed records whose shape is their frontmatter, so `add` writes them with an
-empty body and `validate` holds them to no heading contract.
+`.khub/` at init. Sixteen of the seventeen md types ship a body template;
+`entity` alone does not — it is a name-keyed record whose shape is its
+frontmatter, so `add` writes it with an empty body and `validate` holds it to no
+heading contract. `component`'s template declares only optional headings, a hint
+and review lenses, so a component already written owes it nothing.
 
 **Spoke repos carry no khub workspace.** A spoke is code plus one plain `entities.yaml`
 field-schema file (validated by the spoke's own CI, `resource`-linked from hub entity records).
@@ -73,19 +74,24 @@ under `contracts/specs/` (a subdirectory — invisible to the single-level scan)
 
 ## Storage forms and naming
 
-One rule decides file vs collection: **prose a human reviews → one file per record, ID-enumerated
+One rule decides file vs collection: **prose a human reviews → one file per record, prefixed
 slug; homogeneous wiring → a registry collection row, name-keyed** (the registry file is the
 enumeration).
 
+**Ids are minted from the title, with no ordinal** (`<prefix>-<YYYY-MM-DD>-<slug>`, each
+part per type; see [Ids](schema.md#ids-id_prefix-id_date-in-storage)). Only `adr` and
+`pdr` are dated — a decision recurs under one title, a registry entry does not — and a
+repeated title is refused (`pass --id <slug>`).
+
 **Slugs are lowercase.** `add --id` slugifies whatever you pass and id resolution is
-case-sensitive, so `--id CAP-001-login` is stored — and must be looked up — as
-`cap-001-login`. Write the lowercase form everywhere.
+case-sensitive, so `--id CAP-login` is stored — and must be looked up — as
+`cap-login`. Write the lowercase form everywhere.
 
 | Form | Types · slug scheme |
 |---|---|
-| File, ID-enumerated | adr `ad-NNN-slug` · pdr `pd-NNN-slug` · boundary `bound-NNN-slug` · quality-attribute `qa-NNN-slug` · requirement `fr-NNN`/`cst-NNN` · capability `cap-NNN-slug` · component `cmp-NNN-slug` · feature-spec `fs-NNN-slug` · test-spec `ts-NNN-slug` · work-package `wp-NNN-slug` |
+| File, prefixed | adr `ad-YYYY-MM-DD-slug` · pdr `pd-YYYY-MM-DD-slug` · boundary `bound-slug` · quality-attribute `qa-slug` · requirement `req-slug` · capability `cap-slug` · component `cmp-slug` · feature-spec `fs-slug` · test-spec `ts-slug` · work-package `wp-slug` |
 | File, name-keyed | domain · entity · contract (natural-name identity; contracts name-keyed so `consumes: readings-api` reads) |
-| Collection (yaml) | `knowledge/architecture/repos.yaml` · `knowledge/architecture/baselines.yaml` — **pass `--id`**: neither type is titled in practice, so without one the slug is minted from the type name (`repo`, `repo-2`) and those meaningless keys are what every later `link` and `get` must use |
+| Collection (yaml) | `knowledge/architecture/repos.yaml` · `knowledge/architecture/baselines.yaml` — **pass `--id`**: neither type is titled in practice, and an untitled `add` refuses rather than mint a meaningless key |
 | Singleton (md) | prd · roadmap · glossary · arc42 · erd — one fixed file, slug = type name; prd is `required: true` |
 
 ## What every entity carries
@@ -134,11 +140,19 @@ Two conventions drive the edge placement:
 
 ### Narrative singletons — the prose layer
 
-- **prd** (`knowledge/product/prd.md`, required) — vision, target user, the FR narrative linking
-  `FR-NNN` slugs, non-goals, success metrics. The product source of truth; `check` fails without it.
+- **prd** (`knowledge/product/prd.md`, required) — Vision, Target Users, Features (the
+  narrative linking `req-` slugs, grouped by capability), Non-Goals, Success Metrics; plus
+  the optional Document Purpose, Deferred, Alternatives & Recommendation, Open Questions,
+  Assumptions Index, Grounding Evidence, and optional Glossary / Roadmap sections that
+  point at the two singletons rather than restate them. Lenses: `scope`, `journeys`,
+  `metrics`, `assumptions`. The product source of truth; `check` fails without it.
 - **roadmap** (`knowledge/product/roadmap.md`) — lanes, execution order, build order narration.
 - **glossary** (`knowledge/product/glossary.md`) — terms with owning domains; entity slugs link the graph.
-- **arc42** (`knowledge/architecture/arc42.md`) — the twelve arc42 sections; links `AD-`/`QA-` slugs.
+- **arc42** (`knowledge/architecture/arc42.md`) — the twelve arc42 sections under
+  docs.arc42.org's names, all required (Building Block View asks for one mermaid block;
+  Architecture Decisions and Quality Requirements link `ad-`/`qa-` slugs), plus the four
+  optional appendices Deferred Decisions, Open Questions, Assumptions Index, Grounding
+  Evidence. Lenses: `direction`, `deferred`.
 - **erd** (`knowledge/architecture/erd.md`) — the cross-domain entity narrative; owner/reads live in
   the graph, the doc narrates meaning.
 
@@ -147,17 +161,22 @@ Two conventions drive the edge placement:
 - **capability** (`knowledge/product/capabilities/`) — the durable functional map; `facet_id`
   joins the facet-synthesis inventory. Vocabulary is hub-owned: work claims against these slugs.
 - **requirement** (`knowledge/product/requirements/`) — `kind: functional | constraint |
-  business-rule`; EARS-friendly prose in the body; `capabilities` places it, `realized_in` is the
-  stored backstop for reality outside the work spine. NFRs are quality-attribute entities, not
-  requirements. The PRD narrates and links `FR-NNN` slugs; coverage (every requirement carries at
-  least one inbound `requirements` edge from a live feature-spec) is a graph check.
+  business-rule`; EARS-friendly prose in the body (template: Statement, Acceptance criteria,
+  Notes; lenses `single`, `testable`, `violation` for a constraint, `realized`); `capabilities`
+  places it, `realized_in` is the stored backstop for reality outside the work spine. NFRs are
+  quality-attribute entities, not requirements. The PRD narrates and links `req-` slugs;
+  coverage (every requirement carries at least one inbound `requirements` edge from a live
+  feature-spec) is a graph check.
 - **pdr** (`knowledge/product/decisions/`) — product decision record; `status: proposed |
   accepted | rejected`, `supersedes` self-typed, `affects → any`.
 
 ### Architecture — how-shaped and what-must-hold
 
 - **adr** (`knowledge/architecture/decisions/`) — the pdr shape plus `drivers →
-  quality-attribute` (why) and `produces → boundary` (what invariant it created).
+  quality-attribute` (why) and `produces → boundary` (what invariant it created). Template:
+  Context, Decision, Consequences (each with a word minimum; hedging inside Decision is a
+  `body_rule` gap), optional Alternatives and Prevents; lenses `alternatives`,
+  `consequences`, `reversal`, `rule`, `proposed`.
 - **domain** (`knowledge/architecture/domains/`) — the bounded context. `tier: core | supporting
   | generic`; `depends_on → domain` is the cycle-checked predicate; `relationship` (conformist ·
   customer-supplier · partnership · shared-kernel · acl) is a plain attribute qualifying its
@@ -178,12 +197,14 @@ Two conventions drive the edge placement:
 - **component** (`knowledge/architecture/components/`) — the deployable: a required
   `kind: service | library | external`, `stack`, an optional `repo` edge (the component↔codebase
   mapping), the `domains` it hosts, and the churny `consumes` side of contract edges. The body
-  describes the deployable — stack rationale, operational notes.
+  describes the deployable; its template declares only optional headings (Responsibilities,
+  Interfaces, Operational notes), a hint and lenses (`boundary`; `blast` for `kind: external`;
+  `located` for a service or library).
   A **`kind: external`** component is a vendor or neighboring product: no `repo`, `stack` names
   the vendor, base `resource` carries its API docs. It replaces the `external-system` type
   removed in 0.3.0.
 - **repo** (`knowledge/architecture/repos.yaml`, collection) — a pure remotes record: `repo`
-  (org/name, loosely pattern-pinned — tighten to your org), `status: active | archived`.
+  (org/name, nested groups allowed, loosely pattern-pinned — tighten to your org), `status: active | archived`.
 - **contract** (`knowledge/architecture/contracts/`, **yaml-format file entities**) — hub-authored
   interface records: `kind: api | events | data`, `status: proposed | active | deprecated`,
   required `provider → component`. Policy prose (idempotency, auth model,

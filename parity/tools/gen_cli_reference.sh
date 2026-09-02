@@ -19,7 +19,7 @@ OUT="$REPO/docs/cli-reference.md"
 # Registration order, matching newRoot() in internal/cli/root.go — the order
 # `khub --help` lists them in, so the reference reads the same way.
 COMMANDS=(
-  init status add get edit link unlink remove query search neighbors impact
+  init upgrade status add get edit link unlink remove query search neighbors impact
   history validate check stale reindex viz backfill wire install-skills schema
   "schema types" "schema show" "schema edges" "schema base"
 )

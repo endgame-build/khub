@@ -4,7 +4,7 @@
 
 `khub init firm-ops ./my-hub` seeds a workspace from it. For a hands-on first run, start with [`getting-started.md`](getting-started.md); to author or extend the types yourself, see [`schema.md`](schema.md).
 
-Preset version **0.1.0**. Nine entity types. Fourteen relation predicates: ten declared here, four inherited from the core base.
+Preset version **0.2.0**. Nine entity types. Fourteen relation predicates: ten declared here, four inherited from the core base. Ids are bare slugs of `name` (opportunity, person, client) or `title` (the rest) — no prefix, no date, no ordinal — and every type requires the one it mints from; a repeated one is refused (`pass --id <slug>`).
 
 ## What every entity carries
 

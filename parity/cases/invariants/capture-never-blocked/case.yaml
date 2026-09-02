@@ -1,9 +1,14 @@
 steps:
 - argv: ["init", "build-lite", ".", "--no-wire"]
 - argv: ["add", "adr", "--title", "No status at all", "--format", "json"]
-- argv: ["get", "ad-001-no-status-at-all", "--format", "raw"]
-- argv: ["add", "component", "--format", "json"]
+- argv: ["get", "ad-2026-01-15-no-status-at-all", "--format", "raw"]
+- argv: ["add", "component", "--id", "cmp-nameless", "--format", "json"]
+# The one deliberate carve-out. An add with no name, no title and no --id
+# refuses (`no_slug_source`): there is nothing to mint a slug from, and a
+# refusal that writes nothing is not a blocked capture — the entity above
+# shows the same nameless component landing the moment it is given an id.
+- argv: ["add", "component", "--kind", "service", "--format", "json"]
 - argv: ["validate"]
 - argv: ["check"]
-- argv: ["link", "ad-001-no-status-at-all", "affects", "does-not-exist"]
+- argv: ["link", "ad-2026-01-15-no-status-at-all", "affects", "does-not-exist"]
 - argv: ["status"]

@@ -2,4 +2,4 @@ steps:
 - argv: ["init", "build-lite", ".", "--no-wire"]
 - argv: ["add", "requirement", "--title", "Y", "--kind", "functional", "--mystery", "v", "--strict"]
 - argv: ["add", "requirement", "--title", "Y", "--kind", "functional", "--mystery", "v"]
-- argv: ["get", "fr-001-y", "--format", "json"]
+- argv: ["get", "req-y", "--format", "json"]

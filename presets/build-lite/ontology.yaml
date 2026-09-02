@@ -1,17 +1,17 @@
 # build-lite/ontology.yaml — the domain model of a small build project's hub.
 #
-# 6 entity types; 4 relation predicates beyond the universal four from core
-# (5 declarations; supersedes is declared on both adr and feature-spec).
+# 7 entity types; 5 relation predicates beyond the universal four from core
+# (6 declarations; supersedes is declared on both adr and feature-spec).
 # build-hub cut to necessity. A type earns a slot here only if it is referenced
 # by id from elsewhere, walked as a graph, or gated by `check`. Prose a human
 # reads start to finish is a body; a fact stored once and read once is an
 # attribute; anything that churns with the code is a file in the repo, linked
 # via the base `resource`.
 #
-# The six answer the five questions an agent asks mid-build: what am I building
-# (feature-spec), what must hold (requirement), why can I not do X (adr, via
-# `affects`), where does the code live and what talks to what (component), and
-# what is this product (prd, arc42).
+# The seven answer the five questions an agent asks mid-build: what am I
+# building (feature-spec), what must hold (requirement), why can I not do X
+# (adr, via `affects`), where does the code live and what talks to what
+# (component, repo), and what is this product (prd, arc42).
 #
 # What build-hub has and this does not, and why:
 #  - capability -> base `tags` on requirement. It is a grouping axis, and
@@ -19,48 +19,51 @@
 #    build-hub is the UCAP-XXX facet-import spine, which lite does not do — no
 #    facet_id anywhere here.
 #  - pdr -> the prd body. Anything that constrains implementation is an adr.
-#  - boundary, quality-attribute -> `requirement.kind: constraint`. Lost:
-#    `enforcement` / `measurement` / `scenario` as queryable attributes; they
-#    become body prose. This is the cut with the most real loss and the first
-#    one back.
-#  - domain, entity -> arc42 sections (Building blocks, Data model). At this
-#    size the components ARE the map, and field-level detail lives in code.
-#  - repo -> a plain `repo` text attribute on component. The registry's only
-#    benefit was integrity-checking repo names against an enumeration.
+#  - boundary, quality-attribute -> `requirement.kind: constraint` (a quality
+#    attribute may also be `non-functional`). Lost: `enforcement` /
+#    `measurement` / `scenario` as queryable attributes; they become body
+#    prose. This is the cut with the most real loss and the first one back.
+#  - domain, entity -> arc42 sections (Building Block View; the domain data
+#    model under Crosscutting Concepts). At this size the components ARE the
+#    map, and field-level detail lives in code.
 #  - contract -> the machine spec (OpenAPI/AsyncAPI) is already a file on disk;
 #    hang it off the providing component's base `resource`. The entity earns
 #    its slot when two repos consume it independently.
 #  - external-system -> `component` with `kind: external`. NOT a lite-only cut:
 #    build-hub 0.3.0 made the same fold, so components carry over unchanged on a
-#    move up. (Fourteen build-hub types are cut here; this is the fifteenth row
-#    only in the sense that the name is gone from both presets.)
+#    move up. (Thirteen build-hub types are cut here; this is the fourteenth
+#    row only in the sense that the name is gone from both presets.)
 #  - baseline -> CI and dashboards. A git corpus records metrics stale by
 #    construction.
 #  - work-package -> feature-spec IS the work unit; there is nothing to split
 #    across repos and `status` covers the flip.
 #  - test-spec -> the feature-spec's Acceptance criteria section; the tests
 #    themselves are files in the repo.
-#  - roadmap, glossary -> prd sections. erd -> the arc42 Data model section.
+#  - roadmap, glossary -> prd sections. erd -> arc42, as the domain data model
+#    under Crosscutting Concepts.
 #
 # Add-back order when this stops fitting (each step is a schema edit, no
 # surface code): (1) boundary + quality-attribute, (2) contract — alone; its
 # provider targets `component`, and a vendor contract names a kind: external
-# component, so do NOT reintroduce external-system, (3) repo + work-package,
+# component, so do NOT reintroduce external-system, (3) work-package,
 # (4) domain + entity, (5) the rest — or switch to build-hub.
 #
 # Authoring decisions worth review:
 #  - component.kind is REQUIRED: it is the ownership boundary, what we can
-#    change versus what we can only react to. `repo` is a text attribute, not
-#    an edge, so an external simply omits it.
+#    change versus what we can only react to. `repo` is an edge to the repo
+#    registry (ours only), so an external simply omits it.
+#  - repo is a type, not a text attribute on component: the registry is what
+#    lets `check` hold every component's codebase to a row that exists, and a
+#    repo carries prose of its own (what it holds, how to run it).
 #  - `superseded` is never stored — computed inverse of the inbound
 #    `supersedes` edge, on adr and feature-spec alike.
 #  - No status field declares a `default` — `add` applies no schema defaults,
 #    so status is always an explicit statement.
 #
 # Storage form and per-type gates live beside this file: storage.yaml carries
-# layout/path/id_prefix, policy.yaml carries required/orphan.
+# layout/path/id_prefix/id_date, policy.yaml carries required/orphan.
 
-version: "0.1.0"
+version: "0.2.0"
 
 ontology:
   entities:
@@ -80,7 +83,7 @@ ontology:
         model, a crosscutting concern
       attributes:
         title: { required: true }
-      # absorbs build-hub's erd as the Data model section
+      # absorbs build-hub's erd: the domain data model, under Crosscutting Concepts
 
     # ---------------------------------------------------------- what must hold
     requirement:
@@ -89,12 +92,15 @@ ontology:
         "always", "policy", "has to" are the tells; a stated invariant is a record, not a reply
       attributes:
         title: { required: true }   # override core OKF title -> required (slug source)
-        kind:  { enum: [functional, constraint, business-rule], required: true }
+        kind:  { enum: [functional, non-functional, constraint, business-rule], required: true }
       relations:
         realized_in: { to: component, many: true }
-      # EARS-friendly prose in the body. `kind: constraint` absorbs build-hub's
-      # boundary and quality-attribute: state the invariant, its measurement and
-      # how it is enforced in the body.
+      # EARS-friendly prose in the body. `kind: constraint` and `non-functional`
+      # absorb build-hub's boundary and quality-attribute: state the invariant,
+      # its measurement and how it is enforced in the body. The id is a literal
+      # `req-` (not derived from `kind`), so `kind` is an ordinary field:
+      # `edit <id> kind …` works without making the id wrong, and `add` mints
+      # without `--kind`.
 
     # --------------------------------------------------------- why it is so
     adr:
@@ -117,10 +123,22 @@ ontology:
         title: { required: true }
         kind:  { enum: [service, library, external], required: true }
         stack: { type: text }   # ours: the runtime; external: the vendor
-        repo:  { type: text }   # ours only — org/name; absent on an external
+      relations:
+        repo: { to: repo }      # the component <-> codebase mapping; ours only, absent on an external
       # base `depends_on` carries component -> component and component -> external,
       # which is what makes "what breaks when this vendor changes" a graph walk.
       # base `resource` carries the API docs (external) or the machine spec (ours).
+
+    repo:
+      when: >-
+        a codebase is named that holds part of this system — a service's repo, a shared
+        library, a monorepo group
+      attributes:
+        title:  { required: true }
+        repo:   { type: text, required: true, pattern: '^[a-z0-9._-]+(/[a-z0-9._-]+)+$' }   # org/name, nested groups allowed
+        status: { enum: [active, archived], required: true }
+      # the registry: `component.repo` must resolve here. An engagement tightens
+      # the pattern to its org.
 
     # ------------------------------------------------ what to build (delivery)
     feature-spec:

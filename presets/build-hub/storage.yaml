@@ -3,12 +3,15 @@
 # Layout: two knowledge roots. knowledge/{product,architecture} is durable
 # truth; specs/ at the workspace root is delivery state (different cadence; the
 # tracker sync flips work-package status, everything else is reviewed prose).
-# The work spine is three flat ID-enumerated dirs:
+# The work spine is three flat prefixed-slug dirs:
 # specs/{feature-specs,test-specs,work-packages}.
 #
-# Storage-form rule: prose a human reviews = one file per record with an
-# ID-enumerated slug, lowercase (ad-/pd-/bound-/qa-/fr-/cst-/br-/cap-/cmp-/fs-/ts-/wp-NNN-slug
-# — `add --id` slugifies and lookup is case-sensitive, so uppercase would not resolve);
+# Storage-form rule: prose a human reviews = one file per record with a
+# prefixed slug, lowercase (ad-/pd-/bound-/qa-/req-/cap-/cmp-/fs-/ts-/wp-slug;
+# adr and pdr are dated, ad-YYYY-MM-DD-slug — a decision legitimately recurs
+# under one title, a registry entry does not; `add --id` slugifies and lookup
+# is case-sensitive, so uppercase would not resolve). Minting reads no
+# siblings: the same title mints the same id, which `add` refuses.
 # homogeneous wiring = a collection row, name-keyed (repos.yaml,
 # baselines.yaml — the registry file is the enumeration). domain, entity,
 # contract are name-keyed files (natural-name identity).
@@ -34,14 +37,11 @@ storage:
 
   # product: what
   capability:  { layout: file, path: knowledge/product/capabilities, id_prefix: cap }
-  requirement:
-    layout: file
-    path: knowledge/product/requirements
-    id_prefix: { by: kind, map: { functional: fr, constraint: cst, business-rule: br } }
-  pdr:         { layout: file, path: knowledge/product/decisions, id_prefix: pd }
+  requirement: { layout: file, path: knowledge/product/requirements, id_prefix: req }
+  pdr:         { layout: file, path: knowledge/product/decisions, id_prefix: pd, id_date: true }
 
   # architecture: how
-  adr:               { layout: file, path: knowledge/architecture/decisions, id_prefix: ad }
+  adr:               { layout: file, path: knowledge/architecture/decisions, id_prefix: ad, id_date: true }
   domain:            { layout: file, path: knowledge/architecture/domains }
   entity:            { layout: file, path: knowledge/architecture/entities }
   boundary:          { layout: file, path: knowledge/architecture/boundaries, id_prefix: bound }

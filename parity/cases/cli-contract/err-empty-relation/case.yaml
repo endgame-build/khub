@@ -2,5 +2,5 @@ steps:
 - argv: ["init", "build-lite", ".", "--no-wire"]
 - argv: ["add", "requirement", "--title", "R", "--kind", "functional", "--related", ""]
 - argv: ["add", "requirement", "--title", "R", "--kind", "functional"]
-- argv: ["link", "fr-001-r", "related", "ghost"]
+- argv: ["link", "req-r", "related", "ghost"]
 - argv: ["query", "--type", "requirement", "--bogusfield", "v"]

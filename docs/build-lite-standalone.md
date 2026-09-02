@@ -7,6 +7,11 @@
 > lighter than the tables here assume. The reasoning about what build-lite
 > actually needs is unaffected.
 
+> **Baseline note, 2026-09-02.** The id scheme, exit codes, body templates and
+> `upgrade` described below changed in the kb 0.14.0 port (see CHANGELOG);
+> `cmp-001-api`-style ids, the `-N` suffix and by-kind `fr-/cst-/br-` prefixes
+> no longer exist in either tool.
+
 **A separate, tiny implementation of the build-lite preset for one build project
 driven by opencode: a drop-in directory holding a skill and one stdlib Python
 script. ~850 lines of code where khub is 7,000, no dependencies where khub has
@@ -41,7 +46,7 @@ So the test for every khub verb was: **does this beat the agent's own tools?**
 Four things pass:
 
 1. **The reverse edge is not in the file.** Edges are stored single-sided —
-   `adr.affects: [cmp-001-api]` lives on the adr. Nothing in `cmp-001-api.md`
+   `adr.affects: [cmp-api]` lives on the adr. Nothing in `cmp-api.md`
    says an adr constrains it. "What points at this?" is not a grep, it is a scan
    of the whole corpus, and an agent that greps for a slug finds prose mentions
    and misses nothing reliably.
@@ -53,8 +58,9 @@ Four things pass:
    session 1: the same id scheme, the same field names, the same section
    headings. A schema the tool enforces does this; a convention in a prompt
    decays.
-4. **Deterministic ids.** `ad-007-…` requires knowing what 001–006 are. Cheap for
-   a machine, a race for an agent that glanced at the directory.
+4. **Deterministic ids.** An id is a pure function of the title (plus the type's
+   prefix and date), so two sessions that mint the same title mint the same id
+   and the second collides loudly instead of racing for the next free ordinal.
 
 Everything else fails the test. Full-text search loses to ripgrep on 50 files.
 `get` loses to reading the file. A `--body` flag for writing prose loses to the
@@ -213,7 +219,7 @@ TypeScript were read instead):
 
 Cutting is only half of it. A fixed schema affords checks a general engine cannot:
 
-- **The id scheme moved *into* khub.** Minting `ad-004-use-postgres` began as a kb-only trick, which made it a divergence and a second thing to learn. It is now `id_prefix` in the schema, so khub mints the same id from the same input and the presets' long-documented `ad-`/`fr-`/`wp-` conventions are finally declared rather than typed by hand into `--id`. What stays kb-only is *enforcement*: a `fr-` file whose `kind` says `constraint` is a `check` error here, because this schema is closed.
+- **The id scheme moved *into* khub.** Minting `ad-2026-07-28-use-postgres` began as a kb-only trick, which made it a divergence and a second thing to learn. It is now `id_prefix` and `id_date` in the schema, so khub mints the same id from the same input and the presets' long-documented `ad-`/`req-`/`cmp-` conventions are finally declared rather than typed by hand into `--id`.
 - **The schema is closed by default.** In khub, unknown keys are legal (it is an open format serving many domains) and `--strict` closes it. Here, an unknown field is an *error* — because the realistic failure is `realised_in` for `realized_in`, a typo that silently produces no edge at all.
 - **Body templates are Markdown files.** Their own `##` headings are the contract, so one file both seeds a new document and validates every existing one. khub needs a YAML section list because it must express more.
 

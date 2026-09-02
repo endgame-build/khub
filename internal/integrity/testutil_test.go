@@ -154,10 +154,10 @@ func seedClean(t *testing.T, root string) {
 	create(t, root, "opportunity", "initech-deal",
 		"name", "Initech Deal", "stage", "prospect", "client", "initech", "owner", "noor")
 	create(t, root, "project", "initech-pov",
-		"client", "initech", "owner", "noor", "active", "true")
+		"title", "Initech PoV", "client", "initech", "owner", "noor", "active", "true")
 	create(t, root, "meeting", "kickoff",
-		"date", "2026-06-01T10:00:00", "call_type", "client", "source", "recording",
-		"engagement", "initech-pov")
+		"title", "Kickoff", "date", "2026-06-01T10:00:00", "call_type", "client",
+		"source", "recording", "engagement", "initech-pov")
 }
 
 // cleanWS is test_integrity.py's clean_ws: a sound firm-ops tree plus a

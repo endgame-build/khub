@@ -1,13 +1,13 @@
                                                                                 
- Usage: khub stale [OPTIONS]                                                    
+ Usage: khub check [OPTIONS]                                                    
                                                                                 
- List entities past the `updated` threshold, oldest first: khub stale [--days   
- N].                                                                            
+ Check the active graph: completeness, orphans, dangling edges, strays, cycles, 
+ bodies.                                                                        
                                                                                 
 ╭─ Options ────────────────────────────────────────────────────────────────────╮
-│ --days          <int>  Staleness threshold in days; default: the workspace's │
-│                        stale_days.                                           │
-│ --format        <str>  text (Rich table on a TTY) or json. [default: text]   │
+│ --strict               Fail the gate on orphans too (default:                │
+│                        informational).                                       │
+│ --format        <str>  text (Rich on a TTY) or json. [default: text]         │
 │ --help                 Show this message and exit.                           │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 

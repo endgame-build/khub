@@ -436,6 +436,7 @@ func resolveType(name string, decl *TypeDecl, base *BaseBlock, declared map[stri
 		Required:    decl.Required,
 		Orphan:      decl.Orphan,
 		IdPrefix:    idPrefixOf(decl.IdPrefix),
+		IdDate:      decl.IdDate,
 		Template:    decl.Template,
 		TemplateOff: decl.TemplateOff,
 		When:        decl.When,

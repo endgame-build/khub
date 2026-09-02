@@ -1,1 +1,1 @@
-{"error": {"code": "lookup_error", "message": "No entity 'cmp-004-zed' found"}}
+{"id": "component/cmp-zed", "type": "component", "slug": "cmp-zed", "predicate": "depends_on", "target": "cmp-root", "changed": true}

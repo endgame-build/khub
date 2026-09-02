@@ -260,11 +260,13 @@ open-ontologies contributes the blast-radius/lock framing.
 ## Addenda (post-initial-list)
 
 49. **Body content assertions + body link integrity** [mds+bwrb, S–M] —
-    Extend the existing template checker beyond heading presence/order with
-    per-section content assertions declared in `.khub/templates/<type>.yaml`
-    (e.g. "Data model must contain ≥1 `mermaid` code block" — a live build-lite
-    arc42 case; "Steps must contain a checklist"), plus dead-relative-link
-    detection in bodies. Native extension of `validate`'s body findings —
+    `shipped: body assertions` (the kb 0.14.0 port: per-section `optional`,
+    `word_count`, `required_text`, `forbidden_text`, `code_blocks` and lenses;
+    dead-link detection is the remainder). Extend the existing template
+    checker beyond heading presence/order with per-section content assertions
+    declared in `.khub/templates/<type>.yaml` (e.g. "Building Block View must
+    contain ≥1 `mermaid` code block" — a live build-lite arc42 case; "Steps
+    must contain a checklist"), plus dead-relative-link detection in bodies. Native extension of `validate`'s body findings —
     mdschema itself stays rejected as an engine (see source table). Absorbs
     the remainder of #16.
 

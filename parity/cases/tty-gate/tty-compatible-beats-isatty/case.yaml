@@ -15,6 +15,6 @@ steps:
 - argv: ["init", "build-lite", ".", "--no-wire"]
 - argv: ["add", "component", "--title", "API", "--kind", "service"]
 - argv: ["query", "--type", "component"]
-- argv: ["get", "cmp-001-api"]
+- argv: ["get", "cmp-api"]
 - argv: ["status"]
-- argv: ["get", "cmp-404-nope"]
+- argv: ["get", "cmp-nope"]

@@ -1,1 +1,1 @@
-{"id": "component/a-slash-b", "type": "component", "slug": "a-slash-b", "predicate": "depends_on", "target": "cmp-001-root", "changed": true}
+{"id": "component/a-slash-b", "type": "component", "slug": "a-slash-b", "predicate": "depends_on", "target": "cmp-root", "changed": true}

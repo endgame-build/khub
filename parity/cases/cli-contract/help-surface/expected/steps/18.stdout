@@ -1,11 +1,13 @@
                                                                                 
- Usage: khub reindex [OPTIONS]                                                  
+ Usage: khub stale [OPTIONS]                                                    
                                                                                 
- Regenerate the OKF index.md from the graph: khub reindex [--dry-run].          
+ List entities past the `updated` threshold, oldest first: khub stale [--days   
+ N].                                                                            
                                                                                 
 ╭─ Options ────────────────────────────────────────────────────────────────────╮
-│ --dry-run          Print the diff against the current index.md and write     │
-│                    nothing.                                                  │
-│ --help             Show this message and exit.                               │
+│ --days          <int>  Staleness threshold in days; default: the workspace's │
+│                        stale_days.                                           │
+│ --format        <str>  text (Rich table on a TTY) or json. [default: text]   │
+│ --help                 Show this message and exit.                           │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 

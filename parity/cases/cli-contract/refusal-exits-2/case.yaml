@@ -1,0 +1,12 @@
+# Exit codes are three-way: 0 success, 1 a gate failed (validate/check), 2 a
+# refusal or a usage error — every Located failure, envelope unchanged. Pinned
+# side by side so the split cannot drift: a refused add as JSON and as prose,
+# then a failing check that stays 1 in both renderings.
+mode: human
+steps:
+- argv: ["init", "build-lite", ".", "--no-wire"]
+- argv: ["add", "adr", "--title", "X", "--status", "bogus", "--format", "json"]
+- argv: ["add", "adr", "--title", "X", "--status", "bogus"]
+- argv: ["add", "adr", "--title", "No status"]
+- argv: ["check", "--format", "json"]
+- argv: ["check"]

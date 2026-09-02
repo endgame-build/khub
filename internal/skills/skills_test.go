@@ -63,8 +63,8 @@ func TestSkillDigestsMatchTheRecordedInstall(t *testing.T) {
 	// to be re-recorded in the same commit, because its tree manifest hashes the
 	// same bytes.
 	for name, digest := range map[string]string{
-		"khub/SKILL.md":  "5aca35e1a9efe05de9ea3385dbf205f16ae8473cfdfd0b7a181ba55f7f2bc953",
-		"setup/SKILL.md": "a511e49dbcd537a60a03c017db8d5c5770bef654c58d617e06e6bec021536ba4",
+		"khub/SKILL.md":  "488d43ec7144d14d154ba26415897508fe07af93275136d8f92d763d3555b051",
+		"setup/SKILL.md": "8f35fec92e01651c6f900f41835f4043e64bac64fe3b1e8fab5bae2e743a71b6",
 	} {
 		raw, err := fs.ReadFile(FS(), name)
 		if err != nil {

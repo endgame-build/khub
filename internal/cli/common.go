@@ -329,3 +329,65 @@ func pyRepr(v any) string {
 	}
 	return pyStr(v)
 }
+
+// pathAction is the {path, action} pair every file-writing tail reports —
+// wire's Outcome and skill's Write share the shape, and init, upgrade and
+// install-skills all render it the same way.
+type pathAction struct{ Path, Action string }
+
+// pathActionRecords renders the pairs as the JSON list those commands carry:
+// `{path, action}`, in that order.
+func pathActionRecords(items []pathAction) []any {
+	out := make([]any, 0, len(items))
+	for _, item := range items {
+		record := omap.New()
+		record.Set("path", item.Path)
+		record.Set("action", item.Action)
+		out = append(out, record)
+	}
+	return out
+}
+
+// tail is one best-effort step run after a scaffold or an upgrade — wire,
+// skills, index. Result is set when it ran clean, Err (the located prose)
+// when it failed, neither when the caller skipped it. By the time a tail runs
+// the workspace is already written, so none of them is ever fatal.
+type tail[T any] struct {
+	Result *T
+	Err    string
+}
+
+// tailOf wraps a step's return in a tail: the result when it ran clean, the
+// error's prose when it did not.
+func tailOf[T any](result *T, err error) tail[T] {
+	if err != nil {
+		return tail[T]{Err: tailError(err)}
+	}
+	return tail[T]{Result: result}
+}
+
+// set writes the tail into a payload at key: render(Result) when it ran,
+// null when it did not and nullWhenAbsent says so (init omits `wire` when
+// skipped; upgrade reports every tail), then key_error right after it when
+// the step failed.
+func (t tail[T]) set(p *omap.Map, key string, render func(*T) any, nullWhenAbsent bool) {
+	switch {
+	case t.Result != nil:
+		p.Set(key, render(t.Result))
+	case nullWhenAbsent:
+		p.Set(key, nil)
+	}
+	if t.Err != "" {
+		p.Set(key+"_error", t.Err)
+	}
+}
+
+// tailError is the message a best-effort tail reports: the located prose
+// when there is one, the raw error otherwise.
+func tailError(err error) string {
+	var located *errs.Located
+	if errors.As(err, &located) {
+		return located.Message
+	}
+	return err.Error()
+}

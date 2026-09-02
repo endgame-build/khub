@@ -35,8 +35,10 @@ func TestSlugifyNormalizes(t *testing.T) {
 	}
 }
 
-// TS-ENT-001-U01: id wins, else name, else the type name.
-func TestSlugMintedFromIDNameOrType(t *testing.T) {
+// TS-ENT-001-U01: id wins, else name; a type with neither refuses. The
+// type-name fallback went with the ordinal — without one it minted a single
+// id per type.
+func TestSlugMintedFromIDOrName(t *testing.T) {
 	ws := newWS(t, "firm-ops")
 	prereqs(t, ws)
 
@@ -49,15 +51,18 @@ func TestSlugMintedFromIDNameOrType(t *testing.T) {
 	byName, err := Create(ws, "client", CreateOpts{
 		Fields: fields("name", "Beta Corp"), UseTemplate: true})
 	requireNoError(t, err)
-	if byName.Slug != "001-beta-corp" {
+	if byName.Slug != "beta-corp" {
 		t.Fatalf("minted from name: got %q", byName.Slug)
 	}
-	byType, err := Create(ws, "opportunity", CreateOpts{
+	before := mdFiles(t, ws)
+	_, err = Create(ws, "opportunity", CreateOpts{
 		Fields:      fields("client", "initech", "owner", "noor", "stage", "prospect"),
 		UseTemplate: true})
-	requireNoError(t, err)
-	if byType.Slug != "001-opportunity" {
-		t.Fatalf("minted from type: got %q", byType.Slug)
+	e := requireCode(t, err, "no_slug_source")
+	requireMessageContains(t, e, "Type 'opportunity' has no name or title to mint an id from; "+
+		"pass --name or --title, or name it with --id <slug>")
+	if !equalStrings(mdFiles(t, ws), before) {
+		t.Fatal("the refused create wrote a file")
 	}
 }
 
@@ -89,7 +94,7 @@ func TestNumberFieldRejectsNonNumericAndNonFinite(t *testing.T) {
 		requireCode(t, err, "number_violation")
 	}
 	ok, err := Create(ws, "fragment", CreateOpts{
-		Fields: fields("stage", "raw", "confidence", "0.8"), UseTemplate: true})
+		Fields: fields("title", "Sure", "stage", "raw", "confidence", "0.8"), UseTemplate: true})
 	requireNoError(t, err)
 	if got := metaValue(t, ok.Path, "confidence"); got != 0.8 {
 		t.Fatalf("confidence = %#v, want 0.8", got)
@@ -100,14 +105,14 @@ func TestNumberFieldRejectsNonNumericAndNonFinite(t *testing.T) {
 func TestNumberFieldKeepsIntShape(t *testing.T) {
 	ws := newWS(t, "firm-ops")
 	res, err := Create(ws, "fragment", CreateOpts{
-		Fields: fields("stage", "raw", "confidence", "12"), UseTemplate: true})
+		Fields: fields("title", "Twelve", "stage", "raw", "confidence", "12"), UseTemplate: true})
 	requireNoError(t, err)
 	if got := metaValue(t, res.Path, "confidence"); got != int64(12) {
 		t.Fatalf("confidence = %#v, want int64(12)", got)
 	}
 	huge := "123456789012345678901234567890"
 	big, err := Create(ws, "fragment", CreateOpts{
-		Fields: fields("stage", "raw", "confidence", huge), UseTemplate: true})
+		Fields: fields("title", "Huge", "stage", "raw", "confidence", huge), UseTemplate: true})
 	requireNoError(t, err)
 	if got := metaValue(t, big.Path, "confidence"); got != (canon.BigInt{Literal: huge}) {
 		t.Fatalf("confidence = %#v, want BigInt(%s)", got, huge)
@@ -121,7 +126,7 @@ func TestDraftIsManual(t *testing.T) {
 	prereqs(t, ws)
 
 	active, err := Create(ws, "opportunity", CreateOpts{
-		Fields: fields("stage", "prospect"), UseTemplate: true})
+		Fields: fields("name", "Active deal", "stage", "prospect"), UseTemplate: true})
 	requireNoError(t, err)
 	if active.Draft {
 		t.Fatal("a missing required field must not draft the entity")
@@ -134,7 +139,7 @@ func TestDraftIsManual(t *testing.T) {
 	}
 
 	drafted, err := Create(ws, "opportunity", CreateOpts{
-		Fields:      fields("client", "initech", "owner", "noor", "stage", "prospect"),
+		Fields:      fields("name", "Drafted deal", "client", "initech", "owner", "noor", "stage", "prospect"),
 		Draft:       true,
 		UseTemplate: true})
 	requireNoError(t, err)
@@ -175,7 +180,7 @@ func TestStrictFilter(t *testing.T) {
 	requireMessageContains(t, e, "Unknown field 'vibe' rejected under --strict")
 
 	loose, err := Create(ws, "opportunity", CreateOpts{
-		Fields: fields("client", "initech", "owner", "noor", "stage", "prospect",
+		Fields: fields("name", "Loose deal", "client", "initech", "owner", "noor", "stage", "prospect",
 			"vibe", "high"),
 		UseTemplate: true})
 	requireNoError(t, err)
@@ -193,19 +198,23 @@ func TestEmptySlugIsRejected(t *testing.T) {
 	requireMessageContains(t, e, "Cannot mint a slug from '!!!'")
 }
 
-// TS-ENT-001-U06: a within-type minted collision appends -2, then -3.
-func TestCollisionSuffixIsDeterministic(t *testing.T) {
+// TS-ENT-001-U06: a within-type minted collision refuses — minting reads no
+// siblings, so the same name mints the same slug, and nothing is suffixed.
+func TestSameNameRefuses(t *testing.T) {
 	ws := newWS(t, "firm-ops")
 	prereqs(t, ws)
-	var got []string
-	for i := 0; i < 3; i++ {
-		res, err := Create(ws, "client", CreateOpts{Fields: fields("name", "Acme"), UseTemplate: true})
-		requireNoError(t, err)
-		got = append(got, res.Slug)
+	first, err := Create(ws, "client", CreateOpts{Fields: fields("name", "Acme"), UseTemplate: true})
+	requireNoError(t, err)
+	if first.Slug != "acme" {
+		t.Fatalf("slug = %q, want acme", first.Slug)
 	}
-	want := []string{"001-acme", "002-acme", "003-acme"}
-	if !equalStrings(got, want) {
-		t.Fatalf("slugs = %v, want %v", got, want)
+	before := mdFiles(t, ws)
+	_, err = Create(ws, "client", CreateOpts{Fields: fields("name", "Acme"), UseTemplate: true})
+	e := requireCode(t, err, "slug_taken")
+	requireMessageContains(t, e,
+		"Slug 'acme' already exists in client; pass --id <slug> to name this one differently")
+	if !equalStrings(mdFiles(t, ws), before) {
+		t.Fatal("the refused create wrote a file")
 	}
 }
 
@@ -215,7 +224,7 @@ func TestLayoutResolutionAndEngagementEdge(t *testing.T) {
 	prereqs(t, ws)
 
 	opp, err := Create(ws, "opportunity", CreateOpts{
-		Fields:      fields("client", "initech", "owner", "noor", "stage", "prospect"),
+		Fields:      fields("name", "Deal", "client", "initech", "owner", "noor", "stage", "prospect"),
 		UseTemplate: true})
 	requireNoError(t, err)
 	want := filepath.Join(ws, "opportunities", opp.Slug, "_index.md")
@@ -224,7 +233,7 @@ func TestLayoutResolutionAndEngagementEdge(t *testing.T) {
 	}
 
 	meeting, err := Create(ws, "meeting", CreateOpts{
-		Fields: fields("engagement", "initech-pov", "call_type", "client",
+		Fields: fields("title", "Kickoff", "engagement", "initech-pov", "call_type", "client",
 			"source", "recording", "date", "2026-06-19"),
 		UseTemplate: true})
 	requireNoError(t, err)

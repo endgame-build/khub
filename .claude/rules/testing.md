@@ -47,6 +47,17 @@ paths agree only because both constants are 80.
   *outside* the workspace (else the manifest picks up counter files), merged
   via `go tool covdata`. Report only, no threshold. Signal: `internal/cli`
   near-total from parity alone — a drop means per-type branching crept in.
+- **Scale.** Every fixture holds a dozen entities; the bugs that only appear
+  at n (a walk that never terminates, an index that drops rows, a scan gone
+  quadratic) live in `parity/scale/`: a Go generator drives `khub add` for
+  ~550 entities and writes an **independent** ground-truth manifest (orphans,
+  closures, degree, stale counts from its own graph model, never read back
+  from khub); `smoke.sh` there asserts khub against it, timed, with the
+  mutation cases (cycle, dangle, `check` vs `check --strict`); `bench` fits a
+  growth exponent per command across 100/550/2000. Not in CI per commit — run
+  it before a release or after touching `index`, `graph`, `integrity`,
+  `query`, `search`. Nothing in it spells an id or a title, so an id-scheme
+  change never touches it.
 
 ## The dead oracle
 

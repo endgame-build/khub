@@ -1,0 +1,30 @@
+# Every heading here is optional — this type shipped no template before, and a repo
+# record is a line, not a document. The registry value is in the frontmatter.
+
+hint: >-
+  one line — what this codebase is for. `repo` is the remote as a path (`org/name`, or
+  the full group path where the host nests them), and `status` says whether it is still
+  moving.
+
+sections:
+- heading: What lives here
+  optional: true
+  hint: the components this repo holds — link them, do not list directories
+- heading: What does not
+  optional: true
+  hint: the neighbouring thing people keep looking for here, and where it actually is
+
+lenses:
+- code: remote
+  name: One record per remote
+  instruction: |
+    Is this one remote, or a monorepo being filed as several? One file per remote is
+    the rule — a monorepo is one record whose components all point at it.
+- code: archived
+  name: Archived, but still depended on
+  when: {status: archived}
+  after: remote
+  instruction: |
+    Nothing moves here any more. Walk the components that name this repo: if any is
+    still live, the corpus says a running part of the system lives in a codebase
+    nobody maintains. That is either wrong or the most important thing on this page.

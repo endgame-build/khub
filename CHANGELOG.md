@@ -4,6 +4,311 @@ Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+The `-NNN-` ordinal is gone from minted ids and every refused call exits 2. Both
+change the corpus and the contract; every existing corpus needs the rename in
+Migration below, and every fixture that pinned an ordinal id or an exit 1 on a
+refusal was re-recorded.
+
+### BREAKING
+
+- **`khub add` no longer numbers ids.** An id is `<prefix>-<YYYY-MM-DD>-<slug>`,
+  with the prefix and the date each declared per type in `storage.yaml`
+  (`id_prefix`, and the new `id_date: true|false`, default false) and each
+  optional; the slug is the slugified `name`, else `title`. Shipped shapes:
+  build-lite dates `adr` (`ad-2026-01-15-use-postgres`) and mints `req-`, `cmp-`,
+  `rp-`, `fs-` plus the title; build-hub dates `adr` and `pdr` and mints the rest
+  undated; firm-ops mints bare slugs.
+
+  The ordinal was `max(existing) + 1` over a directory scan — a read-modify-write,
+  and it raced. Two branches, two worktrees or two agents each saw `ad-003` as the
+  highest and each minted `ad-004-<a different slug>`; the *filenames* differed,
+  so git merged both cleanly, `add` never saw a collision and `check` reported
+  nothing, while the skill was telling agents to write `ad-004` in prose as the
+  short handle. Deleting the highest-numbered entity also freed its number for
+  reuse. Minting is now a pure function of the schema, the type, the frontmatter
+  and the title: it reads no siblings, so there is nothing to race on. The same
+  title mints the same id twice, which `add` refuses (exit 2, `slug_taken`, naming
+  `--id`), and which git surfaces as an add/add conflict on one filename rather
+  than two files that quietly coexist.
+
+  Only decisions carry a date, because only a decision legitimately recurs under
+  one title — "use Postgres" is decided, superseded and revisited, which is what
+  `supersedes` is for. The other types are registries of what currently holds,
+  where a repeated title *is* a duplicate. The date is the day the id was minted
+  (an explicit `--created` on the `add` dates it) and stays that; nothing checks
+  it against `created`, which `edit` can rewrite.
+
+  Three fallbacks went with the ordinal, each now a refusal that names the way
+  out: a type with neither `name` nor `title` (`no_slug_source` — the type-name
+  fallback would mint one id per type without a number to tell them apart), a
+  by-value `id_prefix` whose deciding attribute is unset (`id_prefix_undecided`,
+  `needs --kind <…>`), and a minted collision (nothing is ever suffixed —
+  `acme-2` is gone, minted or explicit). `--id` is unchanged: slugified, written
+  as given, and the documented answer to every one of the three.
+
+- **`validate` holds every non-singleton entity to its type's id scheme.** Three
+  arms, one finding per slug on field `id`: the prefix the type mints (and, for a
+  by-value prefix, the one its deciding attribute chose), the date when `id_date`,
+  and the retired `NNN-` ordinal — rejected with a message naming `git mv`, unless
+  the title itself starts with those digits (`cmp-404-handling`). Types declaring
+  no scheme used to be exempt; they are not any more, so an unmigrated corpus
+  fails the gate rather than drifting. The bare `NNN-slug` leniency for "minted
+  before `kind` was set" is gone with the fallback that produced it. `khub schema
+  show` gains `id_prefix`, `id_date` and the rendered `id_shape`
+  (`ad-YYYY-MM-DD-slug`; `null` on a singleton) — the same string every `id`
+  finding quotes — and titles a minting type `adr (file · ids ad-YYYY-MM-DD-slug)`.
+  `id_prefix` or `id_date` on a singleton is a schema error: its id is its type
+  name, so it mints nothing.
+
+- **`requirement` mints one literal `req-`** in build-lite and build-hub, replacing
+  the three derived from `kind` (`fr-`, `cst-`, `br-`). `kind` keeps its values and
+  stays required; build-lite's gains `non-functional`. The cost is real: the id
+  gate can no longer catch a requirement labelled with the wrong `kind`. What it
+  buys is that `kind` became an ordinary field — `khub edit <id> kind constraint`
+  now works, where before it made the id wrong and the only fix was
+  remove-and-re-add — and `add requirement` no longer needs `--kind` to mint.
+
+- **build-lite gains `repo` as a type** (`knowledge/repos/`, `rp-slug`; `repo`
+  matching `^[a-z0-9._-]+(/[a-z0-9._-]+)+$` and `status: active | archived`, both
+  required) and `component.repo` becomes an edge to it instead of a text
+  attribute, so a component cannot claim a codebase nobody registered.
+  build-hub's `repo.repo` pattern widens to the same nested-group form.
+
+- **firm-ops requires the slug source on every type**: `title: { required: true }`
+  on `project`, `meeting`, `fragment`, `case-study` and `partnership` (the other
+  four already required `name` or `title`). With no ordinal to fall back on, an
+  untitled entity cannot be minted, so the schema says so up front.
+
+- **Every refused call exits 2.** A `Located` failure — the call was malformed, or
+  would have written something the schema forbids — renders as before (one line
+  on stderr, or the `{"error": {"code", "message"}}` envelope under the JSON gate)
+  and exits 2 instead of 1, including the text-mode `remove` refusal. Exit 1 is
+  now reserved for a gate that ran and failed (`validate`, `check`), where the
+  workspace is what is wrong rather than the call; usage errors stay 2. An agent
+  reads the code as what to do next: on 2 correct the call and retry, nothing
+  was written; on 1 fix the workspace.
+
+- **The build-lite and build-hub `prd` and `arc42` templates take the section
+  names a reader outside khub already knows** (ported from kb 0.14.0). Heading
+  matching is a case-sensitive prefix and order is part of the contract, so a
+  document written against the earlier template fails `body_shape` after
+  `khub upgrade` until its headings are renamed — nothing else about the corpus
+  moves. `arc42` follows the arc42 spine (docs.arc42.org), with four optional
+  appendices after `Glossary`:
+
+  | before | now |
+  |---|---|
+  | `Context and scope` | `Context and Scope` |
+  | `Solution strategy` | `Solution Strategy` |
+  | `Building blocks` / `Building block view` | `Building Block View` — asks for one mermaid block (a gap, not an error) |
+  | `Data model` (build-lite) | *gone* — fold into `Crosscutting Concepts` (arc42 tip 8-7 puts the domain data model there) |
+  | `Crosscutting concepts` | `Crosscutting Concepts` |
+  | `Decisions` / `Architecture decisions` | `Architecture Decisions` |
+  | `Risks and technical debt` | `Risks and Technical Debt` |
+  | `Introduction and goals`, `Constraints`, `Runtime view`, `Deployment view`, `Quality requirements`, `Glossary` (build-hub) | `Introduction and Goals`, `Architecture Constraints`, `Runtime View`, `Deployment View`, `Quality Requirements`, `Glossary` — still required in build-hub; optional in build-lite, where they are new |
+
+  `prd` orders for the reader and stops colliding with the ontology: `Glossary`
+  sits before `Features`, and the capability section is `Features` rather than
+  `Functional requirements` — `requirement` is already a type with
+  `kind: functional`.
+
+  | before | now |
+  |---|---|
+  | `Target user` | `Target Users` |
+  | `Functional requirements` | `Features` |
+  | `Non-goals` | `Non-Goals` |
+  | `Success metrics` | `Success Metrics` |
+  | `Glossary` (build-lite) | still required, moved before `Features`; in build-hub an optional pointer at the glossary singleton |
+  | `Roadmap` (build-lite) | now `optional: true`; in build-hub an optional pointer at the roadmap singleton |
+
+  Added, all `optional: true`: `Document Purpose`, `Deferred`, `Alternatives &
+  Recommendation`, `Open Questions`, `Assumptions Index`, `Grounding Evidence`
+  on `prd`; `Deferred Decisions`, `Open Questions`, `Assumptions Index`,
+  `Grounding Evidence` on `arc42`. `adr` gains optional `Alternatives` and
+  `Prevents`, word minimums on its three original headings and a
+  `forbidden_text` on hedging inside `Decision` (`tbd`, `we should consider`).
+  build-lite's `requirement`, `component` and `repo` and build-hub's `component`
+  ship a template for the first time — `requirement` declares `sections: []`,
+  the other three only optional headings, so no existing body owes anything;
+  each carries a top-level `hint` and review lenses, and every shipped
+  template's own scaffold satisfies its own rules. Every `NNN` in a hint is
+  gone. Migration: `khub upgrade`, then rename the headings per the maps above;
+  `khub validate arc42/arc42` and `khub validate prd/prd` name the first one
+  still wrong, one at a time.
+
+- Preset versions: build-lite 0.1.0 → 0.2.0, build-hub 0.3.0 → 0.4.0,
+  firm-ops 0.1.0 → 0.2.0.
+
+### Migration
+
+`khub validate` reports every surviving `-NNN-` id as an `id` error, so a
+corpus that has not been migrated fails the gate rather than drifting. There is
+no `khub migrate-ids`: a renamer cannot fix prose references, and it cannot fix
+external files whose frontmatter points in — both of which the docs actively
+encourage. Three loops cover the three presets; run them from the workspace
+root.
+
+**firm-ops** strips the ordinal from every id. Folder-layout types (opportunity,
+project, partnership) are directories, so the directory moves:
+
+```bash
+for p in opportunities projects partnerships; do
+  for d in "$p"/[0-9][0-9][0-9]-*/; do
+    [ -d "$d" ] || continue
+    git mv "${d%/}" "$p/$(basename "$d" | sed 's/^[0-9]*-//')"
+  done
+done
+for p in meetings transcripts fragments case-studies identity/team clients; do
+  for f in "$p"/[0-9][0-9][0-9]-*.md; do
+    [ -e "$f" ] || continue
+    git mv "$f" "$p/$(basename "$f" | sed 's/^[0-9]*-//')"
+  done
+done
+```
+
+**Decisions** (build-lite `knowledge/decisions/ad-`, build-hub
+`knowledge/architecture/decisions/ad-` and `knowledge/product/decisions/pd-`)
+substitute the ordinal with the file's own `created` date. On a dated type an
+unmigrated `ad-001-x` reports `slug carries no date — this type mints
+ad-YYYY-MM-DD-slug`, not the `git mv` message, because the date arm runs before
+the ordinal arm (kb's order); this loop fixes both in one move:
+
+```bash
+for f in knowledge/decisions/ad-[0-9][0-9][0-9]-*.md \
+         knowledge/architecture/decisions/ad-[0-9][0-9][0-9]-*.md \
+         knowledge/product/decisions/pd-[0-9][0-9][0-9]-*.md; do
+  [ -e "$f" ] || continue
+  d=$(sed -n 's/^created: //p' "$f" | head -1)
+  git mv "$f" "$(dirname "$f")/$(basename "$f" | sed -E "s/^(ad|pd)-[0-9]+-/\1-$d-/")"
+done
+```
+
+**Every other prefixed type** strips the ordinal, and requirements also rewrite
+their three prefixes to one — the only move that changes the leading token:
+
+```bash
+for f in knowledge/components/cmp-*.md specs/fs-*.md \
+         knowledge/product/capabilities/cap-*.md \
+         knowledge/architecture/boundaries/bound-*.md \
+         knowledge/architecture/quality-attributes/qa-*.md \
+         knowledge/architecture/components/cmp-*.md \
+         specs/feature-specs/fs-*.md specs/test-specs/ts-*.md specs/work-packages/wp-*.md; do
+  [ -e "$f" ] || continue
+  git mv "$f" "$(echo "$f" | sed -E 's#/([a-z]+)-[0-9]+-#/\1-#')"
+done
+for f in knowledge/requirements/{fr,cst,br}-[0-9][0-9][0-9]-*.md \
+         knowledge/product/requirements/{fr,cst,br}-[0-9][0-9][0-9]-*.md; do
+  [ -e "$f" ] || continue
+  git mv "$f" "$(echo "$f" | sed -E 's#/(fr|cst|br)-[0-9]+-#/req-#')"
+done
+```
+
+None of these fix references. After renaming, `khub check` names every edge that
+no longer resolves — fix those with `khub link`/`khub unlink` (or `khub edit`),
+run `khub reindex`, then grep your prose and any external frontmatter for the
+old ids yourself. Two ids that differed only by ordinal (`fr-001-x` and
+`cst-001-x`) collapse onto the same `req-x`; the second `git mv` refuses rather
+than clobber, and you decide which title to change. build-lite workspaces also
+need a `repo` entity per codebase and `component.repo` re-pointed at it
+(`khub add repo --title … --repo org/name --status active`, then
+`khub edit <component> repo rp-<slug>`); `khub upgrade` brings the schema in.
+
+### Added
+
+- **`khub upgrade`** — bring an existing workspace up to the khub on PATH.
+  Deliberately not a re-init: `init` never writes over a `.khub/` file the
+  workspace owns, and the tree and singleton passes read the workspace's own
+  layer files, so a type or a section shipped in a new preset could never reach
+  an existing workspace. `upgrade` replaces `.khub/{ontology,policy,storage}.yaml`
+  and `.khub/templates/*.yaml` from the preset recorded in `.khub/config.yaml`
+  (an edited file is copied to `<name>.bak` first; a file the workspace never
+  had is created with no backup; an unchanged file is not reported), restamps
+  the provenance `version`, re-reads the schema, scaffolds what the ontology
+  gained, then re-installs the skills, re-wires the agent files and regenerates
+  `index.md` — each tail non-fatal, reported as `*_error`. `--no-schema` keeps
+  `.khub/` as it is and reports `schema_drift`; `--no-skill` and `--no-wire`
+  skip their tails. Refuses outside a workspace, and in one whose config
+  records no preset (`no_preset`). Ported from kb 0.14.0's `cmd_upgrade`.
+- **`khub init` writes `index.md`.** The index is the cheapest read of the
+  whole corpus, and a workspace that had never run `reindex` simply had none —
+  an agent's first look found nothing. Written after the singletons, so it
+  lists them; reported as `index` (`created`/`updated`/`unchanged`) in the JSON
+  payload, or `index_error` with an `index skipped:` stderr note when the scan
+  holds malformed files. A force re-init no longer reads it as a corpus seeded
+  over.
+- **Body-content vocabulary in templates.** A section may declare `optional`,
+  `word_count: {min, max}`, `required_text` and `forbidden_text` (literals,
+  case-insensitive, or `{pattern}`), and `code_blocks: [{lang, min, max}]`; a
+  template may declare a top-level `hint` (leads the scaffold as a comment)
+  and `lenses`. Bounds are non-negative whole numbers, `max` below `min` and a
+  `code_blocks` rule with no bound are refused, and the reserved keys
+  (`repeat`, `pattern`, `images`, `lists`, `tables`, `min_tokens`,
+  `max_tokens`, `budget`) are refused rather than ignored — a template that
+  half-works is worse than one that says no. Rules read prose only (comments
+  and fences blanked), skip an empty section unless it holds a fenced block,
+  and count each CJK character as a word. Ported from kb 0.14.0.
+- **Lenses** — `{code, name, instruction, when, after, section}` review
+  prompts a template declares and `validate <type>/<slug>` hands to whoever is
+  reviewing the body; khub never answers one. `when` compares values as the
+  scalars khub writes to disk, against the frontmatter with schema defaults
+  resolved in (a `draft: false` nobody wrote still matches); `after` orders
+  the list with a stable one-per-round Kahn sort so an edit moves only what it
+  meant to move; a `when` field the type does not declare, a `section` the
+  template does not declare, an unknown `after` code and a cycle are each
+  `template_invalid`.
+- **`validate` reports `gaps`, `body` and `lenses`.** The payload is
+  `{count, errors, gaps, body, lenses}`: `errors` alone gate, body-rule
+  findings land in `gaps`, and a single `type/slug` target of a templated md
+  type also receives `body` (`{words, sections: [{heading, words}]}`) and the
+  applicable `lenses` in template order (`null` / `[]` otherwise).
+- **`check` reads bodies.** Each templated type's template is loaded once; one
+  that does not parse is `template_invalid` against `<type>/*`, a body whose
+  required headings are missing or out of order is `body_shape` — both fail
+  the gate — and a body whose prose does not satisfy a section rule is `thin`,
+  informational under `--strict` too: every rule a template gained would
+  otherwise turn a green corpus red on upgrade, which is the one thing that
+  would stop anyone from declaring a rule at all.
+
+### Changed
+
+- **`validate`'s summary line** is `Validated N entities; E errors, G gaps`
+  (the `; 0 errors` short form is gone), and a gap prints with a `-` marker:
+  `<id>: - body: '## Context' 2 words of prose, at least 50 asked for`.
+- **`check`'s JSON** gains `template_invalid` and `body_shape` after
+  `missing_templates`, and `thin` last, after `strict` — the one bucket that
+  never affects `passed`. Text prints the two errors after the
+  declared-template lines and `thin <id>: <reason>` last (`(informational)` on
+  the passing path).
+- **`search` drops HTML comments before indexing; fenced code stays.** A
+  scaffold's hint comments are the template's words, not the author's, so
+  every freshly added entity was a strong hit for whatever its own hints said
+  (`search forecloses` returned every new ADR). A mermaid block names the
+  components and a bash block names the command, which is what search is for.
+  Comments are removed, not blanked, so snippets stay readable.
+- **`khub install-skills` replaces each skill directory** rather than
+  overlaying it: a file under `.<host>/skills/<skill>/` that khub no longer
+  ships is reported `removed` and deleted (a `--dry-run` reports it and deletes
+  nothing), and a directory that empties is pruned. Previously a release that
+  renamed or dropped a file left the old copy beside the new one for the agent
+  to read both.
+
+### Fixed
+
+- **A `##` inside `<!-- -->` is not a heading.** Heading discovery read
+  comment-masked prose as structure, so a required heading present only inside
+  a comment satisfied the contract and a commented-out one was never reported
+  missing. An unterminated `<!--` masks to the end of the document.
+- **Fence pairing follows CommonMark.** A closing fence repeats the opening
+  character at least as many times and carries no info string, may be indented
+  up to three spaces, a backtick fence's info string may not contain a
+  backtick, and an unterminated fence runs to the end. A heading inside a
+  four-backtick fence holding a three-backtick sample no longer counts as
+  structure.
+- **Heading numbering is stripped only when a `.` or `)` follows it.**
+  `## 2026 goals` keeps its digits, so a template declaring that heading can
+  be satisfied by a body containing it verbatim.
+- **`##` may be indented up to three spaces**, as CommonMark allows.
+
 ## [0.22.1] — 2026-08-30
 
 Internal only: no command, schema, output or file-format change. Every entry

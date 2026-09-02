@@ -1,14 +1,11 @@
                                                                                 
- Usage: khub viz [OPTIONS]                                                      
+ Usage: khub reindex [OPTIONS]                                                  
                                                                                 
- Render the typed graph to a self-contained Cytoscape HTML: khub viz [--out F]  
- [--open] [--type T].                                                           
+ Regenerate the OKF index.md from the graph: khub reindex [--dry-run].          
                                                                                 
 ╭─ Options ────────────────────────────────────────────────────────────────────╮
-│ --out         <str>  Output path for the HTML (default viz.html).            │
-│                      [default: viz.html]                                     │
-│ --open               Open the written file in the default browser.           │
-│ --type        <str>  Render only that type and its incident edges.           │
-│ --help               Show this message and exit.                             │
+│ --dry-run          Print the diff against the current index.md and write     │
+│                    nothing.                                                  │
+│ --help             Show this message and exit.                               │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 

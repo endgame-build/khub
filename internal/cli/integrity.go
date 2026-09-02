@@ -31,31 +31,10 @@ func registerValidate(root *cobra.Command) {
 				if err != nil {
 					return err
 				}
-				payload := omap.New()
-				payload.Set("count", report.Count)
-				errorList := make([]any, 0, len(report.Errors))
-				for _, e := range report.Errors {
-					record := omap.New()
-					record.Set("id", e.ID())
-					record.Set("type", e.Type)
-					record.Set("slug", e.Slug)
-					record.Set("field", e.Field)
-					record.Set("reason", e.Reason)
-					errorList = append(errorList, record)
-				}
-				payload.Set("errors", errorList)
-				if eerr := Emit(payload, format, func() {
-					if report.OK() {
-						fmt.Printf("Validated %d entities; 0 errors\n", report.Count)
-						return
-					}
-					for _, e := range report.Errors {
-						fmt.Printf("%s: %s: %s\n", e.ID(), e.Field, e.Reason)
-					}
-					fmt.Printf("Validated %d entities; %d errors\n", report.Count, len(report.Errors))
-				}); eerr != nil {
+				if eerr := Emit(validatePayload(report), format, func() { validateHuman(report) }); eerr != nil {
 					return eerr
 				}
+				// Errors alone gate; a gap is reported, never exit 1.
 				if !report.OK() {
 					return &ExitError{Code: 1}
 				}
@@ -71,7 +50,7 @@ func registerValidate(root *cobra.Command) {
 func registerCheck(root *cobra.Command) {
 	var format string
 	var strict bool
-	cmd := newCmd("check", "Check the active graph: completeness, orphans, dangling edges, strays, cycles.",
+	cmd := newCmd("check", "Check the active graph: completeness, orphans, dangling edges, strays, cycles, bodies.",
 		"", func(cmd *cobra.Command, args []string) error {
 			return Guard(format, func() error {
 				ws, err := resolveRoot()
@@ -95,6 +74,101 @@ func registerCheck(root *cobra.Command) {
 	cmd.Flags().BoolVar(&strict, "strict", false, "Fail the gate on orphans too (default: informational).")
 	cmd.Flags().StringVar(&format, "format", "text", "text (Rich on a TTY) or json.")
 	root.AddCommand(cmd)
+}
+
+// findingRecords renders one finding bucket's rows: `{id, type, slug, field,
+// reason}` for validate, whose rows span fields; without `field` for check's
+// body buckets, where the bucket implies it (`template_invalid` is always the
+// type's template, `body_shape` and `thin` are always the body).
+func findingRecords(errs []integrity.FieldError, withField bool) []any {
+	out := make([]any, 0, len(errs))
+	for _, e := range errs {
+		record := omap.New()
+		record.Set("id", e.ID())
+		record.Set("type", e.Type)
+		record.Set("slug", e.Slug)
+		if withField {
+			record.Set("field", e.Field)
+		}
+		record.Set("reason", e.Reason)
+		out = append(out, record)
+	}
+	return out
+}
+
+// validatePayload is kb `cmd_validate`'s payload: `count`, the gating
+// `errors`, the informational `gaps`, then the single-target `body` metrics
+// (`null` for a type or whole-workspace run) and applicable `lenses` (`[]`).
+func validatePayload(report *integrity.ValidateReport) *omap.Map {
+	payload := omap.New()
+	payload.Set("count", report.Count)
+	payload.Set("errors", findingRecords(report.Errors, true))
+	payload.Set("gaps", findingRecords(report.Gaps, true))
+	if report.Body == nil {
+		payload.Set("body", nil)
+	} else {
+		body := omap.New()
+		body.Set("words", report.Body.Words)
+		sections := make([]any, 0, len(report.Body.Sections))
+		for _, s := range report.Body.Sections {
+			record := omap.New()
+			record.Set("heading", s.Heading)
+			record.Set("words", s.Words)
+			sections = append(sections, record)
+		}
+		body.Set("sections", sections)
+		payload.Set("body", body)
+	}
+	lenses := make([]any, 0, len(report.Lenses))
+	for _, l := range report.Lenses {
+		record := omap.New()
+		record.Set("code", l.Code)
+		record.Set("name", l.Name)
+		if l.Section == "" {
+			record.Set("section", nil)
+		} else {
+			record.Set("section", l.Section)
+		}
+		record.Set("instruction", l.Instruction)
+		lenses = append(lenses, record)
+	}
+	payload.Set("lenses", lenses)
+	return payload
+}
+
+// validateHuman is kb `cmd_validate`'s text: errors, then gaps with a `-`
+// marker, the summary line, the body metrics, then each lens with its
+// instruction indented beneath it.
+func validateHuman(report *integrity.ValidateReport) {
+	for _, e := range report.Errors {
+		fmt.Printf("%s: %s: %s\n", e.ID(), e.Field, e.Reason)
+	}
+	for _, g := range report.Gaps {
+		fmt.Printf("%s: - %s: %s\n", g.ID(), g.Field, g.Reason)
+	}
+	fmt.Printf("Validated %d entities; %d errors, %d gaps\n",
+		report.Count, len(report.Errors), len(report.Gaps))
+	if report.Body != nil {
+		counts := make([]string, 0, len(report.Body.Sections))
+		for _, s := range report.Body.Sections {
+			counts = append(counts, fmt.Sprintf("%s %d", s.Heading, s.Words))
+		}
+		line := fmt.Sprintf("Body: %d words", report.Body.Words)
+		if len(counts) > 0 {
+			line += " (" + strings.Join(counts, ", ") + ")"
+		}
+		fmt.Println(line)
+	}
+	for _, l := range report.Lenses {
+		where := ""
+		if l.Section != "" {
+			where = " [## " + l.Section + "]"
+		}
+		fmt.Printf("Lens %s%s: %s\n", l.Code, where, l.Name)
+		for line := range strings.SplitSeq(l.Instruction, "\n") {
+			fmt.Printf("  %s\n", line)
+		}
+	}
 }
 
 func checkPayload(report *integrity.CheckReport) *omap.Map {
@@ -132,6 +206,11 @@ func checkPayload(report *integrity.CheckReport) *omap.Map {
 	// The same hole from the claiming side: a declared `template:` name whose
 	// file does not exist.
 	payload.Set("missing_templates", strList(report.MissingTemplates))
+	// A template that exists but does not parse: one row per TYPE
+	// (`<type>/*`), and that type's bodies go unjudged.
+	payload.Set("template_invalid", findingRecords(report.TemplateInvalid, false))
+	// A body missing a required heading (or holding it out of order).
+	payload.Set("body_shape", findingRecords(report.BodyShape, false))
 
 	// Files claiming a known type from outside every layout: unscanned, so
 	// invisible to every other finding here.
@@ -159,6 +238,9 @@ func checkPayload(report *integrity.CheckReport) *omap.Map {
 	payload.Set("draft_required_singletons", strList(report.DraftRequiredSingletons))
 	// Say which gate ran: `orphans` populated with passed=true means default mode.
 	payload.Set("strict", report.Strict)
+	// Last, after `strict`: the one bucket that never affects `passed`. A body
+	// whose prose does not satisfy a section rule is that document, unfinished.
+	payload.Set("thin", findingRecords(report.Thin, false))
 	return payload
 }
 
@@ -171,6 +253,10 @@ func checkHuman(report *integrity.CheckReport) {
 		// gate, so on its own it lands here; the failing path prints it too.
 		for _, name := range report.DraftSingletons {
 			fmt.Printf("singleton %s is unpublished (draft: true) (informational)\n", name)
+		}
+		// Informational is not the same as invisible.
+		for _, th := range report.Thin {
+			fmt.Printf("thin %s: %s (informational)\n", th.ID(), th.Reason)
 		}
 		fmt.Println("Graph check passed")
 		return
@@ -193,6 +279,12 @@ func checkHuman(report *integrity.CheckReport) {
 	}
 	for _, s := range report.MissingTemplates {
 		fmt.Printf("declared template %s does not exist\n", s)
+	}
+	for _, ti := range report.TemplateInvalid {
+		fmt.Printf("template_invalid %s: %s\n", ti.ID(), ti.Reason)
+	}
+	for _, bs := range report.BodyShape {
+		fmt.Printf("body_shape %s: %s\n", bs.ID(), bs.Reason)
 	}
 	for _, m := range report.Misplaced {
 		fmt.Printf("misplaced %s: declares type '%s' but sits outside %s — no command can see it\n",
@@ -222,5 +314,9 @@ func checkHuman(report *integrity.CheckReport) {
 			gate = "required singleton"
 		}
 		fmt.Printf("%s %s is unpublished (draft: true)\n", gate, name)
+	}
+	// Last: the gate did not fail because of these.
+	for _, th := range report.Thin {
+		fmt.Printf("thin %s: %s\n", th.ID(), th.Reason)
 	}
 }

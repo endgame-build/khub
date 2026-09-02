@@ -1,1 +1,1 @@
-[{"id": "component/cmp-001-api", "type": "component", "slug": "cmp-001-api", "depth": 0}, {"id": "component/cmp-002-web", "type": "component", "slug": "cmp-002-web", "depth": 1}]
+[{"id": "component/cmp-api", "type": "component", "slug": "cmp-api", "depth": 0}, {"id": "component/cmp-web", "type": "component", "slug": "cmp-web", "depth": 1}]

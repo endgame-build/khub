@@ -1,0 +1,13 @@
+# preset-bykind — the by-value id_prefix form, which no shipped preset uses any
+# more (build-lite collapsed requirement to a literal `req`). The mint reads the
+# deciding attribute, so an add that leaves it unset has no prefix to mint and
+# refuses (id_prefix_undecided) rather than writing an unprefixed slug.
+version: "0.1.0"
+
+ontology:
+  entities:
+    part:
+      when: parity corpus
+      attributes:
+        title: { required: true }
+        kind: { enum: [bolt, nut], required: true }

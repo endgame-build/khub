@@ -329,9 +329,9 @@ func TestOrphanFlaggedTypesAreExempt(t *testing.T) {
 
 	// The exemption is narrow: an edge-less entity of an unflagged type in the
 	// same workspace is still an orphan, and still fails --strict.
-	create(t, root, "component", "cmp-001-dangling", "title", "Dangling Service", "kind", "service")
+	create(t, root, "component", "cmp-dangling", "title", "Dangling Service", "kind", "service")
 	report := mustCheck(t, root, false)
-	if !reflect.DeepEqual(report.Orphans, []string{"component/cmp-001-dangling"}) {
+	if !reflect.DeepEqual(report.Orphans, []string{"component/cmp-dangling"}) {
 		t.Fatalf("orphans = %v", report.Orphans)
 	}
 	if !report.Passed() {
@@ -465,7 +465,7 @@ func TestCheckReportsMalformedAndFails(t *testing.T) {
 func TestMalformedCollectionSuppressesDerivativeDangles(t *testing.T) {
 	root := wsFor(t, "build-hub")
 	create(t, root, "repo", "svc-a", "repo", "acme/a", "status", "active")
-	create(t, root, "component", "cmp-001-api", "title", "API", "kind", "service", "repo", "svc-a")
+	create(t, root, "component", "cmp-api", "title", "API", "kind", "service", "repo", "svc-a")
 
 	if before := mustCheck(t, root, false); len(before.Dangling) != 0 {
 		t.Fatalf("dangling before the break: %v", before.Dangling)
@@ -506,7 +506,7 @@ func TestMisplacedReportsAFileTheScanCannotReach(t *testing.T) {
 		t.Fatal("an unscanned entity passed the gate")
 	}
 	want := []Misplaced{{
-		Path:     "knowledge/components/cmp-001-api.md",
+		Path:     "knowledge/components/cmp-api.md",
 		Type:     "component",
 		Expected: "knowledge/architecture/components",
 	}}

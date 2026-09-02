@@ -1,22 +1,16 @@
                                                                                 
- Usage: khub query [OPTIONS]                                                    
+ Usage: khub remove [OPTIONS] [ID]                                              
                                                                                 
- Filter entities: khub query --type opportunity --stage prospect --format json. 
+ Remove an entity, guarded by inbound edges: khub remove old-fragment           
+ [--force].                                                                     
                                                                                 
+╭─ Arguments ──────────────────────────────────────────────────────────────────╮
+│   ID      <str>  A bare slug, or type/slug on ambiguity.                     │
+╰──────────────────────────────────────────────────────────────────────────────╯
 ╭─ Options ────────────────────────────────────────────────────────────────────╮
-│ --type           <str>  Restrict to one entity type.                         │
-│ --tag            <str>  Keep entities carrying this tag.                     │
-│ --has            <str>  Keep entities with a resolvable edge for the         │
-│                         predicate.                                           │
-│ --missing        <str>  Keep entities lacking a resolvable edge (gap         │
-│                         finder).                                             │
-│ --orphan                Keep only orphan (edge-less) entities.               │
-│ --stale                 Keep only stale entities.                            │
-│ --draft                 Isolate drafts.                                      │
-│ --active                Exclude drafts.                                      │
-│ --limit          <int>  Cap the returned set.                                │
-│ --format         <str>  text (Rich table on a TTY), json, or ids.            │
-│                         [default: text]                                      │
-│ --help                  Show this message and exit.                          │
+│ --force                Delete despite inbound edges (leaves them dangling).  │
+│ --format        <str>  text or json (emits the removed record).              │
+│                        [default: text]                                       │
+│ --help                 Show this message and exit.                           │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 

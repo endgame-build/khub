@@ -2,4 +2,4 @@ steps:
 - argv: ["init", "build-lite", ".", "--no-wire"]
 - argv: ["add", "requirement", "--title", "R", "--kind", "functional"]
 - argv: ["add", "requirement", "--title", "S", "--kind", "functional"]
-- argv: ["link", "fr-001-r", "supersedes", "fr-002-s"]
+- argv: ["link", "req-r", "supersedes", "req-s"]

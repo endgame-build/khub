@@ -1,19 +1,17 @@
                                                                                 
- Usage: khub neighbors [OPTIONS] {ID}                                           
+ Usage: khub search [OPTIONS] {text}                                            
                                                                                 
- Walk one-hop neighbors: khub neighbors initech-pov [--predicate client --in].  
+ Full-text search: khub search modernization --type transcript --format json.   
                                                                                 
 ╭─ Arguments ──────────────────────────────────────────────────────────────────╮
-│ *    ID      <str>  A bare slug, or type/slug on ambiguity. [required]       │
+│ *    text      <str>  FTS5 MATCH text: terms, "phrases", OR, NEAR, prefix*.  │
+│                       [required]                                             │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 ╭─ Options ────────────────────────────────────────────────────────────────────╮
-│ --predicate        <str>  Restrict adjacency to one predicate.               │
-│ --in                      Inbound edges only (incl. derived inverses).       │
-│ --out                     Outbound (stored) edges only.                      │
-│ --depth            <int>  Bounded multi-hop adjacency over all predicates.   │
-│                           [default: 1]                                       │
-│ --format           <str>  text (Rich table on a TTY) or json.                │
-│                           [default: text]                                    │
-│ --help                    Show this message and exit.                        │
+│ --type          <str>  Restrict to one entity type.                          │
+│ --limit         <int>  Cap the returned set. [default: 20]                   │
+│ --format        <str>  text (Rich table on a TTY), json, or ids.             │
+│                        [default: text]                                       │
+│ --help                 Show this message and exit.                           │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 

@@ -165,8 +165,13 @@ func schemaShow(name, format string) error {
 		layout, _ := view.Get("layout")
 		rows := appendRows([][]string{}, view, "fields", fieldRow)
 		rows = appendRows(rows, view, "relations", relationRow)
-		printTable(fmt.Sprintf("%s (%v)", name, layout),
-			[]string{"field", "type", "required", "enum", "notes"}, rows)
+		// A minting type shows the id it will mint beside its layout, so the
+		// title and the `bad_id` finding name the same shape.
+		title := fmt.Sprintf("%s (%v)", name, layout)
+		if shape, _ := view.Get("id_shape"); shape != nil {
+			title = fmt.Sprintf("%s (%v · ids %v)", name, layout, shape)
+		}
+		printTable(title, []string{"field", "type", "required", "enum", "notes"}, rows)
 	})
 }
 

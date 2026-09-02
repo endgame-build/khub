@@ -1,16 +1,18 @@
                                                                                 
- Usage: khub impact [OPTIONS] {ID}                                              
+ Usage: khub neighbors [OPTIONS] {ID}                                           
                                                                                 
- Compute blast radius: khub impact node-a [--reverse] [--predicate <p>].        
+ Walk one-hop neighbors: khub neighbors initech-pov [--predicate client --in].  
                                                                                 
 ╭─ Arguments ──────────────────────────────────────────────────────────────────╮
 │ *    ID      <str>  A bare slug, or type/slug on ambiguity. [required]       │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 ╭─ Options ────────────────────────────────────────────────────────────────────╮
-│ --predicate        <str>  The edge to walk the closure over.                 │
-│                           [default: depends_on]                              │
-│ --reverse                 Walk ancestors (what reaches this node).           │
-│ --format           <str>  tree (depth-marked, the TTY default) or json.      │
+│ --predicate        <str>  Restrict adjacency to one predicate.               │
+│ --in                      Inbound edges only (incl. derived inverses).       │
+│ --out                     Outbound (stored) edges only.                      │
+│ --depth            <int>  Bounded multi-hop adjacency over all predicates.   │
+│                           [default: 1]                                       │
+│ --format           <str>  text (Rich table on a TTY) or json.                │
 │                           [default: text]                                    │
 │ --help                    Show this message and exit.                        │
 ╰──────────────────────────────────────────────────────────────────────────────╯

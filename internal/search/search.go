@@ -36,6 +36,7 @@ import (
 	"github.com/endgame-build/khub/internal/introspect"
 	"github.com/endgame-build/khub/internal/omap"
 	"github.com/endgame-build/khub/internal/schema"
+	"github.com/endgame-build/khub/internal/template"
 	"github.com/endgame-build/khub/internal/values"
 	"github.com/endgame-build/khub/internal/workspace"
 )
@@ -199,7 +200,16 @@ func buildFTS(conn *sqlite3.Conn, root string, idx *index.Index, type_ *string) 
 		if rerr != nil {
 			rel = path
 		}
-		if err := insertRow(stmt, ftsTitle(meta, node.Slug), canon.FTSBody(meta, body),
+		// Comments out, fences IN (kb `_fts_body`). A scaffold's hint comments
+		// are the template's words, not the author's, so indexing them made
+		// every freshly-added entity a strong hit for whatever its own hints
+		// happened to say. Fenced code is the opposite: a mermaid diagram names
+		// the components, a bash block names the command, and search is how an
+		// agent finds them. Removed rather than blanked: this text is what
+		// snippet() renders back, and a blanked scaffold's snippet is mostly
+		// empty columns.
+		if err := insertRow(stmt, ftsTitle(meta, node.Slug),
+			canon.FTSBody(meta, template.StripComments(body)),
 			node.Type, node.Slug, filepath.ToSlash(rel)); err != nil {
 			return err
 		}

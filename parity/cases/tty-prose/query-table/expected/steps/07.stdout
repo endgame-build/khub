@@ -1,1 +1,1 @@
-Linked cmp-002-web --depends_on--> cmp-001-api
+Linked cmp-web --depends_on--> cmp-api

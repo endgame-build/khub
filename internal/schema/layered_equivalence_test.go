@@ -16,9 +16,9 @@ import (
 )
 
 // The fixture exercises every key the layers carry: all four layouts, both
-// id_prefix forms, when/required/orphan, an authored format, enum/pattern/
-// default attribute facets, and relations carrying many/inverse/acyclic/
-// union/any.
+// id_prefix forms, id_date, when/required/orphan, an authored format,
+// enum/pattern/default attribute facets, and relations carrying
+// many/inverse/acyclic/union/any.
 
 const equivOntology = `
 ontology:
@@ -59,6 +59,7 @@ storage:
     layout: folder
     path: knowledge/decisions
     id_prefix: { by: status, map: { proposed: prop, accepted: acc } }
+    id_date: true
   repo:   { layout: collection, path: knowledge/repos.yaml }
   prd:    { layout: singleton,  path: knowledge/prd.md }
 `
@@ -205,7 +206,8 @@ func dumpResolved(s *ResolvedSchema) string {
 		fmt.Fprintf(&b, "  storage layout=%q path=%s fmt=%q\n",
 			t.Storage.Layout, pstr(t.Storage.Path), t.Storage.Fmt)
 		fmt.Fprintf(&b, "  required=%t orphan=%t when=%s\n", t.Required, t.Orphan, pstr(t.When))
-		fmt.Fprintf(&b, "  idprefix=%s\n", dumpIDPrefix(t.IdPrefix))
+		fmt.Fprintf(&b, "  idprefix=%s iddate=%t\n", dumpIDPrefix(t.IdPrefix), t.IdDate)
+		fmt.Fprintf(&b, "  template=%s templateoff=%t\n", pstr(t.Template), t.TemplateOff)
 		dumpAttrs(&b, "  "+t.Name, t.Attributes)
 		dumpRels(&b, "  "+t.Name, t.Relations)
 	}

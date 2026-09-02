@@ -2,8 +2,8 @@ steps:
 - argv: ["init", "build-lite", ".", "--no-wire"]
 - argv: ["add", "requirement", "--title", "Old", "--kind", "functional"]
 - sh: "git init -q . && git add -A && GIT_AUTHOR_DATE=2025-06-01T10:00:00Z GIT_COMMITTER_DATE=2025-06-01T10:00:00Z git commit -qm seed"
-- sh: "perl -pi -e \"s/^updated:.*\\n//\" knowledge/requirements/fr-001-old.md"
+- sh: "perl -pi -e \"s/^updated:.*\\n//\" knowledge/requirements/req-old.md"
 - sh: "git add -A && GIT_AUTHOR_DATE=2025-06-01T10:00:00Z GIT_COMMITTER_DATE=2025-06-01T10:00:00Z git commit -qm strip"
 - argv: ["backfill", "--dry-run"]
 - argv: ["backfill"]
-- argv: ["get", "requirement/fr-001-old", "--format", "json"]
+- argv: ["get", "requirement/req-old", "--format", "json"]

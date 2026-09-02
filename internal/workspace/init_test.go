@@ -680,39 +680,6 @@ func TestInitRejectsAFlatLayerFile(t *testing.T) {
 
 // --- golden trees: parity/cases/init-wire-skills -----------------------------------
 
-func TestGoldenInitTrees(t *testing.T) {
-	// The recorded manifests pin every byte init writes. Each case runs in a
-	// directory named "ws" with the target given as "." — the recorder's shape.
-	t.Setenv("KHUB_PARITY_NOW", "2026-01-15")
-	for _, tc := range []struct {
-		name    string
-		preset  string
-		fixture string
-		opt     InitOptions
-	}{
-		{"build-lite", "build-lite", "init-build-lite-tree", InitOptions{}},
-		{"firm-ops", "firm-ops", "init-firm-ops-tree", InitOptions{}},
-		{"named", "build-lite", "init-named", InitOptions{Name: "Custom Name"}},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			ws := filepath.Join(t.TempDir(), "ws")
-			if err := os.MkdirAll(ws, 0o777); err != nil {
-				t.Fatal(err)
-			}
-			inDir(t, ws, func() {
-				res := mustInit(t, tc.preset, ".", tc.opt)
-				if res.Path != "." {
-					t.Errorf("path = %q", res.Path)
-				}
-				if res.Version != presetVersion(tc.preset) {
-					t.Errorf("version = %q", res.Version)
-				}
-			})
-			assertManifest(t, ws, tc.fixture)
-		})
-	}
-}
-
 func TestGoldenRerunPreserves(t *testing.T) {
 	// parity/cases/init-wire-skills/init-rerun-preserves step 3: a --force
 	// re-init over a workspace holding one entity preserves all six
@@ -725,7 +692,7 @@ func TestGoldenRerunPreserves(t *testing.T) {
 	inDir(t, ws, func() {
 		mustInit(t, "build-lite", ".", InitOptions{})
 		// Stand in for `khub add requirement` (the entity package owns that verb).
-		writeFile(t, filepath.Join("knowledge", "requirements", "fr-001-keep.md"),
+		writeFile(t, filepath.Join("knowledge", "requirements", "req-keep.md"),
 			"---\ntype: requirement\n---\n")
 
 		res := mustInit(t, "build-lite", ".", InitOptions{Force: true})
@@ -742,7 +709,9 @@ func TestGoldenRerunPreserves(t *testing.T) {
 			".khub/ontology.yaml", ".khub/policy.yaml", ".khub/storage.yaml",
 			".khub/config.yaml",
 			".khub/templates/adr.yaml", ".khub/templates/arc42.yaml",
-			".khub/templates/feature-spec.yaml", ".khub/templates/prd.yaml",
+			".khub/templates/component.yaml", ".khub/templates/feature-spec.yaml",
+			".khub/templates/prd.yaml", ".khub/templates/repo.yaml",
+			".khub/templates/requirement.yaml",
 		}
 		if !reflect.DeepEqual(res.Preserved, want) {
 			t.Errorf("preserved = %v", res.Preserved)
@@ -794,9 +763,9 @@ func TestGoldenEmptyPresetWritesNothing(t *testing.T) {
 
 func presetVersion(preset string) string {
 	if preset == "firm-ops" || preset == "build-lite" {
-		return "0.1.0"
+		return "0.2.0"
 	}
-	return "0.3.0"
+	return "0.4.0"
 }
 
 // inDir runs fn with the process working directory at dir. Init resolves "."

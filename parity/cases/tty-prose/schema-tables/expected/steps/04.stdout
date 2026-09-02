@@ -1,4 +1,4 @@
- schema: build-lite@0.1.0
+ schema: build-lite@0.2.0
 ┏━━━━━━━━━━━━━━┳━━━━━━━━┳━━━━━━━━━━━┳━━━━━━━━━━━┓
 ┃ type         │ fields │ relations │ layout    ┃
 ┡━━━━━━━━━━━━━━╇━━━━━━━━╇━━━━━━━━━━━╇━━━━━━━━━━━┩
@@ -6,6 +6,7 @@
 │ arc42        │ 9      │ 4         │ singleton │
 │ requirement  │ 10     │ 5         │ file      │
 │ adr          │ 10     │ 7         │ file      │
-│ component    │ 12     │ 4         │ file      │
+│ component    │ 11     │ 5         │ file      │
+│ repo         │ 11     │ 4         │ file      │
 │ feature-spec │ 10     │ 7         │ file      │
 └──────────────┴────────┴───────────┴───────────┘

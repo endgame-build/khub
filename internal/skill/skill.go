@@ -3,8 +3,10 @@
 // from the wheel or a dev checkout; here the caller passes the skills tree as
 // an fs.FS (the embedded skills FS, or os.DirFS over a checkout), so
 // skills_dir()/skills_missing have no Go counterpart. Installed skills are
-// managed copies; the sync is additive — files khub no longer ships are left
-// in place.
+// managed copies, and the sync REPLACES each skill directory rather than
+// overlaying it: a file khub no longer ships is removed, so a release that
+// renames or drops a file does not leave the old copy beside the new one for
+// the agent to read both (kb's _install_skills, which rmtree'd first).
 package skill
 
 import (
@@ -74,7 +76,8 @@ func AvailableSkills(source fs.FS) ([]string, error) {
 
 // Write is skill.SkillWrite: one destination file and what happened to it.
 // Path is workspace-relative under project scope, absolute under --global;
-// Action is "created" | "updated" | "unchanged".
+// Action is "created" | "updated" | "unchanged" | "removed" — the last for a
+// file under the skill directory that the shipped tree no longer carries.
 type Write struct {
 	Path   string
 	Action string
@@ -170,8 +173,10 @@ func Install(source fs.FS, root string, opt Options) (*Report, error) {
 }
 
 // syncSkill is skill._sync_skill: copy one skill directory, one action per
-// file. fs.WalkDir's sorted depth-first order equals Python's
-// sorted(src.rglob("*")) — both are lexicographic over path components.
+// file, then remove what the shipped tree no longer carries. fs.WalkDir's
+// sorted depth-first order equals Python's sorted(src.rglob("*")) — both are
+// lexicographic over path components — and the removals follow in the same
+// order over the destination.
 func syncSkill(source fs.FS, name, dest, base string, dryRun bool) ([]Write, error) {
 	var files []string
 	err := fs.WalkDir(source, name, func(p string, d fs.DirEntry, werr error) error {
@@ -188,9 +193,11 @@ func syncSkill(source fs.FS, name, dest, base string, dryRun bool) ([]Write, err
 	}
 
 	writes := make([]Write, 0, len(files))
+	shipped := make(map[string]bool, len(files))
 	for _, p := range files {
 		rel := strings.TrimPrefix(p, name+"/")
 		target := filepath.Join(dest, filepath.FromSlash(rel))
+		shipped[target] = true
 		payload, rerr := fs.ReadFile(source, p)
 		if rerr != nil {
 			return nil, rerr
@@ -219,7 +226,69 @@ func syncSkill(source fs.FS, name, dest, base string, dryRun bool) ([]Write, err
 		}
 		writes = append(writes, Write{Path: display(target, base), Action: action})
 	}
-	return writes, nil
+	removed, err := pruneStale(dest, base, shipped, dryRun)
+	if err != nil {
+		return nil, err
+	}
+	return append(writes, removed...), nil
+}
+
+// pruneStale removes every regular file under dest that the shipped tree does
+// not carry, reporting each as "removed" (a dry run reports and removes
+// nothing), then drops the directories that emptied, deepest first. dest
+// itself is never removed; anything that is not a regular file is left alone.
+func pruneStale(dest, base string, shipped map[string]bool, dryRun bool) ([]Write, error) {
+	if _, err := os.Stat(dest); err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	var stale, dirs []string
+	err := filepath.WalkDir(dest, func(p string, d fs.DirEntry, werr error) error {
+		if werr != nil {
+			return werr
+		}
+		switch {
+		case d.IsDir():
+			if p != dest {
+				dirs = append(dirs, p)
+			}
+		case d.Type().IsRegular() && !shipped[p]:
+			stale = append(stale, p)
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	removed := make([]Write, 0, len(stale))
+	for _, p := range stale {
+		if !dryRun {
+			if rerr := os.Remove(p); rerr != nil {
+				return nil, rerr
+			}
+		}
+		removed = append(removed, Write{Path: display(p, base), Action: "removed"})
+	}
+	if dryRun {
+		return removed, nil
+	}
+	// Deepest first, so a directory whose only content was an emptied
+	// subdirectory empties in turn.
+	for i := len(dirs) - 1; i >= 0; i-- {
+		entries, rerr := os.ReadDir(dirs[i])
+		if rerr != nil {
+			return nil, rerr
+		}
+		if len(entries) > 0 {
+			continue
+		}
+		if rerr := os.Remove(dirs[i]); rerr != nil {
+			return nil, rerr
+		}
+	}
+	return removed, nil
 }
 
 // display is skill._display: workspace-relative under project scope; the

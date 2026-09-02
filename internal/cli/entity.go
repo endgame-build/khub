@@ -32,14 +32,14 @@ func registerAdd(root *cobra.Command) {
 	// The second docstring paragraph, which Typer prints under the usage line.
 	cmd.Long = cmd.Short + "\n\nA missing TYPE is a usage error; every field is a flag."
 	cmd.DisableFlagParsing = true
-	cmd.Flags().StringVar(&id, "id", "", "Explicit slug. Without it the slug is minted from name/title, or from the TYPE NAME when neither is set (fragment -> 002-fragment) — so pass --id for a type you do not title.")
+	cmd.Flags().StringVar(&id, "id", "", "Explicit slug (slugified). Without it the id is minted from name, then title, in the type's scheme (`khub schema show TYPE` names it); a type with neither refuses, so pass --id for a type you do not title.")
 	cmd.Flags().BoolVar(&draft, "draft", false, "Mark the entity unpublished (default: active).")
 	cmd.Flags().BoolVar(&strict, "strict", false, "Reject fields the schema does not declare.")
 	cmd.Flags().StringVar(&bodyText, "body", "", "Body prose as a string.")
 	cmd.Flags().StringVar(&bodyFile, "body-file", "", "Read the body from a file ('-' for stdin).")
 	cmd.Flags().BoolVar(&noTemplate, "no-template", false,
-		"Start with an empty body. Refused on a type that HAS a template, since the "+
-			"result would fail validate; use --body to supply your own sections.")
+		"Start with an empty body. Refused on a type whose template has a required heading, "+
+			"since the result would fail validate; use --body to supply your own sections.")
 	cmd.Flags().StringVar(&format, "format", "text", "text or json (emits the written record).")
 	cmd.RunE = func(cmd *cobra.Command, args []string) error {
 		positional, extra, err := splitDynamic(cmd, args, 1)
@@ -283,7 +283,7 @@ func registerRemove(root *cobra.Command) {
 					fmt.Fprintf(os.Stderr, "  %s/%s --%s-->\n",
 						edge.SourceType, edge.SourceSlug, edge.Predicate)
 				}
-				return &ExitError{Code: 1}
+				return &ExitError{Code: 2} // a refusal: nothing was removed
 			})
 		})
 	cmd.Args = clickArity(1)

@@ -1,0 +1,21 @@
+Validated 1 entities; 0 errors, 0 gaps
+Body: 0 words
+Lens single: One statement
+  Does the body state exactly one thing? An "and", a bulleted list of behaviours, or
+  two sentences each with their own verb mean this is two requirements. Split it —
+  two records each with their own `realized_in` are worth more than one that cannot
+  be satisfied or violated as a unit.
+Lens testable: Observable from outside
+  Could someone who did not write this tell whether the system satisfies it, without
+  reading the implementation? If the only way to check is to open the code, this is
+  describing a design, not stating a requirement.
+Lens measurable: A number and its measurement
+  Look for the value, the unit, where it is measured, over what window, and what
+  enforces it. Flag "gracefully", "robust", "scalable", "efficient", "fast",
+  "user-friendly" — an adjective is not a bound. "p99 under 200 ms at the API edge,
+  measured over a rolling hour, alerted on in the latency dashboard" is.
+Lens realized: Where it is satisfied
+  `realized_in` is the only edge tying a rule to the code that satisfies it, and a
+  requirement without one is unfinished by design. If no component satisfies it yet,
+  that is the honest answer and the gap is the point — but check that it is not
+  simply unlinked.

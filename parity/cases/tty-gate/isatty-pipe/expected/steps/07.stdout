@@ -1,1 +1,1 @@
-{"counts": {"prd": 1, "arc42": 1, "requirement": 1, "adr": 0, "component": 1, "feature-spec": 0}, "total": 4, "draft": 0, "active": 4, "orphan": 0, "stale": 0, "okf_conformant": true, "stray": 0, "malformed": 0}
+{"counts": {"prd": 1, "arc42": 1, "requirement": 1, "adr": 0, "component": 1, "repo": 0, "feature-spec": 0}, "total": 4, "draft": 0, "active": 4, "orphan": 0, "stale": 0, "okf_conformant": true, "stray": 0, "malformed": 0}

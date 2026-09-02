@@ -64,6 +64,23 @@ func Provenance(root string) (*omap.Map, error) {
 	return out, nil
 }
 
+// PresetSource is the `source` init recorded in .khub/config.yaml: the
+// directory the preset was resolved from, or "" for the packaged presets
+// (Python's None). A relative source is resolved against the workspace root,
+// so an upgrade run from any directory reads the same tree init did. Missing
+// and null both read as "".
+func PresetSource(root string) (string, error) {
+	cfg, err := loadConfig(root)
+	if err != nil {
+		return "", err
+	}
+	source := configString(cfg, "source")
+	if source == "" || filepath.IsAbs(source) {
+		return source, nil
+	}
+	return filepath.Join(root, source), nil
+}
+
 // StaleDays is project.stale_days: the workspace's threshold from
 // .khub/config.yaml. Tolerates a null defaults: block, a null/blank
 // stale_days: value, and a quoted number; any absent/empty value falls back

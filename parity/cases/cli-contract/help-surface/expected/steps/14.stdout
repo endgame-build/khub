@@ -1,16 +1,16 @@
                                                                                 
- Usage: khub history [OPTIONS] {ID}                                             
+ Usage: khub impact [OPTIONS] {ID}                                              
                                                                                 
- Trace supersession lineage: khub history decision-0012 [--limit 3].            
+ Compute blast radius: khub impact node-a [--reverse] [--predicate <p>].        
                                                                                 
 ╭─ Arguments ──────────────────────────────────────────────────────────────────╮
 │ *    ID      <str>  A bare slug, or type/slug on ambiguity. [required]       │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 ╭─ Options ────────────────────────────────────────────────────────────────────╮
-│ --predicate        <str>  The self-referential edge to follow.               │
-│                           [default: supersedes]                              │
-│ --limit            <int>  Cap to the N most recent links.                    │
-│ --format           <str>  text (Rich table on a TTY) or json.                │
+│ --predicate        <str>  The edge to walk the closure over.                 │
+│                           [default: depends_on]                              │
+│ --reverse                 Walk ancestors (what reaches this node).           │
+│ --format           <str>  tree (depth-marked, the TTY default) or json.      │
 │                           [default: text]                                    │
 │ --help                    Show this message and exit.                        │
 ╰──────────────────────────────────────────────────────────────────────────────╯

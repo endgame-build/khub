@@ -1,15 +1,20 @@
                                                                                 
- Usage: khub link [OPTIONS] [ID] [PREDICATE] [TARGET]                           
+ Usage: khub edit [OPTIONS] [ID]                                                
                                                                                 
- Add a relation: khub link initech-pov partner northwind.                       
+ Edit an entity: khub edit initech-deal stage proposal-sent  (or --field        
+ value).                                                                        
+                                                                                
+ A missing ID is a usage error; the field and value are positional or flags.    
                                                                                 
 ╭─ Arguments ──────────────────────────────────────────────────────────────────╮
-│   ID             <str>                                                       │
-│   PREDICATE      <str>                                                       │
-│   TARGET         <str>                                                       │
+│   ID      <str>  A bare slug, or type/slug on ambiguity.                     │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 ╭─ Options ────────────────────────────────────────────────────────────────────╮
-│ --format        <str>  text or json (emits the edge record). [default: text] │
-│ --help                 Show this message and exit.                           │
+│ --strict                  Reject fields the schema does not declare.         │
+│ --body             <str>  Replace the body with this string ('' clears it).  │
+│ --body-file        <str>  Replace the body from a file ('-' for stdin).      │
+│ --format           <str>  text or json (emits the updated record).           │
+│                           [default: text]                                    │
+│ --help                    Show this message and exit.                        │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 

@@ -7,6 +7,7 @@
 │ realized_in  │ requirement  │ component    │ many │          │               │
 │ references   │ any          │ any          │ many │          │               │
 │ related      │ any          │ any          │ many │          │               │
+│ repo         │ component    │ repo         │ one  │          │               │
 │ requirements │ feature-spec │ requirement  │ many │          │               │
 │ sources      │ any          │ any          │ many │          │               │
 │ supersedes   │ adr          │ adr          │ one  │          │ inverse       │

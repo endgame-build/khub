@@ -1,1 +1,1 @@
-{"id": "adr/ad-002-two", "type": "adr", "slug": "ad-002-two", "predicate": "supersedes", "target": "ad-001-one", "changed": true}
+{"id": "adr/ad-2026-01-15-two", "type": "adr", "slug": "ad-2026-01-15-two", "predicate": "supersedes", "target": "ad-2026-01-15-one", "changed": true}

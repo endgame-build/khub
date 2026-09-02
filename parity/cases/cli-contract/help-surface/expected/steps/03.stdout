@@ -1,10 +1,26 @@
                                                                                 
- Usage: khub status [OPTIONS]                                                   
+ Usage: khub upgrade [OPTIONS]                                                  
                                                                                 
- Summarize the workspace: counts, draft/active, orphan/stale, OKF conformance.  
+ Refresh an existing workspace: the shipped schema and templates, new           
+ scaffolds, the skills, the wire block.                                         
+                                                                                
+ Replaces .khub/{ontology,policy,storage}.yaml and .khub/templates/*.yaml from  
+ the preset recorded in .khub/config.yaml, copying an edited file to <name>.bak 
+ first; then re-reads the schema, scaffolds what the ontology gained,           
+ re-installs the agent skills, re-wires the agent files, and regenerates        
+ index.md. Refuses outside a workspace: ``khub init`` scaffolds, ``khub         
+ upgrade`` refreshes.                                                           
                                                                                 
 ╭─ Options ────────────────────────────────────────────────────────────────────╮
-│ --format        <str>  text (Rich table on a TTY) or json. [default: text]   │
-│ --help                 Show this message and exit.                           │
+│ --no-schema               Keep this workspace's .khub/ files — schema and    │
+│                           templates — as they are; report what the shipped   │
+│                           ontology has that they do not.                     │
+│ --no-skill                Skip refreshing the agent skills; scaffolds, wire  │
+│                           and index only.                                    │
+│ --no-wire                 Skip re-wiring CLAUDE.md and AGENTS.md.            │
+│ --format           <str>  text confirmation (default); json emits every      │
+│                           step's outcome.                                    │
+│                           [default: text]                                    │
+│ --help                    Show this message and exit.                        │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 

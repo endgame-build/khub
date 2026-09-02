@@ -1,6 +1,6 @@
 steps:
 - argv: ["init", "build-lite", ".", "--no-wire"]
 - argv: ["add", "requirement", "--title", "D", "--kind", "constraint", "--draft"]
-- argv: ["edit", "cst-001-d", "description", "edited"]
-- argv: ["link", "cst-001-d", "related", "cst-001-d"]
-- argv: ["get", "cst-001-d", "--format", "json"]
+- argv: ["edit", "req-d", "description", "edited"]
+- argv: ["link", "req-d", "related", "req-d"]
+- argv: ["get", "req-d", "--format", "json"]

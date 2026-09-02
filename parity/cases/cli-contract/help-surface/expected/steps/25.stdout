@@ -1,11 +1,8 @@
                                                                                 
- Usage: khub schema show [OPTIONS] {type}                                       
+ Usage: khub schema types [OPTIONS]                                             
                                                                                 
- Detail one type: fields, enums, required flags, relations, layout.             
+ List the declared type names.                                                  
                                                                                 
-╭─ Arguments ──────────────────────────────────────────────────────────────────╮
-│ *    type      <str>  Type name. [required]                                  │
-╰──────────────────────────────────────────────────────────────────────────────╯
 ╭─ Options ────────────────────────────────────────────────────────────────────╮
 │ --format        <str>  text (Rich table on a TTY) or json. [default: text]   │
 │ --help                 Show this message and exit.                           │

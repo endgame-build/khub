@@ -316,6 +316,12 @@ func typeView(resolved *schema.ResolvedSchema, rtype *schema.ResolvedType) *omap
 	v.Set("layout", rtype.Storage.Layout)
 	v.Set("format", rtype.Storage.Fmt)
 	v.Set("path", strPtr(rtype.Storage.Path))
+	// The id scheme, as declared and as rendered: an agent building an `add`
+	// reads `id_shape` to know what the write will be named, and `id_prefix`
+	// to know which field decides it.
+	v.Set("id_prefix", idPrefixView(rtype.IdPrefix))
+	v.Set("id_date", rtype.IdDate)
+	v.Set("id_shape", nullIfEmpty(rtype.IdShape()))
 	v.Set("required", rtype.Required)
 	v.Set("orphan", rtype.Orphan)
 	v.Set("when", strPtr(rtype.When))
@@ -511,4 +517,32 @@ func strPtr(p *string) any {
 		return nil
 	}
 	return *p
+}
+
+// nullIfEmpty renders "" as null: a singleton has no id shape, and an agent
+// should read the absence, not an empty string it might interpolate.
+func nullIfEmpty(s string) any {
+	if s == "" {
+		return nil
+	}
+	return s
+}
+
+// idPrefixView renders id_prefix the way it was authored — a literal token,
+// or `{by, map}` in declaration order — and null when the type declares none.
+func idPrefixView(p *schema.IdPrefix) any {
+	if p == nil {
+		return nil
+	}
+	if p.Literal != nil {
+		return *p.Literal
+	}
+	m := omap.New()
+	for _, member := range p.Members {
+		m.Set(member.Value, member.Prefix)
+	}
+	v := omap.New()
+	v.Set("by", strPtr(p.By))
+	v.Set("map", m)
+	return v
 }

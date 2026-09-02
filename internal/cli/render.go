@@ -59,7 +59,14 @@ type ExitError struct{ Code int }
 func (e *ExitError) Error() string { return fmt.Sprintf("exit %d", e.Code) }
 
 // Fail renders one failure in the shape the caller asked for: the JSON error
-// envelope on stdout under the gate, prose on stderr otherwise. Exit 1.
+// envelope on stdout under the gate, prose on stderr otherwise. Exit 2.
+//
+// Every Located failure is a REFUSAL — the call was malformed, or would have
+// written something the schema forbids — and nothing was written, which is
+// what an agent needs to know: correct the call and retry. Exit 1 is reserved
+// for a gate that ran and failed (`validate`, `check`): the workspace is what
+// is wrong, not the call. Usage errors share 2 because they are the same
+// answer to the same question.
 func Fail(message, code, fmt_ string) error {
 	if WantJSON(fmt_) {
 		env := omap.New()
@@ -72,7 +79,7 @@ func Fail(message, code, fmt_ string) error {
 	} else {
 		fmt.Fprintln(os.Stderr, message)
 	}
-	return &ExitError{Code: 1}
+	return &ExitError{Code: 2}
 }
 
 // Guard is the single error boundary: a Located error renders via Fail; an

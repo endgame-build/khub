@@ -59,11 +59,137 @@ hand-edit is how a workspace acquires a field no default gate will report.
 - `khub link <id> <predicate> <target>` / `khub unlink <id> <predicate> <target> --format json` — relations, idempotent. Read `changed` to tell a write from a no-op; both exit 0.
 - `khub remove <id> --format json` — delete; refuses while an inbound edge resolves to it unless `--force`.
 
+## The loop
+
+1. `khub add <type> --title "..." …` — it mints the id (`khub schema show <type>` names the
+   shape: the type's prefix, a date where the type declares one, then the slugified title),
+   writes the frontmatter, and seeds the body from the type's template with a hint comment
+   under each heading. The id is the handle from here on; there is no shorter form of it.
+2. Open the file and write the prose. Replace the hint comments; keep the `##` headings and
+   their order. A heading you have nothing to say under may be deleted if the template
+   declares it `optional` — an empty one helps nobody.
+3. `khub validate <type>/<slug> --format json` — the file you just wrote, on its own. Cheap,
+   and it names the one thing that is wrong. Read all four keys: `errors` (broken), `gaps`
+   (unfinished), `body` (word counts per section) and `lenses` (the review questions the
+   type declares). See **Reviewing a body**.
+4. `khub link` every relation. Edit frontmatter by hand only for plain attributes — and
+   `validate` again if you did.
+5. `khub check`. **Errors** mean the workspace is broken — fix them before you finish.
+   **Gaps** (`incomplete`, orphans, `thin`) mean legal but unfinished; fix the ones your
+   change caused.
+6. `khub reindex` if you added, removed or re-linked anything. `index.md` is generated, and
+   a stale one sends the next reader to a file that moved.
+
+`validate` is the per-entity subset: well-formedness, the schema, whether the ids it names
+resolve, and the body against its template. `check` adds what only exists across the whole
+graph — orphans, cycles, strays, a missing required singleton. `--strict` means two
+different things: on `check` it fails on orphans too; on `validate` and `add`/`edit` it
+closes the schema so a typo like `realised_in` is rejected instead of silently producing no
+edge.
+
+## Reviewing a body
+
+`validate` reports three things about the prose, and they are not the same kind of thing:
+
+- **`errors`** with `field: body` — broken. A missing or out-of-order `##` heading
+  (`body_shape`), or a template that does not parse (`field: template`). Fix before you
+  finish.
+- **`gaps`** with `field: body` — `body_rule`. A section rule is unmet: thin prose, a
+  forbidden phrase, a missing code block. Legal, and it fails no gate. Fix the ones your
+  change caused; leave the ones that were already there.
+- **`body` and `lenses`** — no finding at all. Word counts per section, and the review
+  questions the type declares, filtered to this entity's frontmatter (a lens may apply only
+  to one `kind` or `status`). khub computes and asks; the judgement is yours.
+
+**Answer the lenses out loud** when you have just written or substantially changed a
+document. One line each, naming what you actually looked at:
+
+> `single`: one statement — "the API returns 401 on an expired token". No "and".
+> `measurable`: **fails.** Body says "responds quickly". No number, no measurement point.
+> Rewriting as "p99 under 200 ms at the API edge".
+
+**Evidence discipline.** Never assert what you did not verify. If a lens asks something you
+cannot check from what is in front of you — whether a component really depends on a
+vendor, whether a metric has a dashboard — say you could not check it rather than
+guessing. A confident wrong answer in a review is worse than no review, because it closes
+the question.
+
+### What good looks like
+
+The shape of a good body follows from what the type is for. Two kinds recur in every
+preset: a record that states a rule, and a record that explains a choice.
+
+A rule-stating body (e.g. a `requirement`) is one statement, present tense, with the number
+and the measurement in it:
+
+> When an access token has expired, the API rejects the request with 401 and does not
+> touch the database. Enforced in the auth middleware ahead of routing; covered by
+> `test_expired_token_short_circuits`.
+
+Thin, and why: *"Expired tokens should be handled gracefully."* — "gracefully" is not a
+bound, "should" is not a rule, and nothing here can be observed from outside.
+
+A choice-explaining body (e.g. an `adr`) names a real alternative and a real cost:
+
+> **Decision.** We store the corpus as Markdown files in the project's own git repository,
+> one file per entity.
+>
+> **Alternatives.** A SQLite database beside the code — queryable, but invisible in a diff
+> and unmergeable, and review is the point. A hosted wiki — searchable, but it drifts from
+> the commit that changed the code.
+>
+> **Consequences.** Review, blame and merge come free. The cost is that every query is a
+> full scan, so this stops being cheap somewhere in the low thousands of entities, and
+> cross-entity edits are not atomic.
+
+Thin, and why: *"We decided to use Markdown because it is simple and flexible."* — no
+alternative was on the table, and consequences that are all upside mean the tradeoff has
+not been found yet.
+
 ## Rules
 
 - Every read AND write emits JSON on a pipe; a table is only for a TTY. `--format json` makes it explicit.
 - Build every write from `khub schema show`, never from a hardcoded shape.
-- On a failed command, read the located error (field, reason, or unresolved target) and correct the call.
+- On a failed command, read the located error (field, reason, or unresolved target) and correct the call. Exit 2 is a refusal — nothing was written; exit 1 is a gate (`validate`, `check`) that ran and found the workspace wrong.
 - Gate before you commit: `khub validate` per entity, `khub check` graph-wide.
 - Run `khub validate --strict` in CI. Capture is never blocked, so a typo'd field name (`--knid`) is written to frontmatter and neither default gate reports it; `--strict` is what turns undeclared keys into a finding.
 - `khub search` and `khub query --has/--missing` both reach attribute values, so find an entity by what it holds (`search python`, `query --type component --missing repo`) rather than listing and filtering yourself.
+
+## What earns a document
+
+Most things do not. Before creating one, ask where it really belongs:
+
+- Prose a human reads start to finish → a **body** section of a document that already
+  exists (usually a narrative singleton — `khub schema` lists them by `layout`).
+- A fact stored once and read once → an **attribute** on a document that exists.
+- Anything that churns with the code (schemas, configs, test files) → leave it in the
+  repo and point at it with `resource`.
+- A document earns its slot only if it is **referenced by id from elsewhere, walked as a
+  graph, or gated by `check`.**
+
+The types the schema declares are the whole set. If something does not fit, it is a
+section of a singleton, or it is an instance of the type whose `when` cue it triggers.
+
+## Routing
+
+The schema, not this skill, says where a statement goes. Read the `when` cues and the
+relation vocabulary in `khub schema`, and route on them:
+
+| The question | Where to look in `khub schema` |
+|---|---|
+| What must always hold? | the type whose `when` names rules — "must", "never", "always"; its `kind` enum separates a behaviour from a measurable target from an invariant, and the number goes in the body |
+| Why can't I do X? | the type carrying `supersedes` and an `affects: any` edge — the decision, plus every id it constrains |
+| What talks to what? | the type carrying `depends_on` and a `kind` that separates ours from a vendor's; `depends_on` carries the wiring, vendors included |
+| Where does that code live? | the type whose attribute holds a remote path (`org/name`); the part-of-the-system type points at it with a single edge |
+| What is this product? How is it shaped? | sections of the narrative singletons (`layout: singleton`) — edit them, never add a second |
+| What am I building right now? | the type whose `status` moves (`planned … done`), if the schema declares one — otherwise **not here**: khub records what must hold and why, not what is in flight |
+
+## When it stops fitting
+
+The declared types are a deliberate floor, not a limit anyone forgot to raise. When a rule
+needs a named enforcement mechanism the schema cannot hold, or a second repo consumes an
+interface, **say so** — that is a schema change someone has to make deliberately, and
+`.khub/ontology.yaml` (with `storage.yaml` for where the type lands) is where it happens; a
+preset's docs carry the order to add types back in. Do not improvise the missing type in
+the meantime: a file naming a type the schema does not declare is a `stray` inside a
+layout and invisible outside one — either way it is not an entity, and `check` says so.

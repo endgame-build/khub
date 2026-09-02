@@ -1,0 +1,42 @@
+# Every heading here is optional. This type shipped no template before, so a corpus
+# upgrading into one must not suddenly owe headings for components already written.
+
+hint: >-
+  one paragraph — what this is and where its boundary runs. `kind` says whether we can
+  change it or only react to it; `depends_on` carries what breaks when it does.
+
+sections:
+- heading: Responsibilities
+  optional: true
+  hint: what this owns, and — as sharply — what it deliberately does not
+- heading: Interfaces
+  optional: true
+  hint: how callers reach it; the contracts it provides and `consumes` carry the machine specs
+- heading: Operational notes
+  optional: true
+  hint: how it fails, how that shows up, and what to do about it
+
+lenses:
+- code: boundary
+  name: A boundary, not a directory
+  instruction: |
+    Does this name something that can break, be owned, or be swapped on its own? A
+    component that is really just a folder gives the graph edges that mean nothing —
+    and "what breaks if this changes" is the only question the graph exists to answer.
+- code: blast
+  name: The blast radius is recorded
+  when: {kind: external}
+  after: boundary
+  instruction: |
+    This is a vendor we sit on and cannot change. Everything of ours that would break
+    if it changed its API, its pricing or its availability should reach it through
+    `depends_on`. Walk the in-edges: if the list is shorter than reality, the graph
+    will understate an outage before it happens.
+- code: located
+  name: Where the code lives
+  when: {kind: [service, library]}
+  after: boundary
+  instruction: |
+    This is ours, so it lives in a repo — link it. Without the `repo` edge, "what
+    breaks if this repo moves" is a grep again, which is the thing the type exists to
+    stop.

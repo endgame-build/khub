@@ -1,0 +1,16 @@
+# Section rules on a build-lite adr: a Decision under 15 words that also says
+# `tbd` is two gaps on one section. validate reports them as `gaps`, split from
+# `errors` (exit stays 0), with the body's word counts and the lenses that apply;
+# check reports the same as `thin`, informational — `passed` stays true and
+# --strict, which fails on the orphan, does not fail on thin once the adr is
+# wired.
+steps:
+- argv: ["init", "build-lite", ".", "--no-wire"]
+- argv: ["add", "adr", "--title", "Thin one", "--status", "accepted", "--body-file", "-"]
+  stdin: "## Context\n\nSessions today live in a server-side store that every API node must reach, which couples scaling the API to scaling that store and makes a regional failover a data migration.\n\n## Decision\n\nTBD, but probably JWT.\n\n## Consequences\n\nTokens are stateless, so sessions need no store; revocation gets harder and needs a denylist or short expiry on every token.\n"
+- argv: ["validate", "adr/ad-2026-01-15-thin-one", "--format", "json"]
+- argv: ["validate", "--format", "json"]
+- argv: ["check", "--format", "json"]
+- argv: ["add", "component", "--title", "Sessions", "--kind", "service"]
+- argv: ["link", "ad-2026-01-15-thin-one", "affects", "cmp-sessions"]
+- argv: ["check", "--strict", "--format", "json"]

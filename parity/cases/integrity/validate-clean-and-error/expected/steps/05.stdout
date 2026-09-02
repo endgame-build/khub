@@ -1,1 +1,1 @@
-{"count": 4, "errors": [{"id": "requirement/bad", "type": "requirement", "slug": "bad", "field": "kind", "reason": "'nonsense' is not a valid kind (functional, constraint, business-rule)"}]}
+{"count": 4, "errors": [{"id": "requirement/req-bad", "type": "requirement", "slug": "req-bad", "field": "kind", "reason": "'nonsense' is not a valid kind (functional, non-functional, constraint, business-rule)"}], "gaps": [], "body": null, "lenses": []}

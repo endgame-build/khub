@@ -1,4 +1,4 @@
- requirement (file)
+ requirement (file · ids req-slug)
 ┏━━━━━━━━━━━━━┳━━━━━━━━━━━━━┳━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━┓
 ┃ field       │ type        │ required │ enum                  │ notes         ┃
 ┡━━━━━━━━━━━━━╇━━━━━━━━━━━━━╇━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━┩
@@ -12,6 +12,7 @@
 │ resource    │ text        │          │                       │               │
 │ tags        │ list        │          │                       │               │
 │ kind        │ text        │ ✓        │ functional,           │               │
+│             │             │          │ non-functional,       │               │
 │             │             │          │ constraint,           │               │
 │             │             │          │ business-rule         │               │
 │ related     │ → any       │          │ any                   │               │

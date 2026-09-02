@@ -43,20 +43,15 @@ func registerInstallSkills(root *cobra.Command) {
 				record.Set("scope", report.Scope)
 				record.Set("skills", strList(report.Skills))
 				record.Set("dry_run", report.DryRun)
-				writes := make([]any, 0, len(report.Writes))
+				record.Set("writes", skillWrites(report))
 				rows := [][]string{}
 				changed := 0
 				for _, w := range report.Writes {
-					item := omap.New()
-					item.Set("path", w.Path)
-					item.Set("action", w.Action)
-					writes = append(writes, item)
 					rows = append(rows, []string{w.Path, w.Action})
 					if w.Action != "unchanged" {
 						changed++
 					}
 				}
-				record.Set("writes", writes)
 				return Emit(record, format, func() {
 					if len(rows) == 0 {
 						fmt.Println("No skills to install")
@@ -83,6 +78,16 @@ func registerInstallSkills(root *cobra.Command) {
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Report what would be written, and write nothing.")
 	cmd.Flags().StringVar(&format, "format", "text", "text (Rich table on a TTY) or json.")
 	root.AddCommand(cmd)
+}
+
+// skillWrites renders an install's per-file writes as the `{path, action}`
+// list install-skills carries under `writes` and upgrade under `skills`.
+func skillWrites(report *skill.Report) []any {
+	items := make([]pathAction, 0, len(report.Writes))
+	for _, w := range report.Writes {
+		items = append(items, pathAction{w.Path, w.Action})
+	}
+	return pathActionRecords(items)
 }
 
 // emptyToNil is Python's `value or None`: an unrepeated option means "all".

@@ -1,4 +1,4 @@
 steps:
 - argv: ["init", "build-lite", ".", "--no-wire"]
 - argv: ["add", "requirement", "--title", "Z", "--kind", "functional"]
-- argv: ["link", "fr-001-z", "related", "fr-001-z"]
+- argv: ["link", "req-z", "related", "req-z"]

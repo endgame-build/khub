@@ -1,6 +1,9 @@
-# The choke-point rule from docs/go-port-plan.md: the serialization canon is the
-# only place bytes are shaped, so only internal/canon may reach for a YAML
-# library. Everything else goes through canon's loaders and dumpers.
+# The choke-point rules from docs/go-port-plan.md: the serialization canon is
+# the only place bytes are shaped, so only internal/canon may reach for a YAML
+# library, and only internal/canon/jsonio.go writes JSON bytes (khub emits
+# three JSON dialects and encoding/json matches none of them; ojson.go decodes
+# through it, which is fine). Everything else goes through canon's loaders and
+# dumpers.
 version: "2"
 
 linters:
@@ -32,3 +35,14 @@ linters:
               desc: "only internal/canon may import a YAML library (go-port-plan choke-point rule)"
             - pkg: sigs.k8s.io/yaml
               desc: "only internal/canon may import a YAML library (go-port-plan choke-point rule)"
+        json-choke-point:
+          list-mode: lax
+          files:
+            - "**/internal/**"
+            - "**/cmd/**"
+            - "!**/internal/canon/jsonio.go"
+            - "!**/internal/canon/ojson.go"
+            - "!**/*_test.go"
+          deny:
+            - pkg: encoding/json
+              desc: "only internal/canon/jsonio.go writes JSON bytes and only ojson.go decodes them (CLAUDE.md choke-point rule); use canon.EncodeCLI/EncodeDisk or canon's decoders"

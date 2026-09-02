@@ -1,6 +1,6 @@
 steps:
 - argv: ["init", "build-lite", ".", "--no-wire"]
 - argv: ["add", "requirement", "--title", "R", "--kind", "functional"]
-- argv: ["neighbors", "fr-001-r", "--predicate", "bogus"]
-- argv: ["impact", "fr-001-r", "--predicate", "bogus"]
-- argv: ["history", "fr-001-r", "--predicate", "bogus"]
+- argv: ["neighbors", "req-r", "--predicate", "bogus"]
+- argv: ["impact", "req-r", "--predicate", "bogus"]
+- argv: ["history", "req-r", "--predicate", "bogus"]

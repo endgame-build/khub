@@ -1,9 +1,10 @@
 package schema
 
-// Ports the schema/unit halves of tests/test_id_prefix.py — enumerated ids:
-// the id_prefix vocabulary, its enum-coverage gate, and the resolved IdPrefix
-// shapes. The minting tests (create/init) belong to the entity layer and are
-// covered there / by fixtures.
+// Ports the schema/unit halves of tests/test_id_prefix.py — prefixed and dated
+// ids: the id_prefix/id_date vocabulary, the enum-coverage gate, the
+// singleton gate, the resolved IdPrefix shapes and IdShape. The minting tests
+// (create/init) belong to the entity layer and are covered there / by
+// fixtures.
 
 import (
 	"strings"
@@ -158,7 +159,8 @@ func TestResolvedPrefixShapes(t *testing.T) {
 }
 
 func TestEveryPresetPrefixIsDeclaredOnARealType(t *testing.T) {
-	// The presets' prose conventions (ad-, fr-, wp-) and their schemas agree.
+	// The presets' prose conventions (ad-, req-, wp-) and their schemas agree,
+	// and every id key sits on a type that mints — a singleton's shape is "".
 	for _, name := range []string{"build-lite", "build-hub", "firm-ops"} {
 		schema, err := ResolveWith(corePresetDoc(t), presetPaths(t, name))
 		if err != nil {
@@ -166,17 +168,122 @@ func TestEveryPresetPrefixIsDeclaredOnARealType(t *testing.T) {
 		}
 		for _, type_ := range schema.Types.Keys() {
 			rtype, _ := schema.Types.Get(type_)
-			if rtype.IdPrefix == nil {
+			if rtype.Storage.Layout == LayoutSingleton {
+				if rtype.IdPrefix != nil || rtype.IdDate {
+					t.Errorf("%s/%s: a singleton mints nothing", name, type_)
+				}
+				if rtype.IdShape() != "" {
+					t.Errorf("%s/%s: singleton shape = %q, want empty", name, type_, rtype.IdShape())
+				}
 				continue
 			}
-			if rtype.Storage.Layout == "singleton" {
-				t.Errorf("%s/%s: a singleton mints nothing", name, type_)
+			if !strings.HasSuffix(rtype.IdShape(), "slug") {
+				t.Errorf("%s/%s: shape = %q does not end in the slug", name, type_, rtype.IdShape())
+			}
+			if rtype.IdPrefix == nil {
+				continue
 			}
 			for _, p := range rtype.IdPrefix.All() {
 				if p == "" || p != strings.ToLower(p) {
 					t.Errorf("%s/%s: prefix %q is not a lowercase token", name, type_, p)
 				}
 			}
+		}
+	}
+}
+
+// Only a decision legitimately recurs under one title, so only the decision
+// types are dated; firm-ops mints bare slugs. Pinned so a preset edit that
+// dates a registry type (or undates a decision) is a deliberate change.
+func TestShippedDatedTypes(t *testing.T) {
+	want := map[string][]string{
+		"build-lite": {"adr"},
+		"build-hub":  {"pdr", "adr"},
+		"firm-ops":   nil,
+	}
+	for _, name := range []string{"build-lite", "build-hub", "firm-ops"} {
+		schema, err := ResolveWith(corePresetDoc(t), presetPaths(t, name))
+		if err != nil {
+			t.Fatalf("%s failed to resolve: %v", name, err)
+		}
+		var dated, prefixed []string
+		for _, type_ := range schema.Types.Keys() {
+			rtype, _ := schema.Types.Get(type_)
+			if rtype.IdDate {
+				dated = append(dated, type_)
+			}
+			if rtype.IdPrefix != nil {
+				prefixed = append(prefixed, type_)
+			}
+		}
+		if !eqStrings(dated, want[name]) {
+			t.Errorf("%s dated types = %v, want %v", name, dated, want[name])
+		}
+		if name == "firm-ops" && len(prefixed) > 0 {
+			t.Errorf("firm-ops declares prefixes on %v; it mints bare slugs", prefixed)
+		}
+	}
+}
+
+// A singleton's id is its type name; an id scheme on one declares a prefix or
+// a date nothing would ever mint.
+func TestIdKeysAreRefusedOnASingleton(t *testing.T) {
+	for _, tc := range []struct{ name, key string }{
+		{"id_prefix", "id_prefix: pr"},
+		{"id_date", "id_date: true"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			e := resolveLocated(t, `
+ontology:
+  entities:
+    prd: {}
+storage:
+  prd: { layout: singleton, path: knowledge/prd.md, `+tc.key+` }
+`)
+			if e.Code != "invalid_schema" {
+				t.Errorf("code = %q, want invalid_schema", e.Code)
+			}
+			want := "Invalid schema at storage.prd: Value error, 'id_prefix' and 'id_date' " +
+				"apply only to minting types (a singleton's id is its type name, so it " +
+				"mints nothing); drop the key"
+			if e.Message != want {
+				t.Errorf("message = %q, want %q", e.Message, want)
+			}
+		})
+	}
+}
+
+// IdShape is the one rendering of a type's id pattern: the bad_id finding and
+// `schema show` both print it, so it is pinned here rather than in each.
+func TestIdShape(t *testing.T) {
+	s := resolveDocs(t, `
+ontology:
+  entities:
+    adr: {}
+    requirement:
+      attributes:
+        kind: { enum: [functional, constraint, business-rule] }
+    client: {}
+    prd: {}
+    both:
+      attributes:
+        kind: { enum: [a, b] }
+storage:
+  adr:         { layout: file, path: decisions, id_prefix: ad, id_date: true }
+  requirement: { layout: file, path: reqs, id_prefix: { by: kind, map: { functional: fr, constraint: cst, business-rule: br } } }
+  client:      { layout: file, path: clients }
+  prd:         { layout: singleton, path: prd.md }
+  both:        { layout: collection, path: both.yaml, id_prefix: { by: kind, map: { a: x, b: y } }, id_date: true }
+`)
+	for _, tc := range []struct{ typ, want string }{
+		{"adr", "ad-YYYY-MM-DD-slug"},
+		{"requirement", "fr|cst|br-slug"},
+		{"client", "slug"},
+		{"prd", ""},
+		{"both", "x|y-YYYY-MM-DD-slug"},
+	} {
+		if got := typeOf(t, s, tc.typ).IdShape(); got != tc.want {
+			t.Errorf("%s: IdShape() = %q, want %q", tc.typ, got, tc.want)
 		}
 	}
 }
