@@ -1,1 +1,1 @@
-{"id": "account/001-acme", "type": "account", "slug": "001-acme", "path": "accounts.json", "draft": false, "locator": "accounts.json#001-acme"}
+{"id": "account/acme", "type": "account", "slug": "acme", "path": "accounts.json", "draft": false, "locator": "accounts.json#acme"}
