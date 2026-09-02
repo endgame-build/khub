@@ -10,12 +10,12 @@
  
 @@ -16,6 +16,10 @@
  
- - [Alpha](knowledge/requirements/fr-001-alpha.md)
+ - [Alpha](knowledge/requirements/req-alpha.md)
  
 +## adr
 +
-+- [Gamma](knowledge/decisions/ad-001-gamma.md)
++- [Gamma](knowledge/decisions/ad-2026-01-15-gamma.md)
 +
  ## component
  
- - [Beta](knowledge/components/cmp-001-beta.md)
+ - [Beta](knowledge/components/cmp-beta.md)
