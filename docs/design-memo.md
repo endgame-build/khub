@@ -207,12 +207,12 @@ machinery — each repo's `node_modules` holds its own.
 This deliberately replaces the earlier one-line release downloader rather
 than joining it: the lesson of the removed plugin marketplace — no second
 distribution channel for the same files — cuts against the downloader too.
-A hosted `khub.end.game/install.sh` briefly survived as a bootstrap over
-`npm install -g`, then went the same way and for the same reason — plus a
-sharper one: a script whose job is to find a repo-scoped GitHub token is the
-most valuable thing an attacker could replace, and it wrapped a single
-command. A machine-global install is `npm install -g @endgame-build/khub`. The
-GitHub release assets are the package build's input, not a channel. What was traded away: the downloader's
+A hosted `install.sh` briefly survived as a bootstrap over `npm install -g`,
+then went the same way and for the same reason — plus a sharper one: a script
+whose job is to find a repo-scoped GitHub token is the most valuable thing an
+attacker could replace, and it wrapped a single command. A machine-global
+install is `npm install -g @endgame-build/khub`. The GitHub release assets are
+the package build's input, not a channel. What was traded away: the downloader's
 zero-prerequisite property — npm is now the baseline, which the primary
 consumers (agents in Node-bearing sandboxes, developer machines) already
 meet.

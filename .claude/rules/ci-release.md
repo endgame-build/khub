@@ -4,8 +4,8 @@ khub ships a static binary from a **private** repo through npm: one package
 on GitHub Packages carrying every platform's binary, assembled from
 goreleaser's artifacts by `npm/build-packages.sh` and published by release CI
 (`docs/npm-distribution.md` is the spec). npm is the **only** channel — there
-is no hosted install script and no Cloudflare. That shape drives everything;
-much mainstream supply-chain advice does not apply.
+is no hosted install script. That shape drives everything; much mainstream
+supply-chain advice does not apply.
 
 ## Odd-looking decisions that are correct — do not "fix"
 
@@ -42,11 +42,11 @@ Each is commented where it lives:
   one carries the propagation retry because it reads first. Both run on the
   linux runner; `verify-macos` is a third verification, after publish rather
   than before it — see gap 3.
-- **No hosted install script.** There was one, at `khub.end.game`, wrapping
-  `npm install -g`. It was deleted rather than maintained: a script designed
-  to locate a repo-scoped GitHub token is the highest-value thing an attacker
-  could replace, and it bought one command's worth of convenience. Do not
-  reintroduce a curl channel — document the command instead.
+- **No hosted install script.** There was one, wrapping `npm install -g`. It
+  was deleted rather than maintained: a script designed to locate a repo-scoped
+  GitHub token is the highest-value thing an attacker could replace, and it
+  bought one command's worth of convenience. Do not reintroduce a curl
+  channel — document the command instead.
 - **No Windows.** `gofrs/flock` does support LockFileEx — the library is not
   the blocker. The blockers: mandatory (not advisory) locks, rename-over-open-
   file breaking `fsio`'s atomic replace, and 117 byte-exact tree fixtures.
@@ -115,8 +115,8 @@ toolchains khub doesn't use).
 
 The security boundary is push access to `main` and `packages: write` on this
 repo (what can publish to the npm scope) — not the binary. It used to also
-include a Cloudflare Pages deployment, because `install.sh` was *designed* to
-locate a repo-scoped GitHub token from gh or the keychain: a replaced script
+include whatever host served `install.sh`, because that script was *designed*
+to locate a repo-scoped GitHub token from gh or the keychain: a replaced script
 needed no malware, it just exfiltrated the token, and the blast radius was
 every private repo the developer could read. Deleting the script removed that
 boundary outright, which is the main reason it went.

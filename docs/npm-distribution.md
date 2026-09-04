@@ -13,8 +13,8 @@ picks the matching one at run time. A workspace repo pins its
 khub with one exact `devDependencies` entry, so **one repo runs one khub
 version** — the byte-level output contract (`internal/canon`) stops depending
 on what each teammate happens to have installed. npm is the only way in: the
-curl-based downloader and the `khub.end.game` bootstrap that briefly replaced
-it are both gone.
+curl-based downloader and the hosted bootstrap that briefly replaced it are
+both gone.
 
 ## Scope
 
@@ -24,8 +24,8 @@ it are both gone.
   assembled from goreleaser's `dist/` by `npm/build-packages.sh`.
 - Publishing to GitHub Packages (`npm.pkg.github.com`) from the release
   workflow on every `v*` tag, with an end-to-end install verify.
-- Deleting `install.sh`, its Cloudflare Pages hosting, and the
-  `publish-install` workflow. A machine-global install is `npm install -g`.
+- Deleting `install.sh`, its hosting, and the `publish-install` workflow. A
+  machine-global install is `npm install -g`.
 - Consumer flows: first install, per-repo pin, upgrade, CI, agents,
   side-by-side versions.
 - Documentation repositioning: README, getting-started, RELEASING, the design
@@ -154,7 +154,7 @@ script and smoke-runs the assembly against fixture tarballs.
 The design memo records removing the Claude Code plugin marketplace because it
 was *a second, Claude-only distribution channel for the same files*. npm does
 not reintroduce that shape: it **replaces** the curl downloader as the single
-channel. An earlier draft kept `khub.end.game` alive as a bootstrap over npm
+channel. An earlier draft kept the hosted script alive as a bootstrap over npm
 for the machine that has nothing yet; that was deleted for the same reason the
 marketplace was. A hosted script is a second thing to maintain, to secure, and
 to keep truthful, and it earned none of that — it wrapped one command. The
@@ -163,7 +163,7 @@ GitHub release assets are build inputs, not a channel.
 Deleting it also removed khub's largest stated attack surface. The script was
 *designed* to locate a repo-scoped GitHub token from gh or the keychain, so a
 replaced copy needed no malware to be catastrophic; that is why the security
-boundary used to include a Cloudflare Pages deployment. It no longer does.
+boundary used to include whatever host served it. It no longer does.
 
 What is genuinely given up: the old installer's zero-prerequisite property.
 The primary consumers — agents in Node-bearing sandboxes and developer
@@ -196,7 +196,7 @@ bytes. Same question, same moment, new spelling.
 - `npm install -g @endgame-build/khub@X.Y.Z` on a machine with npm and a
   configured `~/.npmrc` puts `khub` on the PATH reporting version X.Y.Z.
 - No shipped string, skill, or doc still instructs `uv tool install`, the curl
-  download path, or `khub.end.game` as an install method.
+  download path, or a hosted script as an install method.
 
 ## Dependencies
 
