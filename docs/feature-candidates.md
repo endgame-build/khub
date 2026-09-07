@@ -4,8 +4,8 @@
 for reference; numbering is stable (do not renumber when pruning — mark items
 `dropped` instead).
 
-Compiled from comparative reviews (2026-08) of the external projects below
-against khub's design memo and code:
+Compiled from comparative reviews (2026-08 and 2026-09) of the external
+projects below against khub's design memo and code:
 
 | Source tag | Project | One-line characterization |
 |---|---|---|
@@ -17,15 +17,18 @@ against khub's design memo and code:
 | **[iwe]** | [iwe-org/iwe](https://github.com/iwe-org/iwe) | Rust markdown knowledge graph with CLI + LSP + MCP over one core library. khub's closest independent sibling on architecture: markdown-in-git as truth, derived in-memory graph, schema as machine-checked policy, agent as first-class writer. Validates documents in isolation (no referential integrity, untyped edges), so it is no threat to the graph layer — but it is ahead on agent write-safety, body-shape validation, and context assembly. Full review: [`iwe-comparison.md`](iwe-comparison.md). |
 | **[bm]** | [basicmachines-co/basic-memory](https://github.com/basicmachines-co/basic-memory) | Python MCP-first personal AI memory on khub's exact substrate (markdown + frontmatter as truth, derived graph, agent + human as symmetric writers) with the opposite position on every axis above it: schema inferred and advisory, relations as freeform body wikilinks, persisted synced index, commercial cloud/teams layer. No new candidates; reinforces #13, #53, #57, #59. Full review: [`basicmemory-comparison.md`](basicmemory-comparison.md). |
 | **[kag]** | [OpenSPG/KAG](https://github.com/OpenSPG/KAG) | LLM+KG question-answering framework from Ant Group (paper arXiv:2409.13731): builds a mutual-indexed, schema-constrained knowledge graph from documents, answers via a logical-form solver over graph + text. khub's thesis met from the opposite direction — it *reconstructs* the structure khub *authors* — over the stack khub rejects (server, graph store, vector store, models in the loop). Rejected as runtime and dependency; contributes the ingestion alignment pass (#59), the retrieval eval tier (#60), and graph-shaped search hits (#61). Full review: [`kag-review.md`](kag-review.md). |
+| **[okfm]** | [okf-memory/okf-agent-memory](https://github.com/okf-memory/okf-agent-memory) | Go, stdlib-only implementation of Google's OKF v0.2 (Markdown + YAML frontmatter, body links as the graph, `index.md`/`log.md`, `generated`/`verified`/`sources`/`status`/`stale_after`) with a stdio MCP server and a bootstrap that writes `AGENTS.md` plus a skill. Two days old at review, 431 stars. Untyped where khub is typed; a hand-rolled YAML parser and re-serialize writes where khub splices; a prefix TF-IDF labelled BM25 where khub calls FTS5. Ahead on the OKF v0.2 provenance vocabulary, first-run cohesion, and forgiving keyword search. Contributes #62–#69. Full review: [`okf-comparison.md`](okf-comparison.md). |
 
 Full comparative analysis lives in the review session, except for **[iwe]**,
-**[og]**, **[kag]**, and **[bm]**, which have written reviews at
+**[og]**, **[kag]**, **[bm]**, and **[okfm]**, which have written reviews at
 [`iwe-comparison.md`](iwe-comparison.md),
 [`ontograph-review.md`](ontograph-review.md),
-[`kag-review.md`](kag-review.md), and
-[`basicmemory-comparison.md`](basicmemory-comparison.md); this file records
+[`kag-review.md`](kag-review.md),
+[`basicmemory-comparison.md`](basicmemory-comparison.md), and
+[`okf-comparison.md`](okf-comparison.md); this file records
 only the actionable candidates. Effort: **S** ≈ a day or less,
-**M** ≈ days, **L** ≈ a week+. Status: `proposed` unless marked.
+**M** ≈ days, **L** ≈ a week+; `[okfm]` items carry dependency notes and no
+effort tag. Status: `proposed` unless marked.
 
 ---
 
@@ -425,6 +428,110 @@ enter, and how retrieval quality is measured and surfaced.
     `search` already builds per invocation. Output-shape change = deliberate
     parity re-record.
 
+## L. OKF interop, provenance & retrieval ergonomics [okfm]
+
+From the OKF Agent Memory review ([`okf-comparison.md`](okf-comparison.md)),
+which built and probed both tools. The theme: khub wins the engine — schema,
+typed edges, write discipline, FTS5, integrity gates, formats — and okfm wins
+the OKF v0.2 vocabulary and the first five minutes. What transfers is the
+provenance layer khub's "OKF implementation" claim is missing, the export
+boundary that makes the claim testable, and two ergonomics gaps the probes
+exposed (standing context, forgiving search). Items name the review's feature
+request they record (FR1–FR8) so the two documents agree.
+
+62. **Standing-context budget** [okfm; FR1; feeds #41] — Measure what a fresh
+    `init` puts in front of an agent before the first verb: the review counted
+    6,966 B of wiring plus schema imports and a 12,809 B skill against okfm's
+    2,896 B skill and 3,518 B MCP `tools/list`. Split the skill into a short
+    retrieval entrypoint plus supporting files loaded on demand; add a compact
+    `wire` mode that points at `schema types` / `schema show <type>` and the
+    capture cues instead of importing every layer file. Acceptance: a named
+    tokenizer and host, before/after task checks (completion, missed captures,
+    invalid calls), no loss of schema discovery. Byte counts are not token
+    claims.
+63. **`search --plain`** [okfm; FR2] — The natural query `encrypt customer
+    sensitive payload` returns zero khub hits (raw MATCH ANDs the terms, no
+    implicit prefix) and finds the file in okfm. An opt-in escaped-literal mode
+    over the same FTS5 index with a documented OR/prefix policy; raw MATCH and
+    its parity untouched; the skill tells an agent to reformulate on zero hits
+    and to search before `add`. Acceptance: punctuation can never become an
+    operator; Unicode, zero-hit and long queries behave predictably.
+64. **Provenance stamping: `generated: {by, at}`** [okfm; this session] — The
+    base block gains OKF's `generated` as a fixed-shape built-in (two hard-coded
+    shapes, no general map attribute type). `add`/`edit`/`link`/`unlink` stamp
+    it; `backfill`/`reindex`/`upgrade` do not — repair is not authorship. `at`
+    is ISO 8601 UTC from the `KHUB_PARITY_NOW` seam. The actor ladder for
+    `by`: `--actor` > `KHUB_ACTOR` > a harness marker (`CLAUDECODE` set →
+    `agent/claude-code`) > `khub`. It **never infers `human:` from git
+    identity** — an agent running in Noor's shell would be stamped as Noor,
+    which is the one lie OKF's trust tiers exist to prevent; the parity runner
+    pins `KHUB_ACTOR=khub`. `author` keeps meaning creator, set once;
+    `generated.by` is last writer. Existing entities are not backfilled (that
+    fabricates an actor; absent `generated` is the unverified tier with no
+    ordering check). A byte-contract change: deliberate re-record.
+65. **Review validity + trust tier** [okfm; FR5 + this session; needs #64] —
+    `verified: [{by, at, rev}]` in OKF's shape plus one khub extension, `rev`:
+    a content-revision hash over body, declared domain attributes and
+    relations, excluding bookkeeping (`updated`, `generated`, `tags`), so a tag
+    edit does not void a review and a body edit does — the review's point that
+    a timestamp comparison alone cannot say which edits invalidate. New verb
+    `khub verify <id> --by <actor>`; `--by` is required with no ladder default,
+    since a `khub`-stamped verification would mint a machine tier nobody
+    asserted. Reads derive `trust: unverified|machine|human` from the live
+    (non-superseded) events, `human:` prefix wins, carried beside
+    `draft`/`orphan`/`stale`; `query --trust`; `check` gains
+    `superseded_verifications` as a gap. Optional
+    `policy.yaml: protect_verified: human` makes `edit`/`link`/`unlink`/
+    `remove` on a human-tier entity refuse (exit 2) naming `--supersede` — a
+    "say you knew" gate, not authorization: actor strings are assertions and
+    review labels are never a security boundary. `add` is never gated;
+    direct-file edits are covered because `rev` is recomputed at read time;
+    `draft` stays independent. This is the behaviour okfm advertises and its
+    probes show it does not implement.
+66. **`stale_after` authored expiry** [okfm; FR5 lifecycle row] — Base
+    attribute, `datetime`. Stale = the `updated`-age rule OR
+    `now >= stale_after`; `khub stale` grows a `reason` column (`age` /
+    `expired`); `check --stale` as an optional gate. A different signal from
+    age: "this holds until March" is authored, not inferred.
+67. **OKF v0.2 export/consume** [okfm; FR7 + this session; the design memo's
+    planned `export --okf`, mechanics pinned here] — `export --okf <dir>`
+    renders a bundle another tool accepts: root `index.md` with
+    `okf_version: "0.2"` (the bump from `0.1` is a sub-step, never the
+    deliverable); one md concept per entity, json/yaml/collection rows
+    materialized; typed relations under one `# Related` section as
+    `- <predicate>: [Title](/path.md)` with absolute bundle-relative links;
+    `draft: true` → `status: draft`, an inbound `supersedes` → `status:
+    deprecated`, else omitted; preset status fields kept as tolerated
+    extensions, never forced into the OKF enum; frontmatter emitted with the
+    **safe profile** (width 4096) because the review reproduced okfm's parser
+    losing a folded description; `log.md` omitted (optional per spec — generate
+    from git only when a consumer needs it). **`sources` collision — decided
+    2026-09-07:** khub's base `sources` is an `any` relation; OKF's is
+    `[{resource, id, title, author, …}]`. No preset redeclares it, zero
+    fixtures use it, and `references` covers the in-graph case, so the
+    relation is dropped from the base and OKF's shape adopted, with `validate`
+    checking `resource` present, a valid actor prefix, and body footnotes
+    `[^x]` ↔ `sources[].id`. Consume side: read a bundle
+    into a selected schema as drafts with a loss/conflict report, reusing
+    #25/#26/#59; okfm's software/coaching/books bundles are the fixtures. CI
+    runs a foreign v0.2 validator over the export, pinned and informational —
+    a two-day-old hand parser is a detector, not an oracle.
+68. **Ordinary-file write safety** [okfm; FR8; relates to #50/#51] —
+    Collections lock, reread and atomically replace; ordinary md/json/yaml
+    entity edits rewrite in place with no precondition, so two stale readers
+    can silently overwrite each other. Add a content-revision precondition on
+    `edit`/`link`/`unlink`/`remove` (reuse #65's `rev`), compared and written
+    in one shared path, plus atomic replace through `internal/fsio`.
+    Acceptance: guarded writers never lose an update silently; an interrupted
+    write never truncates; every mutation caller participates. This changes
+    inode and byte-contract assumptions — an explicit compatibility decision
+    and the cross-process concurrency tests testing.md already names.
+69. **Navigation drift gate** [okfm; review "lower priority" + this session] —
+    `reindex --check`: exit nonzero when `index.md` is stale, write nothing,
+    reuse the `--dry-run` diff; surfaced by `check` as an `index_stale` gap;
+    a pre-commit/CI recipe. Never per-write regeneration — okfm's
+    concept/index/log three-file write chain is the thing to avoid.
+
 ## Reinforcements to existing items
 
 Where a reviewed project ships a working design for a candidate already on this
@@ -449,6 +556,13 @@ list. No new numbers — recorded so the design work is not redone:
 | **#15** aliases as identity surface | [kag] | KAG needs a synonym/concept layer at query time because identity was never authored; khub resolves aliases at authoring time instead — #15 is KAG's alignment stage collapsed into the identity surface, and #59's second resolution rung. Raises #15's priority. |
 | **#10** competency questions | [kag] | Benchmark discipline: once #60 exists, publish per-preset scores alongside the preset, KAG-style — the preset's claim to encode judgment becomes a measured claim. |
 | **#39** output contract | [kag] | Reflection needs machine-actionable misses: "0 matches" plus nearest candidates is what lets an agent iterate instead of abandoning — the same error DTO as did-you-mean, doing retrieval duty. |
+| **#61** search hits as nodes | [okfm] | Review FR3: lifecycle flags (`draft`, `stale`, supersession), bounded per-predicate adjacency counts, the description where present, and an explicit active-only filter applied *before* the limit — plus #65's `trust` flag once it exists. Third convergence on adjacency-in-hits: okfm's search results carry inbound/outbound ids. |
+| **#53** `retrieve` | [okfm] | Review FR4: return selection reasons, lifecycle signals, truncation and omitted-entity information; cap entities and bytes first; if a token cap is added, name the tokenizer and count the whole response; when the budget cannot hold needed evidence, report insufficiency rather than clip. |
+| **#10 / #60** retrieval eval | [okfm] | Review FR6: task classes (single-document lookup, synonym mismatch, conflicting versions, stale/draft distractors, irrelevant documents, multi-hop); report evidence recall and task success beside full input/output usage, cache use, tool calls and latency, repeated and randomized; never substring checks as "accuracy". The bar khub's own numbers must clear: okfm's published 80% is byte/3.9 estimates, one run, a harness-selected file. |
+| **#41** skill as decision guidance | [okfm] | okfm's CONVENTION contract ported to khub verbs: `query`/`search` before `add`; `edit` over a second entity (#54 is the mechanical backstop); inferred facts land as `--draft`; never claim persistence without exit 0; prefer the higher `trust` tier and never resolve a conflict by overwriting the human one. Pairs with #62's split. |
+| **#39** output contract | [okfm] | okfm exits 2 on a bundle-load error and 1 on non-conformance — the second independent convergence, after IWE, on the trichotomy. |
+| **#57** MCP surface shape | [okfm] | A counter-reference: okfm's six-tool `tools/list` is 3,518 B and its server re-reads the bundle per call (cheap, and the same per-invocation projection khub already has), but there is no dry-run, no read-only mode and no guard — which confirms #50's always-strict writes and #42's exposure filter. The "26 verbs × 550–1,400 tok" footprint in `.claude/rules/cli.md` is not a measured comparison against a six-tool implementation; re-measure before citing it. |
+| **#25 / #59** ingestion | [okfm] | okfm's example bundles are free OKF v0.2 consume-path fixtures, and its `create`-overwrites-an-existing-id probe is the argument that search-before-write guidance cannot replace an exclusive-create check — #59's never-auto-merge, from the other side. |
 
 ---
 
@@ -513,13 +627,40 @@ From the OntoGraph review, with reasons in [`ontograph-review.md`](ontograph-rev
   asymmetric properties, nested unions. Use them to check that what khub *emits*
   round-trips; never as a bar to clear (#44 rejects full OWL deliberately).
 
+From the OKF Agent Memory review, with reasons in [`okf-comparison.md`](okf-comparison.md):
+
+- The body-link graph (typed frontmatter predicates are the invariant; body
+  links stay navigational).
+- A hand-rolled YAML parser and emitter (the review reproduced it losing a
+  folded description; `internal/canon` is the choke point).
+- Full re-serialize writes (the token splice is the contract).
+- The prefix TF-IDF scorer labelled BM25 (loses MATCH syntax and Unicode; FTS5
+  stays).
+- A `curl | sh` or Homebrew channel (ci-release.md; deleted deliberately).
+- An authored per-write `log.md` — and a generated one until a consumer needs
+  it (git is the log; #67 omits it).
+- MCP by default (verdict unchanged; re-measure the footprint against a
+  six-tool implementation before arguing it again — #57 holds the shape).
+- Replacing `draft` with OKF `status` (the manual publish flag is sharper;
+  `status` is an export projection in #67).
+- Backfilling `generated` onto existing entities (fabricates an actor).
+- Human-review labels as a security boundary (#65 is a "say you knew" gate;
+  authorization is repository policy).
+- Attested computations as engine work (a preset can declare the type with
+  `runtime`/`parameters`/`executor`/`attester` attributes).
+- Cloud federation or automatic fact extraction as parity work (neither is
+  delivered by the reviewed implementation).
+- A new generic memory preset (try build-lite plus #62's compact onboarding
+  first).
+
 ## Shortlist (reviewer's recommendation)
 
 - **Highest leverage:** the migration cluster **#1–3** (with #4 folded in) —
   the biggest named gap, with a proven same-substrate design to port.
 - **Highest leverage on the agent surface:** **#50** (guards + surface
   strictness), with **#56** as its prerequisite and **#51** as its completion.
-  The one place a competitor is demonstrably ahead of khub.
+  The one place a competitor is demonstrably ahead of khub on write safety;
+  okfm is ahead on the provenance vocabulary (#64–#65).
 - **Best value/effort:** **#13** (discover), **#9** (bundles), **#55**
   (cardinality — small, and it unblocks #37), **#58 + #11** shipped as one
   (the schema rendered as a doc and as a diagram).
@@ -532,3 +673,8 @@ From the OntoGraph review, with reasons in [`ontograph-review.md`](ontograph-rev
   retrieval surface the eval tier the parity suite cannot provide.
 - **Hold** until the workflow question is deliberately reopened: **#22/#23**.
 - **G (#44–46)** is agreed and proceeds independently.
+- **OKF provenance + interop cluster:** **#64 → #65 → #67**, with **#66**
+  riding along; the `sources` collision is decided (drop the relation), the
+  `protect_verified` default is the one open call.
+- **Cheap wins from [okfm]:** **#63**, **#69**, and the measurement half of
+  **#62**.

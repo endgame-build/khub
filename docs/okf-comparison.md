@@ -148,6 +148,8 @@ This does not make khub an authorization or transaction system. Its normal file 
 
 These requests preserve the schema-generic core, manual draft flag, local operation and existing CLI contracts. Existing candidate numbers are references, not claims those candidates have shipped. Priorities are relative to this comparison; efforts are rough S/M estimates, not schedules.
 
+Recorded in [`feature-candidates.md`](feature-candidates.md) as #62 (FR1), #63 (FR2), #64–#65 (FR5), #66 (lifecycle expiry), #67 (FR7), #68 (FR8) and #69 (lower priority); FR3, FR4 and FR6 reinforce #61, #53 and #10/#60 there.
+
 ### 1. Measure and reduce standing context — P1, S
 
 **Problem:** a selective content retriever can still waste context on its own skill and full schema imports.
