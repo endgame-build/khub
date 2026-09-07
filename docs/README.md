@@ -26,6 +26,7 @@ khub's docs, organized by [Diátaxis](https://diataxis.fr): learning, tasks, ref
 - [npm distribution](npm-distribution.md) — the distribution channel: one npm package, per-repo exact pinning via `devDependencies`, the publish pipeline, and why npm is the only way in.
 - [build-lite, standalone](build-lite-standalone.md) — the preset reimplemented as one skill plus one dependency-free script for opencode: what earns code when the only caller is an agent, what was cut, and why the corpus still graduates to khub.
 - [IWE, feature by feature](iwe-comparison.md) — the closest independent sibling reviewed against khub: where the architectures converge, why its document-only validation is no threat to the graph contract, and the eight things worth taking.
+- [OKF Agent Memory, feature by feature](okf-comparison.md) — implementation comparison, audit of the 80% token-saving claim, local retrieval measurements, and prioritized feature requests.
 - [OntoGraph, reviewed](ontograph-review.md) — an OWL visualization service, dead since 2019 and unbuildable: why it is rejected as a tool, and the three things worth taking anyway (a schema-diagram idea, a peer-reviewed citation, a caveated test corpus).
 - [Feature candidates](feature-candidates.md) — the related-work proposal backlog: numbered, pick-and-choose, with what was explicitly rejected and why.
 
