@@ -30,7 +30,8 @@ khub's docs, organized by [Diátaxis](https://diataxis.fr): learning, tasks, ref
 - [Basic Memory, feature by feature](basicmemory-comparison.md) — khub's mirror image on the same substrate: schema inferred and advisory, relations as body wikilinks, persisted synced index, MCP-first; no new candidates, reinforces #13, #53, #57, #59.
 - [KAG, reviewed](kag-review.md) — Ant Group's LLM+KG QA framework: runtime rejected whole; contributes the ingestion alignment pass, the retrieval eval tier, and graph-shaped search hits (#59–#61).
 - [OntoGraph, reviewed](ontograph-review.md) — an OWL visualization service, dead since 2019 and unbuildable: why it is rejected as a tool, and the three things worth taking anyway (a schema-diagram idea, a peer-reviewed citation, a caveated test corpus).
-- [Feature candidates](feature-candidates.md) — the related-work proposal backlog: numbered, pick-and-choose, with what was explicitly rejected and why.
+- [Feature candidates](feature-candidates.md) — index of the related-work candidates, one GitHub issue each, with what was explicitly rejected and why.
+- [Federation](federation-design.md) — pointer to the federation epic: khub as the record layer under Registry and GraphStore.
 
 ## History
 

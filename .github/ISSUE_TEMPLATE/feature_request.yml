@@ -2,17 +2,53 @@ name: Feature request
 description: Suggest a capability or change
 labels: ["enhancement"]
 body:
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      description: One area; the triager applies it as the label. See .claude/rules/issues.md.
+      options:
+        - schema
+        - write-path
+        - retrieval
+        - integrity
+        - agent-surface
+        - interop
+        - ingestion
+        - federation
+        - viz
+        - perf
+        - testing
+    validations:
+      required: true
   - type: textarea
     id: problem
     attributes:
       label: Problem
-      description: What are you trying to do that khub makes hard today?
+      description: What are you trying to do that khub makes hard today? Name the verb, the schema, the corpus.
     validations:
       required: true
   - type: textarea
     id: proposal
     attributes:
-      label: Proposed direction
-      description: How might khub address it? Note any schema-generic implications.
+      label: Proposal
+      description: How khub should address it. Note any schema-generic implications and which invariant it touches.
+    validations:
+      required: true
+  - type: textarea
+    id: decided
+    attributes:
+      label: Decisions already made
+      description: Link the doc or issue that decided any part of this. Leave empty if none.
+    validations:
+      required: false
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance
+      description: What must be true for this to close. One checkbox per observable outcome.
+      value: |
+        - [ ]
+        - [ ]
     validations:
       required: false

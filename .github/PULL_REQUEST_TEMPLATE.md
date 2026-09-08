@@ -1,6 +1,6 @@
 ## What & why
 
-<!-- One or two sentences. Link the issue if there is one. -->
+<!-- One or two sentences. `Closes #n` per issue this PR ships; one issue per commit when it closes several. -->
 
 ## Checklist
 
@@ -10,6 +10,7 @@
 - [ ] `./parity-run -coverage parity/coverage.yaml -cases parity/cases -subset-of "$PWD/khub"` reports no gaps
 - [ ] `bash smoke.sh` passes
 - [ ] Any re-recorded fixture bytes are **intended**, and the commit says why
+- [ ] The issue's Acceptance boxes are ticked, or the miss is named here
 - [ ] `CHANGELOG.md` updated (if user-facing)
 - [ ] Docs updated (if the command surface or schema changed — regenerate with
       `bash parity/tools/gen_cli_reference.sh`)

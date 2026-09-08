@@ -1,0 +1,55 @@
+name: Design decision
+description: A question that gates code — options, a recommendation, and the decision once made
+labels: ["design"]
+body:
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      description: One area; the triager applies it as the label. See .claude/rules/issues.md.
+      options:
+        - schema
+        - write-path
+        - retrieval
+        - integrity
+        - agent-surface
+        - interop
+        - ingestion
+        - federation
+        - viz
+        - perf
+        - testing
+    validations:
+      required: true
+  - type: textarea
+    id: question
+    attributes:
+      label: Question
+      description: The decision to make, in one or two sentences, and what it blocks.
+    validations:
+      required: true
+  - type: textarea
+    id: options
+    attributes:
+      label: Options with trade-offs
+      description: Each option with what it costs and what it buys. Name the invariant each one touches.
+      value: |
+        1.
+        2.
+        3.
+    validations:
+      required: true
+  - type: textarea
+    id: recommendation
+    attributes:
+      label: Recommendation
+      description: Which option, and the evidence for it.
+    validations:
+      required: false
+  - type: textarea
+    id: decision
+    attributes:
+      label: Decision
+      description: Leave empty. Filled in and dated when the decision is made; the body, not a comment, is the record.
+    validations:
+      required: false

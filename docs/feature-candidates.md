@@ -1,8 +1,10 @@
 # Feature Candidates from Related-Work Review
 
-**Status:** proposal backlog — pick-and-choose input, not a commitment. Numbered
-for reference; numbering is stable (do not renumber when pruning — mark items
-`dropped` instead).
+**Status:** index. Every candidate became a GitHub issue on 2026-09-07 (`→ #n`
+below); the issue body carries the candidate's full text, the reinforcements from
+later reviews, and the triage notes. Priority, size and order live on the
+[khub project board](https://github.com/endgame-build/khub/issues). Numbering is stable; a candidate that was
+shipped, dropped or folded says so in place of a link.
 
 Compiled from comparative reviews (2026-08 and 2026-09) of the external
 projects below against khub's design memo and code:
@@ -26,9 +28,7 @@ Full comparative analysis lives in the review session, except for **[iwe]**,
 [`kag-review.md`](kag-review.md),
 [`basicmemory-comparison.md`](basicmemory-comparison.md), and
 [`okf-comparison.md`](okf-comparison.md); this file records
-only the actionable candidates. Effort: **S** ≈ a day or less,
-**M** ≈ days, **L** ≈ a week+; `[okfm]` items carry dependency notes and no
-effort tag. Status: `proposed` unless marked.
+only the actionable candidates. Effort and priority are fields on the project board.
 
 ---
 
@@ -38,240 +38,79 @@ The largest named gap: today, editing a schema layer (or drifting from a preset)
 has zero guardrails. bwrb ships a working same-substrate migration engine;
 open-ontologies contributes the blast-radius/lock framing.
 
-1. **Schema snapshot + `khub schema diff`** [bwrb, M] — Keep
-   `.khub/schema.applied.yaml`, the last-migrated snapshot; diff the current
-   schema against it and report pending changes. Foundation for #2–#6.
-   *Post-split note: snapshot the RESOLVED schema, not the authored files —
-   three layer files and one document carrying three blocks resolve
-   identically, so an authored-file snapshot would report a pending migration
-   whenever the shape moved. The resolved form is what determines entity
-   validity, which is the question this snapshot exists to answer. And do not
-   adopt bwrb's `backups/` dir: khub's rollback is git (Principle 5), and a
-   backups dir under gitignored `.khub/generated/` would be untracked.*
-2. **Change classification** [bwrb, M] — Classify each schema change as
-   *deterministic* (add field/option, widen single→many: auto-safe),
-   *non-deterministic* (remove field, narrow enum: confirm; may drop data), or
-   *review-flagged* (tighten required, collapse many→single: khub cannot guess
-   a value, so it names the affected entities and stops).
-3. **`khub schema migrate`** [bwrb, L] — Dry-run by default; per-entity
-   before→after preview (`--show-changes`); `--execute` applies to the corpus
-   and **fails closed** with structured blockers when a change would strand a
-   required value. Records migration history; suggests a semver bump from
-   change severity (removals → major, additions → minor).
-4. **Blast radius + risk on schema changes** [oo, M] — The preview reports
-   which live entities become invalid/incomplete and which edges lose a legal
-   predicate, with a low/medium/high risk summary. Folds into #3.
-5. **Locked types/predicates** [oo, S] — A preset marks load-bearing schema
-   elements as locked; a migration removing them is refused unless explicitly
-   unlocked.
-6. **`diff-preset` mechanics** [oo+bwrb, M] — Already on the roadmap by name;
-   #1's snapshot diffing plus OO-style rename detection (name-similarity
-   pairing) supply the missing design. Reports engagement↔preset drift both
-   directions for the promote-back flywheel.
-7. **`khub rename`, data-preserving** [bwrb+oo, M] — Already planned for
-   slugs. bwrb's lesson: renames are not diffable (a rename looks like
-   drop+add, and drop deletes data), so rename is its own explicit verb; any
-   similarity-based rename matching must report both what it paired *and* what
-   it declined to pair.
-8. **`khub layout migrate`** [bwrb-inspired, M] — Per-type `layout`/`format`
-   is config, but no verb changes it on a live corpus (file→collection,
-   md→json). Template: bwrb `identity migrate` — validate the whole set,
-   dry-run, execute under locks.
+1. **Schema snapshot + `khub schema diff`** [bwrb, M] → [#74](https://github.com/endgame-build/khub/issues/74)
+2. **Change classification** [bwrb, M] → [#75](https://github.com/endgame-build/khub/issues/75)
+3. **`khub schema migrate`** [bwrb, L] → [#76](https://github.com/endgame-build/khub/issues/76)
+4. **Blast radius + risk on schema changes** [oo, M] — folded into [#76](https://github.com/endgame-build/khub/issues/76)
+5. **Locked types/predicates** [oo, S] → [#77](https://github.com/endgame-build/khub/issues/77)
+6. **`diff-preset` mechanics** [oo+bwrb, M] → [#78](https://github.com/endgame-build/khub/issues/78)
+7. **`khub rename`, data-preserving** [bwrb+oo, M] → [#79](https://github.com/endgame-build/khub/issues/79)
+8. **`khub layout migrate`** [bwrb-inspired, M] → [#80](https://github.com/endgame-build/khub/issues/80)
 
 ## B. Schema authoring & vocabulary
 
-9. **Field bundles (traits)** [bwrb, M] — Named, flat, reusable field groups
-   composed into types (`bundles:` + per-type `use:`), precedence
-   own > bundle > base. In-house evidence: firm-ops hand-copies
-   `notes_folder`/`notes_folder_id`/`crm_id` across four types.
-   Deliberately *not* type inheritance — bundles only.
-10. **Competency questions as preset acceptance tests** [sem+oo, S–M] —
-    `competency.yaml` per preset mapping natural-language questions to the
-    khub queries that answer them. Executable preset test (goldens tier),
-    drift lint, and self-documentation. Two unrelated projects converged on
-    this pattern independently.
-11. **`khub schema docs`** [sem+oo, S] — Render the resolved schema to
-    Markdown (types, fields, enums, edges, requireds, layouts). Kills the
-    hand-maintained preset-doc drift class; feeds `wire`.
-12. **JSON Schema for the `.khub/` layer files** [bwrb, S] — Emit a meta-schema
-    JSON Schema (`$schema` pointer) for editor validation/autocomplete.
-    Nearly free from the Pydantic meta-schema.
-13. **`khub schema discover`** [bwrb, M] — Descriptive (never pass/fail)
-    frontmatter census over any folder: fields, frequencies, value types,
-    divergent files; with a schema loaded, drift facts (used-but-undeclared,
-    declared-but-unused). The tool for designing a preset from a messy corpus
-    and for pre-cutover recon — the HQ port did this by hand.
-14. **Owned/colocated child entities** [bwrb, L] — `owned: true` relations:
-    children live in the parent's folder, cannot be referenced by other
-    entities, misplacement is a `check` finding. Directly implements the
-    documented "nesting an inventory under a parent item's folder is not yet
-    supported" gap, including deriving the parent edge from placement.
-15. **Aliases as identity surface** [bwrb, S–M] — Schema-marked alias fields
-    join slug/`source_id` in resolution: `get`/`link` targets resolve by
-    alias; a real slug beats an alias on collision.
-16. **Schema-declared body sections** [bwrb] — `dropped: substantially
-    shipped`. Body-template validation already exists: when
-    `.khub/templates/<type>.yaml` is present, `validate` requires its section
-    headings in every instance body as an ordered subsequence (extras
-    allowed), and `add` scaffolds from it. The borrowable remainder
-    (per-section content assertions) moved to #49.
-17. **Type-level retention policy** [bwrb, S] — Per-type end-of-life rules
-    (e.g. meetings older than N days with no outbound edges) evaluated by
-    `check` as findings; never auto-deleted.
-18. **`--under <node>` scope filter** [bwrb, S] — Query filter by transitive
-    containment over a designated hierarchy predicate ("everything under this
-    project"). The transitive machinery exists (`impact`); this is the
-    query-surface ergonomic.
+9. **Field bundles (traits)** [bwrb, M] → [#81](https://github.com/endgame-build/khub/issues/81)
+10. **Competency questions as preset acceptance tests** [sem+oo, S–M] → [#82](https://github.com/endgame-build/khub/issues/82)
+11. **`khub schema docs`** [sem+oo, S] → [#83](https://github.com/endgame-build/khub/issues/83)
+12. **JSON Schema for the `.khub/` layer files** [bwrb, S] → [#84](https://github.com/endgame-build/khub/issues/84)
+13. **`khub schema discover`** [bwrb, M] → [#85](https://github.com/endgame-build/khub/issues/85)
+14. **Owned/colocated child entities** [bwrb, L] → [#86](https://github.com/endgame-build/khub/issues/86)
+15. **Aliases as identity surface** [bwrb, S–M] → [#87](https://github.com/endgame-build/khub/issues/87)
+16. **Schema-declared body sections** [bwrb] — dropped — shipped as body templates
+17. **Type-level retention policy** [bwrb, S] → [#88](https://github.com/endgame-build/khub/issues/88)
+18. **`--under <node>` scope filter** [bwrb, S] → [#89](https://github.com/endgame-build/khub/issues/89)
 
 ## C. Authoring & write path
 
-19. **Richer templates** [bwrb, M] — Per-type template *variants*
-    (default + named), field defaults, declared prompt-fields; an agent picks
-    `--template post-mortem` and gets defaults plus body scaffold in one shot.
-    (Today's templates are body text only.)
-20. **Fork/lineage provenance in core** [bwrb, M] — `add --fork <id>` writing
-    a reserved `forked_from` edge, plus a guarded `lineage adopt` to retrofit
-    provenance onto existing entities (dry-run default; cycle/duplicate
-    guards). Generalizes the engineering preset's `supersedes` into a core
-    mechanic.
-21. **`khub bulk`** [bwrb, M] — Batch frontmatter ops with targeting
-    (`--type/--where/--path`) and safety gates: `--set/--rename/--append/
-    --remove`, dry-run default, `--execute`, `--limit`. The missing verb
-    between `edit` (one entity) and nothing.
-22. **Transition guards + `khub explain`** [bwrb, L] — Schema-declared
-    preconditions on enum transitions ("project may enter `complete` only when
-    all inbound `depends_on` stories are `done`"), plus a read-only `explain`
-    verb reporting allowed/blocked and why. The bounded deterministic answer
-    to design-memo open question #1 (operational procedures in the schema):
-    no cron, no daemon, no engine.
-23. **Transition effects** [bwrb, M; needs #22] — On transition, apply one
-    bounded patch to a directly related entity.
-24. **Spawn-on-transition (recurrence)** [bwrb, M; needs #22] — Completing an
-    entity spawns a successor from a template with date offsets. Trigger is a
-    field transition, not a clock. Most PKM-flavored item; listed for
-    completeness.
-25. **Ingestion conflict policy** [sem, S design note now] — For the planned
-    facet/OKF ingestion: never silently overwrite a non-draft value; emit a
-    conflict report (entity/field/ours/theirs/source) with a named
-    resolution-strategy menu (manual default; prefer-newest/prefer-source as
-    per-field config later). Write the design note before ingestion is built.
-26. **Extraction scaffold + conformance validation** [oo, M] —
-    `khub schema scaffold [--type T]` emits the resolved schema as an
-    extraction prompt contract; ingestion output is validated and
-    conformance-scored against it. Keeps the LLM-ingestion layer
-    schema-generic; plugs into the planned goldens-eval.
+19. **Richer templates** [bwrb, M] → [#90](https://github.com/endgame-build/khub/issues/90)
+20. **Fork/lineage provenance in core** [bwrb, M] → [#91](https://github.com/endgame-build/khub/issues/91)
+21. **`khub bulk`** [bwrb, M] → [#92](https://github.com/endgame-build/khub/issues/92)
+22. **Transition guards + `khub explain`** [bwrb, L] → [#93](https://github.com/endgame-build/khub/issues/93)
+23. **Transition effects** [bwrb, M; needs #22] → [#94](https://github.com/endgame-build/khub/issues/94)
+24. **Spawn-on-transition (recurrence)** [bwrb, M; needs #22] → [#95](https://github.com/endgame-build/khub/issues/95)
+25. **Ingestion conflict policy** [sem, S design note now] → [#96](https://github.com/endgame-build/khub/issues/96)
+26. **Extraction scaffold + conformance validation** [oo, M] → [#97](https://github.com/endgame-build/khub/issues/97)
 
 ## D. Query & retrieval
 
-27. **Saved queries** [bwrb, S] — `khub query … --save-as <name>` +
-    `khub run <name>`. Stable named retrievals for skills and humans.
-28. **`--where` expression filters** [bwrb, M] — Small expression language
-    over frontmatter (`--where "stage='won' and updated > 2026-01-01"`),
-    shared by `query`/`bulk`/custom checks (#37). Today: exact-match filters.
-29. **Derived fields** [bwrb, M] — Query-time computed virtual scalars
-    declared in schema (bounded expressions; one-hop `all()`/`any()` over a
-    relation), never written to disk; `check` flags a persisted copy. Aligned
-    with "the graph is derived, never stored."
-30. **Point-in-time reads: `--at <ref|date>`** [sem, S–M] — Rebuild the
-    projection from a git ref and run any read verb. Semantica's headline
-    `state_at()`, nearly free under the derived-graph invariant. Pair with a
-    bwrb-style `--as-of` (pin "today" for reproducible date queries).
-31. **Type-scoped search** [sem, S] — `khub search <text> --type <t>`: the
-    precedent-lookup idiom ("have we decided something like this before?") as
-    a first-class flag plus skill guidance.
-32. **`khub recent`** [bwrb, S] — Recently created/updated entities from git
-    dates.
-33. **Valid-time on edges** [sem, deferred] — Optional schema-declared
-    `valid_from`/`valid_until` on relations ("Alice was on this project until
-    March"): date fields plus query semantics. Parked so it isn't designed
-    out; not v1 work.
+27. **Saved queries** [bwrb, S] → [#98](https://github.com/endgame-build/khub/issues/98)
+28. **`--where` expression filters** [bwrb, M] → [#99](https://github.com/endgame-build/khub/issues/99)
+29. **Derived fields** [bwrb, M] → [#100](https://github.com/endgame-build/khub/issues/100)
+30. **Point-in-time reads: `--at <ref|date>`** [sem, S–M] → [#101](https://github.com/endgame-build/khub/issues/101)
+31. **Type-scoped search** [sem, S] — shipped — `search --type`
+32. **`khub recent`** [bwrb, S] → [#102](https://github.com/endgame-build/khub/issues/102)
+33. **Valid-time on edges** [sem, deferred] → [#103](https://github.com/endgame-build/khub/issues/103)
 
 ## E. Integrity, audit & fix
 
-34. **`check --fix` with gated autofix** [bwrb, M] — Classified fixes:
-    auto-safe (backfillable dates, formatting) vs. execute-gated vs.
-    never-auto (anything lossy); explicit targeting required for vault-wide;
-    dry-run default; minimal-diff writes (the ruamel round-trip already
-    delivers the write discipline).
-35. **Check-finding suppression allowlist** [oo, S] — Git-visible waivers
-    with reason strings in `.khub/config.yaml` (e.g. per-entity orphan
-    exemptions). Every finding is fixed or deliberately waived; the
-    type-level `orphan: true` flag is this idea at type granularity.
-36. **Body-mention link suggestions** [bwrb, M] — Opt-in audit mode: entity
-    names mentioned in body prose but not linked as edges are suggested
-    (never auto-written). Makes "inline body links are navigational only" a
-    recoverable signal.
-37. **Custom check rules per preset** [oo, M; needs #28] — Presets declare
-    extra graph checks as expressions ("every won opportunity has an origin
-    project within 30 days"), run by `check` alongside built-ins.
-38. **`khub doctor`** [sem, S] — Five-second self-diagnosis: git present,
-    schema parses and resolves, provenance stamp readable, locks writable,
-    layout matches schema. Distinct from `validate`/`check`, which assume a
-    working workspace.
+34. **`check --fix` with gated autofix** [bwrb, M] → [#104](https://github.com/endgame-build/khub/issues/104)
+35. **Check-finding suppression allowlist** [oo, S] → [#105](https://github.com/endgame-build/khub/issues/105)
+36. **Body-mention link suggestions** [bwrb, M] → [#106](https://github.com/endgame-build/khub/issues/106)
+37. **Custom check rules per preset** [oo, M; needs #28] → [#107](https://github.com/endgame-build/khub/issues/107)
+38. **`khub doctor`** [sem, S] → [#108](https://github.com/endgame-build/khub/issues/108)
 
 ## F. Agent surface & contracts
 
-39. **Formal JSON output + exit-code contract** [bwrb, S] — A
-    `docs/cli-output-contract.md`: one JSON value on stdout, typed exit
-    codes, and an error DTO carrying `field`/`expected`/`suggestion` —
-    machine-readable "did you mean" is agent self-correction fuel.
-40. **`--receipt` mode** [bwrb, S] — JSON responses optionally echo the
-    applied query, pre-limit match count, returned count, and truncation
-    flag, so an agent knows what its query actually did.
-41. **Skill rewrite as decision guidance** [oo+bwrb, S] — Restructure the
-    khub skill: when-to-use table per verb, generate→validate→iterate loop,
-    "decide the next call from the last result — not a fixed pipeline."
-42. **MCP tool-exposure filter** [oo, S; with the planned MCP server] —
-    Operator config restricting which verbs the server advertises (e.g. a
-    read-only khub for a reviewer agent).
-43. **Shell completion** [bwrb, S] — `khub completion` generation.
+39. **Formal JSON output + exit-code contract** [bwrb, S] → [#109](https://github.com/endgame-build/khub/issues/109)
+40. **`--receipt` mode** [bwrb, S] → [#110](https://github.com/endgame-build/khub/issues/110)
+41. **Skill rewrite as decision guidance** [oo+bwrb, S] → [#111](https://github.com/endgame-build/khub/issues/111)
+42. **MCP tool-exposure filter** [oo, S; with the planned MCP server] → [#112](https://github.com/endgame-build/khub/issues/112)
+43. **Shell completion** [bwrb, S] → [#113](https://github.com/endgame-build/khub/issues/113)
 
 ## G. Interop & projections — status: **agreed** (this review)
 
-44. **`docs/rdf-mapping.md`** [oo] — Normative khub↔OWL/SHACL mapping:
-    `khub:` annotation vocabulary, IRI minting, deterministic serialization,
-    and the **khub profile** (the lossless-round-trip subset). Firm-ops
-    Turtle render included as the golden fixture. Key decisions already
-    settled: export the *resolved* schema; shared predicate IRIs with
-    per-shape constraints; union edges via `owl:unionOf`/`sh:or`; OWL alone
-    cannot express khub's closed-world semantics, so SHACL is mandatory;
-    `acyclic` and draft-satisfaction rules ride as annotations with khub
-    remaining authoritative.
-45. **RDF projection into `.khub/generated/schema.ttl`** [oo] — Regenerated
-    like the compiled entity models (TBox+SHACL always; ABox behind a flag).
-    *Since the ontology/policy/storage split this projection is LOSSLESS over
-    the ontology layer: `ontology.yaml` is purely the domain (attributes,
-    relations, cues), so the export maps ~1:1 onto RDFS+SHACL with only the
-    policy/storage layers riding as `khub:` annotations.*
-    External RDF tooling points at `.khub/generated/` and sees every
-    workspace natively. Authoring format stays YAML; RDF is derived, never a
-    second source of truth.
-46. **Profile-checked RDF import** [oo, phase 2] — Checker first ("is this
-    Turtle in the khub profile; here is what isn't, named, never silently
-    dropped"); the full Turtle→`ontology.yaml` importer only if preset
-    authoring actually shifts to the RDF side.
+44. **`docs/rdf-mapping.md`** [oo] → [#114](https://github.com/endgame-build/khub/issues/114)
+45. **RDF projection into `.khub/generated/schema.ttl`** [oo] → [#115](https://github.com/endgame-build/khub/issues/115)
+46. **Profile-checked RDF import** [oo, phase 2] → [#116](https://github.com/endgame-build/khub/issues/116)
 
 ## H. Engineering hygiene (internal)
 
-47. **Determinism audit** [oo, S] — Any output derived from unordered
-    iteration (sets, networkx adjacency) is a per-run coin flip. Sweep graph
-    walks and reports for sorted traversal; add a repeat-run equality test.
-48. **Docs canonicality policy** [bwrb, S] — "User-facing behavior is
-    canonical in one place; rationale links to it, never restates it" —
-    formalize what CLAUDE.md / design-memo / cli.md already half-do.
+47. **Determinism audit** [oo, S] → [#117](https://github.com/endgame-build/khub/issues/117)
+48. **Docs canonicality policy** [bwrb, S] → [#118](https://github.com/endgame-build/khub/issues/118)
 
 ## Addenda (post-initial-list)
 
-49. **Body content assertions + body link integrity** [mds+bwrb, S–M] —
-    `shipped: body assertions` (the kb 0.14.0 port: per-section `optional`,
-    `word_count`, `required_text`, `forbidden_text`, `code_blocks` and lenses;
-    dead-link detection is the remainder). Extend the existing template
-    checker beyond heading presence/order with per-section content assertions
-    declared in `.khub/templates/<type>.yaml` (e.g. "Building Block View must
-    contain ≥1 `mermaid` code block" — a live build-lite arc42 case; "Steps
-    must contain a checklist"), plus dead-relative-link detection in bodies. Native extension of `validate`'s body findings —
-    mdschema itself stays rejected as an engine (see source table). Absorbs
-    the remainder of #16.
+49. **Body content assertions + body link integrity** [mds+bwrb, S–M] → [#119](https://github.com/endgame-build/khub/issues/119)
 
 ## I. Agent write-safety and retrieval [iwe]
 
@@ -280,105 +119,21 @@ leads on the graph contract and trails on what happens *around* a write — how 
 agent proves it knows what it is about to change, what it learns when the write
 lands, and how it assembles context in one call instead of five.
 
-50. **`expect` guards + surface-level strictness** [iwe, M] — Every mutating
-    verb accepts `--expect N` or `--expect min:max`, asserting how many
-    entities the operation will write; a mismatch fails the whole operation
-    before anything is written and names the actual count plus each entity that
-    matched. The borrowed insight is that **strictness belongs to the surface,
-    not the grammar**: guards stay optional for a human at a terminal with git
-    behind them, the CLI opts in with `--strict`, and the planned MCP server is
-    *always strict with no opt-out* — an unguarded mutation is refused with the
-    missing guards named. `--dry-run` is exempt and is how the count is learned:
-    dry-run, read the matched set, pin `--expect`, re-run. Highest-value item in
-    the IWE review; the natural gate on #21 (`bulk`) and on any MCP write verb.
-51. **Validate-all-then-write atomicity** [iwe, M; pairs with #21, #34] — A
-    multi-entity operation resolves every target and validates every write
-    against the pre-operation state *before* touching disk, in a fixed order
-    (parse → per-entity validation → referential integrity → cross-write
-    conflict → `expect`), and any failure aborts the whole operation. Today
-    khub's write path is per-entity, so a partial bulk edit is possible. IWE
-    additionally forbids two applications from touching overlapping extents and
-    reports the offending pair; khub's analogue is two writes to the same
-    entity in one operation.
-52. **Session-scoped integrity warnings on write results** [iwe, S] — Write
-    verbs return standing `check` findings alongside their result — one line
-    per finding, `<id> › <rule>: <message>` — reported **once per session**, so
-    the first write surfaces the workspace's existing debt and later writes
-    surface only what changed. Advisory, never blocking (khub's `validate` and
-    `check` gates stay exactly as they are); the point is that an agent
-    currently has to *choose* to run `check` and therefore does not. Pairs with
-    #39's output contract and #40's receipts.
-53. **`khub retrieve` — one-call context assembly** [iwe, M] — The read verb
-    khub is missing. Today an agent composes `search` + `get` + `neighbors` by
-    hand and manages its own budget. `retrieve` takes seeds (a search string, a
-    filter, or explicit ids), an expansion spec mapping each predicate — or
-    direction — to a depth, `--limit` capping seeds *before* expansion, and
-    `--max-entities` capping the result *after* expansion by trimming periphery
-    first, returning seeds in relevance order followed by the expansion. A
-    token budget is the version worth arguing about: it makes the verb
-    context-window-aware, and it is the only place in khub that would need a
-    tokenizer.
-54. **Near-duplicate detection** [iwe, M] — A `check` finding (or a `stats`
-    subcommand) for entities that duplicate one another, behind IWE's three
-    gates, which are what make it usable rather than noisy: **mutual** (each
-    must be mostly made of the other's content, so a short entity contained in
-    a long one is not reported), **comparable size** (both above a floor and
-    within ~2× of each other), and **near-identical** (self-normalized BM25
-    above a tunable threshold, default 0.85). Reuses the FTS5 index already
-    built per invocation.
-55. **Cardinality predicates over relations** [iwe, S–M; feeds #37] — Query
-    support for the *count* of related entities, not just their existence:
-    zero-inbound (orphans), zero-outbound (leaves), "5 or more inbound", "at
-    least 2 active projects within 3 hops". IWE spells this `$size` on each
-    relational operator, composable with a target filter and depth bounds. The
-    payoff is that most `check` findings become expressible as ordinary
-    queries, which is what custom per-preset check rules (#37) need if they are
-    not to become a second dialect.
-56. **Universal `--dry-run`** [iwe, S] — Every mutating verb previews. `backfill`
-    and `wire` have it; `add`/`edit`/`link`/`unlink`/`remove` and anything from
-    #21 or #34 should too, with one shared preview shape. Cheap on its own and
-    load-bearing for #50, since dry-run is how an agent learns the count it
-    must then assert.
-57. **MCP surface shape** [iwe, S; with the planned MCP server] — Settle the
-    shape before building it, using IWE's as the reference: tools for the read,
-    write and refactor verbs; **prompts** for the recurring workflows (explore
-    the graph, review an entity in context, propose a restructuring);
-    **resources** for the stable reads (`khub://entity/{id}`,
-    `khub://schema`, `khub://status`) so a client can subscribe rather than
-    poll; **file watching** so editor and agent edits reach the in-memory index
-    without a restart; and per-tool `dry_run` throughout. Composes with #42's
-    exposure filter and #50's always-strict writes.
+50. **`expect` guards + surface-level strictness** [iwe, M] → [#120](https://github.com/endgame-build/khub/issues/120)
+51. **Validate-all-then-write atomicity** [iwe, M; pairs with #21, #34] → [#121](https://github.com/endgame-build/khub/issues/121)
+52. **Session-scoped integrity warnings on write results** [iwe, S] → [#122](https://github.com/endgame-build/khub/issues/122)
+53. **`khub retrieve` — one-call context assembly** [iwe, M] → [#123](https://github.com/endgame-build/khub/issues/123)
+54. **Near-duplicate detection** [iwe, M] → [#124](https://github.com/endgame-build/khub/issues/124)
+55. **Cardinality predicates over relations** [iwe, S–M; feeds #37] → [#125](https://github.com/endgame-build/khub/issues/125)
+56. **Universal `--dry-run`** [iwe, S] → [#126](https://github.com/endgame-build/khub/issues/126)
+57. **MCP surface shape** [iwe, S; with the planned MCP server] → [#127](https://github.com/endgame-build/khub/issues/127)
 
 ## J. Schema visualization [og]
 
 From the OntoGraph review ([`ontograph-review.md`](ontograph-review.md)). One
 candidate; the rest of that repo is rejected.
 
-58. **`khub viz --aspect schema|instances|both`** [og, S–M; completes #11] —
-    `viz` renders the *instance* graph today: entities as nodes, predicates as
-    edges, per-type coloring, `--type` to narrow. There is no way to render the
-    **schema** — the types, their legal predicates, which relations are
-    required, cardinality, union targets. A reader can see the entities and not
-    the ontology, which is backwards for a tool whose thesis is that the schema
-    is the operational setup. `--aspect schema` draws the resolved schema
-    (everything needed is already in `ResolvedSchema`); `--aspect instances` is
-    today's behavior and stays the default; `--aspect both` is the UML-style
-    combined view, types with their attributes above the instances that realize
-    them. Reuses the existing Cytoscape serialization and inlined-library render
-    in `core/viz.py` — the new work is the schema walk and the notation, not the
-    output path.
-
-    OntoGraph's design rationale is the part worth keeping: it generates
-    separate graphs per aspect *"to reduce the number of nodes and edges on any
-    single graph, and thereby reduce crowding and help focus the semantics."*
-    Supporting findings from the accompanying paper: VOWL was designed for
-    "casual ontology users with only little training"; graphs beat indented
-    trees for holding attention and for showing overviews and multiple
-    inheritance (Fu, Noy & Storey, 2013); and every aspect — classes,
-    hierarchies, instances, relationships, properties — needs to be visualizable
-    for an ontology to be understood (Katifori et al., 2003). Borrow the visual
-    grammar for subclassing, domain/range and cardinality from Graffoo/VOWL;
-    ignore the OWL constructs khub does not have.
+58. **`khub viz --aspect schema|instances|both`** [og, S–M; completes #11] → [#128](https://github.com/endgame-build/khub/issues/128)
 
 ## K. Ingestion alignment & retrieval evaluation [kag]
 
@@ -387,46 +142,9 @@ runtime is rejected whole; what transfers are decisions at khub's two open
 edges — what happens between extraction and write when unstructured sources
 enter, and how retrieval quality is measured and surfaced.
 
-59. **Ingestion alignment pass — link before write** [kag, M; design note now,
-    with #25/#26] — KAG's builder separates extraction from *alignment*:
-    mentions are normalized and linked against existing nodes before anything
-    is written, because unaligned extraction mints duplicate nodes ("knowledge
-    alignment to alleviate noise" is the paper's phrase, and the stage that
-    makes the rest of its pipeline usable). khub's ingestion path (facet, OKF
-    consume) needs the same pass, khub-shaped: for each extracted reference,
-    resolve down a ladder — exact `(type, slug)` → alias (#15) → `source_id` →
-    FTS5 candidates scored against title/aliases, *proposed but never
-    auto-merged* — and mint anything unresolved as a new **draft** entity
-    carrying `source_id` and extraction provenance. Referential integrity
-    holds on write (the target exists), capture is never blocked, identity is
-    never guessed silently, and `check` surfaces the new drafts for review.
-    Same-entity candidates ride #25's conflict report extended from field
-    values to identity (entity/ours/theirs/evidence). Linker precision/recall
-    joins type/edge precision/recall in the planned ingestion goldens-eval.
-    KAG 0.7's lightweight-build result (89% token cost cut, minimal loss) is
-    the supporting argument for shipping a cheap single-pass mode alongside
-    the thorough one from day one.
-60. **Multi-hop retrieval eval over a live corpus** [kag, S–M; extends #10] —
-    KAG publishes multi-hop QA scores (EM/F1 on HotpotQA/2wiki/MuSiQue) with
-    every release, which is why its claims are credible. khub's equivalent
-    tier is missing: a question set over the HQ corpus whose answers require
-    composing verbs across 2–3 hops ("which active projects depend on a
-    component whose owner left this quarter?"), run agent-in-the-loop through
-    the skill + CLI, scored fuzzily (graded key facts, LLM-judged), tracked as
-    a trend, non-blocking in CI. Distinct from #10, which pins deterministic
-    question↔query pairs: this tier scores the *agent's composition* of the
-    surface, and is the eval that would catch a retrieval-hostile regression —
-    an output-shape change that breaks verb chaining — which the parity suite,
-    pinning bytes rather than usefulness, cannot see.
-61. **Search hits are graph nodes** [kag, S] — khub's structural answer to
-    KAG's mutual index is that a text hit *is* a node — but `search` output
-    stops at `title`, `score`, `snippet`, `path`, with no `draft`/`orphan`/
-    `stale` flags (docs/cli.md). Add the flags the other reads carry plus a
-    one-hop digest — per-predicate out/in edge counts — so an agent picks
-    which hit to walk without a round of `get`s. KAG's chunk→node pivot as one
-    output-shape change; the interim step toward #53, reusing the projection
-    `search` already builds per invocation. Output-shape change = deliberate
-    parity re-record.
+59. **Ingestion alignment pass — link before write** [kag, M; design note now, with #25/#26] → [#129](https://github.com/endgame-build/khub/issues/129)
+60. **Multi-hop retrieval eval over a live corpus** [kag, S–M; extends #10] → [#130](https://github.com/endgame-build/khub/issues/130)
+61. **Search hits are graph nodes** [kag, S] → [#131](https://github.com/endgame-build/khub/issues/131)
 
 ## L. OKF interop, provenance & retrieval ergonomics [okfm]
 
@@ -439,134 +157,16 @@ boundary that makes the claim testable, and two ergonomics gaps the probes
 exposed (standing context, forgiving search). Items name the review's feature
 request they record (FR1–FR8) so the two documents agree.
 
-62. **Standing-context budget** [okfm; FR1; feeds #41] — Measure what a fresh
-    `init` puts in front of an agent before the first verb: the review counted
-    6,966 B of wiring plus schema imports and a 12,809 B skill against okfm's
-    2,896 B skill and 3,518 B MCP `tools/list`. Split the skill into a short
-    retrieval entrypoint plus supporting files loaded on demand; add a compact
-    `wire` mode that points at `schema types` / `schema show <type>` and the
-    capture cues instead of importing every layer file. Acceptance: a named
-    tokenizer and host, before/after task checks (completion, missed captures,
-    invalid calls), no loss of schema discovery. Byte counts are not token
-    claims.
-63. **`search --plain`** [okfm; FR2] — The natural query `encrypt customer
-    sensitive payload` returns zero khub hits (raw MATCH ANDs the terms, no
-    implicit prefix) and finds the file in okfm. An opt-in escaped-literal mode
-    over the same FTS5 index with a documented OR/prefix policy; raw MATCH and
-    its parity untouched; the skill tells an agent to reformulate on zero hits
-    and to search before `add`. Acceptance: punctuation can never become an
-    operator; Unicode, zero-hit and long queries behave predictably.
-64. **Provenance stamping: `generated: {by, at}`** [okfm; this session] — The
-    base block gains OKF's `generated` as a fixed-shape built-in (two hard-coded
-    shapes, no general map attribute type). `add`/`edit`/`link`/`unlink` stamp
-    it; `backfill`/`reindex`/`upgrade` do not — repair is not authorship. `at`
-    is ISO 8601 UTC from the `KHUB_PARITY_NOW` seam. The actor ladder for
-    `by`: `--actor` > `KHUB_ACTOR` > a harness marker (`CLAUDECODE` set →
-    `agent/claude-code`) > `khub`. It **never infers `human:` from git
-    identity** — an agent running in Noor's shell would be stamped as Noor,
-    which is the one lie OKF's trust tiers exist to prevent; the parity runner
-    pins `KHUB_ACTOR=khub`. `author` keeps meaning creator, set once;
-    `generated.by` is last writer. Existing entities are not backfilled (that
-    fabricates an actor; absent `generated` is the unverified tier with no
-    ordering check). A byte-contract change: deliberate re-record.
-65. **Review validity + trust tier** [okfm; FR5 + this session; needs #64] —
-    `verified: [{by, at, rev}]` in OKF's shape plus one khub extension, `rev`:
-    a content-revision hash over body, declared domain attributes and
-    relations, excluding bookkeeping (`updated`, `generated`, `tags`), so a tag
-    edit does not void a review and a body edit does — the review's point that
-    a timestamp comparison alone cannot say which edits invalidate. New verb
-    `khub verify <id> --by <actor>`; `--by` is required with no ladder default,
-    since a `khub`-stamped verification would mint a machine tier nobody
-    asserted. Reads derive `trust: unverified|machine|human` from the live
-    (non-superseded) events, `human:` prefix wins, carried beside
-    `draft`/`orphan`/`stale`; `query --trust`; `check` gains
-    `superseded_verifications` as a gap. Optional
-    `policy.yaml: protect_verified: human` makes `edit`/`link`/`unlink`/
-    `remove` on a human-tier entity refuse (exit 2) naming `--supersede` — a
-    "say you knew" gate, not authorization: actor strings are assertions and
-    review labels are never a security boundary. `add` is never gated;
-    direct-file edits are covered because `rev` is recomputed at read time;
-    `draft` stays independent. This is the behaviour okfm advertises and its
-    probes show it does not implement.
-66. **`stale_after` authored expiry** [okfm; FR5 lifecycle row] — Base
-    attribute, `datetime`. Stale = the `updated`-age rule OR
-    `now >= stale_after`; `khub stale` grows a `reason` column (`age` /
-    `expired`); `check --stale` as an optional gate. A different signal from
-    age: "this holds until March" is authored, not inferred.
-67. **OKF v0.2 export/consume** [okfm; FR7 + this session; the design memo's
-    planned `export --okf`, mechanics pinned here] — `export --okf <dir>`
-    renders a bundle another tool accepts: root `index.md` with
-    `okf_version: "0.2"` (the bump from `0.1` is a sub-step, never the
-    deliverable); one md concept per entity, json/yaml/collection rows
-    materialized; typed relations under one `# Related` section as
-    `- <predicate>: [Title](/path.md)` with absolute bundle-relative links;
-    `draft: true` → `status: draft`, an inbound `supersedes` → `status:
-    deprecated`, else omitted; preset status fields kept as tolerated
-    extensions, never forced into the OKF enum; frontmatter emitted with the
-    **safe profile** (width 4096) because the review reproduced okfm's parser
-    losing a folded description; `log.md` omitted (optional per spec — generate
-    from git only when a consumer needs it). **`sources` collision — decided
-    2026-09-07:** khub's base `sources` is an `any` relation; OKF's is
-    `[{resource, id, title, author, …}]`. No preset redeclares it, zero
-    fixtures use it, and `references` covers the in-graph case, so the
-    relation is dropped from the base and OKF's shape adopted, with `validate`
-    checking `resource` present, a valid actor prefix, and body footnotes
-    `[^x]` ↔ `sources[].id`. Consume side: read a bundle
-    into a selected schema as drafts with a loss/conflict report, reusing
-    #25/#26/#59; okfm's software/coaching/books bundles are the fixtures. CI
-    runs a foreign v0.2 validator over the export, pinned and informational —
-    a two-day-old hand parser is a detector, not an oracle.
-68. **Ordinary-file write safety** [okfm; FR8; relates to #50/#51] —
-    Collections lock, reread and atomically replace; ordinary md/json/yaml
-    entity edits rewrite in place with no precondition, so two stale readers
-    can silently overwrite each other. Add a content-revision precondition on
-    `edit`/`link`/`unlink`/`remove` (reuse #65's `rev`), compared and written
-    in one shared path, plus atomic replace through `internal/fsio`.
-    Acceptance: guarded writers never lose an update silently; an interrupted
-    write never truncates; every mutation caller participates. This changes
-    inode and byte-contract assumptions — an explicit compatibility decision
-    and the cross-process concurrency tests testing.md already names.
-69. **Navigation drift gate** [okfm; review "lower priority" + this session] —
-    `reindex --check`: exit nonzero when `index.md` is stale, write nothing,
-    reuse the `--dry-run` diff; surfaced by `check` as an `index_stale` gap;
-    a pre-commit/CI recipe. Never per-write regeneration — okfm's
-    concept/index/log three-file write chain is the thing to avoid.
+62. **Standing-context budget** [okfm; FR1; feeds #41] → [#132](https://github.com/endgame-build/khub/issues/132)
+63. **`search --plain`** [okfm; FR2] → [#133](https://github.com/endgame-build/khub/issues/133)
+64. **Provenance stamping: `generated: {by, at}`** [okfm; this session] → [#25](https://github.com/endgame-build/khub/issues/25)
+65. **Review validity + trust tier** [okfm; FR5 + this session; needs #64] → [#26](https://github.com/endgame-build/khub/issues/26) + [#27](https://github.com/endgame-build/khub/issues/27)
+66. **`stale_after` authored expiry** [okfm; FR5 lifecycle row] → [#29](https://github.com/endgame-build/khub/issues/29)
+67. **OKF v0.2 export/consume** [okfm; FR7 + this session; the design memo's planned `export --okf`, mechanics pinned here] → [#134](https://github.com/endgame-build/khub/issues/134) (export) · [#28](https://github.com/endgame-build/khub/issues/28) (`sources`) · [#32](https://github.com/endgame-build/khub/issues/32) (consume)
+68. **Ordinary-file write safety** [okfm; FR8; relates to #50/#51] → [#135](https://github.com/endgame-build/khub/issues/135)
+69. **Navigation drift gate** [okfm; review "lower priority" + this session] → [#136](https://github.com/endgame-build/khub/issues/136)
 
-## Reinforcements to existing items
-
-Where a reviewed project ships a working design for a candidate already on this
-list. No new numbers — recorded so the design work is not redone:
-
-| Item | Source | What it contributes |
-|---|---|---|
-| **#11** schema docs | [og] | The rendered schema wants a picture, not just a table — #58 is the visual half of the same artifact, and both kill the hand-maintained-preset-doc drift class. Ship them together. |
-| **#44** RDF mapping memo | [og] | A peer-reviewed citation for the position the memo takes: domain experts "do not know the formal languages or logic that express ontological concepts," and pushing OWL at them "may result in errors or omissions, or in the expert becoming frustrated and losing interest entirely" (Westerinen & Tauber, *Applied Ontology*). This is the argument for RDF as a derived projection and never the authoring surface — worth quoting in the memo's opening rather than asserting the boundary unsupported. |
-| **#13** schema discover | [iwe] | The output contract: per field, type distribution with percentages, coverage count/percent, distinct count, value histogram capped at 100. The *enumerable-value* rule is the good part — only null/bool/number and `[A-Za-z0-9_.-/]+` strings count toward distinct and appear in the histogram, so titles and URLs are counted but never enumerated. |
-| **#49** body assertions | [iwe] | A specified dialect (`document-schema.org/draft/2026-06`) covering ordered sections, occurrence counts, header patterns, seven block types, list item shapes, and token budgets, with an ordered greedy no-backtracking matching algorithm and load-time rejection of unreachable entries. See the open follow-up in the review: adopt the dialect or extend khub's template vocabulary, but decide it deliberately. |
-| **#21** bulk | [iwe] | Filter + `$set`/`$unset`, dry-run to learn counts, guards to assert them, atomic per entity. Effectively #21 + #50 + #51 as one verb. |
-| **#28** `--where` filters | [iwe] | A shipped grammar to copy from: bare equality with array-membership semantics, `$eq $ne $gt $gte $lt $lte $in $nin $exists $all $size`, `$and $or $nor`, dotted paths, and no implicit type coercion. |
-| **#18** `--under <node>` | [iwe] | Generalized: a relational operator taking a *filter* as its anchor plus `minDepth`/`maxDepth`, so "everything under this project" and "everything under any active project" are the same construct. |
-| **#39** output contract | [iwe] | Adopt the exit-code trichotomy: `0` clean, `1` findings, `2` configuration or schema error printed to stderr *before* any entity is examined. khub currently overloads `2` as usage error; a broken schema and a workspace with findings should not look the same to CI. Also worth copying: violations carry a machine path into the schema plus the failing keyword. |
-| **#42** MCP exposure filter | [iwe] | Pairs with #50 — "read-only khub for a reviewer agent" and "writes must carry guards" are the same policy surface. |
-| **#41** skill as decision guidance | [kag] | The solver's retrieval cascade, ported from code to prose: exact first (`get`, `query --type --<field>`), then graph (`neighbors`/`impact`), then lexical (`search`), then body read — and iterate only on a *named* gap ("X unresolved"), never re-plan blind. KAG's static-vs-iterative planner split maps to "plan the calls for a closed ask; loop with reflection for an open one." |
-| **#53** `retrieve` | [kag] | Third independent convergence (after IWE) on one-call context assembly: seeds, then neighborhood. KAG's mutual-index retrieval adds the ordering rationale — snippet and structure must arrive *together*, or the reader spends calls reassembling them. |
-| **#57** MCP surface shape | [kag] | A counter-reference: KAG's MCP endpoint serves *answers* (the solver); khub's must serve *evidence* (the primitives) — the client is the planner. KAG 0.8's knowledge-bases-decoupled-from-apps confirms workspace-per-engagement as the right granularity. |
-| **#26** extraction scaffold | [kag] | Schema-constrained extraction validated at industrial scale, against the same alternative khub rejects (schema-free openIE). The scaffold prompt derives from the resolved schema; ship a lightweight single-pass mode first (KAG 0.7: 89% cost cut, minimal loss). |
-| **#25** ingestion conflict policy | [kag] | Alignment extends the conflict report from field values to *identity*: same-entity candidates are proposed with evidence, never auto-merged. Fold into the design note; #59 is the mechanism. |
-| **#15** aliases as identity surface | [kag] | KAG needs a synonym/concept layer at query time because identity was never authored; khub resolves aliases at authoring time instead — #15 is KAG's alignment stage collapsed into the identity surface, and #59's second resolution rung. Raises #15's priority. |
-| **#10** competency questions | [kag] | Benchmark discipline: once #60 exists, publish per-preset scores alongside the preset, KAG-style — the preset's claim to encode judgment becomes a measured claim. |
-| **#39** output contract | [kag] | Reflection needs machine-actionable misses: "0 matches" plus nearest candidates is what lets an agent iterate instead of abandoning — the same error DTO as did-you-mean, doing retrieval duty. |
-| **#61** search hits as nodes | [okfm] | Review FR3: lifecycle flags (`draft`, `stale`, supersession), bounded per-predicate adjacency counts, the description where present, and an explicit active-only filter applied *before* the limit — plus #65's `trust` flag once it exists. Third convergence on adjacency-in-hits: okfm's search results carry inbound/outbound ids. |
-| **#53** `retrieve` | [okfm] | Review FR4: return selection reasons, lifecycle signals, truncation and omitted-entity information; cap entities and bytes first; if a token cap is added, name the tokenizer and count the whole response; when the budget cannot hold needed evidence, report insufficiency rather than clip. |
-| **#10 / #60** retrieval eval | [okfm] | Review FR6: task classes (single-document lookup, synonym mismatch, conflicting versions, stale/draft distractors, irrelevant documents, multi-hop); report evidence recall and task success beside full input/output usage, cache use, tool calls and latency, repeated and randomized; never substring checks as "accuracy". The bar khub's own numbers must clear: okfm's published 80% is byte/3.9 estimates, one run, a harness-selected file. |
-| **#41** skill as decision guidance | [okfm] | okfm's CONVENTION contract ported to khub verbs: `query`/`search` before `add`; `edit` over a second entity (#54 is the mechanical backstop); inferred facts land as `--draft`; never claim persistence without exit 0; prefer the higher `trust` tier and never resolve a conflict by overwriting the human one. Pairs with #62's split. |
-| **#39** output contract | [okfm] | okfm exits 2 on a bundle-load error and 1 on non-conformance — the second independent convergence, after IWE, on the trichotomy. |
-| **#57** MCP surface shape | [okfm] | A counter-reference: okfm's six-tool `tools/list` is 3,518 B and its server re-reads the bundle per call (cheap, and the same per-invocation projection khub already has), but there is no dry-run, no read-only mode and no guard — which confirms #50's always-strict writes and #42's exposure filter. The "26 verbs × 550–1,400 tok" footprint in `.claude/rules/cli.md` is not a measured comparison against a six-tool implementation; re-measure before citing it. |
-| **#25 / #59** ingestion | [okfm] | okfm's example bundles are free OKF v0.2 consume-path fixtures, and its `create`-overwrites-an-existing-id probe is the argument that search-before-write guidance cannot replace an exclusive-create check — #59's never-auto-merge, from the other side. |
-
----
-
-## Explicitly rejected
+## Explicitly rejected (no issue)
 
 Recorded so the picking is complete; each conflicts with an invariant or
 solves a problem khub's corpus does not have:
@@ -652,29 +252,3 @@ From the OKF Agent Memory review, with reasons in [`okf-comparison.md`](okf-comp
   delivered by the reviewed implementation).
 - A new generic memory preset (try build-lite plus #62's compact onboarding
   first).
-
-## Shortlist (reviewer's recommendation)
-
-- **Highest leverage:** the migration cluster **#1–3** (with #4 folded in) —
-  the biggest named gap, with a proven same-substrate design to port.
-- **Highest leverage on the agent surface:** **#50** (guards + surface
-  strictness), with **#56** as its prerequisite and **#51** as its completion.
-  The one place a competitor is demonstrably ahead of khub on write safety;
-  okfm is ahead on the provenance vocabulary (#64–#65).
-- **Best value/effort:** **#13** (discover), **#9** (bundles), **#55**
-  (cardinality — small, and it unblocks #37), **#58 + #11** shipped as one
-  (the schema rendered as a doc and as a diagram).
-- **Cheap-wins batch:** **#27, #30, #38, #39, #52, #56**.
-- **Protects the IP:** **#10** (competency questions make presets testable).
-- **Decide before the MCP server exists:** **#57** (surface shape), **#53**
-  (`retrieve`) — both are much cheaper to design in than to retrofit.
-- **Decide before ingestion exists:** **#59** (the alignment ladder, one
-  design note with #25/#26) — same retrofit argument; **#60** gives the
-  retrieval surface the eval tier the parity suite cannot provide.
-- **Hold** until the workflow question is deliberately reopened: **#22/#23**.
-- **G (#44–46)** is agreed and proceeds independently.
-- **OKF provenance + interop cluster:** **#64 → #65 → #67**, with **#66**
-  riding along; the `sources` collision is decided (drop the relation), the
-  `protect_verified` default is the one open call.
-- **Cheap wins from [okfm]:** **#63**, **#69**, and the measurement half of
-  **#62**.

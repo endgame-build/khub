@@ -9,6 +9,25 @@ body:
       description: What you ran, what you expected, and what you got. Include the exact command and any error output.
     validations:
       required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      description: One area; the triager applies it as the label. See .claude/rules/issues.md.
+      options:
+        - schema
+        - write-path
+        - retrieval
+        - integrity
+        - agent-surface
+        - interop
+        - ingestion
+        - federation
+        - viz
+        - perf
+        - testing
+    validations:
+      required: true
   - type: input
     id: version
     attributes:
