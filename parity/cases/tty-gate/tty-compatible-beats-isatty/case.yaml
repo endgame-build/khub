@@ -12,7 +12,7 @@ mode: pty
 env:
   TTY_COMPATIBLE: "0"
 steps:
-- argv: ["init", "build-lite", ".", "--no-wire"]
+- argv: ["init", "build-hub", ".", "--no-wire"]
 - argv: ["add", "component", "--title", "API", "--kind", "service"]
 - argv: ["query", "--type", "component"]
 - argv: ["get", "cmp-api"]

@@ -1,7 +1,11 @@
 steps:
-- argv: ["init", "build-lite", ".", "--no-wire"]
+- argv: ["init", "build-hub", ".", "--no-wire"]
 - argv: ["add", "requirement", "--title", "R", "--kind", "functional"]
 - sh: "printf \"just prose\\n\" > knowledge/requirements/stray.txt"
 - sh: "printf -- \"---\\ntype: requirement\\ntitle: lost\\ncreated: 2026-01-15\\nkind: functional\\n---\\n\" > lost.md"
 - argv: ["check"]
+- argv: ["check", "--format", "json"]
+# A typed .json outside every storage tree is a data file, not a misplaced
+# entity: it must neither be read nor reported.
+- sh: "printf '{\"type\": \"requirement\", \"title\": \"data\"}\\n' > data.json"
 - argv: ["check", "--format", "json"]

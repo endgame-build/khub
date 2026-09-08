@@ -50,8 +50,32 @@ const (
 // preset dir.
 const TemplatesDir = "templates"
 
+// aliases maps a retired preset name to the directory that replaced it.
+// build-lite became build-hub in 0.6.0, when the two build presets merged:
+// kb's graduation command (`khub init build-lite`) and every workspace whose
+// config.yaml still says build-lite resolve through here. Known() never lists
+// an alias — it is a name that resolves, not a preset anyone is offered.
+var aliases = map[string]string{"build-lite": "build-hub"}
+
+// Canonical is the directory name a preset name resolves to in source: the
+// name itself unless it is a retired alias AND the replacement exists there.
+// A --preset-source carrying its own build-lite/ keeps that name — the alias
+// exists for the packaged tree, not to shadow a directory a user wrote. init
+// records the canonical name in config.yaml and upgrade restamps it there, so
+// a workspace carries the canonical name after either.
+func Canonical(name string, source fs.FS) string {
+	canonical, ok := aliases[name]
+	if !ok {
+		return name
+	}
+	if _, err := fs.Stat(source, path.Join(canonical, OntologyFile)); err != nil {
+		return name
+	}
+	return canonical
+}
+
 // Embedded is the packaged preset tree — PRESETS_DIR. Paths are relative to
-// the tree root ("core/ontology.yaml", "build-lite/ontology.yaml", …).
+// the tree root ("core/ontology.yaml", "build-hub/ontology.yaml", …).
 func Embedded() fs.FS {
 	sub, err := fs.Sub(khub.PresetsData, "presets")
 	if err != nil {
@@ -98,6 +122,7 @@ func Known(source fs.FS) []string {
 // the unknown_preset error listing what source does offer. The reserved core
 // directory is not resolvable — it is the base block, not a preset.
 func Resolve(name string, source fs.FS) (string, error) {
+	name = Canonical(name, source)
 	// The reserved name first: core/ontology.yaml exists in the tree, so the
 	// stat would succeed — its result cannot matter here.
 	if name == coreDir {

@@ -1,0 +1,6 @@
+Usage: khub serve [OPTIONS]
+Try 'khub serve --help' for help.
+╭─ Error ──────────────────────────────────────────────────────────────────────╮
+│ invalid argument "not-a-number" for "--port" flag: strconv.ParseInt: parsing │
+│ "not-a-number": invalid syntax                                               │
+╰──────────────────────────────────────────────────────────────────────────────╯

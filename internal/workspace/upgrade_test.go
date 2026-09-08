@@ -90,7 +90,7 @@ func TestUpgradeOnAFreshInitReportsNothing(t *testing.T) {
 	// upgrade straight after a scaffold finds nothing to replace — and an
 	// untouched file collects no .bak on every upgrade.
 	ws := filepath.Join(t.TempDir(), "ws")
-	mustInit(t, "build-lite", ws, InitOptions{})
+	mustInit(t, "build-hub", ws, InitOptions{})
 
 	res := mustUpgrade(t, ws, UpgradeOptions{})
 	if len(res.Config) != 0 || len(res.SingletonsCreated) != 0 || len(res.SchemaDrift) != 0 {
@@ -102,11 +102,44 @@ func TestUpgradeOnAFreshInitReportsNothing(t *testing.T) {
 	if !strings.Contains(readFile(t, filepath.Join(ws, ".khub", "config.yaml")), "version: "+res.VersionTo+"\n") {
 		t.Error("config.yaml does not carry the version the result reports")
 	}
-	if res.Preset != "build-lite" || res.Path != ws {
+	if res.Preset != "build-hub" || res.Path != ws {
 		t.Errorf("preset/path = %q/%q", res.Preset, res.Path)
 	}
 	if baks := bakFiles(t, ws); len(baks) != 0 {
 		t.Errorf("a fresh upgrade left backups: %v", baks)
+	}
+}
+
+func TestUpgradeRestampsARetiredPresetName(t *testing.T) {
+	// A workspace scaffolded as build-lite before 0.6.0 records that name.
+	// upgrade resolves it through the alias instead of dying with
+	// unknown_preset, and config.yaml comes out saying build-hub.
+	ws := filepath.Join(t.TempDir(), "ws")
+	mustInit(t, "build-hub", ws, InitOptions{})
+	config := filepath.Join(ws, ".khub", "config.yaml")
+	writeFile(t, config, strings.Replace(readFile(t, config), "preset: build-hub\n", "preset: build-lite\n", 1))
+	if !strings.Contains(readFile(t, config), "preset: build-lite\n") {
+		t.Fatal("the fixture did not take")
+	}
+
+	res := mustUpgrade(t, ws, UpgradeOptions{})
+	if res.Preset != "build-hub" {
+		t.Errorf("preset = %q", res.Preset)
+	}
+	got := readFile(t, config)
+	if !strings.Contains(got, "preset: build-hub\n") || strings.Contains(got, "build-lite") {
+		t.Errorf("config.yaml was not restamped:\n%s", got)
+	}
+	if !strings.Contains(got, "version: "+res.VersionTo+"\n") {
+		t.Error("config.yaml does not carry the version the result reports")
+	}
+	// The name is the only thing that moved: the layer files already match
+	// what build-hub ships, so nothing is replaced and nothing is backed up.
+	if len(res.Config) != 0 {
+		t.Errorf("config = %+v", res.Config)
+	}
+	if baks := bakFiles(t, ws); len(baks) != 0 {
+		t.Errorf("backups = %v", baks)
 	}
 }
 
@@ -123,7 +156,7 @@ func TestUpgradeCopiesAnEditedSchemaAsideBeforeReplacingIt(t *testing.T) {
 	// Overwriting is the point; doing it silently and unrecoverably to
 	// someone's own ontology is not.
 	ws := filepath.Join(t.TempDir(), "ws")
-	mustInit(t, "build-lite", ws, InitOptions{})
+	mustInit(t, "build-hub", ws, InitOptions{})
 	storage := filepath.Join(ws, ".khub", "storage.yaml")
 	shipped := readFile(t, storage)
 	writeFile(t, storage, shipped+"\n# mine\n")
@@ -145,7 +178,7 @@ func TestUpgradeCopiesAnEditedTemplateAsideBeforeReplacingIt(t *testing.T) {
 	// Templates are workspace-owned the moment init writes them, so they get
 	// the same treatment the layer files get: replaced, but never silently.
 	ws := filepath.Join(t.TempDir(), "ws")
-	mustInit(t, "build-lite", ws, InitOptions{})
+	mustInit(t, "build-hub", ws, InitOptions{})
 	tpl := filepath.Join(ws, ".khub", "templates", "adr.yaml")
 	shipped := readFile(t, tpl)
 	writeFile(t, tpl, shipped+"\n# mine\n")
@@ -168,7 +201,7 @@ func TestUpgradeInstallsATemplateTheWorkspaceNeverHad(t *testing.T) {
 	// A workspace created before the preset shipped templates has none, and
 	// nothing about that is an edit to preserve — created, not backed up.
 	ws := filepath.Join(t.TempDir(), "ws")
-	mustInit(t, "build-lite", ws, InitOptions{})
+	mustInit(t, "build-hub", ws, InitOptions{})
 	if err := os.RemoveAll(filepath.Join(ws, ".khub", "templates")); err != nil {
 		t.Fatal(err)
 	}
@@ -330,7 +363,7 @@ func TestUpgradeCreatesAMissingSingleton(t *testing.T) {
 	// Creations only, the rule init follows: a deleted singleton comes back,
 	// an existing one is never touched.
 	ws := filepath.Join(t.TempDir(), "ws")
-	mustInit(t, "build-lite", ws, InitOptions{})
+	mustInit(t, "build-hub", ws, InitOptions{})
 	prd := filepath.Join(ws, "knowledge", "prd.md")
 	arc42 := filepath.Join(ws, "knowledge", "arc42.md")
 	if err := os.Remove(prd); err != nil {

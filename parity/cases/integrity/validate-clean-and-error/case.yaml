@@ -1,5 +1,5 @@
 steps:
-- argv: ["init", "build-lite", ".", "--no-wire"]
+- argv: ["init", "build-hub", ".", "--no-wire"]
 - argv: ["add", "requirement", "--title", "Good", "--kind", "functional"]
 - argv: ["validate"]
 - sh: "printf -- \"---\\ntype: requirement\\ntitle: broken\\ncreated: 2026-01-15\\nkind: nonsense\\n---\\n\" > knowledge/requirements/req-bad.md"

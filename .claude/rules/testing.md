@@ -38,9 +38,14 @@ paths agree only because both constants are 80.
   rustfmt/ruff idempotency bug on record was an input nobody's corpus held.
 - **Non-idempotency.** T1c proves verbatim round-trip; add gofmt's loop:
   format the formatter's own output, assert no change.
-- **Cross-process locking.** flock serialization has no test, and `-race`
-  cannot see it (separate address spaces) — needs N processes writing one
-  collection.
+- **Cross-process locking.** `-race` cannot see separate processes. Keep the
+  process-level mutation race tests that prove the workspace lock covers the
+  full scan/validate/commit window, including different entity types. The
+  init/upgrade tails run inside the library's lock through the `Tails` hook;
+  `internal/workspace/tails_test.go` proves it with a non-blocking `flock`
+  probe from inside the hook. `fsio.Locked` is not re-entrant, so a tail that
+  calls a locking entry point from there deadlocks — that is what the `Held`
+  variants exist for.
 - **Unicode filesystems.** No `unicode/norm` anywhere; `casefold.go` has no
   test file. macOS NFD vs NFC on slugs is the live bug shape.
 - **Binary coverage.** `go build -cover` + parity run with `GOCOVERDIR`
@@ -69,5 +74,5 @@ property-testing code.
 
 ## Not worth it
 
-`-race` as coverage (zero goroutines in `internal/`+`cmd/` — tripwire only,
-needs CGO=1), mutation testing, OSS-Fuzz enrolment, Windows CI.
+`-race` as coverage (tripwire only, needs CGO=1), mutation testing, OSS-Fuzz
+enrolment, Windows CI.

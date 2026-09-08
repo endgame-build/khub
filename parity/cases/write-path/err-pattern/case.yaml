@@ -1,3 +1,7 @@
+# repo.repo carries a pattern (org/name, nested groups allowed). A value that
+# does not match is refused at write time and nothing is written; a matching
+# one mints as usual. The pattern is per-type schema, so this holds on every
+# preset that declares one.
 steps:
 - argv: ["init", "build-hub", ".", "--no-wire"]
 - argv: ["add", "repo", "--title", "Bad", "--repo", "no spaces allowed", "--status", "active"]

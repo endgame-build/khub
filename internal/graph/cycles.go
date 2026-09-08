@@ -1,9 +1,7 @@
 package graph
 
-// Cycle enumeration over one predicate — the nx.simple_cycles(_predicate_digraph(g, p))
-// call integrity.py:734 makes. This is the ONLY place gonum is used: enumeration
-// is the job here, ordering is not (the walks own their own adjacency because
-// their output order is a byte contract).
+// Replaces the nx.simple_cycles call from integrity.py:734 with bounded SCC
+// witnesses. Walks retain their ordered adjacency.
 
 import (
 	"sort"
@@ -14,20 +12,7 @@ import (
 	"github.com/endgame-build/khub/internal/index"
 )
 
-// Cycles returns every elementary cycle over the single-predicate subgraph, as
-// node lists — nx.simple_cycles over _predicate_digraph.
-//
-// Rotation and enumeration order are implementation-defined on both sides
-// (go-port-plan R14), so canonicalize before rendering; membership and count are
-// exact. gonum appends the entry node again at the end of each cycle where
-// networkx does not, so that trailing repeat is stripped here.
-//
-// build_graph skips self-edges, so the subgraph never holds a self-loop —
-// which is also the one shape gonum's DirectedCyclesIn drops (it prunes SCCs
-// below two vertices). Single-node cycles are integrity's _self_cycles job,
-// derived from frontmatter, not from this graph.
-// rotateToMin starts a cycle at its lexicographically smallest node, keeping
-// the traversal order intact.
+// rotateToMin preserves traversal direction while pinning the starting node.
 func rotateToMin(cycle []index.Node) []index.Node {
 	if len(cycle) < 2 {
 		return cycle
@@ -50,6 +35,7 @@ func cycleLess(a, b []index.Node) bool {
 	return len(a) < len(b)
 }
 
+// Cycles returns one deterministic directed cycle per cyclic component.
 func Cycles(g *Graph, predicate string) [][]index.Node {
 	edges := g.PredicateEdges(predicate)
 	if len(edges) == 0 {
@@ -72,26 +58,47 @@ func Cycles(g *Graph, predicate string) [][]index.Node {
 		u, v := nodeFor(e.From), nodeFor(e.To)
 		dg.SetLine(dg.NewLine(dg.Node(u), dg.Node(v)))
 	}
-	var out [][]index.Node
-	for _, cycle := range topo.DirectedCyclesIn(dg) {
-		if len(cycle) < 2 {
-			continue
-		}
-		// gonum closes the walk by repeating the entry node; networkx does not.
-		trimmed := cycle[:len(cycle)-1]
-		nodesOut := make([]index.Node, 0, len(trimmed))
-		for _, gn := range trimmed {
-			nodesOut = append(nodesOut, nodes[gn.ID()])
-		}
-		out = append(out, nodesOut)
+	// Sorting successors makes the witness independent of gonum's map order.
+	succ := map[index.Node][]index.Node{}
+	for _, e := range edges {
+		succ[e.From] = append(succ[e.From], e.To)
 	}
-	// gonum's DirectedCyclesIn iterates a Go map, so both the order of the
-	// cycle list AND each cycle's starting point vary run to run. `check` is a
-	// gate whose output is compared byte-for-byte, so it must be reproducible:
-	// rotate each cycle to start at its smallest node, then sort the list.
-	// Membership and count are unaffected — only the presentation is pinned.
-	for i, cycle := range out {
-		out[i] = rotateToMin(cycle)
+	for _, next := range succ {
+		index.SortNodes(next)
+	}
+	var out [][]index.Node
+	for _, component := range topo.TarjanSCC(dg) {
+		members := map[index.Node]bool{}
+		var start index.Node
+		for i, gn := range component {
+			n := nodes[gn.ID()]
+			members[n] = true
+			if i == 0 || n.Less(start) {
+				start = n
+			}
+		}
+		// A deterministic walk inside an SCC must eventually revisit a node.
+		// Its repeated suffix is a real directed cycle, not the SCC's node list.
+		positions := map[index.Node]int{}
+		var path []index.Node
+		for cur := start; ; {
+			if at, seen := positions[cur]; seen {
+				out = append(out, rotateToMin(path[at:]))
+				break
+			}
+			positions[cur] = len(path)
+			path = append(path, cur)
+			found := false
+			for _, next := range succ[cur] {
+				if members[next] {
+					cur, found = next, true
+					break
+				}
+			}
+			if !found { // singleton without a self-loop
+				break
+			}
+		}
 	}
 	sort.Slice(out, func(i, j int) bool { return cycleLess(out[i], out[j]) })
 	return out

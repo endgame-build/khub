@@ -1,16 +1,12 @@
-                                                                                
- Usage: khub remove [OPTIONS] [ID]                                              
-                                                                                
- Remove an entity, guarded by inbound edges: khub remove old-fragment           
- [--force].                                                                     
-                                                                                
-╭─ Arguments ──────────────────────────────────────────────────────────────────╮
-│   ID      <str>  A bare slug, or type/slug on ambiguity.                     │
-╰──────────────────────────────────────────────────────────────────────────────╯
-╭─ Options ────────────────────────────────────────────────────────────────────╮
-│ --force                Delete despite inbound edges (leaves them dangling).  │
-│ --format        <str>  text or json (emits the removed record).              │
-│                        [default: text]                                       │
-│ --help                 Show this message and exit.                           │
-╰──────────────────────────────────────────────────────────────────────────────╯
+Usage: khub remove [OPTIONS] [ID]
+
+Remove an entity, guarded by inbound edges: khub remove old-fragment [--force].
+
+Arguments:
+  ID <str>  A bare slug, or type/slug on ambiguity.
+
+Options:
+  --force  Delete despite inbound edges (leaves them dangling).
+  --format <str>  text or json (emits the removed record). [default: text]
+  --help  Show this message and exit.
 

@@ -14,11 +14,11 @@ khub reads the frontmatter, builds an in-memory graph on demand, answers your qu
 
 ## The schema is the contract
 
-The schema declares the entity types, their attributes, and the legal relations. Every surface (the CLI and skill today, the planned MCP server) reads that schema at runtime and hardcodes no per-type knowledge. Adding a type or changing a relation is a schema edit the surfaces pick up at runtime.
+The schema declares the entity types, their attributes, and the legal relations. The CLI and skill read that schema at runtime and hardcode no per-type knowledge. Adding a type or changing a relation is a schema edit the surfaces pick up at runtime. MCP was evaluated and rejected for the current local product.
 
 ## Relations are single-sided; inverses are derived
 
-A relation is a role-named frontmatter field the schema marks as an edge. The field name is the predicate; the value is the target: `owner: dana-lee` is one edge, `owner`, pointing at `dana-lee`. You store the forward edge on one entity. The inverse (who owns this?) is computed at read time, never written. Inline links in the body are navigational only; typed edges live in frontmatter.
+A relation is a role-named field the schema marks as an edge. The field name is the predicate; the value is the target: `owner: dana-lee` is one edge, `owner`, pointing at `dana-lee`. Resolution compares the target's `(type, slug)` identity, while preserving the spelling stored in the source. A derived inverse is identified by source type and predicate, computed at read time, and never written. Inline body links are navigational only.
 
 ## validate vs check
 

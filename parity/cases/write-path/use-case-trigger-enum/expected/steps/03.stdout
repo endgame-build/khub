@@ -1,0 +1,1 @@
+{"error": {"code": "enum_violation", "message": "'cron' is not a valid trigger (human, scheduled, event, external)"}}

@@ -18,4 +18,5 @@ Lens realized: Where it is satisfied
   `realized_in` is the only edge tying a rule to the code that satisfies it, and a
   requirement without one is unfinished by design. If no component satisfies it yet,
   that is the honest answer and the gap is the point — but check that it is not
-  simply unlinked.
+  simply unlinked. If a use case depends on this rule, name it in `use_cases`: a
+  rule no flow needs is either global or unowned, and the graph should say which.

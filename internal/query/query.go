@@ -73,7 +73,8 @@ func Query(root string, filters Filters, now time.Time) ([]Match, error) {
 		return nil, err
 	}
 
-	if err := validateFilterNames(resolved, root, filters); err != nil {
+	inverses := buildInverses(resolved)
+	if err := validateFilterNames(resolved, root, filters, inverses); err != nil {
 		return nil, err
 	}
 
@@ -90,9 +91,9 @@ func Query(root string, filters Filters, now time.Time) ([]Match, error) {
 		// expected state. Kept identical to the `check` gate and the `status`
 		// count — one notion, three read sites.
 		rtype, _ := resolved.Types.Get(node.Type)
-		orphan := g.InDegree(node) == 0 && g.OutDegree(node) == 0 && !rtype.Orphan
+		orphan := graph.IsOrphan(g, node, rtype)
 		stale := project.IsStale(meta, now, days, nil)
-		if !passes(node, meta, g, filters, resolved, orphan, stale) {
+		if !passes(node, meta, g, filters, resolved, inverses, orphan, stale) {
 			continue
 		}
 		draftRaw, _ := meta.Get("draft")
@@ -142,7 +143,7 @@ func limitMatches(matches []Match, n int) []Match {
 // Type-scoped when --type is set (the located error names that type); otherwise
 // a name must be declared on at least one type, else it is a typo that would
 // silently match nothing (`--stagee` returning an empty set as if a success).
-func validateFilterNames(resolved *schema.ResolvedSchema, root string, filters Filters) error {
+func validateFilterNames(resolved *schema.ResolvedSchema, root string, filters Filters, inverses inverseIndex) error {
 	var preds []string
 	for _, p := range []*string{filters.Has, filters.Missing} {
 		if p != nil {
@@ -169,7 +170,7 @@ func validateFilterNames(resolved *schema.ResolvedSchema, root string, filters F
 		}
 		for _, pred := range preds {
 			if !rtype.Relations.Has(pred) && !rtype.Attributes.Has(pred) &&
-				len(inverseSources(resolved, pred, filters.Type)) == 0 {
+				len(inverses[inverseKey{*filters.Type, pred}]) == 0 {
 				return errs.UnknownFilterField(pred, *filters.Type)
 			}
 		}
@@ -191,7 +192,7 @@ func validateFilterNames(resolved *schema.ResolvedSchema, root string, filters F
 		}
 	}
 	for _, pred := range preds {
-		if !rels[pred] && !attrs[pred] && len(inverseSources(resolved, pred, nil)) == 0 {
+		if !rels[pred] && !attrs[pred] && len(inverses[inverseKey{"", pred}]) == 0 {
 			return errs.UnknownFilterField(pred, "any")
 		}
 	}
@@ -208,7 +209,7 @@ func fieldKeys(f Filters) []string {
 // passes reports whether one entity clears every active filter (read-only over
 // frontmatter) — _passes.
 func passes(node index.Node, meta *omap.Map, g *graph.Graph, f Filters,
-	resolved *schema.ResolvedSchema, orphan, stale bool) bool {
+	resolved *schema.ResolvedSchema, inverses inverseIndex, orphan, stale bool) bool {
 	draftRaw, _ := meta.Get("draft")
 	isDraft := values.AsBool(draftRaw)
 	if f.ActiveOnly && isDraft {
@@ -231,14 +232,14 @@ func passes(node index.Node, meta *omap.Map, g *graph.Graph, f Filters,
 			return false
 		}
 	}
-	if f.Has != nil && !hasValue(node, meta, g, resolved, *f.Has) {
+	if f.Has != nil && !hasValue(node, meta, g, resolved, inverses, *f.Has) {
 		return false
 	}
 	// A type that cannot carry the name has no gap to surface: without --type,
 	// `--missing kind` otherwise returned every singleton alongside the components
 	// that genuinely lack it, diluting the gap query with unfillable rows.
-	if f.Missing != nil && (!declares(node.Type, resolved, *f.Missing) ||
-		hasValue(node, meta, g, resolved, *f.Missing)) {
+	if f.Missing != nil && (!declares(node.Type, resolved, inverses, *f.Missing) ||
+		hasValue(node, meta, g, resolved, inverses, *f.Missing)) {
 		return false
 	}
 	if f.Orphan && !orphan {
@@ -252,13 +253,13 @@ func passes(node index.Node, meta *omap.Map, g *graph.Graph, f Filters,
 
 // declares reports whether type_ could carry name at all — as a relation,
 // inverse, or attribute.
-func declares(type_ string, resolved *schema.ResolvedSchema, name string) bool {
+func declares(type_ string, resolved *schema.ResolvedSchema, inverses inverseIndex, name string) bool {
 	rtype, ok := resolved.Types.Get(type_)
 	if !ok {
 		return false
 	}
 	return rtype.Relations.Has(name) || rtype.Attributes.Has(name) ||
-		len(inverseSources(resolved, name, &type_)) > 0
+		len(inverses[inverseKey{type_, name}]) > 0
 }
 
 // hasValue reports whether node carries name: a resolved edge for a relation, a
@@ -273,12 +274,12 @@ func declares(type_ string, resolved *schema.ResolvedSchema, name string) bool {
 // A relation still tests the RESOLVED edge — an edge exists in the graph only
 // when its value resolved to a node, so an unresolvable target counts as missing.
 func hasValue(node index.Node, meta *omap.Map, g *graph.Graph,
-	resolved *schema.ResolvedSchema, name string) bool {
+	resolved *schema.ResolvedSchema, inverses inverseIndex, name string) bool {
 	rtype, ok := resolved.Types.Get(node.Type)
 	if !ok {
 		return false
 	}
-	inverseOf := inverseSources(resolved, name, &node.Type)
+	inverseOf := inverses[inverseKey{node.Type, name}]
 	if rtype.Relations.Has(name) || len(inverseOf) > 0 {
 		return hasEdge(g, node, name, inverseOf)
 	}
@@ -312,7 +313,7 @@ func isEmptyContainer(v any) bool {
 // answered from the INBOUND side: the forward edge lives on the other entity.
 // That makes `--missing superseded` the "which decisions are still current?"
 // query.
-func hasEdge(g *graph.Graph, node index.Node, predicate string, inverseOf map[string]bool) bool {
+func hasEdge(g *graph.Graph, node index.Node, predicate string, inverseOf map[inverseSource]bool) bool {
 	for _, e := range g.OutEdges(node) {
 		if e.Predicate == predicate {
 			return true // a stored forward edge always wins; an inverse never shadows it
@@ -322,29 +323,38 @@ func hasEdge(g *graph.Graph, node index.Node, predicate string, inverseOf map[st
 		return false
 	}
 	for _, e := range g.InEdges(node) {
-		if inverseOf[e.Predicate] {
+		if inverseOf[inverseSource{e.From.Type, e.Predicate}] {
 			return true
 		}
 	}
 	return false
 }
 
-// inverseSources returns the forward predicates whose declared inverse is name.
-//
-// With onType, only relations that can actually point AT that type count — an
-// inverse of a relation targeting something else is not a field of this type, and
-// accepting it would turn a typo into a filter that silently matches everything.
-func inverseSources(resolved *schema.ResolvedSchema, name string, onType *string) map[string]bool {
-	out := map[string]bool{}
-	for _, tname := range resolved.Types.Keys() {
-		rtype, _ := resolved.Types.Get(tname)
-		for _, p := range rtype.Relations.Keys() {
-			rel, _ := rtype.Relations.Get(p)
-			if rel.Inverse == nil || *rel.Inverse != name {
+// Inverse definitions retain the declaring source type; equal predicate names
+// on unrelated types do not acquire each other's inverses.
+type inverseSource struct{ Type, Predicate string }
+type inverseKey struct{ Type, Name string }
+type inverseIndex map[inverseKey]map[inverseSource]bool
+
+func buildInverses(resolved *schema.ResolvedSchema) inverseIndex {
+	out := inverseIndex{}
+	for _, name := range resolved.Types.Keys() {
+		rt, _ := resolved.Types.Get(name)
+		for _, predicate := range rt.Relations.Keys() {
+			rel, _ := rt.Relations.Get(predicate)
+			if rel.Inverse == nil {
 				continue
 			}
-			if onType == nil || rel.Kind == schema.KindAny || contains(rel.Targets, *onType) {
-				out[rel.Predicate] = true
+			targets := rel.Targets
+			if rel.Kind == schema.KindAny {
+				targets = resolved.Types.Keys()
+			}
+			for _, target := range append(append([]string{}, targets...), "") {
+				key := inverseKey{target, *rel.Inverse}
+				if out[key] == nil {
+					out[key] = map[inverseSource]bool{}
+				}
+				out[key][inverseSource{name, predicate}] = true
 			}
 		}
 	}

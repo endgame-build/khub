@@ -1,0 +1,47 @@
+# The block facet-spec emits for a use case, so an imported spec needs no reshaping.
+# Preconditions, Main flow and Postconditions are the contract; the two flow
+# variants are optional because a short use case has none worth writing.
+
+hint: >-
+  one goal one actor achieves, or a longer flow — the length lives here, not in a
+  second type. `trigger` says what starts it; `actor` who, when a human does;
+  `served_by` names the components each step runs through.
+
+sections:
+- heading: Preconditions
+  hint: the state that must already hold — as ids where the graph has them
+- heading: Main flow
+  hint: numbered steps; each names the component it runs through
+- heading: Alternative flows
+  optional: true
+  hint: a branch that still succeeds — condition, then what differs
+- heading: Exception flows
+  optional: true
+  hint: a branch that fails — what the user sees, what the system records
+- heading: Postconditions
+  hint: what is true afterwards, checkable from outside
+
+lenses:
+- code: served
+  name: Every step names a component that exists
+  section: Main flow
+  instruction: |
+    Walk the main flow: each step runs through something. Is that something a
+    component in `served_by`? A step that names nothing is a gap in the blueprint,
+    and "what breaks for users if this component dies" is the walk `served_by`
+    exists to answer — it is only as complete as this list.
+- code: actor
+  name: Someone performs it
+  when: {trigger: human}
+  after: served
+  instruction: |
+    A human starts this flow, so `actor` should name the role. Without it, "what can
+    an admin do" is a grep again. If no single role fits, the use case is two.
+- code: observable
+  name: Postconditions can be checked from outside
+  section: Postconditions
+  after: served
+  instruction: |
+    Could someone who did not write this tell, from outside, whether the flow
+    succeeded? "Order processed" is not a postcondition; an order id shown, a
+    record with a status, an email sent are. Each one should map to a test that can fail.

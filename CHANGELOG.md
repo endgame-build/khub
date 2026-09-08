@@ -2,6 +2,119 @@
 
 Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); khub is pre-release.
 
+## [Unreleased]
+
+### BREAKING
+
+- **The two build presets are one: `build-hub` 0.6.0.** The seventeen-type
+  `build-hub` is deleted and the six-type `build-lite` takes its name — one flat
+  `knowledge/`, two narrative singletons (`prd`, `arc42`), no collections.
+  `build-lite` survives as an alias: `khub init build-lite` and `khub upgrade` on
+  a `build-lite` workspace both resolve it and record `preset: build-hub`; the
+  known-preset list `init` prints on a typo names `build-hub` and `firm-ops`
+  only. Five types join the six, eleven in all: `capability` (`cap-`), `actor`
+  (`act-`), `use-case` (`uc-`; `trigger: human | scheduled | event | external`,
+  required), `system` (`sys-`; `owner`) and `api` (`api-`; `kind` and `status`
+  required, and a required `provider` edge to a component so `check` names an
+  interface nobody owns — `add` still captures without it). `component` gains
+  `owner` (optional text in slug form), `lifecycle` (`experimental | production
+  | deprecated`) and `tier` (`tier-1 | tier-2 | tier-3`); `requirement` gains
+  `enforcement` (`ui | backend | database | external | review`). The stored
+  edges, each named by its predicate and read as a verb: a use case is
+  *performed by* an `actor`, *belongs to* a `capability` and is *served by*
+  components (`served_by`, many, inverse `serves`); a requirement is *placed in* `capabilities`,
+  *governs* `use_cases` and is *realized in* `realized_in`; a component is *part
+  of* a `system`, *lives in* a `repo` and *consumes* apis (`consumes`, inverse
+  `consumed_by`); an api is *provided by* its `provider`. Every inverse is
+  computed at read time (`impact <cmp> --reverse --predicate served_by` is what
+  breaks for users when a component dies; `--predicate consumes` on an api is
+  its consumers). `component.kind` keeps `external`: a system is a group of
+  components with one owner, and a vendor has APIs, not components we can name,
+  so it stays an external component and its API's `provider` points at it.
+
+  **Migration.** `khub upgrade` on a `build-lite` workspace resolves the alias,
+  replaces `.khub/*` from the new preset (an edited layer file is kept as
+  `<name>.bak`), restamps `preset: build-hub` in `config.yaml` and reports the
+  resolved name as `preset` in `--format json`, scaffolds the five new type
+  directories and templates and no new singleton (there is none), and reports
+  no new findings: `owner` is optional, and the one required edge, `provider`,
+  sits on a type that has no entities yet. A workspace on the old seventeen-type
+  `build-hub` has no automatic path. Its nested `knowledge/{product,architecture}`
+  files move to the flat layout by hand (`prd.md` and `arc42.md` up to
+  `knowledge/`; decisions, components, capabilities and requirements into their
+  flat directories), and the types the new preset does not declare — `domain`,
+  `entity`, `boundary`, `quality-attribute`, `contract`, `baseline`, `pdr`,
+  `roadmap`, `glossary`, `erd` — become invisible: the scanner never visits
+  their directories and an edge from a surviving entity to one of them dangles.
+  Two findings do fire until the move is finished: their retired templates
+  under `.khub/templates/` are `stray_templates`, and a file of a surviving
+  type still sitting in the nested tree is `misplaced`; delete the former,
+  move the latter. Move what they held into the homes
+  `docs/build-hub-preset.md` names (roadmap and glossary into `prd`, erd into
+  `arc42`, pdr into `adr`, boundary and quality-attribute into a `requirement`
+  with `kind: constraint` or `non-functional`) or carry their type blocks in
+  your workspace's own `ontology.yaml` and `storage.yaml`. Every fixture that
+  initialises a build preset was re-recorded: `case.yaml` files say `build-hub`
+  where they said `build-lite`, the tree manifests gain the five templates
+  (a manifest lists files, and an empty type directory is not one), and
+  `schema`, `status`, `init`'s known-preset list
+  and error output name the eleven types.
+
+  For kb: `khub init build-lite . --force` on a corpus kb 0.14.0 wrote still
+  graduates it — the alias resolves, the six types kb ships keep their ids,
+  paths and predicates, none of the five new types has entities, and `check` is
+  clean on the result.
+
+- **The delivery layer is gone from both build presets.** build-lite 0.3.0 drops
+  `feature-spec`, and with it `specs/` and the `requirements` predicate; build-hub
+  0.5.0 drops `feature-spec`, `test-spec` and `work-package`. What is in flight
+  belongs to the framework that runs the build (SDD or its like), which already
+  owns `specs/`; khub records what must hold and why, and two tools writing one
+  directory is one too many. kb 0.14.0 made the same cut, so build-lite is back
+  at parity with it. An external spec points *in* through its own frontmatter
+  (`requirements: [req-…]`, `decisions: [ad-…]`, `components: [cmp-…]`); khub
+  neither scans it nor resolves those ids. `requirement.realized_in` is the one
+  stored implementation record.
+
+  **Migration.** `khub upgrade` replaces `.khub/` from the new preset (an edited
+  layer file is kept in `<name>.bak`). With the types gone the scanner never
+  visits `specs/`, so the files stay on disk and no finding mentions them — not
+  even `stray`, which only speaks for a layout the schema still declares. Move
+  them to the spec framework's directory, or keep the old type blocks in your
+  workspace's own `ontology.yaml` and `storage.yaml`. `upgrade` also leaves the
+  retired templates in place, and a template no type claims is a
+  `stray_templates` finding that fails `check`: delete
+  `.khub/templates/feature-spec.yaml` (build-hub: also `test-spec.yaml` and
+  `work-package.yaml`) after upgrading. Every fixture that
+  initialises a build preset was re-recorded: the tree manifests lose the
+  delivery templates, and `schema`, `status` and error output list one type
+  fewer in build-lite and three fewer in build-hub; three cases that exercised
+  `feature-spec` now exercise `requirement.realized_in` instead.
+
+### Changed
+
+- Serialize existing-workspace writes, preserve file modes during atomic publication,
+  and reject unsafe storage paths, symlinks, overlapping ownership and incomplete scans.
+  `init` and `upgrade` run their wire, skill and index tails under the same lock, and
+  concurrent first writers retry the lock-file open on a transient `ENOENT`.
+- Share bounded schema-pattern validation and resolved relation identity across
+  mutation, integrity, queries and browser navigation.
+- Add transactional upgrade preview (`--dry-run`), rollback journals and additive
+  `dry_run` / `removed_types` JSON fields. The candidate copy prunes vendored
+  directories and skips non-regular files.
+- Add ordered multi-ID `get`; keep single-ID output unchanged and refuse raw batches.
+- Emit plain help on pipes (the Rich terminal help is pinned on a pty); bound cycle
+  reports to one witness per component.
+- Batch search indexing and git-date lookup; cache inverse edges and collection reads
+  within each operation; read each type through one `os.Root` scoped to its directory
+  (`query` at 2000 entities from 157 to 96 ms). No persisted index.
+- `check` reads `.json`/`.yaml` only inside declared storage trees when hunting
+  `misplaced` entities; a root-level data file whose `type` names a declared type is
+  no longer reported.
+
+See [audit release notes](docs/architecture-audit-release-notes.md) for contract
+changes, recovery limits and validation commands.
+
 ## [0.23.0] — 2026-09-02
 
 The `-NNN-` ordinal is gone from minted ids and every refused call exits 2. Both

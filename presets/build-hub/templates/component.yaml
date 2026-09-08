@@ -11,7 +11,7 @@ sections:
   hint: what this owns, and — as sharply — what it deliberately does not
 - heading: Interfaces
   optional: true
-  hint: how callers reach it; the contracts it provides and `consumes` carry the machine specs
+  hint: how callers reach it; hang the machine spec (OpenAPI/AsyncAPI) off `resource`
 - heading: Operational notes
   optional: true
   hint: how it fails, how that shows up, and what to do about it
@@ -23,6 +23,14 @@ lenses:
     Does this name something that can break, be owned, or be swapped on its own? A
     component that is really just a folder gives the graph edges that mean nothing —
     and "what breaks if this changes" is the only question the graph exists to answer.
+- code: owned
+  name: Someone owns it
+  after: boundary
+  instruction: |
+    Who do I ask? `owner` is optional, so nothing gates an ownerless component — which
+    is exactly why this lens exists. A slug-form team name (`team-payments`) costs one
+    line now and becomes an edge the day a `team` type arrives. A component nobody
+    owns is the gap a catalog exists to expose.
 - code: blast
   name: The blast radius is recorded
   when: {kind: external}

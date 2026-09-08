@@ -1,5 +1,5 @@
 steps:
-- argv: ["init", "build-lite", ".", "--no-wire"]
+- argv: ["init", "build-hub", ".", "--no-wire"]
 - argv: ["add", "component", "--title", "Root", "--kind", "service"]
 - argv: ["add", "component", "--title", "a-b", "--kind", "service"]
 - argv: ["add", "component", "--id", "a-slash-b", "--title", "ab2", "--kind", "service"]

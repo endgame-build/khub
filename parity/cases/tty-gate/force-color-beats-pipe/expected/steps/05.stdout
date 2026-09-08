@@ -1,12 +1,16 @@
  types
-┏━━━━━━━━━━━━━━┓
-┃ type         ┃
-┡━━━━━━━━━━━━━━┩
-│ prd          │
-│ arc42        │
-│ requirement  │
-│ adr          │
-│ component    │
-│ repo         │
-│ feature-spec │
-└──────────────┘
+┏━━━━━━━━━━━━━┓
+┃ type        ┃
+┡━━━━━━━━━━━━━┩
+│ prd         │
+│ arc42       │
+│ capability  │
+│ actor       │
+│ use-case    │
+│ requirement │
+│ adr         │
+│ system      │
+│ component   │
+│ api         │
+│ repo        │
+└─────────────┘

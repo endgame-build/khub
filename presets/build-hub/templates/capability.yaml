@@ -1,6 +1,20 @@
-title: Capability
+# A capability is the map, not a document: the title is most of the record, and
+# the graph does the rest (use cases belong to it, requirements are placed in it).
+
+hint: >-
+  one paragraph — what this chunk of value is for, in a customer's words. Use cases
+  point here through `capability`; requirements through `capabilities`. What realizes
+  it is derived from the use cases, never stored here.
+
 sections:
-- heading: Definition
-  hint: what counts as this capability - spokes claim against this slug
-- heading: Boundaries
-  hint: what is adjacent but NOT this capability
+- heading: Scope
+  optional: true
+  hint: what is in, and — as sharply — the neighbouring thing that is not
+
+lenses:
+- code: named
+  name: A noun a customer would recognise
+  instruction: |
+    Is this named after what the product does for someone, or after a component or
+    a team? "Checkout" is a capability; "Payments service" is a component wearing
+    the wrong hat. A capability survives a rewrite of everything under it.

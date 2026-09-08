@@ -4,7 +4,7 @@
 # the validate gate's two other arms — no date on a dated type, the retired
 # `NNN-` ordinal on a prefixed one — on files moved by hand to the old scheme.
 steps:
-- argv: ["init", "build-lite", ".", "--no-wire"]
+- argv: ["init", "build-hub", ".", "--no-wire"]
 - argv: ["schema", "show", "adr", "--format", "json"]
 - argv: ["add", "adr", "--title", "Use JWT", "--status", "accepted"]
 - argv: ["add", "adr", "--title", "Use JWT", "--status", "accepted"]

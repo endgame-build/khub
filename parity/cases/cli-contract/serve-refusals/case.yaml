@@ -1,0 +1,20 @@
+# `khub serve` is the one command that blocks until interrupted, so its CLI
+# contract is entirely about the ways it declines to.
+#
+# DO NOT add a serve step to a `mode: human` or `mode: pty` case. Those modes
+# set TTY_COMPATIBLE=1 (or leave the real isatty to decide), the refusal below
+# does not fire, and the runner waits for a server that never exits — the suite
+# hangs rather than failing. Default `mode: pipe` pins TTY_COMPATIBLE=0, which
+# is what makes these steps terminate.
+#
+# The workspace is initialised first only so these steps run against a real
+# workspace. It does NOT change which error appears: the TTY gate is checked
+# before the root is resolved, so `serve` refuses the same way with or without
+# one. Do not read step 01 as making the refusal specific.
+steps:
+- argv: ["init", "build-hub", ".", "--no-wire"]
+- argv: ["serve"]
+- argv: ["serve", "--port", "9999"]
+- argv: ["serve", "--help"]
+- argv: ["serve", "extra-arg"]
+- argv: ["serve", "--port", "not-a-number"]

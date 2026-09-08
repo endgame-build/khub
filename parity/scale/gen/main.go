@@ -1,4 +1,4 @@
-// gen writes a build-lite workspace at scale through the real khub binary and
+// gen writes a build-hub workspace at scale through the real khub binary and
 // the manifest smoke.sh asserts it against.
 //
 //	go run ./parity/scale/gen -bin ./khub -work /tmp/khub-scale/work -scale 550 -seed 1 -today 2026-01-15

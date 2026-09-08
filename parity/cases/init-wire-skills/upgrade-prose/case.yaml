@@ -2,7 +2,7 @@
 # hint under a replaced file, and `nothing to do` when a run changed nothing.
 mode: human
 steps:
-- argv: ["init", "build-lite", "."]
+- argv: ["init", "build-hub", "."]
 - argv: ["upgrade"]
 - sh: "printf '\\n# mine\\n' >> .khub/storage.yaml && rm .khub/templates/adr.yaml knowledge/prd.md"
 - argv: ["upgrade"]

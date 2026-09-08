@@ -5,7 +5,7 @@
 # scaffolded again; a third run has nothing left to do. Twin case:
 # init-wire-skills/upgrade-prose records the same steps as text.
 steps:
-- argv: ["init", "build-lite", "."]
+- argv: ["init", "build-hub", "."]
 - argv: ["upgrade", "--format", "json"]
 - sh: "printf '\\n# mine\\n' >> .khub/storage.yaml && rm .khub/templates/adr.yaml knowledge/prd.md"
 - argv: ["upgrade", "--format", "json"]

@@ -18,14 +18,14 @@ evidence.
 - **ncruces/go-sqlite3 no longer uses wazero** — `wasm2go`-translated Go, zero
   wazero in `go.sum`.
 - **regexp2 is backtracking with no default timeout.** Schema `pattern`s are
-  author-supplied → `MatchTimeout` is mandatory (`internal/entity/entity.go`
-  `fullMatch`).
+  author-supplied → the shared cached matcher sets `MatchTimeout` to one second
+  (`internal/schema/model.go` `MatchPattern`). Writes and integrity must use it.
 
 ## Standing verdicts — keep custom
 
 | Subsystem | Why the library loses |
 |---|---|
-| `internal/graph` | insertion-ordered adjacency + read-time inverse edges IS the product; candidates (dominikbraun — dormant 2024, yourbasic — pre-generics) are map-backed |
+| `internal/graph` | insertion-ordered adjacency + read-time inverse edges IS the product; gonum is limited to SCC discovery for bounded cycle witnesses; candidates (dominikbraun — dormant 2024, yourbasic — pre-generics) are map-backed |
 | FTS5 search | khub exposes raw FTS5 `MATCH` syntax to agents — a replacement must reimplement the query language, not the scoring. bleve changes ranking (re-records fixtures); bluge dormant since 2022; modernc slower |
 | Shelling out to `git` | per-file `Log` is go-git's known worst case, v6 still alpha, git2go needs CGO. The real win is **batching** (one `git log --name-only` pass), not swapping |
 | `internal/omap` | third-party ordered maps solve absent perf problems, can't fix `any` (values genuinely heterogeneous), and ship `encoding/json` marshalling the choke-point bans. Known edges: `Keys()` aliases the internal slice; `Delete` O(n) — fix in place, ~15 lines |
@@ -39,8 +39,8 @@ evidence.
 but the CLI dialect's `ensure_ascii=True` is not — and that's the one used
 everywhere. Decode via `ojson.go` remains fine.
 
-`os.Root` (Go 1.24+): worth adopting eventually for workspace-rooted path
-safety. Traversal resistance, not durability.
+`os.Root` (Go 1.24+) confines workspace storage operations and resists path
+swaps. Keep the explicit schema path checks and symlink refusals around it.
 
 ## Hygiene
 

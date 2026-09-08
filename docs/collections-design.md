@@ -27,8 +27,8 @@ write atomicity).
   implemented.
 - `slug` and `type` become **reserved field names**: a type declaring an
   attribute or relation so named is rejected when the schema resolves (firm-ops declares neither).
-- A taken slug refuses against a **fresh read under the write lock** (the
-  O_EXCL replacement), `slug_taken`, minted or explicit — nothing is suffixed.
+- A taken slug refuses against a **fresh read under the workspace lock**,
+  `slug_taken`, minted or explicit — nothing is suffixed.
 - design-memo:88 amendment when this ships: the globally-unique storage key is
   the file path for `file`/`folder` layouts, the `(collection-path, slug)` pair
   for collections.
@@ -57,19 +57,16 @@ json/yaml formats shipped (popped to the body on read, placed back on write).
 one md concept with the row's fields as frontmatter and the `body` field as the
 concept body.
 
-## Writes (the O_EXCL replacement)
+## Writes
 
-One code path for every collection mutation (create/edit/link/unlink/delete):
+One code path for every mutation, collection or per-item:
 
-1. Exclusive `fcntl.flock` on a sidecar `.khub/generated/locks/<type>.lock`
-   (under `generated/` so it inherits the gitignore and the deletable-anytime
-   contract in every workspace, old or new), **never on the data file**
-   (`os.replace` swaps the inode, so a data-file lock would guard a dead inode
-   after the first writer's replace).
-2. Fresh read of the collection under the lock; re-run the slug-uniqueness gate
-   against that read (mint: first free `base`/`base-N`; explicit id: refuse).
-3. Mutate the row; serialize; write to a temp file in the same directory;
-   fsync; `os.replace`: a crash never leaves a torn collection.
+1. Lock the stable `.khub/generated/locks/workspace.lock` before scanning and
+   hold it through validation and commit. Never delete lock files while a
+   process may hold them; unlinking would split writers across two inodes.
+2. Fresh-read the collection and re-run identity and relation gates.
+3. Serialize to a unique exclusive sibling temporary, sync, publish atomically,
+   and sync the parent. Existing permissions survive; new files honor umask.
 
 No jsonl append special-case: one path, one proof. Cross-host/branch
 concurrency is unchanged: git is the merge surface; a merge

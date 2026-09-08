@@ -1,8 +1,0 @@
-title: Boundary
-sections:
-- heading: Rule
-  hint: the invariant, one sentence, and what it protects
-- heading: Enforcement
-  hint: how the gate runs (test name, CI job, review checklist)
-- heading: Violations
-  hint: designs that would violate it - recognizable examples

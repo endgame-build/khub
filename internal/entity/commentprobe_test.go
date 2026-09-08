@@ -12,6 +12,41 @@ import (
 	"testing"
 )
 
+// hubYAMLPreset is the pre-0.6.0 build-hub subset the two yaml probes below
+// were written against: a yaml collection and a yaml per-item file, the two
+// shapes the splice writer meets outside markdown frontmatter. build-hub
+// 0.6.0 ships neither — every type is a directory of md files — so the
+// schema lives here and the probed bytes stay what Python khub wrote.
+const hubYAMLPreset = `
+version: "0.1.0"
+ontology:
+  entities:
+    component:
+      attributes:
+        title: { required: true }
+        kind: { enum: [service, library, external], required: true }
+    repo:
+      attributes:
+        repo: { type: text, required: true }
+        status: { enum: [active, archived], required: true }
+    contract:
+      attributes:
+        title: { required: true }
+        kind: { enum: [api, events], required: true }
+        status: { enum: [proposed, active, deprecated], required: true }
+      relations:
+        provider: { to: component, required: true }
+storage:
+  component: { layout: file, path: knowledge/architecture/components }
+  repo: { layout: collection, format: yaml, path: knowledge/architecture/repos.yaml }
+  contract: { layout: file, format: yaml, path: knowledge/architecture/contracts }
+`
+
+func hubYAMLWS(t *testing.T) string {
+	t.Helper()
+	return newWSFrom(t, "hubyaml", writePreset(t, "hubyaml", hubYAMLPreset, nil))
+}
+
 // commentedClient is the hand-authored fixture: the comment sits on a line the
 // edit never touches, which is the shape a whole-document re-emit destroyed.
 const commentedClient = "---\n" +
@@ -140,7 +175,7 @@ func TestNewTopLevelKeyKeepsComments(t *testing.T) {
 // yaml collection leaves the header, the inter-row comment, the per-row inline
 // comments and the trailing note in place. These bytes are Python khub's.
 func TestCollectionRowEditKeepsComments(t *testing.T) {
-	ws := newWS(t, "build-hub")
+	ws := hubYAMLWS(t)
 	path := filepath.Join(ws, "knowledge", "architecture", "repos.yaml")
 	mkdirAll(t, filepath.Dir(path))
 	writeFile(t, path, "# repos.yaml — hand-maintained inventory\n"+
@@ -176,7 +211,7 @@ func TestCollectionRowEditKeepsComments(t *testing.T) {
 // canon/splice.go documents. Clearing the body deletes a key, and a deletion
 // reorders the mapping, so this document re-emits whole.
 func TestUnspliceableEditStillWritesCorrectly(t *testing.T) {
-	ws := newWS(t, "build-hub")
+	ws := hubYAMLWS(t)
 	path := filepath.Join(ws, "knowledge", "architecture", "contracts", "orders-api.yaml")
 	mkdirAll(t, filepath.Dir(path))
 	writeFile(t, path, "type: contract\ntitle: Orders API  # keep this comment\n"+

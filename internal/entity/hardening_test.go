@@ -14,6 +14,7 @@ import (
 	"testing"
 
 	"github.com/endgame-build/khub/internal/canon"
+	"github.com/endgame-build/khub/internal/schema"
 )
 
 func people(t *testing.T, ws string) {
@@ -368,7 +369,9 @@ func TestPatternMatchTimeoutFires(t *testing.T) {
 	// pattern/input pair runs for centuries, hanging the write verb. The
 	// guard is the error; if a future edit drops the timeout, this test
 	// hangs until `go test`'s own deadline kills the run — loudly.
-	_, err := fullMatch(`(a+)+$`, strings.Repeat("a", 36)+"b")
+	pattern := `(a+)+$`
+	attr := &schema.ResolvedAttribute{Pattern: &pattern}
+	_, err := attr.MatchPattern(strings.Repeat("a", 36) + "b")
 	if err == nil {
 		t.Fatal("catastrophic pattern returned no error; MatchTimeout is not set")
 	}

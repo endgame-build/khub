@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
-	"os"
 	"path/filepath"
 
 	"github.com/endgame-build/khub/internal/canon"
@@ -62,7 +61,7 @@ func locator(rtype *schema.ResolvedType, slug string) string {
 
 // mutateCollection is the one write path for every collection mutation.
 //
-// Exclusive flock on the sidecar, fresh in-lock read (the O_EXCL replacement;
+// Caller holds the workspace lock: fresh in-lock read (the O_EXCL replacement;
 // the pre-built index is only a hint), mutate, then write-temp + fsync + rename
 // — a crash never leaves a torn file. mutate reports whether to write: false
 // skips the rewrite (idempotent no-op). A malformed collection refuses the
@@ -71,8 +70,8 @@ func mutateCollection(
 	root string, rtype *schema.ResolvedType, mutate func(rows *omap.Map) (bool, error),
 ) error {
 	path := collectionFile(root, rtype)
-	return fsio.WithLock(fsio.CollectionLockPath(root, rtype.Name), func() error {
-		text, readErr := canon.ReadText(path)
+	return func() error {
+		text, readErr := canon.ReadTextIn(root, path)
 		switch {
 		case readErr == nil:
 		case errors.Is(readErr, fs.ErrNotExist):
@@ -105,21 +104,21 @@ func mutateCollection(
 		if dumpErr != nil {
 			return dumpErr
 		}
-		if err := os.MkdirAll(filepath.Dir(path), 0o777); err != nil {
+		if err := fsio.MkdirAll(root, filepath.Dir(path)); err != nil {
 			return err
 		}
-		return fsio.AtomicWrite(path, []byte(out))
-	})
+		return fsio.AtomicWriteIn(root, path, []byte(out))
+	}()
 }
 
 // writeNew writes a brand-new entity file exclusively (O_EXCL): fs.ErrExist if
 // the slug is taken.
-func writeNew(path string, meta *omap.Map, body string) error {
+func writeNew(root, path string, meta *omap.Map, body string) error {
 	text, err := canon.Render(meta, body, canon.FmtOf(path))
 	if err != nil {
 		return err
 	}
-	return fsio.WriteNew(path, []byte(text))
+	return fsio.WriteNewIn(root, path, []byte(text))
 }
 
 // readDoc is the edit-altitude round-trip load: (meta, body) with formatting
@@ -127,8 +126,8 @@ func writeNew(path string, meta *omap.Map, body string) error {
 // resolution (the read path's python-frontmatter uses 1.1 — the one place the
 // two loaders genuinely differ); yaml/json go through the shared per-item
 // parser, which pops the reserved `body` key.
-func readDoc(path string) (*omap.Map, string, error) {
-	text, err := canon.ReadText(path)
+func readDoc(root, path string) (*omap.Map, string, error) {
+	text, err := canon.ReadTextIn(root, path)
 	if err != nil {
 		return nil, "", err
 	}
@@ -153,7 +152,7 @@ func readDoc(path string) (*omap.Map, string, error) {
 }
 
 // writeDoc re-serializes a round-trip map and the (unchanged) body — a minimal
-// diff. Plain write, exactly like Python's `path.write_text`.
+// diff, published atomically while the workspace lock is held.
 //
 // The document already exists here (writeDoc is only ever reached through
 // readDoc), so its current bytes are the comment channel a plain re-emit would
@@ -161,19 +160,21 @@ func readDoc(path string) (*omap.Map, string, error) {
 // other byte — comments included — alone. canon.ErrNoSplice means the change
 // cannot be expressed in place; the whole-document emitter takes over, exactly
 // as before.
-func writeDoc(path string, meta *omap.Map, body string) error {
+func writeDoc(root, path string, meta *omap.Map, body string) error {
 	fmtName := canon.FmtOf(path)
 	text, err := "", canon.ErrNoSplice
-	if old, readErr := canon.ReadText(path); readErr == nil {
-		text, err = canon.SpliceDoc(string(old), meta, body, fmtName, canon.Mode12)
+	old, readErr := canon.ReadTextIn(root, path)
+	if readErr != nil {
+		return readErr
 	}
+	text, err = canon.SpliceDoc(old, meta, body, fmtName, canon.Mode12)
 	if errors.Is(err, canon.ErrNoSplice) {
 		text, err = canon.Render(meta, body, fmtName)
 	}
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(path, []byte(text), 0o666)
+	return fsio.AtomicWriteIn(root, path, []byte(text))
 }
 
 // mdNormalized ends newly supplied md prose in a newline (file-format nicety).

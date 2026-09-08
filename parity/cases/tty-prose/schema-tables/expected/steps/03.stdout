@@ -1,22 +1,30 @@
  edges
-┏━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━┳━━━━━━┳━━━━━━━━━━┳━━━━━━━━━━━━━━━┓
-┃ predicate    │ from         │ to           │ card │ required │ notes         ┃
-┡━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━╇━━━━━━╇━━━━━━━━━━╇━━━━━━━━━━━━━━━┩
-│ affects      │ adr          │ any          │ many │          │               │
-│ depends_on   │ any          │ any          │ many │          │ acyclic       │
-│ realized_in  │ requirement  │ component    │ many │          │               │
-│ references   │ any          │ any          │ many │          │               │
-│ related      │ any          │ any          │ many │          │               │
-│ repo         │ component    │ repo         │ one  │          │               │
-│ requirements │ feature-spec │ requirement  │ many │          │               │
-│ sources      │ any          │ any          │ many │          │               │
-│ supersedes   │ adr          │ adr          │ one  │          │ inverse       │
-│              │              │              │      │          │ superseded;   │
-│              │              │              │      │          │ acyclic       │
-│ supersedes   │ feature-spec │ feature-spec │ one  │          │ inverse       │
-│              │              │              │      │          │ superseded;   │
-│              │              │              │      │          │ acyclic       │
-│ superseded   │ adr,         │ adr,         │ many │          │ inverse       │
-│              │ feature-spec │ feature-spec │      │          │ supersedes;   │
-│              │              │              │      │          │ acyclic       │
-└──────────────┴──────────────┴──────────────┴──────┴──────────┴───────────────┘
+┏━━━━━━━━━━━━━━┳━━━━━━━━━━━━━┳━━━━━━━━━━━━┳━━━━━━┳━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━┓
+┃ predicate    │ from        │ to         │ card │ required │ notes            ┃
+┡━━━━━━━━━━━━━━╇━━━━━━━━━━━━━╇━━━━━━━━━━━━╇━━━━━━╇━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━┩
+│ actor        │ use-case    │ actor      │ one  │          │                  │
+│ affects      │ adr         │ any        │ many │          │                  │
+│ capabilities │ requirement │ capability │ many │          │                  │
+│ capability   │ use-case    │ capability │ one  │          │                  │
+│ consumes     │ component   │ api        │ many │          │ inverse          │
+│              │             │            │      │          │ consumed_by      │
+│ depends_on   │ any         │ any        │ many │          │ acyclic          │
+│ provider     │ api         │ component  │ one  │ ✓        │                  │
+│ realized_in  │ requirement │ component  │ many │          │                  │
+│ references   │ any         │ any        │ many │          │                  │
+│ related      │ any         │ any        │ many │          │                  │
+│ repo         │ component   │ repo       │ one  │          │                  │
+│ served_by    │ use-case    │ component  │ many │          │ inverse serves   │
+│ sources      │ any         │ any        │ many │          │                  │
+│ supersedes   │ adr         │ adr        │ one  │          │ inverse          │
+│              │             │            │      │          │ superseded;      │
+│              │             │            │      │          │ acyclic          │
+│ system       │ component   │ system     │ one  │          │                  │
+│ use_cases    │ requirement │ use-case   │ many │          │                  │
+│ consumed_by  │ api         │ component  │ many │          │ inverse consumes │
+│ serves       │ component   │ use-case   │ many │          │ inverse          │
+│              │             │            │      │          │ served_by        │
+│ superseded   │ adr         │ adr        │ many │          │ inverse          │
+│              │             │            │      │          │ supersedes;      │
+│              │             │            │      │          │ acyclic          │
+└──────────────┴─────────────┴────────────┴──────┴──────────┴──────────────────┘

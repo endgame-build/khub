@@ -1,5 +1,5 @@
 steps:
-- argv: ["init", "build-lite", ".", "--no-wire"]
+- argv: ["init", "build-hub", ".", "--no-wire"]
 - argv: ["add", "requirement", "--title", "R", "--kind", "functional"]
 - argv: ["neighbors", "req-r", "--predicate", "bogus"]
 - argv: ["impact", "req-r", "--predicate", "bogus"]

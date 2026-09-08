@@ -1,1 +1,1 @@
-{"error": {"code": "unknown_predicate", "message": "No predicate 'bogus' in the schema. Declared predicates: affects, depends_on, realized_in, references, related, repo, requirements, sources, supersedes"}}
+{"error": {"code": "unknown_predicate", "message": "No predicate 'bogus' in the schema. Declared predicates: actor, affects, capabilities, capability, consumes, depends_on, provider, realized_in, references, related, repo, served_by, sources, supersedes, system, use_cases"}}

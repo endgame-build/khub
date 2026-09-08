@@ -9,7 +9,7 @@
 //	env:  {K: V}                    # optional extras
 //	steps:
 //	  - sh: "git init -q ."         # deterministic setup, must exit 0
-//	  - argv: [init, build-lite, ., --no-wire]
+//	  - argv: [init, build-hub, ., --no-wire]
 //	    stdin: "optional bytes"
 //
 // Every argv step records stdout, stderr, and exit code separately under

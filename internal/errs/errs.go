@@ -299,3 +299,41 @@ func InboundEdgeRefusal(type_, slug string, count int) *Located {
 		Target: slug,
 	}
 }
+
+// --- serve --------------------------------------------------------------------
+
+// PortInUse is the `khub serve` bind refusal. Naming the corrective flag is
+// the point: serve is the one command whose failure an agent cannot diagnose
+// from the workspace, because the cause is another process on the machine.
+func PortInUse(port int) *Located {
+	return &Located{
+		Code: "port_in_use",
+		Message: fmt.Sprintf("Port %d is already in use. Pass --port <n> to serve "+
+			"on another port", port),
+	}
+}
+
+// PortNotPermitted is the bind refusal for a port this process may not have:
+// ports below 1024 need privileges khub does not ask for.
+func PortNotPermitted(port int) *Located {
+	return &Located{
+		Code: "port_not_permitted",
+		Message: fmt.Sprintf("Not permitted to bind port %d; ports below 1024 need "+
+			"privileges. Pass --port <n> to serve on an unprivileged port", port),
+	}
+}
+
+// ServeNeedsTTY refuses `khub serve` on a non-terminal stdout.
+//
+// serve blocks until interrupted, so an agent that runs it in a foreground
+// call hangs until its own timeout — the failure the no-prompts rule exists to
+// prevent. The escape reuses the existing IsTTY precedence rather than adding
+// a flag: TTY_COMPATIBLE=1 says "this caller knows the command blocks".
+func ServeNeedsTTY() *Located {
+	return &Located{
+		Code: "serve_needs_tty",
+		Message: "khub serve runs until interrupted and is a human command; " +
+			"stdout is not a terminal. Set TTY_COMPATIBLE=1 to run it anyway " +
+			"(background it, or an agent call will block)",
+	}
+}

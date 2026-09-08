@@ -1,1 +1,1 @@
-{"error": {"code": "unknown_type", "message": "No type 'bogustype' in the build-lite schema. Known types: adr, arc42, component, feature-spec, prd, repo, requirement"}}
+{"error": {"code": "unknown_type", "message": "No type 'bogustype' in the build-hub schema. Known types: actor, adr, api, arc42, capability, component, prd, repo, requirement, system, use-case"}}

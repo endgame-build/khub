@@ -21,6 +21,7 @@ import (
 	"strings"
 
 	"github.com/endgame-build/khub/internal/errs"
+	"github.com/endgame-build/khub/internal/fsio"
 )
 
 // TARGETS: where each agent family reads project-local skills. Order is
@@ -113,6 +114,23 @@ func Install(source fs.FS, root string, opt Options) (*Report, error) {
 		return nil, errs.New("missing_root", "A project-scope skill install needs a workspace root")
 	}
 
+	if !opt.Global && !opt.DryRun {
+		return fsio.Locked(root, func() (*Report, error) { return install(source, root, opt) })
+	}
+	return install(source, root, opt)
+}
+
+// InstallHeld is Install for a caller that already holds the workspace lock
+// (an upgrade running its tails inside its own lock). fsio.Locked is not
+// re-entrant, so calling Install there would block forever.
+func InstallHeld(source fs.FS, root string, opt Options) (*Report, error) {
+	if root == "" && !opt.Global {
+		return nil, errs.New("missing_root", "A project-scope skill install needs a workspace root")
+	}
+	return install(source, root, opt)
+}
+
+func install(source fs.FS, root string, opt Options) (*Report, error) {
 	avail, err := AvailableSkills(source)
 	if err != nil {
 		return nil, err
@@ -158,7 +176,7 @@ func Install(source fs.FS, root string, opt Options) (*Report, error) {
 			if !opt.Global && !opt.DryRun {
 				// Ignore only what khub owns, never the whole skills dir.
 				line := targetDirs[target] + "/" + name + "/"
-				if gerr := appendGitignore(filepath.Join(root, ".gitignore"), line); gerr != nil {
+				if gerr := appendGitignore(root, filepath.Join(root, ".gitignore"), line); gerr != nil {
 					return nil, gerr
 				}
 			}
@@ -202,26 +220,37 @@ func syncSkill(source fs.FS, name, dest, base string, dryRun bool) ([]Write, err
 		if rerr != nil {
 			return nil, rerr
 		}
-		var action string
-		if _, serr := os.Stat(target); serr != nil {
-			action = "created"
+		var existing []byte
+		var eerr error
+		if base == "" {
+			existing, eerr = os.ReadFile(target)
 		} else {
-			existing, eerr := os.ReadFile(target)
-			if eerr != nil {
-				return nil, eerr
-			}
-			if bytes.Equal(existing, payload) {
-				action = "unchanged"
-			} else {
-				action = "updated"
-			}
+			existing, eerr = fsio.ReadFile(base, target)
+		}
+		action := "updated"
+		switch {
+		case errors.Is(eerr, fs.ErrNotExist):
+			action = "created"
+		case eerr != nil:
+			return nil, eerr
+		case bytes.Equal(existing, payload):
+			action = "unchanged"
 		}
 		if !dryRun && action != "unchanged" {
-			if merr := os.MkdirAll(filepath.Dir(target), 0o777); merr != nil {
-				return nil, merr
+			var err error
+			if base == "" {
+				err = os.MkdirAll(filepath.Dir(target), 0o777)
+				if err == nil {
+					err = fsio.AtomicWrite(target, payload)
+				}
+			} else {
+				err = fsio.MkdirAll(base, filepath.Dir(target))
+				if err == nil {
+					err = fsio.AtomicWriteIn(base, target, payload)
+				}
 			}
-			if werr := os.WriteFile(target, payload, 0o666); werr != nil {
-				return nil, werr
+			if err != nil {
+				return nil, err
 			}
 		}
 		writes = append(writes, Write{Path: display(target, base), Action: action})
@@ -245,7 +274,7 @@ func pruneStale(dest, base string, shipped map[string]bool, dryRun bool) ([]Writ
 		return nil, err
 	}
 	var stale, dirs []string
-	err := filepath.WalkDir(dest, func(p string, d fs.DirEntry, werr error) error {
+	walk := func(p string, d fs.DirEntry, werr error) error {
 		if werr != nil {
 			return werr
 		}
@@ -258,14 +287,35 @@ func pruneStale(dest, base string, shipped map[string]bool, dryRun bool) ([]Writ
 			stale = append(stale, p)
 		}
 		return nil
-	})
+	}
+	var err error
+	if base == "" {
+		err = filepath.WalkDir(dest, walk)
+	} else {
+		var r *os.Root
+		var rel string
+		r, rel, err = fsio.OpenPath(base, dest)
+		if err != nil {
+			return nil, err
+		}
+		defer r.Close()
+		err = fs.WalkDir(r.FS(), filepath.ToSlash(rel), func(p string, d fs.DirEntry, e error) error {
+			return walk(filepath.Join(base, filepath.FromSlash(p)), d, e)
+		})
+	}
 	if err != nil {
 		return nil, err
 	}
 	removed := make([]Write, 0, len(stale))
 	for _, p := range stale {
 		if !dryRun {
-			if rerr := os.Remove(p); rerr != nil {
+			var rerr error
+			if base == "" {
+				rerr = os.Remove(p)
+			} else {
+				rerr = fsio.Remove(base, p, false)
+			}
+			if rerr != nil {
 				return nil, rerr
 			}
 		}
@@ -277,14 +327,25 @@ func pruneStale(dest, base string, shipped map[string]bool, dryRun bool) ([]Writ
 	// Deepest first, so a directory whose only content was an emptied
 	// subdirectory empties in turn.
 	for i := len(dirs) - 1; i >= 0; i-- {
-		entries, rerr := os.ReadDir(dirs[i])
+		var entries []os.DirEntry
+		var rerr error
+		if base == "" {
+			entries, rerr = os.ReadDir(dirs[i])
+		} else {
+			entries, rerr = fsio.ReadDir(base, dirs[i])
+		}
 		if rerr != nil {
 			return nil, rerr
 		}
 		if len(entries) > 0 {
 			continue
 		}
-		if rerr := os.Remove(dirs[i]); rerr != nil {
+		if base == "" {
+			rerr = os.Remove(dirs[i])
+		} else {
+			rerr = fsio.Remove(base, dirs[i], false)
+		}
+		if rerr != nil {
 			return nil, rerr
 		}
 	}
@@ -333,9 +394,9 @@ func rejectUnknown(given, known []string, kind string) error {
 // appendGitignore is a package-private port of workspace._append_gitignore
 // (the Python module imports it from core.workspace): append one line unless
 // it is already present, preserving the file's trailing-newline shape.
-func appendGitignore(gitignore, line string) error {
+func appendGitignore(root, gitignore, line string) error {
 	existing := ""
-	if b, err := os.ReadFile(gitignore); err == nil {
+	if b, err := fsio.ReadFile(root, gitignore); err == nil {
 		existing = string(b)
 	} else if !errors.Is(err, fs.ErrNotExist) {
 		return err
@@ -349,5 +410,5 @@ func appendGitignore(gitignore, line string) error {
 	if existing != "" && !strings.HasSuffix(existing, "\n") {
 		sep = "\n"
 	}
-	return os.WriteFile(gitignore, []byte(existing+sep+line+"\n"), 0o666)
+	return fsio.AtomicWriteIn(root, gitignore, []byte(existing+sep+line+"\n"))
 }

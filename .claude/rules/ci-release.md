@@ -47,9 +47,13 @@ Each is commented where it lives:
   GitHub token is the highest-value thing an attacker could replace, and it
   bought one command's worth of convenience. Do not reintroduce a curl
   channel — document the command instead.
-- **No Windows.** `gofrs/flock` does support LockFileEx — the library is not
-  the blocker. The blockers: mandatory (not advisory) locks, rename-over-open-
-  file breaking `fsio`'s atomic replace, and 117 byte-exact tree fixtures.
+- **No Windows.** The workspace lock is `syscall.Flock` (`internal/fsio/lock.go`),
+  which does not exist on Windows, so the tree does not build there — a fact,
+  not just a policy. Behind it the blockers stay: mandatory (not advisory)
+  locks, rename-over-open-file breaking `fsio`'s atomic replace, and 117
+  byte-exact tree fixtures. `gofrs/flock` was dropped when one workspace lock
+  replaced the per-type collection locks; its LockFileEx support was never the
+  thing standing in the way.
 
 ## Gaps worth closing (risk per effort, descending)
 

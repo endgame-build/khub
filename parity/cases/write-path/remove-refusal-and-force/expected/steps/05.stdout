@@ -1,1 +1,1 @@
-{"error": {"code": "inbound_edge_refusal", "message": "Refusing to remove requirement 'req-t': 1 inbound edge resolves to it. Pass --force to override"}}
+{"error": {"code": "inbound_edge_refusal", "message": "Refusing to remove component 'cmp-c': 1 inbound edge resolves to it. Pass --force to override"}}

@@ -73,7 +73,7 @@ func Neighbors(idx *index.Index, id string, predicate *string, direction string,
 	emitted := map[adjacentHit]bool{}
 	frontier := []index.Node{src}
 	found := []Neighbor{}
-	for d := 1; d <= depth; d++ {
+	for d := 0; d < depth && len(frontier) > 0; d++ {
 		var next []index.Node
 		for _, node := range frontier {
 			for _, a := range adjacent(g, node, direction, predicate) {
@@ -87,7 +87,7 @@ func Neighbors(idx *index.Index, id string, predicate *string, direction string,
 					Predicate: a.pred,
 					Direction: a.dir,
 					Derived:   a.dir == DirectionIn,
-					Depth:     d,
+					Depth:     d + 1,
 				})
 				if !visited[a.node] {
 					visited[a.node] = true

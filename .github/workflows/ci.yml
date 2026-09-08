@@ -143,6 +143,8 @@ jobs:
         run: |
           sh -n npm/build-packages.sh
           sh -n npm/smoke.sh
+      - name: Browser model tests
+        run: node --test internal/serve/tests/*.test.mjs
       - name: Launcher shim parses
         run: node --check npm/khub/bin/khub.js
       # The real package is assembled from goreleaser artifacts on a tag

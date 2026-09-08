@@ -58,9 +58,10 @@ type DeleteResult struct {
 
 // Edge is one relation on an entity, stored (forward) or derived (inverse).
 type Edge struct {
-	Predicate string
-	Target    string
-	Derived   bool
+	Predicate       string
+	Target          string
+	Derived         bool
+	ResolvedTargets []string // qualified IDs for HTTP navigation; CLI serialization unchanged
 }
 
 // EntityView is a read of one entity. For a collection row, Raw is the row's

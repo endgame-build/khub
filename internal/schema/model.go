@@ -11,8 +11,12 @@ package schema
 
 import (
 	"fmt"
+	"github.com/dlclark/regexp2"
+	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/endgame-build/khub/internal/omap"
 )
@@ -42,9 +46,31 @@ type StorageConfig struct {
 	Fmt    string  // effective format (post storage-matrix derivation)
 }
 
+// IsOrphan is khub's orphan rule, stated once. A node no edge reaches or leaves
+// is an orphan unless its type declares `orphan: true` — edge-less is that
+// type's normal condition, and a health count that can never reach zero is not
+// a health count.
+//
+// The receiver must be a type the schema declares — every caller reaches it via
+// Types.Get on a node's own type, which the scan produced from that same
+// schema, so a nil receiver here means the index and the schema disagree and a
+// panic is the correct report.
+//
+// It takes the two booleans rather than a graph because its callers derive them
+// differently and cannot share that part: query and viz read degrees off a
+// built graph, while project counts them during the same traversal it uses to
+// find broken references, which no Graph can report. What must not diverge is
+// the rule — in particular the exemption — so only the rule lives here.
+func (t *ResolvedType) IsOrphan(hasOut, hasIn bool) bool {
+	return !hasOut && !hasIn && !t.Orphan
+}
+
 // ResolvedAttribute is a scalar or enum attribute on a resolved type (base
 // merged, overrides applied).
 type ResolvedAttribute struct {
+	patternOnce        sync.Once
+	patternRE          *regexp2.Regexp
+	patternErr         error
 	Name               string
 	BaseType           string // "text" when undeclared
 	Required           bool
@@ -219,4 +245,58 @@ type ResolvedSchema struct {
 	Types          *Ordered[*ResolvedType]
 	BaseAttributes *Ordered[*ResolvedAttribute]
 	BaseRelations  *Ordered[*ResolvedRelation]
+}
+
+// StorageRelpath is the effective path, shared by scanning and ownership checks.
+func (t *ResolvedType) StorageRelpath() string {
+	if t.Storage.Path != nil && *t.Storage.Path != "" {
+		return *t.Storage.Path
+	}
+	if t.Storage.Layout == LayoutCollection || t.Storage.Layout == LayoutSingleton {
+		return t.Name + "." + t.Storage.Fmt
+	}
+	return t.Name
+}
+
+// AcceptsEntityPath describes exactly the paths ScanType reads, including depth.
+func (t *ResolvedType) AcceptsEntityPath(rel string) bool {
+	rel = filepath.ToSlash(filepath.Clean(rel))
+	base := t.StorageRelpath()
+	if t.Storage.Layout == LayoutCollection || t.Storage.Layout == LayoutSingleton {
+		return rel == base
+	}
+	sub, ok := strings.CutPrefix(rel, base+"/")
+	if !ok {
+		return false
+	}
+	parts := strings.Split(sub, "/")
+	suffix := "." + t.Storage.Fmt
+	if t.Storage.Layout == LayoutFolder {
+		return len(parts) == 2 && parts[1] == "_index"+suffix
+	}
+	return len(parts) == 1 && sub != "_index"+suffix && strings.HasSuffix(sub, suffix)
+}
+
+// MatchPattern is the shared write/integrity full-match gate. Cache belongs to
+// the resolved schema, so serving edited schemas never retains stale patterns.
+func (a *ResolvedAttribute) MatchPattern(value string) (bool, error) {
+	if a.Pattern == nil {
+		return true, nil
+	}
+	if err := a.CompilePattern(); err != nil {
+		return false, err
+	}
+	return a.patternRE.MatchString(value)
+}
+func (a *ResolvedAttribute) CompilePattern() error {
+	a.patternOnce.Do(func() {
+		if a.Pattern == nil {
+			return
+		}
+		a.patternRE, a.patternErr = regexp2.Compile(`\A(?:`+*a.Pattern+`)\z`, regexp2.None)
+		if a.patternErr == nil {
+			a.patternRE.MatchTimeout = time.Second
+		}
+	})
+	return a.patternErr
 }

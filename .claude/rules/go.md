@@ -51,9 +51,9 @@ build step + custom binary for what a test does free).
 ## Determinism is contract
 
 Never range a map and emit in that order. Insertion order is the graph's
-ordering rule; preserve it through any new traversal. gonum is used for cycle
-enumeration only and its output is re-sorted (`internal/graph/cycles.go`)
-precisely because it iterates maps internally.
+ordering rule; preserve it through any new traversal. gonum finds strongly
+connected components; khub chooses and sorts one real deterministic cycle
+witness per cyclic component (`internal/graph/cycles.go`).
 
 ## Provenance comments stay; rotted strings are bugs
 

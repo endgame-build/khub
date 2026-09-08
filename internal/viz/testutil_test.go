@@ -181,3 +181,36 @@ func hasNode(nodes []index.Node, want index.Node) bool {
 }
 
 func ptr[T any](v T) *T { return &v }
+
+// collectionPresetOntology and collectionPresetStorage make a preset with one
+// collection-layout type — the shape the pre-0.6.0 build-hub's repos.yaml
+// gave the collection tests. build-hub 0.6.0 ships no collection (every type
+// is a directory of md files), so the schema lives here.
+const collectionPresetOntology = `
+version: "0.1.0"
+ontology:
+  entities:
+    repo:
+      attributes:
+        repo: { type: text, required: true }
+        status: { enum: [active, archived], required: true }
+`
+
+const collectionPresetStorage = `
+storage:
+  repo: { layout: collection, format: yaml, path: knowledge/architecture/repos.yaml }
+`
+
+// collectionWS scaffolds a workspace from the collection preset above, the
+// way `init --preset-source` does.
+func collectionWS(t *testing.T) string {
+	t.Helper()
+	src := t.TempDir()
+	writeRaw(t, src, "collections/ontology.yaml", collectionPresetOntology)
+	writeRaw(t, src, "collections/storage.yaml", collectionPresetStorage)
+	root := t.TempDir()
+	if _, err := workspace.Init("collections", root, workspace.InitOptions{PresetSource: src}); err != nil {
+		t.Fatalf("init collections: %v", err)
+	}
+	return root
+}

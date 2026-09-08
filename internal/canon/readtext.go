@@ -13,6 +13,7 @@ package canon
 // happens once, at the boundary, exactly as it does in Python.
 
 import (
+	"github.com/endgame-build/khub/internal/fsio"
 	"os"
 	"strings"
 )
@@ -28,6 +29,15 @@ func NormalizeNewlines(s string) string {
 // ReadText reads a file the way Python's read_text() does.
 func ReadText(path string) (string, error) {
 	raw, err := os.ReadFile(path)
+	if err != nil {
+		return "", err
+	}
+	return NormalizeNewlines(string(raw)), nil
+}
+
+// ReadTextIn applies the same newline rules through workspace-confined I/O.
+func ReadTextIn(root, path string) (string, error) {
+	raw, err := fsio.ReadFile(root, path)
 	if err != nil {
 		return "", err
 	}

@@ -5,64 +5,41 @@ Do not edit by hand — regenerate instead.
 
 ```console
 $ khub --help
+Usage: khub [OPTIONS] COMMAND [ARGS]...
 
- Usage: khub [OPTIONS] COMMAND [ARGS]...
+khub — schema-bound context management.
 
- khub — schema-bound context management.
+Options:
+  --workspace, -C <path>  Operate on this workspace instead of the working directory.
+  --version  Print the khub version and exit.
+  --help  Show this message and exit.
 
-╭─ Options ────────────────────────────────────────────────────────────────────╮
-│ --workspace  -C      <path>  Operate on this workspace instead of the        │
-│                              working directory.                              │
-│ --version                    Print the khub version and exit.                │
-│ --help                       Show this message and exit.                     │
-╰──────────────────────────────────────────────────────────────────────────────╯
-╭─ Commands ───────────────────────────────────────────────────────────────────╮
-│ init            Scaffold a workspace from a preset and wire it into the      │
-│                 agent context files.                                         │
-│ upgrade         Refresh an existing workspace: the shipped schema and        │
-│                 templates, new scaffolds, the skills, the wire block.        │
-│ status          Summarize the workspace: counts, draft/active, orphan/stale, │
-│                 OKF conformance.                                             │
-│ add             Create an entity: khub add opportunity --client initech      │
-│                 --owner noor --stage prospect.                               │
-│ get             Read an entity's frontmatter and body, optionally with       │
-│                 derived edges.                                               │
-│ edit            Edit an entity: khub edit initech-deal stage proposal-sent   │
-│                 (or --field value).                                          │
-│ link            Add a relation: khub link initech-pov partner northwind.     │
-│ unlink          Remove a relation: khub unlink initech-pov partner           │
-│                 northwind.                                                   │
-│ remove          Remove an entity, guarded by inbound edges: khub remove      │
-│                 old-fragment [--force].                                      │
-│ query           Filter entities: khub query --type opportunity --stage       │
-│                 prospect --format json.                                      │
-│ search          Full-text search: khub search modernization --type           │
-│                 transcript --format json.                                    │
-│ neighbors       Walk one-hop neighbors: khub neighbors initech-pov           │
-│                 [--predicate client --in].                                   │
-│ impact          Compute blast radius: khub impact node-a [--reverse]         │
-│                 [--predicate <p>].                                           │
-│ history         Trace supersession lineage: khub history decision-0012       │
-│                 [--limit 3].                                                 │
-│ validate        Validate entities: khub validate [TARGET] [--strict].        │
-│ check           Check the active graph: completeness, orphans, dangling      │
-│                 edges, strays, cycles, bodies.                               │
-│ stale           List entities past the `updated` threshold, oldest first:    │
-│                 khub stale [--days N].                                       │
-│ reindex         Regenerate the OKF index.md from the graph: khub reindex     │
-│                 [--dry-run].                                                 │
-│ viz             Render the typed graph to a self-contained Cytoscape HTML:   │
-│                 khub viz [--out F] [--open] [--type T].                      │
-│ backfill        Backfill missing dates and frontmatter: khub backfill        │
-│                 [--type T] [--dry-run].                                      │
-│ wire            Wire the workspace into agent context files (CLAUDE.md gets  │
-│                 ``@`` imports of the                                         │
-│                 schema layer files; AGENTS.md gets a schema pointer). Bare   │
-│                 ``wire`` updates whichever already exist.                    │
-│ install-skills  Install khub's agent skills: khub install-skills [--target   │
-│                 agents] [--global].                                          │
-│ schema          Introspect the active schema.                                │
-╰──────────────────────────────────────────────────────────────────────────────╯
+Commands:
+  init  Scaffold a workspace from a preset and wire it into the agent context files.
+  upgrade  Refresh an existing workspace: the shipped schema and templates, new scaffolds, the skills, the wire block.
+  status  Summarize the workspace: counts, draft/active, orphan/stale, OKF conformance.
+  add  Create an entity: khub add opportunity --client initech --owner noor --stage prospect.
+  get  Read entities' frontmatter and body, optionally with derived edges.
+  edit  Edit an entity: khub edit initech-deal stage proposal-sent  (or --field value).
+  link  Add a relation: khub link initech-pov partner northwind.
+  unlink  Remove a relation: khub unlink initech-pov partner northwind.
+  remove  Remove an entity, guarded by inbound edges: khub remove old-fragment [--force].
+  query  Filter entities: khub query --type opportunity --stage prospect --format json.
+  search  Full-text search: khub search modernization --type transcript --format json.
+  neighbors  Walk one-hop neighbors: khub neighbors initech-pov [--predicate client --in].
+  impact  Compute blast radius: khub impact node-a [--reverse] [--predicate <p>].
+  history  Trace supersession lineage: khub history decision-0012 [--limit 3].
+  validate  Validate entities: khub validate [TARGET] [--strict].
+  check  Check the active graph: completeness, orphans, dangling edges, strays, cycles, bodies.
+  stale  List entities past the `updated` threshold, oldest first: khub stale [--days N].
+  reindex  Regenerate the OKF index.md from the graph: khub reindex [--dry-run].
+  viz  Render the typed graph to a self-contained Cytoscape HTML: khub viz [--out F] [--open] [--type T].
+  serve  Serve a read-only graph view on loopback: khub serve [--port 7777].
+  backfill  Backfill missing dates and frontmatter: khub backfill [--type T] [--dry-run].
+  wire  Wire the workspace into agent context files (CLAUDE.md gets ``@`` imports of the
+schema layer files; AGENTS.md gets a schema pointer). Bare ``wire`` updates whichever already exist.
+  install-skills  Install khub's agent skills: khub install-skills [--target agents] [--global].
+  schema  Introspect the active schema.
 
 ```
 
@@ -70,30 +47,24 @@ $ khub --help
 
 ```console
 $ khub init --help
+Usage: khub init [OPTIONS] [preset] [path]
 
- Usage: khub init [OPTIONS] [preset] [path]
+Scaffold a workspace from a preset and wire it into the agent context files.
 
- Scaffold a workspace from a preset and wire it into the agent context files.
+A missing PRESET is a usage error; PATH defaults to the working directory.
+Installing the agent skill is a separate step: ``khub install-skills``.
 
- A missing PRESET is a usage error; PATH defaults to the working directory.
- Installing the agent skill is a separate step: ``khub install-skills``.
+Arguments:
+  preset <str>  Named preset to seed from (e.g. firm-ops).
+  path <path>  Target directory (default: .).
 
-╭─ Arguments ──────────────────────────────────────────────────────────────────╮
-│   preset      <str>   Named preset to seed from (e.g. firm-ops).             │
-│   path        <path>  Target directory (default: .).                         │
-╰──────────────────────────────────────────────────────────────────────────────╯
-╭─ Options ────────────────────────────────────────────────────────────────────╮
-│ --preset-source        <path>  Where to resolve the preset if not packaged   │
-│                                with khub.                                    │
-│ --name                 <str>   Workspace name (default: the target dir       │
-│                                name).                                        │
-│ --force                        Scaffold into a non-empty target.             │
-│ --no-wire                      Skip wiring the schema into the agent files.  │
-│ --format               <str>   text confirmation (default); json emits       │
-│                                resolved provenance.                          │
-│                                [default: text]                               │
-│ --help                         Show this message and exit.                   │
-╰──────────────────────────────────────────────────────────────────────────────╯
+Options:
+  --preset-source <path>  Where to resolve the preset if not packaged with khub.
+  --name <str>  Workspace name (default: the target dir name).
+  --force  Scaffold into a non-empty target.
+  --no-wire  Skip wiring the schema into the agent files.
+  --format <str>  text confirmation (default); json emits resolved provenance. [default: text]
+  --help  Show this message and exit.
 
 ```
 
@@ -101,31 +72,19 @@ $ khub init --help
 
 ```console
 $ khub upgrade --help
+Usage: khub upgrade [OPTIONS]
 
- Usage: khub upgrade [OPTIONS]
+Refresh an existing workspace: the shipped schema and templates, new scaffolds, the skills, the wire block.
 
- Refresh an existing workspace: the shipped schema and templates, new
- scaffolds, the skills, the wire block.
+Replaces .khub/{ontology,policy,storage}.yaml and .khub/templates/*.yaml from the preset recorded in .khub/config.yaml, copying an edited file to <name>.bak first; preflights the candidate schema and scaffolds before publishing, then re-installs the agent skills, re-wires the agent files, and regenerates index.md. Refuses outside a workspace: ``khub init`` scaffolds, ``khub upgrade`` refreshes.
 
- Replaces .khub/{ontology,policy,storage}.yaml and .khub/templates/*.yaml from
- the preset recorded in .khub/config.yaml, copying an edited file to <name>.bak
- first; then re-reads the schema, scaffolds what the ontology gained,
- re-installs the agent skills, re-wires the agent files, and regenerates
- index.md. Refuses outside a workspace: ``khub init`` scaffolds, ``khub
- upgrade`` refreshes.
-
-╭─ Options ────────────────────────────────────────────────────────────────────╮
-│ --no-schema               Keep this workspace's .khub/ files — schema and    │
-│                           templates — as they are; report what the shipped   │
-│                           ontology has that they do not.                     │
-│ --no-skill                Skip refreshing the agent skills; scaffolds, wire  │
-│                           and index only.                                    │
-│ --no-wire                 Skip re-wiring CLAUDE.md and AGENTS.md.            │
-│ --format           <str>  text confirmation (default); json emits every      │
-│                           step's outcome.                                    │
-│                           [default: text]                                    │
-│ --help                    Show this message and exit.                        │
-╰──────────────────────────────────────────────────────────────────────────────╯
+Options:
+  --dry-run  Preview core and tail outcomes without changing the workspace.
+  --no-schema  Keep this workspace's .khub/ files — schema and templates — as they are; report what the shipped ontology has that they do not.
+  --no-skill  Skip refreshing the agent skills; scaffolds, wire and index only.
+  --no-wire  Skip re-wiring CLAUDE.md and AGENTS.md.
+  --format <str>  text confirmation (default); json emits every step's outcome. [default: text]
+  --help  Show this message and exit.
 
 ```
 
@@ -133,15 +92,13 @@ $ khub upgrade --help
 
 ```console
 $ khub status --help
+Usage: khub status [OPTIONS]
 
- Usage: khub status [OPTIONS]
+Summarize the workspace: counts, draft/active, orphan/stale, OKF conformance.
 
- Summarize the workspace: counts, draft/active, orphan/stale, OKF conformance.
-
-╭─ Options ────────────────────────────────────────────────────────────────────╮
-│ --format        <str>  text (Rich table on a TTY) or json. [default: text]   │
-│ --help                 Show this message and exit.                           │
-╰──────────────────────────────────────────────────────────────────────────────╯
+Options:
+  --format <str>  text (Rich table on a TTY) or json. [default: text]
+  --help  Show this message and exit.
 
 ```
 
@@ -149,35 +106,24 @@ $ khub status --help
 
 ```console
 $ khub add --help
+Usage: khub add [OPTIONS] [TYPE]
 
- Usage: khub add [OPTIONS] [TYPE]
+Create an entity: khub add opportunity --client initech --owner noor --stage prospect.
 
- Create an entity: khub add opportunity --client initech --owner noor --stage
- prospect.
+A missing TYPE is a usage error; every field is a flag.
 
- A missing TYPE is a usage error; every field is a flag.
+Arguments:
+  TYPE <str>  The entity type to create.
 
-╭─ Arguments ──────────────────────────────────────────────────────────────────╮
-│   TYPE      <str>  The entity type to create.                                │
-╰──────────────────────────────────────────────────────────────────────────────╯
-╭─ Options ────────────────────────────────────────────────────────────────────╮
-│ --id                 <str>  Explicit slug (slugified). Without it the id is  │
-│                             minted from name, then title, in the type's      │
-│                             scheme (`khub schema show TYPE` names it); a     │
-│                             type with neither refuses, so pass --id for a    │
-│                             type you do not title.                           │
-│ --draft                     Mark the entity unpublished (default: active).   │
-│ --strict                    Reject fields the schema does not declare.       │
-│ --body               <str>  Body prose as a string.                          │
-│ --body-file          <str>  Read the body from a file ('-' for stdin).       │
-│ --no-template               Start with an empty body. Refused on a type      │
-│                             whose template has a required heading, since the │
-│                             result would fail validate; use --body to supply │
-│                             your own sections.                               │
-│ --format             <str>  text or json (emits the written record).         │
-│                             [default: text]                                  │
-│ --help                      Show this message and exit.                      │
-╰──────────────────────────────────────────────────────────────────────────────╯
+Options:
+  --id <str>  Explicit slug (slugified). Without it the id is minted from name, then title, in the type's scheme (`khub schema show TYPE` names it); a type with neither refuses, so pass --id for a type you do not title.
+  --draft  Mark the entity unpublished (default: active).
+  --strict  Reject fields the schema does not declare.
+  --body <str>  Body prose as a string.
+  --body-file <str>  Read the body from a file ('-' for stdin).
+  --no-template  Start with an empty body. Refused on a type whose template has a required heading, since the result would fail validate; use --body to supply your own sections.
+  --format <str>  text or json (emits the written record). [default: text]
+  --help  Show this message and exit.
 
 ```
 
@@ -185,20 +131,17 @@ $ khub add --help
 
 ```console
 $ khub get --help
+Usage: khub get [OPTIONS] [ID]...
 
- Usage: khub get [OPTIONS] [ID]
+Read entities' frontmatter and body, optionally with derived edges.
 
- Read an entity's frontmatter and body, optionally with derived edges.
+Arguments:
+  ID... <str>  One or more bare slugs or qualified type/slug IDs, in output order.
 
-╭─ Arguments ──────────────────────────────────────────────────────────────────╮
-│   ID      <str>  A bare slug, or type/slug on ambiguity.                     │
-╰──────────────────────────────────────────────────────────────────────────────╯
-╭─ Options ────────────────────────────────────────────────────────────────────╮
-│ --edges                Include stored and derived edges.                     │
-│ --format        <str>  json, table, raw, or text (Rich on a TTY).            │
-│                        [default: text]                                       │
-│ --help                 Show this message and exit.                           │
-╰──────────────────────────────────────────────────────────────────────────────╯
+Options:
+  --edges  Include stored and derived edges.
+  --format <str>  json, table, raw, or text (Rich on a TTY). [default: text]
+  --help  Show this message and exit.
 
 ```
 
@@ -206,25 +149,21 @@ $ khub get --help
 
 ```console
 $ khub edit --help
+Usage: khub edit [OPTIONS] [ID]
 
- Usage: khub edit [OPTIONS] [ID]
+Edit an entity: khub edit initech-deal stage proposal-sent  (or --field value).
 
- Edit an entity: khub edit initech-deal stage proposal-sent  (or --field
- value).
+A missing ID is a usage error; the field and value are positional or flags.
 
- A missing ID is a usage error; the field and value are positional or flags.
+Arguments:
+  ID <str>  A bare slug, or type/slug on ambiguity.
 
-╭─ Arguments ──────────────────────────────────────────────────────────────────╮
-│   ID      <str>  A bare slug, or type/slug on ambiguity.                     │
-╰──────────────────────────────────────────────────────────────────────────────╯
-╭─ Options ────────────────────────────────────────────────────────────────────╮
-│ --strict                  Reject fields the schema does not declare.         │
-│ --body             <str>  Replace the body with this string ('' clears it).  │
-│ --body-file        <str>  Replace the body from a file ('-' for stdin).      │
-│ --format           <str>  text or json (emits the updated record).           │
-│                           [default: text]                                    │
-│ --help                    Show this message and exit.                        │
-╰──────────────────────────────────────────────────────────────────────────────╯
+Options:
+  --strict  Reject fields the schema does not declare.
+  --body <str>  Replace the body with this string ('' clears it).
+  --body-file <str>  Replace the body from a file ('-' for stdin).
+  --format <str>  text or json (emits the updated record). [default: text]
+  --help  Show this message and exit.
 
 ```
 
@@ -232,20 +171,18 @@ $ khub edit --help
 
 ```console
 $ khub link --help
+Usage: khub link [OPTIONS] [ID] [PREDICATE] [TARGET]
 
- Usage: khub link [OPTIONS] [ID] [PREDICATE] [TARGET]
+Add a relation: khub link initech-pov partner northwind.
 
- Add a relation: khub link initech-pov partner northwind.
+Arguments:
+  ID <str>
+  PREDICATE <str>
+  TARGET <str>
 
-╭─ Arguments ──────────────────────────────────────────────────────────────────╮
-│   ID             <str>                                                       │
-│   PREDICATE      <str>                                                       │
-│   TARGET         <str>                                                       │
-╰──────────────────────────────────────────────────────────────────────────────╯
-╭─ Options ────────────────────────────────────────────────────────────────────╮
-│ --format        <str>  text or json (emits the edge record). [default: text] │
-│ --help                 Show this message and exit.                           │
-╰──────────────────────────────────────────────────────────────────────────────╯
+Options:
+  --format <str>  text or json (emits the edge record). [default: text]
+  --help  Show this message and exit.
 
 ```
 
@@ -253,20 +190,18 @@ $ khub link --help
 
 ```console
 $ khub unlink --help
+Usage: khub unlink [OPTIONS] [ID] [PREDICATE] [TARGET]
 
- Usage: khub unlink [OPTIONS] [ID] [PREDICATE] [TARGET]
+Remove a relation: khub unlink initech-pov partner northwind.
 
- Remove a relation: khub unlink initech-pov partner northwind.
+Arguments:
+  ID <str>
+  PREDICATE <str>
+  TARGET <str>
 
-╭─ Arguments ──────────────────────────────────────────────────────────────────╮
-│   ID             <str>                                                       │
-│   PREDICATE      <str>                                                       │
-│   TARGET         <str>                                                       │
-╰──────────────────────────────────────────────────────────────────────────────╯
-╭─ Options ────────────────────────────────────────────────────────────────────╮
-│ --format        <str>  text or json (emits the edge record). [default: text] │
-│ --help                 Show this message and exit.                           │
-╰──────────────────────────────────────────────────────────────────────────────╯
+Options:
+  --format <str>  text or json (emits the edge record). [default: text]
+  --help  Show this message and exit.
 
 ```
 
@@ -274,21 +209,17 @@ $ khub unlink --help
 
 ```console
 $ khub remove --help
+Usage: khub remove [OPTIONS] [ID]
 
- Usage: khub remove [OPTIONS] [ID]
+Remove an entity, guarded by inbound edges: khub remove old-fragment [--force].
 
- Remove an entity, guarded by inbound edges: khub remove old-fragment
- [--force].
+Arguments:
+  ID <str>  A bare slug, or type/slug on ambiguity.
 
-╭─ Arguments ──────────────────────────────────────────────────────────────────╮
-│   ID      <str>  A bare slug, or type/slug on ambiguity.                     │
-╰──────────────────────────────────────────────────────────────────────────────╯
-╭─ Options ────────────────────────────────────────────────────────────────────╮
-│ --force                Delete despite inbound edges (leaves them dangling).  │
-│ --format        <str>  text or json (emits the removed record).              │
-│                        [default: text]                                       │
-│ --help                 Show this message and exit.                           │
-╰──────────────────────────────────────────────────────────────────────────────╯
+Options:
+  --force  Delete despite inbound edges (leaves them dangling).
+  --format <str>  text or json (emits the removed record). [default: text]
+  --help  Show this message and exit.
 
 ```
 
@@ -296,27 +227,22 @@ $ khub remove --help
 
 ```console
 $ khub query --help
+Usage: khub query [OPTIONS]
 
- Usage: khub query [OPTIONS]
+Filter entities: khub query --type opportunity --stage prospect --format json.
 
- Filter entities: khub query --type opportunity --stage prospect --format json.
-
-╭─ Options ────────────────────────────────────────────────────────────────────╮
-│ --type           <str>  Restrict to one entity type.                         │
-│ --tag            <str>  Keep entities carrying this tag.                     │
-│ --has            <str>  Keep entities with a resolvable edge for the         │
-│                         predicate.                                           │
-│ --missing        <str>  Keep entities lacking a resolvable edge (gap         │
-│                         finder).                                             │
-│ --orphan                Keep only orphan (edge-less) entities.               │
-│ --stale                 Keep only stale entities.                            │
-│ --draft                 Isolate drafts.                                      │
-│ --active                Exclude drafts.                                      │
-│ --limit          <int>  Cap the returned set.                                │
-│ --format         <str>  text (Rich table on a TTY), json, or ids.            │
-│                         [default: text]                                      │
-│ --help                  Show this message and exit.                          │
-╰──────────────────────────────────────────────────────────────────────────────╯
+Options:
+  --type <str>  Restrict to one entity type.
+  --tag <str>  Keep entities carrying this tag.
+  --has <str>  Keep entities with a resolvable edge for the predicate.
+  --missing <str>  Keep entities lacking a resolvable edge (gap finder).
+  --orphan  Keep only orphan (edge-less) entities.
+  --stale  Keep only stale entities.
+  --draft  Isolate drafts.
+  --active  Exclude drafts.
+  --limit <int>  Cap the returned set.
+  --format <str>  text (Rich table on a TTY), json, or ids. [default: text]
+  --help  Show this message and exit.
 
 ```
 
@@ -324,22 +250,18 @@ $ khub query --help
 
 ```console
 $ khub search --help
+Usage: khub search [OPTIONS] {text}
 
- Usage: khub search [OPTIONS] {text}
+Full-text search: khub search modernization --type transcript --format json.
 
- Full-text search: khub search modernization --type transcript --format json.
+Arguments:
+  text <str>  FTS5 MATCH text: terms, "phrases", OR, NEAR, prefix*. [required]
 
-╭─ Arguments ──────────────────────────────────────────────────────────────────╮
-│ *    text      <str>  FTS5 MATCH text: terms, "phrases", OR, NEAR, prefix*.  │
-│                       [required]                                             │
-╰──────────────────────────────────────────────────────────────────────────────╯
-╭─ Options ────────────────────────────────────────────────────────────────────╮
-│ --type          <str>  Restrict to one entity type.                          │
-│ --limit         <int>  Cap the returned set. [default: 20]                   │
-│ --format        <str>  text (Rich table on a TTY), json, or ids.             │
-│                        [default: text]                                       │
-│ --help                 Show this message and exit.                           │
-╰──────────────────────────────────────────────────────────────────────────────╯
+Options:
+  --type <str>  Restrict to one entity type.
+  --limit <int>  Cap the returned set. [default: 20]
+  --format <str>  text (Rich table on a TTY), json, or ids. [default: text]
+  --help  Show this message and exit.
 
 ```
 
@@ -347,24 +269,20 @@ $ khub search --help
 
 ```console
 $ khub neighbors --help
+Usage: khub neighbors [OPTIONS] {ID}
 
- Usage: khub neighbors [OPTIONS] {ID}
+Walk one-hop neighbors: khub neighbors initech-pov [--predicate client --in].
 
- Walk one-hop neighbors: khub neighbors initech-pov [--predicate client --in].
+Arguments:
+  ID <str>  A bare slug, or type/slug on ambiguity. [required]
 
-╭─ Arguments ──────────────────────────────────────────────────────────────────╮
-│ *    ID      <str>  A bare slug, or type/slug on ambiguity. [required]       │
-╰──────────────────────────────────────────────────────────────────────────────╯
-╭─ Options ────────────────────────────────────────────────────────────────────╮
-│ --predicate        <str>  Restrict adjacency to one predicate.               │
-│ --in                      Inbound edges only (incl. derived inverses).       │
-│ --out                     Outbound (stored) edges only.                      │
-│ --depth            <int>  Bounded multi-hop adjacency over all predicates.   │
-│                           [default: 1]                                       │
-│ --format           <str>  text (Rich table on a TTY) or json.                │
-│                           [default: text]                                    │
-│ --help                    Show this message and exit.                        │
-╰──────────────────────────────────────────────────────────────────────────────╯
+Options:
+  --predicate <str>  Restrict adjacency to one predicate.
+  --in  Inbound edges only (incl. derived inverses).
+  --out  Outbound (stored) edges only.
+  --depth <int>  Bounded multi-hop adjacency over all predicates. [default: 1]
+  --format <str>  text (Rich table on a TTY) or json. [default: text]
+  --help  Show this message and exit.
 
 ```
 
@@ -372,22 +290,18 @@ $ khub neighbors --help
 
 ```console
 $ khub impact --help
+Usage: khub impact [OPTIONS] {ID}
 
- Usage: khub impact [OPTIONS] {ID}
+Compute blast radius: khub impact node-a [--reverse] [--predicate <p>].
 
- Compute blast radius: khub impact node-a [--reverse] [--predicate <p>].
+Arguments:
+  ID <str>  A bare slug, or type/slug on ambiguity. [required]
 
-╭─ Arguments ──────────────────────────────────────────────────────────────────╮
-│ *    ID      <str>  A bare slug, or type/slug on ambiguity. [required]       │
-╰──────────────────────────────────────────────────────────────────────────────╯
-╭─ Options ────────────────────────────────────────────────────────────────────╮
-│ --predicate        <str>  The edge to walk the closure over.                 │
-│                           [default: depends_on]                              │
-│ --reverse                 Walk ancestors (what reaches this node).           │
-│ --format           <str>  tree (depth-marked, the TTY default) or json.      │
-│                           [default: text]                                    │
-│ --help                    Show this message and exit.                        │
-╰──────────────────────────────────────────────────────────────────────────────╯
+Options:
+  --predicate <str>  The edge to walk the closure over. [default: depends_on]
+  --reverse  Walk ancestors (what reaches this node).
+  --format <str>  tree (depth-marked, the TTY default) or json. [default: text]
+  --help  Show this message and exit.
 
 ```
 
@@ -395,22 +309,18 @@ $ khub impact --help
 
 ```console
 $ khub history --help
+Usage: khub history [OPTIONS] {ID}
 
- Usage: khub history [OPTIONS] {ID}
+Trace supersession lineage: khub history decision-0012 [--limit 3].
 
- Trace supersession lineage: khub history decision-0012 [--limit 3].
+Arguments:
+  ID <str>  A bare slug, or type/slug on ambiguity. [required]
 
-╭─ Arguments ──────────────────────────────────────────────────────────────────╮
-│ *    ID      <str>  A bare slug, or type/slug on ambiguity. [required]       │
-╰──────────────────────────────────────────────────────────────────────────────╯
-╭─ Options ────────────────────────────────────────────────────────────────────╮
-│ --predicate        <str>  The self-referential edge to follow.               │
-│                           [default: supersedes]                              │
-│ --limit            <int>  Cap to the N most recent links.                    │
-│ --format           <str>  text (Rich table on a TTY) or json.                │
-│                           [default: text]                                    │
-│ --help                    Show this message and exit.                        │
-╰──────────────────────────────────────────────────────────────────────────────╯
+Options:
+  --predicate <str>  The self-referential edge to follow. [default: supersedes]
+  --limit <int>  Cap to the N most recent links.
+  --format <str>  text (Rich table on a TTY) or json. [default: text]
+  --help  Show this message and exit.
 
 ```
 
@@ -418,19 +328,17 @@ $ khub history --help
 
 ```console
 $ khub validate --help
+Usage: khub validate [OPTIONS] [TARGET]
 
- Usage: khub validate [OPTIONS] [TARGET]
+Validate entities: khub validate [TARGET] [--strict].
 
- Validate entities: khub validate [TARGET] [--strict].
+Arguments:
+  TARGET <str>  A type or type/slug; default: all.
 
-╭─ Arguments ──────────────────────────────────────────────────────────────────╮
-│   TARGET      <str>  A type or type/slug; default: all.                      │
-╰──────────────────────────────────────────────────────────────────────────────╯
-╭─ Options ────────────────────────────────────────────────────────────────────╮
-│ --strict               Close the schema: reject undeclared keys.             │
-│ --format        <str>  text (Rich on a TTY) or json. [default: text]         │
-│ --help                 Show this message and exit.                           │
-╰──────────────────────────────────────────────────────────────────────────────╯
+Options:
+  --strict  Close the schema: reject undeclared keys.
+  --format <str>  text (Rich on a TTY) or json. [default: text]
+  --help  Show this message and exit.
 
 ```
 
@@ -438,18 +346,14 @@ $ khub validate --help
 
 ```console
 $ khub check --help
+Usage: khub check [OPTIONS]
 
- Usage: khub check [OPTIONS]
+Check the active graph: completeness, orphans, dangling edges, strays, cycles, bodies.
 
- Check the active graph: completeness, orphans, dangling edges, strays, cycles,
- bodies.
-
-╭─ Options ────────────────────────────────────────────────────────────────────╮
-│ --strict               Fail the gate on orphans too (default:                │
-│                        informational).                                       │
-│ --format        <str>  text (Rich on a TTY) or json. [default: text]         │
-│ --help                 Show this message and exit.                           │
-╰──────────────────────────────────────────────────────────────────────────────╯
+Options:
+  --strict  Fail the gate on orphans too (default: informational).
+  --format <str>  text (Rich on a TTY) or json. [default: text]
+  --help  Show this message and exit.
 
 ```
 
@@ -457,18 +361,14 @@ $ khub check --help
 
 ```console
 $ khub stale --help
+Usage: khub stale [OPTIONS]
 
- Usage: khub stale [OPTIONS]
+List entities past the `updated` threshold, oldest first: khub stale [--days N].
 
- List entities past the `updated` threshold, oldest first: khub stale [--days
- N].
-
-╭─ Options ────────────────────────────────────────────────────────────────────╮
-│ --days          <int>  Staleness threshold in days; default: the workspace's │
-│                        stale_days.                                           │
-│ --format        <str>  text (Rich table on a TTY) or json. [default: text]   │
-│ --help                 Show this message and exit.                           │
-╰──────────────────────────────────────────────────────────────────────────────╯
+Options:
+  --days <int>  Staleness threshold in days; default: the workspace's stale_days.
+  --format <str>  text (Rich table on a TTY) or json. [default: text]
+  --help  Show this message and exit.
 
 ```
 
@@ -476,16 +376,13 @@ $ khub stale --help
 
 ```console
 $ khub reindex --help
+Usage: khub reindex [OPTIONS]
 
- Usage: khub reindex [OPTIONS]
+Regenerate the OKF index.md from the graph: khub reindex [--dry-run].
 
- Regenerate the OKF index.md from the graph: khub reindex [--dry-run].
-
-╭─ Options ────────────────────────────────────────────────────────────────────╮
-│ --dry-run          Print the diff against the current index.md and write     │
-│                    nothing.                                                  │
-│ --help             Show this message and exit.                               │
-╰──────────────────────────────────────────────────────────────────────────────╯
+Options:
+  --dry-run  Print the diff against the current index.md and write nothing.
+  --help  Show this message and exit.
 
 ```
 
@@ -493,19 +390,29 @@ $ khub reindex --help
 
 ```console
 $ khub viz --help
+Usage: khub viz [OPTIONS]
 
- Usage: khub viz [OPTIONS]
+Render the typed graph to a self-contained Cytoscape HTML: khub viz [--out F] [--open] [--type T].
 
- Render the typed graph to a self-contained Cytoscape HTML: khub viz [--out F]
- [--open] [--type T].
+Options:
+  --out <str>  Output path for the HTML (default viz.html). [default: viz.html]
+  --open  Open the written file in the default browser.
+  --type <str>  Render only that type and its incident edges.
+  --help  Show this message and exit.
 
-╭─ Options ────────────────────────────────────────────────────────────────────╮
-│ --out         <str>  Output path for the HTML (default viz.html).            │
-│                      [default: viz.html]                                     │
-│ --open               Open the written file in the default browser.           │
-│ --type        <str>  Render only that type and its incident edges.           │
-│ --help               Show this message and exit.                             │
-╰──────────────────────────────────────────────────────────────────────────────╯
+```
+
+## khub serve
+
+```console
+$ khub serve --help
+Usage: khub serve [OPTIONS]
+
+Serve a read-only graph view on loopback: khub serve [--port 7777].
+
+Options:
+  --port <int>  Port to bind on 127.0.0.1; 0 takes an ephemeral one. [default: 7777]
+  --help  Show this message and exit.
 
 ```
 
@@ -513,18 +420,14 @@ $ khub viz --help
 
 ```console
 $ khub backfill --help
+Usage: khub backfill [OPTIONS]
 
- Usage: khub backfill [OPTIONS]
+Backfill missing dates and frontmatter: khub backfill [--type T] [--dry-run].
 
- Backfill missing dates and frontmatter: khub backfill [--type T] [--dry-run].
-
-╭─ Options ────────────────────────────────────────────────────────────────────╮
-│ --type           <str>  Add missing per-type frontmatter scaffolding for     │
-│                         that type.                                           │
-│ --dry-run               List the entities and fields that would change;      │
-│                         write nothing.                                       │
-│ --help                  Show this message and exit.                          │
-╰──────────────────────────────────────────────────────────────────────────────╯
+Options:
+  --type <str>  Add missing per-type frontmatter scaffolding for that type.
+  --dry-run  List the entities and fields that would change; write nothing.
+  --help  Show this message and exit.
 
 ```
 
@@ -532,20 +435,15 @@ $ khub backfill --help
 
 ```console
 $ khub wire --help
+Usage: khub wire [OPTIONS]
 
- Usage: khub wire [OPTIONS]
+Wire the workspace into agent context files (CLAUDE.md gets ``@`` imports of the
+schema layer files; AGENTS.md gets a schema pointer). Bare ``wire`` updates whichever already exist.
 
- Wire the workspace into agent context files (CLAUDE.md gets ``@`` imports of
- the schema layer files; AGENTS.md gets a schema pointer). Bare ``wire``
- updates whichever already exist.
-
-╭─ Options ────────────────────────────────────────────────────────────────────╮
-│ --target         <str>  Create and wire a specific file: claude, agents, or  │
-│                         both. Omit to update the agent files that already    │
-│                         exist.                                               │
-│ --dry-run               Print the block(s); write nothing.                   │
-│ --help                  Show this message and exit.                          │
-╰──────────────────────────────────────────────────────────────────────────────╯
+Options:
+  --target <str>  Create and wire a specific file: claude, agents, or both. Omit to update the agent files that already exist.
+  --dry-run  Print the block(s); write nothing.
+  --help  Show this message and exit.
 
 ```
 
@@ -553,22 +451,17 @@ $ khub wire --help
 
 ```console
 $ khub install-skills --help
+Usage: khub install-skills [OPTIONS]
 
- Usage: khub install-skills [OPTIONS]
+Install khub's agent skills: khub install-skills [--target agents] [--global].
 
- Install khub's agent skills: khub install-skills [--target agents] [--global].
-
-╭─ Options ────────────────────────────────────────────────────────────────────╮
-│ --target         <str>  claude, agents, or opencode (repeatable). Default:   │
-│                         all three.                                           │
-│ --skill          <str>  Which skill to install (repeatable). Default: all    │
-│                         shipped.                                             │
-│ --global                Install into the home directories instead of this    │
-│                         workspace.                                           │
-│ --dry-run               Report what would be written, and write nothing.     │
-│ --format         <str>  text (Rich table on a TTY) or json. [default: text]  │
-│ --help                  Show this message and exit.                          │
-╰──────────────────────────────────────────────────────────────────────────────╯
+Options:
+  --target <str>  claude, agents, or opencode (repeatable). Default: all three.
+  --skill <str>  Which skill to install (repeatable). Default: all shipped.
+  --global  Install into the home directories instead of this workspace.
+  --dry-run  Report what would be written, and write nothing.
+  --format <str>  text (Rich table on a TTY) or json. [default: text]
+  --help  Show this message and exit.
 
 ```
 
@@ -576,21 +469,19 @@ $ khub install-skills --help
 
 ```console
 $ khub schema --help
+Usage: khub schema [OPTIONS] COMMAND [ARGS]...
 
- Usage: khub schema [OPTIONS] COMMAND [ARGS]...
+Introspect the active schema.
 
- Introspect the active schema.
+Options:
+  --format <str>  text (Rich table on a TTY) or json. [default: text]
+  --help  Show this message and exit.
 
-╭─ Options ────────────────────────────────────────────────────────────────────╮
-│ --format        <str>  text (Rich table on a TTY) or json. [default: text]   │
-│ --help                 Show this message and exit.                           │
-╰──────────────────────────────────────────────────────────────────────────────╯
-╭─ Commands ───────────────────────────────────────────────────────────────────╮
-│ types  List the declared type names.                                         │
-│ show   Detail one type: fields, enums, required flags, relations, layout.    │
-│ edges  List the relation vocabulary by predicate.                            │
-│ base   Show the effective base block every type inherits.                    │
-╰──────────────────────────────────────────────────────────────────────────────╯
+Commands:
+  types  List the declared type names.
+  show  Detail one type: fields, enums, required flags, relations, layout.
+  edges  List the relation vocabulary by predicate.
+  base  Show the effective base block every type inherits.
 
 ```
 
@@ -598,15 +489,13 @@ $ khub schema --help
 
 ```console
 $ khub schema types --help
+Usage: khub schema types [OPTIONS]
 
- Usage: khub schema types [OPTIONS]
+List the declared type names.
 
- List the declared type names.
-
-╭─ Options ────────────────────────────────────────────────────────────────────╮
-│ --format        <str>  text (Rich table on a TTY) or json. [default: text]   │
-│ --help                 Show this message and exit.                           │
-╰──────────────────────────────────────────────────────────────────────────────╯
+Options:
+  --format <str>  text (Rich table on a TTY) or json. [default: text]
+  --help  Show this message and exit.
 
 ```
 
@@ -614,18 +503,16 @@ $ khub schema types --help
 
 ```console
 $ khub schema show --help
+Usage: khub schema show [OPTIONS] {type}
 
- Usage: khub schema show [OPTIONS] {type}
+Detail one type: fields, enums, required flags, relations, layout.
 
- Detail one type: fields, enums, required flags, relations, layout.
+Arguments:
+  type <str>  Type name. [required]
 
-╭─ Arguments ──────────────────────────────────────────────────────────────────╮
-│ *    type      <str>  Type name. [required]                                  │
-╰──────────────────────────────────────────────────────────────────────────────╯
-╭─ Options ────────────────────────────────────────────────────────────────────╮
-│ --format        <str>  text (Rich table on a TTY) or json. [default: text]   │
-│ --help                 Show this message and exit.                           │
-╰──────────────────────────────────────────────────────────────────────────────╯
+Options:
+  --format <str>  text (Rich table on a TTY) or json. [default: text]
+  --help  Show this message and exit.
 
 ```
 
@@ -633,15 +520,13 @@ $ khub schema show --help
 
 ```console
 $ khub schema edges --help
+Usage: khub schema edges [OPTIONS]
 
- Usage: khub schema edges [OPTIONS]
+List the relation vocabulary by predicate.
 
- List the relation vocabulary by predicate.
-
-╭─ Options ────────────────────────────────────────────────────────────────────╮
-│ --format        <str>  text (Rich table on a TTY) or json. [default: text]   │
-│ --help                 Show this message and exit.                           │
-╰──────────────────────────────────────────────────────────────────────────────╯
+Options:
+  --format <str>  text (Rich table on a TTY) or json. [default: text]
+  --help  Show this message and exit.
 
 ```
 
@@ -649,14 +534,12 @@ $ khub schema edges --help
 
 ```console
 $ khub schema base --help
+Usage: khub schema base [OPTIONS]
 
- Usage: khub schema base [OPTIONS]
+Show the effective base block every type inherits.
 
- Show the effective base block every type inherits.
-
-╭─ Options ────────────────────────────────────────────────────────────────────╮
-│ --format        <str>  text (Rich table on a TTY) or json. [default: text]   │
-│ --help                 Show this message and exit.                           │
-╰──────────────────────────────────────────────────────────────────────────────╯
+Options:
+  --format <str>  text (Rich table on a TTY) or json. [default: text]
+  --help  Show this message and exit.
 
 ```

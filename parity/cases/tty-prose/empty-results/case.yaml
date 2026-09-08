@@ -2,7 +2,7 @@ mode: human
 normalize:
 - tty-layout-free
 steps:
-- argv: ["init", "build-lite", ".", "--no-wire"]
+- argv: ["init", "build-hub", ".", "--no-wire"]
 - argv: ["add", "requirement", "--title", "Lonely", "--kind", "functional"]
 - argv: ["neighbors", "req-lonely"]
 - argv: ["history", "req-lonely", "--predicate", "supersedes"]

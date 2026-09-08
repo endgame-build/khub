@@ -18,6 +18,7 @@ commands:
   - '--format'
 - name: 'upgrade'
   params:
+  - '--dry-run'
   - '--no-schema'
   - '--no-skill'
   - '--no-wire'
@@ -123,6 +124,12 @@ commands:
   - '--out'
   - '--open'
   - '--type'
+# serve blocks until interrupted, so every fixture step is one of its refusals
+# (cli-contract/serve-refusals). --port is reached there; the port bind itself
+# is not, because the TTY gate fires before Listen — see TestListenRefusesBusyPort.
+- name: 'serve'
+  params:
+  - '--port'
 - name: 'backfill'
   params:
   - '--type'

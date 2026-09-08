@@ -201,7 +201,7 @@ func TestCollectionTypesAreSkippedAndReported(t *testing.T) {
 			name = "dry run"
 		}
 		t.Run(name, func(t *testing.T) {
-			root := wsFor(t, "build-hub")
+			root := collectionWS(t)
 			create(t, root, "repo", "svc-a", "repo", "acme/a", "status", "active")
 			report := mustBackfill(t, root, nil, dryRun)
 			if !containsStr(report.SkippedCollections, "repo") {

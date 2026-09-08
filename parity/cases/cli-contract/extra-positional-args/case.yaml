@@ -1,10 +1,10 @@
-# Every command has a fixed arity. A token past the declared arguments is a
+# Commands have fixed arity except batch get and dynamic field commands. A token past the declared arguments is a
 # Click usage error (exit 2), never a silently ignored extra — cobra's default
 # Args is ArbitraryArgs, which accepted all of these. add/edit/query are the
 # exception: their leftovers become fields, so a stray token is a field with no
-# value.
+# value. get accepts both IDs and fails lookup atomically when either is missing.
 steps:
-- argv: ["init", "build-lite", ".", "--no-wire"]
+- argv: ["init", "build-hub", ".", "--no-wire"]
 - argv: ["status", "foo"]
 - argv: ["status", "foo", "bar"]
 - argv: ["check", "x"]

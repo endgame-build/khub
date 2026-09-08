@@ -238,3 +238,42 @@ func locatedCode(err error) string {
 }
 
 func ptr[T any](v T) *T { return &v }
+
+// collectionPresetOntology and collectionPresetStorage make a preset with one
+// collection-layout type and one edge into it — the shape the pre-0.6.0
+// build-hub's repos.yaml and component.repo gave the malformed-collection
+// test. build-hub 0.6.0 ships no collection (every type is a directory of
+// md files), so the schema lives here.
+const collectionPresetOntology = `
+version: "0.1.0"
+ontology:
+  entities:
+    component:
+      attributes:
+        title: { required: true }
+        kind: { enum: [service, library, external], required: true }
+      relations:
+        repo: { to: repo }
+    repo:
+      attributes:
+        repo: { type: text, required: true }
+        status: { enum: [active, archived], required: true }
+`
+
+const collectionPresetStorage = `
+storage:
+  component: { layout: file, path: knowledge/components }
+  repo: { layout: collection, format: yaml, path: knowledge/architecture/repos.yaml }
+`
+
+// collectionWS scaffolds a workspace from the collection preset above, the
+// way `init --preset-source` does.
+func collectionWS(t *testing.T) string {
+	t.Helper()
+	src := t.TempDir()
+	writeRaw(t, src, "collections/ontology.yaml", collectionPresetOntology)
+	writeRaw(t, src, "collections/storage.yaml", collectionPresetStorage)
+	root := t.TempDir()
+	initFrom(t, root, "collections", src)
+	return root
+}

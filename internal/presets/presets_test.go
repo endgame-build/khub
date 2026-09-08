@@ -25,7 +25,7 @@ import (
 
 func TestKnownPresetsFromPackage(t *testing.T) {
 	got := Known(Embedded())
-	want := []string{"build-hub", "build-lite", "firm-ops"}
+	want := []string{"build-hub", "firm-ops"}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("Known() = %v, want %v", got, want)
 	}
@@ -71,7 +71,7 @@ func TestUnknownPresetListsKnown(t *testing.T) {
 	if located.Code != "unknown_preset" {
 		t.Fatalf("code = %s", located.Code)
 	}
-	want := "Unknown preset 'bogus'. Known presets: build-hub, build-lite, firm-ops"
+	want := "Unknown preset 'bogus'. Known presets: build-hub, firm-ops"
 	if located.Message != want {
 		t.Fatalf("message = %q", located.Message)
 	}
@@ -90,17 +90,17 @@ func TestUnknownPresetSourceResolvesNothing(t *testing.T) {
 }
 
 func TestTemplatesShipPerPreset(t *testing.T) {
-	// kb test_every_shipped_template_parses: every build-lite md type ships a
-	// template — prd, arc42, adr and feature-spec carry a heading contract;
-	// requirement (`sections: []`), component and repo (optional sections
-	// only) carry a hint and lenses instead. firm-ops ships none at all.
+	// kb test_every_shipped_template_parses: every build-hub md type ships a
+	// template, one per type — prd, arc42 and adr carry a heading contract;
+	// the rest carry a hint and lenses. firm-ops ships none at all.
 	for _, tc := range []struct {
 		preset string
 		want   []string
 	}{
-		{"build-lite", []string{
-			"adr.yaml", "arc42.yaml", "component.yaml", "feature-spec.yaml",
-			"prd.yaml", "repo.yaml", "requirement.yaml",
+		{"build-hub", []string{
+			"actor.yaml", "adr.yaml", "api.yaml", "arc42.yaml", "capability.yaml",
+			"component.yaml", "prd.yaml", "repo.yaml", "requirement.yaml",
+			"system.yaml", "use-case.yaml",
 		}},
 		{"firm-ops", nil},
 	} {
@@ -112,10 +112,11 @@ func TestTemplatesShipPerPreset(t *testing.T) {
 			t.Errorf("%s templates = %v, want %v", tc.preset, got, tc.want)
 		}
 	}
-	// Sixteen of build-hub's seventeen md types: component gained one with the
-	// kb port; entity alone stays a frontmatter-shaped record with no body contract.
-	if n := len(Templates("build-hub", Embedded())); n != 16 {
-		t.Errorf("build-hub templates = %d, want 16", n)
+	// One template per type: a type added without one is a body contract an
+	// agent never sees.
+	hub := resolvePreset(t, "build-hub")
+	if got, want := len(Templates("build-hub", Embedded())), len(hub.Types.Keys()); got != want {
+		t.Errorf("build-hub templates = %d, want one per type (%d)", got, want)
 	}
 }
 
@@ -168,43 +169,43 @@ func TestFirmOpsPreset(t *testing.T) {
 	}
 }
 
-func TestBuildLitePreset(t *testing.T) {
-	s := resolvePreset(t, "build-lite")
+func TestBuildHubPreset(t *testing.T) {
+	s := resolvePreset(t, "build-hub")
 	singletons := []string{"prd", "arc42"}
+	minted := []string{
+		"capability", "actor", "use-case", "requirement", "adr",
+		"system", "component", "api", "repo",
+	}
 
-	assertTypeSet(t, s, []string{"prd", "arc42", "requirement", "adr", "component", "repo", "feature-spec"})
-	// The thirteen build-hub types lite drops are absent, not renamed.
-	cut := []string{
-		"roadmap", "glossary", "erd", "capability", "pdr", "boundary",
-		"quality-attribute", "domain", "entity", "contract",
-		"baseline", "test-spec", "work-package",
-	}
-	if len(cut) != 13 {
-		t.Fatalf("cut list drifted: %d", len(cut))
-	}
-	for _, name := range append(cut, "external-system") {
-		if s.Types.Has(name) {
-			t.Errorf("cut type %s is back", name)
+	// Eleven types: the two narrative docs and nine minting registries. What
+	// 0.6.0 cut stays cut — the seventeen-type hub's extras and the delivery
+	// layer both build presets dropped before the merge.
+	assertTypeSet(t, s, append(append([]string(nil), singletons...), minted...))
+	for _, gone := range []string{
+		"roadmap", "glossary", "erd", "pdr", "boundary", "quality-attribute",
+		"domain", "entity", "contract", "baseline", "external-system",
+		"feature-spec", "test-spec", "work-package",
+	} {
+		if s.Types.Has(gone) {
+			t.Errorf("cut type %s is back", gone)
 		}
 	}
-	// Five predicate names beyond the universal four; six declarations
-	// (supersedes is declared on both adr and feature-spec).
-	assertPredicates(t, s, []string{"affects", "realized_in", "repo", "requirements", "supersedes"})
-	if n := countDeclarations(s); n != 6 {
-		t.Errorf("declarations = %d, want 6", n)
+	// Twelve predicate names beyond the universal four, one declaration each.
+	assertPredicates(t, s, []string{
+		"actor", "affects", "capabilities", "capability", "consumes", "provider",
+		"realized_in", "repo", "served_by", "supersedes", "system", "use_cases",
+	})
+	if n := countDeclarations(s); n != 12 {
+		t.Errorf("declarations = %d, want 12", n)
 	}
 
-	// Two narrative docs; prd is the required one — check fails without it.
+	// Two narrative docs above the top of the durability ladder: singleton md,
+	// exempt from the orphan sweep; prd is the one `check` demands.
 	for _, name := range singletons {
 		ty := typeOf(t, s, name)
 		if ty.Storage.Layout != schema.LayoutSingleton || ty.Storage.Fmt != "md" {
 			t.Errorf("%s storage = %s/%s", name, ty.Storage.Layout, ty.Storage.Fmt)
 		}
-		if a, ok := ty.Attributes.Get("title"); !ok || !a.Required {
-			t.Errorf("%s.title is not required", name)
-		}
-		// Narrative roots sit above the top of the durability ladder: without
-		// orphan: true they are permanent findings.
 		if !ty.Orphan {
 			t.Errorf("%s does not opt out of the orphan sweep", name)
 		}
@@ -217,285 +218,180 @@ func TestBuildLitePreset(t *testing.T) {
 	}
 	assertPath(t, s, "prd", "knowledge/prd.md")
 	assertPath(t, s, "arc42", "knowledge/arc42.md")
-	for _, name := range []string{"requirement", "adr", "component", "repo", "feature-spec"} {
-		if typeOf(t, s, name).Orphan {
-			t.Errorf("%s opts out of the orphan sweep", name)
+
+	// Every other type is a directory of md files under the one knowledge
+	// root — no collections — minting a lowercase prefixed slug from its
+	// title; adr alone is dated, because only a decision recurs under one
+	// title.
+	for _, name := range minted {
+		ty := typeOf(t, s, name)
+		if ty.Storage.Layout != schema.LayoutFile || ty.Storage.Fmt != "md" {
+			t.Errorf("%s storage = %s/%s", name, ty.Storage.Layout, ty.Storage.Fmt)
 		}
-		if got := typeOf(t, s, name).Storage.Layout; got != schema.LayoutFile {
-			t.Errorf("%s layout = %s", name, got)
+		if ty.Orphan || ty.Required {
+			t.Errorf("%s orphan=%v required=%v", name, ty.Orphan, ty.Required)
+		}
+	}
+	for _, name := range s.Types.Keys() {
+		if a, ok := typeOf(t, s, name).Attributes.Get("title"); !ok || !a.Required {
+			t.Errorf("%s.title is not required", name)
+		}
+	}
+	for _, tc := range []struct{ typ, path, shape string }{
+		{"capability", "knowledge/capabilities", "cap-slug"},
+		{"actor", "knowledge/actors", "act-slug"},
+		{"use-case", "knowledge/use-cases", "uc-slug"},
+		{"requirement", "knowledge/requirements", "req-slug"},
+		{"adr", "knowledge/decisions", "ad-YYYY-MM-DD-slug"},
+		{"system", "knowledge/systems", "sys-slug"},
+		{"component", "knowledge/components", "cmp-slug"},
+		{"api", "knowledge/apis", "api-slug"},
+		{"repo", "knowledge/repos", "rp-slug"},
+	} {
+		assertPath(t, s, tc.typ, tc.path)
+		if got := typeOf(t, s, tc.typ).IdShape(); got != tc.shape {
+			t.Errorf("%s id shape = %q, want %q", tc.typ, got, tc.shape)
 		}
 	}
 
-	// boundary and quality-attribute collapse into requirement.kind.
+	// The map, the people and the grouping: title only; nothing points out
+	// of them. system.owner is slug-form text until `team` turns it into an
+	// edge.
+	for _, name := range []string{"capability", "actor", "system"} {
+		if n := len(ownPredicates(s, name)); n != 0 {
+			t.Errorf("%s declares %d relations", name, n)
+		}
+	}
+	assertText(t, s, "system", "owner", false)
+
+	// use-case: the trigger is required, the actor is not — a scheduled or
+	// event-driven flow needs no actor called "System". served_by is the
+	// blueprint edge; its inversion answers what breaks for users.
+	assertEnum(t, s, "use-case", "trigger", []string{"human", "scheduled", "event", "external"})
+	if !attr(t, s, "use-case", "trigger").Required {
+		t.Error("use-case.trigger is not required")
+	}
+	assertRelation(t, s, "use-case", "actor", []string{"actor"}, false, false)
+	assertRelation(t, s, "use-case", "capability", []string{"capability"}, false, false)
+	assertRelation(t, s, "use-case", "served_by", []string{"component"}, true, false)
+
+	// requirement: boundary and quality-attribute collapse into kind;
+	// enforcement says what holds the rule up.
 	assertEnum(t, s, "requirement", "kind", []string{"functional", "non-functional", "constraint", "business-rule"})
 	if !attr(t, s, "requirement", "kind").Required {
 		t.Error("requirement.kind is not required")
 	}
-	realized := relation(t, s, "requirement", "realized_in")
-	if !reflect.DeepEqual(realized.Targets, []string{"component"}) || !realized.Many {
-		t.Errorf("requirement.realized_in = %v many=%v", realized.Targets, realized.Many)
+	assertEnum(t, s, "requirement", "enforcement", []string{"ui", "backend", "database", "external", "review"})
+	if attr(t, s, "requirement", "enforcement").Required {
+		t.Error("requirement.enforcement is required")
 	}
-	// component carries the ownership boundary; repo is an optional edge to
-	// the registry (an external has none).
+	assertRelation(t, s, "requirement", "capabilities", []string{"capability"}, true, false)
+	assertRelation(t, s, "requirement", "use_cases", []string{"use-case"}, true, false)
+	assertRelation(t, s, "requirement", "realized_in", []string{"component"}, true, false)
+
+	// adr is the only decision type; affects is the blast-radius query.
+	assertEnum(t, s, "adr", "status", []string{"proposed", "accepted", "rejected"})
+	if !attr(t, s, "adr", "status").Required {
+		t.Error("adr.status is not required")
+	}
+	assertRelation(t, s, "adr", "supersedes", []string{"adr"}, false, false)
+	if r := relation(t, s, "adr", "supersedes"); r.Inverse == nil || *r.Inverse != "superseded" || !r.Acyclic {
+		t.Errorf("adr.supersedes inverse=%v acyclic=%v", r.Inverse, r.Acyclic)
+	}
+	if r := relation(t, s, "adr", "affects"); r.Kind != schema.KindAny || !r.Many {
+		t.Errorf("adr.affects kind=%s many=%v", r.Kind, r.Many)
+	}
+
+	// component carries the ownership boundary (kind), who to ask (owner)
+	// and whether to build on it (lifecycle, tier). repo is an edge to the
+	// registry an external simply omits; consumes is the churny side of an
+	// api, its consumers computed.
 	assertEnum(t, s, "component", "kind", []string{"service", "library", "external"})
 	if !attr(t, s, "component", "kind").Required {
 		t.Error("component.kind is not required")
 	}
+	assertText(t, s, "component", "stack", false)
+	assertText(t, s, "component", "owner", false)
+	assertEnum(t, s, "component", "lifecycle", []string{"experimental", "production", "deprecated"})
+	assertEnum(t, s, "component", "tier", []string{"tier-1", "tier-2", "tier-3"})
+	for _, name := range []string{"lifecycle", "tier"} {
+		if attr(t, s, "component", name).Required {
+			t.Errorf("component.%s is required", name)
+		}
+	}
 	if typeOf(t, s, "component").Attributes.Has("repo") {
-		t.Error("component.repo is still a text attribute")
+		t.Error("component.repo is a text attribute, not an edge")
 	}
-	if r := relation(t, s, "component", "repo"); !reflect.DeepEqual(r.Targets, []string{"repo"}) || r.Many || r.Required {
-		t.Errorf("component.repo = %v many=%v required=%v", r.Targets, r.Many, r.Required)
+	assertRelation(t, s, "component", "system", []string{"system"}, false, false)
+	assertRelation(t, s, "component", "repo", []string{"repo"}, false, false)
+	assertRelation(t, s, "component", "consumes", []string{"api"}, true, false)
+	if r := relation(t, s, "component", "consumes"); r.Inverse == nil || *r.Inverse != "consumed_by" {
+		t.Errorf("component.consumes inverse = %v", r.Inverse)
 	}
-	if typeOf(t, s, "component").Relations.Has("consumes") {
-		t.Error("component declares relation consumes")
+
+	// api: provider is required so `check` catches an interface nobody owns.
+	assertEnum(t, s, "api", "kind", []string{"rest", "graphql", "grpc", "events", "data"})
+	assertEnum(t, s, "api", "status", []string{"proposed", "active", "deprecated"})
+	for _, name := range []string{"kind", "status"} {
+		if !attr(t, s, "api", name).Required {
+			t.Errorf("api.%s is not required", name)
+		}
 	}
-	// repo is the codebase registry: name, status, and a title to mint from.
-	assertPath(t, s, "repo", "knowledge/repos")
+	assertRelation(t, s, "api", "provider", []string{"component"}, false, true)
+
+	// repo is the codebase registry: org/name, status, a title to mint from;
+	// ownership is derived from the components naming it, never stored.
 	if a := attr(t, s, "repo", "repo"); a.BaseType != "text" || !a.Required ||
 		a.Pattern == nil || *a.Pattern != `^[a-z0-9._-]+(/[a-z0-9._-]+)+$` {
 		t.Errorf("repo.repo = %s required=%v pattern=%v", a.BaseType, a.Required, a.Pattern)
 	}
 	assertEnum(t, s, "repo", "status", []string{"active", "archived"})
-	if !attr(t, s, "repo", "status").Required || !attr(t, s, "repo", "title").Required {
-		t.Error("repo.status / repo.title are not both required")
-	}
-	// adr is the only decision type; affects is the blast-radius query.
-	assertEnum(t, s, "adr", "status", []string{"proposed", "accepted", "rejected"})
-	if !reflect.DeepEqual(relation(t, s, "adr", "supersedes").Targets, []string{"adr"}) {
-		t.Error("adr.supersedes is not self-typed")
-	}
-	affects := relation(t, s, "adr", "affects")
-	if affects.Kind != schema.KindAny || !affects.Many {
-		t.Errorf("adr.affects kind=%s many=%v", affects.Kind, affects.Many)
-	}
-	// The FS is the work record: obligation only.
-	assertEnum(t, s, "feature-spec", "status", []string{"planned", "active", "done", "dropped"})
-	reqs := relation(t, s, "feature-spec", "requirements")
-	if !reflect.DeepEqual(reqs.Targets, []string{"requirement"}) || !reqs.Many {
-		t.Errorf("feature-spec.requirements = %v many=%v", reqs.Targets, reqs.Many)
-	}
-	if !reflect.DeepEqual(relation(t, s, "feature-spec", "supersedes").Targets, []string{"feature-spec"}) {
-		t.Error("feature-spec.supersedes is not self-typed")
-	}
-	if typeOf(t, s, "feature-spec").Relations.Has("capabilities") {
-		t.Error("feature-spec declares capabilities")
-	}
-	// superseded is computed; status is always an explicit statement.
-	for _, name := range s.Types.Keys() {
-		rtype, _ := s.Types.Get(name)
-		if rtype.Relations.Has("superseded") {
-			t.Errorf("%s stores an inverse", name)
-		}
-	}
-	for _, name := range []string{"adr", "feature-spec"} {
-		if attr(t, s, name, "status").Default != nil {
-			t.Errorf("%s.status carries a default", name)
-		}
-	}
-	// No collections: one knowledge root plus specs/.
-	assertPath(t, s, "requirement", "knowledge/requirements")
-	assertPath(t, s, "adr", "knowledge/decisions")
-	assertPath(t, s, "component", "knowledge/components")
-	assertPath(t, s, "feature-spec", "specs")
-}
-
-func TestBuildHubPreset(t *testing.T) {
-	s := resolvePreset(t, "build-hub")
-	singletons := []string{"prd", "roadmap", "glossary", "arc42", "erd"}
-	all := append([]string{
-		"capability", "requirement", "pdr", "adr", "domain", "entity", "boundary",
-		"quality-attribute", "component", "repo", "contract",
-		"baseline", "feature-spec", "test-spec", "work-package",
-	}, singletons...)
-
-	assertTypeSet(t, s, all)
-	for _, name := range singletons {
-		ty := typeOf(t, s, name)
-		if ty.Storage.Layout != schema.LayoutSingleton || ty.Storage.Fmt != "md" {
-			t.Errorf("%s storage = %s/%s", name, ty.Storage.Layout, ty.Storage.Fmt)
-		}
-		if a, ok := ty.Attributes.Get("title"); !ok || !a.Required {
-			t.Errorf("%s.title is not required", name)
-		}
-		if !ty.Orphan {
-			t.Errorf("%s does not opt out of the orphan sweep", name)
-		}
-		if name != "prd" && ty.Required {
-			t.Errorf("%s is required", name)
-		}
-	}
-	if !typeOf(t, s, "prd").Required {
-		t.Error("prd is not required")
-	}
-	assertPath(t, s, "prd", "knowledge/product/prd.md")
-	assertPath(t, s, "arc42", "knowledge/architecture/arc42.md")
-
-	// Seventeen predicate names beyond the universal four; twenty-three
-	// declarations (domain.depends_on narrows a base edge, so the base-name
-	// filter excludes it from both counts).
-	assertPredicates(t, s, []string{
-		"affects", "applies_to", "capabilities", "component", "consumes", "domains",
-		"drivers", "feature", "owner", "produces", "provider", "reads", "realized_in",
-		"repo", "requirements", "supersedes", "verifies",
-	})
-	if n := countDeclarations(s); n != 23 {
-		t.Errorf("declarations = %d, want 23", n)
-	}
-	d := relation(t, s, "domain", "depends_on")
-	if !reflect.DeepEqual(d.Targets, []string{"domain"}) || d.Kind != schema.KindTyped || !d.Many {
-		t.Errorf("domain.depends_on = %v %s many=%v", d.Targets, d.Kind, d.Many)
-	}
-
-	// entity.owner: exactly one authoritative writer per entity.
-	owner := relation(t, s, "entity", "owner")
-	if !reflect.DeepEqual(owner.Targets, []string{"domain"}) || !owner.Required || owner.Many {
-		t.Errorf("entity.owner = %v required=%v many=%v", owner.Targets, owner.Required, owner.Many)
-	}
-	reads := relation(t, s, "domain", "reads")
-	if !reflect.DeepEqual(reads.Targets, []string{"entity"}) || !reads.Many {
-		t.Errorf("domain.reads = %v many=%v", reads.Targets, reads.Many)
-	}
-
-	// Governance layer.
-	if !attr(t, s, "boundary", "rule").Required {
-		t.Error("boundary.rule is not required")
-	}
-	assertEnum(t, s, "boundary", "scope", []string{"domain", "api", "data", "system"})
-	if !attr(t, s, "quality-attribute", "scenario").Required {
-		t.Error("quality-attribute.scenario is not required")
-	}
-	qa := relation(t, s, "quality-attribute", "applies_to")
-	if qa.Kind != schema.KindUnion || !reflect.DeepEqual(qa.Targets, []string{"domain", "component"}) {
-		t.Errorf("quality-attribute.applies_to = %s %v", qa.Kind, qa.Targets)
-	}
-	if !reflect.DeepEqual(relation(t, s, "adr", "produces").Targets, []string{"boundary"}) {
-		t.Error("adr.produces does not target boundary")
-	}
-	if !reflect.DeepEqual(relation(t, s, "adr", "drivers").Targets, []string{"quality-attribute"}) {
-		t.Error("adr.drivers does not target quality-attribute")
-	}
-
-	// Component topology; repo rows are a pure remotes record.
-	compRepo := relation(t, s, "component", "repo")
-	if !reflect.DeepEqual(compRepo.Targets, []string{"repo"}) || compRepo.Required {
-		t.Errorf("component.repo = %v required=%v", compRepo.Targets, compRepo.Required)
-	}
-	if !reflect.DeepEqual(relation(t, s, "component", "domains").Targets, []string{"domain"}) {
-		t.Error("component.domains does not target domain")
-	}
-	if !reflect.DeepEqual(relation(t, s, "component", "consumes").Targets, []string{"contract"}) {
-		t.Error("component.consumes does not target contract")
+	if !attr(t, s, "repo", "status").Required {
+		t.Error("repo.status is not required")
 	}
 	if n := len(ownPredicates(s, "repo")); n != 0 {
 		t.Errorf("repo declares %d relations", n)
 	}
-	assertEnum(t, s, "component", "kind", []string{"service", "library", "external"})
-	if !attr(t, s, "component", "kind").Required {
-		t.Error("component.kind is not required")
-	}
 
-	// The hub-authored yaml contract.
-	contract := typeOf(t, s, "contract")
-	if contract.Storage.Layout != schema.LayoutFile || contract.Storage.Fmt != "yaml" {
-		t.Errorf("contract storage = %s/%s", contract.Storage.Layout, contract.Storage.Fmt)
-	}
-	provider := relation(t, s, "contract", "provider")
-	if !reflect.DeepEqual(provider.Targets, []string{"component"}) || provider.Kind != schema.KindTyped ||
-		!provider.Required || provider.Many {
-		t.Errorf("contract.provider = %v %s required=%v many=%v",
-			provider.Targets, provider.Kind, provider.Required, provider.Many)
-	}
-	if contract.Relations.Has("consumers") {
-		t.Error("contract stores consumers")
-	}
-
-	// The work spine: feature-spec IS the feature record.
-	for _, gone := range []string{"feature", "solution-spec", "external-system"} {
-		if s.Types.Has(gone) {
-			t.Errorf("type %s is back", gone)
-		}
-	}
-	assertEnum(t, s, "feature-spec", "status", []string{"planned", "active", "done", "dropped"})
-	if !reflect.DeepEqual(relation(t, s, "feature-spec", "capabilities").Targets, []string{"capability"}) {
-		t.Error("feature-spec.capabilities does not target capability")
-	}
-	if !relation(t, s, "feature-spec", "requirements").Many {
-		t.Error("feature-spec.requirements is not many")
-	}
-	ts := relation(t, s, "test-spec", "verifies")
-	if !reflect.DeepEqual(ts.Targets, []string{"feature-spec"}) || !ts.Required {
-		t.Errorf("test-spec.verifies = %v required=%v", ts.Targets, ts.Required)
-	}
-	wpFeature := relation(t, s, "work-package", "feature")
-	if !reflect.DeepEqual(wpFeature.Targets, []string{"feature-spec"}) || !wpFeature.Required {
-		t.Errorf("work-package.feature = %v required=%v", wpFeature.Targets, wpFeature.Required)
-	}
-	if relation(t, s, "work-package", "repo").Many {
-		t.Error("work-package.repo is many")
-	}
-	if typeOf(t, s, "work-package").Relations.Has("requirements") {
-		t.Error("work-package declares requirements")
-	}
-
-	// adr and pdr share the shape; no stored inverse anywhere.
-	for _, name := range []string{"adr", "pdr"} {
-		if !reflect.DeepEqual(relation(t, s, name, "supersedes").Targets, []string{name}) {
-			t.Errorf("%s.supersedes is not self-typed", name)
-		}
-		if relation(t, s, name, "affects").Kind != schema.KindAny {
-			t.Errorf("%s.affects is not an any edge", name)
-		}
-		assertEnum(t, s, name, "status", []string{"proposed", "accepted", "rejected"})
-	}
+	// Inverses are computed at read time, never stored; status is always an
+	// explicit statement.
 	for _, name := range s.Types.Keys() {
 		rtype, _ := s.Types.Get(name)
-		if rtype.Relations.Has("superseded_by") {
-			t.Errorf("%s stores an inverse", name)
+		for _, inverse := range []string{"superseded", "superseded_by", "consumed_by", "consumers"} {
+			if rtype.Relations.Has(inverse) || rtype.Attributes.Has(inverse) {
+				t.Errorf("%s stores the inverse %s", name, inverse)
+			}
 		}
 	}
-
-	// facet_id rides the four import-target types; pdr carries none.
-	for _, name := range []string{"capability", "requirement", "adr", "contract"} {
-		if attr(t, s, name, "facet_id").BaseType != "text" {
-			t.Errorf("%s.facet_id is not text", name)
-		}
-	}
-	if typeOf(t, s, "pdr").Attributes.Has("facet_id") {
-		t.Error("pdr carries facet_id")
-	}
-
-	// Coarse work statuses; no status field carries a default.
-	for _, name := range []string{"feature-spec", "work-package"} {
-		assertEnum(t, s, name, "status", []string{"planned", "active", "done", "dropped"})
-	}
-	assertEnum(t, s, "contract", "status", []string{"proposed", "active", "deprecated"})
-	for _, name := range []string{"feature-spec", "work-package", "adr", "pdr", "contract", "repo"} {
+	for _, name := range []string{"adr", "api", "repo"} {
 		if attr(t, s, name, "status").Default != nil {
 			t.Errorf("%s.status carries a default", name)
 		}
 	}
+}
 
-	// Two yaml registries; everything else per-item files.
-	for _, name := range []string{"repo", "baseline"} {
-		st := typeOf(t, s, name).Storage
-		if st.Layout != schema.LayoutCollection || st.Fmt != "yaml" {
-			t.Errorf("%s storage = %s/%s", name, st.Layout, st.Fmt)
+func TestAliasResolves(t *testing.T) {
+	// build-lite became build-hub in 0.6.0. The retired name still resolves —
+	// kb's graduation command and every pre-0.6.0 config.yaml spell it — but
+	// it is a name that resolves, not a preset anyone is offered.
+	got, err := Resolve("build-lite", Embedded())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != "build-hub/ontology.yaml" {
+		t.Fatalf("Resolve(build-lite) = %q", got)
+	}
+	if c := Canonical("build-lite", Embedded()); c != "build-hub" {
+		t.Errorf("Canonical(build-lite) = %q", c)
+	}
+	for _, name := range []string{"build-hub", "firm-ops", "bogus"} {
+		if c := Canonical(name, Embedded()); c != name {
+			t.Errorf("Canonical(%s) = %q, want it unchanged", name, c)
 		}
 	}
-	assertPath(t, s, "repo", "knowledge/architecture/repos.yaml")
-	assertPath(t, s, "capability", "knowledge/product/capabilities")
-	assertPath(t, s, "adr", "knowledge/architecture/decisions")
-	assertPath(t, s, "pdr", "knowledge/product/decisions")
-	assertPath(t, s, "feature-spec", "specs/feature-specs")
-	assertPath(t, s, "test-spec", "specs/test-specs")
-	assertPath(t, s, "work-package", "specs/work-packages")
-	for _, name := range all {
-		if name == "repo" || name == "baseline" || contains(singletons, name) {
-			continue
-		}
-		if got := typeOf(t, s, name).Storage.Layout; got != schema.LayoutFile {
-			t.Errorf("%s layout = %s", name, got)
+	for _, name := range Known(Embedded()) {
+		if name == "build-lite" {
+			t.Error("Known() lists the alias")
 		}
 	}
 }
@@ -679,6 +575,27 @@ func assertEnum(t *testing.T, s *schema.ResolvedSchema, typeName, name string, w
 	}
 }
 
+// assertRelation pins a typed edge's targets, cardinality and gate.
+func assertRelation(t *testing.T, s *schema.ResolvedSchema, typeName, predicate string,
+	targets []string, many, required bool) {
+	t.Helper()
+	r := relation(t, s, typeName, predicate)
+	if r.Kind != schema.KindTyped || !reflect.DeepEqual(r.Targets, targets) ||
+		r.Many != many || r.Required != required {
+		t.Errorf("%s.%s = %s %v many=%v required=%v, want %v many=%v required=%v",
+			typeName, predicate, r.Kind, r.Targets, r.Many, r.Required, targets, many, required)
+	}
+}
+
+// assertText pins a free-text attribute and whether it is required.
+func assertText(t *testing.T, s *schema.ResolvedSchema, typeName, name string, required bool) {
+	t.Helper()
+	a := attr(t, s, typeName, name)
+	if a.BaseType != "text" || a.Required != required || a.Enum != nil {
+		t.Errorf("%s.%s = %s required=%v enum=%v", typeName, name, a.BaseType, a.Required, a.Enum)
+	}
+}
+
 func assertPath(t *testing.T, s *schema.ResolvedSchema, typeName, want string) {
 	t.Helper()
 	p := typeOf(t, s, typeName).Storage.Path
@@ -687,11 +604,26 @@ func assertPath(t *testing.T, s *schema.ResolvedSchema, typeName, want string) {
 	}
 }
 
-func contains(ss []string, s string) bool {
-	for _, x := range ss {
-		if x == s {
-			return true
-		}
+func TestAliasDoesNotShadowAUserDirectory(t *testing.T) {
+	// The alias exists for the packaged tree. A --preset-source that carries
+	// its own build-lite/ keeps the name: it resolves to that directory, is
+	// recorded as itself, and the unknown-preset message never names a
+	// directory the caller did not type.
+	dir := t.TempDir()
+	mustWrite(t, filepath.Join(dir, "build-lite", "ontology.yaml"),
+		"version: \"1.0.0\"\nontology: {entities: {note: {}}}\n")
+	src := Source(dir)
+	if c := Canonical("build-lite", src); c != "build-lite" {
+		t.Errorf("Canonical(build-lite, user source) = %q", c)
 	}
-	return false
+	got, err := Resolve("build-lite", src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != "build-lite/ontology.yaml" {
+		t.Errorf("Resolve = %q", got)
+	}
+	if k := Known(src); !reflect.DeepEqual(k, []string{"build-lite"}) {
+		t.Errorf("Known = %v", k)
+	}
 }

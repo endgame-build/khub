@@ -373,9 +373,9 @@ seeds, an `expand` object mapping each of the four edge kinds to a depth,
 `limit` capping seeds *before* expansion, `max_documents` capping the result
 *after* expansion by trimming periphery first, and output ordered seeds-first.
 
-**khub:** the MCP server is planned. Its shape should be settled now
-(#57), and `retrieve` (#53) is the read verb khub is missing — today an agent
-composes `search` + `get` + `neighbors` by hand and manages its own budget.
+**khub:** MCP was evaluated and rejected for the current local deployment.
+`retrieve` (#53) remains the read verb khub is missing — today an agent composes
+`search` + `get` + `neighbors` by hand and manages its own budget.
 
 ### OKF
 
@@ -415,7 +415,7 @@ what moved between the two revisions; not part of this review.
 | Schema inference | yes, profiling | planned (#13) |
 | Schema migration | none | planned (#1–#8) |
 | Presets | none (`init --okf` only) | preset directories + templates |
-| Surfaces | CLI + LSP + MCP | CLI + skill (MCP planned) |
+| Surfaces | CLI + LSP + MCP | CLI + skill (MCP rejected for current deployment) |
 | History | git, external | git-derived (`gitlog.py`) |
 | Exit codes | 0 clean / 1 violation / 2 config error | 0 / 1 / 2 (usage) |
 

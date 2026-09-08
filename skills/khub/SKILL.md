@@ -18,12 +18,12 @@ Never hardcode a type or a field. Read the live schema:
 - `khub schema --format json` — every type with its fields, enums, required flags, and relations.
 - `khub schema show <type> --format json` — one type's shape; build an `add`/`edit` from it.
 
-The schema lives at `.khub/ontology.yaml` (the domain model) with `.khub/policy.yaml` and `.khub/storage.yaml` beside it; the active preset (`firm-ops`, `build-hub`, or `build-lite`) is recorded in `.khub/config.yaml`. `khub wire` links the schema into the agent context files (`CLAUDE.md`, `AGENTS.md`), so the ontology may already be in your context.
+The schema lives at `.khub/ontology.yaml` (the domain model) with `.khub/policy.yaml` and `.khub/storage.yaml` beside it; the active preset (`firm-ops` or `build-hub`; `build-lite` is an alias that `init` resolves and records as `build-hub`) is recorded in `.khub/config.yaml`. `khub wire` links the schema into the agent context files (`CLAUDE.md`, `AGENTS.md`), so the ontology may already be in your context.
 
 ## Retrieve
 
 - `khub query --type <t> [--<field> <v>] [--tag <t>] [--has <pred>] [--missing <pred>] --format json` — filter by frontmatter; `--missing` surfaces gaps.
-- `khub get <id> --edges --format json` — one entity plus its derived inverse edges.
+- `khub get <id>... --edges --format json` — one ID returns one object; multiple IDs return an all-or-nothing array in argument order, duplicates included. Raw output accepts one ID only.
 - `khub neighbors <id> --format json` — one-hop adjacency.
 - `khub impact <id> --format json` — transitive closure over a predicate (blast radius).
 - `khub history <id> --format json` — a supersession chain.
@@ -140,7 +140,7 @@ A choice-explaining body (e.g. an `adr`) names a real alternative and a real cos
 >
 > **Consequences.** Review, blame and merge come free. The cost is that every query is a
 > full scan, so this stops being cheap somewhere in the low thousands of entities, and
-> cross-entity edits are not atomic.
+> each command publishes one entity atomically; commands do not form a multi-command transaction.
 
 Thin, and why: *"We decided to use Markdown because it is simple and flexible."* — no
 alternative was on the table, and consequences that are all upside mean the tradeoff has
@@ -149,8 +149,9 @@ not been found yet.
 ## Rules
 
 - Every read AND write emits JSON on a pipe; a table is only for a TTY. `--format json` makes it explicit.
+- Every existing-workspace mutation is serialized workspace-wide from scan through commit. Never delete `.khub/generated/locks/workspace.lock` while khub may be running.
 - Build every write from `khub schema show`, never from a hardcoded shape.
-- On a failed command, read the located error (field, reason, or unresolved target) and correct the call. Exit 2 is a refusal — nothing was written; exit 1 is a gate (`validate`, `check`) that ran and found the workspace wrong.
+- On a failed command, read the located error (field, reason, or unresolved target) and correct the call. Exit 2 reports a refusal or write failure; `write_durability_uncertain` means publication happened, and `upgrade_recovery_failed` requires journal inspection. Exit 1 is a gate (`validate`, `check`) that ran and found the workspace wrong.
 - Gate before you commit: `khub validate` per entity, `khub check` graph-wide.
 - Run `khub validate --strict` in CI. Capture is never blocked, so a typo'd field name (`--knid`) is written to frontmatter and neither default gate reports it; `--strict` is what turns undeclared keys into a finding.
 - `khub search` and `khub query --has/--missing` both reach attribute values, so find an entity by what it holds (`search python`, `query --type component --missing repo`) rather than listing and filtering yourself.
@@ -179,7 +180,13 @@ relation vocabulary in `khub schema`, and route on them:
 |---|---|
 | What must always hold? | the type whose `when` names rules — "must", "never", "always"; its `kind` enum separates a behaviour from a measurable target from an invariant, and the number goes in the body |
 | Why can't I do X? | the type carrying `supersedes` and an `affects: any` edge — the decision, plus every id it constrains |
+| Who is this for? | the type whose `when` names a human role — a customer, an admin, an operator. Title only; the persona is its body. A scheduler or another system is not one: it is a `trigger` value on the flow type |
+| What does the user do, end to end? | the type carrying `trigger` and a `served_by` edge to the part-of-the-system type, with `actor` and `capability` edges beside it; `served_by` inverted (`impact <cmp> --reverse --predicate served_by`) is what breaks for users when a component dies |
+| What does the system do, at map level? | the title-only type that flows belong to (their `capability` edge) and rules are placed in (`capabilities`, many); what realizes it is two hops — its flows, then their `served_by` |
 | What talks to what? | the type carrying `depends_on` and a `kind` that separates ours from a vendor's; `depends_on` carries the wiring, vendors included |
+| Which system is this in? | the type the part-of-the-system type names with a single `system` edge; it carries `owner` and no edges of its own — its members are the computed inverse, and a one-system workspace never creates one |
+| Who consumes this interface? What breaks if it changes? | the type carrying a required `provider` edge back to the part-of-the-system type plus a `kind` and a `status`; consumers are the inverse of that type's `consumes` (`impact <api> --reverse --predicate consumes`), and an unset `provider` is a `check` finding |
+| Who owns this? May I build on it? | `owner`, `lifecycle` and `tier` on the part-of-the-system type (`owner` on the system type too): a slug, `experimental … deprecated`, `tier-1 … tier-3`. Text, not an edge — there is no team type to resolve against yet |
 | Where does that code live? | the type whose attribute holds a remote path (`org/name`); the part-of-the-system type points at it with a single edge |
 | What is this product? How is it shaped? | sections of the narrative singletons (`layout: singleton`) — edit them, never add a second |
 | What am I building right now? | the type whose `status` moves (`planned … done`), if the schema declares one — otherwise **not here**: khub records what must hold and why, not what is in flight |
@@ -187,9 +194,9 @@ relation vocabulary in `khub schema`, and route on them:
 ## When it stops fitting
 
 The declared types are a deliberate floor, not a limit anyone forgot to raise. When a rule
-needs a named enforcement mechanism the schema cannot hold, or a second repo consumes an
-interface, **say so** — that is a schema change someone has to make deliberately, and
-`.khub/ontology.yaml` (with `storage.yaml` for where the type lands) is where it happens; a
-preset's docs carry the order to add types back in. Do not improvise the missing type in
-the meantime: a file naming a type the schema does not declare is a `stray` inside a
-layout and invisible outside one — either way it is not an entity, and `check` says so.
+needs a named enforcement mechanism the schema cannot hold, **say so** — that is a schema
+change someone has to make deliberately, and `.khub/ontology.yaml` (with `storage.yaml`
+for where the type lands) is where it happens; a preset's docs carry the order to add
+types back in. Do not improvise the missing type in the meantime: a file naming a type the
+schema does not declare is a `stray` inside a layout and invisible outside one — either
+way it is not an entity, and `check` says so.

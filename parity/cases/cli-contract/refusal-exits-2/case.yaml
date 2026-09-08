@@ -4,7 +4,7 @@
 # then a failing check that stays 1 in both renderings.
 mode: human
 steps:
-- argv: ["init", "build-lite", ".", "--no-wire"]
+- argv: ["init", "build-hub", ".", "--no-wire"]
 - argv: ["add", "adr", "--title", "X", "--status", "bogus", "--format", "json"]
 - argv: ["add", "adr", "--title", "X", "--status", "bogus"]
 - argv: ["add", "adr", "--title", "No status"]

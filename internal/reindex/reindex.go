@@ -10,13 +10,13 @@
 package reindex
 
 import (
-	"os"
 	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
 
 	"github.com/endgame-build/khub/internal/entity"
+	"github.com/endgame-build/khub/internal/fsio"
 	"github.com/endgame-build/khub/internal/graph"
 	"github.com/endgame-build/khub/internal/index"
 	"github.com/endgame-build/khub/internal/introspect"
@@ -52,6 +52,17 @@ type Result struct {
 // Reindex is reindex.reindex: regenerate index.md from the live graph;
 // dry-run diffs and writes nothing.
 func Reindex(root string, dryRun bool) (*Result, error) {
+	if dryRun {
+		return reindex(root, true)
+	}
+	return fsio.Locked(root, func() (*Result, error) { return reindex(root, false) })
+}
+
+// ReindexHeld is Reindex for a caller that already holds the workspace lock
+// (an init or upgrade running its tails inside its own lock). fsio.Locked is
+// not re-entrant, so calling Reindex there would block forever.
+func ReindexHeld(root string, dryRun bool) (*Result, error) { return reindex(root, dryRun) }
+func reindex(root string, dryRun bool) (*Result, error) {
 	content, count, malformed, err := buildIndexDoc(root, dryRun)
 	if err != nil {
 		return nil, err
@@ -59,7 +70,7 @@ func Reindex(root string, dryRun bool) (*Result, error) {
 	path := filepath.Join(root, IndexName)
 	if dryRun {
 		current := ""
-		if raw, rerr := os.ReadFile(path); rerr == nil {
+		if raw, rerr := fsio.ReadFile(root, path); rerr == nil {
 			current = string(raw)
 		}
 		diff := unifiedDiff(
@@ -69,7 +80,7 @@ func Reindex(root string, dryRun bool) (*Result, error) {
 			Wrote: false, Malformed: malformed,
 		}, nil
 	}
-	if err := os.WriteFile(path, []byte(content), 0o666); err != nil {
+	if err := fsio.AtomicWriteIn(root, path, []byte(content)); err != nil {
 		return nil, err
 	}
 	return &Result{Count: count, Path: path, Content: content, Wrote: true}, nil

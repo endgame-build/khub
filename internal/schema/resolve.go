@@ -14,7 +14,9 @@ package schema
 
 import (
 	"fmt"
+	"github.com/endgame-build/khub/internal/fsio"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/endgame-build/khub/internal/canon"
@@ -135,9 +137,28 @@ func mergeLayers(docs []schemaDoc) (*authoredLayers, error) {
 // the caller's business (introspect.LoadSchema, which knows both the workspace
 // and the embedded tree, is the one that joins them).
 func ResolveWith(baseDoc *omap.Map, schemaFiles []string) (*ResolvedSchema, error) {
+	return resolveIn("", baseDoc, schemaFiles)
+}
+
+// ResolveIn reads workspace layers through root-confined I/O.
+func ResolveIn(root string, baseDoc *omap.Map, schemaFiles []string) (*ResolvedSchema, error) {
+	return resolveIn(root, baseDoc, schemaFiles)
+}
+
+func resolveIn(root string, baseDoc *omap.Map, schemaFiles []string) (*ResolvedSchema, error) {
 	docs := make([]schemaDoc, 0, len(schemaFiles))
 	for _, f := range schemaFiles {
-		data, err := LoadYAML(f)
+		var data *omap.Map
+		var err error
+		if root == "" {
+			data, err = LoadYAML(f)
+		} else {
+			var raw []byte
+			raw, err = fsio.ReadFile(root, f)
+			if err == nil {
+				data, err = ParseDoc(f, string(raw))
+			}
+		}
 		if err != nil {
 			return nil, err
 		}
@@ -224,7 +245,7 @@ func ResolveWith(baseDoc *omap.Map, schemaFiles []string) (*ResolvedSchema, erro
 		baseRelations.Set(rn, rr)
 	}
 	resolved := &ResolvedSchema{Types: types, BaseAttributes: baseAttributes, BaseRelations: baseRelations}
-	if err := checkCollectionPaths(resolved); err != nil {
+	if err := validateResolved(resolved); err != nil {
 		return nil, err
 	}
 	return resolved, nil
@@ -274,30 +295,60 @@ func finishLayered(sf *SchemaFile) error {
 	return nil
 }
 
-// checkCollectionPaths rejects two collection types resolving to one inventory
-// file. Nothing downstream can recover from it: the scan hands every row to
-// both types, and the per-type lock does not serialize writers who share the
-// file. Enforced here because Resolve is the one gate every surface passes.
-func checkCollectionPaths(resolved *ResolvedSchema) error {
-	byPath := map[string][]string{}
-	var order []string
+// validateResolved checks compiled patterns and normalized storage ownership
+// before any caller can scan or write through the resolved schema.
+func validateResolved(resolved *ResolvedSchema) error {
+	types := []*ResolvedType{}
 	for _, name := range resolved.Types.Keys() {
 		t, _ := resolved.Types.Get(name)
-		if t.Storage.Layout != LayoutCollection {
-			continue
+		for _, attrName := range t.Attributes.Keys() {
+			attr, _ := t.Attributes.Get(attrName)
+			if err := attr.CompilePattern(); err != nil {
+				return errs.New("invalid_schema", fmt.Sprintf("Invalid pattern at ontology.entities.%s.attributes.%s: %s", name, attrName, err))
+			}
 		}
-		rel := t.CollectionRelpath()
-		if len(byPath[rel]) == 0 {
-			order = append(order, rel)
+		rel := filepath.Clean(t.StorageRelpath())
+		first := strings.Split(filepath.ToSlash(rel), "/")[0]
+		if !filepath.IsLocal(rel) || rel == "." || first == ".khub" || first == ".git" || first == ".claude" || first == ".agents" || first == ".opencode" || rel == "index.md" || rel == "AGENTS.md" || rel == "CLAUDE.md" {
+			return errs.New("invalid_schema", fmt.Sprintf("Invalid schema at storage.%s.path: path must stay in workspace storage and cannot own khub control files (%s)", name, t.StorageRelpath()))
 		}
-		byPath[rel] = append(byPath[rel], name)
-	}
-	for _, rel := range order {
-		if names := byPath[rel]; len(names) > 1 {
-			return errs.CollectionPathCollision(rel, names)
+		normalized := filepath.ToSlash(rel)
+		if t.Storage.Path != nil {
+			t.Storage.Path = &normalized
 		}
+		for _, other := range types {
+			if storageOverlap(t, other) {
+				if t.Storage.Layout == LayoutCollection && other.Storage.Layout == LayoutCollection {
+					return errs.CollectionPathCollision(normalized, []string{other.Name, t.Name})
+				}
+				return errs.New("invalid_schema", fmt.Sprintf("Storage paths for '%s' and '%s' overlap: %s, %s", other.Name, t.Name, other.StorageRelpath(), normalized))
+			}
+		}
+		types = append(types, t)
 	}
 	return nil
+}
+
+func storageOverlap(a, b *ResolvedType) bool {
+	ap, bp := a.StorageRelpath(), b.StorageRelpath()
+	if ap == bp {
+		return true
+	}
+	if a.Storage.Layout == LayoutFolder && strings.HasPrefix(bp, ap+"/") {
+		return true
+	}
+	if b.Storage.Layout == LayoutFolder && strings.HasPrefix(ap, bp+"/") {
+		return true
+	}
+	aFile := a.Storage.Layout == LayoutSingleton || a.Storage.Layout == LayoutCollection
+	bFile := b.Storage.Layout == LayoutSingleton || b.Storage.Layout == LayoutCollection
+	if aFile && (b.AcceptsEntityPath(ap) || strings.HasPrefix(bp, ap+"/")) {
+		return true
+	}
+	if bFile && (a.AcceptsEntityPath(bp) || strings.HasPrefix(ap, bp+"/")) {
+		return true
+	}
+	return false
 }
 
 // LoadYAML is resolve.load_yaml: a safe-load of one YAML document into an

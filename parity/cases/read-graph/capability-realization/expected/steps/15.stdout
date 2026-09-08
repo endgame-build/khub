@@ -1,0 +1,1 @@
+{"id": "requirement/req-never-store-pan", "type": "requirement", "slug": "req-never-store-pan", "predicate": "use_cases", "target": "uc-pay-for-basket", "changed": true}

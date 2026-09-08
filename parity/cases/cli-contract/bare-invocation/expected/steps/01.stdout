@@ -1,58 +1,35 @@
-                                                                                
- Usage: khub [OPTIONS] COMMAND [ARGS]...                                        
-                                                                                
- khub — schema-bound context management.                                        
-                                                                                
-╭─ Options ────────────────────────────────────────────────────────────────────╮
-│ --workspace  -C      <path>  Operate on this workspace instead of the        │
-│                              working directory.                              │
-│ --version                    Print the khub version and exit.                │
-│ --help                       Show this message and exit.                     │
-╰──────────────────────────────────────────────────────────────────────────────╯
-╭─ Commands ───────────────────────────────────────────────────────────────────╮
-│ init            Scaffold a workspace from a preset and wire it into the      │
-│                 agent context files.                                         │
-│ upgrade         Refresh an existing workspace: the shipped schema and        │
-│                 templates, new scaffolds, the skills, the wire block.        │
-│ status          Summarize the workspace: counts, draft/active, orphan/stale, │
-│                 OKF conformance.                                             │
-│ add             Create an entity: khub add opportunity --client initech      │
-│                 --owner noor --stage prospect.                               │
-│ get             Read an entity's frontmatter and body, optionally with       │
-│                 derived edges.                                               │
-│ edit            Edit an entity: khub edit initech-deal stage proposal-sent   │
-│                 (or --field value).                                          │
-│ link            Add a relation: khub link initech-pov partner northwind.     │
-│ unlink          Remove a relation: khub unlink initech-pov partner           │
-│                 northwind.                                                   │
-│ remove          Remove an entity, guarded by inbound edges: khub remove      │
-│                 old-fragment [--force].                                      │
-│ query           Filter entities: khub query --type opportunity --stage       │
-│                 prospect --format json.                                      │
-│ search          Full-text search: khub search modernization --type           │
-│                 transcript --format json.                                    │
-│ neighbors       Walk one-hop neighbors: khub neighbors initech-pov           │
-│                 [--predicate client --in].                                   │
-│ impact          Compute blast radius: khub impact node-a [--reverse]         │
-│                 [--predicate <p>].                                           │
-│ history         Trace supersession lineage: khub history decision-0012       │
-│                 [--limit 3].                                                 │
-│ validate        Validate entities: khub validate [TARGET] [--strict].        │
-│ check           Check the active graph: completeness, orphans, dangling      │
-│                 edges, strays, cycles, bodies.                               │
-│ stale           List entities past the `updated` threshold, oldest first:    │
-│                 khub stale [--days N].                                       │
-│ reindex         Regenerate the OKF index.md from the graph: khub reindex     │
-│                 [--dry-run].                                                 │
-│ viz             Render the typed graph to a self-contained Cytoscape HTML:   │
-│                 khub viz [--out F] [--open] [--type T].                      │
-│ backfill        Backfill missing dates and frontmatter: khub backfill        │
-│                 [--type T] [--dry-run].                                      │
-│ wire            Wire the workspace into agent context files (CLAUDE.md gets  │
-│                 ``@`` imports of the                                         │
-│                 schema layer files; AGENTS.md gets a schema pointer). Bare   │
-│                 ``wire`` updates whichever already exist.                    │
-│ install-skills  Install khub's agent skills: khub install-skills [--target   │
-│                 agents] [--global].                                          │
-│ schema          Introspect the active schema.                                │
-╰──────────────────────────────────────────────────────────────────────────────╯
+Usage: khub [OPTIONS] COMMAND [ARGS]...
+
+khub — schema-bound context management.
+
+Options:
+  --workspace, -C <path>  Operate on this workspace instead of the working directory.
+  --version  Print the khub version and exit.
+  --help  Show this message and exit.
+
+Commands:
+  init  Scaffold a workspace from a preset and wire it into the agent context files.
+  upgrade  Refresh an existing workspace: the shipped schema and templates, new scaffolds, the skills, the wire block.
+  status  Summarize the workspace: counts, draft/active, orphan/stale, OKF conformance.
+  add  Create an entity: khub add opportunity --client initech --owner noor --stage prospect.
+  get  Read entities' frontmatter and body, optionally with derived edges.
+  edit  Edit an entity: khub edit initech-deal stage proposal-sent  (or --field value).
+  link  Add a relation: khub link initech-pov partner northwind.
+  unlink  Remove a relation: khub unlink initech-pov partner northwind.
+  remove  Remove an entity, guarded by inbound edges: khub remove old-fragment [--force].
+  query  Filter entities: khub query --type opportunity --stage prospect --format json.
+  search  Full-text search: khub search modernization --type transcript --format json.
+  neighbors  Walk one-hop neighbors: khub neighbors initech-pov [--predicate client --in].
+  impact  Compute blast radius: khub impact node-a [--reverse] [--predicate <p>].
+  history  Trace supersession lineage: khub history decision-0012 [--limit 3].
+  validate  Validate entities: khub validate [TARGET] [--strict].
+  check  Check the active graph: completeness, orphans, dangling edges, strays, cycles, bodies.
+  stale  List entities past the `updated` threshold, oldest first: khub stale [--days N].
+  reindex  Regenerate the OKF index.md from the graph: khub reindex [--dry-run].
+  viz  Render the typed graph to a self-contained Cytoscape HTML: khub viz [--out F] [--open] [--type T].
+  serve  Serve a read-only graph view on loopback: khub serve [--port 7777].
+  backfill  Backfill missing dates and frontmatter: khub backfill [--type T] [--dry-run].
+  wire  Wire the workspace into agent context files (CLAUDE.md gets ``@`` imports of the
+schema layer files; AGENTS.md gets a schema pointer). Bare ``wire`` updates whichever already exist.
+  install-skills  Install khub's agent skills: khub install-skills [--target agents] [--global].
+  schema  Introspect the active schema.

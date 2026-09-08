@@ -12,17 +12,21 @@ The schema is imported below, so it loads into context even without running the 
 
 @.khub/storage.yaml
 
-Schema files: [`.khub/ontology.yaml`](.khub/ontology.yaml) (the domain model), [`.khub/policy.yaml`](.khub/policy.yaml), [`.khub/storage.yaml`](.khub/storage.yaml). Preset: `build-lite@0.2.0`. Entity types: `prd`, `arc42`, `requirement`, `adr`, `component`, `repo`, `feature-spec`.
+Schema files: [`.khub/ontology.yaml`](.khub/ontology.yaml) (the domain model), [`.khub/policy.yaml`](.khub/policy.yaml), [`.khub/storage.yaml`](.khub/storage.yaml). Preset: `build-hub@0.6.0`. Entity types: `prd`, `arc42`, `capability`, `actor`, `use-case`, `requirement`, `adr`, `system`, `component`, `api`, `repo`.
 
 Record as you go — when one of these moments occurs, capture it:
 
 - `prd` — someone states what the product is for, who it serves, or what is deliberately out of scope — edit [knowledge/prd.md](knowledge/prd.md), never add a second
 - `arc42` — the shape of the system is described or changes — context, building blocks, data model, a crosscutting concern — edit [knowledge/arc42.md](knowledge/arc42.md), never add a second
+- `capability` — a coherent chunk of product value is named as a thing the product does — the map that use cases belong to and requirements are placed in
+- `actor` — a human role is named that uses the product — a customer, an admin, an operator. Not a system or a scheduler; those are a use case's `trigger`
+- `use-case` — someone describes what a user does end to end, or a flow the system runs on a schedule or an event. Record it when the flow is described, not when it ships
 - `requirement` — a rule is stated that the system must satisfy or must never violate. "must", "never", "always", "policy", "has to" are the tells; a stated invariant is a record, not a reply
-- `adr` — a choice is made, rejected, or revisited between real alternatives — including "we considered X and are not doing it". Capture the reasoning while it is still known
+- `adr` — a choice is made, rejected, or revisited between real alternatives — product or technical, including "we considered X and are not doing it". Capture the reasoning while it is still known
+- `system` — a group of components is named as one thing with one owner and one boundary — a product, a platform, a deployable whole
 - `component` — a part of the system is named as a thing that can break, be owned, or be swapped — a service, a library of ours, or a vendor dependency we sit on
+- `api` — an interface is agreed, published, or versioned — a REST or GraphQL surface, a gRPC service, an event stream, a data feed
 - `repo` — a codebase is named that holds part of this system — a service's repo, a shared library, a monorepo group
-- `feature-spec` — work is proposed, started, finished, or dropped. Record it when it is proposed, then edit `status` as it moves — do not wait until it is done
 
 A stated fact about the system is a capture request, whatever the wording. "note it", "write it down", "log it", "FYI", "heads up", "for the record" — and a bare statement with no instruction at all — all mean record it. Do that, then say what you recorded and its id. Answering "Noted." without a record does not complete the task, and neither does asking which file to write to: entities are written with `khub add`, never by choosing a path.
 
@@ -46,17 +50,21 @@ This repository is a [khub](https://github.com/endgame-build/khub) workspace: it
 
 The ontology is defined in the schema files below; read them to work in this model, even without running the khub CLI:
 
-Schema files: [`.khub/ontology.yaml`](.khub/ontology.yaml) (the domain model), [`.khub/policy.yaml`](.khub/policy.yaml), [`.khub/storage.yaml`](.khub/storage.yaml). Preset: `build-lite@0.2.0`. Entity types: `prd`, `arc42`, `requirement`, `adr`, `component`, `repo`, `feature-spec`.
+Schema files: [`.khub/ontology.yaml`](.khub/ontology.yaml) (the domain model), [`.khub/policy.yaml`](.khub/policy.yaml), [`.khub/storage.yaml`](.khub/storage.yaml). Preset: `build-hub@0.6.0`. Entity types: `prd`, `arc42`, `capability`, `actor`, `use-case`, `requirement`, `adr`, `system`, `component`, `api`, `repo`.
 
 Record as you go — when one of these moments occurs, capture it:
 
 - `prd` — someone states what the product is for, who it serves, or what is deliberately out of scope — edit [knowledge/prd.md](knowledge/prd.md), never add a second
 - `arc42` — the shape of the system is described or changes — context, building blocks, data model, a crosscutting concern — edit [knowledge/arc42.md](knowledge/arc42.md), never add a second
+- `capability` — a coherent chunk of product value is named as a thing the product does — the map that use cases belong to and requirements are placed in
+- `actor` — a human role is named that uses the product — a customer, an admin, an operator. Not a system or a scheduler; those are a use case's `trigger`
+- `use-case` — someone describes what a user does end to end, or a flow the system runs on a schedule or an event. Record it when the flow is described, not when it ships
 - `requirement` — a rule is stated that the system must satisfy or must never violate. "must", "never", "always", "policy", "has to" are the tells; a stated invariant is a record, not a reply
-- `adr` — a choice is made, rejected, or revisited between real alternatives — including "we considered X and are not doing it". Capture the reasoning while it is still known
+- `adr` — a choice is made, rejected, or revisited between real alternatives — product or technical, including "we considered X and are not doing it". Capture the reasoning while it is still known
+- `system` — a group of components is named as one thing with one owner and one boundary — a product, a platform, a deployable whole
 - `component` — a part of the system is named as a thing that can break, be owned, or be swapped — a service, a library of ours, or a vendor dependency we sit on
+- `api` — an interface is agreed, published, or versioned — a REST or GraphQL surface, a gRPC service, an event stream, a data feed
 - `repo` — a codebase is named that holds part of this system — a service's repo, a shared library, a monorepo group
-- `feature-spec` — work is proposed, started, finished, or dropped. Record it when it is proposed, then edit `status` as it moves — do not wait until it is done
 
 A stated fact about the system is a capture request, whatever the wording. "note it", "write it down", "log it", "FYI", "heads up", "for the record" — and a bare statement with no instruction at all — all mean record it. Do that, then say what you recorded and its id. Answering "Noted." without a record does not complete the task, and neither does asking which file to write to: entities are written with `khub add`, never by choosing a path.
 

@@ -1,4 +1,4 @@
-// Package corpus writes a build-lite workspace at scale — a few hundred entity
+// Package corpus writes a build-hub workspace at scale — a few hundred entity
 // files — through the real khub binary, and computes an independent
 // ground-truth manifest for it.
 //
@@ -52,7 +52,7 @@ const Needle = "xylotrope"
 const ManifestName = "smoke-manifest.json"
 
 // Preset is the only preset this generator knows how to fill.
-const Preset = "build-lite"
+const Preset = "build-hub"
 
 // ------------------------------------------------------------------ vocabulary
 //
@@ -668,7 +668,7 @@ func (w *world) makeAdrs(k *khub, count int, targets []string) (ids, chain []str
 
 // -------------------------------------------------------------------- bodies
 //
-// Prose that satisfies the build-lite templates as kb 0.14.0 ships them
+// Prose that satisfies the build-hub templates for the six types kb 0.14.0 ships
 // (requirement: no headings; component and repo: optional headings only; adr:
 // Context/Decision/Consequences with word-count floors of 25/15/20) so a
 // generated corpus is legal and not thin. None of it contains the needle.

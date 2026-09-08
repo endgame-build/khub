@@ -4,7 +4,7 @@
 # set, in the template's `after:` order.
 mode: human
 steps:
-- argv: ["init", "build-lite", ".", "--no-wire"]
+- argv: ["init", "build-hub", ".", "--no-wire"]
 - argv: ["add", "requirement", "--title", "Fast", "--kind", "non-functional"]
 - argv: ["add", "requirement", "--title", "Bounded", "--kind", "constraint"]
 - argv: ["add", "adr", "--title", "Maybe", "--status", "proposed"]

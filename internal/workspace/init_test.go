@@ -16,6 +16,7 @@ import (
 	"testing"
 
 	"github.com/endgame-build/khub/internal/errs"
+	"github.com/endgame-build/khub/internal/presets"
 )
 
 // A minimal, self-contained preset for the fast paths (tests/test_init.py
@@ -33,6 +34,14 @@ const notePresetStorage = `
 storage:
   note: { layout: file, path: notes }
 `
+
+// buildHubTemplates is every template build-hub ships, by name — one per md
+// type, which is all eleven of them.
+var buildHubTemplates = []string{
+	"actor.yaml", "adr.yaml", "api.yaml", "arc42.yaml", "capability.yaml",
+	"component.yaml", "prd.yaml", "repo.yaml", "requirement.yaml",
+	"system.yaml", "use-case.yaml",
+}
 
 // presetSource is the preset_source fixture: a directory holding the tiny
 // `note` preset in the directory layout.
@@ -247,8 +256,8 @@ func TestTemplatesAreCopiedIntoTheWorkspace(t *testing.T) {
 	// The workspace gets its own editable copy of every preset template, and
 	// the directory is created whenever the preset ships one — even empty.
 	ws := filepath.Join(t.TempDir(), "ws")
-	mustInit(t, "build-lite", ws, InitOptions{})
-	for _, name := range []string{"prd.yaml", "arc42.yaml", "adr.yaml", "feature-spec.yaml"} {
+	mustInit(t, "build-hub", ws, InitOptions{})
+	for _, name := range buildHubTemplates {
 		if !exists(filepath.Join(ws, ".khub", "templates", name)) {
 			t.Errorf("missing template %s", name)
 		}
@@ -373,7 +382,7 @@ func TestReinitRefusesADifferentPreset(t *testing.T) {
 	if l.Message != want {
 		t.Fatalf("message = %q", l.Message)
 	}
-	if exists(filepath.Join(ws, "knowledge", "product", "prd.md")) {
+	if exists(filepath.Join(ws, "knowledge", "prd.md")) {
 		t.Error("build-hub's singleton was minted")
 	}
 	if !strings.Contains(readFile(t, filepath.Join(ws, ".khub", "config.yaml")), "firm-ops") {
@@ -385,10 +394,35 @@ func TestPresetMismatchRunsBeforeTheEmptinessGuard(t *testing.T) {
 	// Guard order is contract: a live workspace scaffolded with another preset
 	// reports preset_mismatch, never target_not_empty.
 	ws := filepath.Join(t.TempDir(), "ws")
-	mustInit(t, "build-lite", ws, InitOptions{})
+	mustInit(t, "build-hub", ws, InitOptions{})
 	_, err := Init("firm-ops", ws, InitOptions{}) // no --force
 	if code := located(t, err).Code; code != "preset_mismatch" {
 		t.Fatalf("code = %s", code)
+	}
+}
+
+func TestRetiredPresetNameInitsAsItsReplacement(t *testing.T) {
+	// build-lite became build-hub in 0.6.0; kb's graduation command still
+	// says `khub init build-lite`. The alias resolves and the workspace
+	// records the canonical name, so nothing downstream ever sees the old one.
+	ws := filepath.Join(t.TempDir(), "ws")
+	res := mustInit(t, "build-lite", ws, InitOptions{})
+	if res.Preset != "build-hub" || res.Version != presetVersion("build-hub") {
+		t.Fatalf("preset/version = %q/%q", res.Preset, res.Version)
+	}
+	config := readFile(t, filepath.Join(ws, ".khub", "config.yaml"))
+	if !strings.Contains(config, "preset: build-hub\n") || strings.Contains(config, "build-lite") {
+		t.Errorf("config.yaml does not record the canonical name:\n%s", config)
+	}
+	for _, layer := range []string{"ontology.yaml", "policy.yaml", "storage.yaml"} {
+		head := strings.SplitN(readFile(t, filepath.Join(ws, ".khub", layer)), "\n", 2)[0]
+		if head != "# khub-preset: build-hub@"+presetVersion("build-hub") {
+			t.Errorf("%s header = %q", layer, head)
+		}
+	}
+	// Re-scaffolding under either name is the same preset, not a mismatch.
+	if _, err := Init("build-lite", ws, InitOptions{Force: true}); err != nil {
+		t.Errorf("re-init under the retired name: %v", err)
 	}
 }
 
@@ -546,7 +580,7 @@ func TestReinitStillRestoresWhatIsActuallyMissing(t *testing.T) {
 	ws := filepath.Join(t.TempDir(), "ws")
 	mustInit(t, "build-hub", ws, InitOptions{})
 	tpl := filepath.Join(ws, ".khub", "templates", "adr.yaml")
-	singleton := filepath.Join(ws, "knowledge", "product", "roadmap.md")
+	singleton := filepath.Join(ws, "knowledge", "prd.md")
 	if err := os.Remove(tpl); err != nil {
 		t.Fatal(err)
 	}
@@ -559,7 +593,7 @@ func TestReinitStillRestoresWhatIsActuallyMissing(t *testing.T) {
 	if !exists(tpl) {
 		t.Error("the deleted template was not restored")
 	}
-	if !contains(res.SingletonsCreated, "roadmap") {
+	if !contains(res.SingletonsCreated, "prd") {
 		t.Errorf("singletons_created = %v", res.SingletonsCreated)
 	}
 	if contains(res.Preserved, ".khub/templates/adr.yaml") {
@@ -682,20 +716,21 @@ func TestInitRejectsAFlatLayerFile(t *testing.T) {
 
 func TestGoldenRerunPreserves(t *testing.T) {
 	// parity/cases/init-wire-skills/init-rerun-preserves step 3: a --force
-	// re-init over a workspace holding one entity preserves all six
-	// workspace-owned files, mints no singleton, and modifies nothing.
+	// re-init over a workspace holding one entity preserves every
+	// workspace-owned file — the three layers, config and the eleven
+	// templates — mints no singleton, and modifies nothing.
 	t.Setenv("KHUB_PARITY_NOW", "2026-01-15")
 	ws := filepath.Join(t.TempDir(), "ws")
 	if err := os.MkdirAll(ws, 0o777); err != nil {
 		t.Fatal(err)
 	}
 	inDir(t, ws, func() {
-		mustInit(t, "build-lite", ".", InitOptions{})
+		mustInit(t, "build-hub", ".", InitOptions{})
 		// Stand in for `khub add requirement` (the entity package owns that verb).
 		writeFile(t, filepath.Join("knowledge", "requirements", "req-keep.md"),
 			"---\ntype: requirement\n---\n")
 
-		res := mustInit(t, "build-lite", ".", InitOptions{Force: true})
+		res := mustInit(t, "build-hub", ".", InitOptions{Force: true})
 		if !res.SeededOverCorpus {
 			t.Error("seeded_over_corpus is false")
 		}
@@ -708,10 +743,9 @@ func TestGoldenRerunPreserves(t *testing.T) {
 		want := []string{
 			".khub/ontology.yaml", ".khub/policy.yaml", ".khub/storage.yaml",
 			".khub/config.yaml",
-			".khub/templates/adr.yaml", ".khub/templates/arc42.yaml",
-			".khub/templates/component.yaml", ".khub/templates/feature-spec.yaml",
-			".khub/templates/prd.yaml", ".khub/templates/repo.yaml",
-			".khub/templates/requirement.yaml",
+		}
+		for _, name := range buildHubTemplates {
+			want = append(want, ".khub/templates/"+name)
 		}
 		if !reflect.DeepEqual(res.Preserved, want) {
 			t.Errorf("preserved = %v", res.Preserved)
@@ -761,11 +795,17 @@ func TestGoldenEmptyPresetWritesNothing(t *testing.T) {
 
 // --- golden helpers ----------------------------------------------------------------
 
+// presetVersion is the `version:` each shipped preset declares; a retired
+// name reports the version of the preset it resolves to, and an unknown one
+// reports nothing so the comparison fails loudly.
 func presetVersion(preset string) string {
-	if preset == "firm-ops" || preset == "build-lite" {
+	switch presets.Canonical(preset, presets.Embedded()) {
+	case "build-hub":
+		return "0.6.0"
+	case "firm-ops":
 		return "0.2.0"
 	}
-	return "0.4.0"
+	return ""
 }
 
 // inDir runs fn with the process working directory at dir. Init resolves "."

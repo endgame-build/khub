@@ -137,6 +137,10 @@ func buildFTS(conn *sqlite3.Conn, root string, idx *index.Index, type_ *string) 
 	if err := conn.Exec(createFTS); err != nil {
 		return errs.FTSUnavailable(sqliteDetail(err))
 	}
+	if err := conn.Exec("BEGIN"); err != nil {
+		return err
+	}
+	defer func() { _ = conn.Exec("ROLLBACK") }()
 	stmt, _, err := conn.Prepare(insertFTS)
 	if err != nil {
 		return err
@@ -214,7 +218,7 @@ func buildFTS(conn *sqlite3.Conn, root string, idx *index.Index, type_ *string) 
 			return err
 		}
 	}
-	return nil
+	return conn.Exec("COMMIT")
 }
 
 func insertRow(stmt *sqlite3.Stmt, cols ...string) error {

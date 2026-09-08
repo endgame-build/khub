@@ -1,0 +1,8 @@
+Usage: khub serve [OPTIONS]
+
+Serve a read-only graph view on loopback: khub serve [--port 7777].
+
+Options:
+  --port <int>  Port to bind on 127.0.0.1; 0 takes an ephemeral one. [default: 7777]
+  --help  Show this message and exit.
+

@@ -1,1 +1,1 @@
-{"error": {"code": "internal_path_error", "message": "Cannot mkdir '%WS%/knowledge/requirements': Not a directory. That path cannot exist as addressed. If you did not create it, khub built the path wrong \u2014 please report it with this line."}}
+{"error": {"code": "internal_path_error", "message": "Cannot readdir '%WS%/knowledge/requirements': Not a directory. That path cannot exist as addressed. If you did not create it, khub built the path wrong \u2014 please report it with this line."}}

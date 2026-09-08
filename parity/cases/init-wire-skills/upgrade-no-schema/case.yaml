@@ -2,7 +2,7 @@
 # shipped ontology declares that they do not (`schema_drift`), instead of
 # replacing them; --no-skill and --no-wire leave those tails null.
 steps:
-- argv: ["init", "build-lite", ".", "--no-wire"]
-- sh: "perl -0pi -e 's/^    feature-spec:\\n(?:(?: {6}.*)?\\n)*//m' .khub/ontology.yaml && perl -0pi -e 's/^  feature-spec:\\n(?:    .*\\n)*//m' .khub/storage.yaml"
+- argv: ["init", "build-hub", ".", "--no-wire"]
+- sh: "perl -0pi -e 's/^    adr:\\n(?:(?: {6}.*)?\\n)*//m' .khub/ontology.yaml && perl -0pi -e 's/^  adr:\\n(?:    .*\\n)*//m' .khub/storage.yaml"
 - argv: ["upgrade", "--no-schema", "--no-skill", "--no-wire", "--format", "json"]
 - argv: ["status", "--format", "json"]

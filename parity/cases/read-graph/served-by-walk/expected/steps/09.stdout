@@ -1,0 +1,1 @@
+{"id": "use-case/uc-pay-for-basket", "type": "use-case", "slug": "uc-pay-for-basket", "predicate": "served_by", "target": "cmp-cart", "changed": true}

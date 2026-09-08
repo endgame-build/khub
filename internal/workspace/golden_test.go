@@ -33,9 +33,9 @@ func TestGoldenInitTrees(t *testing.T) {
 		fixture string
 		opt     workspace.InitOptions
 	}{
-		{"build-lite", "build-lite", "init-build-lite-tree", workspace.InitOptions{}},
+		{"build-lite", "build-hub", "init-build-lite-tree", workspace.InitOptions{}},
 		{"firm-ops", "firm-ops", "init-firm-ops-tree", workspace.InitOptions{}},
-		{"named", "build-lite", "init-named", workspace.InitOptions{Name: "Custom Name"}},
+		{"named", "build-hub", "init-named", workspace.InitOptions{Name: "Custom Name"}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			ws := filepath.Join(t.TempDir(), "ws")

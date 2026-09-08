@@ -74,7 +74,7 @@ A type with no storage entry at all takes the default: one file per entity under
 Per type, keyed by the type's name — what `check` demands of it in *this* workspace.
 
 - `required` — singleton-only: `check` reports a missing required singleton (e.g. a workspace without its `prd.md`).
-- `orphan` — `orphan: true` declares that edge-less is this type's *expected* state, so `check` stops reporting its entities as orphans, `--strict` stops failing on them, `query --orphan` stops flagging them and the `status` count stops including them. Default `false`. Use it for a narrative root nothing points at by design: build-hub declares it on all five narrative singletons (`prd`, `roadmap`, `glossary`, `arc42`, `erd`) and build-lite on its two, because every stored edge in those presets points *up* the durability ladder and the documents sit above its top — so orphan-ness there is a finding no authoring could ever close, and without the flag `check --strict` could not go green on a correct workspace. Unlike `required` this is **not** singleton-only: any type whose members are legitimately unwired may declare it, and a singleton that *does* carry relations is still swept. It removes no signal — a missing required edge is still reported by required-completeness, which names the field.
+- `orphan` — `orphan: true` declares that edge-less is this type's *expected* state, so `check` stops reporting its entities as orphans, `--strict` stops failing on them, `query --orphan` stops flagging them and the `status` count stops including them. Default `false`. Use it for a narrative root nothing points at by design: build-hub declares it on its two narrative singletons (`prd`, `arc42`), because every stored edge in that preset points *up* the durability ladder and the documents sit above its top — so orphan-ness there is a finding no authoring could ever close, and without the flag `check --strict` could not go green on a correct workspace. Unlike `required` this is **not** singleton-only: any type whose members are legitimately unwired may declare it, and a singleton that *does* carry relations is still swept. It removes no signal — a missing required edge is still reported by required-completeness, which names the field.
 
 ## Capture cues (`when`)
 
@@ -124,11 +124,11 @@ An explicit `--id` is slugified and written as given. It is *not* exempt from th
 
 The shape every message quotes (`ad-YYYY-MM-DD-slug`, `req-slug`, `svc|lib|ext-slug`, `slug`) is the same one `khub schema show <type>` prints as `id_shape`, so a reader fixing a slug against one is never told something different by the other.
 
-build-lite and build-hub declare the prefixes their docs use in prose (`ad-`, `req-`, `cmp-`, `fs-`, `rp-`, `wp-`, …) and date `adr` and `pdr`; firm-ops declares neither, so its ids are bare slugs.
+build-hub declares the prefixes its docs use in prose (`cap-`, `act-`, `uc-`, `req-`, `ad-`, `sys-`, `cmp-`, `api-`, `rp-`) and dates only `adr`; firm-ops declares neither, so its ids are bare slugs.
 
 ### Migrating an ordinal corpus
 
-`khub validate` reports every surviving `NNN-` id as an `id` error, so a corpus that has not been migrated fails the gate rather than drifting. There is no `khub migrate-ids`: a renamer cannot fix prose references, and it cannot fix external spec files whose frontmatter points in — both of which the docs actively encourage. Three loops cover the three presets; run them from the workspace root.
+`khub validate` reports every surviving `NNN-` id as an `id` error, so a corpus that has not been migrated fails the gate rather than drifting. There is no `khub migrate-ids`: a renamer cannot fix prose references, and it cannot fix external spec files whose frontmatter points in — both of which the docs actively encourage. Three loops cover the two presets; run them from the workspace root.
 
 **firm-ops** strips the ordinal from every id. Folder-layout types (opportunity, project, partnership) are directories, so the directory moves:
 
@@ -147,32 +147,24 @@ for p in meetings transcripts fragments case-studies identity/team clients; do
 done
 ```
 
-**Decisions** (build-lite `knowledge/decisions/ad-`, build-hub `knowledge/architecture/decisions/ad-` and `knowledge/product/decisions/pd-`) substitute the ordinal with the file's own `created` date. On a dated type an unmigrated `ad-001-x` reports `slug carries no date — this type mints ad-YYYY-MM-DD-slug`, not the `git mv` message, because the date arm runs before the ordinal arm; this loop fixes both in one move:
+**Decisions** (build-hub `knowledge/decisions/ad-`) substitute the ordinal with the file's own `created` date. On a dated type an unmigrated `ad-001-x` reports `slug carries no date — this type mints ad-YYYY-MM-DD-slug`, not the `git mv` message, because the date arm runs before the ordinal arm; this loop fixes both in one move:
 
 ```bash
-for f in knowledge/decisions/ad-[0-9][0-9][0-9]-*.md \
-         knowledge/architecture/decisions/ad-[0-9][0-9][0-9]-*.md \
-         knowledge/product/decisions/pd-[0-9][0-9][0-9]-*.md; do
+for f in knowledge/decisions/ad-[0-9][0-9][0-9]-*.md; do
   [ -e "$f" ] || continue
   d=$(sed -n 's/^created: //p' "$f" | head -1)
-  git mv "$f" "$(dirname "$f")/$(basename "$f" | sed -E "s/^(ad|pd)-[0-9]+-/\1-$d-/")"
+  git mv "$f" "$(dirname "$f")/$(basename "$f" | sed -E "s/^ad-[0-9]+-/ad-$d-/")"
 done
 ```
 
 **Every other prefixed type** strips the ordinal, and requirements also rewrite their three prefixes to one — the only move that changes the leading token:
 
 ```bash
-for f in knowledge/components/cmp-*.md specs/fs-*.md \
-         knowledge/product/capabilities/cap-*.md \
-         knowledge/architecture/boundaries/bound-*.md \
-         knowledge/architecture/quality-attributes/qa-*.md \
-         knowledge/architecture/components/cmp-*.md \
-         specs/feature-specs/fs-*.md specs/test-specs/ts-*.md specs/work-packages/wp-*.md; do
+for f in knowledge/components/cmp-*.md knowledge/capabilities/cap-*.md; do
   [ -e "$f" ] || continue
   git mv "$f" "$(echo "$f" | sed -E 's#/([a-z]+)-[0-9]+-#/\1-#')"
 done
-for f in knowledge/requirements/{fr,cst,br}-[0-9][0-9][0-9]-*.md \
-         knowledge/product/requirements/{fr,cst,br}-[0-9][0-9][0-9]-*.md; do
+for f in knowledge/requirements/{fr,cst,br}-[0-9][0-9][0-9]-*.md; do
   [ -e "$f" ] || continue
   git mv "$f" "$(echo "$f" | sed -E 's#/(fr|cst|br)-[0-9]+-#/req-#')"
 done
@@ -214,7 +206,7 @@ Which template a type reads is settled in storage:
 
 ```yaml
 storage:
-  pdr:  { layout: file, path: pdrs, template: decision }   # explicit name
+  rfc:  { layout: file, path: rfcs, template: decision }   # explicit name
   adr:  { layout: file, path: adrs, template: decision }   # two types, one template
   memo: { layout: file, path: memos, template: false }     # explicitly untemplated
 ```

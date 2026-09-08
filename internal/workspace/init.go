@@ -24,11 +24,13 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
 	"github.com/endgame-build/khub/internal/canon"
 	"github.com/endgame-build/khub/internal/errs"
+	"github.com/endgame-build/khub/internal/fsio"
 	"github.com/endgame-build/khub/internal/introspect"
 	"github.com/endgame-build/khub/internal/omap"
 	"github.com/endgame-build/khub/internal/presets"
@@ -71,6 +73,12 @@ type InitOptions struct {
 	PresetSource string
 	Name         string
 	Force        bool
+	// Tails runs after a successful scaffold, under the workspace lock, so the
+	// wire and index tails see the tree the scaffold committed and nothing a
+	// concurrent writer slipped in between. The callee must use the Held
+	// variants (wire.WireHeld, reindex.ReindexHeld): fsio.Locked is not
+	// re-entrant. Tails are non-fatal; the hook returns nothing.
+	Tails func(root string)
 }
 
 // The gitignore line init appends: the runtime collection locks live there.
@@ -83,12 +91,45 @@ const generatedIgnore = ".khub/generated/"
 // the .khub/ it created and the singletons it minted are removed; directories
 // and the .gitignore line may remain (harmless, idempotent on retry).
 func Init(preset, path string, opt InitOptions) (*InitResult, error) {
+	tails := func() (struct{}, error) {
+		if opt.Tails != nil {
+			opt.Tails(path)
+		}
+		return struct{}{}, nil
+	}
+	if _, err := os.Lstat(filepath.Join(path, ".khub")); err == nil {
+		// Re-init over a workspace: one lock covers the scaffold and its tails.
+		return fsio.Locked(path, func() (*InitResult, error) {
+			result, err := initWorkspace(preset, path, opt)
+			if err == nil {
+				_, err = tails()
+			}
+			return result, err
+		})
+	} else if !errors.Is(err, fs.ErrNotExist) {
+		return nil, err
+	}
+	// A fresh scaffold has no lock to hold (there is no .khub/ yet); the tails
+	// take one once it exists, so they at least serialize against each other.
+	result, err := initWorkspace(preset, path, opt)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := fsio.Locked(path, tails); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+func initWorkspace(preset, path string, opt InitOptions) (*InitResult, error) {
 	// str(Path(...)) at the boundary: PresetSource is echoed into config.yaml
 	// and InitResult.Source, so it carries pathlib's spelling, not the caller's.
 	if opt.PresetSource != "" {
 		opt.PresetSource = osPath(pyPath(filepath.ToSlash(opt.PresetSource)))
 	}
 	source := presets.Source(opt.PresetSource)
+	// A retired name resolves to the directory that replaced it, and the
+	// workspace records the canonical one.
+	preset = presets.Canonical(preset, source)
 	schemaPath, err := presets.Resolve(preset, source)
 	if err != nil {
 		return nil, err
@@ -98,7 +139,7 @@ func Init(preset, path string, opt InitOptions) (*InitResult, error) {
 	// Since 0.11.0 a re-init preserves the workspace's schema, so scaffolding a
 	// DIFFERENT preset over it would lay down directories and singletons for
 	// types the active schema does not declare — orphan files no verb can see.
-	if existing, ok := existingPreset(target); ok && existing != preset {
+	if existing, ok := existingPreset(target); ok && presets.Canonical(existing, source) != preset {
 		return nil, errs.New("preset_mismatch", fmt.Sprintf(
 			"%s is a '%s' workspace; refusing to scaffold '%s' over it. "+
 				"Its .khub schema files are workspace-owned and would be kept, leaving files for "+
@@ -138,15 +179,9 @@ func Init(preset, path string, opt InitOptions) (*InitResult, error) {
 		// individual files this run wrote into it, so a failed re-init leaves
 		// the workspace's schema exactly as it was.
 		for _, s := range createdSingletons {
-			_ = os.Remove(osPath(s.path))
+			_ = fsio.Remove(osPath(target), osPath(s.path), false)
 		}
-		if createdKhub {
-			_ = os.RemoveAll(osPath(khubDir))
-		} else {
-			for _, p := range writtenKhub {
-				_ = os.Remove(osPath(p))
-			}
-		}
+		cleanupInitFiles(osPath(target), osPath(khubDir), writtenKhub, createdKhub)
 		return nil, err
 	}
 
@@ -178,6 +213,31 @@ func Init(preset, path string, opt InitOptions) (*InitResult, error) {
 	}, nil
 }
 
+// Cleanup never recursively removes .khub: a writer may have created a stable
+// lock or another file after fresh initialization began. Only empty dirs go.
+func cleanupInitFiles(root, khubDir string, written []string, createdKhub bool) {
+	for _, p := range written {
+		_ = fsio.Remove(root, osPath(p), false)
+	}
+	if !createdKhub {
+		return
+	}
+	dirs := map[string]bool{khubDir: true, filepath.Join(khubDir, "templates"): true}
+	for _, p := range written {
+		for d := filepath.Dir(osPath(p)); d != khubDir && d != filepath.Dir(d); d = filepath.Dir(d) {
+			dirs[d] = true
+		}
+	}
+	ordered := make([]string, 0, len(dirs))
+	for d := range dirs {
+		ordered = append(ordered, d)
+	}
+	sort.Slice(ordered, func(i, j int) bool { return len(ordered[i]) > len(ordered[j]) })
+	for _, d := range ordered {
+		_ = fsio.Remove(root, d, false)
+	}
+}
+
 // singleton is one md singleton this run minted, kept so a mid-init failure
 // can roll the creation back.
 type singleton struct {
@@ -197,7 +257,10 @@ func scaffold(
 	created *[]singleton,
 	written *[]string,
 ) (string, []string, error) {
-	if err := os.MkdirAll(osPath(khubDir), 0o777); err != nil {
+	if err := os.MkdirAll(osPath(target), 0o777); err != nil {
+		return "", nil, err
+	}
+	if err := fsio.MkdirAll(osPath(target), osPath(khubDir)); err != nil {
 		return "", nil, err
 	}
 	preserved := []string{}
@@ -217,7 +280,7 @@ func scaffold(
 		if err != nil {
 			return "", nil, err
 		}
-		if err := writeText(layerPath, text); err != nil {
+		if err := fsio.WriteNewIn(osPath(target), osPath(layerPath), []byte(text)); err != nil {
 			return "", nil, err
 		}
 		*written = append(*written, layerPath)
@@ -250,7 +313,7 @@ func scaffold(
 		if err != nil {
 			return "", nil, err
 		}
-		if err := writeText(configPath, body); err != nil {
+		if err := fsio.WriteNewIn(osPath(target), osPath(configPath), []byte(body)); err != nil {
 			return "", nil, err
 		}
 		*written = append(*written, configPath)
@@ -267,7 +330,7 @@ func scaffold(
 	// empty templates/ still lands an empty .khub/templates/.
 	if presets.HasTemplates(preset, source) {
 		tplDir := pyJoin(khubDir, "templates")
-		if err := os.MkdirAll(osPath(tplDir), 0o777); err != nil {
+		if err := fsio.MkdirAll(osPath(target), osPath(tplDir)); err != nil {
 			return "", nil, err
 		}
 		for _, tpl := range presets.Templates(preset, source) {
@@ -281,7 +344,7 @@ func scaffold(
 			if err != nil {
 				return "", nil, err
 			}
-			if err := writeText(dest, string(payload)); err != nil {
+			if err := fsio.WriteNewIn(osPath(target), osPath(dest), payload); err != nil {
 				return "", nil, err
 			}
 			*written = append(*written, dest)
@@ -369,13 +432,13 @@ func layDownTree(target string, resolved *schema.ResolvedSchema) error {
 			}
 			cpath := pyJoin(target, filepath.ToSlash(rel))
 			if parent := pyParent(cpath); parent != target {
-				if err := os.MkdirAll(osPath(parent), 0o777); err != nil {
+				if err := fsio.MkdirAll(osPath(target), osPath(parent)); err != nil {
 					return err
 				}
 			}
 		default:
 			// file/folder: storageDefaults guarantees a non-empty path.
-			if err := os.MkdirAll(osPath(pyJoin(target, *rt.Storage.Path)), 0o777); err != nil {
+			if err := fsio.MkdirAll(osPath(target), osPath(pyJoin(target, *rt.Storage.Path))); err != nil {
 				return err
 			}
 		}
@@ -425,10 +488,10 @@ func createSingletons(target string, resolved *schema.ResolvedSchema, created *[
 		if err != nil {
 			return err
 		}
-		if err := os.MkdirAll(osPath(pyParent(spath)), 0o777); err != nil {
+		if err := fsio.MkdirAll(osPath(target), osPath(pyParent(spath))); err != nil {
 			return err
 		}
-		if err := writeText(spath, text); err != nil {
+		if err := fsio.WriteNewIn(osPath(target), osPath(spath), []byte(text)); err != nil {
 			return err
 		}
 		*created = append(*created, singleton{typeName: name, path: spath})
@@ -441,11 +504,11 @@ func createSingletons(target string, resolved *schema.ResolvedSchema, created *[
 // failure reads as "not a workspace yet".
 func existingPreset(target string) (string, bool) {
 	configPath := pyJoin(target, ".khub", "config.yaml")
-	fi, err := os.Stat(osPath(configPath))
+	fi, err := fsio.Stat(osPath(target), osPath(configPath))
 	if err != nil || !fi.Mode().IsRegular() {
 		return "", false
 	}
-	raw, err := os.ReadFile(osPath(configPath))
+	raw, err := fsio.ReadFile(osPath(target), osPath(configPath))
 	if err != nil {
 		return "", false
 	}
@@ -566,7 +629,7 @@ func hasEntitySuffix(name string) bool {
 // present, preserving the file's trailing-newline shape.
 func appendGitignore(gitignore, line string) error {
 	existing := ""
-	if b, err := os.ReadFile(osPath(gitignore)); err == nil {
+	if b, err := fsio.ReadFile(filepath.Dir(osPath(gitignore)), osPath(gitignore)); err == nil {
 		existing = string(b)
 	} else if !errors.Is(err, fs.ErrNotExist) {
 		return err
@@ -580,7 +643,7 @@ func appendGitignore(gitignore, line string) error {
 	if existing != "" && !strings.HasSuffix(existing, "\n") {
 		sep = "\n"
 	}
-	return writeText(gitignore, existing+sep+line+"\n")
+	return fsio.AtomicWriteIn(filepath.Dir(osPath(gitignore)), osPath(gitignore), []byte(existing+sep+line+"\n"))
 }
 
 // resolvedName is `target.resolve().name or "workspace"`: the target's own
@@ -607,10 +670,6 @@ func today() string {
 		return frozen
 	}
 	return time.Now().Format("2006-01-02")
-}
-
-func writeText(path, text string) error {
-	return os.WriteFile(osPath(path), []byte(text), 0o666)
 }
 
 // pathExists is Path.exists(): symlinks are followed, so a dangling link

@@ -233,6 +233,7 @@ func newRoot() *cobra.Command {
 	registerStale(root)
 	registerReindex(root)
 	registerViz(root)
+	registerServe(root)
 	registerBackfill(root)
 	registerWire(root)
 	registerInstallSkills(root)

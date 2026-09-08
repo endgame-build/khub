@@ -159,9 +159,9 @@ func TestResolvedPrefixShapes(t *testing.T) {
 }
 
 func TestEveryPresetPrefixIsDeclaredOnARealType(t *testing.T) {
-	// The presets' prose conventions (ad-, req-, wp-) and their schemas agree,
+	// The presets' prose conventions (ad-, req-, cmp-) and their schemas agree,
 	// and every id key sits on a type that mints — a singleton's shape is "".
-	for _, name := range []string{"build-lite", "build-hub", "firm-ops"} {
+	for _, name := range []string{"build-hub", "firm-ops"} {
 		schema, err := ResolveWith(corePresetDoc(t), presetPaths(t, name))
 		if err != nil {
 			t.Fatalf("%s failed to resolve: %v", name, err)
@@ -193,15 +193,14 @@ func TestEveryPresetPrefixIsDeclaredOnARealType(t *testing.T) {
 }
 
 // Only a decision legitimately recurs under one title, so only the decision
-// types are dated; firm-ops mints bare slugs. Pinned so a preset edit that
+// type is dated; firm-ops mints bare slugs. Pinned so a preset edit that
 // dates a registry type (or undates a decision) is a deliberate change.
 func TestShippedDatedTypes(t *testing.T) {
 	want := map[string][]string{
-		"build-lite": {"adr"},
-		"build-hub":  {"pdr", "adr"},
-		"firm-ops":   nil,
+		"build-hub": {"adr"},
+		"firm-ops":  nil,
 	}
-	for _, name := range []string{"build-lite", "build-hub", "firm-ops"} {
+	for _, name := range []string{"build-hub", "firm-ops"} {
 		schema, err := ResolveWith(corePresetDoc(t), presetPaths(t, name))
 		if err != nil {
 			t.Fatalf("%s failed to resolve: %v", name, err)

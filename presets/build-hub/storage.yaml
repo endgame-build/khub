@@ -1,57 +1,37 @@
 # build-hub/storage.yaml — where and how each type's bytes land.
 #
-# Layout: two knowledge roots. knowledge/{product,architecture} is durable
-# truth; specs/ at the workspace root is delivery state (different cadence; the
-# tracker sync flips work-package status, everything else is reviewed prose).
-# The work spine is three flat prefixed-slug dirs:
-# specs/{feature-specs,test-specs,work-packages}.
+# Layout: one knowledge root. knowledge/ is durable truth: the two narrative
+# singletons at its top level, then one directory per type. Nothing in flight
+# lives here — specs belong to the framework that runs the build (see the
+# absent list in ontology.yaml).
 #
-# Storage-form rule: prose a human reviews = one file per record with a
-# prefixed slug, lowercase (ad-/pd-/bound-/qa-/req-/cap-/cmp-/fs-/ts-/wp-slug;
-# adr and pdr are dated, ad-YYYY-MM-DD-slug — a decision legitimately recurs
-# under one title, a registry entry does not; `add --id` slugifies and lookup
-# is case-sensitive, so uppercase would not resolve). Minting reads no
-# siblings: the same title mints the same id, which `add` refuses.
-# homogeneous wiring = a collection row, name-keyed (repos.yaml,
-# baselines.yaml — the registry file is the enumeration). domain, entity,
-# contract are name-keyed files (natural-name identity).
+# Storage form: prose a human reviews = one file per record with a lowercase
+# prefixed slug (cap-/act-/uc-/req-/sys-/cmp-/api-/rp-slug; adr is dated,
+# ad-YYYY-MM-DD-slug — `add --id` slugifies and lookup is case-sensitive, so
+# uppercase would not resolve). No collections: every type is a directory of
+# md files, so a repo or a system carries prose of its own the way a component
+# does.
 #
-# The five narrative singletons live one fixed file each (slug = type name):
-# prd, roadmap, glossary under knowledge/product/ and arc42, erd under
-# knowledge/architecture/. init creates each from its body template in
-# templates/.
+# Minting is a pure function of the schema, the frontmatter and the title — it
+# reads no siblings, so two branches minting the same title collide on one
+# filename (an add/add conflict git shows) instead of numbering past each other
+# silently. Only adr carries a date: a decision legitimately recurs under one
+# title ("use Postgres" is decided, superseded, revisited — that is what
+# `supersedes` is for); the other types are registries of what currently holds,
+# where a repeated title IS a duplicate and `add` refuses it. The date is the
+# day the id was minted and stays that even if `created` is later edited.
 #
-# Contracts are yaml-format file entities (format: yaml; policy prose rides the
-# reserved `body` field). The machine spec (OpenAPI/AsyncAPI) is a standalone
-# file under contracts/specs/ — a SUBDIRECTORY, invisible to the single-level
-# scan — linked via `resource` so codegen and contract tests consume it
-# directly.
+# Body templates live in templates/*.yaml, one per type.
 
 storage:
-  # narrative singletons
-  prd:      { layout: singleton, path: knowledge/product/prd.md }
-  roadmap:  { layout: singleton, path: knowledge/product/roadmap.md }
-  glossary: { layout: singleton, path: knowledge/product/glossary.md }
-  arc42:    { layout: singleton, path: knowledge/architecture/arc42.md }
-  erd:      { layout: singleton, path: knowledge/architecture/erd.md }
-
-  # product: what
-  capability:  { layout: file, path: knowledge/product/capabilities, id_prefix: cap }
-  requirement: { layout: file, path: knowledge/product/requirements, id_prefix: req }
-  pdr:         { layout: file, path: knowledge/product/decisions, id_prefix: pd, id_date: true }
-
-  # architecture: how
-  adr:               { layout: file, path: knowledge/architecture/decisions, id_prefix: ad, id_date: true }
-  domain:            { layout: file, path: knowledge/architecture/domains }
-  entity:            { layout: file, path: knowledge/architecture/entities }
-  boundary:          { layout: file, path: knowledge/architecture/boundaries, id_prefix: bound }
-  quality-attribute: { layout: file, path: knowledge/architecture/quality-attributes, id_prefix: qa }
-  component:         { layout: file, path: knowledge/architecture/components, id_prefix: cmp }
-  repo:              { layout: collection, path: knowledge/architecture/repos.yaml }   # format derived from the path suffix
-  contract:          { layout: file, format: yaml, path: knowledge/architecture/contracts }
-  baseline:          { layout: collection, path: knowledge/architecture/baselines.yaml }
-
-  # specs: delivery state
-  feature-spec: { layout: file, path: specs/feature-specs, id_prefix: fs }
-  test-spec:    { layout: file, path: specs/test-specs,    id_prefix: ts }
-  work-package: { layout: file, path: specs/work-packages, id_prefix: wp }
+  prd:          { layout: singleton, path: knowledge/prd.md }
+  arc42:        { layout: singleton, path: knowledge/arc42.md }
+  capability:   { layout: file, path: knowledge/capabilities, id_prefix: cap }
+  actor:        { layout: file, path: knowledge/actors,       id_prefix: act }
+  use-case:     { layout: file, path: knowledge/use-cases,    id_prefix: uc }
+  requirement:  { layout: file, path: knowledge/requirements, id_prefix: req }
+  adr:          { layout: file, path: knowledge/decisions,    id_prefix: ad, id_date: true }
+  system:       { layout: file, path: knowledge/systems,      id_prefix: sys }
+  component:    { layout: file, path: knowledge/components,   id_prefix: cmp }
+  api:          { layout: file, path: knowledge/apis,         id_prefix: api }
+  repo:         { layout: file, path: knowledge/repos,        id_prefix: rp }

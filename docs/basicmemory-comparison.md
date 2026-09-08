@@ -161,10 +161,10 @@ whole non-CLI client ecosystem with it. khub measured the standing token cost
 agents through the CLI + SKILL.md with JSON automatic on any pipe.
 
 Basic Memory is evidence the rejection's *scope* is right: its MCP position is
-what buys Cursor/ChatGPT/mobile reach, none of which khub targets. When khub's
-planned MCP server does get built (#57), Basic Memory's behavior annotations
-are the concrete borrowable detail — they are the MCP-native rendering of the
-same write-safety posture IWE reaches via always-strict guards (#42, #50).
+what buys Cursor/ChatGPT/mobile reach, none of which khub targets. If the
+deployment model ever changes enough to revisit that rejection, Basic Memory's
+behavior annotations are the concrete borrowable detail — the MCP-native
+rendering of the same write-safety posture IWE reaches via always-strict guards.
 
 ### Sync, cloud, collaboration
 
@@ -213,7 +213,7 @@ survive contact with khub's git-as-review-surface position.
 | Index | persisted SQLite/Postgres, watched, synced | in-memory per invocation, never stale |
 | Search | full-text + semantic vector + rerank | FTS5 BM25, raw MATCH |
 | Context assembly | `build_context` over `memory://` | compose `search`/`get`/`neighbors` (#53 gap) |
-| Agent surface | MCP-first (~18 tools, behavior hints) | CLI + skill; MCP rejected, planned later |
+| Agent surface | MCP-first (~18 tools, behavior hints) | CLI + skill; MCP server rejected for the current deployment model |
 | Client reach | Claude, Cursor, VS Code, ChatGPT, Obsidian, mobile | CLI-capable agents |
 | Multi-project | first-class, mixed local/cloud | one workspace per repo |
 | Sync / cloud / teams | commercial product layer | none, by design (no egress) |

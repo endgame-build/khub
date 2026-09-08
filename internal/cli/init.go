@@ -63,23 +63,27 @@ func registerInit(root *cobra.Command) {
 				if len(args) > 1 {
 					target = args[1]
 				}
+				// Best-effort tails, run by the library under its own lock: a wire
+				// hiccup does not unwind the scaffold, and no other writer can
+				// slip in between the scaffold and the index it lists.
+				var wireStep tail[wire.Result]
+				var indexStep tail[string]
 				result, err := workspace.Init(args[0], target, workspace.InitOptions{
 					PresetSource: presetSource, Name: name, Force: force,
+					Tails: func(root string) {
+						if !noWire { // no selection to make without a wizard: seed both files
+							wireStep = tailOf(wire.WireHeld(root, wire.Options{Claude: true, Agents: true}))
+						}
+						// The index is the cheapest read of the whole corpus, and a
+						// workspace that has never run `reindex` simply has none — so
+						// an agent's first look finds nothing. Written after the
+						// singletons so it lists them.
+						indexStep = indexTailHeld(root)
+					},
 				})
 				if err != nil {
 					return err
 				}
-
-				// Best-effort tail: a wire hiccup does not unwind the scaffold above.
-				var wireStep tail[wire.Result]
-				if !noWire { // no selection to make without a wizard: seed both files
-					wireStep = tailOf(wire.Wire(result.Path, wire.Options{Claude: true, Agents: true}))
-				}
-				// The index is the cheapest read of the whole corpus, and a
-				// workspace that has never run `reindex` simply has none — so an
-				// agent's first look finds nothing. Written after the singletons
-				// above so it lists them.
-				indexStep := indexTail(result.Path)
 
 				payload := initPayload(result, wireStep, indexStep)
 				return Emit(payload, format, func() {
@@ -169,12 +173,17 @@ func wireOutcomes(result *wire.Result) []any {
 // upgrade. Never fatal — a malformed file makes reindex refuse, and the
 // scaffold above stands either way — so it reports the action taken
 // ("created" | "updated" | "unchanged"), or the refusal's message.
-func indexTail(root string) tail[string] {
+func indexTail(root string) tail[string] { return indexTailWith(root, reindex.Reindex) }
+
+// indexTailHeld is indexTail for a caller already inside the workspace lock.
+func indexTailHeld(root string) tail[string] { return indexTailWith(root, reindex.ReindexHeld) }
+
+func indexTailWith(root string, run func(string, bool) (*reindex.Result, error)) tail[string] {
 	before, rerr := os.ReadFile(filepath.Join(root, reindex.IndexName))
 	if rerr != nil && !errors.Is(rerr, fs.ErrNotExist) {
 		return tail[string]{Err: tailError(rerr)}
 	}
-	result, err := reindex.Reindex(root, false)
+	result, err := run(root, false)
 	if err != nil {
 		return tail[string]{Err: tailError(err)}
 	}

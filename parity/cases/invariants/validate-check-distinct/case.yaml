@@ -1,5 +1,5 @@
 steps:
-- argv: ["init", "build-lite", ".", "--no-wire"]
+- argv: ["init", "build-hub", ".", "--no-wire"]
 - argv: ["add", "adr", "--title", "Incomplete"]
 - argv: ["validate"]
 - argv: ["validate", "--format", "json"]

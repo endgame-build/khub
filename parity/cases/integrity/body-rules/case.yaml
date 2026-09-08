@@ -5,7 +5,7 @@
 # --strict, which fails on the orphan, does not fail on thin once the adr is
 # wired.
 steps:
-- argv: ["init", "build-lite", ".", "--no-wire"]
+- argv: ["init", "build-hub", ".", "--no-wire"]
 - argv: ["add", "adr", "--title", "Thin one", "--status", "accepted", "--body-file", "-"]
   stdin: "## Context\n\nSessions today live in a server-side store that every API node must reach, which couples scaling the API to scaling that store and makes a regional failover a data migration.\n\n## Decision\n\nTBD, but probably JWT.\n\n## Consequences\n\nTokens are stateless, so sessions need no store; revocation gets harder and needs a denylist or short expiry on every token.\n"
 - argv: ["validate", "adr/ad-2026-01-15-thin-one", "--format", "json"]

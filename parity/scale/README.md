@@ -11,7 +11,7 @@ Four pieces, all Go, all stdlib:
 
 | | |
 |---|---|
-| `corpus/` | the generator — writes a build-lite workspace of 300–2000 entities, every one authored by `khub add`, and its manifest |
+| `corpus/` | the generator — writes a build-hub workspace of 300–2000 entities, every one authored by `khub add`, and its manifest |
 | `gen/` | the generator's command line |
 | `smoke.sh` | 80 assertions over that workspace, every command timed |
 | `bench/` | the read surface over several corpus sizes, reporting how cost grows |

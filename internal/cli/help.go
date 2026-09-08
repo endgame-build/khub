@@ -47,6 +47,10 @@ func renderHelp(cmd *cobra.Command) { renderHelpText(cmd, true) }
 func renderNoArgsHelp(cmd *cobra.Command) { renderHelpText(cmd, false) }
 
 func renderHelpText(cmd *cobra.Command, echoed bool) {
+	if !IsTTY() {
+		renderPlainHelp(cmd, echoed)
+		return
+	}
 	width := helpWidth()
 	var b strings.Builder
 	writeUsageBlock(&b, cmd, width)
@@ -813,7 +817,7 @@ var helpArguments = map[string][]helpArg{
 		{name: "TYPE", metavar: "<str>", help: "The entity type to create."},
 	},
 	"khub get": {
-		{name: "ID", metavar: "<str>", help: "A bare slug, or type/slug on ambiguity."},
+		{name: "ID...", metavar: "<str>", help: "One or more bare slugs or qualified type/slug IDs, in output order."},
 	},
 	"khub edit": {
 		{name: "ID", metavar: "<str>", help: "A bare slug, or type/slug on ambiguity."},
@@ -850,4 +854,59 @@ var helpArguments = map[string][]helpArg{
 	"khub schema show": {
 		{name: "type", metavar: "<str>", required: true, help: "Type name."},
 	},
+}
+
+// Plain help reuses the same metadata and ordering without terminal chrome.
+func renderPlainHelp(cmd *cobra.Command, echoed bool) {
+	var b strings.Builder
+	fmt.Fprintf(&b, "Usage: %s %s\n", cmd.CommandPath(), usageSuffix(cmd))
+	first, rest := helpProse(cmd)
+	for _, prose := range []string{first, rest} {
+		if prose != "" {
+			fmt.Fprintf(&b, "\n%s\n", prose)
+		}
+	}
+	if args := helpArgsFor(cmd); len(args) > 0 {
+		b.WriteString("\nArguments:\n")
+		for _, a := range args {
+			fmt.Fprintf(&b, "  %s %s", a.name, a.metavar)
+			if a.help != "" {
+				fmt.Fprintf(&b, "  %s", a.help)
+			}
+			if a.required {
+				b.WriteString(" [required]")
+			}
+			b.WriteByte('\n')
+		}
+	}
+	if opts := helpOptsFor(cmd); len(opts) > 0 {
+		b.WriteString("\nOptions:\n")
+		for _, o := range opts {
+			name := o.long
+			if o.short != "" {
+				name += ", " + o.short
+			}
+			if o.metavar != "" {
+				name += " " + o.metavar
+			}
+			fmt.Fprintf(&b, "  %s  %s", name, o.help)
+			if o.def != "" {
+				fmt.Fprintf(&b, " [default: %s]", o.def)
+			}
+			if o.required {
+				b.WriteString(" [required]")
+			}
+			b.WriteByte('\n')
+		}
+	}
+	if subs := helpSubcommands(cmd); len(subs) > 0 {
+		b.WriteString("\nCommands:\n")
+		for _, sub := range subs {
+			fmt.Fprintf(&b, "  %s  %s\n", sub.Name(), sub.Short)
+		}
+	}
+	if echoed {
+		b.WriteByte('\n')
+	}
+	fmt.Fprint(os.Stdout, b.String())
 }

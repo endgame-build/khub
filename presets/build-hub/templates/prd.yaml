@@ -1,20 +1,26 @@
-# The section names are the ones build-lite's prd uses (Title Case, narrative first,
-# audit apparatus last), so a corpus moving between the two presets keeps its
-# headings. `Features`, not `Functional requirements`: `requirement` is a type here
-# with `kind: functional`, and the two side by side is the confusion the split exists
-# to prevent.
+# No published standard exists for a PRD the way arc42 exists for the file beside
+# this one, so three rules chose this shape and hold it:
+#
+#   - order follows the reader: narrative first, audit apparatus last;
+#   - Title Case throughout, matching arc42, so no corpus fails on capitalisation;
+#   - no section name collides inside this preset's own ontology. Hence `Features` and
+#     not `Functional requirements`: `requirement` is already a type here, with
+#     `kind: functional`.
 #
 # BREAKING with the kb 0.14.0 port: matching is a case-sensitive prefix and order is
 # part of the contract, so a PRD written against the earlier template fails
 # `body_shape` after `khub upgrade` until its headings are renamed. CHANGELOG carries
 # the map.
 #
-# Required are the five that carried the contract before this port. Everything added
-# since is `optional: true` — the standing rule for a section a type gains after it
-# ships. Glossary and Roadmap are singletons of their own in this preset, so their
-# sections here are optional pointers, never a second copy.
+# Required is "a PRD is meaningless without it". The rest are what a gated workflow
+# adds — a corpus with no gate owes no recommendation and no audit trail, and a
+# workflow with one requires them on its own account.
+#
+# User journeys stay inside Target Users and counter-metrics inside Success Metrics:
+# khub reads only `##`, so declaring either as a section would seed a shape that
+# fights how a PRD is written. Their guidance rides in the parent section's hint.
 
-title: Product requirements
+title: PRD
 sections:
 - heading: Document Purpose
   optional: true
@@ -25,8 +31,7 @@ sections:
 - heading: Target Users
   hint: who this serves, in their words - the jobs they are hiring it for, who it deliberately does not serve, and the journeys they actually narrated
 - heading: Glossary
-  optional: true
-  hint: link the glossary singleton; do not restate terms
+  hint: the ubiquitous language - term, one line each; a synonym introduced downstream is a defect
 - heading: Features
   hint: what the product does and how you would know it works - group by capability under sub-headings, never by how it is built; link requirement ids (req- slugs) inline, coverage is a graph check
 - heading: Non-Goals
@@ -38,7 +43,7 @@ sections:
   hint: how we know it worked - a baseline, a target, a date and the source someone queries; and what must NOT worsen while they move
 - heading: Roadmap
   optional: true
-  hint: link the roadmap singleton; sequencing lives there
+  hint: what lands in what order, and what each order buys - omit it where a separate plan owns sequencing
 - heading: Alternatives & Recommendation
   optional: true
   hint: what else was on the table and what each would cost, then the verdict and what would disconfirm it

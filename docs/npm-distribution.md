@@ -1,8 +1,9 @@
 # Feature spec: npm distribution
 
-Structure follows the `feature-spec` template khub's own build-hub preset ships
-(`presets/build-hub/templates/feature-spec.yaml`); this repo is not a khub
-workspace, so the spec lives as a plain doc.
+Structure follows the four-section feature-spec shape (Summary, Scope, Behaviour,
+Acceptance criteria) the build presets shipped as a template until build-hub
+0.5.0 cut the delivery layer; this repo is not a khub workspace either, so the
+spec lives as a plain doc.
 
 ## Summary
 

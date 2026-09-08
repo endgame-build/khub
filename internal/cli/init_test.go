@@ -26,7 +26,7 @@ func TestIndexTailWritesThenLeavesTheIndex(t *testing.T) {
 	// The tail init and upgrade share: created on a fresh scaffold, unchanged
 	// on a re-run, updated when the corpus moved under it.
 	ws := filepath.Join(t.TempDir(), "ws")
-	if _, err := workspace.Init("build-lite", ws, workspace.InitOptions{}); err != nil {
+	if _, err := workspace.Init("build-hub", ws, workspace.InitOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	index := filepath.Join(ws, reindex.IndexName)
@@ -52,7 +52,7 @@ func TestIndexTailReportsARefusalInsteadOfFailing(t *testing.T) {
 	// A malformed entity makes reindex refuse; the scaffold above stands and
 	// the tail says why the index was skipped.
 	ws := filepath.Join(t.TempDir(), "ws")
-	if _, err := workspace.Init("build-lite", ws, workspace.InitOptions{}); err != nil {
+	if _, err := workspace.Init("build-hub", ws, workspace.InitOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	bad := filepath.Join(ws, "knowledge", "requirements", "broken.md")
@@ -103,7 +103,7 @@ func TestUpgradePayloadKeyOrder(t *testing.T) {
 	payload := upgradePayload(result,
 		tailOf(&skill.Report{}, nil), tailOf(&wire.Result{}, nil), tailOf(&unchanged, nil))
 	want := []string{"path", "preset", "version_from", "version_to", "config", "singletons_created",
-		"schema_drift", "skills", "wire", "index"}
+		"schema_drift", "skills", "wire", "index", "dry_run", "removed_types"}
 	if !reflect.DeepEqual(payload.Keys(), want) {
 		t.Errorf("keys = %v, want %v", payload.Keys(), want)
 	}
@@ -118,7 +118,7 @@ func TestUpgradePayloadKeyOrder(t *testing.T) {
 		tailOf[wire.Result](nil, errors.New("wire broke")),
 		tailOf[string](nil, errors.New("index broke")))
 	want = []string{"path", "preset", "version_from", "version_to", "config", "singletons_created",
-		"schema_drift", "skills", "skills_error", "wire", "wire_error", "index", "index_error"}
+		"schema_drift", "skills", "skills_error", "wire", "wire_error", "index", "index_error", "dry_run", "removed_types"}
 	if !reflect.DeepEqual(payload.Keys(), want) {
 		t.Errorf("keys = %v, want %v", payload.Keys(), want)
 	}

@@ -1,17 +1,12 @@
-                                                                                
- Usage: khub install-skills [OPTIONS]                                           
-                                                                                
- Install khub's agent skills: khub install-skills [--target agents] [--global]. 
-                                                                                
-╭─ Options ────────────────────────────────────────────────────────────────────╮
-│ --target         <str>  claude, agents, or opencode (repeatable). Default:   │
-│                         all three.                                           │
-│ --skill          <str>  Which skill to install (repeatable). Default: all    │
-│                         shipped.                                             │
-│ --global                Install into the home directories instead of this    │
-│                         workspace.                                           │
-│ --dry-run               Report what would be written, and write nothing.     │
-│ --format         <str>  text (Rich table on a TTY) or json. [default: text]  │
-│ --help                  Show this message and exit.                          │
-╰──────────────────────────────────────────────────────────────────────────────╯
+Usage: khub install-skills [OPTIONS]
+
+Install khub's agent skills: khub install-skills [--target agents] [--global].
+
+Options:
+  --target <str>  claude, agents, or opencode (repeatable). Default: all three.
+  --skill <str>  Which skill to install (repeatable). Default: all shipped.
+  --global  Install into the home directories instead of this workspace.
+  --dry-run  Report what would be written, and write nothing.
+  --format <str>  text (Rich table on a TTY) or json. [default: text]
+  --help  Show this message and exit.
 

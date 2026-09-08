@@ -193,7 +193,7 @@ same "status: counts per type" "$(printf '%s' "$STATUS" | json field counts)" "$
 same "status: total"           "$(printf '%s' "$STATUS" | json field total)"  "$M_TOTAL"
 same "status: drafts"          "$(printf '%s' "$STATUS" | json field draft)"  "$M_DRAFTS"
 same "status: orphans"         "$(printf '%s' "$STATUS" | json field orphan)" "$M_ORPHAN_N"
-# 90 is build-lite's stale_days: workspace.DefaultStaleDays, no policy override.
+# 90 is build-hub's stale_days: workspace.DefaultStaleDays, no policy override.
 same "status: stale (90-day default)" "$(printf '%s' "$STATUS" | json field stale)" "$M_STALE90"
 same "status: no strays, nothing malformed" \
   "$(printf '%s' "$STATUS" | json field stray)/$(printf '%s' "$STATUS" | json field malformed)" "0/0"

@@ -1,13 +1,9 @@
-                                                                                
- Usage: khub check [OPTIONS]                                                    
-                                                                                
- Check the active graph: completeness, orphans, dangling edges, strays, cycles, 
- bodies.                                                                        
-                                                                                
-╭─ Options ────────────────────────────────────────────────────────────────────╮
-│ --strict               Fail the gate on orphans too (default:                │
-│                        informational).                                       │
-│ --format        <str>  text (Rich on a TTY) or json. [default: text]         │
-│ --help                 Show this message and exit.                           │
-╰──────────────────────────────────────────────────────────────────────────────╯
+Usage: khub check [OPTIONS]
+
+Check the active graph: completeness, orphans, dangling edges, strays, cycles, bodies.
+
+Options:
+  --strict  Fail the gate on orphans too (default: informational).
+  --format <str>  text (Rich on a TTY) or json. [default: text]
+  --help  Show this message and exit.
 

@@ -230,7 +230,7 @@ func TestCheckSupersedesCycle(t *testing.T) {
 // predicate, not just depends_on.
 func TestCheckSelfSupersessionIsReported(t *testing.T) {
 	root := wsFor(t, "build-hub")
-	seed(t, root, "knowledge/architecture/decisions/solo.md",
+	seed(t, root, "knowledge/decisions/solo.md",
 		kv{"type", "adr"}, kv{"title", "Solo"}, kv{"status", "accepted"},
 		kv{"supersedes", "solo"}, kv{"created", "2026-01-01"})
 
@@ -259,8 +259,8 @@ func TestCheckDependsOnStaysAcyclicWithAndWithoutTheFlag(t *testing.T) {
 				// The base block (and its acyclic flag) is embedded in the
 				// binary now, so the workspace files are what a stripped
 				// schema looks like; assert none of them smuggles the flag
-				// back in. build-hub's domain.depends_on redeclares the edge
-				// WITHOUT acyclic (relations whole-replace), so cycle
+				// back in. No build-hub type redeclares depends_on, so the
+				// workspace file never carried the flag for it and cycle
 				// detection below rests on the built-in backstop alone.
 				text := readRaw(t, root, ".khub/ontology.yaml")
 				text = strings.ReplaceAll(text, ", acyclic: true", "")
@@ -271,7 +271,7 @@ func TestCheckDependsOnStaysAcyclicWithAndWithoutTheFlag(t *testing.T) {
 				}
 			}
 			for _, name := range []string{"alpha", "beta", "gamma"} {
-				create(t, root, "domain", name, "title", name)
+				create(t, root, "component", name, "title", name, "kind", "service")
 			}
 			link(t, root, "alpha", "depends_on", "beta")
 			link(t, root, "beta", "depends_on", "gamma")
@@ -315,7 +315,7 @@ func TestOrphansAreInformationalUntilStrict(t *testing.T) {
 // `orphan: true` exempts a type from the sweep — the regression the flag exists
 // for is that a correct, freshly-initialised workspace can satisfy --strict.
 func TestOrphanFlaggedTypesAreExempt(t *testing.T) {
-	root := wsFor(t, "build-lite") // prd + arc42, both orphan: true, edge-less
+	root := wsFor(t, "build-hub") // prd + arc42, both orphan: true, edge-less
 	fresh := mustCheck(t, root, false)
 	if len(fresh.Orphans) != 0 {
 		t.Fatalf("orphans = %v, want none", fresh.Orphans)
@@ -345,7 +345,7 @@ func TestOrphanFlaggedTypesAreExempt(t *testing.T) {
 // The flag removes no signal: a flagged type missing a required field is still
 // active-but-incomplete, which names the field the orphan line never did.
 func TestOrphanFlaggedTypeStillReportsCompleteness(t *testing.T) {
-	root := wsFor(t, "build-lite")
+	root := wsFor(t, "build-hub")
 	writeRaw(t, root, "knowledge/prd.md", "---\ntype: prd\ncreated: 2026-06-01\ndraft: false\n---\n")
 
 	incomplete := incompleteByID(mustCheck(t, root, false))
@@ -428,7 +428,7 @@ func TestDraftRequiredSingletonFailsAndIsNotMissing(t *testing.T) {
 // A drafted NON-required singleton is reported but does not fail: reporting it
 // nowhere let `check` pass while the workspace had quietly lost a document.
 func TestDraftOptionalSingletonIsInformational(t *testing.T) {
-	root := wsFor(t, "build-lite") // arc42 is a singleton, but not required
+	root := wsFor(t, "build-hub") // arc42 is a singleton, but not required
 	update(t, root, "arc42", "draft", "true")
 
 	report := mustCheck(t, root, false)
@@ -463,7 +463,7 @@ func TestCheckReportsMalformedAndFails(t *testing.T) {
 // A malformed COLLECTION file removes every row of its type at once, so the
 // edges into it are suppressed and counted rather than burying the real error.
 func TestMalformedCollectionSuppressesDerivativeDangles(t *testing.T) {
-	root := wsFor(t, "build-hub")
+	root := collectionWS(t)
 	create(t, root, "repo", "svc-a", "repo", "acme/a", "status", "active")
 	create(t, root, "component", "cmp-api", "title", "API", "kind", "service", "repo", "svc-a")
 
@@ -493,7 +493,7 @@ func TestMalformedCollectionSuppressesDerivativeDangles(t *testing.T) {
 // The one breakage a schema-driven scan is blind to by construction: move a
 // type's declared path and the old files are not absent, they are unscanned.
 func TestMisplacedReportsAFileTheScanCannotReach(t *testing.T) {
-	root := wsFor(t, "build-lite")
+	root := wsFor(t, "build-hub")
 	create(t, root, "component", "", "title", "API", "kind", "service")
 
 	// The schema now looks somewhere else; the file does not move.
@@ -518,7 +518,7 @@ func TestMisplacedReportsAFileTheScanCannotReach(t *testing.T) {
 // Narrow on purpose: it takes a file positively claiming a KNOWN type from
 // outside every layout.
 func TestMisplacedIgnoresEverythingThatIsNotAClaim(t *testing.T) {
-	root := wsFor(t, "build-lite")
+	root := wsFor(t, "build-hub")
 	writeRaw(t, root, "README.md", "# A repo\n\nNo frontmatter here.\n")
 	writeRaw(t, root, "notes.md", "---\ntype: meeting\ntitle: Not our type\n---\n")
 	writeRaw(t, root, "docs/guide.md", "---\ntitle: No type key\n---\n")
@@ -530,7 +530,7 @@ func TestMisplacedIgnoresEverythingThatIsNotAClaim(t *testing.T) {
 
 // The two findings are mirrors and must never double-report the same file.
 func TestFileInsideALayoutStaysAStray(t *testing.T) {
-	root := wsFor(t, "build-lite")
+	root := wsFor(t, "build-hub")
 	writeRaw(t, root, "knowledge/components/wrong.md",
 		"---\ntype: adr\ntitle: In the wrong layout\nstatus: proposed\ncreated: 2026-07-25\n---\n")
 
@@ -540,5 +540,52 @@ func TestFileInsideALayoutStaysAStray(t *testing.T) {
 	}
 	if len(report.Misplaced) != 0 {
 		t.Errorf("misplaced = %+v, want none (it is a stray)", report.Misplaced)
+	}
+}
+
+// A typed .json/.yaml outside every storage tree is a data file — a lockfile,
+// a compose file, an export — never a claim, however its `type` reads.
+func TestMisplacedIgnoresDataFilesOutsideStorageTrees(t *testing.T) {
+	root := wsFor(t, "build-lite")
+	writeRaw(t, root, "data.json", "{\"type\": \"component\", \"title\": \"An export\"}\n")
+	writeRaw(t, root, "config/settings.yaml", "type: component\ntitle: A config\n")
+
+	if got := mustCheck(t, root, false).Misplaced; len(got) != 0 {
+		t.Fatalf("misplaced = %+v, want none", got)
+	}
+}
+
+// Inside a storage tree the same claim at the wrong depth is exactly what
+// misplaced exists to catch, whatever the serialization.
+func TestMisplacedReportsTypedJSONInsideAStorageTree(t *testing.T) {
+	root := wsFor(t, "build-lite")
+	writeRaw(t, root, "knowledge/components/deep/cmp-lost.json", "{\"type\": \"component\", \"title\": \"Lost\"}\n")
+
+	want := []Misplaced{{
+		Path:     "knowledge/components/deep/cmp-lost.json",
+		Type:     "component",
+		Expected: "knowledge/components",
+	}}
+	if got := mustCheck(t, root, false).Misplaced; !reflect.DeepEqual(got, want) {
+		t.Fatalf("misplaced = %+v, want %+v", got, want)
+	}
+}
+
+// `expected` names where the scan looks. For a path-less file type that is
+// `<name>/`, not the collection default `<name>.md`.
+func TestMisplacedExpectedUsesStorageRelpathForPathlessTypes(t *testing.T) {
+	root := wsFor(t, "build-lite")
+	create(t, root, "component", "", "title", "API", "kind", "service")
+
+	text := readRaw(t, root, ".khub/storage.yaml")
+	writeRaw(t, root, ".khub/storage.yaml", strings.ReplaceAll(text, "    path: knowledge/components\n", ""))
+
+	want := []Misplaced{{
+		Path:     "knowledge/components/cmp-api.md",
+		Type:     "component",
+		Expected: "component",
+	}}
+	if got := mustCheck(t, root, false).Misplaced; !reflect.DeepEqual(got, want) {
+		t.Fatalf("misplaced = %+v, want %+v", got, want)
 	}
 }

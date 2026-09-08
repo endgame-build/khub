@@ -1,12 +1,16 @@
- schema: build-lite@0.2.0
-┏━━━━━━━━━━━━━━┳━━━━━━━━┳━━━━━━━━━━━┳━━━━━━━━━━━┓
-┃ type         │ fields │ relations │ layout    ┃
-┡━━━━━━━━━━━━━━╇━━━━━━━━╇━━━━━━━━━━━╇━━━━━━━━━━━┩
-│ prd          │ 9      │ 4         │ singleton │
-│ arc42        │ 9      │ 4         │ singleton │
-│ requirement  │ 10     │ 5         │ file      │
-│ adr          │ 10     │ 7         │ file      │
-│ component    │ 11     │ 5         │ file      │
-│ repo         │ 11     │ 4         │ file      │
-│ feature-spec │ 10     │ 7         │ file      │
-└──────────────┴────────┴───────────┴───────────┘
+ schema: build-hub@0.6.0
+┏━━━━━━━━━━━━━┳━━━━━━━━┳━━━━━━━━━━━┳━━━━━━━━━━━┓
+┃ type        │ fields │ relations │ layout    ┃
+┡━━━━━━━━━━━━━╇━━━━━━━━╇━━━━━━━━━━━╇━━━━━━━━━━━┩
+│ prd         │ 9      │ 4         │ singleton │
+│ arc42       │ 9      │ 4         │ singleton │
+│ capability  │ 9      │ 4         │ file      │
+│ actor       │ 9      │ 4         │ file      │
+│ use-case    │ 10     │ 7         │ file      │
+│ requirement │ 11     │ 7         │ file      │
+│ adr         │ 10     │ 7         │ file      │
+│ system      │ 10     │ 4         │ file      │
+│ component   │ 14     │ 8         │ file      │
+│ api         │ 11     │ 6         │ file      │
+│ repo        │ 11     │ 4         │ file      │
+└─────────────┴────────┴───────────┴───────────┘

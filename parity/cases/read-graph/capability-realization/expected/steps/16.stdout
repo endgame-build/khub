@@ -1,0 +1,1 @@
+{"id": "requirement/req-never-store-pan", "type": "requirement", "slug": "req-never-store-pan", "predicate": "realized_in", "target": "cmp-payments", "changed": true}

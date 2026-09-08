@@ -1,5 +1,5 @@
 steps:
-- argv: ["init", "build-lite", ".", "--no-wire"]
+- argv: ["init", "build-hub", ".", "--no-wire"]
 - argv: ["add", "adr", "--title", "No status at all", "--format", "json"]
 - argv: ["get", "ad-2026-01-15-no-status-at-all", "--format", "raw"]
 - argv: ["add", "component", "--id", "cmp-nameless", "--format", "json"]

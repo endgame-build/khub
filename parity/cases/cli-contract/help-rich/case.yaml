@@ -1,0 +1,10 @@
+# The Rich panel branch of help (internal/cli/help.go renderHelpText) renders
+# only when stdout is a real TTY; every other help case is pipe mode and pins
+# the plain branch. No normalizer on purpose: tty-layout-free strips the box
+# drawing this case exists to pin. Never add a serve step here (a serve step
+# in pty mode hangs the suite, see .claude/rules/cli.md).
+mode: pty
+steps:
+- argv: []
+- argv: ["--help"]
+- argv: ["get", "--help"]

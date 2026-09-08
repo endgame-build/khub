@@ -1,0 +1,1 @@
+{"id": "component/cmp-payments", "type": "component", "slug": "cmp-payments", "predicate": "depends_on", "target": "cmp-stripe", "changed": true}

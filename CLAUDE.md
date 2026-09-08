@@ -75,7 +75,7 @@ thin, schema-introspecting adapter with zero per-type code.**
    (`internal/gitlog/`), projection (`internal/reindex/`, `internal/viz/`,
    `internal/backfill/`), serialization and collections (`internal/canon/`).
 4. **Graph projection** — an in-memory ordered adjacency rebuilt per call; gonum
-   is used for cycle enumeration only. FTS5 search is in-memory per invocation
+   finds strongly connected components for bounded cycle witnesses. FTS5 search is in-memory per invocation
    (never stale). No persisted index.
 5. **Access** — `internal/cli/root.go` wires one `*.go` per command group over
    the core verbs.
@@ -97,7 +97,7 @@ push it into the schema or the generic core path.
 
 - **Schema-generic surfaces.** No hardcoded per-type knowledge outside the schema.
 - **Graph is derived**, never stored. Inverse edges are computed at read time from
-  the single-sided forward edge; never written to disk.
+  the single-sided forward edge and identified by source type plus predicate; never written to disk.
 - **`validate` vs `check` are distinct gates.** `validate` = per-entity
   well-formedness + referential integrity over *present* declared fields (missing
   required does NOT block capture). `check` = graph-wide over the active
@@ -107,10 +107,14 @@ push it into the schema or the generic core path.
   auto-promotes/demotes.
 - **Capture is never blocked.** Referential integrity hard-fails on write; a
   missing required field just leaves the entity incomplete for `check` to report.
+- **Writes are workspace-serialized and atomic.** One stable
+  `.khub/generated/locks/workspace.lock` covers scan, validation, and commit for
+  every existing-workspace mutation. Keep lock files while a process may hold them. Publication uses
+  unique sibling temporaries, preserves permissions, and refuses unsafe paths and symlinks.
 - **Storage is per-type config**: `layout` (file / folder / collection) × `format`
   (md / json / yaml; collections take json / jsonl / yaml). Non-md entities carry
-  prose in a reserved `body` field. Collection writes are lock-serialized
-  (`.khub/generated/locks/`, gitignored) and land via atomic replace.
+  prose in a reserved `body` field. Collections use the same workspace lock and
+  atomic publication as every other mutation; `.khub/generated/` is gitignored.
 
 Each invariant has a sentinel fixture under `parity/cases/invariants/`.
 

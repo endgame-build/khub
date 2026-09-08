@@ -1,0 +1,361 @@
+/* app.css — khub serve.
+ *
+ * Part 1 is Paper's token sheet, copied wholesale from
+ * ~/.claude/skills/paper-artifacts/references/tokens.css. Do not retype values
+ * here: drift between surfaces starts with a re-remembered colour. Part 2 is
+ * this application's chrome, built from the recipes in that skill's
+ * components.md.
+ *
+ * One deliberate deviation, recorded per the skill's latitude clause: --display
+ * is redefined to the system sans below. Paper's display voice is Space Grotesk
+ * and khub ships no fonts — the CSP grants no font-src and there is no network
+ * to fetch one from. The token is already a stack with a system fallback, so
+ * this makes the fallback explicit rather than silent.
+ */
+
+/*
+ * Paper — the artifact design system. Token sheet + base styles.
+ * Copy this block wholesale into every artifact's <style>. Do not retype values
+ * from memory: drift between artifacts starts with a re-remembered colour.
+ *
+ * Provenance: ENDGAME Registry design language (Quiet Ink), lab() values captured
+ * live from the running app 2026-07-19. The comments map each token to its
+ * Registry CSS-variable ancestor.
+ */
+:root {
+  /* ——— the four surfaces ——— */
+  --paper: lab(97.4957% 0.351042 4.58058);         /* page ground        (--background) */
+  --white: lab(99.5525% 0.107318 1.52054);         /* control/card       (--card) */
+  --beige: lab(94.5956% 0.352174 4.58136);         /* group/well         (--muted) */
+  --beige-deep: lab(93.1489% -0.505984 6.88361);   /* pressed/over state (--accent) */
+
+  /* ——— inks ——— */
+  --ink: lab(2.13234% 0.231497 -6.36338);          /* primary text       (--foreground) */
+  --ink-mid: lab(28.5817% -0.782385 -7.34651);     /* secondary text     (--muted-foreground) */
+  --ink-soft: lab(44.2672% -0.694275 -5.55873);    /* labels, hints      (--fg-soft) */
+
+  /* ——— lines (dividers only — NEVER containment) ——— */
+  --line: lab(86.1274% 0.35581 4.58385);           /* strong hairline    (--border) */
+  --line-soft: lab(90.76% 0.288427 3.81444);       /* default hairline   (--border-soft) */
+
+  /* ——— the dark + focus ——— */
+  --navy: lab(7.47057% -0.587948 -18.6409);        /* primary actions    (--surface-brand) */
+  --focus: lab(28.8555% 9.12361 -54.6686);         /* focus ring only    (--ring) */
+
+  /* ——— semantic (never decorative) ——— */
+  --ok: lab(46.1094% -42.9662 35.1265);            /* success            (--success) */
+  --warn: lab(55.6864% 21.5518 81.378);            /* warning/amber      (--warning) */
+  --crit-fg: lab(25.7139% 70.5635 51.3785);        /* critical text */
+  --crit-tint: lab(46.7025% 69.8561 45.8347 / 0.1);/* critical chip bg */
+  --rag-red: lab(25.7139% 70.5635 51.3785);        /* status: early/at-risk */
+  --rag-amber: lab(55.6864% 21.5518 81.378);       /* status: pending/out */
+  --rag-green: lab(46.1094% -42.9662 35.1265);     /* status: committed/good */
+  --rag-neutral: lab(28.0452% -0.470579 -3.70967); /* status: terminal/unknown */
+
+  /* ——— categorical ramp (identity, charts — pair with a label, never alone) ——— */
+  --cat-teal: lab(45.1887% -28.1482 -11.5496);
+  --cat-violet: lab(47.5728% 17.8731 -37.2582);
+  --cat-blue: lab(37.618% -0.018388 -47.3664);
+  --cat-green: lab(46.1094% -42.9662 35.1265);
+  --cat-steel: lab(49.3755% -18.7133 -18.9728);
+  /* ramp expansion (2026-07-22, Registry client-identity work): six more slots in the
+     L≈38–47 band so every slot clears 3:1 on light surfaces. Hues avoid the red/amber
+     state region (umber is low-chroma brown, berry a light raspberry — neither reads
+     as the dark scarlet crit pair). For identity ramps use --cat-purple INSTEAD of
+     --cat-violet: violet sits too close to --cat-blue to distinguish at tint strength;
+     purple is red-shifted 16° to fix exactly that. */
+  --cat-purple: lab(45% 34 -38);
+  --cat-magenta: lab(42% 46 -14);
+  --cat-berry: lab(45% 52 5);
+  --cat-umber: lab(41% 14 32);
+  --cat-olive: lab(47% -16 44);
+  --cat-pine: lab(38% -28 10);
+
+  /* ——— the shadow contract: exactly three lifts, nothing else ——— */
+  --lift-rest: 0 1px 2px lab(2% 0 -6 / 0.05), 0 1px 1px lab(2% 0 -6 / 0.03);
+  --lift-hover: 0 3px 8px lab(2% 0 -6 / 0.07), 0 1px 2px lab(2% 0 -6 / 0.05);
+  --lift-flight: 0 10px 15px -3px lab(2% 0 -6 / 0.10), 0 4px 6px -4px lab(2% 0 -6 / 0.10);
+
+  /* ——— radii scale (annotated where used) ——— */
+  --r-frame: 14px;    /* page-level mock frames, modals */
+  --r-group: 10px;    /* painted groups, wells, section slabs */
+  --r-control: 7px;   /* cards, chips, inputs, buttons */
+  --r-badge: 5px;     /* value badges, tags */
+
+  /* ——— embedded-diagram hex approximations (2026-07-24, khub ontology artifact) ———
+     Mermaid classDef/themeVariables cannot read CSS vars; these hexes are the SANCTIONED
+     approximations of existing tokens for use inside diagram init/classDef blocks only:
+     paper ≈ #faf8f4 · white ≈ #fefdfb · beige ≈ #f0ede8 · line-soft ≈ #e6e1d9 ·
+     ink ≈ #0b0c10 · ink-soft ≈ #62666d ·
+     cat-blue 12% tint ≈ #e7ebf6 (stroke #c9d4ec, text #24406f) ·
+     cat-teal 12% tint ≈ #e0f0ef (stroke #c5e0dd, text #0c625e) */
+
+  /* ——— graph-renderer hex ramp (2026-09-05, khub serve) ———
+     Cytoscape.js parses colours itself: it reads neither CSS custom properties
+     nor lab(), so a canvas renderer cannot use the tokens above directly. Same
+     accommodation as the Mermaid block, and the same rule — these are the
+     SANCTIONED hex forms of existing tokens, for renderers that cannot read
+     CSS. Do not introduce a colour here that is not already a token above.
+
+     The categorical ten are --cat-* converted from lab() (D50, CSS Color 4);
+     every one measures at or above 4.28:1 against --paper. --cat-purple is in
+     the ramp and --cat-violet is not: violet is indistinguishable from blue at
+     tint strength, which the ramp comment above already warns about.
+
+     The chrome six reuse the Mermaid block's values wherever they overlap, so
+     one token never has two hex answers. */
+  --graph-1: #00787d;   /* --cat-teal    */
+  --graph-2: #8955ab;   /* --cat-purple  */
+  --graph-3: #015ba6;   /* --cat-blue    */
+  --graph-4: #157e2c;   /* --cat-green   */
+  --graph-5: #357f95;   /* --cat-steel   */
+  --graph-6: #a03e7c;   /* --cat-magenta */
+  --graph-7: #b63d65;   /* --cat-berry   */
+  --graph-8: #80572c;   /* --cat-umber   */
+  --graph-9: #65761c;   /* --cat-olive   */
+  --graph-10: #216548;  /* --cat-pine    */
+  --graph-ink: #0b0c10;       /* --ink       (Mermaid block) */
+  --graph-ink-mid: #3e444f;   /* --ink-mid   */
+  --graph-ink-soft: #62666d;  /* --ink-soft  (Mermaid block) */
+  --graph-line: #dbd7cf;      /* --line      */
+  --graph-navy: #02182f;      /* --navy      */
+  --graph-amber: #b97600;     /* --rag-amber */
+
+  /* ——— type ——— */
+  --sans: ui-sans-serif, system-ui, sans-serif;
+  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --display: "Space Grotesk", var(--sans);
+}
+
+/* Paper is deliberately single-theme: a warm light world. Do not add a dark theme
+   unless the user asks — commit to the one look. */
+html { color-scheme: light only; }
+
+body {
+  margin: 0; background: var(--paper); color: var(--ink);
+  font-family: var(--sans); font-size: 14px; line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+}
+.page { max-width: 1240px; margin: 0 auto; padding: 44px 28px 90px; }
+
+/* ——— the six type voices (see SKILL.md §Type) ——— */
+h1 { font-family: var(--display); font-size: 27px; font-weight: 600; margin: 6px 0 8px; letter-spacing: -0.01em; }
+h2 { font-family: var(--display); font-size: 17px; font-weight: 600; margin: 0 0 4px; }
+.eyebrow { font-family: var(--mono); font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-soft); }
+.lede, .note { color: var(--ink-mid); max-width: 66ch; }
+.lede { margin: 0; }
+.note { font-size: 13px; margin: 4px 0 14px; }
+.sec { margin-top: 48px; }
+.sec > .eyebrow { display: block; margin-bottom: 6px; }
+.verdict { font-size: 13px; color: var(--ink-mid); margin-top: 12px; max-width: 68ch; }
+.verdict b { color: var(--ink); font-weight: 600; }
+.note code, td code { font-family: var(--mono); font-size: 11.5px; background: var(--beige); border-radius: 4px; padding: 1px 5px; }
+
+/* ——— spec table (white slab, hairline rows, mono headers) ——— */
+.tblwrap { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 13px; background: var(--white); border-radius: var(--r-group); overflow: hidden; box-shadow: var(--lift-rest); }
+th { font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.09em; text-transform: uppercase; color: var(--ink-soft); text-align: left; font-weight: 500; padding: 10px 14px 8px; border-bottom: 1px solid var(--line-soft); }
+td { padding: 9px 14px; border-bottom: 1px solid var(--line-soft); vertical-align: top; }
+tr:last-child td { border-bottom: 0; }
+
+/* ═══ Part 2 · khub serve chrome ═══════════════════════════════════════════ */
+
+/* The deviation named at the top of this file. */
+:root { --display: var(--sans); }
+
+/* The viewport is the frame, so the app fills it rather than sitting on a
+   page. Paper's .page furniture above goes unused here by design. */
+html, body { height: 100%; }
+body { display: flex; flex-direction: column; overflow: hidden; }
+button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; padding: 0; text-align: left; }
+button:disabled { cursor: default; opacity: 0.4; }
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; border-radius: var(--r-badge); }
+.mono { font-family: var(--mono); }
+
+/* ——— toolbar ——— */
+/* Chrome casts no shadow; the hairline is the app-frame rule, the one
+   sanctioned containment line. */
+#bar {
+  display: flex; align-items: center; gap: 14px;
+  padding: 9px 14px; border-bottom: 1px solid var(--line-soft);
+  background: var(--white); flex: none;
+}
+#brand { font-family: var(--display); font-size: 16px; font-weight: 600; }
+#counts { margin-left: auto; font-size: 11.5px; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+
+#crumbs { display: flex; align-items: center; gap: 5px; min-width: 0; }
+#crumbs .crumb {
+  height: 28px; padding: 0 9px; border-radius: var(--r-control);
+  background: var(--beige); font-size: 13px; font-weight: 500;
+  max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+#crumbs .crumb:hover { background: var(--beige-deep); }
+#crumbs .sep { color: var(--ink-soft); font-size: 12px; }
+
+#find { position: relative; }
+#search {
+  height: 30px; width: 230px; padding: 0 10px; border: 0;
+  border-radius: var(--r-control); background: var(--beige);
+  font: inherit; font-size: 12.5px; color: var(--ink);
+}
+#search::placeholder { color: var(--ink-soft); }
+#results {
+  position: absolute; top: 36px; left: 0; width: 300px; z-index: 20;
+  background: var(--white); border-radius: var(--r-group);
+  box-shadow: var(--lift-flight); padding: 6px; max-height: 60vh; overflow-y: auto;
+}
+#results .hit {
+  display: flex; align-items: center; gap: 8px; width: 100%;
+  padding: 6px 8px; border-radius: var(--r-badge); font-size: 12.5px;
+}
+#results .hit:hover { background: var(--beige); }
+#results .hit .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+#depthctl { display: flex; align-items: center; gap: 6px; }
+#depthctl button {
+  width: 26px; height: 26px; border-radius: var(--r-badge);
+  background: var(--beige); justify-content: center; display: flex;
+  align-items: center; font-size: 13px;
+}
+#depth { font-size: 10.5px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-soft); min-width: 52px; }
+
+/* ——— body ——— */
+main { flex: 1; display: flex; gap: 10px; padding: 10px; min-height: 0; }
+
+/* Rails are painted groups: beige slab, no border, no shadow. */
+.rail {
+  background: var(--beige); border-radius: var(--r-group); padding: 8px;
+  overflow-y: auto; flex: none;
+}
+#filters { width: 216px; }
+#side { width: 320px; display: flex; flex-direction: column; gap: 10px; }
+
+/* The canvas is the one object on the page, so it is white and it lifts. */
+#stage {
+  flex: 1; min-width: 0; position: relative;
+  background: var(--white); border-radius: var(--r-group); box-shadow: var(--lift-rest);
+  overflow: hidden;
+}
+#cy { position: absolute; inset: 0; }
+#notice {
+  position: absolute; left: 12px; bottom: 12px; z-index: 5;
+  background: var(--beige); border-radius: var(--r-badge);
+  padding: 5px 9px; font-size: 11.5px; color: var(--ink-mid);
+}
+
+/* ——— shared panel grammar ——— */
+.cap {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em;
+  text-transform: uppercase; color: var(--ink-soft);
+  margin: 10px 3px 7px;
+}
+.rail > *:first-child .cap, .cap:first-child { margin-top: 2px; }
+.hint { font-size: 12.5px; color: var(--ink-mid); margin: 0 3px 8px; }
+.err { font-size: 12.5px; color: var(--crit-fg); margin: 0 3px 8px; }
+
+/* Objects on the beige rail are white and lift. No borders anywhere. */
+.card {
+  background: var(--white); border-radius: var(--r-control);
+  box-shadow: var(--lift-rest); padding: 10px 12px; margin-bottom: 8px;
+}
+.card .ttl { font-size: 13px; font-weight: 650; line-height: 1.2; word-break: break-word; }
+.card .sub { font-size: 12.5px; color: var(--ink-mid); margin-top: 3px; }
+.card .path { font-size: 11px; color: var(--ink-soft); margin-top: 5px; word-break: break-all; }
+
+.kv { display: flex; gap: 8px; font-size: 11.5px; padding: 3px 0; align-items: baseline; }
+.kv .k {
+  font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.06em;
+  text-transform: uppercase; color: var(--ink-soft); flex: none; width: 88px;
+}
+.kv .v { color: var(--ink); word-break: break-word; font-variant-numeric: tabular-nums; }
+
+.erow { display: flex; gap: 7px; align-items: baseline; padding: 5px 0; border-bottom: 1px solid var(--line-soft); font-size: 11.5px; flex-wrap: wrap; }
+.erow:last-child { border-bottom: 0; }
+.erow .k { font-size: 10.5px; color: var(--ink-soft); flex: none; }
+
+.link { font-size: 11.5px; color: var(--navy); text-decoration: underline; text-underline-offset: 2px; word-break: break-all; }
+.link.warn { color: var(--crit-fg); text-decoration: none; font-family: var(--mono); font-size: 10px; }
+
+.bdg {
+  background: var(--beige); border-radius: var(--r-badge); padding: 2px 6px;
+  font-size: 11px; color: var(--ink-mid); font-variant-numeric: tabular-nums;
+  line-height: 1; margin-left: auto; flex: none;
+}
+.tag {
+  font-family: var(--mono); font-size: 10px; padding: 2px 5px;
+  border-radius: var(--r-badge); background: var(--beige); color: var(--ink-soft);
+  white-space: nowrap; flex: none;
+}
+.card .tag, .erow .tag { background: var(--beige); }
+
+/* ——— filters ——— */
+/* Controls flip to white on the beige rail — the inverse scheme. */
+.frow {
+  display: flex; align-items: center; gap: 7px; width: 100%;
+  padding: 5px 8px; margin-bottom: 3px; border-radius: var(--r-control);
+  background: var(--white); font-size: 12.5px; box-shadow: var(--lift-rest);
+}
+.frow:hover { box-shadow: var(--lift-hover); }
+.frow.hidden { background: var(--beige-deep); box-shadow: none; color: var(--ink-soft); }
+.frow.hidden .sw { opacity: 0.25; }
+.frow .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.frow .nm.mono { font-size: 11.5px; }
+.sw { width: 10px; height: 10px; border-radius: 50%; flex: none; }
+
+/* ——— composer ——— */
+.btnrow { display: flex; gap: 7px; margin-top: 9px; flex-wrap: wrap; }
+.btn-primary {
+  height: 30px; padding: 0 13px; border-radius: var(--r-control);
+  display: inline-flex; align-items: center; font-size: 12.5px; font-weight: 550;
+  background: var(--navy); color: var(--paper);
+}
+.btn-ghost {
+  height: 30px; padding: 0 11px; border-radius: var(--r-control);
+  display: inline-flex; align-items: center; font-size: 12.5px; color: var(--ink-mid);
+  background: var(--beige);
+}
+.btn-ghost:hover { background: var(--beige-deep); }
+select.ctl {
+  height: 30px; width: 100%; margin-top: 8px; padding: 0 8px;
+  border: 0; border-radius: var(--r-control); background: var(--beige);
+  font: inherit; font-size: 12.5px; color: var(--ink);
+}
+.queue {
+  width: 100%; border: 0; border-radius: var(--r-control); padding: 9px 10px;
+  background: var(--white); box-shadow: var(--lift-rest);
+  font-size: 11.5px; line-height: 1.5; resize: vertical; color: var(--ink);
+}
+pre.body {
+  background: var(--white); border-radius: var(--r-control); box-shadow: var(--lift-rest);
+  padding: 10px 12px; margin: 0 0 8px; font-size: 11.5px; line-height: 1.5;
+  white-space: pre-wrap; word-break: break-word; max-height: 260px; overflow-y: auto;
+  font-family: var(--mono); color: var(--ink-mid);
+}
+
+/* ——— list view (L1) ——— */
+/* Overlays #cy so the canvas keeps its dimensions: the fit and zoom clamp that
+   follow a layout both read cy.width(), which a hidden container reports as 0. */
+#list {
+  position: absolute; inset: 0; z-index: 4;
+  overflow: auto; background: var(--white); padding: 0 2px 2px;
+}
+/* Paper's token sheet already styles table/th/td as a white slab with its own
+   radius and lift. Inside #stage — itself a white slab with --lift-rest — that
+   would stack two shadows, which the three-lift contract forbids. The stage is
+   the object; the table is its content. `overflow: hidden` goes too, because it
+   makes the table its own scrollport and sticky headers would stick to a box
+   that never scrolls. */
+#list table { box-shadow: none; border-radius: 0; overflow: visible; table-layout: fixed; }
+#list th { position: sticky; top: 0; background: var(--white); z-index: 1; }
+#list th.num, #list td.num { text-align: right; font-variant-numeric: tabular-nums; }
+#list td { font-size: 12.5px; }
+#list td.slug { color: var(--ink-mid); font-size: 11.5px; word-break: break-all; }
+#list tbody tr:hover td { background: var(--beige); }
+.sortbtn { font: inherit; color: inherit; }
+.sortbtn.on { color: var(--ink); font-weight: 600; }
+.rowlink { font-size: 12.5px; font-weight: 550; }
+.rowlink:hover { text-decoration: underline; text-underline-offset: 2px; }
+.tag.warn { color: var(--crit-fg); background: var(--crit-tint); }
+#viewctl { display: flex; gap: 4px; }
+#viewctl button { height: 26px; padding: 0 9px; font-size: 11.5px; }
+#viewctl button.on { background: var(--navy); color: var(--paper); }

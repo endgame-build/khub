@@ -1,0 +1,13 @@
+# build-lite is an alias of build-hub since 0.6.0: kb's graduation command and
+# every workspace recorded under the old name keep resolving. init through the
+# alias records the canonical name (the tree manifest pins config.yaml), the
+# merged preset's eleven types are what `status` counts and `schema types`
+# lists, and `upgrade` on a config.yaml that still says build-lite reports
+# `preset: build-hub` and restamps it instead of refusing with unknown_preset.
+steps:
+- argv: ["init", "build-lite", ".", "--no-wire", "--format", "json"]
+- argv: ["status", "--format", "json"]
+- sh: "perl -pi -e 's/^preset: build-hub$/preset: build-lite/' .khub/config.yaml"
+- argv: ["upgrade", "--no-skill", "--no-wire", "--format", "json"]
+- argv: ["status", "--format", "json"]
+- argv: ["schema", "types", "--format", "json"]

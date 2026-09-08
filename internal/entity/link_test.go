@@ -5,6 +5,7 @@ package entity
 
 import (
 	"path/filepath"
+	"reflect"
 	"testing"
 )
 
@@ -117,5 +118,22 @@ func TestLinkStoresTheCanonicalSpelling(t *testing.T) {
 	requireNoError(t, err)
 	if qualified.Target != "partnership/northwind" {
 		t.Fatalf("qualified target = %q", qualified.Target)
+	}
+}
+
+// An empty scalar on a many relation is Python-falsy: linking replaces it and
+// never keeps the empty string as a target (review of PR #143, finding 1).
+func TestLinkOnEmptyScalarManyValueDropsTheEmptyString(t *testing.T) {
+	ws := newWS(t, "firm-ops")
+	linkPrereqs(t, ws)
+	source := project(t, ws, "related", "")
+
+	res, err := Link(ws, "initech-pov", "related", "northwind")
+	requireNoError(t, err)
+	if !res.Changed {
+		t.Fatal("link over an empty value reported no change")
+	}
+	if got := metaValue(t, source, "related"); !reflect.DeepEqual(got, []any{"northwind"}) {
+		t.Fatalf("related = %#v, want [northwind]", got)
 	}
 }

@@ -1,7 +1,7 @@
 normalize:
 - cycles-canonical
 steps:
-- argv: ["init", "build-lite", ".", "--no-wire"]
+- argv: ["init", "build-hub", ".", "--no-wire"]
 - argv: ["add", "component", "--title", "A", "--kind", "service"]
 - argv: ["add", "component", "--title", "B", "--kind", "service"]
 - argv: ["link", "cmp-a", "depends_on", "cmp-b"]

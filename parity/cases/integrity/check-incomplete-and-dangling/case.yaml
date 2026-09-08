@@ -1,9 +1,9 @@
 steps:
-- argv: ["init", "build-lite", ".", "--no-wire"]
+- argv: ["init", "build-hub", ".", "--no-wire"]
 - argv: ["add", "adr", "--title", "No status"]
 - argv: ["add", "requirement", "--title", "T", "--kind", "functional"]
-- argv: ["add", "feature-spec", "--title", "F", "--status", "planned"]
-- argv: ["link", "fs-f", "requirements", "req-t"]
-- argv: ["remove", "req-t", "--force"]
+- argv: ["add", "component", "--title", "C", "--kind", "service"]
+- argv: ["link", "req-t", "realized_in", "cmp-c"]
+- argv: ["remove", "cmp-c", "--force"]
 - argv: ["check"]
 - argv: ["check", "--format", "json"]

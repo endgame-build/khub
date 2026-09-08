@@ -13,7 +13,7 @@ mode: pipe
 env:
   TTY_COMPATIBLE: ""
 steps:
-- argv: ["init", "build-lite", ".", "--no-wire"]
+- argv: ["init", "build-hub", ".", "--no-wire"]
 - argv: ["add", "requirement", "--title", "Auth required", "--kind", "functional"]
 - argv: ["add", "component", "--title", "API", "--kind", "service", "--stack", "python"]
 - argv: ["link", "req-auth-required", "realized_in", "cmp-api"]

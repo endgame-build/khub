@@ -280,7 +280,7 @@ func TestCollectionWriteTakesTheSidecarLock(t *testing.T) {
 	_, err := Create(ws, "repo", CreateOpts{
 		Fields: fields("repo", "endgame-build/acme"), ID: "acme", UseTemplate: true})
 	requireNoError(t, err)
-	lock := filepath.Join(ws, ".khub", "generated", "locks", "repo.lock")
+	lock := filepath.Join(ws, ".khub", "generated", "locks", "workspace.lock")
 	if _, statErr := os.Stat(lock); statErr != nil {
 		t.Fatalf("no lock sidecar at %s: %v", lock, statErr)
 	}

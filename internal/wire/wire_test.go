@@ -234,9 +234,9 @@ func TestWireDryRunWritesNothing(t *testing.T) {
 
 func TestSingletonCuesCarryTheirFileLink(t *testing.T) {
 	// The block tells an agent to edit the existing document — and says which.
-	// build-lite's two singletons are the case; a non-singleton is written by
+	// build-hub's two singletons are the case; a non-singleton is written by
 	// `khub add`, so its cue names no path.
-	ws := freshWS(t, "build-lite")
+	ws := freshWS(t, "build-hub")
 	mustWire(t, ws, Options{Claude: true, Agents: true})
 	for _, name := range []string{"CLAUDE.md", "AGENTS.md"} {
 		text := read(t, filepath.Join(ws, name))
@@ -351,11 +351,11 @@ func TestCueLinkDestinationWithSpacesIsWrapped(t *testing.T) {
 func TestGoldenWiredFiles(t *testing.T) {
 	// The recorded manifest pins both wired files byte for byte, and step 02's
 	// stdout pins the dry-run preview.
-	ws := freshWS(t, "build-lite")
+	ws := freshWS(t, "build-hub")
 	mustWire(t, ws, Options{})
 	want := map[string]string{
-		"CLAUDE.md": "ad5fa175025dbe625a4efd60b5b5d2df58f698e70effd2e9739b70c8b2e05081",
-		"AGENTS.md": "2079da519a27331186386565e9fc83d1a2041050472e407d526f1d1434016b11",
+		"CLAUDE.md": "f18ea28b69f25c70c88bcf54ce956524f2087c26cc8e0f2722c88fbdbce198bd",
+		"AGENTS.md": "55c72884b0fe82c833c244b7d8b7db9206db6faa3a81aca0518c0405c4c2b4c1",
 	}
 	for name, digest := range want {
 		sum := sha256.Sum256([]byte(read(t, filepath.Join(ws, name))))
@@ -387,7 +387,7 @@ func TestGoldenInitWireTailTree(t *testing.T) {
 	if err := os.MkdirAll(ws, 0o777); err != nil {
 		t.Fatal(err)
 	}
-	res, err := workspace.Init("build-lite", ws, workspace.InitOptions{})
+	res, err := workspace.Init("build-hub", ws, workspace.InitOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}

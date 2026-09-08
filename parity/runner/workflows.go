@@ -94,15 +94,23 @@ var firmOpsWorkflows = []workflow{
 	}},
 }
 
-// buildLiteWorkflows drive the other shipped preset: a spec/decision arc.
-var buildLiteWorkflows = []workflow{
-	{"requirement-to-spec", [][]string{
+// buildHubWorkflows drive the other shipped preset: a requirement/decision
+// arc, a supersession chain, a dependency chain, the repo registry, a
+// use-case arc and an api arc. `build-lite` resolves to this preset (an
+// alias since 0.6.0), so workflowsFor maps both names here.
+//
+// No shipped preset declares a `layout: collection` type any more (the old
+// hub's `repo` was the one), so the lock-serialized write path is no longer
+// exercised in workflow shape; integrity/collection-path-collision covers
+// the collection path by appending two collection types to its workspace.
+var buildHubWorkflows = []workflow{
+	{"requirement-to-decision", [][]string{
 		{"add", "requirement", "--title", "Rule {n}", "--kind", "functional", "--format", "json"},
 		{"add", "component", "--title", "Service {n}", "--kind", "service", "--format", "json"},
 		{"link", "{last:requirement}", "realized_in", "{last:component}", "--format", "json"},
-		{"add", "feature-spec", "--title", "Work {n}", "--status", "planned",
-			"--requirements", "{last:requirement}", "--format", "json"},
-		{"edit", "{last:feature-spec}", "status", "active", "--format", "json"},
+		{"add", "adr", "--title", "Guard {n}", "--status", "proposed",
+			"--affects", "{last:requirement}", "--format", "json"},
+		{"edit", "{last:adr}", "status", "accepted", "--format", "json"},
 		{"neighbors", "{last:requirement}", "--format", "json"},
 		{"check", "--format", "json"},
 	}},
@@ -124,35 +132,36 @@ var buildLiteWorkflows = []workflow{
 		{"check", "--format", "json"},
 		{"reindex"},
 	}},
-}
-
-// buildHubWorkflows extend the build-lite arcs with the types only build-hub
-// declares. `repo` is the one COLLECTION-layout type any preset ships, so this
-// list is the only place the lock-serialized write path is exercised in
-// workflow shape — it used to sit in firmOpsWorkflows, where `repo` does not
-// exist and `{any:project}` could never bind, so the arc silently never ran.
-var buildHubWorkflows = append(append([]workflow{}, buildLiteWorkflows...),
-	workflow{"collection-churn", [][]string{
-		{"add", "repo", "--repo", "org/svc-{n}", "--status", "active", "--format", "json"},
+	{"repo-registry", [][]string{
+		{"add", "repo", "--title", "Svc {n}", "--repo", "org/svc-{n}", "--status", "active", "--format", "json"},
 		{"get", "{last:repo}", "--format", "raw"},
+		{"edit", "{any:component}", "repo", "{last:repo}", "--format", "json"}, // single-valued: edit replaces, link refuses
 		{"edit", "{last:repo}", "status", "archived", "--format", "json"},
 		{"query", "--type", "repo", "--format", "json"},
 		{"check", "--format", "json"},
 	}},
-	workflow{"domain-to-work", [][]string{
-		{"add", "domain", "--title", "Area {n}", "--tier", "core", "--format", "json"},
+	{"use-case", [][]string{
 		{"add", "capability", "--title", "Ability {n}", "--format", "json"},
-		{"add", "feature-spec", "--title", "Slice {n}", "--status", "planned", "--format", "json"},
-		{"add", "work-package", "--title", "Batch {n}", "--status", "planned",
-			"--feature", "{last:feature-spec}", "--format", "json"},
-		{"add", "test-spec", "--title", "Check {n}",
-			"--verifies", "{last:feature-spec}", "--format", "json"},
-		{"edit", "{last:work-package}", "status", "active", "--format", "json"},
-		{"neighbors", "{last:feature-spec}", "--depth", "2", "--format", "json"},
-		{"stale", "--format", "json"},
+		{"add", "actor", "--title", "Role {n}", "--format", "json"},
+		{"add", "use-case", "--title", "Flow {n}", "--trigger", "human",
+			"--actor", "{last:actor}", "--capability", "{last:capability}", "--format", "json"},
+		{"link", "{last:use-case}", "served_by", "{any:component}", "--format", "json"},
+		{"link", "{any:requirement}", "use_cases", "{last:use-case}", "--format", "json"},
+		{"neighbors", "{last:use-case}", "--format", "json"},
+		{"neighbors", "{last:capability}", "--depth", "2", "--format", "json"},
 		{"check", "--format", "json"},
 	}},
-)
+	{"api", [][]string{
+		{"add", "system", "--title", "Platform {n}", "--owner", "team-{n}", "--format", "json"},
+		{"edit", "{any:component}", "system", "{last:system}", "--format", "json"}, // single-valued: edit replaces, link refuses
+		{"add", "api", "--title", "Surface {n}", "--kind", "rest", "--status", "active",
+			"--provider", "{any:component}", "--format", "json"},
+		{"link", "{any:component}", "consumes", "{last:api}", "--format", "json"},
+		{"impact", "{last:api}", "--reverse", "--predicate", "consumes", "--format", "json"},
+		{"impact", "{any:component}", "--reverse", "--predicate", "served_by", "--format", "json"},
+		{"check", "--format", "json"},
+	}},
+}
 
 // bind resolves placeholders; ok=false means the workflow cannot run yet.
 func (s *fuzzState) bind(argv []string, n int) (out []string, ok bool) {
@@ -182,10 +191,8 @@ func (s *fuzzState) bind(argv []string, n int) (out []string, ok bool) {
 // workflowsFor picks the template set matching the workspace's preset.
 func workflowsFor(preset string) []workflow {
 	switch preset {
-	case "build-hub":
+	case "build-hub", "build-lite": // the alias, re-spelled: the runner imports nothing from internal/ on purpose
 		return buildHubWorkflows
-	case "build-lite":
-		return buildLiteWorkflows
 	default:
 		return firmOpsWorkflows
 	}

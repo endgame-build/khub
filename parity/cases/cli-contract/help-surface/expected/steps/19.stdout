@@ -1,11 +1,8 @@
-                                                                                
- Usage: khub reindex [OPTIONS]                                                  
-                                                                                
- Regenerate the OKF index.md from the graph: khub reindex [--dry-run].          
-                                                                                
-╭─ Options ────────────────────────────────────────────────────────────────────╮
-│ --dry-run          Print the diff against the current index.md and write     │
-│                    nothing.                                                  │
-│ --help             Show this message and exit.                               │
-╰──────────────────────────────────────────────────────────────────────────────╯
+Usage: khub reindex [OPTIONS]
+
+Regenerate the OKF index.md from the graph: khub reindex [--dry-run].
+
+Options:
+  --dry-run  Print the diff against the current index.md and write nothing.
+  --help  Show this message and exit.
 

@@ -7,41 +7,49 @@
 #
 # BREAKING with the kb 0.14.0 port: matching is a case-sensitive prefix, so an arc42
 # written against the earlier template fails `body_shape` after `khub upgrade` until
-# its headings are renamed (`Constraints` is now `Architecture Constraints`; the rest
-# is capitalisation). CHANGELOG carries the map.
+# its headings are renamed. CHANGELOG carries the map.
 #
-# All twelve arc42 sections stay required: they carried the contract before this
-# port. The appendices are `optional: true` — the standing rule for a section a type
-# gains after it ships.
+# Required are the six that carried the contract before this port. Everything added
+# since is `optional: true` — the standing rule for a section a type gains after it
+# ships.
+#
+# `Data model` is deliberately absent: arc42 has no section for it — the domain data
+# model goes under Crosscutting Concepts (tip 8-7). Do not re-add it as a heading.
 
-title: Architecture (arc42)
+title: Architecture
 sections:
 - heading: Introduction and Goals
-  hint: quality goals + key stakeholders
+  optional: true
+  hint: what this system is for, and the one or two decisions that matter most
 - heading: Architecture Constraints
+  optional: true
   hint: forces from outside the design space - platform, budget, org boundary, compliance
 - heading: Context and Scope
   hint: the system boundary - the systems and people outside it, named, and what crosses the line
 - heading: Solution Strategy
   hint: the shape and why - one paragraph per big call, each stating the choice and its cost; a pinned stack, with versions, earns a table here
 - heading: Building Block View
-  hint: components by cmp- slug, one line each on what it owns; narrate the mapping, the graph holds it; the diagram below carries the direction
+  hint: each part by name and what it owns, one line each; the diagram below carries the direction
   # The one diagram nothing else can carry: which way the dependencies point. The
   # component graph knows the edges, but not what a reader should conclude from them.
   code_blocks: [{lang: mermaid, min: 1}]
 - heading: Runtime View
+  optional: true
   hint: only the interactions a quality target stresses - a numbered walk or a sequence, at component altitude
 - heading: Deployment View
+  optional: true
   hint: the runtime nodes and environments, and the structural reason they are separate
 - heading: Crosscutting Concepts
-  hint: auth, errors, logging, config, naming - the rules that hold everywhere
+  hint: auth, errors, logging, config, naming - the rules that hold everywhere; the domain data model belongs here too, as an ERD
 - heading: Architecture Decisions
-  hint: one line per decision - what was chosen and why it still holds; link ad- slugs, the decisions/ inventory is canonical
+  hint: one line per decision - what was chosen and why it still holds; full records in knowledge/decisions/
 - heading: Quality Requirements
-  hint: the measurable targets - link qa- slugs; a number, a unit, and the point it is measured at
+  optional: true
+  hint: the measurable targets - a number, a unit, and the point it is measured at
 - heading: Risks and Technical Debt
 - heading: Glossary
-  hint: link the glossary singleton; do not restate terms
+  optional: true
+  hint: the ubiquitous language - term, one line each
 
 # The appendices below are not arc42. They are what a gated workflow hangs off the
 # spine, declared so one template covers both readers, and optional so a corpus

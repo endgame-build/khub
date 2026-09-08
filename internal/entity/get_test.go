@@ -7,6 +7,7 @@ package entity
 
 import (
 	"path/filepath"
+	"reflect"
 	"testing"
 
 	"github.com/endgame-build/khub/internal/index"
@@ -74,7 +75,7 @@ func TestResolveIDFoldsCaseAsAFallback(t *testing.T) {
 // get --edges lists the stored forward edges and the read-time derived
 // inverses, the derived ones qualified type/slug.
 func TestGetEdgesIncludesDerivedInverses(t *testing.T) {
-	ws := newWS(t, "build-lite")
+	ws := newWS(t, "build-hub")
 	older, err := Create(ws, "adr", CreateOpts{
 		Fields: fields("title", "Old choice", "status", "accepted"), UseTemplate: true})
 	requireNoError(t, err)
@@ -89,7 +90,7 @@ func TestGetEdgesIncludesDerivedInverses(t *testing.T) {
 	if len(forward.Edges) != 1 {
 		t.Fatalf("forward edges = %#v", forward.Edges)
 	}
-	if forward.Edges[0] != (Edge{Predicate: "supersedes", Target: older.Slug, Derived: false}) {
+	if !reflect.DeepEqual(forward.Edges[0], Edge{Predicate: "supersedes", Target: older.Slug, Derived: false, ResolvedTargets: []string{"adr/" + older.Slug}}) {
 		t.Fatalf("stored edge = %#v", forward.Edges[0])
 	}
 
@@ -98,8 +99,8 @@ func TestGetEdgesIncludesDerivedInverses(t *testing.T) {
 	if len(inverse.Edges) != 1 {
 		t.Fatalf("derived edges = %#v", inverse.Edges)
 	}
-	want := Edge{Predicate: "superseded", Target: "adr/" + newer.Slug, Derived: true}
-	if inverse.Edges[0] != want {
+	want := Edge{Predicate: "superseded", Target: "adr/" + newer.Slug, Derived: true, ResolvedTargets: []string{"adr/" + newer.Slug}}
+	if !reflect.DeepEqual(inverse.Edges[0], want) {
 		t.Fatalf("derived edge = %#v, want %#v", inverse.Edges[0], want)
 	}
 

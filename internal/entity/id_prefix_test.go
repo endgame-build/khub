@@ -37,7 +37,7 @@ func byKindWS(t *testing.T) string {
 // way the parity recorder pins it.
 func TestLiteralPrefixAndDate(t *testing.T) {
 	t.Setenv("KHUB_PARITY_NOW", "2026-01-15")
-	ws := newWS(t, "build-lite")
+	ws := newWS(t, "build-hub")
 	first, err := Create(ws, "adr", CreateOpts{
 		Fields: fields("title", "Use Postgres", "status", "proposed"), UseTemplate: true})
 	requireNoError(t, err)
@@ -51,10 +51,10 @@ func TestLiteralPrefixAndDate(t *testing.T) {
 
 // An undated prefixed type is the prefix plus the slugified title, nothing else.
 func TestLiteralPrefixWithoutDate(t *testing.T) {
-	ws := newWS(t, "build-lite")
+	ws := newWS(t, "build-hub")
 	got := []string{}
 	for _, tc := range []struct{ typ, title string }{
-		{"requirement", "Pay by card"}, {"component", "Public API"}, {"feature-spec", "Checkout"},
+		{"requirement", "Pay by card"}, {"component", "Public API"}, {"repo", "Acme API"},
 	} {
 		extra := []string{"title", tc.title}
 		switch tc.typ {
@@ -62,14 +62,14 @@ func TestLiteralPrefixWithoutDate(t *testing.T) {
 			extra = append(extra, "kind", "functional")
 		case "component":
 			extra = append(extra, "kind", "service")
-		case "feature-spec":
-			extra = append(extra, "status", "planned")
+		case "repo":
+			extra = append(extra, "repo", "acme/api", "status", "active")
 		}
 		res, err := Create(ws, tc.typ, CreateOpts{Fields: fields(extra...), UseTemplate: true})
 		requireNoError(t, err)
 		got = append(got, res.Slug)
 	}
-	want := []string{"req-pay-by-card", "cmp-public-api", "fs-checkout"}
+	want := []string{"req-pay-by-card", "cmp-public-api", "rp-acme-api"}
 	if !equalStrings(got, want) {
 		t.Fatalf("slugs = %v, want %v", got, want)
 	}
@@ -113,7 +113,7 @@ func TestNoDeclaredPrefixMintsBareSlug(t *testing.T) {
 // the ordinal — the read-modify-write that raced across branches is gone.
 func TestMintingReadsNoSiblings(t *testing.T) {
 	t.Setenv("KHUB_PARITY_NOW", "2026-01-15")
-	ws := newWS(t, "build-lite")
+	ws := newWS(t, "build-hub")
 	decisions := filepath.Join(ws, "knowledge", "decisions")
 	mkdirAll(t, decisions)
 	for _, slug := range []string{"ad-044-a", "ad-999-b", "ad-2026-01-14-next"} {
@@ -132,7 +132,7 @@ func TestMintingReadsNoSiblings(t *testing.T) {
 // the next minted one is unaffected by it.
 func TestExplicitIDBypassesTheScheme(t *testing.T) {
 	t.Setenv("KHUB_PARITY_NOW", "2026-01-15")
-	ws := newWS(t, "build-lite")
+	ws := newWS(t, "build-hub")
 	res, err := Create(ws, "adr", CreateOpts{
 		Fields: fields("title", "Hand named", "status", "proposed"),
 		ID:     "hand", UseTemplate: true})
@@ -153,7 +153,7 @@ func TestExplicitIDBypassesTheScheme(t *testing.T) {
 // one filename instead of numbering past each other.
 func TestSameTitleRefusesAndNamesID(t *testing.T) {
 	t.Setenv("KHUB_PARITY_NOW", "2026-01-15")
-	ws := newWS(t, "build-lite")
+	ws := newWS(t, "build-hub")
 	_, err := Create(ws, "adr", CreateOpts{
 		Fields: fields("title", "Use Postgres", "status", "proposed"), UseTemplate: true})
 	requireNoError(t, err)
@@ -185,7 +185,7 @@ func TestSameTitleRefusesAndNamesID(t *testing.T) {
 // dates it — an imported decision keeps the day it was really made.
 func TestCreatedOverrideDatesTheId(t *testing.T) {
 	t.Setenv("KHUB_PARITY_NOW", "2026-01-15")
-	ws := newWS(t, "build-lite")
+	ws := newWS(t, "build-hub")
 	res, err := Create(ws, "adr", CreateOpts{
 		Fields:      fields("title", "Imported", "status", "accepted", "created", "2025-03-01"),
 		UseTemplate: true})

@@ -3,6 +3,6 @@
 # so `khub schema bogus` printed the whole schema and exited 0). A missing
 # required TYPE routes through Click's boxed usage error like every other one.
 steps:
-- argv: ["init", "build-lite", ".", "--no-wire"]
+- argv: ["init", "build-hub", ".", "--no-wire"]
 - argv: ["schema", "bogus"]
 - argv: ["schema", "show"]

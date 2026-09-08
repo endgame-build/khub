@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>khub</title>
+<link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+<header id="bar">
+  <span id="brand">khub</span>
+  <nav id="crumbs"></nav>
+  <div id="find">
+    <input id="search" type="search" placeholder="Find an entity" autocomplete="off" spellcheck="false">
+    <div id="results" hidden></div>
+  </div>
+  <div id="viewctl">
+    <button id="asschema" class="btn-ghost" title="The ontology: what this workspace can contain">Schema</button>
+    <button id="asgraph" class="btn-ghost" title="The entities, as a picture">Graph</button>
+    <button id="aslist" class="btn-ghost" title="The entities, as rows">List</button>
+  </div>
+  <div id="depthctl">
+    <button id="contract" class="btn-ghost" disabled title="Show one hop less">−</button>
+    <span id="depth" class="mono"></span>
+    <button id="expand" class="btn-ghost" disabled title="Show one hop more">+</button>
+  </div>
+  <span id="counts"></span>
+</header>
+<main>
+  <aside id="filters" class="rail"></aside>
+  <section id="stage">
+    <div id="cy"></div>
+    <!-- Overlays the canvas rather than replacing it. Hiding #cy would make
+         cy.width() zero, and the fit and zoom-clamp after a layout read it. -->
+    <div id="list" hidden></div>
+    <div id="notice" hidden></div>
+  </section>
+  <aside id="side" class="rail">
+    <div id="inspector"></div>
+    <div id="composer"></div>
+  </aside>
+</main>
+<!-- Both tags carry src. The CSP forbids inline script, and the build gate in
+     internal/serve/serve_test.go fails on any tag lacking one — including a
+     mention inside a comment like this, which is why this note spells none.
+     The classic tag is not deferred and the module tag is, so the cytoscape
+     global is guaranteed to exist by the time app.js runs. -->
+<script src="/static/cytoscape.min.js"></script>
+<script type="module" src="/static/app.js"></script>
+</body>
+</html>

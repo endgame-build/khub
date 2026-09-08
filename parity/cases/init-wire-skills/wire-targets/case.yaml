@@ -1,5 +1,5 @@
 steps:
-- argv: ["init", "build-lite", ".", "--no-wire"]
+- argv: ["init", "build-hub", ".", "--no-wire"]
 - argv: ["wire", "--dry-run"]
 - argv: ["wire"]
 - argv: ["wire"]

@@ -383,15 +383,15 @@ func TestGraphEdgesNesting(t *testing.T) {
 func TestPredicateEdgesDedup(t *testing.T) {
 	ws := freshWS(t)
 	recent := []kv{{"created", date("2026-06-01")}, {"updated", date("2026-06-01")}}
-	// The same target twice: MultiDiGraph keeps two edges, DiGraph keeps one.
+	// Repeated values resolve to one source/predicate/target edge.
 	seed(t, ws, "clients/dup-src.md", append([]kv{
 		{"type", "client"}, {"name", "Dup"}, {"depends_on", []any{"dup-dst", "dup-dst"}},
 	}, recent...)...)
 	seed(t, ws, "clients/dup-dst.md", append([]kv{{"type", "client"}, {"name", "Dst"}}, recent...)...)
 	g := BuildGraph(buildIdx(t, ws))
 	src := index.Node{Type: "client", Slug: "dup-src"}
-	if got := g.OutDegree(src); got != 2 {
-		t.Fatalf("multigraph keeps parallel edges: want 2, got %d", got)
+	if got := g.OutDegree(src); got != 1 {
+		t.Fatalf("duplicate edge inflated degree: want 1, got %d", got)
 	}
 	if got := len(g.PredicateEdges("depends_on")); got != 1 {
 		t.Fatalf("the predicate digraph collapses them: want 1, got %d", got)

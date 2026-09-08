@@ -12,32 +12,40 @@
 //
 // An edited file is copied to <name>.bak before it is replaced. Overwriting
 // is the point; doing it silently and unrecoverably to someone's own ontology
-// is not, and this is the one step with no cheap undo if the corpus was not
-// committed. There is no unwind — the .bak is the safety net.
+// is not. Publication stages originals and replacements for rollback and crash inspection.
 
 package workspace
 
 import (
 	"errors"
 	"io/fs"
-	"os"
 	"path/filepath"
 	"strings"
 
 	"github.com/endgame-build/khub/internal/canon"
 	"github.com/endgame-build/khub/internal/errs"
+	"github.com/endgame-build/khub/internal/fsio"
 	"github.com/endgame-build/khub/internal/introspect"
 	"github.com/endgame-build/khub/internal/omap"
 	"github.com/endgame-build/khub/internal/presets"
 	"github.com/endgame-build/khub/internal/schema"
 )
 
-// UpgradeOptions carries upgrade's one library-level switch. NoSchema keeps
+// UpgradeOptions controls planning and schema refresh. NoSchema keeps
 // the workspace's .khub/ files — layers, templates and the provenance stamp —
 // exactly as they are and reports what the shipped ontology has that they do
 // not.
 type UpgradeOptions struct {
 	NoSchema bool
+	DryRun   bool
+	// Preview runs dry-run tails against the prepared temporary workspace.
+	Preview func(string) error
+	// Tails runs after a real upgrade has published, still under the workspace
+	// lock, so the skill, wire and index tails see exactly the tree the core
+	// committed. The callee must use the Held variants (skill.InstallHeld,
+	// wire.WireHeld, reindex.ReindexHeld): fsio.Locked is not re-entrant.
+	// Tails are non-fatal; the hook returns nothing.
+	Tails func(root string)
 }
 
 // ConfigChange is one workspace-owned file upgrade touched. Name and Backup
@@ -66,7 +74,9 @@ type UpgradeResult struct {
 	SingletonsCreated []string
 	// SchemaDrift lists the shipped types the workspace ontology lacks. Filled
 	// only under NoSchema: after a refresh the files are never stale.
-	SchemaDrift []string
+	SchemaDrift  []string
+	DryRun       bool
+	RemovedTypes []string
 }
 
 // Upgrade brings the workspace at root up to the preset the binary ships:
@@ -78,22 +88,21 @@ type UpgradeResult struct {
 //
 // root must be a workspace (the CLI resolves it through FindWorkspace); a
 // config.yaml recording no preset is the no_preset refusal.
-func Upgrade(root string, opt UpgradeOptions) (*UpgradeResult, error) {
+func upgradeCandidate(root string, opt UpgradeOptions, sourceDir string) (*UpgradeResult, error) {
 	prov, err := Provenance(root)
 	if err != nil {
 		return nil, err
 	}
-	preset := configString(prov, "preset")
-	if preset == "" {
+	recorded := configString(prov, "preset")
+	if recorded == "" {
 		return nil, errs.NoPreset(root)
 	}
 	versionFrom := configString(prov, "version")
 
-	sourceDir, err := PresetSource(root)
-	if err != nil {
-		return nil, err
-	}
 	source := presets.Source(sourceDir)
+	// A workspace recorded under a retired name upgrades onto the preset that
+	// replaced it, and config.yaml is restamped with the canonical name below.
+	preset := presets.Canonical(recorded, source)
 	schemaPath, err := presets.Resolve(preset, source)
 	if err != nil {
 		return nil, err
@@ -112,8 +121,13 @@ func Upgrade(root string, opt UpgradeOptions) (*UpgradeResult, error) {
 		if err != nil {
 			return nil, err
 		}
-		if err := restampVersion(pyJoin(khubDir, "config.yaml"), merged.Version); err != nil {
+		if err := restampConfig(pyJoin(khubDir, "config.yaml"), "version", merged.Version); err != nil {
 			return nil, err
+		}
+		if preset != recorded {
+			if err := restampConfig(pyJoin(khubDir, "config.yaml"), "preset", preset); err != nil {
+				return nil, err
+			}
 		}
 		versionTo = merged.Version
 	}
@@ -171,7 +185,7 @@ func replaceConfig(target, khubDir, preset string, merged *flattened, source fs.
 		return changes, nil
 	}
 	tplDir := pyJoin(khubDir, "templates")
-	if err := os.MkdirAll(osPath(tplDir), 0o777); err != nil {
+	if err := fsio.MkdirAll(osPath(target), osPath(tplDir)); err != nil {
 		return nil, err
 	}
 	for _, tpl := range presets.Templates(preset, source) {
@@ -199,15 +213,15 @@ func replaceConfig(target, khubDir, preset string, merged *flattened, source fs.
 // copied to <name>.bak first.
 func replaceFile(target, path, incoming string, headed bool) (ConfigChange, bool, error) {
 	name := relTo(target, path)
-	raw, err := os.ReadFile(osPath(path))
+	raw, err := fsio.ReadFile(osPath(target), osPath(path))
 	if err != nil {
 		if !errors.Is(err, fs.ErrNotExist) {
 			return ConfigChange{}, false, err
 		}
-		if merr := os.MkdirAll(osPath(pyParent(path)), 0o777); merr != nil {
+		if merr := fsio.MkdirAll(osPath(target), osPath(pyParent(path))); merr != nil {
 			return ConfigChange{}, false, merr
 		}
-		if werr := writeText(path, incoming); werr != nil {
+		if werr := fsio.AtomicWriteIn(osPath(target), osPath(path), []byte(incoming)); werr != nil {
 			return ConfigChange{}, false, werr
 		}
 		return ConfigChange{Name: name, Action: "created"}, true, nil
@@ -219,12 +233,12 @@ func replaceFile(target, path, incoming string, headed bool) (ConfigChange, bool
 	backup := ""
 	if !headed || stripHeader(current) != stripHeader(incoming) {
 		backupPath := path + ".bak"
-		if werr := writeText(backupPath, current); werr != nil {
+		if werr := fsio.AtomicWriteIn(osPath(target), osPath(backupPath), []byte(current)); werr != nil {
 			return ConfigChange{}, false, werr
 		}
 		backup = relTo(target, backupPath)
 	}
-	if werr := writeText(path, incoming); werr != nil {
+	if werr := fsio.AtomicWriteIn(osPath(target), osPath(path), []byte(incoming)); werr != nil {
 		return ConfigChange{}, false, werr
 	}
 	return ConfigChange{Name: name, Action: "replaced", Backup: backup}, true, nil
@@ -253,12 +267,13 @@ func relTo(target, path string) string {
 	return strings.TrimPrefix(strings.TrimPrefix(path, target), "/")
 }
 
-// restampVersion writes the shipped version into config.yaml's `version`,
-// touching only that scalar (the workspace may have edited stale_days, and a
-// comment beside it should survive). A change the splicer cannot express
-// re-emits the document through the same wide dump init wrote it with.
-func restampVersion(configPath, version string) error {
-	raw, err := os.ReadFile(osPath(configPath))
+// restampConfig writes one scalar into config.yaml — the shipped `version`,
+// or the canonical `preset` when the workspace was recorded under a retired
+// name — touching only that scalar (the workspace may have edited stale_days,
+// and a comment beside it should survive). A change the splicer cannot
+// express re-emits the document through the same wide dump init wrote it with.
+func restampConfig(configPath, key, value string) error {
+	raw, err := fsio.ReadFile(filepath.Dir(filepath.Dir(osPath(configPath))), osPath(configPath))
 	if err != nil {
 		return err
 	}
@@ -270,10 +285,10 @@ func restampVersion(configPath, version string) error {
 	if err != nil {
 		return err
 	}
-	if configString(cfg, "version") == version {
+	if configString(cfg, key) == value {
 		return nil
 	}
-	cfg.Set("version", version)
+	cfg.Set(key, value)
 	out, err := canon.SpliceMapping(raw, cfg, canon.Mode12)
 	if errors.Is(err, canon.ErrNoSplice) {
 		text, derr := canon.DumpWide(cfg)
@@ -284,7 +299,7 @@ func restampVersion(configPath, version string) error {
 	} else if err != nil {
 		return err
 	}
-	return writeText(configPath, string(out))
+	return fsio.AtomicWriteIn(filepath.Dir(filepath.Dir(osPath(configPath))), osPath(configPath), out)
 }
 
 // schemaDrift is kb's _schema_drift: the types the shipped ontology declares

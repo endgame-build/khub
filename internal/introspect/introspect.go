@@ -8,13 +8,13 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
-	"os"
 	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
 
 	"github.com/endgame-build/khub/internal/errs"
+	"github.com/endgame-build/khub/internal/fsio"
 	"github.com/endgame-build/khub/internal/omap"
 	"github.com/endgame-build/khub/internal/presets"
 	"github.com/endgame-build/khub/internal/schema"
@@ -37,7 +37,7 @@ func LayerFiles(root string) ([]string, error) {
 	var out []string
 	for _, name := range []string{presets.OntologyFile, presets.PolicyFile, presets.StorageFile} {
 		p := filepath.Join(root, ".khub", name)
-		fi, statErr := os.Stat(p)
+		fi, statErr := fsio.Stat(root, p)
 		if statErr != nil {
 			if errors.Is(statErr, fs.ErrNotExist) {
 				continue
@@ -93,7 +93,7 @@ func LoadSchemaLayers(root string) (*schema.ResolvedSchema, []string, error) {
 	for _, rel := range layers {
 		paths = append(paths, filepath.Join(root, filepath.FromSlash(rel)))
 	}
-	resolved, err := schema.ResolveWith(base, paths)
+	resolved, err := schema.ResolveIn(root, base, paths)
 	if err != nil {
 		var located *errs.Located
 		if errors.As(err, &located) {
@@ -178,9 +178,9 @@ func SchemaView(resolved *schema.ResolvedSchema, provenance *omap.Map) *omap.Map
 }
 
 // EdgesView renders the relation vocabulary: one row per DISTINCT declaration.
-// Keying by predicate name alone is lossy in a way that misleads (build-lite
-// declares `supersedes` on two types with different targets), so a row is
-// keyed by the whole declaration.
+// Keying by predicate name alone is lossy in a way that misleads (a preset
+// may declare `supersedes` on two types with different targets, as the old
+// build-hub did on adr and pdr), so a row is keyed by the whole declaration.
 func EdgesView(resolved *schema.ResolvedSchema) []any {
 	type row struct {
 		sig     string
@@ -248,9 +248,10 @@ func EdgesView(resolved *schema.ResolvedSchema) []any {
 	// the stored edge came from.
 	// One row per derived DECLARATION, aggregated across every type carrying it:
 	// `from` is the types answering to the inverse, `to` the union of types
-	// storing the forward edge. Aggregating matters — build-hub declares
-	// `supersedes` on adr, feature-spec and pdr, and reporting only whichever
-	// was seen first would understate the surface.
+	// storing the forward edge. Aggregating matters — a preset declaring one
+	// inverse on several types (the pre-0.6.0 build-hub carried `supersedes`
+	// on adr and pdr; today's declares it on adr alone) would otherwise
+	// report only whichever was seen first and understate the surface.
 	var derivedOrder []string
 	agg := map[string]*derivedInverse{}
 	froms := map[string][]string{}

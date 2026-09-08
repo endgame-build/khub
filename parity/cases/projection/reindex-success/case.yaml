@@ -1,5 +1,5 @@
 steps:
-- argv: ["init", "build-lite", ".", "--no-wire"]
+- argv: ["init", "build-hub", ".", "--no-wire"]
 - argv: ["add", "requirement", "--title", "Alpha", "--kind", "functional"]
 - argv: ["add", "component", "--title", "Beta", "--kind", "service"]
 - argv: ["reindex", "--dry-run"]

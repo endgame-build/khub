@@ -1,0 +1,5 @@
+Usage: khub serve [OPTIONS]
+Try 'khub serve --help' for help.
+╭─ Error ──────────────────────────────────────────────────────────────────────╮
+│ Got unexpected extra argument(s) (extra-arg)                                 │
+╰──────────────────────────────────────────────────────────────────────────────╯

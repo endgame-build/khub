@@ -60,7 +60,80 @@ resolved schema (zero per-type code), emitting `outputSchema` +
 ## Untrusted content drives writes
 
 Entity bodies are attacker-influenceable text; `get`/`search` output is
-untrusted by construction. khub holds private data + untrusted content but
-**no egress** — keep it that way (`viz --open` and any future `export` are the
-lines to think before crossing). Containment for injected-content writes is
-provenance + draft, with `check` as the human review point.
+untrusted by construction. khub holds private data + untrusted content and
+**sends nothing outward** — keep it that way (`viz --open` and any future
+`export` are the lines to think before crossing). Containment for
+injected-content writes is provenance + draft, with `check` as the human
+review point.
+
+`khub serve` is not a crossing of that line and should not be argued as one: a
+listener bound to `127.0.0.1` transmits to nobody. Its real exposure is the
+reverse direction — anything already running on the machine can reach it — and
+that is what `serve`'s guards answer. See below.
+
+## `khub serve` — why a second contract was accepted here
+
+The MCP verdict above rejects "a second contract the parity suite doesn't
+cover." `serve` is exactly that, so the distinction has to be written down or
+the two sections read as a contradiction and someone will eventually delete
+the wrong one.
+
+MCP's cost was paid by **agents, on every turn**: 14K–36K standing tokens for a
+surface the CLI already gave them. `serve`'s standing cost to an agent is one
+row in root help — about 20 tokens — and nothing per call, because an agent has
+no reason to invoke it and the TTY gate turns an accidental invocation into an
+immediate refusal rather than a hang. That gate is a guard, not a wall:
+`TTY_COMPATIBLE=1` is a documented escape, so "an agent cannot run it" would be
+false. What it buys is a human surface with no CLI equivalent: a graph you can
+look at, and navigate, without regenerating a file. Different consumer, and a
+ledger three orders of magnitude smaller.
+
+Be precise about what "live" means here, because it is easy to overstate: the
+**server** rebuilds from the live tree on every request, so it can never answer
+from a stale graph. The **page** fetches once on load. A reload shows the
+current tree; nothing pushes. There is no polling and no event stream, and
+neither should be added without a reason better than symmetry with that
+sentence.
+
+What stays true from the MCP reasoning: the static-binary position is intact
+(`net/http` is stdlib, `CGO_ENABLED=0` unchanged), and there is no per-type
+code — the endpoints call `viz.Graph`, `introspect.LoadSchema` and
+`entity.Get`, the same verbs the CLI calls. One caveat worth keeping in view:
+`entity.Get` builds its index without the stray filter and without
+`RejectMalformed`, so `/api/entity/{id}` can answer for a file `/api/graph` has
+no node for. The UI only ever links from graph nodes, so nothing reaches it —
+but a new caller could.
+
+**The coverage split is deliberate.** The parity harness pins `serve`'s CLI
+contract — the TTY refusal, help, arity — because those are
+stdout/stderr/exit-code, which is what the harness is good at. The HTTP
+contract is `httptest` in `internal/serve/`, because an HTTP body has neither
+of the two properties that make the harness worth having (a whole-tree
+manifest and an exact exit code).
+
+The **port refusal is the exception, and it is not reachable from a fixture**:
+the TTY gate runs before `Listen`, so `serve --port N` in a pipe-mode case
+records `serve_needs_tty` and never binds. `TestListenRefusesBusyPort` covers
+it instead. Do not add a fixture step expecting `port_in_use` — it cannot
+produce one.
+
+**A serve step in a `mode: human` or `mode: pty` parity case hangs the suite
+forever.** Those modes do not set `TTY_COMPATIBLE=0`, so the refusal never
+fires and the runner waits on a server that never exits. Default `mode: pipe`
+is what makes `cli-contract/serve-refusals` terminate. Nothing in the code can
+prevent this; the case file carries the warning.
+
+**Read-only is structural, not policy.** The guard rejects every method but GET
+and HEAD before routing, so a write endpoint cannot be added by accident. If
+one is ever added, three things become mandatory that are not needed today: a
+per-run token in the URL (same-origin currently stops a local page from
+*reading* a response it is allowed to send — that argument dies the moment a
+request has an effect), an `Origin` check, and a decision about whether the
+HTTP contract gets harness coverage after all.
+
+**Host-header validation is the load-bearing guard**, not the loopback bind.
+DNS rebinding re-resolves an attacker's domain to `127.0.0.1`, which defeats
+the bind and defeats same-origin — but the request still announces the
+attacker's hostname in `Host`. `serve.AllowedHost` is therefore the whole
+defence, and its test is the one not to delete. Never add a CORS header: it
+would undo the layer underneath it.

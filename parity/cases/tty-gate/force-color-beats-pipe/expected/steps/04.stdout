@@ -4,11 +4,15 @@
 ┡━━━━━━━━━━━━━━━━╇━━━━━━━┩
 │ prd            │ 1     │
 │ arc42          │ 1     │
+│ capability     │ 0     │
+│ actor          │ 0     │
+│ use-case       │ 0     │
 │ requirement    │ 0     │
 │ adr            │ 0     │
+│ system         │ 0     │
 │ component      │ 1     │
+│ api            │ 0     │
 │ repo           │ 0     │
-│ feature-spec   │ 0     │
 │ draft / active │ 0 / 3 │
 │ orphan         │ 1     │
 │ stale          │ 0     │

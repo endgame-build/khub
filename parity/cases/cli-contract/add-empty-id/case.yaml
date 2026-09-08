@@ -3,7 +3,7 @@
 # cannot be minted. Both are located failures (exit 2), and both are raised
 # AFTER the unknown-type and referential-integrity gates.
 steps:
-- argv: ["init", "build-lite", ".", "--no-wire"]
+- argv: ["init", "build-hub", ".", "--no-wire"]
 - argv: ["add", "prd", "--id", ""]
 - argv: ["add", "requirement", "--id", "", "--title", "R", "--kind", "functional"]
 - argv: ["add", "bogustype", "--id", ""]

@@ -113,13 +113,14 @@ func Project(root string, staleDays int, now time.Time) (*Projection, error) {
 		}
 	}
 
-	// Types declaring `orphan: true` are excluded: a health count that can never
-	// reach zero is not a health count. Same rule as the `check` gate and the
-	// `query` flag.
+	// The rule (including the `orphan: true` exemption) lives on ResolvedType so
+	// this, query and viz cannot drift. Only the degrees are computed locally —
+	// the traversal above derives them while also detecting broken references,
+	// which is why this path does not build a graph to ask.
 	orphan := 0
 	for _, node := range valid.Order {
 		rtype, _ := valid.Resolved.Types.Get(node.Type)
-		if !hasOut[node] && !hasIn[node] && !rtype.Orphan {
+		if rtype.IsOrphan(hasOut[node], hasIn[node]) {
 			orphan++
 		}
 	}

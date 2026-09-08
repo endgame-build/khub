@@ -1,8 +1,0 @@
-title: Roadmap
-sections:
-- heading: Lanes
-  hint: one lane per component; what ships in each
-- heading: Execution order
-  hint: the interleaved feature-spec order and why
-- heading: Build order
-  hint: derived from domain depends_on - narrate, don't restate

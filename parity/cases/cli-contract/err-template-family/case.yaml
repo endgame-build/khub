@@ -1,5 +1,5 @@
 steps:
-- argv: ["init", "build-lite", ".", "--no-wire"]
+- argv: ["init", "build-hub", ".", "--no-wire"]
 - argv: ["add", "adr", "--no-template", "--title", "A", "--status", "proposed"]
 - sh: "printf -- \"- x\\n\" > .khub/templates/adr.yaml"
 - argv: ["add", "adr", "--title", "B", "--status", "proposed"]

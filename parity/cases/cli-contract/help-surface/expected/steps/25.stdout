@@ -1,10 +1,8 @@
-                                                                                
- Usage: khub schema types [OPTIONS]                                             
-                                                                                
- List the declared type names.                                                  
-                                                                                
-╭─ Options ────────────────────────────────────────────────────────────────────╮
-│ --format        <str>  text (Rich table on a TTY) or json. [default: text]   │
-│ --help                 Show this message and exit.                           │
-╰──────────────────────────────────────────────────────────────────────────────╯
+Usage: khub schema types [OPTIONS]
+
+List the declared type names.
+
+Options:
+  --format <str>  text (Rich table on a TTY) or json. [default: text]
+  --help  Show this message and exit.
 

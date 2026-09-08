@@ -1,8 +1,0 @@
-title: Quality attribute
-sections:
-- heading: Scenario
-  hint: concrete and measurable - stimulus, environment, response, measure
-- heading: Measurement
-  hint: where the number comes from
-- heading: Enforcement
-  hint: the gate or alert that trips

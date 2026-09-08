@@ -24,10 +24,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dlclark/regexp2"
-
 	"github.com/endgame-build/khub/internal/canon"
 	"github.com/endgame-build/khub/internal/errs"
+	"github.com/endgame-build/khub/internal/fsio"
 	"github.com/endgame-build/khub/internal/index"
 	"github.com/endgame-build/khub/internal/introspect"
 	"github.com/endgame-build/khub/internal/omap"
@@ -47,6 +46,10 @@ import (
 // required field never blocks capture — check surfaces the gap as
 // active-but-incomplete.
 func Create(root, typeName string, opts CreateOpts) (*CreateResult, error) {
+	return fsio.Locked(root, func() (*CreateResult, error) { return create(root, typeName, opts) })
+}
+
+func create(root, typeName string, opts CreateOpts) (*CreateResult, error) {
 	resolved, err := introspect.LoadSchema(root)
 	if err != nil {
 		return nil, err
@@ -65,6 +68,7 @@ func Create(root, typeName string, opts CreateOpts) (*CreateResult, error) {
 	if err != nil {
 		return nil, err
 	}
+	idx = index.Filter(idx, index.StrayNodes(idx))
 	part, err := partition(rtype, opts.Fields, opts.Strict)
 	if err != nil {
 		return nil, err
@@ -77,6 +81,10 @@ func Create(root, typeName string, opts CreateOpts) (*CreateResult, error) {
 	if stem := rtype.TemplateName(); strings.TrimSpace(body) == "" && rtype.ReadsTemplate() && stem != "" {
 		tpl, terr := template.LoadTemplate(root, stem, rtype.FieldNames())
 		if terr != nil {
+			var located *errs.Located
+			if errors.As(terr, &located) && located.Code == "unsafe_path" {
+				return nil, terr
+			}
 			tpl = nil // validate carries the template finding
 		}
 		if tpl != nil {
@@ -112,6 +120,11 @@ func Create(root, typeName string, opts CreateOpts) (*CreateResult, error) {
 				return nil, err
 			}
 		}
+		unique := uniqueTargets(idx, rel, vals.([]string))
+		if !rel.Many && len(unique) > 1 {
+			return nil, errs.CardinalityViolation(predicate)
+		}
+		part.rels.Set(predicate, unique)
 	}
 
 	// `draft` is manual: the --draft flag, or an explicit `draft` field, else false.
@@ -159,10 +172,10 @@ func Create(root, typeName string, opts CreateOpts) (*CreateResult, error) {
 				"'%s' is a singleton — its id is always '%s' (drop --id)", typeName, typeName))
 		}
 		path := entityPath(root, rtype, typeName)
-		if err := os.MkdirAll(filepath.Dir(path), 0o777); err != nil {
+		if err := fsio.MkdirAll(root, filepath.Dir(path)); err != nil {
 			return nil, err
 		}
-		if err := writeNew(path, meta, body); err != nil {
+		if err := writeNew(root, path, meta, body); err != nil {
 			if errors.Is(err, fs.ErrExist) {
 				return nil, errs.New("singleton_exists", fmt.Sprintf(
 					"Singleton '%s' already exists at %s; edit it instead of adding another",
@@ -203,10 +216,10 @@ func Create(root, typeName string, opts CreateOpts) (*CreateResult, error) {
 		return nil, errs.SlugTaken(slug, typeName, !explicit)
 	}
 	path := entityPath(root, rtype, slug)
-	if err := os.MkdirAll(filepath.Dir(path), 0o777); err != nil {
+	if err := fsio.MkdirAll(root, filepath.Dir(path)); err != nil {
 		return nil, err
 	}
-	if err := writeNew(path, meta, body); err != nil {
+	if err := writeNew(root, path, meta, body); err != nil {
 		if errors.Is(err, fs.ErrExist) {
 			return nil, errs.SlugTaken(slug, typeName, !explicit)
 		}
@@ -287,7 +300,7 @@ func partition(rtype *schema.ResolvedType, fields *omap.Map, strict bool) (*part
 			part.attrs.Set(key, value)
 			continue
 		}
-		if rel, isRel := rtype.Relations.Get(key); isRel {
+		if _, isRel := rtype.Relations.Get(key); isRel {
 			var vals []string
 			if raw != "" {
 				for _, v := range strings.Split(raw, ",") {
@@ -302,9 +315,6 @@ func partition(rtype *schema.ResolvedType, fields *omap.Map, strict bool) (*part
 			if len(vals) == 0 {
 				return nil, errs.New("empty_relation_value", fmt.Sprintf(
 					"Empty value for relation '%s'; use unlink to remove an edge", key))
-			}
-			if !rel.Many && len(vals) > 1 {
-				return nil, errs.CardinalityViolation(key)
 			}
 			part.rels.Set(key, vals)
 			continue
@@ -329,7 +339,7 @@ func validateAttr(attr *schema.ResolvedAttribute, raw, storageFmt string) (any, 
 		return nil, errs.EnumViolation(raw, attr.Name, attr.Enum)
 	}
 	if attr.Pattern != nil {
-		matched, err := fullMatch(*attr.Pattern, raw)
+		matched, err := attr.MatchPattern(raw)
 		if err != nil {
 			return nil, err
 		}
@@ -361,28 +371,20 @@ func validateAttr(attr *schema.ResolvedAttribute, raw, storageFmt string) (any, 
 	return raw, nil
 }
 
-// fullMatch emulates Python re.fullmatch. User patterns may use constructs RE2
-// rejects (backreferences, lookaround), so the regexp2 engine compiles them
-// wrapped in \A(?:…)\z (go-port-plan R1).
-//
-// regexp2 is a backtracking engine with no linear-time guarantee, and it checks
-// no deadline unless MatchTimeout is set. Schema `pattern`s are author-supplied,
-// so without the timeout a catastrophically backtracking pattern hangs the
-// write verb forever. One second is orders of magnitude above any legitimate
-// single-value match.
-func fullMatch(pattern, s string) (bool, error) {
-	re, err := regexp2.Compile(`\A(?:`+pattern+`)\z`, regexp2.None)
-	if err != nil {
-		return false, err
-	}
-	re.MatchTimeout = time.Second
-	return re.MatchString(s)
-}
-
 // --- get ---------------------------------------------------------------------
 
 // Get reads one entity by id; edges optionally includes stored and derived edges.
 func Get(root, id string, edges bool) (*EntityView, error) {
+	views, err := GetMany(root, []string{id}, edges)
+	if err != nil {
+		return nil, err
+	}
+	return views[0], nil
+}
+
+// GetMany resolves the whole request before reading results, preserving argument
+// order and duplicates. All records share one schema/index/collection snapshot.
+func GetMany(root string, ids []string, edges bool) ([]*EntityView, error) {
 	resolved, err := introspect.LoadSchema(root)
 	if err != nil {
 		return nil, err
@@ -391,27 +393,46 @@ func Get(root, id string, edges bool) (*EntityView, error) {
 	if err != nil {
 		return nil, err
 	}
-	node, err := resolveID(idx, id)
-	if err != nil {
-		return nil, err
+	nodes := make([]index.Node, len(ids))
+	for i, id := range ids {
+		nodes[i], err = resolveID(idx, id)
+		if err != nil {
+			return nil, err
+		}
 	}
+	valid := index.Filter(idx, index.StrayNodes(idx))
+	views := make([]*EntityView, 0, len(ids))
+	cache := map[index.Node]*EntityView{}
+	for _, node := range nodes {
+		view := cache[node]
+		if view == nil {
+			view, err = getView(root, idx, node)
+			if err != nil {
+				return nil, err
+			}
+			if edges {
+				view.Edges = entityEdges(valid, resolved, node, view.Meta)
+			}
+			cache[node] = view
+		}
+		views = append(views, view)
+	}
+	return views, nil
+}
+
+func getView(root string, idx *index.Index, node index.Node) (*EntityView, error) {
+	resolved := idx.Resolved
+	var err error
 	rtype, _ := resolved.Types.Get(node.Type)
 	path := entityPath(root, rtype, node.Slug)
 
 	var meta *omap.Map
 	var body, raw string
 	if rtype.Storage.Layout == schema.LayoutCollection {
-		text, rerr := canon.ReadText(path)
-		if rerr != nil {
-			return nil, rerr
-		}
-		rows, lerr := canon.LoadCollection(string(text), rtype.Storage.Fmt)
-		if lerr != nil {
-			return nil, lerr
-		}
+		rows := idx.Collections[node.Type]
 		rowAny, has := rows.Get(node.Slug)
 		if !has { // indexed a moment ago; the row vanished mid-command
-			return nil, errs.LookupError(id)
+			return nil, errs.LookupError(node.ID())
 		}
 		row := rowAny.(*omap.Map)
 		meta, body, err = canon.SplitRow(row, rtype.Storage.Fmt)
@@ -426,7 +447,7 @@ func Get(root, id string, edges bool) (*EntityView, error) {
 			return nil, err
 		}
 	} else {
-		text, rerr := canon.ReadText(path)
+		text, rerr := canon.ReadTextIn(root, path)
 		if rerr != nil {
 			return nil, rerr
 		}
@@ -445,9 +466,6 @@ func Get(root, id string, edges bool) (*EntityView, error) {
 		Raw:     raw,
 		Locator: locator(rtype, node.Slug),
 	}
-	if edges {
-		view.Edges = entityEdges(idx, resolved, node, meta)
-	}
 	return view, nil
 }
 
@@ -457,6 +475,10 @@ func Get(root, id string, edges bool) (*EntityView, error) {
 // `draft` moves only when the user edits it (`edit <id> draft true|false`); no
 // completeness recompute, no auto-promote.
 func Update(root, id string, opts UpdateOpts) (*UpdateResult, error) {
+	return fsio.Locked(root, func() (*UpdateResult, error) { return update(root, id, opts) })
+}
+
+func update(root, id string, opts UpdateOpts) (*UpdateResult, error) {
 	resolved, err := introspect.LoadSchema(root)
 	if err != nil {
 		return nil, err
@@ -473,6 +495,7 @@ func Update(root, id string, opts UpdateOpts) (*UpdateResult, error) {
 
 	// Validate everything before touching the file, so a rejected edit leaves it
 	// byte-for-byte unchanged (enum/pattern/strict raise here).
+	idx = index.Filter(idx, index.StrayNodes(idx))
 	part, err := partition(rtype, opts.Fields, opts.Strict)
 	if err != nil {
 		return nil, err
@@ -489,6 +512,11 @@ func Update(root, id string, opts UpdateOpts) (*UpdateResult, error) {
 				return nil, selfLink(id, predicate)
 			}
 		}
+		unique := uniqueTargets(idx, rel, vals.([]string))
+		if !rel.Many && len(unique) > 1 {
+			return nil, errs.CardinalityViolation(predicate)
+		}
+		part.rels.Set(predicate, unique)
 	}
 
 	path := entityPath(root, rtype, node.Slug)
@@ -500,7 +528,18 @@ func Update(root, id string, opts UpdateOpts) (*UpdateResult, error) {
 		for _, predicate := range part.rels.Keys() {
 			rel, _ := rtype.Relations.Get(predicate)
 			vals, _ := part.rels.Get(predicate)
-			list := vals.([]string)
+			list := append([]string(nil), vals.([]string)...)
+			old, _ := m.Get(predicate)
+			if old != nil {
+				for i, value := range list {
+					for _, prior := range asTargetList(old) {
+						if sameTarget(idx, rel, prior, value) {
+							list[i] = prior
+							break
+						}
+					}
+				}
+			}
 			if rel.Many {
 				m.Set(predicate, toAnyList(list))
 			} else {
@@ -549,7 +588,7 @@ func Update(root, id string, opts UpdateOpts) (*UpdateResult, error) {
 		}, nil
 	}
 
-	meta, bodyText, err := readDoc(path)
+	meta, bodyText, err := readDoc(root, path)
 	if err != nil {
 		return nil, err
 	}
@@ -557,7 +596,7 @@ func Update(root, id string, opts UpdateOpts) (*UpdateResult, error) {
 	if opts.Body != nil {
 		bodyText = mdNormalized(*opts.Body, rtype)
 	}
-	if err := writeDoc(path, meta, bodyText); err != nil {
+	if err := writeDoc(root, path, meta, bodyText); err != nil {
 		return nil, err
 	}
 	// AsBool, not truthiness: a hand-authored draft: "false" must report active,
@@ -574,6 +613,10 @@ func Update(root, id string, opts UpdateOpts) (*UpdateResult, error) {
 // no-op link (the edge already exists) leaves the file untouched and returns
 // Changed=false.
 func Link(root, id, predicate, target string) (*LinkResult, error) {
+	return fsio.Locked(root, func() (*LinkResult, error) { return link(root, id, predicate, target) })
+}
+
+func link(root, id, predicate, target string) (*LinkResult, error) {
 	resolved, idx, node, rel, err := edgeContext(root, id, predicate)
 	if err != nil {
 		return nil, err
@@ -591,9 +634,13 @@ func Link(root, id, predicate, target string) (*LinkResult, error) {
 		existing, _ := m.Get(predicate)
 		if rel.Many {
 			// A scalar many-value reads as [value], never char-split.
-			list := asList(existing)
-			changed := false
-			if !containsTarget(list, target) {
+			original := asList(existing)
+			list := toAnyList(uniqueTargets(idx, rel, asTargetList(existing)))
+			if !truthy(existing) {
+				list = []any{}
+			}
+			changed := len(original) != len(list)
+			if !containsTarget(idx, rel, list, target) {
 				list = append(list, target)
 				changed = true
 			}
@@ -604,8 +651,11 @@ func Link(root, id, predicate, target string) (*LinkResult, error) {
 		if truthyScalar(existing) {
 			current, hasCurrent = values.Str(existing), true
 		}
-		if hasCurrent && !sameTarget(current, target) {
+		if hasCurrent && !sameTarget(idx, rel, current, target) {
 			return false, errs.CardinalityViolation(predicate)
+		}
+		if hasCurrent && sameTarget(idx, rel, current, target) {
+			return false, nil
 		}
 		changed := current != target
 		m.Set(predicate, target)
@@ -622,9 +672,9 @@ func Link(root, id, predicate, target string) (*LinkResult, error) {
 	}, nil
 }
 
-func containsTarget(list []any, target string) bool {
+func containsTarget(idx *index.Index, rel *schema.ResolvedRelation, list []any, target string) bool {
 	for _, v := range list {
-		if sameTarget(values.Str(v), target) {
+		if sameTarget(idx, rel, values.Str(v), target) {
 			return true
 		}
 	}
@@ -635,7 +685,11 @@ func containsTarget(list []any, target string) bool {
 // recompute. A no-op unlink (no such edge) leaves the file untouched and returns
 // Changed=false.
 func Unlink(root, id, predicate, target string) (*LinkResult, error) {
-	resolved, _, node, rel, err := edgeContext(root, id, predicate)
+	return fsio.Locked(root, func() (*LinkResult, error) { return unlink(root, id, predicate, target) })
+}
+
+func unlink(root, id, predicate, target string) (*LinkResult, error) {
+	resolved, idx, node, rel, err := edgeContext(root, id, predicate)
 	if err != nil {
 		return nil, err
 	}
@@ -646,7 +700,7 @@ func Unlink(root, id, predicate, target string) (*LinkResult, error) {
 			hit := false
 			remaining := []any{}
 			for _, v := range list {
-				if sameTarget(values.Str(v), target) {
+				if sameTarget(idx, rel, values.Str(v), target) {
 					hit = true
 					continue
 				}
@@ -656,13 +710,13 @@ func Unlink(root, id, predicate, target string) (*LinkResult, error) {
 				return false, nil
 			}
 			if len(remaining) > 0 {
-				m.Set(predicate, remaining)
+				m.Set(predicate, toAnyList(uniqueTargets(idx, rel, asTargetList(remaining))))
 			} else {
 				m.Delete(predicate)
 			}
 			return true, nil
 		}
-		if has && existing != nil && sameTarget(values.Str(existing), target) {
+		if has && existing != nil && sameTarget(idx, rel, values.Str(existing), target) {
 			m.Delete(predicate)
 			return true, nil
 		}
@@ -700,7 +754,7 @@ func edgeContext(root, id, predicate string) (
 	if !ok {
 		return nil, nil, index.Node{}, nil, errs.IllegalPredicate(predicate, node.Type)
 	}
-	return resolved, idx, node, rel, nil
+	return resolved, index.Filter(idx, index.StrayNodes(idx)), node, rel, nil
 }
 
 // applyEdgeMutation runs one link/unlink mutation against per-item or collection
@@ -727,7 +781,7 @@ func applyEdgeMutation(
 		return changed, nil
 	}
 	path := entityPath(root, rtype, slug)
-	meta, body, err := readDoc(path)
+	meta, body, err := readDoc(root, path)
 	if err != nil {
 		return false, err
 	}
@@ -736,7 +790,7 @@ func applyEdgeMutation(
 		return false, err
 	}
 	if changed {
-		if werr := writeDoc(path, meta, body); werr != nil {
+		if werr := writeDoc(root, path, meta, body); werr != nil {
 			return false, werr
 		}
 	}
@@ -749,6 +803,10 @@ func applyEdgeMutation(
 // A forced removal deletes the entity and leaves the now-dangling inbound edges
 // in place — khub check surfaces the breakage; khub never repairs it.
 func Delete(root, id string, force bool) (*DeleteResult, error) {
+	return fsio.Locked(root, func() (*DeleteResult, error) { return delete(root, id, force) })
+}
+
+func delete(root, id string, force bool) (*DeleteResult, error) {
 	resolved, err := introspect.LoadSchema(root)
 	if err != nil {
 		return nil, err
@@ -786,10 +844,10 @@ func Delete(root, id string, force bool) (*DeleteResult, error) {
 	path := entityPath(root, rtype, node.Slug)
 	if rtype.Storage.Layout == schema.LayoutFolder {
 		// The entity is the folder, not just its _index.
-		if err := os.RemoveAll(filepath.Dir(path)); err != nil {
+		if err := fsio.Remove(root, filepath.Dir(path), true); err != nil {
 			return nil, err
 		}
-	} else if err := os.Remove(path); err != nil {
+	} else if err := fsio.Remove(root, path, false); err != nil {
 		return nil, err
 	}
 	return &DeleteResult{Type: node.Type, Slug: node.Slug, Removed: true, Inbound: inbound}, nil

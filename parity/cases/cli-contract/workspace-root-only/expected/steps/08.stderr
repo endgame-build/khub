@@ -1,4 +1,4 @@
-Usage: khub get [OPTIONS] [ID]
+Usage: khub get [OPTIONS] [ID]...
 Try 'khub get --help' for help.
 ╭─ Error ──────────────────────────────────────────────────────────────────────╮
 │ No such option: -C                                                           │

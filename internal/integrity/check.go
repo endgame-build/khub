@@ -18,6 +18,7 @@ import (
 
 	"github.com/endgame-build/khub/internal/canon"
 	"github.com/endgame-build/khub/internal/entity"
+	"github.com/endgame-build/khub/internal/fsio"
 	"github.com/endgame-build/khub/internal/graph"
 	"github.com/endgame-build/khub/internal/index"
 	"github.com/endgame-build/khub/internal/introspect"
@@ -215,9 +216,9 @@ func Check(root string, strict bool) (*CheckReport, error) {
 		}
 	}
 
-	// BuildGraph skips self-edges, so a stored self-reference on an acyclic
-	// predicate never reaches the cycle detector — detect it directly.
-	cycles := append(graphCycles(g, resolved), selfCycles(resolved, valid, entityNodes)...)
+	// Include self references in the cycle projection only; orphan degrees
+	// and walks keep their existing self-edge-free graph.
+	cycles := graphCycles(graph.BuildCycleGraph(valid), resolved)
 
 	strayLocators := map[string]bool{}
 	for n := range strays {
@@ -304,11 +305,9 @@ func draftFlag(meta *omap.Map) any {
 	return v
 }
 
-// skipDirs is integrity._SKIP_DIRS.
-var skipDirs = map[string]bool{
-	".git": true, ".khub": true, ".kb": true,
-	"node_modules": true, ".venv": true, "venv": true, "__pycache__": true,
-}
+// skipDir is integrity._SKIP_DIRS: the shared prune list plus khub's own
+// control directory.
+func skipDir(name string) bool { return name == ".khub" || fsio.SkipDirs[name] }
 
 // templateFindings sweeps the template link both ways.
 //
@@ -370,29 +369,19 @@ func templateFindings(root string, resolved *schema.ResolvedSchema) (strays, mis
 	return strays, missing, nil
 }
 
-// misplacedFiles is integrity._misplaced: markdown outside every layout whose
-// frontmatter names a type the schema knows.
+// misplacedFiles is integrity._misplaced: a file outside every layout whose
+// frontmatter names a type the schema knows. Markdown is a candidate anywhere
+// in the workspace; a `.json`/`.yaml` only inside a declared storage tree,
+// because outside one it is a data file (`package.json`, a lockfile, a compose
+// file) and parsing every such file on each `check` costs time and can
+// misreport one whose top-level `type` happens to name a declared type.
 //
 // Deliberately narrow. A README carries no `type`, and a doc about something
 // else carries an unknown one — neither fires. It takes a file that positively
 // claims to be, say, a `component` while sitting where components are not kept,
 // which is what a moved path or a swapped schema leaves behind.
 func misplacedFiles(root string, resolved *schema.ResolvedSchema) ([]Misplaced, error) {
-	scannedDirs := map[string]bool{}
-	scannedFiles := map[string]bool{}
-	for _, tname := range resolved.Types.Keys() {
-		rtype, _ := resolved.Types.Get(tname)
-		switch {
-		case rtype.Storage.Layout == schema.LayoutSingleton && rtype.Storage.Path != nil:
-			scannedFiles[resolvePath(filepath.Join(root, *rtype.Storage.Path))] = true
-		case rtype.Storage.Layout == schema.LayoutCollection:
-			scannedFiles[resolvePath(filepath.Join(root, rtype.CollectionRelpath()))] = true
-		case rtype.Storage.Path != nil && *rtype.Storage.Path != "":
-			scannedDirs[resolvePath(filepath.Join(root, *rtype.Storage.Path))] = true
-		}
-	}
-
-	candidates, err := rglobMD(root)
+	candidates, err := rglobMD(root, resolved)
 	if err != nil {
 		return nil, err
 	}
@@ -405,15 +394,23 @@ func misplacedFiles(root string, resolved *schema.ResolvedSchema) ([]Misplaced, 
 		if skipped(rel) {
 			continue
 		}
-		resolvedPath := resolvePath(path)
-		if scannedFiles[resolvedPath] {
+		accepted := false
+		for _, name := range resolved.Types.Keys() {
+			rt, _ := resolved.Types.Get(name)
+			if rt.AcceptsEntityPath(rel) {
+				accepted = true
+				break
+			}
+		}
+		if accepted {
 			continue
 		}
-		if underAny(resolvedPath, scannedDirs) {
-			continue // inside a layout: a bad file there is a stray, reported already
+		text, err := canon.ReadTextIn(root, path)
+		if err != nil {
+			return nil, err
 		}
-		meta := loadMeta(path)
-		if meta == nil {
+		meta, _, err := canon.Parse(text, canon.FmtOf(path))
+		if err != nil {
 			continue
 		}
 		tnameAny, _ := meta.Get("type")
@@ -425,36 +422,44 @@ func misplacedFiles(root string, resolved *schema.ResolvedSchema) ([]Misplaced, 
 		if !known {
 			continue
 		}
-		expected := rtype.CollectionRelpath()
-		if rtype.Storage.Path != nil && *rtype.Storage.Path != "" {
-			expected = *rtype.Storage.Path
-		}
-		out = append(out, Misplaced{Path: rel, Type: tname, Expected: expected})
+		// StorageRelpath, not CollectionRelpath: a path-less file or folder type
+		// lives under `<name>/`, and the collection default is only right for
+		// collection and singleton layouts.
+		out = append(out, Misplaced{Path: rel, Type: tname, Expected: rtype.StorageRelpath()})
 	}
 	return out, nil
 }
 
-// rglobMD is `sorted(root.rglob("*.md"))`: every entry (file OR directory)
-// whose name ends in .md, anywhere below root. Symlinked directories are not
-// descended, matching pathlib's recursive selector.
+// rglobMD is `sorted(root.rglob("*.md"))`: every regular file whose name ends
+// in .md, anywhere below root, plus every .json/.yaml inside a declared storage
+// tree (see misplacedFiles). Symlinked directories are not descended, matching
+// pathlib's recursive selector.
 //
 // Divergence: sorted() over Path objects compares part lists on CPython 3.11
 // and the whole string on 3.12+. khub supports both, so the two orders are
 // already not a pinned contract; this uses the 3.12+ string order.
-func rglobMD(root string) ([]string, error) {
+func rglobMD(root string, resolved *schema.ResolvedSchema) ([]string, error) {
+	trees := storageTrees(resolved)
 	var out []string
 	var walk func(dir string) error
 	walk = func(dir string) error {
-		entries, err := os.ReadDir(dir)
+		entries, err := fsio.ReadDir(root, dir)
 		if err != nil {
-			return nil // an unreadable directory yields nothing, like scandir's
+			return err
 		}
 		for _, e := range entries {
 			path := filepath.Join(dir, e.Name())
-			if strings.HasSuffix(e.Name(), ".md") {
-				out = append(out, path)
+			if e.Type().IsRegular() {
+				name := e.Name()
+				if strings.HasSuffix(name, ".md") {
+					out = append(out, path)
+				} else if strings.HasSuffix(name, ".json") || strings.HasSuffix(name, ".yaml") {
+					if rel, err := filepath.Rel(root, path); err == nil && underStorageTree(rel, trees) {
+						out = append(out, path)
+					}
+				}
 			}
-			if e.IsDir() && !skipDirs[e.Name()] && !strings.HasPrefix(e.Name(), ".") {
+			if e.IsDir() && !skipDir(e.Name()) && !strings.HasPrefix(e.Name(), ".") {
 				if isSymlink(path) {
 					continue
 				}
@@ -472,6 +477,35 @@ func rglobMD(root string) ([]string, error) {
 	return out, nil
 }
 
+// storageTrees is every workspace-relative directory a declared type keeps
+// entities under: the storage path of a file or folder type, the parent
+// directory of a collection or singleton file. The workspace root itself is
+// never a tree, so a data file beside `.khub/` is never a candidate.
+func storageTrees(resolved *schema.ResolvedSchema) []string {
+	var trees []string
+	for _, name := range resolved.Types.Keys() {
+		rt, _ := resolved.Types.Get(name)
+		tree := rt.StorageRelpath()
+		if rt.Storage.Layout == schema.LayoutCollection || rt.Storage.Layout == schema.LayoutSingleton {
+			tree = filepath.Dir(tree)
+		}
+		if tree = filepath.ToSlash(filepath.Clean(tree)); tree != "." {
+			trees = append(trees, tree)
+		}
+	}
+	return trees
+}
+
+func underStorageTree(rel string, trees []string) bool {
+	rel = filepath.ToSlash(rel)
+	for _, tree := range trees {
+		if strings.HasPrefix(rel, tree+"/") {
+			return true
+		}
+	}
+	return false
+}
+
 func isSymlink(path string) bool {
 	fi, err := os.Lstat(path)
 	return err == nil && fi.Mode()&fs.ModeSymlink != 0
@@ -481,51 +515,11 @@ func isSymlink(path string) bool {
 // workspace-relative path, the file name included.
 func skipped(rel string) bool {
 	for _, part := range pathParts(rel) {
-		if skipDirs[part] || strings.HasPrefix(part, ".") {
+		if skipDir(part) || strings.HasPrefix(part, ".") {
 			return true
 		}
 	}
 	return false
-}
-
-// loadMeta is formats.load_meta: the document's metadata, or nil if
-// unparseable (a directory named *.md lands here and reads as nil).
-func loadMeta(path string) *omap.Map {
-	text, err := canon.ReadText(path)
-	if err != nil {
-		return nil
-	}
-	meta, _, err := canon.Parse(text, canon.FmtOf(path))
-	if err != nil {
-		return nil
-	}
-	return meta
-}
-
-// resolvePath is Path.resolve(): absolute, symlinks followed where they exist.
-func resolvePath(p string) string {
-	abs, err := filepath.Abs(p)
-	if err != nil {
-		return p
-	}
-	if real, err := filepath.EvalSymlinks(abs); err == nil {
-		return real
-	}
-	return abs
-}
-
-// underAny is `any(d == path.parent or d in path.parents for d in dirs)`.
-func underAny(path string, dirs map[string]bool) bool {
-	for d := filepath.Dir(path); ; {
-		if dirs[d] {
-			return true
-		}
-		parent := filepath.Dir(d)
-		if parent == d {
-			return false
-		}
-		d = parent
-	}
 }
 
 // derivativeDangle is integrity._derivative_dangle: whether a dangle is
@@ -694,12 +688,7 @@ func acyclicPredicates(resolved *schema.ResolvedSchema) []string {
 	return sortedKeys(declared)
 }
 
-// graphCycles is integrity._cycles: elementary cycles on each
-// acyclic-by-contract predicate, as id lists.
-//
-// graph.Cycles is Johnson's algorithm, the same one nx.simple_cycles uses.
-// Rotation and enumeration order are implementation-defined on both sides, so
-// only set membership and count are contract (go-port-plan R14).
+// graphCycles reports one real witness per cyclic component and predicate.
 func graphCycles(g *graph.Graph, resolved *schema.ResolvedSchema) [][]string {
 	out := [][]string{}
 	for _, predicate := range acyclicPredicates(resolved) {
@@ -709,45 +698,6 @@ func graphCycles(g *graph.Graph, resolved *schema.ResolvedSchema) [][]string {
 				ids[i] = n.ID()
 			}
 			out = append(out, ids)
-		}
-	}
-	return out
-}
-
-// selfCycles is integrity._self_cycles: one-node cycles — a stored
-// acyclic-predicate value resolving to the entity itself.
-//
-// BuildGraph skips self-edges, so a self-referential depends_on (or a
-// self-superseding ADR) never reaches the graph cycle detector. `link` refuses
-// a self-edge, but a hand-edit, an import, or a merge resolution can still
-// write one.
-func selfCycles(
-	resolved *schema.ResolvedSchema, idx *index.Index, nodes []index.Node,
-) [][]string {
-	out := [][]string{}
-	predicates := acyclicPredicates(resolved)
-	for _, node := range nodes {
-		rtype, _ := resolved.Types.Get(node.Type)
-		for _, predicate := range predicates {
-			rel, ok := rtype.Relations.Get(predicate)
-			if !ok {
-				continue
-			}
-			value := metaGet(idx.Meta[node], predicate)
-			if !present(value) {
-				continue
-			}
-			hit := false
-			for _, target := range asList(value) {
-				if idx.ResolveTarget(rel, pyStr(target))[node] {
-					hit = true
-					break
-				}
-			}
-			if hit {
-				out = append(out, []string{node.ID()})
-				break // one self-cycle entry per entity, whichever predicate caused it
-			}
 		}
 	}
 	return out

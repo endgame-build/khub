@@ -63,27 +63,34 @@ func Stale(root string, days *int, now time.Time) (*StaleReport, error) {
 		threshold = *days
 	}
 
+	nodes := sortedNodes(valid)
+	paths := map[index.Node]string{}
+	var requests []DateRequest
+	if gitOK {
+		for _, node := range nodes {
+			rtype, _ := resolved.Types.Get(node.Type)
+			// Collection commit dates never describe individual rows.
+			if !absent(valid.Meta[node], "updated") || rtype.Storage.Layout == schema.LayoutCollection {
+				continue
+			}
+			rel, err := filepath.Rel(root, entity.EntityPath(root, rtype, node.Slug))
+			if err != nil {
+				return nil, err
+			}
+			paths[node] = filepath.ToSlash(rel)
+			requests = append(requests, DateRequest{Path: paths[node], Last: true})
+		}
+	}
+	dates, err := CommitDates(root, requests)
+	if err != nil {
+		return nil, err
+	}
 	entries := []StaleEntry{}
-	for _, node := range sortedNodes(valid) {
+	for _, node := range nodes {
 		meta := valid.Meta[node]
-		rtype, _ := resolved.Types.Get(node.Type)
-		// Only reach for git when `updated` is absent — that avoids a subprocess
-		// per dated entity. A collection row never takes the file's commit date:
-		// any row's edit bumps it, so attributing it would make every other row
-		// read never-stale — a dated lie, not an approximation.
 		var gitDate *time.Time
-		if gitOK && absent(meta, "updated") && rtype.Storage.Layout != schema.LayoutCollection {
-			rel, rerr := filepath.Rel(root, entity.EntityPath(root, rtype, node.Slug))
-			if rerr != nil {
-				return nil, rerr
-			}
-			d, ok, derr := LastCommitDate(root, rel)
-			if derr != nil {
-				return nil, derr
-			}
-			if ok {
-				gitDate = &d
-			}
+		if d := dates[paths[node]].Last; !d.IsZero() {
+			gitDate = &d
 		}
 		eff, source := project.EffectiveDate(meta, gitDate)
 		if eff == nil {

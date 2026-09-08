@@ -22,7 +22,7 @@ import (
 )
 
 func registerUpgrade(root *cobra.Command) {
-	var noSchema, noSkill, noWire bool
+	var noSchema, noSkill, noWire, dryRun bool
 	var format string
 	cmd := newCmd("upgrade",
 		"Refresh an existing workspace: the shipped schema and templates, new scaffolds, the skills, the wire block.",
@@ -40,25 +40,55 @@ func registerUpgrade(root *cobra.Command) {
 				// hand the library and the tails the same relative form init
 				// hands them ("." at the root).
 				ws := displayRoot(root)
-				result, err := workspace.Upgrade(ws, workspace.UpgradeOptions{NoSchema: noSchema})
+				var skillsStep tail[skill.Report]
+				var wireStep tail[wire.Result]
+				var indexStep tail[string]
+				// held: the library runs the tails inside its own lock after the
+				// core commit, so they must not lock again (fsio.Locked is not
+				// re-entrant). A dry run previews against a temporary candidate
+				// with no lock held, and the DryRun flags below already skip it.
+				runTails := func(target string, held bool) {
+					installFn, wireFn, indexFn := skill.Install, wire.Wire, indexTail
+					if held {
+						installFn, wireFn, indexFn = skill.InstallHeld, wire.WireHeld, indexTailHeld
+					}
+					if !noSkill {
+						skillsStep = tailOf(installFn(skills.FS(), target, skill.Options{DryRun: dryRun}))
+					}
+					if !noWire {
+						wireStep = tailOf(wireFn(target, wire.Options{Claude: true, Agents: true, DryRun: dryRun}))
+					}
+					indexStep = indexFn(target)
+					if dryRun {
+						if wireStep.Result != nil {
+							for i := range wireStep.Result.Outcomes {
+								outcome := &wireStep.Result.Outcomes[i]
+								if rel, err := filepath.Rel(target, outcome.Path); err == nil {
+									outcome.Path = filepath.Join(ws, rel)
+								}
+							}
+						}
+						skillsStep.Err = strings.ReplaceAll(skillsStep.Err, target, ws)
+						wireStep.Err = strings.ReplaceAll(wireStep.Err, target, ws)
+						indexStep.Err = strings.ReplaceAll(indexStep.Err, target, ws)
+					}
+				}
+				opt := workspace.UpgradeOptions{NoSchema: noSchema, DryRun: dryRun}
+				if dryRun {
+					opt.Preview = func(candidate string) error { runTails(candidate, false); return nil }
+				} else {
+					opt.Tails = func(root string) { runTails(root, true) }
+				}
+				result, err := workspace.Upgrade(ws, opt)
 				if err != nil {
 					return err
 				}
 
-				var skillsStep tail[skill.Report]
-				if !noSkill {
-					skillsStep = tailOf(skill.Install(skills.FS(), ws, skill.Options{}))
-				}
-				// After the version restamp, so the wired block names the
-				// version the workspace is now on.
-				var wireStep tail[wire.Result]
-				if !noWire {
-					wireStep = tailOf(wire.Wire(ws, wire.Options{Claude: true, Agents: true}))
-				}
-				indexStep := indexTail(ws)
-
 				payload := upgradePayload(result, skillsStep, wireStep, indexStep)
 				return Emit(payload, format, func() {
+					if dryRun {
+						fmt.Println("dry run — planned outcomes; workspace unchanged")
+					}
 					skillChanges := 0
 					if skillsStep.Result != nil {
 						for _, w := range skillsStep.Result.Writes {
@@ -120,6 +150,9 @@ func registerUpgrade(root *cobra.Command) {
 					if indexStep.Err != "" {
 						fmt.Fprintf(os.Stderr, "index skipped: %s\n", indexStep.Err)
 					}
+					if len(result.RemovedTypes) > 0 {
+						fmt.Println("removed types (entity files retained): " + strings.Join(result.RemovedTypes, ", "))
+					}
 					if len(result.SchemaDrift) > 0 {
 						fmt.Printf("\nthe shipped ontology declares types your .khub/ontology.yaml does not: %s\n",
 							strings.Join(result.SchemaDrift, ", "))
@@ -131,9 +164,10 @@ func registerUpgrade(root *cobra.Command) {
 	cmd.Args = clickArity(0)
 	cmd.Long = cmd.Short + "\n\nReplaces .khub/{ontology,policy,storage}.yaml and .khub/templates/*.yaml from " +
 		"the preset recorded in .khub/config.yaml, copying an edited file to <name>.bak first; " +
-		"then re-reads the schema, scaffolds what the ontology gained, re-installs the agent " +
+		"preflights the candidate schema and scaffolds before publishing, then re-installs the agent " +
 		"skills, re-wires the agent files, and regenerates index.md. " +
 		"Refuses outside a workspace: ``khub init`` scaffolds, ``khub upgrade`` refreshes."
+	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Preview core and tail outcomes without changing the workspace.")
 	cmd.Flags().BoolVar(&noSchema, "no-schema", false,
 		"Keep this workspace's .khub/ files — schema and templates — as they are; "+
 			"report what the shipped ontology has that they do not.")
@@ -185,5 +219,7 @@ func upgradePayload(
 	skilled.set(payload, "skills", func(r *skill.Report) any { return skillWrites(r) }, true)
 	wired.set(payload, "wire", func(r *wire.Result) any { return wireOutcomes(r) }, true)
 	indexed.set(payload, "index", func(action *string) any { return *action }, true)
+	payload.Set("dry_run", result.DryRun)
+	payload.Set("removed_types", strList(result.RemovedTypes))
 	return payload
 }

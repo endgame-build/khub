@@ -75,11 +75,16 @@ khub wire
 Run `khub install-skills` here too, so this workspace carries the skills.
 
 **After bumping the khub version** (a new `@endgame-build/khub` pin, or a
-new global install), run `khub upgrade` in each workspace: it replaces
+new global install), preview with `khub upgrade --dry-run`, then run
+`khub upgrade` in each workspace. The preview validates a complete candidate
+without creating workspace files or a lock. The real upgrade replaces
 `.khub/` from the shipped preset (copying an edited file to `<name>.bak`
 first), scaffolds what the ontology gained, re-installs the skills and re-wires
-the agent files. `khub upgrade --no-schema` keeps the workspace's own schema and
-reports what the shipped one has that it does not.
+the agent files. Core publication is transactional and writes the version last;
+skill, wire, and index failures are reported after it. `khub upgrade --no-schema`
+keeps the workspace's own schema and reports what the shipped one has that it
+does not. An `upgrade_recovery_failed` error names a retained journal under
+`.khub/generated/`; inspect it manually because khub does not auto-recover after a crash.
 
 **opencode** asks before every shell command unless told otherwise. Allow khub
 outright — the catch-all goes FIRST, opencode takes the last match:

@@ -98,8 +98,8 @@ func registerAdd(root *cobra.Command) {
 func registerGet(root *cobra.Command) {
 	var format string
 	var edges bool
-	cmd := newCmd("get [ID]", "Read an entity's frontmatter and body, optionally with derived edges.",
-		"[ID]", func(cmd *cobra.Command, args []string) error {
+	cmd := newCmd("get [ID]...", "Read entities' frontmatter and body, optionally with derived edges.",
+		"[ID]...", func(cmd *cobra.Command, args []string) error {
 			return Guard(format, func() error {
 				ws, err := resolveRoot()
 				if err != nil {
@@ -109,18 +109,32 @@ func registerGet(root *cobra.Command) {
 					fmt.Fprintln(os.Stderr, "Missing argument 'ID'.")
 					return &ExitError{Code: 2}
 				}
-				view, err := entity.Get(ws, args[0], edges)
+				if len(args) > 1 && format == "raw" {
+					return errs.New("batch_raw", "Raw output requires exactly one ID")
+				}
+				views, err := entity.GetMany(ws, args, edges)
 				if err != nil {
 					return err
 				}
 				if format == "raw" {
-					_, werr := fmt.Fprint(os.Stdout, view.Raw)
+					_, werr := fmt.Fprint(os.Stdout, views[0].Raw)
 					return werr
 				}
-				return Emit(getRecord(ws, view), format, func() { printEntityTable(view) })
+				if len(views) == 1 {
+					return Emit(getRecord(ws, views[0]), format, func() { printEntityTable(views[0]) })
+				}
+				records := make([]any, len(views))
+				for i, view := range views {
+					records[i] = getRecord(ws, view)
+				}
+				return Emit(records, format, func() {
+					for _, view := range views {
+						fmt.Println(view.Type + "/" + view.Slug)
+						printEntityTable(view)
+					}
+				})
 			})
 		})
-	cmd.Args = clickArity(1)
 	cmd.Flags().BoolVar(&edges, "edges", false, "Include stored and derived edges.")
 	cmd.Flags().StringVar(&format, "format", "text", "json, table, raw, or text (Rich on a TTY).")
 	root.AddCommand(cmd)

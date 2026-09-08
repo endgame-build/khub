@@ -2,7 +2,7 @@
 # directory that the package does not ship is removed on the next install, and
 # reported as such beside the unchanged files.
 steps:
-- argv: ["init", "build-lite", ".", "--no-wire"]
+- argv: ["init", "build-hub", ".", "--no-wire"]
 - argv: ["install-skills"]
 - sh: "touch .claude/skills/khub/stale.md"
 - argv: ["install-skills", "--format", "json"]

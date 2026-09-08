@@ -1,1 +1,1 @@
-{"id": "feature-spec/fs-f", "type": "feature-spec", "slug": "fs-f", "predicate": "requirements", "target": "req-t", "changed": true}
+{"id": "requirement/req-t", "type": "requirement", "slug": "req-t", "predicate": "realized_in", "target": "cmp-c", "changed": true}

@@ -21,11 +21,11 @@ package wire
 import (
 	"errors"
 	"io/fs"
-	"os"
 	"path/filepath"
 	"strings"
 
 	"github.com/endgame-build/khub/internal/errs"
+	"github.com/endgame-build/khub/internal/fsio"
 	"github.com/endgame-build/khub/internal/introspect"
 	"github.com/endgame-build/khub/internal/mdlink"
 	"github.com/endgame-build/khub/internal/schema"
@@ -273,6 +273,17 @@ func upsert(text, block string) string {
 // than silently for some. Writes each target unless the content is unchanged
 // (or DryRun is set). Idempotent.
 func Wire(root string, opt Options) (*Result, error) {
+	if opt.DryRun {
+		return wire(root, opt)
+	}
+	return fsio.Locked(root, func() (*Result, error) { return wire(root, opt) })
+}
+
+// WireHeld is Wire for a caller that already holds the workspace lock (an
+// init or upgrade running its tails inside its own lock). fsio.Locked is not
+// re-entrant, so calling Wire there would block forever.
+func WireHeld(root string, opt Options) (*Result, error) { return wire(root, opt) }
+func wire(root string, opt Options) (*Result, error) {
 	prov, err := workspace.Provenance(root)
 	if err != nil {
 		return nil, err
@@ -327,7 +338,7 @@ func Wire(root string, opt Options) (*Result, error) {
 	previews := make([]string, 0, len(targets))
 	for _, c := range targets {
 		previews = append(previews, "# "+filepath.Base(c.path)+"\n"+c.block)
-		raw, readErr := os.ReadFile(c.path)
+		raw, readErr := fsio.ReadFile(root, c.path)
 		exists := readErr == nil
 		if readErr != nil && !errors.Is(readErr, fs.ErrNotExist) {
 			return nil, readErr
@@ -345,7 +356,7 @@ func Wire(root string, opt Options) (*Result, error) {
 			action = "unchanged"
 		}
 		if !opt.DryRun && action != "unchanged" {
-			if werr := os.WriteFile(c.path, []byte(updated), 0o666); werr != nil {
+			if werr := fsio.AtomicWriteIn(root, c.path, []byte(updated)); werr != nil {
 				return nil, werr
 			}
 		}

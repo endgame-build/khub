@@ -1,26 +1,14 @@
-                                                                                
- Usage: khub upgrade [OPTIONS]                                                  
-                                                                                
- Refresh an existing workspace: the shipped schema and templates, new           
- scaffolds, the skills, the wire block.                                         
-                                                                                
- Replaces .khub/{ontology,policy,storage}.yaml and .khub/templates/*.yaml from  
- the preset recorded in .khub/config.yaml, copying an edited file to <name>.bak 
- first; then re-reads the schema, scaffolds what the ontology gained,           
- re-installs the agent skills, re-wires the agent files, and regenerates        
- index.md. Refuses outside a workspace: ``khub init`` scaffolds, ``khub         
- upgrade`` refreshes.                                                           
-                                                                                
-╭─ Options ────────────────────────────────────────────────────────────────────╮
-│ --no-schema               Keep this workspace's .khub/ files — schema and    │
-│                           templates — as they are; report what the shipped   │
-│                           ontology has that they do not.                     │
-│ --no-skill                Skip refreshing the agent skills; scaffolds, wire  │
-│                           and index only.                                    │
-│ --no-wire                 Skip re-wiring CLAUDE.md and AGENTS.md.            │
-│ --format           <str>  text confirmation (default); json emits every      │
-│                           step's outcome.                                    │
-│                           [default: text]                                    │
-│ --help                    Show this message and exit.                        │
-╰──────────────────────────────────────────────────────────────────────────────╯
+Usage: khub upgrade [OPTIONS]
+
+Refresh an existing workspace: the shipped schema and templates, new scaffolds, the skills, the wire block.
+
+Replaces .khub/{ontology,policy,storage}.yaml and .khub/templates/*.yaml from the preset recorded in .khub/config.yaml, copying an edited file to <name>.bak first; preflights the candidate schema and scaffolds before publishing, then re-installs the agent skills, re-wires the agent files, and regenerates index.md. Refuses outside a workspace: ``khub init`` scaffolds, ``khub upgrade`` refreshes.
+
+Options:
+  --dry-run  Preview core and tail outcomes without changing the workspace.
+  --no-schema  Keep this workspace's .khub/ files — schema and templates — as they are; report what the shipped ontology has that they do not.
+  --no-skill  Skip refreshing the agent skills; scaffolds, wire and index only.
+  --no-wire  Skip re-wiring CLAUDE.md and AGENTS.md.
+  --format <str>  text confirmation (default); json emits every step's outcome. [default: text]
+  --help  Show this message and exit.
 

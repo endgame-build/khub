@@ -214,7 +214,7 @@ func TestEntityLinkWrapsProblematicPaths(t *testing.T) {
 // 0.11.0: a malformed file is not in the graph, so reindex used to write an
 // index with an entire type erased and exit 0 — a silent partial write.
 func TestReindexRefusesWhenACollectionIsMalformed(t *testing.T) {
-	root := wsFor(t, "build-hub")
+	root := collectionWS(t)
 	create(t, root, "repo", "svc-a", "repo", "acme/a", "status", "active")
 	mustReindex(t, root, false)
 	if !strings.Contains(readRaw(t, root, "index.md"), "svc-a") {

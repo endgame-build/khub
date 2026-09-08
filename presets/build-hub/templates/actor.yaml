@@ -1,0 +1,22 @@
+# An actor is a role, and a record of one is short. The persona — who they are,
+# what they want, what they fear — is the body; nothing about it is a field.
+
+hint: >-
+  one line — who this role is, in the product's own words. Use cases point here
+  through `actor`; "what can this role do" is that edge inverted.
+
+sections:
+- heading: Goals
+  optional: true
+  hint: what this role is trying to get done, not what the product offers
+- heading: Permissions
+  optional: true
+  hint: what this role may and may not do, as the rules the product enforces
+
+lenses:
+- code: role
+  name: A role, not a person or a system
+  instruction: |
+    Is this a role several people could hold, named the way the product names it?
+    A named individual belongs in a people system; a scheduler or another service
+    is not an actor at all — it is a use case's `trigger`.

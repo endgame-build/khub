@@ -1,0 +1,8 @@
+# Batch preserves argument order/duplicates; invalid input emits no partial records.
+steps:
+- argv: [init, build-lite, ., --no-wire]
+- argv: [add, requirement, --title, First, --kind, functional]
+- argv: [add, requirement, --title, Second, --kind, functional]
+- argv: [get, req-second, req-first, req-second, --edges]
+- argv: [get, req-first, missing]
+- argv: [get, req-first, req-second, --format, raw]

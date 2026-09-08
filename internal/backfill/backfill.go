@@ -11,13 +11,13 @@ package backfill
 
 import (
 	"errors"
-	"os"
 	"path/filepath"
 	"sort"
 
 	"github.com/endgame-build/khub/internal/canon"
 	"github.com/endgame-build/khub/internal/entity"
 	"github.com/endgame-build/khub/internal/errs"
+	"github.com/endgame-build/khub/internal/fsio"
 	"github.com/endgame-build/khub/internal/gitlog"
 	"github.com/endgame-build/khub/internal/index"
 	"github.com/endgame-build/khub/internal/introspect"
@@ -84,6 +84,12 @@ func (r *BackfillReport) distinct(source string) int {
 // option, and an explicitly empty string is a type name no schema declares
 // (which fails loudly, exactly as in Python).
 func Backfill(root string, typeName *string, dryRun bool) (*BackfillReport, error) {
+	if dryRun {
+		return backfill(root, typeName, true)
+	}
+	return fsio.Locked(root, func() (*BackfillReport, error) { return backfill(root, typeName, false) })
+}
+func backfill(root string, typeName *string, dryRun bool) (*BackfillReport, error) {
 	resolved, err := introspect.LoadSchema(root)
 	if err != nil {
 		return nil, err
@@ -102,9 +108,32 @@ func Backfill(root string, typeName *string, dryRun bool) (*BackfillReport, erro
 		return nil, err
 	}
 
+	nodes := sortedNodes(idx)
+	paths := map[index.Node]string{}
+	var requests []gitlog.DateRequest
+	if gitOK {
+		for _, node := range nodes {
+			rtype, _ := resolved.Types.Get(node.Type)
+			meta := idx.Meta[node]
+			if rtype.Storage.Layout == schema.LayoutCollection || (!absent(meta, "created") && !absent(meta, "updated")) {
+				continue
+			}
+			rel, err := filepath.Rel(root, entity.EntityPath(root, rtype, node.Slug))
+			if err != nil {
+				return nil, err
+			}
+			paths[node] = filepath.ToSlash(rel)
+			requests = append(requests, gitlog.DateRequest{Path: paths[node], First: absent(meta, "created"), Last: absent(meta, "updated")})
+		}
+	}
+	dates, err := gitlog.CommitDates(root, requests)
+	if err != nil {
+		return nil, err
+	}
+
 	changes := []BackfillChange{}
 	skipped := map[string]bool{}
-	for _, node := range sortedNodes(idx) {
+	for _, node := range nodes {
 		rtype, _ := resolved.Types.Get(node.Type)
 		if rtype.Storage.Layout == schema.LayoutCollection {
 			skipped[node.Type] = true // a file date is not a row date; reported, never silent
@@ -113,10 +142,7 @@ func Backfill(root string, typeName *string, dryRun bool) (*BackfillReport, erro
 		meta := idx.Meta[node]
 		path := entity.EntityPath(root, rtype, node.Slug)
 		scaffold := typeName != nil && *typeName == node.Type
-		adds, err := additions(root, path, rtype, meta, scaffold, gitOK)
-		if err != nil {
-			return nil, err
-		}
+		adds := additions(rtype, meta, scaffold, dates[paths[node]])
 		if len(adds.order) == 0 {
 			continue
 		}
@@ -128,7 +154,7 @@ func Backfill(root string, typeName *string, dryRun bool) (*BackfillReport, erro
 			})
 		}
 		if !dryRun {
-			if err := apply(path, adds); err != nil {
+			if err := apply(root, path, adds); err != nil {
 				return nil, err
 			}
 		}
@@ -166,33 +192,13 @@ func (s *additionSet) has(field string) bool { _, ok := s.byField[field]; return
 // additions is backfill._additions: the absent fields to write for one entity.
 // Dates come first from git; scaffolding then covers any required key still
 // absent (including created/updated when git could not supply them).
-func additions(
-	root, path string, rtype *schema.ResolvedType, meta *omap.Map, scaffold, gitOK bool,
-) (*additionSet, error) {
+func additions(rtype *schema.ResolvedType, meta *omap.Map, scaffold bool, dates gitlog.Dates) *additionSet {
 	adds := &additionSet{byField: map[string]addition{}}
-	if gitOK {
-		relpath, err := filepath.Rel(root, path)
-		if err != nil {
-			return nil, err
-		}
-		if absent(meta, "created") {
-			d, ok, err := gitlog.FirstCommitDate(root, relpath)
-			if err != nil {
-				return nil, err
-			}
-			if ok {
-				adds.set("created", canon.Date{ISO: d.Format("2006-01-02")}, SourceGit)
-			}
-		}
-		if absent(meta, "updated") {
-			d, ok, err := gitlog.LastCommitDate(root, relpath)
-			if err != nil {
-				return nil, err
-			}
-			if ok {
-				adds.set("updated", canon.Date{ISO: d.Format("2006-01-02")}, SourceGit)
-			}
-		}
+	if absent(meta, "created") && !dates.First.IsZero() {
+		adds.set("created", canon.Date{ISO: dates.First.Format("2006-01-02")}, SourceGit)
+	}
+	if absent(meta, "updated") && !dates.Last.IsZero() {
+		adds.set("updated", canon.Date{ISO: dates.Last.Format("2006-01-02")}, SourceGit)
 	}
 	if scaffold {
 		for _, key := range missingRequired(rtype, meta) {
@@ -205,7 +211,7 @@ func additions(
 			}
 		}
 	}
-	return adds, nil
+	return adds
 }
 
 // missingRequired is backfill._missing_required: the required attributes and
@@ -237,8 +243,8 @@ func missingRequired(rtype *schema.ResolvedType, meta *omap.Map) []string {
 // alone, matching ruamel's round-trip. canon.ErrNoSplice means the shape is not
 // expressible in place; the whole-document emitter takes over and the comments
 // go with it (canon/splice.go states the trade).
-func apply(path string, adds *additionSet) error {
-	text, err := canon.ReadText(path)
+func apply(root, path string, adds *additionSet) error {
+	text, err := canon.ReadTextIn(root, path)
 	if err != nil {
 		return err
 	}
@@ -260,7 +266,7 @@ func apply(path string, adds *additionSet) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(path, []byte(text), 0o666)
+	return fsio.AtomicWriteIn(root, path, []byte(text))
 }
 
 // readDocMode is the resolver canon.ReadDoc read `meta` under, so an untouched

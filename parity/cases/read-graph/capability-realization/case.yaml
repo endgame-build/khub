@@ -1,0 +1,26 @@
+# What realizes a capability is never stored: it is the use cases whose
+# `capability` names it, then their `served_by` components — two hops that
+# `neighbors --depth 2` walks. A fully wired workspace of the new shape passes
+# `check --strict`: every stored edge points up the ladder and nothing is
+# left orphaned.
+steps:
+- argv: ["init", "build-hub", ".", "--no-wire"]
+- argv: ["add", "capability", "--title", "Checkout"]
+- argv: ["add", "actor", "--title", "Shopper"]
+- argv: ["add", "repo", "--title", "Shop", "--repo", "acme/shop", "--status", "active"]
+- argv: ["add", "system", "--title", "Shop", "--owner", "team-shop"]
+- argv: ["add", "component", "--title", "Payments", "--kind", "service", "--owner", "team-payments", "--lifecycle", "production", "--tier", "tier-1", "--repo", "rp-shop", "--system", "sys-shop"]
+- argv: ["add", "component", "--title", "Stripe", "--kind", "external", "--stack", "Stripe"]
+- argv: ["add", "api", "--title", "Stripe charges", "--kind", "rest", "--status", "active", "--provider", "cmp-stripe"]
+- argv: ["add", "use-case", "--title", "Pay for basket", "--trigger", "human", "--actor", "act-shopper", "--capability", "cap-checkout"]
+- argv: ["link", "uc-pay-for-basket", "served_by", "cmp-payments"]
+- argv: ["link", "cmp-payments", "consumes", "api-stripe-charges"]
+- argv: ["link", "cmp-payments", "depends_on", "cmp-stripe"]
+- argv: ["add", "requirement", "--title", "Never store PAN", "--kind", "constraint", "--enforcement", "backend"]
+- argv: ["link", "req-never-store-pan", "capabilities", "cap-checkout"]
+- argv: ["link", "req-never-store-pan", "use_cases", "uc-pay-for-basket"]
+- argv: ["link", "req-never-store-pan", "realized_in", "cmp-payments"]
+- argv: ["neighbors", "cap-checkout", "--depth", "2", "--format", "json"]
+- argv: ["impact", "cap-checkout", "--reverse", "--predicate", "capability", "--format", "json"]
+- argv: ["impact", "api-stripe-charges", "--reverse", "--predicate", "consumes", "--format", "json"]
+- argv: ["check", "--strict", "--format", "json"]

@@ -1,0 +1,20 @@
+# `served_by` is the blueprint edge: a use case names the components that serve
+# it, and the walk that matters runs the other way — which user flows break if
+# this component dies. `impact --reverse --predicate served_by` on the component
+# lists the use case (`impact` walks `depends_on` unless told otherwise),
+# `get --edges` on the component shows the computed inverse, and a use case
+# with no `served_by` is what `query --missing` is for.
+steps:
+- argv: ["init", "build-hub", ".", "--no-wire"]
+- argv: ["add", "actor", "--title", "Shopper"]
+- argv: ["add", "capability", "--title", "Checkout"]
+- argv: ["add", "component", "--title", "Payments", "--kind", "service"]
+- argv: ["add", "component", "--title", "Cart", "--kind", "service"]
+- argv: ["add", "use-case", "--title", "Pay for basket", "--trigger", "human", "--actor", "act-shopper", "--capability", "cap-checkout"]
+- argv: ["add", "use-case", "--title", "Nightly report", "--trigger", "scheduled", "--capability", "cap-checkout"]
+- argv: ["link", "uc-pay-for-basket", "served_by", "cmp-payments"]
+- argv: ["link", "uc-pay-for-basket", "served_by", "cmp-cart"]
+- argv: ["impact", "cmp-payments", "--reverse", "--predicate", "served_by", "--format", "json"]
+- argv: ["get", "cmp-payments", "--edges", "--format", "json"]
+- argv: ["neighbors", "uc-pay-for-basket", "--format", "json"]
+- argv: ["query", "--type", "use-case", "--missing", "served_by", "--format", "json"]

@@ -404,7 +404,11 @@ func attrError(attr *schema.ResolvedAttribute, value any) (string, bool) {
 	// A pattern that MATCHES falls through to the scalar-type check, exactly as
 	// in Python — the pattern branch is a guard clause, not a terminal one.
 	if attr.Pattern != nil {
-		if matched, usable := fullmatch(*attr.Pattern, pyStr(value)); usable && !matched {
+		matched, err := attr.MatchPattern(pyStr(value))
+		if err != nil {
+			return fmt.Sprintf("Cannot evaluate pattern for %s: %s", attr.Name, err), true
+		}
+		if !matched {
 			return fmt.Sprintf("'%s' does not match the pattern for %s (%s)",
 				pyStr(value), attr.Name, *attr.Pattern), true
 		}

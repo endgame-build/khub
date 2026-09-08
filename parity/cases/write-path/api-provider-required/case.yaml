@@ -1,0 +1,15 @@
+# api.provider is required: an interface nobody owns is exactly what `check`
+# exists to name. Capture is never blocked — `add api` without --provider
+# writes the file — and `check` reports the incomplete entity (exit 1) until
+# the edge is linked. Consumers live on the consuming component and show up
+# on the api as the computed `consumed_by`.
+steps:
+- argv: ["init", "build-hub", ".", "--no-wire"]
+- argv: ["add", "component", "--title", "Payments", "--kind", "service"]
+- argv: ["add", "component", "--title", "Web", "--kind", "service"]
+- argv: ["add", "api", "--title", "Charges", "--kind", "rest", "--status", "active", "--format", "json"]
+- argv: ["check", "--format", "json"]
+- argv: ["link", "api-charges", "provider", "cmp-payments"]
+- argv: ["link", "cmp-web", "consumes", "api-charges"]
+- argv: ["get", "api-charges", "--edges", "--format", "json"]
+- argv: ["check", "--format", "json"]

@@ -1,0 +1,36 @@
+# An api record holds the policy a machine spec cannot: who provides it, who may
+# consume it, how it is versioned. The spec itself (OpenAPI, AsyncAPI, a schema)
+# stays a file, linked via `resource`.
+
+hint: >-
+  one paragraph — what this interface promises and to whom. `provider` is the
+  component that owns it; consumers are the components whose `consumes` names it,
+  never listed here.
+
+sections:
+- heading: Versioning
+  optional: true
+  hint: how breaking changes are announced, and how long the old shape stays up
+- heading: Auth
+  optional: true
+  hint: who may call it and how they prove it
+- heading: Idempotency
+  optional: true
+  hint: what a retry does — which calls are safe to repeat and which are not
+
+lenses:
+- code: spec
+  name: A live interface names its spec
+  when: {status: active}
+  instruction: |
+    Where is the machine-readable contract? An active api with no `resource`
+    pointing at its OpenAPI, AsyncAPI or schema file is a promise nobody can test.
+    If the spec does not exist, `status: proposed` is the honest value.
+- code: consumed
+  name: The consumers are in the graph
+  after: spec
+  instruction: |
+    Walk the components whose `consumes` names this. If the list is shorter than
+    reality, "what breaks if this changes" will understate an outage before it
+    happens — the churny side lives on the consumer, so a missing entry is a
+    missing line in one component file.

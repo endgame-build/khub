@@ -1,16 +1,14 @@
 # build-hub/policy.yaml — what this workspace demands, per type.
 #
-# prd is `required: true` — check fails while it is absent.
-#
-# All five narrative singletons declare `orphan: true`: they are narrative
-# roots that nothing points at (edges run UP the durability ladder and the prd
-# sits above its top), so without the flag they are permanent orphan findings
-# and `check --strict` can never go green on a correct workspace. Per type, not
-# per layout — a singleton carrying relations is still swept.
+# prd is the product source of truth: `required: true` makes `check` fail while
+# it is absent. Both narrative docs declare `orphan: true`: every stored edge
+# points UP the durability ladder (component -> repo, requirement -> component),
+# and both docs sit above its top, so nothing points at them and they point at
+# nothing.
+# Without the flag they are permanent orphan findings and `check --strict` can
+# never go green on a correct workspace. The flag is per type, not per layout:
+# a singleton carrying relations is still swept.
 
 policy:
-  prd:      { required: true, orphan: true }
-  roadmap:  { orphan: true }
-  glossary: { orphan: true }
-  arc42:    { orphan: true }
-  erd:      { orphan: true }
+  prd:   { required: true, orphan: true }
+  arc42: { orphan: true }

@@ -5,7 +5,9 @@
 package index
 
 import (
+	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"sort"
@@ -14,6 +16,7 @@ import (
 
 	"github.com/endgame-build/khub/internal/canon"
 	"github.com/endgame-build/khub/internal/errs"
+	"github.com/endgame-build/khub/internal/fsio"
 	"github.com/endgame-build/khub/internal/omap"
 	"github.com/endgame-build/khub/internal/schema"
 )
@@ -40,6 +43,7 @@ func SortNodes(ns []Node) { sort.Slice(ns, func(i, j int) bool { return ns[i].Le
 // on insertion order — FTS rowids, adjacency — stay deterministic.
 type Index struct {
 	Resolved    *schema.ResolvedSchema
+	Collections map[string]*omap.Map // parsed inventories, reused by batch reads
 	Nodes       map[Node]bool
 	Order       []Node
 	TypesBySlug map[string]map[string]bool
@@ -88,6 +92,7 @@ func (idx *Index) ResolveTarget(rel *schema.ResolvedRelation, target string) map
 func Build(root string, resolved *schema.ResolvedSchema) (*Index, error) {
 	idx := &Index{
 		Resolved:    resolved,
+		Collections: map[string]*omap.Map{},
 		Nodes:       map[Node]bool{},
 		TypesBySlug: map[string]map[string]bool{},
 		Meta:        map[Node]*omap.Map{},
@@ -95,7 +100,7 @@ func Build(root string, resolved *schema.ResolvedSchema) (*Index, error) {
 	var malformed []string
 	for _, tname := range resolved.Types.Keys() {
 		rtype, _ := resolved.Types.Get(tname)
-		pairs, bad, err := ScanType(root, rtype)
+		pairs, bad, err := scanType(root, rtype, idx.Collections)
 		if err != nil {
 			return nil, err
 		}
@@ -134,86 +139,130 @@ type Pair struct {
 // malformed files. A single unparseable file becomes a malformed entry instead
 // of raising — validate/check/query/status/get never crash on one bad file.
 func ScanType(root string, rtype *schema.ResolvedType) ([]Pair, []string, error) {
-	switch rtype.Storage.Layout {
-	case "collection":
-		return scanCollection(root, rtype)
-	case "singleton":
-		spath := filepath.Join(root, storagePath(rtype))
-		if !isFile(spath) {
-			return nil, nil, nil
-		}
-		meta := loadMeta(spath)
-		if meta == nil {
-			return nil, []string{spath}, nil
-		}
-		return []Pair{{Slug: rtype.Name, Meta: meta}}, nil, nil
+	return scanType(root, rtype, nil)
+}
+func scanType(root string, rtype *schema.ResolvedType, collections map[string]*omap.Map) ([]Pair, []string, error) {
+	base := filepath.Join(root, rtype.StorageRelpath())
+	r, baseRel, err := fsio.OpenPath(root, base)
+	if err != nil {
+		return nil, nil, err
 	}
-	if storagePath(rtype) == "" {
+	defer r.Close()
+	info, err := r.Stat(baseRel)
+	if errors.Is(err, fs.ErrNotExist) {
 		return nil, nil, nil
 	}
-	base := filepath.Join(root, storagePath(rtype))
-	if _, err := os.Stat(base); err != nil {
-		return nil, nil, nil
+	if err != nil {
+		return nil, nil, err
+	}
+	if rtype.Storage.Layout == schema.LayoutCollection {
+		return scanCollection(root, rtype, collections)
 	}
 	var out []Pair
 	var malformed []string
-	ext := rtype.Storage.Fmt
-	if rtype.Storage.Layout == "folder" {
-		dirs, _ := os.ReadDir(base)
-		var matches []string
-		for _, d := range dirs {
-			if d.IsDir() {
-				matches = append(matches, filepath.Join(base, d.Name(), "_index."+ext))
-			}
+	parse := func(raw []byte, path, slug string) {
+		meta, _, err := canon.Parse(canon.NormalizeNewlines(string(raw)), rtype.Storage.Fmt)
+		if err != nil {
+			malformed = append(malformed, path)
+		} else {
+			out = append(out, Pair{Slug: slug, Meta: meta})
 		}
-		for _, idxPath := range matches {
-			if !isFile(idxPath) {
-				continue
-			}
-			meta := loadMeta(idxPath)
-			if meta == nil {
-				malformed = append(malformed, idxPath)
-				continue
-			}
-			out = append(out, Pair{Slug: filepath.Base(filepath.Dir(idxPath)), Meta: meta})
+	}
+	if rtype.Storage.Layout == schema.LayoutSingleton {
+		if !info.Mode().IsRegular() {
+			return nil, nil, &fs.PathError{Op: "scan", Path: base, Err: fs.ErrInvalid}
 		}
+		raw, err := r.ReadFile(baseRel)
+		if err != nil {
+			return nil, nil, err
+		}
+		parse(raw, base, rtype.Name)
 		return out, malformed, nil
 	}
-	// os.ReadDir over filepath.Glob + os.Stat: the directory entry already
-	// carries the file type, so the regular-file check is free. The Stat was
-	// 55% of the scan's syscalls on a 10k-entity workspace — one extra syscall
-	// per file, purely to re-learn what readdir had already reported.
-	// ReadDir returns entries sorted by filename, the order Glob+sort produced.
-	entries, _ := os.ReadDir(base)
-	suffix := "." + ext
-	for _, e := range entries {
-		name := e.Name()
-		if name == "_index"+suffix || !strings.HasSuffix(name, suffix) || !isRegular(base, e) {
-			continue
+	entries, err := fsio.ReadDirIn(r, baseRel, base)
+	if err != nil {
+		return nil, nil, err
+	}
+	// One Root scoped to the type directory. Reading through the workspace
+	// Root re-opened every path component per file (three openat calls for
+	// knowledge/requirements/req-x.md), which was two thirds of a query's time
+	// at 2000 entities. From here a file-layout read is one component and a
+	// folder-layout read two; the leaf still opens O_NOFOLLOW, and the
+	// directory descriptor is pinned, so a swap after OpenPath validated it
+	// cannot redirect a read.
+	dir, err := r.OpenRoot(baseRel)
+	if err != nil {
+		return nil, nil, err
+	}
+	defer dir.Close()
+	for _, entry := range entries {
+		name := entry.Name()
+		path := filepath.Join(base, name)
+		if entry.Type()&os.ModeSymlink != 0 {
+			return nil, nil, errs.New("unsafe_path", fmt.Sprintf("Symlinks are not allowed in workspace storage: %s", path))
 		}
-		f := filepath.Join(base, name)
-		meta := loadMeta(f)
-		if meta == nil {
-			malformed = append(malformed, f)
-			continue
+		slug := strings.TrimSuffix(name, "."+rtype.Storage.Fmt)
+		inDir := name
+		if rtype.Storage.Layout == schema.LayoutFolder {
+			if !entry.IsDir() {
+				continue
+			}
+			slug = name
+			inDir = filepath.Join(name, "_index."+rtype.Storage.Fmt)
+			path = filepath.Join(base, inDir)
+			st, err := dir.Lstat(inDir)
+			if errors.Is(err, fs.ErrNotExist) {
+				continue
+			}
+			if err != nil {
+				return nil, nil, rootRelative(err, root, path)
+			}
+			if !st.Mode().IsRegular() {
+				return nil, nil, &fs.PathError{Op: "scan", Path: path, Err: fs.ErrInvalid}
+			}
+		} else {
+			rel, _ := filepath.Rel(root, path)
+			if !rtype.AcceptsEntityPath(rel) {
+				continue
+			}
+			if !entry.Type().IsRegular() {
+				return nil, nil, &fs.PathError{Op: "scan", Path: path, Err: fs.ErrInvalid}
+			}
 		}
-		out = append(out, Pair{Slug: strings.TrimSuffix(name, suffix), Meta: meta})
+		raw, err := dir.ReadFile(inDir)
+		if err != nil {
+			return nil, nil, rootRelative(err, root, path)
+		}
+		parse(raw, path, slug)
 	}
 	return out, malformed, nil
 }
 
-func scanCollection(root string, rtype *schema.ResolvedType) ([]Pair, []string, error) {
-	cpath := filepath.Join(root, rtype.CollectionRelpath())
-	if !isFile(cpath) {
-		return nil, nil, nil
+// rootRelative re-anchors a PathError from the type-directory Root to the
+// workspace-relative path the workspace Root would have reported, so error
+// text does not depend on which Root performed the read.
+func rootRelative(err error, root, path string) error {
+	var pe *fs.PathError
+	if errors.As(err, &pe) {
+		if rel, rerr := filepath.Rel(root, path); rerr == nil {
+			return &fs.PathError{Op: pe.Op, Path: rel, Err: pe.Err}
+		}
 	}
-	text, err := canon.ReadText(cpath)
+	return err
+}
+
+func scanCollection(root string, rtype *schema.ResolvedType, collections map[string]*omap.Map) ([]Pair, []string, error) {
+	cpath := filepath.Join(root, rtype.CollectionRelpath())
+	text, err := canon.ReadTextIn(root, cpath)
 	if err != nil {
-		return nil, []string{cpath}, nil
+		return nil, nil, err
 	}
 	rows, err := canon.LoadCollection(text, rtype.Storage.Fmt)
 	if err != nil {
 		return nil, []string{cpath}, nil
+	}
+	if collections != nil {
+		collections[rtype.Name] = rows
 	}
 	var out []Pair
 	for _, slug := range rows.Keys() {
@@ -232,45 +281,6 @@ func scanCollection(root string, rtype *schema.ResolvedType) ([]Pair, []string, 
 		out = append(out, Pair{Slug: slug, Meta: meta})
 	}
 	return out, nil, nil
-}
-
-// loadMeta is the scan-altitude read: metadata, or nil if unparseable (the
-// malformed-file contract — try_parse guards ANY read/parse failure).
-func loadMeta(path string) *omap.Map {
-	text, err := canon.ReadText(path)
-	if err != nil {
-		return nil
-	}
-	meta, _, err := canon.Parse(text, canon.FmtOf(path))
-	if err != nil {
-		return nil
-	}
-	return meta
-}
-
-// isRegular reports whether a directory entry is a regular file. A symlink is
-// resolved with a Stat, matching Python's Path.is_file(); everything else is
-// answered from the readdir entry with no syscall.
-func isRegular(dir string, e os.DirEntry) bool {
-	if e.Type().IsRegular() {
-		return true
-	}
-	if e.Type()&os.ModeSymlink == 0 {
-		return false // directory, socket, device: not an entity, not malformed
-	}
-	return isFile(filepath.Join(dir, e.Name()))
-}
-
-func isFile(p string) bool {
-	st, err := os.Stat(p)
-	return err == nil && st.Mode().IsRegular()
-}
-
-func storagePath(rtype *schema.ResolvedType) string {
-	if rtype.Storage.Path == nil {
-		return ""
-	}
-	return *rtype.Storage.Path
 }
 
 func resolveTarget(idx *Index, rel *schema.ResolvedRelation, target string) map[Node]bool {
@@ -345,6 +355,7 @@ func Filter(idx *Index, drop map[Node]bool) *Index {
 	}
 	out := &Index{
 		Resolved:    idx.Resolved,
+		Collections: idx.Collections,
 		Nodes:       map[Node]bool{},
 		TypesBySlug: map[string]map[string]bool{},
 		Meta:        map[Node]*omap.Map{},

@@ -237,21 +237,12 @@ func TestValidateReportsMalformedAsFrontmatterError(t *testing.T) {
 	}
 }
 
-// HQ-port regression: a directory matching the layout glob is skipped — not an
-// entity, not malformed.
-func TestDirectoryNamedMDIsInvisibleToValidate(t *testing.T) {
+// A wrong-shaped storage entry must not produce a successful incomplete scan.
+func TestDirectoryAtEntityPathRefusesValidation(t *testing.T) {
 	root := freshWS(t)
-	seed(t, root, "clients/real.md", kv{"type", "client"}, kv{"name", "Real"},
-		kv{"created", "2026-06-01"}, kv{"updated", "2026-06-01"})
-	mkdir(t, root, "clients/weird.md")
 	mkdir(t, root, "opportunities/ghost/_index.md")
-
-	report := mustValidate(t, root, nil, false)
-	if !report.OK() {
-		t.Fatalf("a directory named *.md produced errors: %v", report.Errors)
-	}
-	if report.Count != 1 {
-		t.Errorf("count = %d, want 1", report.Count)
+	if _, err := Validate(root, nil, false); err == nil {
+		t.Fatal("directory at entity path was silently skipped")
 	}
 }
 
@@ -260,7 +251,7 @@ func TestDirectoryNamedMDIsInvisibleToValidate(t *testing.T) {
 // An md type with a workspace template requires the template's headings, in
 // order; a body missing one is a `body` finding on that entity.
 func TestValidateBodyStructureContract(t *testing.T) {
-	root := wsFor(t, "build-lite")
+	root := wsFor(t, "build-hub")
 	create(t, root, "adr", "ad-2026-01-15-x", "title", "X", "status", "proposed")
 	// Replace the templated body with prose that satisfies no heading.
 	path := "knowledge/decisions/ad-2026-01-15-x.md"
@@ -284,7 +275,7 @@ func TestValidateBodyStructureContract(t *testing.T) {
 
 // A broken template is reported once, on the type, and does not abort the run.
 func TestValidateBrokenTemplateIsOneFindingOnTheType(t *testing.T) {
-	root := wsFor(t, "build-lite")
+	root := wsFor(t, "build-hub")
 	writeRaw(t, root, ".khub/templates/adr.yaml", "sections: 3\n")
 	report := mustValidate(t, root, nil, false)
 	found := false
@@ -301,7 +292,7 @@ func TestValidateBrokenTemplateIsOneFindingOnTheType(t *testing.T) {
 // The target selector governs template findings too: checking one type must not
 // fail on an unrelated type's broken template.
 func TestValidateTemplateFindingHonoursTarget(t *testing.T) {
-	root := wsFor(t, "build-lite")
+	root := wsFor(t, "build-hub")
 	writeRaw(t, root, ".khub/templates/adr.yaml", "sections: 3\n")
 	create(t, root, "component", "cmp-api", "title", "API", "kind", "service")
 
@@ -320,7 +311,7 @@ func TestValidateTemplateFindingHonoursTarget(t *testing.T) {
 // `id_date`, and the retired `NNN-` ordinal — unless the title itself starts
 // with those digits. kb `test_id_gate_*`.
 func TestIdGateThreeArms(t *testing.T) {
-	root := wsFor(t, "build-lite")
+	root := wsFor(t, "build-hub")
 	adr := func(slug, title string) {
 		seed(t, root, "knowledge/decisions/"+slug+".md", kv{"type", "adr"}, kv{"title", title},
 			kv{"status", "proposed"}, kv{"created", "2026-01-15"})

@@ -1,0 +1,19 @@
+# A system is a boundary drawn around components. It stores no edges of its own:
+# components point at it through `system`, and that inverse is the whole record.
+
+hint: >-
+  one paragraph — what this group of components is, as one thing, and where its
+  boundary runs. `owner` is who to ask, in slug form.
+
+sections:
+- heading: Boundary
+  optional: true
+  hint: what is inside and what is deliberately outside — the neighbouring system people confuse it with
+
+lenses:
+- code: grouped
+  name: Components point here
+  instruction: |
+    Walk the components whose `system` names this. If the list is empty, this is a
+    label, not a system; if it holds everything in the workspace, the workspace is
+    one system and the record is not needed at all.

@@ -122,3 +122,116 @@ func parseShortDate(s string) (time.Time, error) {
 	}
 	return d, nil
 }
+
+// DateRequest selects only missing dates; dated entities need no history work.
+type DateRequest struct {
+	Path        string
+	First, Last bool
+}
+
+// Dates holds available committer dates. Zero values mean no matching commit.
+type Dates struct{ First, Last time.Time }
+
+// CommitDates batches multiple paths on linear history. Merge history retains
+// the per-path helpers' history simplification and ordering semantics.
+func CommitDates(root string, requests []DateRequest) (map[string]Dates, error) {
+	out := map[string]Dates{}
+	if len(requests) == 0 {
+		return out, nil
+	}
+	// A path may supply separate first/last requests; count distinct eligible
+	// paths when choosing the batch or single-file route.
+	positions := map[string]int{}
+	unique := make([]DateRequest, 0, len(requests))
+	for _, request := range requests {
+		if !request.First && !request.Last {
+			continue
+		}
+		if i, ok := positions[request.Path]; ok {
+			unique[i].First = unique[i].First || request.First
+			unique[i].Last = unique[i].Last || request.Last
+		} else {
+			positions[request.Path] = len(unique)
+			unique = append(unique, request)
+		}
+	}
+	requests = unique
+	if len(requests) > 1 {
+		merges, code, err := run(root, "rev-list", "--min-parents=2", "-1", "HEAD")
+		if err != nil {
+			return nil, err
+		}
+		if code == 0 && strings.TrimSpace(merges) == "" {
+			// NUL framing preserves tabs/newlines and avoids core.quotePath.
+			// --relative keeps paths relative to nested workspace roots.
+			log, code, err := run(root, "log", "--no-renames", "--name-only", "-z", "--format=%x00%cd", "--date=short", "--relative", "--", ".")
+			if err != nil {
+				return nil, err
+			}
+			if code == 0 {
+				wanted := map[string]DateRequest{}
+				for _, request := range requests {
+					wanted[request.Path] = request
+				}
+				parts := strings.Split(log, "\x00")
+				var date time.Time
+				firstPath := false
+				for i := 0; i < len(parts); i++ {
+					part := parts[i]
+					if part == "" {
+						if i+1 == len(parts) {
+							break
+						}
+						i++
+						date, err = parseShortDate(parts[i])
+						if err != nil {
+							return nil, err
+						}
+						firstPath = true
+						continue
+					}
+					if firstPath {
+						part = strings.TrimPrefix(part, "\n")
+						firstPath = false
+					}
+					request, ok := wanted[part]
+					if !ok {
+						continue
+					}
+					dates := out[part]
+					if request.Last && dates.Last.IsZero() {
+						dates.Last = date
+					}
+					if request.First {
+						dates.First = date
+					}
+					out[part] = dates
+				}
+				return out, nil
+			}
+		}
+	}
+	for _, request := range requests {
+		var dates Dates
+		if request.First {
+			d, ok, err := FirstCommitDate(root, request.Path)
+			if err != nil {
+				return nil, err
+			}
+			if ok {
+				dates.First = d
+			}
+		}
+		if request.Last {
+			d, ok, err := LastCommitDate(root, request.Path)
+			if err != nil {
+				return nil, err
+			}
+			if ok {
+				dates.Last = d
+			}
+		}
+		out[request.Path] = dates
+	}
+	return out, nil
+}

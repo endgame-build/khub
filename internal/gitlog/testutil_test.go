@@ -25,14 +25,14 @@ type kv struct {
 	V any
 }
 
-func freshWS(t *testing.T) string {
+func freshWS(t testing.TB) string {
 	t.Helper()
 	root := t.TempDir()
 	initPreset(t, root, "firm-ops")
 	return root
 }
 
-func initPreset(t *testing.T, root, preset string) {
+func initPreset(t testing.TB, root, preset string) {
 	t.Helper()
 	if _, err := workspace.Init(preset, root, workspace.InitOptions{}); err != nil {
 		t.Fatalf("init %s: %v", preset, err)
@@ -40,7 +40,7 @@ func initPreset(t *testing.T, root, preset string) {
 }
 
 // writeRaw writes a file verbatim (a collection inventory, a hand-authored doc).
-func writeRaw(t *testing.T, root, relpath, text string) {
+func writeRaw(t testing.TB, root, relpath, text string) {
 	t.Helper()
 	p := filepath.Join(root, filepath.FromSlash(relpath))
 	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
@@ -52,7 +52,7 @@ func writeRaw(t *testing.T, root, relpath, text string) {
 }
 
 // seed writes an md entity's frontmatter, like conftest.py's seed fixture.
-func seed(t *testing.T, root, relpath string, f ...kv) {
+func seed(t testing.TB, root, relpath string, f ...kv) {
 	t.Helper()
 	meta := omap.New()
 	for _, x := range f {
@@ -71,7 +71,7 @@ func seed(t *testing.T, root, relpath string, f ...kv) {
 	}
 }
 
-func git(t *testing.T, root, when string, args ...string) {
+func git(t testing.TB, root, when string, args ...string) {
 	t.Helper()
 	cmd := exec.Command("git", append([]string{"-C", root}, args...)...)
 	if when != "" {
@@ -82,20 +82,20 @@ func git(t *testing.T, root, when string, args ...string) {
 	}
 }
 
-func gitInit(t *testing.T, root string) {
+func gitInit(t testing.TB, root string) {
 	t.Helper()
 	git(t, root, "", "init")
 	git(t, root, "", "config", "user.email", "t@t")
 	git(t, root, "", "config", "user.name", "t")
 }
 
-func commit(t *testing.T, root, message, when string) {
+func commit(t testing.TB, root, message, when string) {
 	t.Helper()
 	git(t, root, "", "add", "-A")
 	git(t, root, when, "commit", "-m", message)
 }
 
-func mustStale(t *testing.T, root string, days *int) *StaleReport {
+func mustStale(t testing.TB, root string, days *int) *StaleReport {
 	t.Helper()
 	report, err := Stale(root, days, now)
 	if err != nil {
@@ -121,3 +121,36 @@ func slugOrder(report *StaleReport) []string {
 }
 
 func ptr[T any](v T) *T { return &v }
+
+// collectionPresetOntology and collectionPresetStorage make a preset with one
+// collection-layout type — the shape the pre-0.6.0 build-hub's repos.yaml
+// gave the collection tests. build-hub 0.6.0 ships no collection (every type
+// is a directory of md files), so the schema lives here.
+const collectionPresetOntology = `
+version: "0.1.0"
+ontology:
+  entities:
+    repo:
+      attributes:
+        repo: { type: text, required: true }
+        status: { enum: [active, archived], required: true }
+`
+
+const collectionPresetStorage = `
+storage:
+  repo: { layout: collection, format: yaml, path: knowledge/architecture/repos.yaml }
+`
+
+// collectionWS scaffolds a workspace from the collection preset above, the
+// way `init --preset-source` does.
+func collectionWS(t *testing.T) string {
+	t.Helper()
+	src := t.TempDir()
+	writeRaw(t, src, "collections/ontology.yaml", collectionPresetOntology)
+	writeRaw(t, src, "collections/storage.yaml", collectionPresetStorage)
+	root := t.TempDir()
+	if _, err := workspace.Init("collections", root, workspace.InitOptions{PresetSource: src}); err != nil {
+		t.Fatalf("init collections: %v", err)
+	}
+	return root
+}

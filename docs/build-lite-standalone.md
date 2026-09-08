@@ -3,7 +3,7 @@
 > **Baseline note, 2026-08-16.** This was written while khub was a Python
 > package, and several arguments below weigh khub's dependency count and
 > install cost against a standalone script. khub is a single static binary
-> now, installed by one `curl`, so that side of the comparison is much
+> now, installed through its npm package, so that side of the comparison is much
 > lighter than the tables here assume. The reasoning about what build-lite
 > actually needs is unaffected.
 
@@ -93,7 +93,7 @@ plugin runs it automatically after every corpus edit.
 | **Skill + one CLI script** ✅ | one file, one language runtime | **Recommended.** Works in opencode, Claude Code, a bare terminal, a pre-commit hook, and CI — the same four commands. Nothing about it is opencode-specific, which is what makes it survive the next tool change. |
 | **opencode custom tools** (`.opencode/tools/*.ts`) | TypeScript + a yaml dep; opencode-only; every tool's schema sits in context permanently | A wrapper worth adding *if* bash approval friction bites. Not the base: it cannot run in CI, and typed args stop mattering once the verbs take two arguments each. |
 | **MCP server** | a process, a protocol, always-on tool schemas | Over-serving. Its advantage is cross-agent reach, and a CLI already has that more cheaply. Revisit only if the corpus is driven from a hosted agent with no shell. |
-| **Full khub + build-lite preset** (status quo) | 7,000 lines, one static binary, `curl … | sh`, search/viz/backfill/collections/presets unused | The graduation target, not the daily driver. Its generality is real value at a firm's scale and dead weight at one project's. |
+| **Full khub + build-lite preset** (status quo) | one npm-delivered static binary; search/viz/backfill/collections/presets unused | The graduation target, not the daily driver. Its generality is real value at a firm's scale and dead weight at one project's. |
 
 The recommendation is the second row, and the deliverable is **one directory you
 drop into a project**, holding the two things that install to different places:
@@ -207,13 +207,13 @@ TypeScript were read instead):
 | `search` (FTS5, BM25) | **cut.** ripgrep is better at this scale and the agent already has it. |
 | `add --body/--body-file`, `edit` | **kept, and rarely the right call.** The agent writes prose into the file; `add` scaffolds, `edit` is for one attribute, `link`/`unlink` keep edges honest. |
 | `validate` + `check` as two gates | **both kept**, splitting one sweep by finding code: `validate` reports the per-entity subset, `check` adds the graph-wide gates. Two severities cut across them — `error` (broken) and `gap` (unfinished) — and only errors set the exit code, so capture is never blocked. |
-| `draft` flag, active-subgraph logic | **the behaviour is cut, the attribute is not.** `adr.status` and `feature-spec.status` already say what draft would, and no relation in build-lite is required, so the flag gates nothing here. It is still declared, because deleting an attribute from a *closed* schema turns every entity khub writes into an `unknown_field` error — which is what the drift test caught. Same for `author`, `sources` and `references`: declared, unread. |
+| `draft` flag, active-subgraph logic | **the behaviour is cut, the attribute is not.** `adr.status` already says what draft would, and no relation in build-lite is required, so the flag gates nothing here. It is still declared, because deleting an attribute from a *closed* schema turns every entity khub writes into an `unknown_field` error — which is what the drift test caught. Same for `author`, `sources` and `references`: declared, unread. |
 | `stale`, `backfill`, `log`, git integration | **cut.** git is the freshness record; `git log -- <path>` answers it without a projection. |
 | `reindex`, `viz`, OKF export | **cut.** No index to keep current, no dashboard consumer. |
 | collections, `json`/`yaml`/`jsonl` entities, locks, atomic replace | **cut.** Markdown only. build-lite has no homogeneous registry left. |
 | presets, `init <preset>`, schema flattening, `wire` | **cut.** One schema, shipped pre-flattened as `build.schema.yaml`. `install-skills` is kept, under khub's name. |
 | networkx, pydantic, typer, rich, ruamel, python-frontmatter | **cut.** BFS over a dict is 20 lines; validation is the checker; argparse is stdlib. Two hand-written readers replace the YAML dependency: a flat profile for frontmatter (~90 lines, which is also what pins the corpus to one shape) and a nested subset reader for the schema (~140 lines, tested against `ruamel.yaml`'s parse of the shipped file). |
-| `type/slug` qualification, ambiguity resolution | **cut by specialization.** Ids carry a type prefix (`ad-`, `cmp-`, `fs-`, `fr-`/`cst-`/`br-`), so every slug is globally unambiguous. |
+| `type/slug` qualification, ambiguity resolution | **cut by specialization.** Ids carry a type prefix (`ad-`, `cmp-`, `fr-`/`cst-`/`br-`), so every slug is globally unambiguous. |
 
 ### And what specialization buys back
 
@@ -255,7 +255,7 @@ name, no field name, and no predicate. Every one comes from `build.schema.yaml`,
 which is why adding a field is a data edit — a project can even override the
 shipped copy at `.kb/build.schema.yaml` without touching the drop-in —
 and why the add-back ladder in
-[`build-lite-preset.md`](build-lite-preset.md) still works here.
+[`build-hub-preset.md`](build-hub-preset.md) still works here.
 
 ## Size
 
@@ -366,10 +366,11 @@ khub init build-lite . --force   # --force only means "the directory isn't empty
 khub validate && khub check
 ```
 
-Verified on a corpus authored entirely by `kb` — two components, two
-requirements, an adr, a feature spec and both narrative documents. `init`
+Verified at build-lite 0.2.0 on a corpus authored entirely by `kb` — two
+components, two requirements, an adr, a feature spec and both narrative
+documents. `init`
 reported *0 entity files modified*, `validate` returned 8 entities and no
 errors, `check` passed with no findings of any kind, and `status` reported the
 workspace OKF-conformant. Then follow the add-back ladder in
-[`build-lite-preset.md`](build-lite-preset.md#add-back-ladder). The only thing
+[`build-hub-preset.md`](build-hub-preset.md#the-ladder). The only thing
 lost in the move is the parts of this tool khub does better anyway.

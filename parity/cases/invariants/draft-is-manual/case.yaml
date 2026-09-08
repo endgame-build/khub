@@ -1,5 +1,5 @@
 steps:
-- argv: ["init", "build-lite", ".", "--no-wire"]
+- argv: ["init", "build-hub", ".", "--no-wire"]
 - argv: ["add", "requirement", "--title", "Draft one", "--kind", "functional", "--draft", "--format", "json"]
 - argv: ["add", "requirement", "--title", "Active one", "--kind", "functional", "--format", "json"]
 - argv: ["edit", "req-draft-one", "description", "edited while draft"]

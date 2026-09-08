@@ -1,0 +1,5 @@
+# Dry-run previews tails and leaves the whole workspace tree unchanged.
+steps:
+- argv: [init, build-lite, ., --no-wire]
+- argv: [upgrade, --dry-run, --format, json]
+- argv: [upgrade, --dry-run, --no-schema, --no-skill, --no-wire, --format, json]

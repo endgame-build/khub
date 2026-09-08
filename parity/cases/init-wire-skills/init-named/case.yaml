@@ -1,2 +1,2 @@
 steps:
-- argv: ["init", "build-lite", ".", "--no-wire", "--name", "Custom Name", "--format", "json"]
+- argv: ["init", "build-hub", ".", "--no-wire", "--name", "Custom Name", "--format", "json"]

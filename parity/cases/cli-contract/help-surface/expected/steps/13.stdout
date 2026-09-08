@@ -1,19 +1,15 @@
-                                                                                
- Usage: khub neighbors [OPTIONS] {ID}                                           
-                                                                                
- Walk one-hop neighbors: khub neighbors initech-pov [--predicate client --in].  
-                                                                                
-╭─ Arguments ──────────────────────────────────────────────────────────────────╮
-│ *    ID      <str>  A bare slug, or type/slug on ambiguity. [required]       │
-╰──────────────────────────────────────────────────────────────────────────────╯
-╭─ Options ────────────────────────────────────────────────────────────────────╮
-│ --predicate        <str>  Restrict adjacency to one predicate.               │
-│ --in                      Inbound edges only (incl. derived inverses).       │
-│ --out                     Outbound (stored) edges only.                      │
-│ --depth            <int>  Bounded multi-hop adjacency over all predicates.   │
-│                           [default: 1]                                       │
-│ --format           <str>  text (Rich table on a TTY) or json.                │
-│                           [default: text]                                    │
-│ --help                    Show this message and exit.                        │
-╰──────────────────────────────────────────────────────────────────────────────╯
+Usage: khub neighbors [OPTIONS] {ID}
+
+Walk one-hop neighbors: khub neighbors initech-pov [--predicate client --in].
+
+Arguments:
+  ID <str>  A bare slug, or type/slug on ambiguity. [required]
+
+Options:
+  --predicate <str>  Restrict adjacency to one predicate.
+  --in  Inbound edges only (incl. derived inverses).
+  --out  Outbound (stored) edges only.
+  --depth <int>  Bounded multi-hop adjacency over all predicates. [default: 1]
+  --format <str>  text (Rich table on a TTY) or json. [default: text]
+  --help  Show this message and exit.
 

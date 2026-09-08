@@ -6,13 +6,13 @@
 
 khub is **structured, schema-bound context management for analytical and operational work**, a semantic, ontology-aligned context hub for agents. It gives an AI agent typed, validated, queryable context (structured memory it navigates and writes back to) instead of unstructured documents stuffed into a context window.
 
-One generic engine: every entity is one Markdown file with YAML frontmatter, held in git. A khub schema defines the entity types, their attributes, and legal relations, and is resolved in memory for validation. A Go core provides schema-validated CRUD and graph queries. A generic CLI (`khub`) and a Claude Code skill are thin, schema-driven surfaces over that core. khub is an Open Knowledge Format (OKF) implementation and extension: its Markdown entities are OKF concepts, and khub adds a typed schema, a graph, and the serialization formats and collections OKF lacks on top of its Markdown-only model. Any workspace projects to a conformant OKF bundle.
+One generic engine: every entity is a Markdown file with YAML frontmatter, a `.json`/`.yaml` document, or a row in a single-file collection, held in git. A khub schema defines the entity types, their attributes, and legal relations, and is resolved in memory for validation. A Go core provides schema-validated CRUD and graph queries. A generic CLI (`khub`) and an agent skill are thin, schema-driven surfaces over that core. khub is an Open Knowledge Format (OKF) implementation and extension: its Markdown entities are OKF concepts, and khub adds a typed schema, a graph, and the serialization formats and collections OKF lacks on top of its Markdown-only model. Any workspace projects to a conformant OKF bundle.
 
 **The schema is the operational setup.** It configures what a given hub is *for*. The engine knows nothing about engineering, consulting, or research; the schema does. Swap the schema, and the same engine becomes a different operational hub.
 
 The product is two things at once:
 
-1. A library of **canonical ontology presets, one per domain** (the operational setup): engineering (building and maintaining a system), consulting and analytical engagements, research, firm operations (HQ-style). Each preset is the firm's encoded judgment about how to model a kind of work. This is the IP.
+1. A library of **canonical ontology presets** (the operational setup): `firm-ops`, `build-hub`, and the smaller `build-lite`. Each preset is the firm's encoded judgment about how to model a kind of work. This is the IP.
 2. A **per-engagement workspace**: each engagement gets its own repo seeded from a preset, where agents and humans author entities and extend the schema as the work demands.
 
 ## Who It Serves
@@ -28,10 +28,10 @@ Both are first-class, symmetric writers of the same graph through the same libra
 | 1 | Source of truth | Markdown + YAML frontmatter, git |
 | 2 | Ontology | khub schema (entities/attributes/relations), resolved in memory |
 | 3 | Core | Go (`internal/`): validate / create / get / update / delete / link / query |
-| 4 | Graph projection | In-memory index; in-memory per-invocation FTS5 search; persisted SQLite (nodes/edges) planned; no graph engine |
-| 5 | Access | Generic CLI (`khub`) + Claude Code skill (MCP later) |
+| 4 | Graph projection | In-memory ordered index; in-memory per-invocation FTS5 search; no persisted index or graph engine |
+| 5 | Access | Generic CLI (`khub`) + agent skill; read-only loopback graph UI for humans |
 
-The core is the only place logic lives. The CLI, skill, and any future MCP server are thin, schema-introspecting adapters over it. Adding or changing a type is an edit to the ontology, with no surface code changes.
+The core is the only place logic lives. The CLI and skill are thin, schema-introspecting adapters over it. Adding or changing a type is an edit to the ontology, with no surface code changes. An MCP server was evaluated and rejected: its standing tool-schema cost and second contract duplicate the CLI without helping the local, single-user deployment.
 
 ### Schema
 
@@ -69,7 +69,7 @@ storage:
   project: { layout: folder, path: projects }
 ```
 
-khub validates natively from the resolved schema (a hand-written Pydantic meta-schema plus runtime field and relation checks). If an MCP server or editor integration later needs JSON Schema or typed models, khub emits them directly from the resolved schema; there is no separate compilation backend.
+khub validates natively from the resolved schema: `internal/schema/vocab.go` parses and checks the schema vocabulary, then shared runtime field and relation checks enforce it. There is no Pydantic runtime or separate compilation backend.
 
 ### Technology Choices
 
@@ -80,14 +80,14 @@ The concrete stack under the five layers. Each pick stays dependency-light and e
 | Schema | khub YAML → `ResolvedSchema` (the native resolver) | authors write entities/attributes/relations; the resolver merges the base and produces the in-memory contract every surface reads |
 | Validation | native (`internal/schema/vocab.go` meta-schema + runtime field/relation checks) | precise errors that feed `validate`; no generated code |
 | Frontmatter | **`internal/canon`** — **`goccy/go-yaml`** parses, khub's own emitter writes | an edit rewrites only the tokens whose values moved, so key order, comments and the author's quoting all survive and `khub edit` produces a minimal git diff. The emitter reproduces ruamel.yaml byte-for-byte because the on-disk shape is a contract, not a preference |
-| In-memory graph | khub's own ordered adjacency; **`gonum`** for cycles only | `descendants`/`ancestors` give blast radius and supersession chains; cycle detection backs `check`. Adjacency is insertion-ordered because walk determinism is contract |
-| Projection | **SQLite** + **FTS5** via **`ncruces/go-sqlite3`** | full-text search (`khub search`, in-memory per invocation, never stale); persisted `nodes`/`edges` tables planned. A pure-Go wasm build, which is why CGO stays off and all four release targets cross-compile without a C toolchain |
+| In-memory graph | khub's own ordered adjacency; **`gonum`** for strongly connected components | `impact`/`history` give blast radius and supersession chains; `check` reports one deterministic real cycle witness per cyclic component. Adjacency is insertion-ordered because walk determinism is contract |
+| Projection | **FTS5** via **`ncruces/go-sqlite3`** | full-text search (`khub search`) builds one in-memory index per invocation and never goes stale. A pure-Go translated build keeps CGO off and all release targets cross-compile without a C toolchain |
 | Graph engine (if ever) | embedded graph engine (oxigraph or a kuzu fork) | considered and not adopted; kuzu was archived Oct 2025 (Apple acqui-hire), so a fork or oxigraph would be the path, and a server stays unjustified while the corpus is small |
 | CLI | **`cobra`** + **`pflag`** | declarative commands, `--format json` for the agent, trees and tables for a human; the panel and table rendering is khub's own |
-| Git history | `git` over `subprocess` | `stale` and `backfill` read commit dates; git is present, so no library dependency |
+| Git history | `git` subprocess | `stale` and `backfill` batch file history reads where possible; git is present, so no library dependency |
 | Tooling | **Go**, **gofmt**, **go vet**, **golangci-lint**, `go test` | a golden-corpus test runs khub against an HQ snapshot and asserts it validates and checks cleanly (a functional cutover, judged on its own output) |
 
-Go, shipped as a single static binary (`npm install -D @endgame-build/khub`). It was a Python console script through 0.18.0; the rewrite bought no features, it removed the interpreter from every install. Agent skills, thin `SKILL.md` files over the same commands, are embedded in the binary and install with `khub install-skills`; an MCP server exposing the same verbs is planned, its tool schemas emitted natively from the resolved schema.
+Go, shipped as a single static binary (`npm install -D @endgame-build/khub`). It was a Python console script through 0.18.0; the rewrite removed the interpreter from every install. Agent skills, thin `SKILL.md` files over the same commands, are embedded in the binary and install with `khub install-skills`.
 
 Two eval tiers: deterministic golden-file tests cover the engine (the HQ functional-cutover test above), and an OKF-style fuzzy goldens-eval scores the LLM ingestion layer: precision and recall over extracted types and edges, gated on `khub check`.
 
@@ -154,6 +154,7 @@ The CLI is a thin, schema-introspecting adapter over the core library's verbs: c
 | Projection | `khub reindex` | regenerate the OKF `index.md` navigation from the graph |
 | | `khub backfill [--type T]` | add missing frontmatter and dates from `git log` |
 | | `khub viz` | self-contained Cytoscape HTML over the typed graph |
+| | `khub serve` | the same graph live over loopback HTTP, read-only, rebuilt per request |
 | | `khub build` | materialize the SQLite projection *(planned)* |
 | | `khub export --okf [path]` | render the workspace to a conformant OKF bundle *(planned)* |
 | | `khub diff-preset` | drift against the canonical preset, and promote-back *(planned)* |
@@ -174,7 +175,7 @@ engagement-repo/
     ontology.yaml      # the domain: types, attributes, relations, capture cues
     policy.yaml        # workspace gates: required singletons, orphan exemptions
     storage.yaml       # layouts, inventory paths, id prefixes, template links
-    generated/         # collection locks, gitignored
+    generated/         # stable workspace lock and upgrade recovery journals, gitignored
   clients/             # entity type folders live at the workspace root, one per type,
   projects/            #   each laid out per the type's storage config (see Authoring and
     <slug>/_index.md   #   Integrity): flat `clients/{slug}.md` or folder `projects/{slug}/_index.md`
@@ -232,9 +233,9 @@ moment the packages become public.
 
 The **engine** is proven on the real thing: **firm-hq** cut over to khub. The proving ground is HQ's live firm-operations corpus, already running the projection-and-validation pattern under `kb.py`. khub runs read-only against the same files, then takes over: a functional cutover proven against the live corpus. Markdown is truth, so the risk stays low: khub never owns the data, the `.md` files go untouched, and the incumbent keeps working until cutover.
 
-The cutover exercises the whole engine: the schema-introspecting core library, the in-memory `networkx` index, the integrity loop (`validate`/`check`/`stale`), plus `reindex` and `backfill` for the HQ migration; the full author and query command surface; `khub init`; and the **firm-ops preset**, the port of `hq.schema.yml` (9 types, 14 relation predicates), captured in full in `firm-ops-preset.md`.
+The cutover exercised the whole engine: the schema-introspecting core library, the in-memory ordered graph, the integrity loop (`validate`/`check`/`stale`), plus `reindex` and `backfill` for the HQ migration; the full author and query command surface; `khub init`; and the **firm-ops preset**, the port of `hq.schema.yml` (9 types, 14 relation predicates), captured in full in `firm-ops-preset.md`.
 
-Not yet built, and named: the engineering preset and any preset beyond firm-ops; the persisted SQLite/graph projection; `diff-preset` drift/promotion; hub↔engagement sync; the MCP server; facet and OKF-bundle ingestion; `rename`; concurrency arbitration.
+Not yet built, and named: the persisted SQLite/graph projection; `diff-preset` drift/promotion; hub↔engagement sync; facet and OKF-bundle ingestion; `rename`. MCP is rejected for the local product shape. Existing-workspace mutations now serialize under one lock.
 
 ### HQ Firm-Ops: Engine Coverage
 
@@ -252,39 +253,25 @@ The firm-ops schema is the real engine test. It exercises most of the engine's m
 | the `draft` flag (`draft: true\|false`) | added by khub over HQ's per-type `stage`/`status` |
 | real scale and mess | the live HQ corpus, plus reference docs with no frontmatter to skip cleanly |
 
-The one family HQ leaves uncovered is the intent/behavior **satisfies-gap**: a Requirement with no Capability (engineering-specific, arriving with the engineering preset). Self-referential and derived-inverse edges (`supersedes`/`superseded_by`) also moved there when `decision` was folded out of firm-ops; the engine still supports them, exercised by the generic resolver tests. HQ's gap query is structural instead: orphans and missing required relations, both surfaced by `check`.
+The one family HQ leaves uncovered is the intent/behavior **satisfies-gap**: a Requirement with no Capability, covered by the shipped build presets. Self-referential and derived-inverse edges (`supersedes`/`superseded_by`) also live there. HQ's gap query is structural instead: orphans and missing required relations, both surfaced by `check`.
 
-## The Engineering Preset
+## Build Presets
 
-The engineering preset is the second operational setup, built after firm-ops: an **operational hub for building and maintaining a system**. It is a documented target, built by hand and via the promote-back flywheel.
+The shipped engineering setup is `build-hub`: 20 types spanning product knowledge, architecture, and executable specifications. `build-lite` keeps the same core model at six entity types plus narrative singletons and documents the order for adding the full types back. Their preset files are authoritative; see [`build-hub-preset.md`](build-hub-preset.md) and [`build-lite-preset.md`](build-lite-preset.md).
 
-The model is four verbs over an intent/behavior spine:
-
-- **Spine:** `Requirement`, `Capability` (keystone). *Capability satisfies Requirement.*
-- **Inventory** (what exists): `Domain` (grouping), `Component`, `APISchema`, `DataEntity`, `Repository`. *Component realizes Capability, belongs_to Domain, lives_in Repository, exposes/consumes APISchema, persists DataEntity, depends_on Component.*
-- **Deliver** (what we build): `Spec`, `Epic`, `Story`. *Spec specifies Capability; Story implements Spec, part_of Epic.*
-- **Decide** (why): `Decision (adr|pdr)`. *supersedes, decides_on.*
-- **Operate** (what happened in prod): `Event (type: incident|outage|deployment|…)`, `PostMortem`, `Environment`. *Event affects Component, in Environment; PostMortem analyzes Event, produces Story/Decision.*
-- **Verify:** `TestScenario`. *Verifies Capability/Requirement; a PostMortem produces a regression TestScenario.*
-- **People:** `Team`. *owned_by.*
-
-The operational loop is the payoff the firm-ops schema does not carry:
-
-> incident `Event` → affects `Component` → `PostMortem` → produces `Decision (ADR)` → remediated by `Story` → changes `Component`.
-
-khub records the **durable nodes**; live execution lives in the specialist tool (Story status in beads/GitHub, incident response in incident.io, test runs in CI), linked by `resource`. khub records durable state; the specialist tool tracks live execution. Candidate additions (monotonic to add): `Constraint`, `Risk`, `Technology`, `TechnicalRecord`, `Actor`.
+khub records durable requirements, decisions, architecture, and specs. Live delivery status and test execution stay in specialist tools and link back through `resource`.
 
 ## Boundary and Relationships
 
 - **facet** seeds structural entities and supplies the ingestion format; the overlap is only the ingestion path. Coupling stays loose: khub reads facet output with no runtime dependency.
-- **forge / beads / GitHub** own live delivery execution (work packages, sprint state, tickets). khub records the durable spec/epic/story/decision/incident nodes and links out by `resource`.
+- **forge / beads / GitHub** own live delivery execution (work packages, sprint state, tickets) and the spec framework (SDD or its like) owns the specs directory; an in-flight spec points at hub ids from its own frontmatter and khub does not read it back. khub records the durable decision/requirement/use-case/component nodes and links out by `resource`; the facet import lands by the map in `build-hub-preset.md`.
 - **firm-hq** is the working precedent for the projection-and-validation pattern; khub generalizes it (schema-introspected checks, no graph engine) and is itself the kind of operational hub an HQ preset would produce.
 - **OKF (Open Knowledge Format)** is the vendor-neutral substrate khub speaks (Google, v0.1: a git tree of `.md` concepts with a required `type`, cross-links, `index.md`, `log.md`). khub's Markdown entities are conformant OKF concepts, so khub is an OKF implementation and extension: it adds a typed schema, typed relations, a `draft` flag, and the graph. Extra serialization formats and collections (which OKF lacks) go further: per-entity `json`/`yaml` (a single mapping; prose rides in a reserved `body` field) and single-file collections (`layout: collection`, `format: json|jsonl|yaml`, row-level entities; `docs/collections-design.md` holds the row-model contract). `gjson` remains named-but-undefined; the schema rejects it. Markdown entities carry the extras as OKF-tolerated frontmatter; any workspace projects to a conformant OKF bundle. khub adopts OKF's optional `title`, `description`, and `resource` fields and emits OKF `index.md` (stamped `okf_version`) from `reindex`. Reading external OKF bundles permissively as drafts is a planned consume-side path alongside facet ingestion (schema-validated and one-directional; khub is record-of and writes nothing back to the source). It does not adopt OKF's conventional body sections; relations stay typed in frontmatter. The `status` OKF-conformance flag reports whether the workspace would project to a valid OKF bundle, the conditions `export --okf` requires (every entity carries `type`, relations resolve, an `index.md` generates), rather than whether the on-disk tree is already all-Markdown.
 
 ## Open Questions (Non-Blocking)
 
 1. **"Operational setup" depth.** khub reads the schema as ontology-level setup (types, relations, integrity, queries). Whether a schema should also configure operational procedures (workflows, agent routines) is a later question.
-2. **Projection engine.** In-memory today, including `khub search`'s per-invocation FTS5 index; a persisted SQLite projection (nodes/edges, cached FTS) is planned past the performance budget; a graph engine only much later, if ever.
+2. **Projection engine.** In-memory today, including `khub search`'s per-invocation FTS5 index. A persisted projection remains unnecessary until measured performance exceeds the budget.
 3. **id ↔ facet alignment.** khub mints its own slugs and aliases facet ids via `source_id`; which facet layer ingestion seeds from is settled at ingestion-build time.
 
 ## Next Step

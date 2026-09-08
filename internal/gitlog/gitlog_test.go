@@ -155,8 +155,7 @@ func TestStaleUsesCreatedLikeStatus(t *testing.T) {
 // A collection row never takes the shared file's commit date: any row's edit
 // bumps it, so attributing it would make every other row read never-stale.
 func TestCollectionRowsSkipGitDates(t *testing.T) {
-	root := t.TempDir()
-	initPreset(t, root, "build-hub")
+	root := collectionWS(t)
 	writeRaw(t, root, "knowledge/architecture/repos.yaml",
 		"svc-a:\n  type: repo\n  repo: acme/a\n  status: active\n")
 	gitInit(t, root)

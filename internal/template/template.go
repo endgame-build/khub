@@ -14,8 +14,9 @@
 package template
 
 import (
+	"errors"
 	"fmt"
-	"os"
+	"io/fs"
 	"path/filepath"
 	"regexp"
 	"slices"
@@ -23,6 +24,7 @@ import (
 
 	"github.com/endgame-build/khub/internal/canon"
 	"github.com/endgame-build/khub/internal/errs"
+	"github.com/endgame-build/khub/internal/fsio"
 	"github.com/endgame-build/khub/internal/omap"
 )
 
@@ -186,15 +188,21 @@ func TemplatePath(root, stem string) string {
 // any field is refused against it.
 func LoadTemplate(root, stem string, fields []string) (*BodyTemplate, error) {
 	p := TemplatePath(root, stem)
-	fi, err := os.Stat(p)
-	if err != nil || !fi.Mode().IsRegular() {
+	fi, err := fsio.Stat(root, p)
+	if errors.Is(err, fs.ErrNotExist) {
 		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	if !fi.Mode().IsRegular() {
+		return nil, &fs.PathError{Op: "read", Path: p, Err: fs.ErrInvalid}
 	}
 	// canon.ReadText, not os.ReadFile: a template authored with CRLF would
 	// otherwise carry \r into every body rendered from it, exactly as
 	// --body-file did. Python read templates with Path.read_text(), which
 	// normalizes.
-	raw, err := canon.ReadText(p)
+	raw, err := canon.ReadTextIn(root, p)
 	if err != nil {
 		return nil, err
 	}

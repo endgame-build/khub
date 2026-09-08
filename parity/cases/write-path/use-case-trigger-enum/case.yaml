@@ -1,0 +1,13 @@
+# use-case.trigger is required and an enum. A scheduled flow needs no actor and
+# gets no `actor` lens; a human one is asked for an actor by the lens; a value
+# outside the enum is refused at write time (exit 2, nothing written); a use
+# case with no trigger at all is captured and reported incomplete by `check`.
+steps:
+- argv: ["init", "build-hub", ".", "--no-wire"]
+- argv: ["add", "use-case", "--title", "Nightly report", "--trigger", "scheduled", "--format", "json"]
+- argv: ["add", "use-case", "--title", "Bad", "--trigger", "cron"]
+- argv: ["add", "use-case", "--title", "No trigger", "--format", "json"]
+- argv: ["add", "use-case", "--title", "Pay", "--trigger", "human", "--format", "json"]
+- argv: ["validate", "use-case/uc-nightly-report", "--format", "json"]
+- argv: ["validate", "use-case/uc-pay", "--format", "json"]
+- argv: ["check", "--format", "json"]

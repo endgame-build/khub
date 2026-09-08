@@ -1,5 +1,5 @@
 steps:
-- argv: ["init", "build-lite", ".", "--no-wire"]
+- argv: ["init", "build-hub", ".", "--no-wire"]
 - sh: "rm .khub/policy.yaml .khub/storage.yaml && printf \"ontology:\\n  entities:\\n    ghost:\\n      relations:\\n        to_missing: {to: nowhere}\\n\" > .khub/ontology.yaml"
 - argv: ["status"]
 - sh: "printf \"ontology:\\n  entities:\\n    x: {sneaky_construct: 1}\\n\" > .khub/ontology.yaml"

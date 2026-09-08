@@ -13,6 +13,6 @@
 # than blaming khub. What it must NOT do is look identical to a permission
 # error, which is what this pins.
 steps:
-- argv: ["init", "build-lite", ".", "--no-wire"]
+- argv: ["init", "build-hub", ".", "--no-wire"]
 - sh: "rm -rf knowledge/requirements && printf 'not a directory' > knowledge/requirements"
 - argv: ["add", "requirement", "--title", "Boom", "--kind", "functional", "--format", "json"]

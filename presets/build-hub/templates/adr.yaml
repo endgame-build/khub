@@ -5,7 +5,7 @@
 title: Architecture decision
 sections:
 - heading: Context
-  hint: the forces; link the drivers (quality-attribute ids, qa- slugs) inline
+  hint: the forces; the constraint requirements (req- slugs) that bind this
   word_count: {min: 25}
 - heading: Alternatives
   optional: true
@@ -18,7 +18,7 @@ sections:
   forbidden_text:
   - {pattern: '\b(tbd|to be decided|we should consider|still deciding)\b'}
 - heading: Consequences
-  hint: what gets easier, what gets harder; the boundaries this produces (bound- slugs)
+  hint: what gets easier, what gets harder; what this forecloses
   word_count: {min: 20}
 - heading: Prevents
   optional: true
@@ -48,13 +48,12 @@ lenses:
     knows when to open a superseding record — and `supersedes` is the edge that makes
     the history readable.
 - code: rule
-  name: A rule needs a boundary
+  name: A rule needs a requirement
   after: reversal
   instruction: |
     If this decision creates something the system must always or never do, that is a
-    `boundary`, not a paragraph here. Add it and link it through `produces` — `affects`
-    carries the blast radius, and a rule buried in an ADR body is a rule nothing can
-    check.
+    `requirement`, not a paragraph here. Add it and link it — `affects` carries the
+    blast radius, and a rule buried in an ADR body is a rule nothing can check.
 - code: proposed
   name: Still proposed
   when: {status: proposed}

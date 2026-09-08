@@ -1,24 +1,23 @@
-# The three headings are the ones this type shipped with and stay required. No word
-# bound on Statement: a requirement is one sentence, and a minimum would fire on a
-# correct one. NFRs are quality-attribute entities in this preset, so no lens here
-# reads `kind: non-functional` — the enum does not carry it.
+# A requirement is one statement, so it declares no headings at all — the body is a
+# paragraph. `sections: []` is the explicit way to say "this type has a template, but
+# no heading contract"; the work this file does is the `hint` and the lenses.
 
-title: Requirement
-sections:
-- heading: Statement
-  hint: one statement, in the present tense, of what must hold. EARS reads well - "When <trigger>, the system shall <response>"; say what is measured and what enforces it
-- heading: Acceptance criteria
-  hint: observable from outside - a request, a response, a number
-- heading: Notes
+hint: >-
+  one statement, in the present tense, of what must hold. EARS reads well here: "When
+  <trigger>, the system shall <response>." Say what is measured and what enforces it —
+  a `non-functional` requirement without a number is a wish. Link `realized_in` to the
+  component that satisfies it.
+
+sections: []
 
 lenses:
 - code: single
   name: One statement
   instruction: |
-    Does the Statement say exactly one thing? An "and", a bulleted list of behaviours,
-    or two sentences each with their own verb mean this is two requirements. Split it —
-    two records each with their own edges are worth more than one that cannot be
-    satisfied or violated as a unit.
+    Does the body state exactly one thing? An "and", a bulleted list of behaviours, or
+    two sentences each with their own verb mean this is two requirements. Split it —
+    two records each with their own `realized_in` are worth more than one that cannot
+    be satisfied or violated as a unit.
 - code: testable
   name: Observable from outside
   after: single
@@ -26,6 +25,15 @@ lenses:
     Could someone who did not write this tell whether the system satisfies it, without
     reading the implementation? If the only way to check is to open the code, this is
     describing a design, not stating a requirement.
+- code: measurable
+  name: A number and its measurement
+  when: {kind: non-functional}
+  after: testable
+  instruction: |
+    Look for the value, the unit, where it is measured, over what window, and what
+    enforces it. Flag "gracefully", "robust", "scalable", "efficient", "fast",
+    "user-friendly" — an adjective is not a bound. "p99 under 200 ms at the API edge,
+    measured over a rolling hour, alerted on in the latency dashboard" is.
 - code: violation
   name: What violating it looks like
   when: {kind: constraint}
@@ -38,8 +46,8 @@ lenses:
   name: Where it is satisfied
   after: testable
   instruction: |
-    A feature-spec binding this requirement through `requirements` is how it gets
-    built; `realized_in` is the stored backstop naming the repo where it already holds
-    outside the work spine. A requirement with neither is unfinished by design. If
-    nothing satisfies it yet, that is the honest answer and the gap is the point — but
-    check that it is not simply unlinked.
+    `realized_in` is the only edge tying a rule to the code that satisfies it, and a
+    requirement without one is unfinished by design. If no component satisfies it yet,
+    that is the honest answer and the gap is the point — but check that it is not
+    simply unlinked. If a use case depends on this rule, name it in `use_cases`: a
+    rule no flow needs is either global or unowned, and the graph should say which.

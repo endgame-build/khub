@@ -16,7 +16,7 @@ What it overrides and why:
 
 Three task sets, each answering a different question (`--task-set`):
 
-  narrative  — 27 ordered engineering asks over the SUT. Measures wiring adherence
+  narrative  — 22 ordered engineering asks over the SUT. Measures wiring adherence
                end to end, and is the only set where later tasks depend on earlier
                ones landing. Wired 21/27 vs unwired 0/27 on khub 0.13.0.
   statements — 8 bare statements of fact, no instruction to use any tool. Isolates
@@ -81,42 +81,32 @@ TASKS: list[dict] = [
      "expect": {"type": "adr", "slug_like": "rich", "fields": {"status": "rejected"}}},
     {"id": "a-plugin", "family": "create", "prompt": "There's an idea on the table to rework the plugin API. It's not decided yet, but write it up.",
      "expect": {"type": "adr", "slug_like": "plugin", "fields": {"status": "proposed"}}},
-    # --- Phase 4: what we're building ----------------------------------------
-    {"id": "f-upload", "family": "create", "prompt": "We're about to start work on streaming uploads. Write up what we're building.",
-     "expect": {"type": "feature-spec", "slug_like": "upload", "fields": {"status": "planned"}}},
-    {"id": "f-offline", "family": "create", "prompt": "Also queued up: an offline mode that replays recorded responses. Get it on the board as not started yet.",
-     "expect": {"type": "feature-spec", "slug_like": "offline", "fields": {"status": "planned"}}},
-    # --- Phase 5: wire the graph (needs the cast to exist) -------------------
+    # --- Phase 4: wire the graph (needs the cast to exist) -------------------
     {"id": "l-client-requests", "family": "operate", "prompt": "Our HTTP client layer sits directly on top of requests — make that dependency explicit.",
      "expect": {"type": "component", "slug_like": "client", "rels": {"depends_on": "requests"}}},
     {"id": "l-output-pygments", "family": "operate", "prompt": "The output subsystem relies on Pygments. Record that link.",
      "expect": {"type": "component", "slug_like": "output", "rels": {"depends_on": "pygments"}}},
     {"id": "l-req-realized", "family": "operate", "prompt": "That no-buffering rule is enforced in the HTTP client layer. Connect the two.",
      "expect": {"type": "requirement", "slug_like": "buffer", "rels": {"realized_in": "client"}}},
-    {"id": "l-spec-req", "family": "operate", "prompt": "The streaming uploads work is what satisfies the no-buffering rule. Tie them together.",
-     "expect": {"type": "feature-spec", "slug_like": "upload", "rels": {"requirements": "buffer"}}},
     {"id": "l-adr-affects", "family": "operate", "prompt": "That decision about staying on requests obviously has consequences for the HTTP client layer. Record the blast radius.",
      "expect": {"type": "adr", "slug_like": "requests", "rels": {"affects": "client"}}},
-    # --- Phase 6: operate — status churn -------------------------------------
-    {"id": "o-upload-active", "family": "operate", "prompt": "We've actually started on streaming uploads now.",
-     "expect": {"type": "feature-spec", "slug_like": "upload", "fields": {"status": "active"}}},
+    # --- Phase 5: operate — status churn -------------------------------------
     {"id": "o-plugin-accept", "family": "operate", "prompt": "The plugin API rework got the green light — it's agreed now.",
      "expect": {"type": "adr", "slug_like": "plugin", "fields": {"status": "accepted"}}},
-    {"id": "o-offline-drop", "family": "operate", "prompt": "We're not doing the offline replay thing after all. Kill it off.",
-     "expect": {"type": "feature-spec", "slug_like": "offline", "fields": {"status": "dropped"}}},
-    # --- Phase 7: read — must query the graph, not grep the tree -------------
+    {"id": "o-rich-reopen", "family": "operate", "prompt": "The own-renderer idea is back on the table — it's no longer turned down, just undecided again.",
+     "expect": {"type": "adr", "slug_like": "rich", "fields": {"status": "proposed"}}},
+    # --- Phase 6: read — must query the graph, not grep the tree -------------
     {"id": "r-why-requests", "family": "read", "prompt": "Why can't we just drop requests and use httpx?", "expect": {"read": True}},
     {"id": "r-blast", "family": "read", "prompt": "If we swapped out the HTTP client library, what else would be affected?", "expect": {"read": True}},
-    {"id": "r-building", "family": "read", "prompt": "What are we actively building right now?", "expect": {"read": True}},
     {"id": "r-constraints", "family": "read", "prompt": "What hard constraints do we have to respect in this codebase?", "expect": {"read": True}},
-    # --- Phase 8: traps — tempt a raw file -----------------------------------
+    # --- Phase 7: traps — tempt a raw file -----------------------------------
     {"id": "t-note-release", "family": "create", "prompt": "Jot down a note somewhere about the plan for the next release.", "expect": {"new_entity": True}},
-    {"id": "t-note-going-well", "family": "create", "prompt": "Write down that the streaming upload work is going well so far.", "expect": {"new_entity": True}},
+    {"id": "t-note-going-well", "family": "create", "prompt": "Write down that the plugin API rework is going well so far.", "expect": {"new_entity": True}},
 ]
 
 
 # --- the statement-of-fact micro-batch -----------------------------------------
-# Isolates the ONE behaviour the 27-task narrative could not measure cleanly: a bare
+# Isolates the ONE behaviour the narrative task list could not measure cleanly: a bare
 # statement of fact about the system, phrased as conversation, with no instruction to
 # use any tool. In the full run these were the persistent failures — the agent replies
 # "Noted." and records nothing — but they were 4 of 27, diluted by tasks that fail for

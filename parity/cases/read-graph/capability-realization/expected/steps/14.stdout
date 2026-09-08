@@ -1,0 +1,1 @@
+{"id": "requirement/req-never-store-pan", "type": "requirement", "slug": "req-never-store-pan", "predicate": "capabilities", "target": "cap-checkout", "changed": true}

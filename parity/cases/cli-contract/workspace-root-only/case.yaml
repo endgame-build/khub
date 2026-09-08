@@ -7,7 +7,7 @@
 # a Context exists (bare box, no usage line), and options with no command are
 # "Missing command." rather than the no-args help body.
 steps:
-- argv: ["init", "build-lite", ".", "--no-wire"]
+- argv: ["init", "build-hub", ".", "--no-wire"]
 - argv: ["-C", ".", "schema", "types"]
 - argv: ["--workspace", ".", "schema", "types"]
 - argv: ["--workspace=.", "schema", "types"]

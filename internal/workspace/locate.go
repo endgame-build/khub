@@ -15,6 +15,7 @@ import (
 
 	"github.com/endgame-build/khub/internal/canon"
 	"github.com/endgame-build/khub/internal/errs"
+	"github.com/endgame-build/khub/internal/fsio"
 	"github.com/endgame-build/khub/internal/omap"
 )
 
@@ -105,7 +106,7 @@ func StaleDays(root string) (int, error) {
 // loadConfig reads and parses .khub/config.yaml — resolve.load_yaml applied
 // to the config path, including the `data or {}` falsy-to-empty collapse.
 func loadConfig(root string) (*omap.Map, error) {
-	data, err := os.ReadFile(filepath.Join(root, ".khub", "config.yaml"))
+	data, err := fsio.ReadFile(root, filepath.Join(root, ".khub", "config.yaml"))
 	if err != nil {
 		return nil, err
 	}

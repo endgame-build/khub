@@ -68,6 +68,11 @@ func (g *Graph) addEdge(u, v index.Node, predicate string) {
 	g.addNode(u)
 	g.addNode(v)
 	s := g.succ[u]
+	for _, old := range s.keys[v] {
+		if old == predicate {
+			return
+		}
+	}
 	if _, ok := s.keys[v]; !ok {
 		s.order = append(s.order, v)
 	}
@@ -85,7 +90,12 @@ func (g *Graph) addEdge(u, v index.Node, predicate string) {
 // A MultiDiGraph keeps parallel edges between the same pair under different
 // predicates, which a plain DiGraph would collapse. Self-edges are skipped: a
 // self-reference connects nothing new (mirrors the orphan rule in core.project).
-func BuildGraph(idx *index.Index) *Graph {
+func BuildGraph(idx *index.Index) *Graph { return buildGraph(idx, false) }
+
+// BuildCycleGraph includes self references for cycle detection only.
+func BuildCycleGraph(idx *index.Index) *Graph { return buildGraph(idx, true) }
+
+func buildGraph(idx *index.Index, includeSelf bool) *Graph {
 	g := newGraph()
 	for _, node := range idx.Order {
 		g.addNode(node)
@@ -104,7 +114,7 @@ func BuildGraph(idx *index.Index) *Graph {
 			}
 			for _, target := range targetList(raw) {
 				for _, tnode := range resolveTargets(rel, target, idx) {
-					if tnode != node {
+					if includeSelf || tnode != node {
 						g.addEdge(node, tnode, predicate)
 					}
 				}
@@ -185,6 +195,15 @@ func (g *Graph) OutDegree(n index.Node) int { return degree(g.succ[n]) }
 
 // InDegree is G.in_degree(n).
 func (g *Graph) InDegree(n index.Node) int { return degree(g.pred[n]) }
+
+// IsOrphan reads the degrees off the graph and defers to the rule itself
+// (schema.ResolvedType.IsOrphan). project answers the same question from its
+// own traversal; both reach the same verdict because BuildGraph skips
+// self-edges just as project's `other == node` guard does, which is what
+// TestSelfReferenceStaysOrphan pins.
+func IsOrphan(g *Graph, n index.Node, rtype *schema.ResolvedType) bool {
+	return rtype.IsOrphan(g.OutDegree(n) > 0, g.InDegree(n) > 0)
+}
 
 func degree(a *adjacency) int {
 	if a == nil {

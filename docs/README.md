@@ -15,9 +15,9 @@ khub's docs, organized by [Diátaxis](https://diataxis.fr): learning, tasks, ref
 
 - [CLI](cli.md) — every command, its flags, the JSON record shape, and validation semantics.
 - [firm-ops preset](firm-ops-preset.md) — the consulting-firm operating graph: 9 entity types, 14 relation predicates, per-type attributes.
-- [build-hub preset](build-hub-preset.md) — the knowledge hub of a build project: 20 types across knowledge/{product,architecture} + specs/; spokes carry no khub workspace.
-- [build-lite preset](build-lite-preset.md) — build-hub cut to necessity: 6 types, what each cut replaces, and the order the rest comes back.
+- [build-hub preset](build-hub-preset.md) — the one build preset: eleven types, the edges and the walks they buy, the ArchiMate and facet maps, and the ladder for what comes back. `build-lite` is an alias that resolves to it.
 - [Collections](collections-design.md) — the single-file collection row model: identity, locking, malformed handling, git attribution.
+- [Architecture audit release notes](architecture-audit-release-notes.md) — intentional contract changes and validation checklist.
 
 ## Explanation — understand the design
 

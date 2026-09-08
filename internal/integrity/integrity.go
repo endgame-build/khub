@@ -19,9 +19,7 @@
 package integrity
 
 import (
-	"regexp"
 	"strings"
-	"sync"
 
 	"github.com/endgame-build/khub/internal/index"
 	"github.com/endgame-build/khub/internal/omap"
@@ -85,40 +83,4 @@ func pyStr(v any) string {
 	default:
 		return values.Str(v)
 	}
-}
-
-// fullmatch is re.fullmatch over a schema-authored pattern.
-//
-// Divergence: Go's RE2 rejects constructs Python's `re` accepts
-// (backreferences, lookaround). Python would evaluate such a pattern; RE2
-// cannot compile it. A pattern that will not compile is therefore treated as
-// unmatched-by-nothing — the check is skipped rather than failed, because
-// fabricating a violation for a pattern khub cannot evaluate is worse than
-// missing one.
-func fullmatch(pattern, s string) (matched bool, usable bool) {
-	re, err := compilePattern(pattern)
-	if err != nil {
-		return false, false
-	}
-	return re.MatchString(s), true
-}
-
-var patternCache sync.Map // pattern string -> *regexp.Regexp | error
-
-func compilePattern(pattern string) (*regexp.Regexp, error) {
-	if hit, ok := patternCache.Load(pattern); ok {
-		if re, isRE := hit.(*regexp.Regexp); isRE {
-			return re, nil
-		}
-		return nil, hit.(error)
-	}
-	// \A…\z is fullmatch: unlike ^…$ it cannot be satisfied by a prefix under
-	// an embedded alternation, and it never matches before a trailing newline.
-	re, err := regexp.Compile(`\A(?:` + pattern + `)\z`)
-	if err != nil {
-		patternCache.Store(pattern, err)
-		return nil, err
-	}
-	patternCache.Store(pattern, re)
-	return re, nil
 }

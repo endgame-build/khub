@@ -15,7 +15,7 @@ Compared the [OKF website](https://okf-memory.dev/), Google's [OKF v0.2 specific
 | Source of truth | Git-held authored files/collection rows | Git-held Markdown concepts | Same architectural advantage: inspectable, portable data; no mandatory external database. |
 | Runtime | Static Go binary; bundled Go dependencies | Go binary using standard library only | Both run locally. OKF has fewer dependencies; that does not establish parser correctness. |
 | Domain model | Authored ontology, policy and storage layers; resolved schema introspection | Arbitrary nonempty `type`, optional standard metadata; no authored domain contract | khub for managed knowledge; OKF for low-friction notes. |
-| Presets | `firm-ops`, `build-hub`, `build-lite`; editable workspace copies | Software, coaching and books examples; generic bootstrap | khub presets encode enforceable working models. OKF examples impose less setup. |
+| Presets | `firm-ops`, `build-hub` (`build-lite` is an alias); editable workspace copies | Software, coaching and books examples; generic bootstrap | khub presets encode enforceable working models. OKF examples impose less setup. |
 | Attribute validation | Declared scalar types, enums, regex patterns; optional closed-schema strict mode | Checks selected OKF fields, dates and actor strings | khub substantially richer; its default still accepts undeclared extensions. |
 | Capture/completeness | Missing required values can be captured; `check` gates active completeness; `draft` remains manual | Minimal mandatory concept structure; no domain completeness model | khub makes “captured” and “complete” independently observable. |
 | Relationships | Declared predicates, target types/unions, cardinality, computed inverse predicates | Markdown links; prose describes meaning; derived inbound/outbound adjacency | khub supports executable relationship semantics. OKF links are convenient navigation. |
@@ -225,7 +225,7 @@ Add a machine-readable `reindex --check` or equivalent drift gate that reuses th
 - **A second handwritten change log:** Git plus selected projections already supplies history. Add a user-facing summary only for a demonstrated discovery need.
 - **Cloud federation or automatic fact extraction as parity work:** neither is delivered by the reviewed local OKF implementation. khub's federation design remains a separate project.
 - **Human-review labels as a security boundary:** metadata can guide retrieval; authentication and write authorization require actual enforcement.
-- **A new generic memory preset immediately:** first test whether build-lite plus compact onboarding serves the use case. Add a smaller preset only when a concrete corpus makes the existing taxonomy burdensome.
+- **A new generic memory preset immediately:** first test whether build-hub plus compact onboarding serves the use case. Add a smaller preset only when a concrete corpus makes the existing taxonomy burdensome.
 
 ## Verification and limitations
 

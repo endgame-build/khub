@@ -59,7 +59,33 @@ func resolveID(idx *index.Index, id string) (index.Node, error) {
 
 // sameTarget reports whether two target spellings name one node.
 // Case-insensitive, because lookup is.
-func sameTarget(a, b string) bool { return foldEqual(a, b) }
+func sameTarget(idx *index.Index, rel *schema.ResolvedRelation, a, b string) bool {
+	left, right := idx.ResolveTarget(rel, a), idx.ResolveTarget(rel, b)
+	if len(left) == 1 && len(right) == 1 {
+		for node := range left {
+			return right[node]
+		}
+	}
+	// Literal fallback lets unlink repair dangling or explicitly authored ambiguous values.
+	return foldEqual(a, b)
+}
+
+func uniqueTargets(idx *index.Index, rel *schema.ResolvedRelation, list []string) []string {
+	out := make([]string, 0, len(list))
+	for _, value := range list {
+		duplicate := false
+		for _, old := range out {
+			if sameTarget(idx, rel, old, value) {
+				duplicate = true
+				break
+			}
+		}
+		if !duplicate {
+			out = append(out, value)
+		}
+	}
+	return out
+}
 
 // canonicalTarget is the spelling to STORE for a resolved target, preserving
 // the caller's qualified form.
@@ -116,8 +142,14 @@ func entityEdges(
 		if !truthy(value) {
 			continue
 		}
+		rel, _ := rtype.Relations.Get(predicate)
 		for _, target := range asTargetList(value) {
-			edges = append(edges, Edge{Predicate: predicate, Target: target, Derived: false})
+			ids := []string{}
+			for hit := range idx.ResolveTarget(rel, target) {
+				ids = append(ids, hit.ID())
+			}
+			sort.Strings(ids)
+			edges = append(edges, Edge{Predicate: predicate, Target: target, ResolvedTargets: ids})
 		}
 	}
 	// Derived inverses: any stored edge declaring an `inverse` that resolves to
@@ -142,9 +174,10 @@ func entityEdges(
 			for _, target := range asTargetList(value) {
 				if idx.ResolveTarget(rel, target)[node] {
 					edges = append(edges, Edge{
-						Predicate: *rel.Inverse,
-						Target:    other.Type + "/" + other.Slug,
-						Derived:   true,
+						Predicate:       *rel.Inverse,
+						Target:          other.Type + "/" + other.Slug,
+						Derived:         true,
+						ResolvedTargets: []string{other.ID()},
 					})
 				}
 			}

@@ -5,6 +5,7 @@ package viz
 // left to the golden fixtures.
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -18,7 +19,7 @@ import (
 func TestSerializersTagTypeAndLabelPredicate(t *testing.T) {
 	g := liveGraph(t, firmOpsWS(t))
 	nodes, edges := Select(g, nil)
-	els := ToCytoscape(nodes, edges)
+	els := ToCytoscape(nodes, edges, nil)
 
 	var deal *nodeData
 	for _, el := range els.Nodes {
@@ -55,7 +56,7 @@ type nodeData struct{ id, label, typ string }
 func TestAssetInlinerHasNoExternalHost(t *testing.T) {
 	g := liveGraph(t, firmOpsWS(t))
 	nodes, edges := Select(g, nil)
-	html, err := RenderHTML(ToCytoscape(nodes, edges), []string{"opportunity"})
+	html, err := RenderHTML(ToCytoscape(nodes, edges, nil), []string{"opportunity"})
 	if err != nil {
 		t.Fatalf("render: %v", err)
 	}
@@ -192,7 +193,7 @@ func TestUnknownTypeFailsLoudly(t *testing.T) {
 
 // 0.11.0: a malformed scan must not become a written projection.
 func TestVizRefusesWhenACollectionIsMalformed(t *testing.T) {
-	root := wsFor(t, "build-hub")
+	root := collectionWS(t)
 	writeRaw(t, root, "knowledge/architecture/repos.yaml", "a:\n  repo: x/y\na:\n  repo: x/z\n")
 	out := filepath.Join(t.TempDir(), "v.html")
 
@@ -214,16 +215,55 @@ func TestStylePerTypeColors(t *testing.T) {
 	if len(style) != 4 {
 		t.Fatalf("style rules = %d, want 4 (node, edge, and one per type)", len(style))
 	}
-	html, err := RenderHTML(ToCytoscape(nil, nil), []string{"client", "person"})
+	html, err := RenderHTML(ToCytoscape(nil, nil, nil), []string{"client", "person"})
 	if err != nil {
 		t.Fatalf("render: %v", err)
 	}
 	for _, want := range []string{
-		`{"selector": "node[type=\"client\"]", "style": {"background-color": "#4e79a7"}}`,
-		`{"selector": "node[type=\"person\"]", "style": {"background-color": "#f28e2b"}}`,
+		`{"selector": "node[type=\"client\"]", "style": {"background-color": "#00787d"}}`,
+		`{"selector": "node[type=\"person\"]", "style": {"background-color": "#8955ab"}}`,
 	} {
 		if !strings.Contains(html, want) {
 			t.Errorf("missing style rule %s", want)
 		}
+	}
+}
+
+func TestRenderHTMLEscapesScriptClose(t *testing.T) {
+	// A rendered viz inlines its JSON inside a <script> element. An HTML parser
+	// ends that element at the first "</script" in the text, before any
+	// JavaScript runs — so an entity title containing one closes the tag and
+	// everything after it is parsed as markup. Titles are authored text, and
+	// the file gets shared, so that is stored XSS in the artifact.
+	//
+	// This fires the moment any attacker-influenced field joins the payload.
+	// It did: `title` was added and this caught it.
+	hostile := `</script><img src=x onerror=alert(1)>`
+	nodes := []index.Node{{Type: "component", Slug: "cmp-a"}}
+	els := ToCytoscape(nodes, nil, map[index.Node]NodeMeta{
+		{Type: "component", Slug: "cmp-a"}: {Title: hostile},
+	})
+	html, err := RenderHTML(els, []string{"component"})
+	if err != nil {
+		t.Fatalf("render: %v", err)
+	}
+
+	// Exactly the two closers the template itself emits — the library block and
+	// the payload block. A third means the payload broke out.
+	if got := strings.Count(html, "</script>"); got != 2 {
+		t.Errorf("</script> count = %d, want 2 — the payload escaped its element", got)
+	}
+	if !strings.Contains(html, `</script`) {
+		t.Error("the hostile title was not escaped for script-element embedding")
+	}
+	// Escaping is transport-only: the value a reader parses must be unchanged.
+	var payload []map[string]map[string]any
+	start := strings.Index(html, "var elements = ") + len("var elements = ")
+	end := strings.Index(html[start:], ";\n")
+	if err := json.Unmarshal([]byte(html[start:start+end]), &payload); err != nil {
+		t.Fatalf("payload no longer parses as JSON: %v", err)
+	}
+	if got := payload[0]["data"]["title"]; got != hostile {
+		t.Errorf("title round-tripped as %q, want the original %q", got, hostile)
 	}
 }
