@@ -4,4 +4,4 @@
 // and the git tag disagree. Release builds override it via -ldflags.
 package version
 
-var Version = "0.23.0"
+var Version = "0.24.0"

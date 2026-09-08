@@ -2,7 +2,7 @@
 
 Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); khub is pre-release.
 
-## [Unreleased]
+## [0.24.0] — 2026-09-08
 
 ### BREAKING
 
@@ -90,6 +90,48 @@ Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelo
   delivery templates, and `schema`, `status` and error output list one type
   fewer in build-lite and three fewer in build-hub; three cases that exercised
   `feature-spec` now exercise `requirement.realized_in` instead.
+
+### Added
+
+- **`khub serve` — a read-only HTTP view of the workspace graph on `127.0.0.1`.**
+  The server rebuilds from the live tree on every request, so it can never answer
+  from a stale graph; the page fetches once on load, and a reload shows the
+  current tree. Three views over one workspace: **Schema** (the ontology — one
+  node per declared type, one edge per declared relation, derived inverses and
+  the four base predicates hidden by default, declared-but-unused relations
+  dimmed), **Graph** (entities, three zoom levels) and **List** (sortable rows,
+  with ids as selectable text). Clicking a type in Schema inspects it rather than
+  jumping to instances. The page never writes: it composes `khub link` /
+  `khub unlink` commands as text to copy, so every mutation stays on khub's
+  validated path with its refusals and exit codes intact.
+
+  Read-only is structural, not policy — the guard rejects every method but GET
+  and HEAD before routing, so a write endpoint cannot appear by accident.
+  **Host-header validation is the load-bearing guard**, not the loopback bind:
+  DNS rebinding re-resolves an attacker domain to `127.0.0.1`, defeating both the
+  bind and same-origin, but the request still announces the attacker hostname in
+  `Host`. No CORS header is ever set, and `frame-ancestors` is declared
+  explicitly because it does not fall back to `default-src`.
+
+  Refuses to start without a TTY (`TTY_COMPATIBLE=1` is the documented escape),
+  so an accidental invocation by an agent is an immediate refusal rather than a
+  hang. `--port` defaults to 7777. `viz` is unchanged and stays the static
+  artifact you share or print; both now call one shared read path and colour a
+  type identically.
+
+- `/api/schema` carries the ontology as a graph (`introspect.EdgesView`), and
+  `/api/type/{name}` returns what `khub schema show <type>` prints, so the
+  browser view and the CLI cannot disagree about the schema.
+
+### Security
+
+- **Fixed a stored XSS in `viz`.** Its HTML inlines the graph JSON inside a
+  script element, and an HTML parser ends that element at the first `</script`
+  in the text — before any JavaScript runs. Once node records began carrying the
+  entity `title`, a title of `</script><img src=x onerror=alert(1)>` broke out
+  and executed for anyone opening the shared file. Now escaped as a JSON unicode
+  escape, so the parsed value is byte-identical, with a regression test pinning
+  both containment and round-trip.
 
 ### Changed
 
