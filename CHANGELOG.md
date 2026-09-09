@@ -2,7 +2,12 @@
 
 Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); khub is pre-release.
 
-## [Unreleased]
+## [0.25.0] — 2026-09-09
+
+A housekeeping release. No command, flag or JSON field changes; the one
+contract that moves is the `firm-ops` preset's vocabulary, below. What the
+binary does is unchanged — what shipped alongside it is smaller and cleaner,
+and the npm package is now public.
 
 ### BREAKING
 
@@ -16,12 +21,28 @@ Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelo
   frontmatter and maps its old `source` values (`recording` → `recording`, a
   partner name → `partner`) before `khub upgrade`.
 
+### Added
+
+- Four fuzz targets in `internal/canon` seeded from `parity/corpus`:
+  `FuzzJSONValid`, `FuzzReconcatIdentity`, `FuzzSpliceIdempotent` and
+  `FuzzEmitRoundTrip`. `go test` runs the seeds; `-fuzz` explores from them.
+  They found both bugs listed under Fixed.
+- `internal/omap` has a test file, pinning insertion order, the stable
+  position of a re-`Set` key, `Delete`, and the documented `Keys()` aliasing.
+- A doc comment on every exported identifier that lacked one, `internal/errs`
+  first: each factory now names the code it builds and when it is raised.
+
 ### Removed
 
 - The Python-era `tests/eval/` harness, the parity runner's `-differential`
   mode (`-bin-b`, `-seed-ws`, `-seeds`, `-len`, `-v`, `-workflows`) and three
-  Go test binaries that had been tracked since the cutover. Nine internal
-  planning documents leave `docs/`.
+  Go test binaries that had been tracked since the cutover.
+- Internal planning and decision-history documents: `docs/history/`,
+  `docs/npm-distribution.md`, `parity/DECISIONS.md`, `parity/yamlgate/REPORT.md`
+  and nine related-work reviews. What remains in `docs/` describes what khub
+  is and how to use it; the reasoning behind past decisions lives in git
+  history. `CHANGELOG.md` keeps 0.23.0 onward in full and summarises earlier
+  releases in one paragraph.
 
 ### Changed
 

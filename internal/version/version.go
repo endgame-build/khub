@@ -6,4 +6,4 @@ package version
 
 // Version is the release the binary reports. goreleaser overrides it with
 // -ldflags at build time; the value here is the version of the source tree.
-var Version = "0.24.0"
+var Version = "0.25.0"
