@@ -64,7 +64,7 @@ func TestSkillDigestsMatchTheRecordedInstall(t *testing.T) {
 	// same bytes.
 	for name, digest := range map[string]string{
 		"khub/SKILL.md":  "62a6a16daf16c75b8dbae6b9acebb1a69c52150244197b5fbfda09e12ea0eb94",
-		"setup/SKILL.md": "07c11759746d32233edc3fef9e8babd441e26ce103ffb2b6683521ef1961ec0b",
+		"setup/SKILL.md": "2fc6018c397ec94b0babf909935656f3f815e5f369a00214cafe6bf1d91de679",
 	} {
 		raw, err := fs.ReadFile(FS(), name)
 		if err != nil {

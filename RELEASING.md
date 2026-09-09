@@ -34,7 +34,7 @@ The tag triggers `.github/workflows/release.yml`, which re-runs the gates,
 builds darwin and linux on amd64 and arm64 with goreleaser, attaches the
 archives and `checksums.txt` to the GitHub release, then assembles and
 publishes the npm package (`@endgame-build/khub`, carrying all four binaries)
-to GitHub Packages — a stable tag under the `latest` dist-tag, a
+to npmjs.org with provenance — a stable tag under the `latest` dist-tag, a
 hyphenated tag (`v0.20.0-rc1`) under `next`, so a prerelease never becomes
 what a bare install resolves. It then proves the channel through both real
 consumer paths — a machine-global `npm install -g` and a scratch per-repo
@@ -50,19 +50,24 @@ npm install -D @endgame-build/khub@X.Y.Z          # bump/downgrade a repo, in a 
 npm install -g @endgame-build/khub                # machine-global
 ```
 
-## How the private repo serves the channel
+## The channel
 
-Nothing about khub is public. The packages live on GitHub Packages, which
-requires a token with `read:packages` while the repo is private, so every
-consumer configures npm once:
+The package publishes to npmjs.org through [npm trusted publishing](https://docs.npmjs.com/trusted-publishers):
+the release job proves its identity with a GitHub OIDC token (`id-token:
+write`), npm attaches provenance, and no publish token is stored anywhere.
+Two things have to exist on npmjs.org for that to work:
 
-```bash
-npm config set @endgame-build:registry https://npm.pkg.github.com
-npm config set //npm.pkg.github.com/:_authToken "$(gh auth token)"
-```
+1. The `endgame-build` organization, which owns the `@endgame-build` scope.
+2. A trusted publisher on the `@endgame-build/khub` package: Settings →
+   Trusted Publisher → GitHub Actions, owner `endgame-build`, repository
+   `khub`, workflow `release.yml`. npm only offers that setting on a package
+   that already exists, so the **first** publish is done once by hand from a
+   maintainer's machine (`npm publish --access public ./npm/dist/khub` after
+   the dry run below); every later release goes through CI.
 
-An SSH key does **not** work here: it authenticates git-over-SSH, and the npm
-registry ignores it.
+Existing consumers that mapped the `@endgame-build` scope to GitHub Packages
+in `~/.npmrc` remove that mapping; the bare `npm install -D @endgame-build/khub`
+is the whole install.
 
 Archive names still carry no version (`khub_darwin_arm64.tar.gz`):
 `npm/build-packages.sh` derives them from the same template as

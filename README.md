@@ -30,16 +30,7 @@ Full command surface and JSON contracts: [`docs/cli.md`](docs/cli.md). Feature h
 
 ## Quickstart
 
-khub is a single static binary, distributed through npm as `@endgame-build/khub` — one package carrying a prebuilt binary per platform, with a launcher that picks the matching one. Pin it per repo — one khub version per repo, reviewed in git.
-
-The packages are **private** — they live on GitHub Packages under this repo, so npm needs the scope mapped and a token with `read:packages` before it can resolve anything. Once per machine:
-
-```bash
-npm config set @endgame-build:registry https://npm.pkg.github.com
-npm config set //npm.pkg.github.com/:_authToken "$(gh auth token)"
-```
-
-Without that, the next command fails — with `404 Not Found` if npm has no scope mapping at all (it looks on npmjs.org, where the scope does not exist), or `401 Unauthorized` if the scope is mapped but the token is missing or lacks `read:packages`. Then:
+khub is a single static binary for macOS and Linux (amd64, arm64). The primary install is the npm package [`@endgame-build/khub`](https://www.npmjs.com/package/@endgame-build/khub) — one package carrying a prebuilt binary per platform behind a launcher that picks the matching one — pinned per repo, so everyone (and every agent) touching that repo runs the same khub:
 
 ```bash
 npm install -D @endgame-build/khub       # exact per-repo pin (or: npx @endgame-build/khub@latest)
@@ -48,7 +39,14 @@ cd my-hub
 npx khub install-skills                  # copy the agent skills in (offline)
 ```
 
-For a machine-global install, `npm install -g @endgame-build/khub`; or build from source: `go build -o khub ./cmd/khub`. More on tokens and scopes: [`docs/getting-started.md`](docs/getting-started.md#install). Upgrading a repo is a one-line `package.json` bump in a PR: any on-disk byte changes a release makes land in that reviewed commit, not in everyone's unrelated diffs.
+Two other ways in, for machines without Node:
+
+```bash
+go install github.com/endgame-build/khub/cmd/khub@latest                  # Go toolchain
+curl -fsSL https://github.com/endgame-build/khub/releases/latest/download/khub_darwin_arm64.tar.gz | tar -xz khub   # release archive
+```
+
+Upgrading a repo is a one-line `package.json` bump in a PR: any on-disk byte changes a release makes land in that reviewed commit, not in everyone's unrelated diffs. More in [`docs/getting-started.md`](docs/getting-started.md#install).
 
 Author entities. Referential integrity hard-fails on write (a relation to a missing target is rejected), but a missing field never blocks capture:
 
@@ -102,10 +100,10 @@ npx khub install-skills
 
 That writes both skills into `.claude/skills/`, `.agents/skills/`, and `.opencode/skills/`, and gitignores them (they are reproducible from the CLI). Narrow it with `--target claude|agents|opencode` or `--skill khub|setup`; `--global` installs into your home directories instead, once per machine; `--dry-run` shows the writes first.
 
-**Option 2 — let an agent do it.** Installs the `setup` skill, which tells the agent how to install the CLI and set up the project. Needs Node, network, and read access to this repo:
+**Option 2 — let an agent do it.** Installs the `setup` skill, which tells the agent how to install the CLI and set up the project. Needs Node and network:
 
 ```bash
-npx skills add git@github.com:endgame-build/khub.git -s setup
+npx skills add endgame-build/khub -s setup
 ```
 
 Use option 2 on a machine with no khub yet; option 1 is what you re-run afterwards.

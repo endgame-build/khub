@@ -27,26 +27,15 @@ If the project already pins khub in `package.json`, just `npm ci` (or
 npm install -g @endgame-build/khub
 ```
 
-khub's packages live on GitHub Packages, which is private today, so npm needs
-the scope mapped and a GitHub token with `read:packages` — two lines in
-`~/.npmrc`:
+No Node on this machine? With a Go toolchain:
 
-```
-@endgame-build:registry=https://npm.pkg.github.com
-//npm.pkg.github.com/:_authToken=<token>
+```bash
+go install github.com/endgame-build/khub/cmd/khub@latest
 ```
 
-**Do not write those yourself.** If the install fails with a 401 or 404, that
-file is missing or its token lacks the `read:packages` scope — report exactly
-that, name the scope, and stop. Configuring a credential is the human's call,
-not yours.
-
-An SSH key does **not** work for the registry, even though it does work for
-`npx skills add git@github.com:endgame-build/khub.git -s setup`. Having just
-succeeded at that, SSH is the wrong guess to reach for next.
-
-If the install fails for any other reason, report the error and stop; install
-nothing partial.
+If the install fails, report the error and stop; install nothing partial, and
+never write registry or credential configuration yourself — that is the
+human's call.
 
 ## 2. Set up the project
 

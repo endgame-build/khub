@@ -31,6 +31,11 @@ Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelo
   alongside the choke-point rules; the tree is clean under them.
 - GitHub Actions are pinned to commit SHAs, and goreleaser archives carry the
   commit timestamp so a rebuild of the same commit is byte-identical.
+- The npm package publishes to npmjs.org with provenance, through npm trusted
+  publishing (no stored token). Consumers drop the GitHub Packages registry
+  mapping from `.npmrc`; `npm install -D @endgame-build/khub` works bare.
+  `go install github.com/endgame-build/khub/cmd/khub@latest` and the release
+  archives are documented as the other two ways in.
 - New at the root: SECURITY.md, CODE_OF_CONDUCT.md, NOTICE, .editorconfig,
   .github/CODEOWNERS.
 

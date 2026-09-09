@@ -6,8 +6,9 @@ on:
 
 permissions:
   contents: write
-  # The npm packages publish to GitHub Packages with the built-in token.
-  packages: write
+  # npm trusted publishing: the job proves its identity to npmjs.org with an
+  # OIDC token instead of a stored secret, and npm attaches provenance.
+  id-token: write
 
 jobs:
   release:
@@ -51,18 +52,15 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # setup-node writes a userconfig whose auth reads NODE_AUTH_TOKEN at
-      # publish time — the blessed way to authenticate npm in Actions.
       - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
         with:
           node-version: "22"
-          registry-url: "https://npm.pkg.github.com"
-          scope: "@endgame-build"
+          registry-url: "https://registry.npmjs.org"
+      # Trusted publishing (OIDC) needs npm 11.5 or later; Node 22 bundles 10.x.
+      - run: npm install -g npm@11
       - name: Assemble the npm package from the goreleaser artifacts
         run: npm/build-packages.sh "${GITHUB_REF_NAME#v}" dist npm/dist
-      - name: Publish to GitHub Packages
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Publish to npmjs.org
         run: |
           # A prerelease tag must never become what a bare install resolves:
           # stable tags publish under `latest`, anything with a hyphen
@@ -70,13 +68,11 @@ jobs:
           # `prerelease: auto` already handles for the GitHub release.
           dist_tag=latest
           case "$GITHUB_REF_NAME" in *-*) dist_tag=next ;; esac
-          npm publish --tag "$dist_tag" ./npm/dist/khub
+          npm publish --access public --provenance --tag "$dist_tag" ./npm/dist/khub
 
       # Prove the channel end to end, through both paths a user takes — a
       # machine-global install and a per-repo pin — not a reimplementation.
       - name: Global install resolves the exact version
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           # Pin the tag being built: on an -rc tag, `latest` still resolves to
           # the previous stable (by design, see the publish step above), so an
@@ -85,7 +81,7 @@ jobs:
           # Registry propagation is not instant; retry briefly before failing.
           # This is the first read after publish, so the retry lives here.
           for i in 1 2 3; do
-            npm install -g --no-audit --no-fund \
+            npm install -g --no-audit --no-fund --ignore-scripts \
               "@endgame-build/khub@${GITHUB_REF_NAME#v}" && break
             test "$i" = 3 && exit 1
             sleep 10
@@ -96,12 +92,10 @@ jobs:
             echo "installed $got, expected ${GITHUB_REF_NAME#v}"; exit 1; }
           "$prefix/bin/khub" --help >/dev/null
       - name: Per-repo install resolves the exact version
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           mkdir /tmp/khub-pin && cd /tmp/khub-pin
           npm init -y >/dev/null
-          npm install --no-audit --no-fund "@endgame-build/khub@${GITHUB_REF_NAME#v}"
+          npm install --no-audit --no-fund --ignore-scripts "@endgame-build/khub@${GITHUB_REF_NAME#v}"
           got=$(npx khub --version)
           test "$got" = "${GITHUB_REF_NAME#v}" || {
             echo "resolved $got, expected ${GITHUB_REF_NAME#v}"; exit 1; }
@@ -130,24 +124,19 @@ jobs:
   verify-macos:
     needs: release
     runs-on: macos-latest
-    permissions:
-      # It never checks out; it installs the published package and runs it.
-      packages: read
+    # It never checks out; it installs the published package and runs it.
+    permissions: {}
     steps:
       - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
         with:
           node-version: "22"
-          registry-url: "https://npm.pkg.github.com"
-          scope: "@endgame-build"
       - name: The published darwin binary runs
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           version="${GITHUB_REF_NAME#v}"
           # Same retry as the global install above: this is another first read
           # after publish and registry propagation is not instant.
           for i in 1 2 3; do
-            npm install -g --no-audit --no-fund \
+            npm install -g --no-audit --no-fund --ignore-scripts \
               "@endgame-build/khub@$version" && break
             test "$i" = 3 && exit 1
             sleep 10

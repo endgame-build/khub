@@ -4,50 +4,37 @@ This walkthrough builds a tiny firm-ops hub from nothing (one client, one person
 
 ## Install
 
-khub is a single static binary, distributed through npm as
-`@endgame-build/khub` — one package carrying a prebuilt binary per platform,
-with a launcher that picks the matching one. Install it as a pinned dev
-dependency of the repo you are working in, so everyone (and every agent)
-touching that repo runs the same khub:
+khub is a single static binary for macOS and Linux (amd64, arm64),
+distributed through npm as `@endgame-build/khub` — one package carrying a
+prebuilt binary per platform, with a launcher that picks the matching one.
+Install it as a pinned dev dependency of the repo you are working in, so
+everyone (and every agent) touching that repo runs the same khub:
 
 ```bash
 npm install -D @endgame-build/khub
 npx khub --version
 ```
 
-The packages live on GitHub Packages while the repo is private, so npm needs
-the scope mapped there and a GitHub token with `read:packages`. Two commands,
-once per machine:
-
-```bash
-npm config set @endgame-build:registry https://npm.pkg.github.com
-npm config set //npm.pkg.github.com/:_authToken "$(gh auth token)"
-```
-
-If npm is not configured, `npm install -D @endgame-build/khub` fails with
-`404 Not Found` — npm looks on npmjs.org, where the `@endgame-build` scope does
-not exist, so the error reads as though the package is missing rather than
-private. With the scope mapped but no valid token you get `401 Unauthorized`
-instead.
-
-Without the GitHub CLI, generate a token with `read:packages` at
-[github.com/settings/tokens](https://github.com/settings/tokens) and put the
-two lines in `~/.npmrc` by hand:
-
-```
-@endgame-build:registry=https://npm.pkg.github.com
-//npm.pkg.github.com/:_authToken=<token>
-```
-
-An SSH key does not work here — the npm registry API ignores it. (It *does*
-work for `npx skills add git@github.com:endgame-build/khub.git -s setup`, which
-is how an agent bootstraps a machine that has no khub yet.)
-
 For a machine-global install instead, `npm install -g @endgame-build/khub`,
-optionally pinned with `@0.19.0`. Or build from a checkout:
+optionally pinned with `@X.Y.Z`. The package has no install scripts; the
+launcher picks the binary out of the package at run time, so
+`--ignore-scripts` changes nothing.
+
+Without Node, either of these works:
 
 ```bash
-git clone git@github.com:endgame-build/khub.git
+go install github.com/endgame-build/khub/cmd/khub@latest
+```
+
+```bash
+# darwin_arm64, darwin_amd64, linux_arm64 or linux_amd64
+curl -fsSL https://github.com/endgame-build/khub/releases/latest/download/khub_darwin_arm64.tar.gz | tar -xz khub
+```
+
+Or build from a checkout:
+
+```bash
+git clone https://github.com/endgame-build/khub.git
 cd khub
 go build -o khub ./cmd/khub
 ./khub --help    # prefix every command below with `./`
@@ -57,7 +44,7 @@ The rest of this guide writes `khub …`. With the per-repo install read that as
 
 This walkthrough passes every value as a flag, which is the only way khub takes input: it never prompts, so a missing argument is a usage error rather than a question. That is also exactly how an agent drives it — pipe the output or add `--format json` to get machine-readable records.
 
-To hand the setup to an agent instead, install the `setup` skill with `npx skills add git@github.com:endgame-build/khub.git -s setup` and ask it to set khub up; see [Agent skills](../README.md#agent-skills) for both install options.
+To hand the setup to an agent instead, install the `setup` skill with `npx skills add endgame-build/khub -s setup` and ask it to set khub up; see [Agent skills](../README.md#agent-skills) for both install options.
 
 ## Seed a workspace
 
@@ -128,7 +115,7 @@ khub gitignores the installed directories for you: the copies are reproducible f
 On a machine with no khub yet, the same skills install straight from the repo with [`npx skills`](https://skills.sh) (Node and repo access required):
 
 ```bash
-npx skills add git@github.com:endgame-build/khub.git -s setup
+npx skills add endgame-build/khub -s setup
 ```
 
 ## Author your first entities
