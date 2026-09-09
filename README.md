@@ -39,13 +39,6 @@ cd my-hub
 npx khub install-skills                  # copy the agent skills in (offline)
 ```
 
-Two other ways in, for machines without Node:
-
-```bash
-go install github.com/endgame-build/khub/cmd/khub@latest                  # Go toolchain
-curl -fsSL https://github.com/endgame-build/khub/releases/latest/download/khub_darwin_arm64.tar.gz | tar -xz khub   # release archive
-```
-
 Upgrading a repo is a one-line `package.json` bump in a PR: any on-disk byte changes a release makes land in that reviewed commit, not in everyone's unrelated diffs. More in [`docs/getting-started.md`](docs/getting-started.md#install).
 
 Author entities. Referential integrity hard-fails on write (a relation to a missing target is rejected), but a missing field never blocks capture:

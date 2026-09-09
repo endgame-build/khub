@@ -52,22 +52,31 @@ npm install -g @endgame-build/khub                # machine-global
 
 ## The channel
 
-The package publishes to npmjs.org through [npm trusted publishing](https://docs.npmjs.com/trusted-publishers):
-the release job proves its identity with a GitHub OIDC token (`id-token:
-write`), npm attaches provenance, and no publish token is stored anywhere.
-Two things have to exist on npmjs.org for that to work:
+The package is public on npmjs.org while the repository is still private —
+the published artifact is the binary, not the source. Releases publish through
+[npm trusted publishing](https://docs.npmjs.com/trusted-publishers): the job
+proves its identity with a GitHub OIDC token (`id-token: write`), so no
+publish token is stored anywhere.
 
-1. The `endgame-build` organization, which owns the `@endgame-build` scope.
-2. A trusted publisher on the `@endgame-build/khub` package: Settings →
-   Trusted Publisher → GitHub Actions, owner `endgame-build`, repository
-   `khub`, workflow `release.yml`. npm only offers that setting on a package
-   that already exists, so the **first** publish is done once by hand from a
-   maintainer's machine (`npm publish --access public ./npm/dist/khub` after
-   the dry run below); every later release goes through CI.
+The `endgame-build` organization owns the scope. One thing is still set up by
+hand, once: **a trusted publisher on the `@endgame-build/khub` package**
+(Settings → Trusted Publisher → GitHub Actions, owner `endgame-build`,
+repository `khub`, workflow `release.yml`). npm only offers that setting on a
+package that already exists, so the **first** publish comes from a
+maintainer's machine — `npm publish --access public ./npm/dist/khub` after the
+dry run below — and every later release goes through CI.
+
+**`--provenance` is deliberately absent** from the publish step. npm will not
+attest a private source repository, and the attestation lands in a public
+transparency log. Add the flag to `release.yml` when the repository goes
+public; nothing else about the channel changes.
 
 Existing consumers that mapped the `@endgame-build` scope to GitHub Packages
 in `~/.npmrc` remove that mapping; the bare `npm install -D @endgame-build/khub`
 is the whole install.
+
+`go install` and a plain `curl` of a release archive both need the repository
+to be public, so they are not documented as install paths yet.
 
 Archive names still carry no version (`khub_darwin_arm64.tar.gz`):
 `npm/build-packages.sh` derives them from the same template as

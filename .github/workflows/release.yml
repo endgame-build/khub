@@ -60,6 +60,9 @@ jobs:
       - run: npm install -g npm@11
       - name: Assemble the npm package from the goreleaser artifacts
         run: npm/build-packages.sh "${GITHUB_REF_NAME#v}" dist npm/dist
+      # No --provenance while the source repo is private: npm refuses to attest a
+      # private repo, and the attestation would go into a public transparency
+      # log. Add the flag when the repo goes public.
       - name: Publish to npmjs.org
         run: |
           # A prerelease tag must never become what a bare install resolves:
@@ -68,7 +71,7 @@ jobs:
           # `prerelease: auto` already handles for the GitHub release.
           dist_tag=latest
           case "$GITHUB_REF_NAME" in *-*) dist_tag=next ;; esac
-          npm publish --access public --provenance --tag "$dist_tag" ./npm/dist/khub
+          npm publish --access public --tag "$dist_tag" ./npm/dist/khub
 
       # Prove the channel end to end, through both paths a user takes — a
       # machine-global install and a per-repo pin — not a reimplementation.

@@ -27,11 +27,8 @@ If the project already pins khub in `package.json`, just `npm ci` (or
 npm install -g @endgame-build/khub
 ```
 
-No Node on this machine? With a Go toolchain:
-
-```bash
-go install github.com/endgame-build/khub/cmd/khub@latest
-```
+npm is the only install channel; khub needs Node on the machine (the binary
+itself has no runtime dependency once installed).
 
 If the install fails, report the error and stop; install nothing partial, and
 never write registry or credential configuration yourself — that is the

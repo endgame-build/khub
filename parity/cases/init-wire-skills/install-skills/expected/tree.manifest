@@ -1,7 +1,7 @@
 62a6a16daf16c75b8dbae6b9acebb1a69c52150244197b5fbfda09e12ea0eb94 - .agents/skills/khub/SKILL.md
-2fc6018c397ec94b0babf909935656f3f815e5f369a00214cafe6bf1d91de679 - .agents/skills/setup/SKILL.md
+d6ef8b60613a84f5555dcbee06642c6a6b73eef82d02141b7ffb277b503e26d0 - .agents/skills/setup/SKILL.md
 62a6a16daf16c75b8dbae6b9acebb1a69c52150244197b5fbfda09e12ea0eb94 - .claude/skills/khub/SKILL.md
-2fc6018c397ec94b0babf909935656f3f815e5f369a00214cafe6bf1d91de679 - .claude/skills/setup/SKILL.md
+d6ef8b60613a84f5555dcbee06642c6a6b73eef82d02141b7ffb277b503e26d0 - .claude/skills/setup/SKILL.md
 e4b6547b748377d00705060fbe64a705036876cd4f37c18a8c0b7a42223ce99d - .gitignore
 17aafe9aae9c3d00eeced1aabaf60478704e39525ca009666033c27710bbc30a - .khub/config.yaml
 37b429a90073d1fb6a652d2b6f9e8339346de55e06eb3c4aa3c5bedecbeea4c6 - .khub/ontology.yaml
@@ -19,7 +19,7 @@ f39215929ad512e3a09ba46b9c1e6f15a8724e41e6141149a30417c4fa99889a - .khub/templat
 c60c8074374c44720397bcfcec717005c492fbdd794357027e7212a21df46ca9 - .khub/templates/system.yaml
 7de7c7d270e148f1b17e86d012191fc63062804528cb15ba228e1d30c80c87e1 - .khub/templates/use-case.yaml
 62a6a16daf16c75b8dbae6b9acebb1a69c52150244197b5fbfda09e12ea0eb94 - .opencode/skills/khub/SKILL.md
-2fc6018c397ec94b0babf909935656f3f815e5f369a00214cafe6bf1d91de679 - .opencode/skills/setup/SKILL.md
+d6ef8b60613a84f5555dcbee06642c6a6b73eef82d02141b7ffb277b503e26d0 - .opencode/skills/setup/SKILL.md
 a41cc222d35435d401a8e1877129ab903db87ec181aee42dad7ab143697b2051 - index.md
 b3aea6ef41e4081e244e1ac1b3f8adc0bf5821c5ae94ee60da9b1284836841ab - knowledge/arc42.md
 8d3dd17e861bcfc80ea889b99d0c10ac518d8beb4585caf0737239201dac1d43 - knowledge/prd.md

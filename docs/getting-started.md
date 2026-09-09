@@ -20,18 +20,7 @@ optionally pinned with `@X.Y.Z`. The package has no install scripts; the
 launcher picks the binary out of the package at run time, so
 `--ignore-scripts` changes nothing.
 
-Without Node, either of these works:
-
-```bash
-go install github.com/endgame-build/khub/cmd/khub@latest
-```
-
-```bash
-# darwin_arm64, darwin_amd64, linux_arm64 or linux_amd64
-curl -fsSL https://github.com/endgame-build/khub/releases/latest/download/khub_darwin_arm64.tar.gz | tar -xz khub
-```
-
-Or build from a checkout:
+Or build from a checkout, which needs read access to the repository:
 
 ```bash
 git clone https://github.com/endgame-build/khub.git
