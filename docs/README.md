@@ -9,29 +9,20 @@ khub's docs, organized by [Diátaxis](https://diataxis.fr): learning, tasks, ref
 ## How-to guides — get a task done
 
 - [Author and extend a schema](schema.md) — the `base` block, attributes and relations, storage config, and `--strict`.
-- Wire khub into an agent — see [Use it from Claude Code](../README.md#use-it-from-claude-code) in the README and the `khub wire` entry in the [CLI reference](cli.md).
+- Wire khub into an agent — see [Agent skills](../README.md#agent-skills) in the README and the `khub wire` entry in the [CLI reference](cli.md).
 
 ## Reference — look it up
 
 - [CLI](cli.md) — every command, its flags, the JSON record shape, and validation semantics.
-- [firm-ops preset](firm-ops-preset.md) — the consulting-firm operating graph: 9 entity types, 14 relation predicates, per-type attributes.
-- [build-hub preset](build-hub-preset.md) — the one build preset: eleven types, the edges and the walks they buy, the ArchiMate and facet maps, and the ladder for what comes back. `build-lite` is an alias that resolves to it.
+- [CLI reference](cli-reference.md) — the `--help` text of every command, regenerated from the binary.
+- [firm-ops preset](firm-ops-preset.md) — the operating graph of a consulting and delivery firm: 9 entity types, 14 relation predicates, per-type attributes.
+- [build-hub preset](build-hub-preset.md) — the knowledge hub of a build project: eleven types, the edges and the walks they buy. `build-lite` is an alias that resolves to it.
 - [Collections](collections-design.md) — the single-file collection row model: identity, locking, malformed handling, git attribution.
 
 ## Explanation — understand the design
 
 - [Concepts](concepts.md) — the mental model in seven ideas: Markdown is truth, the derived graph, validate vs check, and more.
-- [Design memo](design-memo.md) — rationale, the five-layer engine, technology choices, and the invariants every change preserves.
-- [npm distribution](npm-distribution.md) — the distribution channel: one npm package, per-repo exact pinning via `devDependencies`, the publish pipeline, and why npm is the only way in.
-
-## History
-
-Superseded records, kept because they explain why the code looks as it does. The
-`internal/` comments that cite risk IDs (`R5`, `R9`, `R14`) and section numbers
-(`A.3`, `A.5`) point into the port plan.
-
-- [A Go rewrite of khub](history/go-rewrite-memo.md) — the decision to rewrite: what a port gains, the verified Go stack per dependency, why not Rust or TypeScript, and the YAML round-trip prototype that gated it. Shipped; §3.3's cross-platform argument was not delivered.
-- [Reimplement khub in Go](history/go-port-plan.md) — the execution plan. **Appendix A is still live**: it is the API enumeration the coverage gate is written against.
+- [Design memo](design-memo.md) — the five-layer engine, technology choices, and the invariants every change preserves.
 
 ---
 

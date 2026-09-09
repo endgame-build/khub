@@ -226,4 +226,4 @@ unreachable:  # documented, not fixture-coverable
 - skills_missing     # packaging-dependent: fires only when package data is absent
 - 'viz --open'       # opens a real browser; side effect excluded from fixtures
 - missing_root       # CLI resolves the workspace first (no_workspace wins); library-only
-- duplicate_type     # dead in the Python baseline: the factory has zero callers (see parity/DECISIONS.md D5)
+- duplicate_type     # dead in the Python baseline: the factory has zero callers

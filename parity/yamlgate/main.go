@@ -1,4 +1,4 @@
-// yamlgate — the go-port-plan M0 go/no-go prototype (memo §5).
+// yamlgate — the YAML round-trip gate.
 //
 // For every YAML-bearing file in the corpus it runs:
 //
@@ -7,7 +7,7 @@
 //	T2   surgical edit: set the first `updated:` value via the AST → diff must
 //	     touch only that line
 //
-// Zero product code; results feed parity/yamlgate/REPORT.md.
+// Zero product code; CI asserts its counts.
 package main
 
 import (

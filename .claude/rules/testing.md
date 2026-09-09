@@ -3,14 +3,13 @@
 CLAUDE.md lists the commands. This file is what each gate covers, the record
 discipline, and where new tests are worth adding.
 
-## Why the parity harness beats testscript (evaluated; keep ours)
+## The harness is custom on purpose
 
-Two properties `rogpeppe/testscript` lacks: the **whole-tree manifest** per
-step ("no stray files, no unintended writes" — the write-path oracle) and
-**exact exit codes** (testscript's `!` is boolean, its `stdout` is regexp-grep
-not bytes). txtar also normalizes trailing newlines — exactly where khub's
-format contract lives. Borrow its ideas, never its file format. Same verdict
-for golden libs (goldie/autogold/cupaloy): `parity/expected/` is stricter.
+Two properties no golden-test library offers together: a **whole-tree
+manifest** per step (no stray files, no unintended writes — the write-path
+oracle) and **exact exit codes**. Borrow ideas from such libraries, never
+their file formats: txtar normalizes trailing newlines, exactly where khub's
+format contract lives.
 
 ## Record discipline
 
@@ -67,16 +66,3 @@ paths agree only because both constants are 80.
   `query`, `search`. Nothing in it spells an id or a title, so an id-scheme
   change never touches it.
 
-## The differential oracle is gone
-
-`parity/runner` once carried a `-differential` mode (seeded random verb
-sequences through two binaries, full-tree diff per step). It needed a second
-binary, which died with Python, and CI never ran it, so it was deleted rather
-than kept as 654 lines of unreachable code. Its ideas — adversarial values like
-`İstanbul`, `yes`/`017`, CRLF — are worth recovering from git history if a
-self-invariant property test is ever written.
-
-## Not worth it
-
-`-race` as coverage (tripwire only, needs CGO=1), mutation testing, OSS-Fuzz
-enrolment, Windows CI.

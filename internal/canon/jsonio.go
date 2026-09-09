@@ -1,6 +1,6 @@
 package canon
 
-// The three Python json.dumps dialects khub emits (go-port-plan R2). Stock
+// The three Python json.dumps dialects khub emits. Stock
 // encoding/json is banned on output paths: it escapes <>&, drops the space
 // separators, and emits raw UTF-8 where the CLI dialect escapes.
 //

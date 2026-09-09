@@ -1,7 +1,4 @@
-# Dependencies — the bar and the standing verdicts
-
-Settled "should we just use a library?" questions. Do not re-open without new
-evidence.
+# Dependencies — the bar, and what stays custom
 
 ## The bar (all four)
 
@@ -11,39 +8,44 @@ evidence.
 3. Replaces more code than it adds, counting the shim to keep pinned bytes.
 4. Maintained — check last release, not stars.
 
-## Facts about current deps (measured)
+## Facts about current deps
 
-- **gonum is not heavy**: links 9 leaf packages, no `mat`/BLAS. The big module
-  cache is source the linker never sees. Don't vendor Johnson's to "save" it.
-- **ncruces/go-sqlite3 no longer uses wazero** — `wasm2go`-translated Go, zero
-  wazero in `go.sum`.
+- **gonum** links a handful of leaf packages, no `mat`/BLAS; it is used only
+  for strongly connected components.
+- **ncruces/go-sqlite3** is `wasm2go`-translated Go: no wazero, no CGO.
 - **regexp2 is backtracking with no default timeout.** Schema `pattern`s are
-  author-supplied → the shared cached matcher sets `MatchTimeout` to one second
-  (`internal/schema/model.go` `MatchPattern`). Writes and integrity must use it.
+  author-supplied, so the shared cached matcher sets `MatchTimeout` to one
+  second (`internal/schema/model.go` `MatchPattern`). Writes and integrity
+  must use it.
+- `os.Root` (Go 1.24+) confines workspace storage operations and resists path
+  swaps. Keep the explicit schema path checks and symlink refusals around it.
 
-## Standing verdicts — keep custom
+## What stays custom, and why
 
-| Subsystem | Why the library loses |
-|---|---|
-| `internal/graph` | insertion-ordered adjacency + read-time inverse edges IS the product; gonum is limited to SCC discovery for bounded cycle witnesses; candidates (dominikbraun — dormant 2024, yourbasic — pre-generics) are map-backed |
-| FTS5 search | khub exposes raw FTS5 `MATCH` syntax to agents — a replacement must reimplement the query language, not the scoring. bleve changes ranking (re-records fixtures); bluge dormant since 2022; modernc slower |
-| Shelling out to `git` | per-file `Log` is go-git's known worst case, v6 still alpha, git2go needs CGO. The real win is **batching** (one `git log --name-only` pass), not swapping |
-| `internal/omap` | third-party ordered maps solve absent perf problems, can't fix `any` (values genuinely heterogeneous), and ship `encoding/json` marshalling the choke-point bans. Known edges, both pinned by `omap_test.go`: `Keys()` aliases the internal slice; `Delete` is O(n) in the key count, accepted because no khub record is large enough to notice |
-| Table/help rendering | fixtures are the spec; any lib is a pure-cost re-record. The one real bug (rune count ≠ terminal cells) fixes with `x/text/width`, already a dep |
-| `internal/schema/vocab.go` | JSON Schema/CUE = a translation layer + an error-message shim to keep fixtures green; net LOC up. CUE's Go API is pre-redesign |
-| `editDistance` (~20 LOC) | threshold tuned so retired command names stay ≥3 away; every lib produces different bytes |
-| Frontmatter split | a second splitter = second source of truth for the 1.1/1.2 scan split; no Go frontmatter lib round-trips anyway |
-| `internal/fsio` | renameio/natefinch/lockedfile don't fsync the parent dir either; fix ours in place |
-
-`encoding/json` output ban stays: 2 of 3 dialects are expressible in jsontext,
-but the CLI dialect's `ensure_ascii=True` is not — and that's the one used
-everywhere. Decode via `ojson.go` remains fine.
-
-`os.Root` (Go 1.24+) confines workspace storage operations and resists path
-swaps. Keep the explicit schema path checks and symlink refusals around it.
+- `internal/graph` — insertion-ordered adjacency plus read-time inverse edges
+  is the product; a map-backed graph library cannot promise either.
+- FTS5 search — khub exposes raw FTS5 `MATCH` syntax to agents; a replacement
+  would have to reimplement the query language, not just the scoring.
+- Git history — shell out to `git`; the win is batching one `git log` pass,
+  not a library.
+- `internal/omap` — third-party ordered maps cannot fix `any` (values are
+  genuinely heterogeneous) and ship `encoding/json` marshalling the choke
+  point bans. Known edges, pinned by `omap_test.go`: `Keys()` aliases the
+  backing slice; `Delete` is O(n), accepted at khub's record sizes.
+- Table/help rendering — fixtures are the spec; any library is a pure-cost
+  re-record.
+- `internal/schema/vocab.go` — a JSON Schema or CUE layer would be a
+  translation layer plus an error-message shim to keep fixtures green.
+- The frontmatter splitter — a second splitter is a second source of truth
+  for the YAML 1.1/1.2 scan split.
+- `internal/fsio` — the atomic-write libraries do not fsync the parent
+  directory either; fix ours in place.
+- `encoding/json` stays banned on output paths: the CLI dialect's ASCII
+  escaping is not expressible with the standard encoder. Decoding through
+  `ojson.go` is fine.
 
 ## Hygiene
 
-Check `pkg.go.dev/vuln` before adding anything; `govulncheck` in CI (call-graph
-reachability, private-repo safe, catches stdlib CVEs). Pin tool versions —
+Check `pkg.go.dev/vuln` before adding anything; `govulncheck` runs in CI
+(call-graph reachability, catches stdlib CVEs). Pin tool versions —
 `version: latest` in CI is an unpinned dependency.

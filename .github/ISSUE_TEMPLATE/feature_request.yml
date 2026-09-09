@@ -6,7 +6,7 @@ body:
     id: area
     attributes:
       label: Area
-      description: One area; the triager applies it as the label. See .claude/rules/issues.md.
+      description: One area; the triager applies it as the label.
       options:
         - schema
         - write-path

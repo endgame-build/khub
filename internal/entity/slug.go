@@ -28,7 +28,7 @@ var isoDay = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}`)
 
 // slugify lowercases, collapses non-alphanumeric runs to single hyphens, and
 // trims hyphens. Python str.lower(), NOT casefold — target matching folds case,
-// slug minting only lowers (go-port-plan R6).
+// slug minting only lowers.
 func slugify(text string) string {
 	lowered := toLower(text)
 	return trimHyphens(slugStrip.ReplaceAllString(lowered, "-"))

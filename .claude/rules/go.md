@@ -32,8 +32,7 @@ construction. Never `slog`/`logrus`/`zap`.
 
 ## The lint set is small on purpose
 
-Measured on this tree: `default: all` → ~3,866 non-test findings, roughly
-1 true bug per 3,800. A curated set (`staticcheck` minus ST1005, `errorlint`,
+The curated set (`staticcheck` minus ST1005, `errorlint`,
 `unused`, `errcheck` with the `std-error-handling` preset) is what
 `.golangci.yml` enables, held at zero findings with the issue caps lifted. Several
 popular linters attack khub's contracts: `wrapcheck` demands forbidden `%w`,
@@ -62,9 +61,7 @@ Comments citing the Python module a package ports are deliberate provenance —
 keep them (`search.go` "The Python build either has FTS5 compiled in",
 `gitlog.go` "Python builds no env" are correct as comments and must stay). A
 **shipped string** describing the retired implementation is the opposite: a bug
-regardless of how faithfully a fixture preserves it. `wire.go`'s "uv tool
-install" hint was the last one; replacing it with the npm command was a
-deliberate fixture re-record. Grep before adding an install hint anywhere.
+regardless of how faithfully a fixture preserves it. Grep before adding an install hint anywhere.
 
 ## Layout
 

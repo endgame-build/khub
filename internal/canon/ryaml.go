@@ -1,7 +1,7 @@
 package canon
 
 // ruamel.yaml-emulating block-style YAML emitter — the write half of khub's
-// serialization canon (go-port-plan M0/T3, risk R4). Ported line-for-line
+// serialization canon. Ported line-for-line
 // from ruamel.yaml 0.18.x Emitter (write_plain / write_single_quoted /
 // write_double_quoted / analyze_scalar / choose_scalar_style) for the shapes
 // khub writes: block mappings and sequences, flow {} / [] for empty

@@ -60,9 +60,8 @@ commit message:
 ./parity-run -bin "$PWD/khub" -record -only <family>/<case>
 ```
 
-Never re-record to make a red suite green. If a change is a deliberate
-divergence rather than a fix, it belongs in
-[`parity/DECISIONS.md`](parity/DECISIONS.md).
+Never re-record to make a red suite green. A deliberate behaviour change is
+re-recorded on purpose, and the commit message says which bytes moved and why.
 
 These fixtures were recorded from the Python implementation khub had through
 0.18.0, which is why comments across `internal/` cite the Python module each

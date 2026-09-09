@@ -28,7 +28,7 @@ type Node struct{ Type, Slug string }
 func (n Node) ID() string { return n.Type + "/" + n.Slug }
 
 // Less orders nodes the way Python sorts (type, slug) tuples: field by field,
-// never on the joined string (go-port-plan R7).
+// never on the joined string.
 func (n Node) Less(o Node) bool {
 	if n.Type != o.Type {
 		return n.Type < o.Type

@@ -325,7 +325,7 @@ func TestBuildBlockRendersOnlyPresentLayers(t *testing.T) {
 func TestBuildBlockInstallHintNamesTheShippedChannel(t *testing.T) {
 	// The hint reaches a reader who has no khub and cannot check the claim, so
 	// it must name the channel khub actually ships through. npm is the only one
-	// (docs/npm-distribution.md); the retired uv and curl channels build nothing.
+	// the retired uv and curl channels build nothing.
 	block := BuildBlock(BlockSpec{Preset: "p", Version: "1", Types: []string{"a"}, Layers: threeLayers}, true)
 	if !strings.Contains(block, "npm install -D @endgame-build/khub") {
 		t.Error("the install hint does not name the npm channel")

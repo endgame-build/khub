@@ -1,7 +1,7 @@
 package canon
 
 // Read half of the YAML canon: goccy AST → *omap.Map with ruamel-compatible
-// scalar resolution (go-port-plan R3). goccy's own Unmarshal resolves YAML
+// scalar resolution. goccy's own Unmarshal resolves YAML
 // scalars by its own rules and loses key order; khub needs ruamel 1.2
 // semantics (yes/on are strings, 2026-01-15 is a date, 017 is an int) and
 // insertion order, so resolution happens here over plain-scalar tokens using

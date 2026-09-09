@@ -3,9 +3,8 @@
 Only `internal/canon` may import a YAML library. This is enforced by the
 choke-point lint in `.golangci.yml`, not by convention.
 
-Before the Go cutover this rule read "always `ruamel.yaml`, never PyYAML". The
-reason it existed survives the rewrite: khub's on-disk bytes are a contract, and
-a second library reaching the write path would quietly reshape them.
+khub's on-disk bytes are a contract, and a second library reaching the write
+path would quietly reshape them.
 
 ## Why the format is still ruamel-shaped
 
@@ -24,10 +23,8 @@ Two profiles, both pinned:
 ## Why goccy is parser-only
 
 `goccy/go-yaml` is the parser and lexer. It is **never** the writer: its encoder
-re-renders comment spacing and unfolds folded scalars, which the M0 gate measured
-(T1a 7/133, T1b 91/133). The writer is khub's own, over the lexer's token
-origins — `concat(token.Origin)` reconstructs the source byte-exactly (T1c
-133/133), so an edit rewrites only the tokens whose values moved and every other
+re-renders comment spacing and unfolds folded scalars. The writer is khub's own, over the lexer's token
+origins — `concat(token.Origin)` reconstructs the source byte-exactly, so an edit rewrites only the tokens whose values moved and every other
 byte survives by construction.
 
 That is what lets `khub edit` keep a hand-written comment, a deliberately quoted

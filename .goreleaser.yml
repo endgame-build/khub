@@ -70,7 +70,7 @@ release:
     name: khub
   # The repo is private, so these assets need a token to fetch. Users do not
   # fetch them directly any more — release CI turns them into the npm packages
-  # (docs/npm-distribution.md) in the same run that built them. The day the repo
+  # in the same run that built them. The day the repo
   # goes public they become anonymously fetchable at
   # /releases/latest/download/<name>, which is why the archive names above carry
   # no version.

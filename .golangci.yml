@@ -1,4 +1,4 @@
-# Two kinds of rule live here. The choke-point rules from docs/history/go-port-plan.md:
+# Two kinds of rule live here. The choke-point rules:
 # the serialization canon is the only place bytes are shaped, so only
 # internal/canon may reach for a YAML library, and only internal/canon/jsonio.go
 # writes JSON bytes (khub emits three JSON dialects and encoding/json matches
@@ -33,15 +33,15 @@ linters:
             - "!**/parity/runner/*.go"
           deny:
             - pkg: github.com/goccy/go-yaml
-              desc: "only internal/canon may import a YAML library (go-port-plan choke-point rule)"
+              desc: "only internal/canon may import a YAML library (choke-point rule)"
             - pkg: gopkg.in/yaml.v2
-              desc: "only internal/canon may import a YAML library (go-port-plan choke-point rule)"
+              desc: "only internal/canon may import a YAML library (choke-point rule)"
             - pkg: gopkg.in/yaml.v3
-              desc: "only internal/canon may import a YAML library (go-port-plan choke-point rule)"
+              desc: "only internal/canon may import a YAML library (choke-point rule)"
             - pkg: go.yaml.in/yaml
-              desc: "only internal/canon may import a YAML library (go-port-plan choke-point rule)"
+              desc: "only internal/canon may import a YAML library (choke-point rule)"
             - pkg: sigs.k8s.io/yaml
-              desc: "only internal/canon may import a YAML library (go-port-plan choke-point rule)"
+              desc: "only internal/canon may import a YAML library (choke-point rule)"
         json-choke-point:
           list-mode: lax
           files:

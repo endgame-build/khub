@@ -10,9 +10,8 @@ package canon
 // The Go port parses to *omap.Map, which has no comment channel, so a
 // whole-document re-emit destroys every comment.
 //
-// The fix is the mechanism parity/yamlgate/REPORT.md proved on 133 real files
-// and parity/DECISIONS.md D2 sanctions: goccy's LEXER token origins
-// reconstruct a document byte-for-byte (T1c 133/133), so an edit becomes a
+// The fix is the mechanism the yamlgate corpus proves: goccy's LEXER token
+// origins reconstruct a document byte-for-byte, so an edit becomes a
 // surgical splice of one token's Origin and every other byte survives BY
 // CONSTRUCTION (T2 99/99). The AST is used only to locate the pairs; it is
 // never a writer.
@@ -118,8 +117,8 @@ func SpliceMapping(src []byte, want *omap.Map, mode ResolveMode) ([]byte, error)
 	// `+.Inf` — silent corruption of fields the user never touched, on any
 	// edit. Splicing preserves the value exactly; what it also preserves is
 	// quote style and null spelling, which ruamel does normalize. That is
-	// cosmetic and already recorded as D13, and a cosmetic divergence is a far
-	// better trade than a changed value.
+	// cosmetic, and a cosmetic divergence is a far better trade than a
+	// changed value.
 	if reconcat(toks, text) != text {
 		// T1c identity is the whole safety argument. Without it the untouched
 		// bytes are not guaranteed to survive, so refuse rather than guess.

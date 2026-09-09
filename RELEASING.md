@@ -61,16 +61,12 @@ npm config set @endgame-build:registry https://npm.pkg.github.com
 npm config set //npm.pkg.github.com/:_authToken "$(gh auth token)"
 ```
 
-There used to be a hosted `install.sh` that sourced that token from the
-machine automatically. It was deleted: a script whose job is to find a
-repo-scoped GitHub token is the most valuable thing an attacker could replace,
-and it existed to wrap one command. An SSH key does **not** work here either:
-it authenticates git-over-SSH, and the npm registry ignores it.
+An SSH key does **not** work here: it authenticates git-over-SSH, and the npm
+registry ignores it.
 
 Archive names still carry no version (`khub_darwin_arm64.tar.gz`):
-`npm/build-packages.sh` derives them the same way the retired downloader
-did, so the template in `.goreleaser.yml` and that script have to move
-together.
+`npm/build-packages.sh` derives them from the same template as
+`.goreleaser.yml`, so the two have to move together.
 
 ## Dry run
 
@@ -91,21 +87,3 @@ npx --no-install khub --version         # package.json's `files` allowlist entir
 goreleaser run — CI runs it on every PR, and it is the faster check when you
 have only changed the packaging. Release CI exercises the real artifacts.
 
-## When khub goes open source
-
-The license is already settled: Apache-2.0 since 0.21.0, in the root `LICENSE`.
-Nothing about going public re-opens it.
-
-1. Flip repository visibility to public. GitHub Packages under a public repo
-   serves reads without a token, so existing `.npmrc` registry mappings keep
-   working and the token line stops being needed.
-2. Decide whether to also publish to public npmjs.com (where `@endgame/khub`
-   is claimable as a rename) — a wider audience and no registry mapping at
-   all, at the cost of a second publish target.
-3. Docs — drop the `npm config set` / token setup from the install
-   instructions; `npm install -D @endgame-build/khub` starts working bare.
-
-Before flipping, settle one thing: public packages mean the binaries are
-publicly downloadable, and a binary carries the embedded `firm-ops` and
-`build-hub` presets and the skill files. The source and those bytes become
-public together.

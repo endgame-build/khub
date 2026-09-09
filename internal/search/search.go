@@ -285,7 +285,7 @@ func match(conn *sqlite3.Conn, text string, limit int) ([]Hit, error) {
 // ErrorCodeString already carries the "sqlite3: " prefix), so both leading
 // segments are noise Python never emits. No result-code text contains ": ", so
 // cutting at the first one after the prefix is unambiguous. What survives is
-// SQLite's own errmsg — still version-dependent (go-port-plan R10), which is the
+// SQLite's own errmsg — still version-dependent, which is the
 // accepted delta.
 func sqliteDetail(err error) string {
 	var serr *sqlite3.Error

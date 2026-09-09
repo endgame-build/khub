@@ -11,36 +11,31 @@ the human-render `func()` handed to `Emit`. `Emit` / `Fail` / `Guard` are the
 only exits.
 
 - `WantJSON = --format json || !IsTTY()` — agents get machine output without
-  knowing the flag exists. The single highest-leverage decision in the CLI.
-  Do not narrow it.
+  knowing the flag exists. Do not narrow it.
 - `IsTTY()` precedence is `TTY_COMPATIBLE` → `FORCE_COLOR` → real isatty.
   Never add a fourth signal — the whole fixture suite drives this gate.
 - EPIPE is not a failure (`khub schema | head`); `Guard` passes it through and
   `main.go` disables the SIGPIPE kill so the write error is visible at all.
 - Exit codes: 0 success · 1 a gate failed (`validate`/`check`) · 2 a refusal
-  or a usage error — every `Located` failure, envelope unchanged. Three-way,
-  pinned. The split is what an agent does next: on 2 the call was wrong and
-  nothing was written, correct it; on 1 the workspace is wrong, fix it. New
-  codes only with a stated answer to "what does an agent do differently?"
+  or a usage error — every `Located` failure, envelope unchanged. The split is
+  what an agent does next: on 2 the call was wrong and nothing was written,
+  correct it; on 1 the workspace is wrong, fix it. New codes only with a
+  stated answer to "what does an agent do differently?"
 
 ## khub never prompts
 
-The wizard was removed in 0.9.0; every input is a flag, missing → exit 2. An
-interactive prompt hangs an agent forever. Never reintroduce a prompt, pager,
-or stdin-blocking confirmation.
+Every input is a flag; a missing one is exit 2. An interactive prompt hangs an
+agent forever. Never introduce a prompt, pager, or stdin-blocking confirmation.
 
-## Load-bearing "legacy" — do not clean up
+## Pinned rendering — do not clean up
 
-- `help.go` (853 lines of Rich emulation) stays: the alternative is cobra's
-  `text/template` help, a *different* frozen output that cannot express Rich's
-  column-width algorithm. `charmbracelet/fang` was evaluated — experimental,
-  overwrites `SetHelpFunc` wholesale.
-- `parseGlobals` stays: cobra has no eager-option hook, so Click's
-  short-circuiting `--version` + root-only options need the hand parse.
-- One sanctioned change exists: gate **help output only** on `IsTTY()` (it is
-  currently the sole output path that never checks it, so piped help is 34–58%
-  box-drawing chrome). That is a deliberate help-fixture re-record; error
-  prose, tables, trees stay byte-pinned.
+- `help.go` (Rich-style help emulation) stays: cobra's `text/template` help is
+  a *different* frozen output that cannot express its column-width algorithm.
+- `parseGlobals` stays: cobra has no eager-option hook, so the short-circuiting
+  `--version` and root-only options need the hand parse.
+- Help output is gated on `IsTTY()`: rich terminal help stays byte-pinned,
+  piped help is plain text with the same section order. Error prose, tables
+  and trees keep their own pinned bytes.
 
 ## Output for agents
 
@@ -52,90 +47,47 @@ a write should name the corrective call (as `TargetNotEmpty` does).
 
 ## No MCP server
 
-Evaluated, rejected. ~26 verbs × 550–1,400 tok of schema = 14K–36K standing
-tokens per turn vs ~900 for SKILL.md, plus a second contract the parity suite
-doesn't cover, plus giving up the static-binary supply-chain position. Revisit
-only if khub goes multi-tenant/remote. If ever built: generated from the
-resolved schema (zero per-type code), emitting `outputSchema` +
-`structuredContent`, not just inputs.
+The CLI plus `SKILL.md` is the agent surface. An MCP server would be a second
+contract the parity suite does not cover, with a standing per-turn schema cost
+the CLI never charges. If one is ever built: generated from the resolved
+schema (zero per-type code), emitting `outputSchema` + `structuredContent`.
 
 ## Untrusted content drives writes
 
 Entity bodies are attacker-influenceable text; `get`/`search` output is
-untrusted by construction. khub holds private data + untrusted content and
+untrusted by construction. khub holds private data plus untrusted content and
 **sends nothing outward** — keep it that way (`viz --open` and any future
 `export` are the lines to think before crossing). Containment for
 injected-content writes is provenance + draft, with `check` as the human
 review point.
 
-`khub serve` is not a crossing of that line and should not be argued as one: a
-listener bound to `127.0.0.1` transmits to nobody. Its real exposure is the
-reverse direction — anything already running on the machine can reach it — and
-that is what `serve`'s guards answer. See below.
+## `khub serve`
 
-## `khub serve` — why a second contract was accepted here
+A read-only loopback view of the graph for a human. Its exposure is inbound —
+anything already running on the machine can reach it — and that is what the
+guards answer.
 
-The MCP verdict above rejects "a second contract the parity suite doesn't
-cover." `serve` is exactly that, so the distinction has to be written down or
-the two sections read as a contradiction and someone will eventually delete
-the wrong one.
-
-MCP's cost was paid by **agents, on every turn**: 14K–36K standing tokens for a
-surface the CLI already gave them. `serve`'s standing cost to an agent is one
-row in root help — about 20 tokens — and nothing per call, because an agent has
-no reason to invoke it and the TTY gate turns an accidental invocation into an
-immediate refusal rather than a hang. That gate is a guard, not a wall:
-`TTY_COMPATIBLE=1` is a documented escape, so "an agent cannot run it" would be
-false. What it buys is a human surface with no CLI equivalent: a graph you can
-look at, and navigate, without regenerating a file. Different consumer, and a
-ledger three orders of magnitude smaller.
-
-Be precise about what "live" means here, because it is easy to overstate: the
-**server** rebuilds from the live tree on every request, so it can never answer
-from a stale graph. The **page** fetches once on load. A reload shows the
-current tree; nothing pushes. There is no polling and no event stream, and
-neither should be added without a reason better than symmetry with that
-sentence.
-
-What stays true from the MCP reasoning: the static-binary position is intact
-(`net/http` is stdlib, `CGO_ENABLED=0` unchanged), and there is no per-type
-code — the endpoints call `viz.Graph`, `introspect.LoadSchema` and
-`entity.Get`, the same verbs the CLI calls. One caveat worth keeping in view:
-`entity.Get` builds its index without the stray filter and without
-`RejectMalformed`, so `/api/entity/{id}` can answer for a file `/api/graph` has
-no node for. The UI only ever links from graph nodes, so nothing reaches it —
-but a new caller could.
-
-**The coverage split is deliberate.** The parity harness pins `serve`'s CLI
-contract — the TTY refusal, help, arity — because those are
-stdout/stderr/exit-code, which is what the harness is good at. The HTTP
-contract is `httptest` in `internal/serve/`, because an HTTP body has neither
-of the two properties that make the harness worth having (a whole-tree
-manifest and an exact exit code).
-
-The **port refusal is the exception, and it is not reachable from a fixture**:
-the TTY gate runs before `Listen`, so `serve --port N` in a pipe-mode case
-records `serve_needs_tty` and never binds. `TestListenRefusesBusyPort` covers
-it instead. Do not add a fixture step expecting `port_in_use` — it cannot
-produce one.
-
-**A serve step in a `mode: human` or `mode: pty` parity case hangs the suite
-forever.** Those modes do not set `TTY_COMPATIBLE=0`, so the refusal never
-fires and the runner waits on a server that never exits. Default `mode: pipe`
-is what makes `cli-contract/serve-refusals` terminate. Nothing in the code can
-prevent this; the case file carries the warning.
-
-**Read-only is structural, not policy.** The guard rejects every method but GET
-and HEAD before routing, so a write endpoint cannot be added by accident. If
-one is ever added, three things become mandatory that are not needed today: a
-per-run token in the URL (same-origin currently stops a local page from
-*reading* a response it is allowed to send — that argument dies the moment a
-request has an effect), an `Origin` check, and a decision about whether the
-HTTP contract gets harness coverage after all.
-
-**Host-header validation is the load-bearing guard**, not the loopback bind.
-DNS rebinding re-resolves an attacker's domain to `127.0.0.1`, which defeats
-the bind and defeats same-origin — but the request still announces the
-attacker's hostname in `Host`. `serve.AllowedHost` is therefore the whole
-defence, and its test is the one not to delete. Never add a CORS header: it
-would undo the layer underneath it.
+- **TTY gate.** `serve` refuses a non-terminal stdout (`serve_needs_tty`) so an
+  agent that invokes it by accident gets an immediate refusal, not a hang.
+  `TTY_COMPATIBLE=1` is the documented escape.
+- **The server rebuilds from the live tree on every request; the page fetches
+  once on load.** No polling, no event stream; do not add either without a
+  reason better than symmetry.
+- **Read-only is structural.** Every method but GET and HEAD is rejected
+  before routing. A write endpoint would make three things mandatory: a
+  per-run token in the URL, an `Origin` check, and harness coverage of the
+  HTTP contract.
+- **Host-header validation is the load-bearing guard**, not the loopback bind:
+  DNS rebinding defeats the bind and same-origin, but the request still
+  announces the attacker's hostname. `serve.AllowedHost` is the whole defence;
+  its test is the one not to delete. Never add a CORS header.
+- **Coverage split.** The parity harness pins the CLI contract (the TTY
+  refusal, help, arity); the HTTP contract is `httptest` in `internal/serve/`.
+  The port refusal is not fixture-reachable — the TTY gate runs before
+  `Listen` — and `TestListenRefusesBusyPort` covers it.
+- **A serve step in a `mode: human` or `mode: pty` parity case hangs the suite
+  forever**: those modes do not set `TTY_COMPATIBLE=0`. Keep such cases in the
+  default `mode: pipe`.
+- `entity.Get` builds its index without the stray filter, so `/api/entity/{id}`
+  can answer for a file `/api/graph` has no node for. The UI only links from
+  graph nodes; a new caller must not assume otherwise.

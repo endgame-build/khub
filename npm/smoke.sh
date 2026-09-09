@@ -49,7 +49,7 @@ for p in darwin-x64 darwin-arm64 linux-x64 linux-arm64; do
 done
 
 # No lifecycle scripts. Load-bearing supply-chain property
-# (.claude/rules/ci-release.md): a template edit that reintroduces one must fail
+# a template edit that reintroduces one must fail
 # here rather than ship.
 node -e '
   const f = process.argv[1];

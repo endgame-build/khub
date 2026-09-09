@@ -24,7 +24,7 @@ import (
 var folder = cases.Fold()
 
 // foldEqual is Python's `a.casefold() == b.casefold()` — full Unicode folding
-// (ß → ss), which strings.EqualFold does not do (go-port-plan R6).
+// (ß → ss), which strings.EqualFold does not do.
 func foldEqual(a, b string) bool { return folder.String(a) == folder.String(b) }
 
 // toLower is Python str.lower() — slugify's case step, deliberately NOT

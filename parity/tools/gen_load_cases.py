@@ -1,6 +1,6 @@
 """parity/corpus/load-cases.jsonl — scalar resolution expectations for BOTH
 Python load paths: python-frontmatter/PyYAML (md frontmatter, YAML 1.1) and
-ruamel safe (yaml entities, YAML 1.2). go-port-plan R3."""
+ruamel safe (yaml entities, YAML 1.2)."""
 import json
 import frontmatter
 from io import StringIO

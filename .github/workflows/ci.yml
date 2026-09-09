@@ -53,7 +53,7 @@ jobs:
         run: go mod tidy -diff
       # Pinned, per .claude/rules/dependencies.md. Call-graph reachability, so
       # it reports what khub actually calls rather than everything in go.sum —
-      # which is why ci-release.md prefers it to an SBOM. Note go-version above
+      # which is why it is preferred to an SBOM. Note go-version above
       # floats across 1.25 PATCHES deliberately: a stdlib advisory is fixed by
       # picking up the patch release, and pinning it exactly would opt out.
       - name: govulncheck

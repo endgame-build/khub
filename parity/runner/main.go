@@ -1,4 +1,4 @@
-// parity-run — the golden-fixture harness (go-port-plan M1).
+// parity-run — the golden-fixture harness.
 //
 //	parity-run -bin "<cmd…>" -record -cases parity/cases [-only fam[/case]]
 //	parity-run -bin "<cmd…>" -cases parity/cases [-only …]     # verify
@@ -47,7 +47,7 @@ type caseSpec struct {
 	Normalize []string          `yaml:"normalize"`
 	Steps     []step            `yaml:"steps"`
 	// Divergence records a KNOWN, accepted difference from Python for this
-	// case (see parity/DECISIONS.md). The case still runs and still reports,
+	// case. The case still runs and still reports,
 	// but a mismatch counts as XFAIL rather than FAIL. It is deliberately
 	// per-case and noisy: the reason is printed on every run so an accepted
 	// divergence can never quietly become invisible. An unexpected PASS is
@@ -368,8 +368,8 @@ func baseEnv(home, mode string) []string {
 		// strip it would certify a colour divergence as a pass. `dumb` puts
 		// Rich on the port's footing (Console._detect_color_system returns None
 		// for a dumb terminal) so these fixtures compare real bytes. The
-		// residual gap — nobody compares COLOURED output — is named in
-		// parity/DECISIONS.md, not hidden here.
+		// residual gap — nobody compares COLOURED output — is accepted and named
+		// here, not hidden.
 		env = append(env, "TERM=dumb")
 	}
 	return env
@@ -530,8 +530,8 @@ func bytesEqualNorm(got, want []byte, spec caseSpec, st step, channel string) bo
 }
 
 // layoutFree strips ANSI codes, box-drawing, and run-length whitespace so a
-// human table compares on content, order, and literals only (go-port-plan:
-// TTY output is content-pinned).
+// human table compares on content, order, and literals only: TTY output is
+// content-pinned, not layout-pinned.
 func layoutFree(s string) string {
 	s = ansiRe.ReplaceAllString(s, "")
 	var b strings.Builder
@@ -633,7 +633,7 @@ func firstDiff(want, got []byte) string {
 	return b.String()
 }
 
-// --- coverage gate (go-port-plan A.5) ---------------------------------------
+// --- coverage gate ---------------------------------------
 
 type coverageSpec struct {
 	Commands []struct {

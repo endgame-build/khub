@@ -1,10 +1,6 @@
 # Collections: the row model
 
-Status: **shipped 2026-07-07** (same-day as the per-entity formats
-it builds on). This record was written first as the design contract and now
-documents the implemented behavior; deviations would be bugs. Single-file
-collections, one `[inventory].[json|jsonl|yaml]` file holding every entity of
-a type as a row, per the design-memo storage grammar (design-memo.md:89-101).
+Single-file collections: one `[inventory].[json|jsonl|yaml]` file holding every entity of a type as a row. This page is the contract for how rows are read and written; the graph semantics above them do not change.
 
 The framing invariant: the `Index` (`internal/index/`) is the format seam. Every
 graph semantic (draft, edges, derived inverses, orphans, required-completeness,
@@ -101,8 +97,8 @@ upgrade when a real corpus hits a 500-row file with one typo.
   write. One authored key does not: a row's own `slug:` key is redundant with the
   mapping key that already names it, so it is dropped from the row on load and
   re-emitted only for jsonl, where it is the identity.
-- **Row-level git attribution** (shipped as `khub log <row-id>` until 0.9.0, when
-  `log` was removed; kept here as the design for row-dated `backfill`): parse the
+- **Row-level git attribution** (the design for row-dated `backfill`;
+  not yet implemented): parse the
   collection blob at `rev` and `rev^` (a `{slug: row}` frontmatter read), diff the
   row by slug: one `LogEntry` per changed row, same two-`git show`s-per-commit
   cost as today. `gitlog.path_to_node` becomes one-path-to-many-nodes.
@@ -124,28 +120,6 @@ repo:
   entities, never malformed (the analog of `scan_type`'s missing-directory
   return). The scaffold loop creates only the parent directory, and
   `.khub/locks/` joins `.khub/generated/` in the gitignore.
-- `workspace._entity_hashes` already snapshots `.jsonl` (shipped with formats),
-  so the cutover guarantee measures collection corpora from day one.
+- `workspace._entity_hashes` snapshots `.jsonl` files too, so a collection
+  file counts in change detection like any entity file.
 
-## Open items
-
-The grammar was **not** narrowed. Named but unimplemented, rejected by the
-schema until decided:
-- `gjson` — undefined beyond "Graph-JSON collection". This record's
-  recommendation if ever wanted: an **export projection** (`khub export
-  --gjson`, derived like `viz`), never a storage format: stored edge lists
-  collide with Principles 2 and 4 (derived graph, computed inverses).
-- `jsonl` as a **per-item** format (a one-line file; recommendation: keep
-  collection-only).
-- The `[inv]/_index.[ext]` collection path form (recommendation: `_index` stays
-  the folder-layout item token; explicit `path` config covers placement).
-
-## Acceptance
-
-1. **Zero behavior change for md/file/folder workspaces** — all command output,
-   text and JSON, byte-identical before and after (no `locator`, no new keys,
-   additive schema change only).
-2. **Live pilot** (2026-07-07): port a real `project-repos.yaml` into a
-   `repo` collection type in a live firm-ops workspace: rows become entities
-   with edges to projects; `validate`/`check`/`query`/`search` run green
-   against the real corpus.

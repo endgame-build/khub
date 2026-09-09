@@ -1,7 +1,7 @@
 package canon
 
-// Differential tests against Python-recorded corpora (go-port-plan M2
-// acceptance: codec-json + codec-yaml byte-for-byte).
+// Differential tests against Python-recorded corpora: codec-json and
+// codec-yaml, byte-for-byte.
 
 import (
 	"bufio"

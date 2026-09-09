@@ -1,7 +1,7 @@
 name: Add issue to board
 
 # Every new or reopened issue lands on the org project board #15 ("khub"), so
-# the board stays the order of the backlog (.claude/rules/issues.md). The
+# the board stays the order of the backlog. The
 # built-in GITHUB_TOKEN cannot write an org project; ADD_TO_PROJECT_PAT is a
 # repo secret holding a token with the `project` scope. Until the secret
 # exists this job fails on the Actions tab and nowhere else — it never gates a

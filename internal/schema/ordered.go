@@ -2,7 +2,7 @@ package schema
 
 // Ordered is the typed insertion-ordered map backing every dict[str, X] of the
 // Python ontology layer (schema_model / model). Iteration order = declaration
-// order is contract (go-port-plan: "key order is contract, not cosmetics"); a
+// order is contract; a
 // Set on an existing key keeps its original position, exactly like a Python
 // dict assignment. Keys returns the backing slice — callers must not mutate it.
 type Ordered[V any] struct {

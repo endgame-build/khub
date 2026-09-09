@@ -1,6 +1,6 @@
 // Package omap provides the insertion-ordered map that backs every dynamic
 // record in khub — frontmatter, collection rows, JSON payloads. Key order is
-// observable contract (go-port-plan R5); map[string]any never crosses an API
+// observable contract; map[string]any never crosses an API
 // boundary.
 package omap
 

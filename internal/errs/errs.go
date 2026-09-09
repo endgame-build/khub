@@ -1,6 +1,6 @@
 // Package errs ports core/errors.py: the located error taxonomy with
 // byte-exact message templates. Factories build code + message together so
-// the two can never drift (go-port-plan A.3).
+// the two can never drift.
 package errs
 
 import (
