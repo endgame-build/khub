@@ -18,9 +18,9 @@
  * Copy this block wholesale into every artifact's <style>. Do not retype values
  * from memory: drift between artifacts starts with a re-remembered colour.
  *
- * Provenance: ENDGAME Registry design language (Quiet Ink), lab() values captured
- * live from the running app 2026-07-19. The comments map each token to its
- * Registry CSS-variable ancestor.
+ * Provenance: an in-house design language, lab() values captured live from
+ * the running app 2026-07-19. The comments map each token to the
+ * CSS-variable ancestor it was taken from.
  */
 :root {
   /* ——— the four surfaces ——— */
@@ -58,7 +58,7 @@
   --cat-blue: lab(37.618% -0.018388 -47.3664);
   --cat-green: lab(46.1094% -42.9662 35.1265);
   --cat-steel: lab(49.3755% -18.7133 -18.9728);
-  /* ramp expansion (2026-07-22, Registry client-identity work): six more slots in the
+  /* ramp expansion (2026-07-22, client-identity ramps): six more slots in the
      L≈38–47 band so every slot clears 3:1 on light surfaces. Hues avoid the red/amber
      state region (umber is low-chroma brown, berry a light raspberry — neither reads
      as the dark scarlet crit pair). For identity ramps use --cat-purple INSTEAD of
