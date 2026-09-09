@@ -34,7 +34,8 @@ construction. Never `slog`/`logrus`/`zap`.
 
 Measured on this tree: `default: all` → ~3,866 non-test findings, roughly
 1 true bug per 3,800. A curated set (`staticcheck` minus ST1005, `errorlint`,
-`unused`, `errcheck` with the `std-error-handling` preset) yields ~18. Several
+`unused`, `errcheck` with the `std-error-handling` preset) is what
+`.golangci.yml` enables, held at zero findings with the issue caps lifted. Several
 popular linters attack khub's contracts: `wrapcheck` demands forbidden `%w`,
 `mnd` flags the pinned emitter widths, **`misspell` rewrites string literals
 including golden messages — never enable it**. Adopt linters tree-wide, not

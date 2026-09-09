@@ -4,6 +4,7 @@
 // index — each non-fatal for the same reason init's wire tail is: by the time
 // they run the workspace is already upgraded, and aborting there would leave
 // it half-done with its context files never re-wired.
+
 package cli
 
 import (

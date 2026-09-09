@@ -32,3 +32,15 @@ parity/corpus/real/
 # npm packaging: assembled package trees and any local installs.
 /npm/dist/
 node_modules/
+
+# Go test binaries (`go test -c`) and agent/editor session state. None of it
+# is source; the worktrees dir alone has carried a full Python venv.
+*.test
+.claude/worktrees/
+.superpowers/
+.agents/
+.serena/
+
+# The retired Python implementation and its predecessor, if still on disk.
+/src/
+/kb/

@@ -15,6 +15,8 @@ import (
 	"github.com/endgame-build/khub/internal/omap"
 )
 
+// ReadDoc parses an entity document of format fmt_ into frontmatter and body;
+// non-md formats carry the body in the reserved `body` key.
 func ReadDoc(text, fmt_ string) (*omap.Map, string, error) {
 	if fmt_ != "md" {
 		return Parse(text, fmt_)

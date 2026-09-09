@@ -6,6 +6,7 @@ package entity
 // copy) so these tests do not depend on the init port landing first.
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"sort"
@@ -261,8 +262,8 @@ func requireCode(t *testing.T, err error, code string) *errs.Located {
 	if err == nil {
 		t.Fatalf("expected a %s error, got nil", code)
 	}
-	located, ok := err.(*errs.Located)
-	if !ok {
+	var located *errs.Located
+	if !errors.As(err, &located) {
 		t.Fatalf("expected a located error, got %T: %v", err, err)
 	}
 	if located.Code != code {

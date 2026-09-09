@@ -5,6 +5,7 @@ package schema
 // argument order, resolved in that order).
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -95,7 +96,8 @@ func asLocatedErr(t *testing.T, err error) *errs.Located {
 	if err == nil {
 		t.Fatal("Resolve succeeded; want a LocatedError")
 	}
-	le, ok := err.(*errs.Located)
+	var le *errs.Located
+	ok := errors.As(err, &le)
 	if !ok {
 		t.Fatalf("Resolve error is %T (%v); want *errs.Located", err, err)
 	}

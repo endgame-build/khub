@@ -97,7 +97,7 @@ func TestCommaOnSingleRelationRaises(t *testing.T) {
 	_, err := Create(ws, "opportunity", CreateOpts{
 		Fields:      fields("client", "initech,acme", "owner", "noor", "stage", "prospect"),
 		UseTemplate: true})
-	requireCode(t, err, "cardinality_violation")
+	_ = requireCode(t, err, "cardinality_violation")
 	if !equalStrings(mdFiles(t, ws), before) {
 		t.Fatal("a refused create wrote a file")
 	}
@@ -222,7 +222,7 @@ func TestSlugFromTitleElseRefuses(t *testing.T) {
 	before := mdFiles(t, ws)
 	_, err = Create(ws, "fragment", CreateOpts{
 		Fields: fields("stage", "raw", "owner", "ann"), UseTemplate: true})
-	requireCode(t, err, "no_slug_source")
+	_ = requireCode(t, err, "no_slug_source")
 	if !equalStrings(mdFiles(t, ws), before) {
 		t.Fatal("the refused create wrote a file")
 	}
@@ -326,7 +326,7 @@ func TestEmptyRelationValueRejected(t *testing.T) {
 	seed(t, ws, "projects/p1/_index.md",
 		kv("type", "project", "client", "initech", "owner", "noor"))
 	_, err = Update(ws, "p1", UpdateOpts{Fields: fields("client", "")})
-	requireCode(t, err, "empty_relation_value")
+	_ = requireCode(t, err, "empty_relation_value")
 }
 
 // review round: `edit X <relation> X` refuses the self-edge exactly like link.
@@ -334,7 +334,7 @@ func TestEditSelfLinkRejected(t *testing.T) {
 	ws := newWS(t, "firm-ops")
 	seed(t, ws, "identity/team/noor.md", kv("type", "person", "name", "Noor", "role", "partner"))
 	_, err := Update(ws, "noor", UpdateOpts{Fields: fields("related", "noor")})
-	requireCode(t, err, "self_link")
+	_ = requireCode(t, err, "self_link")
 }
 
 // review round: UpdateResult.Draft parses a hand-authored draft: 'false' as

@@ -91,23 +91,6 @@ func seedRaw(t *testing.T, root, relpath, text string) {
 	writeFile(t, p, text)
 }
 
-func loadYAMLFile(t *testing.T, path string) *omap.Map {
-	t.Helper()
-	raw, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatalf("read %s: %v", path, err)
-	}
-	v, err := canon.LoadDoc(string(raw))
-	if err != nil {
-		t.Fatalf("parse %s: %v", path, err)
-	}
-	m, _ := v.(*omap.Map)
-	if m == nil {
-		t.Fatalf("%s is not a mapping", path)
-	}
-	return m
-}
-
 func mkdirAll(t *testing.T, dir string) {
 	t.Helper()
 	if err := os.MkdirAll(dir, 0o755); err != nil {

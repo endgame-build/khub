@@ -16,6 +16,9 @@ builds:
   - id: khub
     main: ./cmd/khub
     binary: khub
+    # Byte-deterministic archives per commit: an unexpected checksum change is
+    # signal, not noise.
+    mod_timestamp: "{{ .CommitTimestamp }}"
     env:
       - CGO_ENABLED=0
     goos: [darwin, linux]

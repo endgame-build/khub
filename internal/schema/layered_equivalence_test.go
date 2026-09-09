@@ -206,7 +206,7 @@ func dumpResolved(s *ResolvedSchema) string {
 		fmt.Fprintf(&b, "  storage layout=%q path=%s fmt=%q\n",
 			t.Storage.Layout, pstr(t.Storage.Path), t.Storage.Fmt)
 		fmt.Fprintf(&b, "  required=%t orphan=%t when=%s\n", t.Required, t.Orphan, pstr(t.When))
-		fmt.Fprintf(&b, "  idprefix=%s iddate=%t\n", dumpIDPrefix(t.IdPrefix), t.IdDate)
+		fmt.Fprintf(&b, "  idprefix=%s iddate=%t\n", dumpIDPrefix(t.IDPrefix), t.IDDate)
 		fmt.Fprintf(&b, "  template=%s templateoff=%t\n", pstr(t.Template), t.TemplateOff)
 		dumpAttrs(&b, "  "+t.Name, t.Attributes)
 		dumpRels(&b, "  "+t.Name, t.Relations)
@@ -230,7 +230,7 @@ func dumpRels(b *strings.Builder, owner string, rels *Ordered[*ResolvedRelation]
 	}
 }
 
-func dumpIDPrefix(p *IdPrefix) string {
+func dumpIDPrefix(p *IDPrefix) string {
 	if p == nil {
 		return "<nil>"
 	}

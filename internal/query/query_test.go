@@ -6,6 +6,7 @@ package query
 // the derived-inverse predicate handling added in 0.11.0.
 
 import (
+	"errors"
 	"sort"
 	"testing"
 	"time"
@@ -132,7 +133,8 @@ func TestQueryMissingAndHas(t *testing.T) {
 // TS-QRY-001-U03 (REQ-QRY001-03): an undeclared field is a located filter error.
 func TestQueryUnknownFieldRaises(t *testing.T) {
 	_, err := Query(qws(t), Filters{Type: ptr("opportunity"), Fields: fields("vibe", "high")}, now)
-	located, ok := err.(*errs.Located)
+	var located *errs.Located
+	ok := errors.As(err, &located)
 	if !ok || located.Code != "filter_error" {
 		t.Fatalf("want filter_error, got %#v", err)
 	}
@@ -147,7 +149,8 @@ func TestQueryUnknownFieldRaises(t *testing.T) {
 // QRY-001: a mistyped --has/--missing predicate errors, not a silent empty set.
 func TestQueryUnknownPredicateRaises(t *testing.T) {
 	_, err := Query(qws(t), Filters{Type: ptr("project"), Missing: ptr("ownre")}, now)
-	located, ok := err.(*errs.Located)
+	var located *errs.Located
+	ok := errors.As(err, &located)
 	if !ok || located.Code != "filter_error" || located.Target != "ownre" {
 		t.Fatalf("want filter_error on 'ownre', got %#v", err)
 	}
@@ -156,7 +159,8 @@ func TestQueryUnknownPredicateRaises(t *testing.T) {
 // An unknown --type is the shared unknown_type error, naming the preset.
 func TestQueryUnknownTypeRaises(t *testing.T) {
 	_, err := Query(qws(t), Filters{Type: ptr("zzz")}, now)
-	located, ok := err.(*errs.Located)
+	var located *errs.Located
+	ok := errors.As(err, &located)
 	if !ok || located.Code != "unknown_type" {
 		t.Fatalf("want unknown_type, got %#v", err)
 	}
@@ -271,7 +275,7 @@ func TestQueryOrderIsTupleCompare(t *testing.T) {
 		ids = append(ids, m.Type+"/"+m.Slug)
 	}
 	want := []string{
-		"client/orphan-client", "client/stale-client", "client/initech", "client/tagged",
+		"client/initech", "client/orphan-client", "client/stale-client", "client/tagged",
 		"opportunity/op-proposal", "opportunity/op-prospect", "opportunity/op-won",
 		"person/noor", "project/has-owner", "project/no-owner",
 	}
@@ -338,7 +342,8 @@ func TestHasAndMissingAcceptADeclaredInverse(t *testing.T) {
 // Accepting inverses must not turn a typo into a silent empty result.
 func TestUnknownPredicateIsStillRejected(t *testing.T) {
 	_, err := Query(inverseWS(t), Filters{Type: ptr("adr"), Has: ptr("bogus")}, now)
-	if _, ok := err.(*errs.Located); !ok {
+	var asLocated *errs.Located
+	if !errors.As(err, &asLocated) {
 		t.Fatalf("want a located error, got %#v", err)
 	}
 }
@@ -375,7 +380,8 @@ func TestAnInverseIsRejectedOnATypeThatCannotCarryIt(t *testing.T) {
 	ws := inverseWS(t)
 	seed(t, ws, "repos/r1.md", kv{"type", "repo"}, kv{"title", "R1"})
 	_, err := Query(ws, Filters{Type: ptr("repo"), Missing: ptr("superseded")}, now)
-	if _, ok := err.(*errs.Located); !ok {
+	var asLocated *errs.Located
+	if !errors.As(err, &asLocated) {
 		t.Fatalf("want a located error, got %#v", err)
 	}
 }

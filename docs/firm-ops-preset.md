@@ -1,10 +1,10 @@
 # Firm-ops preset
 
-**The operating graph of a consulting and delivery firm.** `firm-ops` models a firm as it runs: pipeline deals become delivery engagements, engagements generate meetings and transcripts, delivery yields case studies; and behind all of it sit the people, clients, and partnerships that carry the work. It is the port of firm-hq's hand-rolled schema.
+**The operating graph of a consulting and delivery firm.** `firm-ops` models a firm as it runs: pipeline deals become delivery engagements, engagements generate meetings and transcripts, delivery yields case studies; and behind all of it sit the people, clients, and partnerships that carry the work.
 
 `khub init firm-ops ./my-hub` seeds a workspace from it. For a hands-on first run, start with [`getting-started.md`](getting-started.md); to author or extend the types yourself, see [`schema.md`](schema.md).
 
-Preset version **0.2.0**. Nine entity types. Fourteen relation predicates: ten declared here, four inherited from the core base. Ids are bare slugs of `name` (opportunity, person, client) or `title` (the rest) — no prefix, no date, no ordinal — and every type requires the one it mints from; a repeated one is refused (`pass --id <slug>`).
+Preset version **0.3.0**. Nine entity types. Fourteen relation predicates: ten declared here, four inherited from the core base. Ids are bare slugs of `name` (opportunity, person, client) or `title` (the rest) — no prefix, no date, no ordinal — and every type requires the one it mints from; a repeated one is refused (`pass --id <slug>`).
 
 ## What every entity carries
 
@@ -46,9 +46,9 @@ Layout: folder (`opportunities/{slug}/_index.md`). A pipeline deal; the pre-sale
 
 | Attribute | Type | Notes |
 |---|---|---|
-| `stage` | enum, required | `prospect`, `proposal-sent`, `won`, `signed`, `lost`: the CRM "Sales" pipeline stages (the deal system of record) |
-| `source` | enum | `event`, `referral`, `outbound`, `inbound`, `northwind`, `existing-client` |
-| `crm_id` | text | digits (`^[0-9]+$`), the CRM deal id |
+| `stage` | enum, required | `prospect`, `proposal-sent`, `won`, `signed`, `lost`: the deal pipeline of the sales system of record |
+| `source` | enum | `referral`, `outbound`, `inbound`, `partner`, `event`, `existing-client` |
+| `crm_id` | text | digits (`^[0-9]+$`), the deal id in the CRM |
 | `notes_folder` | text | |
 | `notes_folder_id` | text | |
 | `updated` | required | overrides the base default |
@@ -62,8 +62,8 @@ Layout: folder (`projects/{slug}/_index.md`). A delivery engagement; the post-sa
 | Attribute | Type | Notes |
 |---|---|---|
 | `active` | bool | default `true` (is the engagement ongoing?) |
-| `source` | enum | `event`, `referral`, `outbound`, `inbound`, `northwind`, `existing-client` |
-| `external_repo` | text | pattern `^endgame-build/[a-z0-9-]+$` |
+| `source` | enum | `referral`, `outbound`, `inbound`, `partner`, `event`, `existing-client` |
+| `external_repo` | text | pattern `^[a-z0-9-]+/[a-z0-9-]+$`, the delivery repo as owner/name |
 | `crm_id` | text | digits |
 | `budget_id` | text | digits |
 | `notes_folder` | text | |
@@ -89,7 +89,7 @@ Relations: `engagement` → opportunity \| project \| partnership (required, uni
 
 ### transcript
 
-Layout: file (`transcripts/{slug}.md`). Raw meeting capture; the unprocessed Recorder export.
+Layout: file (`transcripts/{slug}.md`). Raw meeting capture; the unprocessed export from the recording tool.
 
 | Attribute | Type | Notes |
 |---|---|---|
@@ -175,7 +175,7 @@ Relations: `partner` → partnership.
 
 ## Design note: three types the original capture had
 
-The firm-hq capture carried three more types that the shipped preset drops, each with zero live entities:
+Earlier versions of the preset carried three more types that the shipped one drops, each with no entities in practice:
 
 - **`build`** — a product/engineering engagement. After the lifecycle refinement it differed from `project` only by a `tech_stack` field.
 - **`decision`** — an ADR-style durable record. Dropping it also removed firm-ops's self-referential `supersedes` edge and its derived `superseded_by` inverse. The engine still supports derived inverses generically; firm-ops no longer demonstrates them.

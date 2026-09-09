@@ -32,10 +32,13 @@ paths agree only because both constants are 80.
 
 ## What golden bytes cannot catch — add tests here
 
-- **Inputs outside the corpus.** Zero `func Fuzz` in the repo. Four targets,
-  seeded from `parity/corpus`: `FuzzJSONValid` (`json.Valid(EncodeCLI(v))`),
-  `FuzzReconcatIdentity`, `FuzzSpliceIdempotent`, `FuzzEmitRoundTrip`. Every
-  rustfmt/ruff idempotency bug on record was an input nobody's corpus held.
+- **Inputs outside the corpus.** `internal/canon/fuzz_test.go` holds four
+  targets seeded from `parity/corpus`: `FuzzJSONValid` (both encoders emit
+  what `json.Valid` accepts), `FuzzReconcatIdentity` (a no-change splice is
+  byte-identical), `FuzzSpliceIdempotent`, `FuzzEmitRoundTrip` (emit → load →
+  emit is stable in both profiles). `go test` runs the seeds; `go test
+  -fuzz=FuzzEmitRoundTrip ./internal/canon` explores. Every rustfmt/ruff
+  idempotency bug on record was an input nobody's corpus held.
 - **Non-idempotency.** T1c proves verbatim round-trip; add gofmt's loop:
   format the formatter's own output, assert no change.
 - **Cross-process locking.** `-race` cannot see separate processes. Keep the
@@ -64,13 +67,14 @@ paths agree only because both constants are 80.
   `query`, `search`. Nothing in it spells an id or a title, so an id-scheme
   change never touches it.
 
-## The dead oracle
+## The differential oracle is gone
 
-`parity/runner/differential.go` + `workflows.go` (654 LOC: seeded random verb
-sequences, adversarial values — `İstanbul`, `yes`/`017`, CRLF — full-tree diff
-per step) require `-bin-b`, which died with Python. CI never runs it. Revive
-(khub vs last release, or self-invariants) before writing any new
-property-testing code.
+`parity/runner` once carried a `-differential` mode (seeded random verb
+sequences through two binaries, full-tree diff per step). It needed a second
+binary, which died with Python, and CI never ran it, so it was deleted rather
+than kept as 654 lines of unreachable code. Its ideas — adversarial values like
+`İstanbul`, `yes`/`017`, CRLF — are worth recovering from git history if a
+self-invariant property test is ever written.
 
 ## Not worth it
 

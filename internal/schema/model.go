@@ -94,15 +94,15 @@ type ResolvedRelation struct {
 	Acyclic bool
 }
 
-// PrefixMember is one (enum value, prefix) pair of a by-value IdPrefix.
+// PrefixMember is one (enum value, prefix) pair of a by-value IDPrefix.
 type PrefixMember struct {
 	Value  string
 	Prefix string
 }
 
-// IdPrefix is a type's prefixed-id policy: a literal prefix, or one per enum
-// member. See TypeDecl.IdPrefix. By/Members are empty for the literal form.
-type IdPrefix struct {
+// IDPrefix is a type's prefixed-id policy: a literal prefix, or one per enum
+// member. See TypeDecl.IDPrefix. By/Members are empty for the literal form.
+type IDPrefix struct {
 	Literal *string
 	By      *string
 	Members []PrefixMember
@@ -110,7 +110,7 @@ type IdPrefix struct {
 
 // Resolve returns the prefix for one entity's attributes; ok is false when its
 // `by` value is absent or maps to no member (Python returns None).
-func (p *IdPrefix) Resolve(attributes *omap.Map) (string, bool) {
+func (p *IDPrefix) Resolve(attributes *omap.Map) (string, bool) {
 	if p.Literal != nil {
 		return *p.Literal, true
 	}
@@ -133,7 +133,7 @@ func (p *IdPrefix) Resolve(attributes *omap.Map) (string, bool) {
 
 // All returns every prefix this policy can mint, deduplicated, first
 // occurrence first (Python dict.fromkeys order).
-func (p *IdPrefix) All() []string {
+func (p *IDPrefix) All() []string {
 	if p.Literal != nil {
 		return []string{*p.Literal}
 	}
@@ -160,11 +160,11 @@ type ResolvedType struct {
 	Required bool
 	// See TypeDecl.Orphan: this type's instances are exempt from the orphan sweep.
 	Orphan bool
-	// See TypeDecl.IdPrefix: `add` mints `<prefix>-<slug>` when this is set.
-	IdPrefix *IdPrefix
-	// See TypeDecl.IdDate: the minted id carries its mint date,
+	// See TypeDecl.IDPrefix: `add` mints `<prefix>-<slug>` when this is set.
+	IDPrefix *IDPrefix
+	// See TypeDecl.IDDate: the minted id carries its mint date,
 	// `<prefix>-<YYYY-MM-DD>-<slug>`.
-	IdDate bool
+	IDDate bool
 	// See TypeDecl.Template / TemplateOff: the declared template stem and the
 	// explicit opt-out. Read through TemplateName.
 	Template    *string
@@ -198,20 +198,20 @@ func (t *ResolvedType) ReadsTemplate() bool {
 	return t.Storage.Fmt == "md" && t.Storage.Layout != LayoutCollection
 }
 
-// IdShape renders the id pattern this type declares — `fr|cst|br-slug`,
+// IDShape renders the id pattern this type declares — `fr|cst|br-slug`,
 // `ad-YYYY-MM-DD-slug`, `slug` — once, for every message that shows it. The
 // `bad_id` finding and `schema show` both name it, and a reader fixing a slug
 // against one while reading the other must not be told two things. A
 // singleton mints nothing and renders "".
-func (t *ResolvedType) IdShape() string {
+func (t *ResolvedType) IDShape() string {
 	if t.Storage.Layout == LayoutSingleton {
 		return ""
 	}
 	var parts []string
-	if t.IdPrefix != nil {
-		parts = append(parts, strings.Join(t.IdPrefix.All(), "|"))
+	if t.IDPrefix != nil {
+		parts = append(parts, strings.Join(t.IDPrefix.All(), "|"))
 	}
-	if t.IdDate {
+	if t.IDDate {
 		parts = append(parts, "YYYY-MM-DD")
 	}
 	parts = append(parts, "slug")
@@ -288,6 +288,9 @@ func (a *ResolvedAttribute) MatchPattern(value string) (bool, error) {
 	}
 	return a.patternRE.MatchString(value)
 }
+
+// CompilePattern compiles the attribute's pattern once, with the shared match
+// timeout; MatchPattern calls it, callers rarely need to.
 func (a *ResolvedAttribute) CompilePattern() error {
 	a.patternOnce.Do(func() {
 		if a.Pattern == nil {

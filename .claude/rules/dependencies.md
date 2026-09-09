@@ -28,7 +28,7 @@ evidence.
 | `internal/graph` | insertion-ordered adjacency + read-time inverse edges IS the product; gonum is limited to SCC discovery for bounded cycle witnesses; candidates (dominikbraun — dormant 2024, yourbasic — pre-generics) are map-backed |
 | FTS5 search | khub exposes raw FTS5 `MATCH` syntax to agents — a replacement must reimplement the query language, not the scoring. bleve changes ranking (re-records fixtures); bluge dormant since 2022; modernc slower |
 | Shelling out to `git` | per-file `Log` is go-git's known worst case, v6 still alpha, git2go needs CGO. The real win is **batching** (one `git log --name-only` pass), not swapping |
-| `internal/omap` | third-party ordered maps solve absent perf problems, can't fix `any` (values genuinely heterogeneous), and ship `encoding/json` marshalling the choke-point bans. Known edges: `Keys()` aliases the internal slice; `Delete` O(n) — fix in place, ~15 lines |
+| `internal/omap` | third-party ordered maps solve absent perf problems, can't fix `any` (values genuinely heterogeneous), and ship `encoding/json` marshalling the choke-point bans. Known edges, both pinned by `omap_test.go`: `Keys()` aliases the internal slice; `Delete` is O(n) in the key count, accepted because no khub record is large enough to notice |
 | Table/help rendering | fixtures are the spec; any lib is a pure-cost re-record. The one real bug (rune count ≠ terminal cells) fixes with `x/text/width`, already a dep |
 | `internal/schema/vocab.go` | JSON Schema/CUE = a translation layer + an error-message shim to keep fixtures green; net LOC up. CUE's Go API is pre-redesign |
 | `editDistance` (~20 LOC) | threshold tuned so retired command names stay ≥3 away; every lib produces different bytes |

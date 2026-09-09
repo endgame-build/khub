@@ -2,6 +2,7 @@
 // history render a table as their human view; impact's human view is a
 // depth-marked text tree, and it keeps its own output gate so `--format tree`
 // forces the tree even on a pipe.
+
 package cli
 
 import (

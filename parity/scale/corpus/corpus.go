@@ -30,7 +30,7 @@ import (
 	// parity/scale is a dev tool, not a khub output path. The jsonio choke
 	// point (.claude/rules/go.md) governs the bytes khub itself emits, and
 	// .golangci.yml's depguard covers only YAML libraries — the same position
-	// parity/runner/differential.go and parity/yamlgate/emit take.
+	// parity/yamlgate/emit takes.
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -205,7 +205,7 @@ func (k *khub) add(typ string, fields ...field) (string, error) {
 		Slug string `json:"slug"`
 	}
 	if err := json.Unmarshal(out, &rec); err != nil {
-		return "", fmt.Errorf("khub add %s: unreadable record %q: %v", typ, out, err)
+		return "", fmt.Errorf("khub add %s: unreadable record %q: %w", typ, out, err)
 	}
 	if rec.Slug == "" {
 		return "", fmt.Errorf("khub add %s: record carries no slug: %s", typ, out)
@@ -999,7 +999,7 @@ func Build(o Options) (*Manifest, error) {
 
 	versionOut, err := exec.Command(o.Bin, "--version").Output()
 	if err != nil {
-		return nil, fmt.Errorf("%s --version: %v", o.Bin, err)
+		return nil, fmt.Errorf("%s --version: %w", o.Bin, err)
 	}
 	version := strings.TrimSpace(string(versionOut))
 	say("khub %s -> %s", version, work)
@@ -1085,7 +1085,7 @@ func schemaTypes(k *khub) ([]string, map[string]bool, error) {
 	}
 	var names []string
 	if err := json.Unmarshal(out, &names); err != nil {
-		return nil, nil, fmt.Errorf("khub schema types: unreadable payload %q: %v", out, err)
+		return nil, nil, fmt.Errorf("khub schema types: unreadable payload %q: %w", out, err)
 	}
 	exempt := map[string]bool{}
 	for _, name := range names {
@@ -1097,7 +1097,7 @@ func schemaTypes(k *khub) ([]string, map[string]bool, error) {
 			Orphan bool `json:"orphan"`
 		}
 		if err := json.Unmarshal(out, &view); err != nil {
-			return nil, nil, fmt.Errorf("khub schema show %s: unreadable payload: %v", name, err)
+			return nil, nil, fmt.Errorf("khub schema show %s: unreadable payload: %w", name, err)
 		}
 		if view.Orphan {
 			exempt[name] = true
@@ -1114,7 +1114,7 @@ func Read(work string) (*Manifest, error) {
 	}
 	var m Manifest
 	if err := json.Unmarshal(raw, &m); err != nil {
-		return nil, fmt.Errorf("%s: %v", filepath.Join(work, ManifestName), err)
+		return nil, fmt.Errorf("%s: %w", filepath.Join(work, ManifestName), err)
 	}
 	return &m, nil
 }

@@ -48,9 +48,9 @@ func TestResolveIDBareQualifiedAndAmbiguous(t *testing.T) {
 	requireMessageContains(t, e, "Slug 'acme' is ambiguous: client/acme, partnership/acme")
 
 	_, err = ResolveID(idx, "ghost")
-	requireCode(t, err, "lookup_error")
+	_ = requireCode(t, err, "lookup_error")
 	_, err = ResolveID(idx, "client/ghost")
-	requireCode(t, err, "lookup_error")
+	_ = requireCode(t, err, "lookup_error")
 }
 
 // Case is resolved leniently as a fallback: writes slugify to lowercase, so an

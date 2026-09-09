@@ -1,6 +1,7 @@
 // serve.go adapts `khub serve` — the live, read-only sibling of viz. It prints
 // prose and takes no --format, like the other operator commands; only the
 // shared error boundary emits JSON.
+
 package cli
 
 import (

@@ -88,18 +88,18 @@ type RelationDecl struct {
 	Acyclic bool
 }
 
-// IdPrefixDecl is a prefix chosen by the value of another attribute (By), one
+// IDPrefixDecl is a prefix chosen by the value of another attribute (By), one
 // per enum member. Map iterates in authored order.
-type IdPrefixDecl struct {
+type IDPrefixDecl struct {
 	By  string
 	Map *Ordered[string]
 }
 
-// IdPrefixSpec is the authored id_prefix union: a literal slug token or a
+// IDPrefixSpec is the authored id_prefix union: a literal slug token or a
 // by-value decl. Exactly one field is non-nil.
-type IdPrefixSpec struct {
+type IDPrefixSpec struct {
 	Literal *string
-	Decl    *IdPrefixDecl
+	Decl    *IDPrefixDecl
 }
 
 // TypeDecl is one entity type's storage config plus its attribute/relation
@@ -117,12 +117,12 @@ type TypeDecl struct {
 	// Opt out of the orphan sweep (see schema_model.TypeDecl.orphan).
 	Orphan bool
 	// Prefixed ids: `add` mints `<prefix>-<slug>` instead of a bare slug.
-	IdPrefix *IdPrefixSpec
+	IDPrefix *IDPrefixSpec
 	// Dated ids: the minted id carries the day it was minted on
-	// (`<prefix>-<YYYY-MM-DD>-<slug>`). A flat sibling of IdPrefix, not part of
+	// (`<prefix>-<YYYY-MM-DD>-<slug>`). A flat sibling of IDPrefix, not part of
 	// it: the two resolve independently, so a by-value prefix and a date
 	// compose. Default false.
-	IdDate bool
+	IDDate bool
 	// The declared template stem (.khub/templates/<name>.yaml). nil = the
 	// standing convention (the type's own name); see TemplateOff for the
 	// explicit opt-out. A NAME, never a path: templates live in one directory,
@@ -243,7 +243,7 @@ func (t *TypeDecl) storageMatrix() error {
 	// A singleton's id IS its type name, so an id scheme on one declares a
 	// prefix or a date no verb would ever mint — a category error here, not a
 	// permanent `check` finding.
-	if (t.IdPrefix != nil || t.IdDate) && t.Layout == "singleton" {
+	if (t.IDPrefix != nil || t.IDDate) && t.Layout == "singleton" {
 		return errors.New("'id_prefix' and 'id_date' apply only to minting types " +
 			"(a singleton's id is its type name, so it mints nothing); drop the key")
 	}
@@ -476,9 +476,9 @@ func applyStorageDecl(m *omap.Map, td *TypeDecl, loc []string, c *vocabCollector
 		}
 	}
 	if pv, has := m.Get("id_prefix"); has && pv != nil {
-		td.IdPrefix = buildIdPrefixSpec(pv, at(loc, "id_prefix"), c)
+		td.IDPrefix = buildIDPrefixSpec(pv, at(loc, "id_prefix"), c)
 	}
-	td.IdDate = takeBool(m, "id_date", loc, c)
+	td.IDDate = takeBool(m, "id_date", loc, c)
 	if tv, has := m.Get("template"); has && tv != nil {
 		switch x := tv.(type) {
 		case string:
@@ -603,23 +603,23 @@ func buildToDecl(v any, loc []string, c *vocabCollector) ToDecl {
 	}
 }
 
-// buildIdPrefixSpec validates the id_prefix union: a pattern-constrained
-// string or an IdPrefixDecl mapping. Branch tags mirror pydantic's smart-union
+// buildIDPrefixSpec validates the id_prefix union: a pattern-constrained
+// string or an IDPrefixDecl mapping. Branch tags mirror pydantic's smart-union
 // error locs ("constrained-str", "IdPrefixDecl").
-func buildIdPrefixSpec(v any, loc []string, c *vocabCollector) *IdPrefixSpec {
+func buildIDPrefixSpec(v any, loc []string, c *vocabCollector) *IDPrefixSpec {
 	switch x := v.(type) {
 	case string:
 		if idPrefixRE.MatchString(x) {
-			return &IdPrefixSpec{Literal: &x}
+			return &IDPrefixSpec{Literal: &x}
 		}
 		c.add("string_pattern_mismatch", at(loc, "constrained-str"), msgPattern(IDPrefixPattern))
 		c.add("model_type", at(loc, "IdPrefixDecl"), msgModel("IdPrefixDecl"))
 		return nil
 	case *omap.Map:
 		sub := &vocabCollector{}
-		decl := buildIdPrefixDecl(x, at(loc, "IdPrefixDecl"), sub)
+		decl := buildIDPrefixDecl(x, at(loc, "IdPrefixDecl"), sub)
 		if len(sub.list) == 0 {
-			return &IdPrefixSpec{Decl: decl}
+			return &IDPrefixSpec{Decl: decl}
 		}
 		c.add("string_type", at(loc, "constrained-str"), msgString)
 		c.list = append(c.list, sub.list...)
@@ -631,8 +631,8 @@ func buildIdPrefixSpec(v any, loc []string, c *vocabCollector) *IdPrefixSpec {
 	}
 }
 
-func buildIdPrefixDecl(m *omap.Map, loc []string, c *vocabCollector) *IdPrefixDecl {
-	d := &IdPrefixDecl{Map: NewOrdered[string]()}
+func buildIDPrefixDecl(m *omap.Map, loc []string, c *vocabCollector) *IDPrefixDecl {
+	d := &IDPrefixDecl{Map: NewOrdered[string]()}
 	if bv, has := m.Get("by"); has {
 		if s, ok := bv.(string); ok {
 			d.By = s

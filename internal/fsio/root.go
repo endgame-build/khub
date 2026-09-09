@@ -51,6 +51,7 @@ func OpenPath(root, path string) (*os.Root, string, error) {
 	return r, rel, nil
 }
 
+// ReadFile reads path confined to root; OpenPath's refusals apply.
 func ReadFile(root, path string) ([]byte, error) {
 	r, rel, err := OpenPath(root, path)
 	if err != nil {
@@ -59,6 +60,8 @@ func ReadFile(root, path string) ([]byte, error) {
 	defer r.Close()
 	return r.ReadFile(rel)
 }
+
+// Stat stats path confined to root; OpenPath's refusals apply.
 func Stat(root, path string) (fs.FileInfo, error) {
 	r, rel, err := OpenPath(root, path)
 	if err != nil {
@@ -67,6 +70,8 @@ func Stat(root, path string) (fs.FileInfo, error) {
 	defer r.Close()
 	return r.Stat(rel)
 }
+
+// ReadDir lists path confined to root; OpenPath's refusals apply.
 func ReadDir(root, path string) ([]os.DirEntry, error) {
 	r, rel, err := OpenPath(root, path)
 	if err != nil {
@@ -125,6 +130,8 @@ func MkdirAll(root, path string) error {
 	}
 	return nil
 }
+
+// Remove deletes path confined to root, recursively when asked.
 func Remove(root, path string, recursive bool) error {
 	r, rel, err := OpenPath(root, path)
 	if err != nil {

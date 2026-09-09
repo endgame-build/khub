@@ -6,6 +6,7 @@
 // other diff algorithm. difflib is not Myers: it is a recursive
 // longest-matching-block search with an autojunk heuristic, and only that
 // algorithm produces difflib's hunks.
+
 package reindex
 
 import (
@@ -187,7 +188,7 @@ func (m *seqMatcher) groupedOpcodes(n int) [][]opcode {
 		}
 		group = append(group, opcode{c.tag, i1, c.i2, j1, c.j2})
 	}
-	if len(group) > 0 && !(len(group) == 1 && group[0].tag == "equal") {
+	if len(group) > 0 && (len(group) != 1 || group[0].tag != "equal") {
 		groups = append(groups, group)
 	}
 	return groups

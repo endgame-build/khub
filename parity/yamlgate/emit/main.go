@@ -36,7 +36,7 @@ func main() {
 	total, okRT, okSafe, shown := 0, 0, 0, 0
 	maxShow := 12
 	if v := os.Getenv("SHOW"); v != "" {
-		fmt.Sscanf(v, "%d", &maxShow)
+		_, _ = fmt.Sscanf(v, "%d", &maxShow) // unparsable SHOW keeps the default
 	}
 	for sc.Scan() {
 		var r row

@@ -108,7 +108,7 @@ func TestUpgradeRollbackRestoresFilesBackupsModesAndCreations(t *testing.T) {
 	if err := os.Mkdir(blocked, 0o555); err != nil {
 		t.Fatal(err)
 	}
-	defer os.Chmod(blocked, 0o755)
+	defer func() { _ = os.Chmod(blocked, 0o755) }()
 	// Read succeeds, publication fails, after earlier files have been published.
 	writes := []upgradeWrite{
 		{name: ".khub/config.yaml", before: old, after: upgradeFile{[]byte("new version\n"), old.mode}},

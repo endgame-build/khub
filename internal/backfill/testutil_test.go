@@ -6,6 +6,7 @@ package backfill
 // have real history.
 
 import (
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -194,15 +195,9 @@ func snapshot(t *testing.T, dir string) map[string]string {
 }
 
 func locatedCode(err error) string {
-	for e := err; e != nil; {
-		if l, ok := e.(*errs.Located); ok {
-			return l.Code
-		}
-		u, ok := e.(interface{ Unwrap() error })
-		if !ok {
-			return ""
-		}
-		e = u.Unwrap()
+	var l *errs.Located
+	if errors.As(err, &l) {
+		return l.Code
 	}
 	return ""
 }

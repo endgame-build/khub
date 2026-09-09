@@ -320,9 +320,9 @@ func typeView(resolved *schema.ResolvedSchema, rtype *schema.ResolvedType) *omap
 	// The id scheme, as declared and as rendered: an agent building an `add`
 	// reads `id_shape` to know what the write will be named, and `id_prefix`
 	// to know which field decides it.
-	v.Set("id_prefix", idPrefixView(rtype.IdPrefix))
-	v.Set("id_date", rtype.IdDate)
-	v.Set("id_shape", nullIfEmpty(rtype.IdShape()))
+	v.Set("id_prefix", idPrefixView(rtype.IDPrefix))
+	v.Set("id_date", rtype.IDDate)
+	v.Set("id_shape", nullIfEmpty(rtype.IDShape()))
 	v.Set("required", rtype.Required)
 	v.Set("orphan", rtype.Orphan)
 	v.Set("when", strPtr(rtype.When))
@@ -531,7 +531,7 @@ func nullIfEmpty(s string) any {
 
 // idPrefixView renders id_prefix the way it was authored — a literal token,
 // or `{by, map}` in declaration order — and null when the type declares none.
-func idPrefixView(p *schema.IdPrefix) any {
+func idPrefixView(p *schema.IDPrefix) any {
 	if p == nil {
 		return nil
 	}

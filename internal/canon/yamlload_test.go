@@ -5,7 +5,10 @@ import (
 	"encoding/json"
 	"math"
 	"os"
+	"strings"
 	"testing"
+
+	"github.com/endgame-build/khub/internal/omap"
 )
 
 func TestScalarResolutionDifferential(t *testing.T) {
@@ -114,4 +117,43 @@ func itoa(n int64) string {
 		return "-" + string(b)
 	}
 	return string(b)
+}
+
+// An explicit `? key` entry — what the emitter itself writes for a key past
+// 128 characters — must load back. Found by FuzzEmitRoundTrip.
+func TestLoadDocReadsExplicitKeys(t *testing.T) {
+	long := strings.Repeat("k", 130)
+	v, err := LoadDoc("? " + long + "\n: value\n")
+	if err != nil {
+		t.Fatalf("explicit key: %v", err)
+	}
+	m, ok := v.(*omap.Map)
+	if !ok {
+		t.Fatalf("want a map, got %T", v)
+	}
+	if got, _ := m.Get(long); got != "value" {
+		t.Fatalf("value = %#v", got)
+	}
+}
+
+// `_` and `0x_` match the 1.2 integer pattern but hold no digit; they stay
+// strings rather than becoming an empty integer literal. Found by
+// FuzzEmitRoundTrip.
+func TestDigitlessIntegerPatternsStayStrings(t *testing.T) {
+	for _, in := range []string{"_", "0x_", "0b_", "0o_", "+_"} {
+		if got := ResolvePlainScalar(in); got != in {
+			t.Errorf("%q resolved to %T %#v, want the string", in, got, got)
+		}
+	}
+	out, err := DumpRT(mustMap(t, "v", "_"))
+	if err != nil || out != "v: '_'\n" {
+		t.Fatalf("emit %q err=%v", out, err)
+	}
+}
+
+func mustMap(t *testing.T, k string, v any) *omap.Map {
+	t.Helper()
+	m := omap.New()
+	m.Set(k, v)
+	return m
 }

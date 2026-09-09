@@ -21,6 +21,8 @@ var boolish = map[string]bool{
 }
 var trueish = map[string]bool{"true": true, "yes": true, "1": true, "on": true}
 
+// Present reports whether a value counts as set: nil, blank strings and empty
+// lists do not.
 func Present(v any) bool {
 	switch x := v.(type) {
 	case nil:
@@ -34,6 +36,7 @@ func Present(v any) bool {
 	}
 }
 
+// IsBool reports whether v is a bool or one of the YAML 1.1 boolean words.
 func IsBool(v any) bool {
 	switch x := v.(type) {
 	case bool:
@@ -45,6 +48,8 @@ func IsBool(v any) bool {
 	}
 }
 
+// AsBool coerces v to a bool the way the Python build did: true-ish words,
+// non-zero numbers and non-empty lists are true.
 func AsBool(v any) bool {
 	switch x := v.(type) {
 	case bool:

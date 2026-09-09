@@ -7,6 +7,7 @@
 // finding. A lens is a prompt for whoever is reviewing the body, human or
 // agent — the judgement it asks for is the part a reader has to be able to
 // disagree with.
+
 package template
 
 import (

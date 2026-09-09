@@ -7,6 +7,7 @@ package wire
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -426,7 +427,8 @@ func TestResolveTarget(t *testing.T) {
 	}
 	bogus := "bogus"
 	_, err := ResolveTarget(&bogus)
-	l, ok := err.(*errs.Located)
+	var l *errs.Located
+	ok := errors.As(err, &l)
 	if !ok || l.Code != "bad_target" {
 		t.Fatalf("err = %v", err)
 	}

@@ -5,6 +5,7 @@
 // and leaves undeclared extensions alone unless strict closes the schema. It
 // collects every error rather than stopping at the first (REQ-INT001-02). It
 // does NOT enforce required-completeness — that is check's job.
+
 package integrity
 
 import (
@@ -311,10 +312,10 @@ func idError(rtype *schema.ResolvedType, slug string, meta *omap.Map) (string, b
 	if rtype.Storage.Layout == schema.LayoutSingleton {
 		return "", false
 	}
-	shape := rtype.IdShape()
+	shape := rtype.IDShape()
 	rest := slug
 
-	if prefix := rtype.IdPrefix; prefix != nil {
+	if prefix := rtype.IDPrefix; prefix != nil {
 		expected, ok := prefix.Resolve(meta)
 		if !ok {
 			// The deciding attribute is unset, so no prefix can be right and
@@ -345,7 +346,7 @@ func idError(rtype *schema.ResolvedType, slug string, meta *omap.Map) (string, b
 		rest = slug[len(found)+1:]
 	}
 
-	if rtype.IdDate {
+	if rtype.IDDate {
 		// Presence only, never absence: slugBase slugifies the raw title, so a
 		// title like "2026 07 28 audit" legitimately mints a date-shaped opening
 		// on an undated type. Requiring its absence would reject correct ids.

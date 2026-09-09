@@ -98,13 +98,13 @@ func main() {
 
 	today, err := time.Parse("2006-01-02", *todayFlag)
 	if err != nil {
-		fail(fmt.Errorf("-today: %v", err))
+		fail(fmt.Errorf("-today: %w", err))
 	}
 	var scales []int
 	for part := range strings.SplitSeq(*scalesFlag, ",") {
 		n, err := strconv.Atoi(strings.TrimSpace(part))
 		if err != nil {
-			fail(fmt.Errorf("-scales: %v", err))
+			fail(fmt.Errorf("-scales: %w", err))
 		}
 		scales = append(scales, n)
 	}
@@ -252,7 +252,7 @@ func invoke(bin, root string, argv []string, env []string) (int, error) {
 	if errors.As(err, &exit) {
 		return exit.ExitCode(), nil
 	}
-	return -1, fmt.Errorf("%s %s: %v", bin, strings.Join(full, " "), err)
+	return -1, fmt.Errorf("%s %s: %w", bin, strings.Join(full, " "), err)
 }
 
 // timed is the median of repeat runs; the caller has already spent the

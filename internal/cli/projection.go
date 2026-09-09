@@ -2,6 +2,7 @@
 // Neither gates — both are no-op-safe reads that write a derived, disposable
 // artifact, so an empty workspace is a success. Neither takes --format either:
 // they print prose, and only the shared error boundary emits JSON.
+
 package cli
 
 import (

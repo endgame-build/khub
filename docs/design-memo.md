@@ -1,6 +1,6 @@
 # khub: Design Memo
 
-**Status:** khub is structured, schema-bound context management for analytical and operational work, a domain-agnostic engine where the schema is the operational setup. The engine is proven on firm-hq's live firm-ops corpus.
+**Status:** khub is structured, schema-bound context management for analytical and operational work, a domain-agnostic engine where the schema is the operational setup. The engine is proven on a live firm-ops corpus.
 
 ## What It Is
 
@@ -42,7 +42,7 @@ do not know the formal languages or logic that express ontological concepts," an
 asking one to work in OWL "may result in errors or omissions, or in the expert
 becoming frustrated and losing interest entirely" (Westerinen & Tauber, *Ontology
 Development by Domain Experts (Without Using the "O" Word)*, Applied Ontology, IOS
-Press; see [`ontograph-review.md`](ontograph-review.md)). khub's schema is the
+Press). khub's schema is the
 rendering that fits how the expert works; any RDF/OWL projection is derived from it
 and never the authoring surface. The schema is split into three layer files — `ontology.yaml` (the domain: per-type `attributes`, `relations`, `when`), `policy.yaml` (this workspace's gates: `required`, `orphan`) and `storage.yaml` (`layout`/`format`/`path`/`id_prefix`/`template`) — merging at load time into one resolved contract. The `base` block (`type`, `draft`, `author`, `created`/`updated`, `tags`, the OKF fields, the `any → any` edges) is khub's own plumbing and ships EMBEDDED in the binary, supplied to every resolve and never copied into a workspace; an authored `ontology.base` is rejected outright — the base is not an authoring surface. A type declares only its domain delta and overrides a base attribute by redeclaring it. The split is what makes the ontology projectable: `ontology.yaml` carries purely the domain, which is what an RDF/SHACL export reads.
 
@@ -85,11 +85,11 @@ The concrete stack under the five layers. Each pick stays dependency-light and e
 | Graph engine (if ever) | embedded graph engine (oxigraph or a kuzu fork) | considered and not adopted; kuzu was archived Oct 2025 (Apple acqui-hire), so a fork or oxigraph would be the path, and a server stays unjustified while the corpus is small |
 | CLI | **`cobra`** + **`pflag`** | declarative commands, `--format json` for the agent, trees and tables for a human; the panel and table rendering is khub's own |
 | Git history | `git` subprocess | `stale` and `backfill` batch file history reads where possible; git is present, so no library dependency |
-| Tooling | **Go**, **gofmt**, **go vet**, **golangci-lint**, `go test` | a golden-corpus test runs khub against an HQ snapshot and asserts it validates and checks cleanly (a functional cutover, judged on its own output) |
+| Tooling | **Go**, **gofmt**, **go vet**, **golangci-lint**, `go test` | a golden-corpus test runs khub against a firm-ops corpus snapshot and asserts it validates and checks cleanly (a functional cutover, judged on its own output) |
 
 Go, shipped as a single static binary (`npm install -D @endgame-build/khub`). It was a Python console script through 0.18.0; the rewrite removed the interpreter from every install. Agent skills, thin `SKILL.md` files over the same commands, are embedded in the binary and install with `khub install-skills`.
 
-Two eval tiers: deterministic golden-file tests cover the engine (the HQ functional-cutover test above), and an OKF-style fuzzy goldens-eval scores the LLM ingestion layer: precision and recall over extracted types and edges, gated on `khub check`.
+Two eval tiers: deterministic golden-file tests cover the engine (the functional-cutover test above), and an OKF-style fuzzy goldens-eval scores the LLM ingestion layer: precision and recall over extracted types and edges, gated on `khub check`.
 
 ### Principles (Invariants)
 
@@ -101,7 +101,7 @@ Two eval tiers: deterministic golden-file tests cover the engine (the HQ functio
 
 ### Authoring and Integrity
 
-- **Identity.** Each entity's **id is its slug**: one bare, human-readable token (`auth`, `initech-pov`) that names the file or folder on disk and identifies the node in the graph. No type prefix. Uniqueness is per type, `(type, slug)`, with the file path as the globally-unique key; a within-type collision is refused (`slug_taken`) rather than suffixed, because minting reads no siblings — an id is a function of the schema and the entity's own fields, nothing else on disk. Typed relations resolve by their schema-known target type (`lives_in: api`); polymorphic (`any`-typed) relations take a bare slug too, qualified as `type/slug` only when a slug is ambiguous across types. An external identifier rides along as a non-authoritative `source_id` alias (the ingestion path). A preset may also declare integration routing keys (e.g. Recorder folder ids) as first-class attributes; the `source_id` alias is specifically for an external system's record id. Renaming a slug is not yet supported.
+- **Identity.** Each entity's **id is its slug**: one bare, human-readable token (`auth`, `initech-pov`) that names the file or folder on disk and identifies the node in the graph. No type prefix. Uniqueness is per type, `(type, slug)`, with the file path as the globally-unique key; a within-type collision is refused (`slug_taken`) rather than suffixed, because minting reads no siblings — an id is a function of the schema and the entity's own fields, nothing else on disk. Typed relations resolve by their schema-known target type (`lives_in: api`); polymorphic (`any`-typed) relations take a bare slug too, qualified as `type/slug` only when a slug is ambiguous across types. An external identifier rides along as a non-authoritative `source_id` alias (the ingestion path). A preset may also declare integration routing keys (e.g. a notes-tool folder id) as first-class attributes; the `source_id` alias is specifically for an external system's record id. Renaming a slug is not yet supported.
 - **Storage layout is per-type config.** A type stores its entities as individual files or as a single-file collection. A preset sets the layout per type; an engagement can override it.
 
   Inventory as files (one entity per file):
@@ -231,17 +231,17 @@ moment the packages become public.
 
 ## The Proving Ground
 
-The **engine** is proven on the real thing: **firm-hq** cut over to khub. The proving ground is HQ's live firm-operations corpus, already running the projection-and-validation pattern under `kb.py`. khub runs read-only against the same files, then takes over: a functional cutover proven against the live corpus. Markdown is truth, so the risk stays low: khub never owns the data, the `.md` files go untouched, and the incumbent keeps working until cutover.
+The **engine** is proven on the real thing: a consultancy's live firm-operations hub cut over to khub from the hand-rolled projection-and-validation script it ran before. khub runs read-only against the same files, then takes over: a functional cutover proven against the live corpus. Markdown is truth, so the risk stays low: khub never owns the data, the `.md` files go untouched, and the incumbent keeps working until cutover.
 
-The cutover exercised the whole engine: the schema-introspecting core library, the in-memory ordered graph, the integrity loop (`validate`/`check`/`stale`), plus `reindex` and `backfill` for the HQ migration; the full author and query command surface; `khub init`; and the **firm-ops preset**, the port of `hq.schema.yml` (9 types, 14 relation predicates), captured in full in `firm-ops-preset.md`.
+The cutover exercised the whole engine: the schema-introspecting core library, the in-memory ordered graph, the integrity loop (`validate`/`check`/`stale`), plus `reindex` and `backfill` for the migration; the full author and query command surface; `khub init`; and the **firm-ops preset** (9 types, 14 relation predicates), captured in full in `firm-ops-preset.md`.
 
 Not yet built, and named: the persisted SQLite/graph projection; `diff-preset` drift/promotion; hub↔engagement sync; facet and OKF-bundle ingestion; `rename`. MCP is rejected for the local product shape. Existing-workspace mutations now serialize under one lock.
 
-### HQ Firm-Ops: Engine Coverage
+### Firm-Ops: Engine Coverage
 
 The firm-ops schema is the real engine test. It exercises most of the engine's mechanisms on real data and at real scale, plus several a synthetic seed never would. The full entity, property, and relation capture lives in `firm-ops-preset.md`; the coverage map:
 
-| Engine mechanism | Where HQ exercises it |
+| Engine mechanism | Where firm-ops exercises it |
 |------------------|------------------------|
 | enums, scalars, `source_id` alias | `stage`/`call_type`/`role`/`phase` enums; `external_repo`/`website`; `crm_id`/`note_id` aliases |
 | required relations → `check` completeness | `owner` (most types), `client` (engagements), `engagement` (meetings) |
@@ -250,10 +250,10 @@ The firm-ops schema is the real engine test. It exercises most of the engine's m
 | union- and `any`-typed edges + `type/slug` | `engagement` (union → opportunity\|project\|partnership); `related`/`sources`/`depends_on` (`any`) |
 | mixed storage layout | flat `clients/{slug}.md` vs folder `projects/{slug}/_index.md` |
 | explicit union edge (nesting not yet supported) | `meeting` flat at `meetings/{slug}.md`; `engagement` an explicit union edge |
-| the `draft` flag (`draft: true\|false`) | added by khub over HQ's per-type `stage`/`status` |
-| real scale and mess | the live HQ corpus, plus reference docs with no frontmatter to skip cleanly |
+| the `draft` flag (`draft: true\|false`) | added by khub over the source's per-type `stage`/`status` |
+| real scale and mess | the live corpus, plus reference docs with no frontmatter to skip cleanly |
 
-The one family HQ leaves uncovered is the intent/behavior **satisfies-gap**: a Requirement with no Capability, covered by the shipped build presets. Self-referential and derived-inverse edges (`supersedes`/`superseded_by`) also live there. HQ's gap query is structural instead: orphans and missing required relations, both surfaced by `check`.
+The one family firm-ops leaves uncovered is the intent/behavior **satisfies-gap**: a Requirement with no Capability, covered by the shipped build presets. Self-referential and derived-inverse edges (`supersedes`/`superseded_by`) also live there. The firm-ops gap query is structural instead: orphans and missing required relations, both surfaced by `check`.
 
 ## Build Presets
 
@@ -265,7 +265,7 @@ khub records durable requirements, decisions, architecture, and specs. Live deli
 
 - **facet** seeds structural entities and supplies the ingestion format; the overlap is only the ingestion path. Coupling stays loose: khub reads facet output with no runtime dependency.
 - **forge / beads / GitHub** own live delivery execution (work packages, sprint state, tickets) and the spec framework (SDD or its like) owns the specs directory; an in-flight spec points at hub ids from its own frontmatter and khub does not read it back. khub records the durable decision/requirement/use-case/component nodes and links out by `resource`; the facet import lands by the map in `build-hub-preset.md`.
-- **firm-hq** is the working precedent for the projection-and-validation pattern; khub generalizes it (schema-introspected checks, no graph engine) and is itself the kind of operational hub an HQ preset would produce.
+- The firm-operations hub khub was first cut over to is the working precedent for the projection-and-validation pattern; khub generalizes it (schema-introspected checks, no graph engine) and is itself the kind of operational hub the firm-ops preset produces.
 - **OKF (Open Knowledge Format)** is the vendor-neutral substrate khub speaks (Google, v0.1: a git tree of `.md` concepts with a required `type`, cross-links, `index.md`, `log.md`). khub's Markdown entities are conformant OKF concepts, so khub is an OKF implementation and extension: it adds a typed schema, typed relations, a `draft` flag, and the graph. Extra serialization formats and collections (which OKF lacks) go further: per-entity `json`/`yaml` (a single mapping; prose rides in a reserved `body` field) and single-file collections (`layout: collection`, `format: json|jsonl|yaml`, row-level entities; `docs/collections-design.md` holds the row-model contract). `gjson` remains named-but-undefined; the schema rejects it. Markdown entities carry the extras as OKF-tolerated frontmatter; any workspace projects to a conformant OKF bundle. khub adopts OKF's optional `title`, `description`, and `resource` fields and emits OKF `index.md` (stamped `okf_version`) from `reindex`. Reading external OKF bundles permissively as drafts is a planned consume-side path alongside facet ingestion (schema-validated and one-directional; khub is record-of and writes nothing back to the source). It does not adopt OKF's conventional body sections; relations stay typed in frontmatter. The `status` OKF-conformance flag reports whether the workspace would project to a valid OKF bundle, the conditions `export --okf` requires (every entity carries `type`, relations resolve, an `index.md` generates), rather than whether the on-disk tree is already all-Markdown.
 
 ## Open Questions (Non-Blocking)

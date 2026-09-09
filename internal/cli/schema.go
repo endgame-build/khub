@@ -1,6 +1,7 @@
 // schema.go ports cli/schema_cmd.py: the four introspection views over the
 // active schema. Zero per-type knowledge — every row derives from the resolved
 // contract at runtime.
+
 package cli
 
 import (

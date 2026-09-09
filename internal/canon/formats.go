@@ -13,7 +13,10 @@ import (
 	"github.com/endgame-build/khub/internal/omap"
 )
 
+// PerItem lists the formats a one-entity-per-file type may declare.
 var PerItem = map[string]bool{"md": true, "json": true, "yaml": true}
+
+// Collection lists the formats a single-file collection type may declare.
 var Collection = map[string]bool{"json": true, "jsonl": true, "yaml": true}
 
 const bodyKey = "body"
@@ -160,7 +163,7 @@ func cloneWith(m *omap.Map, key string, v any) *omap.Map {
 	return out
 }
 
-// FTSBody: the searchable prose — body plus every scalar string field except
+// FTSBody is the searchable prose — body plus every scalar string field except
 // type/title/name.
 func FTSBody(meta *omap.Map, body string) string {
 	parts := []string{body}
@@ -178,7 +181,7 @@ func FTSBody(meta *omap.Map, body string) string {
 
 // --- collections -------------------------------------------------------------
 
-// LoadCollection: raw rows keyed by slug; error on ANY bad row (whole-file
+// LoadCollection returns raw rows keyed by slug; error on ANY bad row (whole-file
 // malformed contract). Empty text → zero rows.
 func LoadCollection(text, fmt_ string) (*omap.Map, error) {
 	rows := omap.New()
@@ -273,14 +276,14 @@ func DumpCollection(rows *omap.Map, fmt_ string) (string, error) {
 	}
 }
 
-// RenderRow: one row's stored serialization (get --format raw for a row).
+// RenderRow is one row's stored serialization (get --format raw for a row).
 func RenderRow(slug string, row *omap.Map, fmt_ string) (string, error) {
 	one := omap.New()
 	one.Set(slug, row)
 	return DumpCollection(one, fmt_)
 }
 
-// SplitRow: a raw row as (meta, body) — reserved key stripped, row untouched.
+// SplitRow splits a raw row into (meta, body) — reserved key stripped, row untouched.
 func SplitRow(row *omap.Map, fmt_ string) (*omap.Map, string, error) {
 	meta := omap.New()
 	for _, k := range row.Keys() {

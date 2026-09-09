@@ -9,6 +9,7 @@
 // with box=None, padding=(0,1) and pad_edge=False, whose column widths follow
 // Rich's own algorithm — measure every column, then either distribute the
 // surplus or collapse the widest column until the row fits.
+
 package cli
 
 import (

@@ -2,6 +2,49 @@
 
 Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); khub is pre-release.
 
+## [Unreleased]
+
+### BREAKING
+
+- **firm-ops 0.3.0 drops its vendor-specific fields.** `crm_id` → `crm_id`,
+  `budget_id` → `budget_id`, `notes_folder` → `notes_folder`,
+  `notes_folder_id` → `notes_folder_id`; `opportunity.source` and
+  `project.source` are `referral | outbound | inbound | partner | event |
+  existing-client`; `meeting.source` is `recording | manual` and
+  `transcript.source` is `recording`; `project.external_repo` accepts any
+  `owner/name`. An existing firm-ops workspace renames the keys in its
+  frontmatter and maps its old `source` values (`recording` → `recording`, a
+  partner name → `partner`) before `khub upgrade`.
+
+### Removed
+
+- The Python-era `tests/eval/` harness, the parity runner's `-differential`
+  mode (`-bin-b`, `-seed-ws`, `-seeds`, `-len`, `-v`, `-workflows`) and three
+  Go test binaries that had been tracked since the cutover. Nine internal
+  planning documents leave `docs/`.
+
+### Changed
+
+- CLI help examples and unit-test fixtures use fictional names (`initech`,
+  `northwind`, `noor`) in place of real ones.
+- golangci-lint runs staticcheck (minus ST1005), errorlint, unused and errcheck
+  alongside the choke-point rules; the tree is clean under them.
+- GitHub Actions are pinned to commit SHAs, and goreleaser archives carry the
+  commit timestamp so a rebuild of the same commit is byte-identical.
+- New at the root: SECURITY.md, CODE_OF_CONDUCT.md, NOTICE, .editorconfig,
+  .github/CODEOWNERS.
+
+### Fixed
+
+- A document whose key is written in explicit form (`? key` on its own line —
+  what the emitter itself writes for a key past 128 characters) now loads;
+  it failed with "unsupported YAML node". `edit` still re-emits such a document
+  whole rather than splicing it.
+- A plain scalar that matches the YAML 1.2 integer pattern without holding a
+  digit (`_`, `0x_`) stays a string. It resolved to an empty integer literal,
+  which emitted as nothing and loaded back as null. Both found by the new
+  fuzz targets in `internal/canon`.
+
 ## [0.24.0] — 2026-09-08
 
 ### BREAKING
@@ -616,7 +659,7 @@ it carried a changelog line of its own.
   per-repo `devDependencies` pin — one khub version per repo, upgraded by a
   reviewed one-line PR — which is what keeps khub's byte-stable output
   contract from drifting between teammates. npm is the only channel: the curl
-  downloader, `install.sh`, its Cloudflare Pages hosting at `khub.end.game`
+  downloader, `install.sh`, its static hosting
   and the `publish-install` workflow are all deleted — a script designed to
   locate a repo-scoped GitHub token was khub's largest attack surface, and it
   wrapped one command. A machine-global install is `npm install -g
@@ -1081,7 +1124,7 @@ Claude-only channel for the same two files — is gone.
   clone of a private repo. It shelled out to `npx skills add
   git@github.com:endgame-build/khub.git` because `plugin/skills/` sat outside the
   wheel and the files genuinely were not on disk at runtime — which made a
-  two-file copy unusable for anyone without SSH access to the ENDGAME org, and
+  two-file copy unusable for anyone without SSH access to the org, and
   broken offline.
 - **New flags:** `--target claude|agents|opencode` and `--skill khub|setup` (both
   repeatable), `--global` for the home directories, `--dry-run`. Default writes
@@ -1354,7 +1397,7 @@ The `build-graph.py` replacement's missing half: BM25-ranked FTS5 over title + f
 
 ## [0.1.0] — 2026-07-07 (unreleased baseline)
 
-The v1 engine, proven by the firm-hq cutover (241 entities, `kb.py`/`build-graph.py`/`hq.schema.yml` retired):
+The v1 engine, proven by a live firm-ops cutover (241 entities, the incumbent scripts retired):
 
 - Schema-generic core over Markdown-in-git: `init` (presets, measured non-destructive force-seed), `compile` (LinkML + Pydantic + JSON Schema, optional extra), schema introspection, `status`.
 - Authoring verbs (`add`/`get`/`edit`/`link`/`unlink`/`remove`): referential-integrity hard-fail, capture never blocked, minimal-diff ruamel round-trip, O_EXCL slug minting, inbound-edge delete guard.

@@ -1,21 +1,28 @@
-# The choke-point rules from docs/go-port-plan.md: the serialization canon is
-# the only place bytes are shaped, so only internal/canon may reach for a YAML
-# library, and only internal/canon/jsonio.go writes JSON bytes (khub emits
-# three JSON dialects and encoding/json matches none of them; ojson.go decodes
-# through it, which is fine). Everything else goes through canon's loaders and
-# dumpers.
+# Two kinds of rule live here. The choke-point rules from docs/history/go-port-plan.md:
+# the serialization canon is the only place bytes are shaped, so only
+# internal/canon may reach for a YAML library, and only internal/canon/jsonio.go
+# writes JSON bytes (khub emits three JSON dialects and encoding/json matches
+# none of them; ojson.go decodes through it, which is fine). And the curated
+# general set .claude/rules/go.md argues for: staticcheck minus ST1005 (error
+# text is product here, capitalised Click-style, and a fixture pins it),
+# errorlint, unused and errcheck. golangci v2 runs its default set unless told
+# otherwise, so `default: none` keeps the set exactly this list — broadening it
+# is a deliberate decision, not a side effect.
 version: "2"
 
 linters:
-  # ONLY the choke-point rule. golangci v2 runs its default set unless told
-  # otherwise, so without this the step named "choke-point lint" silently
-  # enforced errcheck and friends across the whole tree — adopting a repo-wide
-  # standard as a side effect of a targeted rule. Broadening the linter set is
-  # a deliberate decision, not a default.
   default: none
   enable:
     - depguard
+    - errcheck
+    - errorlint
+    - staticcheck
+    - unused
   settings:
+    staticcheck:
+      checks:
+        - all
+        - -ST1005 # error strings are pinned prose, capitalised on purpose
     depguard:
       rules:
         yaml-choke-point:
@@ -46,3 +53,12 @@ linters:
           deny:
             - pkg: encoding/json
               desc: "only internal/canon/jsonio.go writes JSON bytes and only ojson.go decodes them (CLAUDE.md choke-point rule); use canon.EncodeCLI/EncodeDisk or canon's decoders"
+  exclusions:
+    presets:
+      - std-error-handling
+
+issues:
+  # Report everything: the defaults (50 per linter, 3 per message) hide the
+  # tail of a fresh linter's findings and make a green run mean less.
+  max-issues-per-linter: 0
+  max-same-issues: 0

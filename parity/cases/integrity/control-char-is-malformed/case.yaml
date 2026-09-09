@@ -1,7 +1,8 @@
 # A control character anywhere in the document makes it malformed: PyYAML's
 # and ruamel's Reader reject non-printables outright. goccy accepts them, which
 # silently turned a malformed file into a live entity in Go — found by the
-# differential fuzzer as a one-entity difference in `status` counts.
+# (since retired) differential fuzzer as a one-entity difference in `status`
+# counts.
 #
 # The 0x01 byte is written with the OCTAL escape, not \x01. The runner executes
 # `sh` steps through `sh -c`, which is dash on Ubuntu, and dash's printf does not

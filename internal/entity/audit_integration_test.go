@@ -153,7 +153,7 @@ func TestAuditValidationAndScanFailures(t *testing.T) {
 	if err := os.Chmod(filepath.Join(root, "a"), 0); err != nil {
 		t.Fatal(err)
 	}
-	defer os.Chmod(filepath.Join(root, "a"), 0o755)
+	defer func() { _ = os.Chmod(filepath.Join(root, "a"), 0o755) }()
 	if os.Geteuid() != 0 {
 		if _, err := integrity.Validate(root, nil, false); err == nil {
 			t.Fatal("unreadable scan succeeded")

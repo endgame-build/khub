@@ -1,6 +1,7 @@
 // Port of the storage half of src/khub/core/entity.py: entity_path,
 // _collection_file, _locator, _mutate_collection, _write_new, _read_doc,
 // _write_doc and _md_normalized.
+
 package entity
 
 import (
@@ -162,12 +163,11 @@ func readDoc(root, path string) (*omap.Map, string, error) {
 // as before.
 func writeDoc(root, path string, meta *omap.Map, body string) error {
 	fmtName := canon.FmtOf(path)
-	text, err := "", canon.ErrNoSplice
 	old, readErr := canon.ReadTextIn(root, path)
 	if readErr != nil {
 		return readErr
 	}
-	text, err = canon.SpliceDoc(old, meta, body, fmtName, canon.Mode12)
+	text, err := canon.SpliceDoc(old, meta, body, fmtName, canon.Mode12)
 	if errors.Is(err, canon.ErrNoSplice) {
 		text, err = canon.Render(meta, body, fmtName)
 	}

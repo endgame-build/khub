@@ -47,7 +47,7 @@ func main() {
 		}
 		var payload any
 		if err := json.Unmarshal(raw, &payload); err != nil {
-			die(fmt.Errorf("stdin is not JSON: %v", err))
+			die(fmt.Errorf("stdin is not JSON: %w", err))
 		}
 		fmt.Println(reduce(payload, args[1], args[2:]))
 	default:
@@ -60,7 +60,7 @@ func main() {
 		}
 		var payload any
 		if err := json.Unmarshal(raw, &payload); err != nil {
-			die(fmt.Errorf("%s: %v", args[0], err))
+			die(fmt.Errorf("%s: %w", args[0], err))
 		}
 		v, err := walk(payload, args[1])
 		if err != nil {

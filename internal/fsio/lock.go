@@ -1,4 +1,5 @@
 // Workspace mutations serialize on a stable advisory lock file.
+
 package fsio
 
 import (

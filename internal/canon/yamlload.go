@@ -51,6 +51,8 @@ func LoadDocMap(text string, mode ResolveMode) (*omap.Map, any, error) {
 // LoadDoc parses one YAML document with ruamel 1.2 resolution.
 func LoadDoc(text string) (any, error) { return LoadDocMode(text, Mode12) }
 
+// LoadDocMode parses one YAML document, resolving plain scalars as YAML 1.1
+// (Mode11, the scan altitude) or 1.2 (Mode12, the edit altitude).
 func LoadDocMode(text string, mode ResolveMode) (any, error) {
 	if strings.TrimSpace(text) == "" {
 		return nil, nil
@@ -124,6 +126,8 @@ func (r *resolver) node(n ast.Node, anchors map[string]any) (any, error) {
 		*ast.InfinityNode, *ast.NanNode, *ast.LiteralNode:
 		return r.scalar(n)
 	case *ast.TagNode:
+		return r.node(x.Value, anchors)
+	case *ast.MappingKeyNode: // explicit `? key` — what the emitter writes past 128 chars
 		return r.node(x.Value, anchors)
 	default:
 		return nil, fmt.Errorf("unsupported YAML node %T", n)
@@ -237,6 +241,8 @@ var (
 	sexa      = regexp.MustCompile(`^[-+]?[1-9][0-9_]*(?::[0-5]?[0-9])+$`)
 )
 
+// ResolvePlainScalarMode types a plain scalar as YAML 1.1 or 1.2 would:
+// the two differ on yes/no/on/off, octals and sexagesimals.
 func ResolvePlainScalarMode(s string, mode ResolveMode) any {
 	if mode == Mode11 {
 		switch s {
@@ -340,6 +346,13 @@ func parseYAMLInt(s string) any {
 		t, base = t[2:], 8
 	case strings.HasPrefix(t, "0x"):
 		t, base = t[2:], 16
+	}
+	if t == "" {
+		// The 1.2 int pattern admits `_` and `0x_`: no digit at all once the
+		// separators go. ruamel raises on those; khub cannot raise from a
+		// resolver, and an empty integer literal would emit as nothing and load
+		// back as null (found by FuzzEmitRoundTrip). It stays the string it is.
+		return s
 	}
 	if n, err := strconv.ParseInt(t, base, 64); err == nil {
 		if neg {

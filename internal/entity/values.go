@@ -1,6 +1,7 @@
 // Value helpers the src/khub/core/entity.py port needs: Python truthiness over
 // loaded YAML/JSON values, str.casefold matching, and the write-gate coercions
 // _to_bool / _to_number / _as_dateobj.
+
 package entity
 
 import (

@@ -36,6 +36,7 @@ func (n Node) Less(o Node) bool {
 	return n.Slug < o.Slug
 }
 
+// SortNodes orders nodes by (type, slug), the graph's ordering rule.
 func SortNodes(ns []Node) { sort.Slice(ns, func(i, j int) bool { return ns[i].Less(ns[j]) }) }
 
 // Index is a scanned view of the entity tree. Order holds the scan order

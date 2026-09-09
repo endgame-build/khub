@@ -10,11 +10,11 @@ import (
 	"testing"
 )
 
-func scanCorpus(t *testing.T, path string, fn func(line []byte)) {
-	t.Helper()
+func scanCorpus(tb testing.TB, path string, fn func(line []byte)) {
+	tb.Helper()
 	f, err := os.Open(path)
 	if err != nil {
-		t.Fatalf("corpus missing: %v (regenerate via parity/tools)", err)
+		tb.Fatalf("corpus missing: %v (regenerate via parity/tools)", err)
 	}
 	defer f.Close()
 	sc := bufio.NewScanner(f)

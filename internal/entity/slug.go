@@ -2,6 +2,7 @@
 // _slug_base and _explicit_slug. The ordinal machinery that sat beside them
 // (_minted_base, _next_ordinal, _mint_and_write) went with the `-NNN-` scheme;
 // see mintSlug for why.
+
 package entity
 
 import (
@@ -98,18 +99,18 @@ func mintSlug(rtype *schema.ResolvedType, meta *omap.Map) (string, error) {
 		return "", err
 	}
 	stem := ""
-	if rtype.IdPrefix != nil {
-		prefix, resolved := rtype.IdPrefix.Resolve(meta)
+	if rtype.IDPrefix != nil {
+		prefix, resolved := rtype.IDPrefix.Resolve(meta)
 		if !resolved {
 			// Only the by-value form can fail to resolve — a literal always
 			// does — so By is set here. The ordinal used to stand in for the
 			// missing prefix (`NNN-slug`); without it there is nothing to mint.
-			return "", errs.IdPrefixUndecided(rtype.Name, *rtype.IdPrefix.By, memberValues(rtype.IdPrefix))
+			return "", errs.IDPrefixUndecided(rtype.Name, *rtype.IDPrefix.By, memberValues(rtype.IDPrefix))
 		}
 		stem = prefix + "-"
 	}
 	dated := ""
-	if rtype.IdDate {
+	if rtype.IDDate {
 		dated = mintDate(meta) + "-"
 	}
 	return stem + dated + base, nil
@@ -129,7 +130,7 @@ func mintDate(meta *omap.Map) string {
 
 // memberValues lists the enum values a by-value prefix decides on, in declared
 // order — the `<functional|constraint|…>` a refusal names.
-func memberValues(p *schema.IdPrefix) []string {
+func memberValues(p *schema.IDPrefix) []string {
 	out := make([]string, len(p.Members))
 	for i, m := range p.Members {
 		out[i] = m.Value

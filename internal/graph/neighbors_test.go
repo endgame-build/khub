@@ -5,6 +5,7 @@ package graph
 // vs the unbounded impact closure, parallel edges, and the located lookup error.
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"sort"
@@ -178,7 +179,8 @@ func TestNeighborsParallelEdges(t *testing.T) {
 // TS-QRY-002-U05 (REQ-QRY002-03): an unresolvable id raises a lookup error.
 func TestNeighborsLookupError(t *testing.T) {
 	_, err := Neighbors(buildIdx(t, nws(t)), "ghost", nil, DirectionBoth, 1)
-	located, ok := err.(*errs.Located)
+	var located *errs.Located
+	ok := errors.As(err, &located)
 	if !ok || located.Code != "lookup_error" {
 		t.Fatalf("want lookup_error, got %#v", err)
 	}

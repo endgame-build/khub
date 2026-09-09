@@ -18,7 +18,6 @@ import (
 	"strings"
 
 	"github.com/goccy/go-yaml"
-	"github.com/goccy/go-yaml/ast"
 	"github.com/goccy/go-yaml/lexer"
 	"github.com/goccy/go-yaml/parser"
 	"github.com/goccy/go-yaml/token"
@@ -200,44 +199,6 @@ func splitFrontmatter(text string) (prefix, yamlText, suffix string, err error) 
 	return "", "", "", fmt.Errorf("unterminated frontmatter")
 }
 
-// editUpdated finds the first top-level-or-nested mapping value keyed
-// `updated` and rewrites its scalar to 2026-02-02, mutating the token so the
-// AST renders the change in place.
-func editUpdated(f *ast.File) (string, bool) {
-	var target *ast.MappingValueNode
-	for _, doc := range f.Docs {
-		ast.Walk(&finder{hit: &target}, doc.Body)
-		if target != nil {
-			break
-		}
-	}
-	if target == nil {
-		return "", false
-	}
-	tok := target.Value.GetToken()
-	old := tok.Value
-	tok.Value = "2026-02-02"
-	tok.Origin = strings.Replace(tok.Origin, old, "2026-02-02", 1)
-	return f.String(), true
-}
-
-type finder struct{ hit **ast.MappingValueNode }
-
-func (v *finder) Visit(node ast.Node) ast.Visitor {
-	if *v.hit != nil {
-		return nil
-	}
-	if mv, ok := node.(*ast.MappingValueNode); ok {
-		if key, ok := mv.Key.(*ast.StringNode); ok && key.Value == "updated" {
-			if _, scalar := mv.Value.(*ast.StringNode); scalar {
-				*v.hit = mv
-				return nil
-			}
-		}
-	}
-	return v
-}
-
 func diff(want, got string) (string, string) {
 	if want == got {
 		return "ok", ""
@@ -312,12 +273,12 @@ func report(results []result) {
 }
 
 func kind(s string) string {
-	switch {
-	case s == "ok" || s == "":
+	switch s {
+	case "ok", "":
 		return "ok"
-	case s == "diff":
+	case "diff":
 		return "diff"
-	case s == "skip":
+	case "skip":
 		return "skip"
 	default:
 		return "error"

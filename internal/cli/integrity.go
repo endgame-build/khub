@@ -1,6 +1,7 @@
 // integrity.go ports cli/integrity_cmd.py: the v1 integrity gate. Both verbs
 // follow the read-command output contract, and both GATE — the report is
 // emitted first, then a non-empty finding set exits 1.
+
 package cli
 
 import (

@@ -7,6 +7,7 @@ package graph
 // integrity consumes.
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"sort"
@@ -263,8 +264,8 @@ func TestHistoryChainRootReturnsSelf(t *testing.T) {
 // TS-QRY-004-U05 (REQ-QRY004-03): an unresolvable id raises a lookup error.
 func TestHistoryLookupError(t *testing.T) {
 	_, err := History(buildIdx(t, historyWS(t)), "ghost", "supersedes", nil)
-	located, ok := err.(*errs.Located)
-	if !ok || located.Code != "lookup_error" {
+	var located *errs.Located
+	if !errors.As(err, &located) || located.Code != "lookup_error" {
 		t.Fatalf("want lookup_error, got %#v", err)
 	}
 }
@@ -288,7 +289,8 @@ func TestHistoryCyclicChainTerminates(t *testing.T) {
 func TestWalkHistoryUnknownPredicate(t *testing.T) {
 	ws := nws(t)
 	_, err := WalkHistory(ws, "initech", "supersedes", nil)
-	located, ok := err.(*errs.Located)
+	var located *errs.Located
+	ok := errors.As(err, &located)
 	if !ok || located.Code != "unknown_predicate" {
 		t.Fatalf("want unknown_predicate, got %#v", err)
 	}
@@ -312,10 +314,10 @@ func TestWalkHistoryUnknownPredicate(t *testing.T) {
 // A named --predicate no type declares fails; nil (no filter) stays valid.
 func TestWalkNeighborsPredicateGate(t *testing.T) {
 	ws := nws(t)
-	if _, err := WalkNeighbors(ws, "initech-pov", ptr("nope"), DirectionBoth, 1); err == nil {
-		t.Fatal("want unknown_predicate")
-	} else if located, ok := err.(*errs.Located); !ok || located.Code != "unknown_predicate" {
-		t.Fatalf("got %#v", err)
+	_, perr := WalkNeighbors(ws, "initech-pov", ptr("nope"), DirectionBoth, 1)
+	var predicateErr *errs.Located
+	if !errors.As(perr, &predicateErr) || predicateErr.Code != "unknown_predicate" {
+		t.Fatalf("want unknown_predicate, got %#v", perr)
 	}
 	if _, err := WalkNeighbors(ws, "initech-pov", nil, DirectionBoth, 1); err != nil {
 		t.Fatalf("nil predicate must stay valid: %v", err)

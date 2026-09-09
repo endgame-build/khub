@@ -8,6 +8,7 @@ package search
 // only results.
 
 import (
+	"errors"
 	"strings"
 	"testing"
 
@@ -112,7 +113,8 @@ func TestSearchTypeFilter(t *testing.T) {
 		t.Fatalf("got %v", got)
 	}
 	_, err := Search(ws, "modernization", ptr("zzz"), 20)
-	located, ok := err.(*errs.Located)
+	var located *errs.Located
+	ok := errors.As(err, &located)
 	if !ok || located.Code != "unknown_type" {
 		t.Fatalf("want unknown_type, got %#v", err)
 	}
@@ -146,7 +148,8 @@ func TestSearchEmptyIsSuccess(t *testing.T) {
 // A malformed FTS5 expression raises a located error, not a driver error.
 func TestSearchBadMatchSyntaxIsLocated(t *testing.T) {
 	_, err := Search(sws(t), `mainframe AND "`, nil, 20)
-	located, ok := err.(*errs.Located)
+	var located *errs.Located
+	ok := errors.As(err, &located)
 	if !ok || located.Code != "bad_search_query" {
 		t.Fatalf("want bad_search_query, got %#v", err)
 	}
@@ -171,7 +174,8 @@ func TestSearchBadQueryDetailMatchesCPython(t *testing.T) {
 		{`a OR OR b`, `fts5: syntax error near "OR"`},
 	} {
 		_, err := Search(ws, tc.q, nil, 20)
-		located, ok := err.(*errs.Located)
+		var located *errs.Located
+		ok := errors.As(err, &located)
 		if !ok {
 			t.Fatalf("%q: want a located error, got %#v", tc.q, err)
 		}

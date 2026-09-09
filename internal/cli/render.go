@@ -34,7 +34,7 @@ func IsTTY() bool {
 	return term.IsTerminal(int(os.Stdout.Fd()))
 }
 
-// WantJSON: --format json or any non-TTY stream — for reads and writes alike.
+// WantJSON is true for --format json or any non-TTY stream — for reads and writes alike.
 func WantJSON(fmt_ string) bool { return fmt_ == "json" || !IsTTY() }
 
 // Emit prints one JSON document (json format or non-TTY) or runs the human view.
@@ -56,6 +56,7 @@ func Emit(data any, fmt_ string, human func()) error {
 // ExitError carries the process exit code through the command return path.
 type ExitError struct{ Code int }
 
+// Error names the exit code; nothing prints it, the code is the message.
 func (e *ExitError) Error() string { return fmt.Sprintf("exit %d", e.Code) }
 
 // Fail renders one failure in the shape the caller asked for: the JSON error

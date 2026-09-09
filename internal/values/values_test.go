@@ -78,6 +78,6 @@ func normalize(v any) any {
 
 func bytesReader(b []byte) *os.File { // tiny shim: use a pipe-free reader
 	r, w, _ := os.Pipe()
-	go func() { w.Write(b); w.Close() }()
+	go func() { _, _ = w.Write(b); _ = w.Close() }()
 	return r
 }

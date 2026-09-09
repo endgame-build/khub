@@ -17,21 +17,12 @@ khub's docs, organized by [Diátaxis](https://diataxis.fr): learning, tasks, ref
 - [firm-ops preset](firm-ops-preset.md) — the consulting-firm operating graph: 9 entity types, 14 relation predicates, per-type attributes.
 - [build-hub preset](build-hub-preset.md) — the one build preset: eleven types, the edges and the walks they buy, the ArchiMate and facet maps, and the ladder for what comes back. `build-lite` is an alias that resolves to it.
 - [Collections](collections-design.md) — the single-file collection row model: identity, locking, malformed handling, git attribution.
-- [Architecture audit release notes](architecture-audit-release-notes.md) — intentional contract changes and validation checklist.
 
 ## Explanation — understand the design
 
 - [Concepts](concepts.md) — the mental model in seven ideas: Markdown is truth, the derived graph, validate vs check, and more.
 - [Design memo](design-memo.md) — rationale, the five-layer engine, technology choices, and the invariants every change preserves.
 - [npm distribution](npm-distribution.md) — the distribution channel: one npm package, per-repo exact pinning via `devDependencies`, the publish pipeline, and why npm is the only way in.
-- [build-lite, standalone](build-lite-standalone.md) — the preset reimplemented as one skill plus one dependency-free script for opencode: what earns code when the only caller is an agent, what was cut, and why the corpus still graduates to khub.
-- [IWE, feature by feature](iwe-comparison.md) — the closest independent sibling reviewed against khub: where the architectures converge, why its document-only validation is no threat to the graph contract, and the eight things worth taking.
-- [OKF Agent Memory, feature by feature](okf-comparison.md) — implementation comparison, audit of the 80% token-saving claim, local retrieval measurements, and prioritized feature requests.
-- [Basic Memory, feature by feature](basicmemory-comparison.md) — khub's mirror image on the same substrate: schema inferred and advisory, relations as body wikilinks, persisted synced index, MCP-first; no new candidates, reinforces #13, #53, #57, #59.
-- [KAG, reviewed](kag-review.md) — Ant Group's LLM+KG QA framework: runtime rejected whole; contributes the ingestion alignment pass, the retrieval eval tier, and graph-shaped search hits (#59–#61).
-- [OntoGraph, reviewed](ontograph-review.md) — an OWL visualization service, dead since 2019 and unbuildable: why it is rejected as a tool, and the three things worth taking anyway (a schema-diagram idea, a peer-reviewed citation, a caveated test corpus).
-- [Feature candidates](feature-candidates.md) — index of the related-work candidates, one GitHub issue each, with what was explicitly rejected and why.
-- [Federation](federation-design.md) — pointer to the federation epic: khub as the record layer under Registry and GraphStore.
 
 ## History
 

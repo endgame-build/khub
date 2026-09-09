@@ -2,6 +2,7 @@
 // `stale` reports a (possibly empty) set. The machine view carries the git
 // fallback in each entry's `source`; the human view gets the notice, so the
 // JSON payload stays a clean list.
+
 package cli
 
 import (

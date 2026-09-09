@@ -7,6 +7,7 @@
 // Masking is byte-length and newline preserving — each masked byte becomes a
 // space, `\n` stays — so BodyRules and Metrics can slice the ORIGINAL body by
 // the H2Span offsets found in the masked one.
+
 package template
 
 import (

@@ -1,6 +1,7 @@
 // skill.go ports cli/skill_cmd.py: copy khub's agent skills into the local
 // agent directories. The install is a file copy out of the binary — offline,
 // silent, and safe to re-run.
+
 package cli
 
 import (

@@ -475,7 +475,7 @@ func resolveType(name string, decl *TypeDecl, base *BaseBlock, declared map[stri
 		relations.Set(rn, rr)
 	}
 
-	if err := checkIdPrefix(name, decl, attributes); err != nil {
+	if err := checkIDPrefix(name, decl, attributes); err != nil {
 		return nil, err
 	}
 	storage := StorageConfig{Layout: decl.Layout, Path: decl.Path, Fmt: decl.Format}
@@ -486,23 +486,23 @@ func resolveType(name string, decl *TypeDecl, base *BaseBlock, declared map[stri
 		Relations:   relations,
 		Required:    decl.Required,
 		Orphan:      decl.Orphan,
-		IdPrefix:    idPrefixOf(decl.IdPrefix),
-		IdDate:      decl.IdDate,
+		IDPrefix:    idPrefixOf(decl.IDPrefix),
+		IDDate:      decl.IDDate,
 		Template:    decl.Template,
 		TemplateOff: decl.TemplateOff,
 		When:        decl.When,
 	}, nil
 }
 
-// checkIdPrefix: a by-value prefix must name an enum attribute and cover every
+// checkIDPrefix: a by-value prefix must name an enum attribute and cover every
 // member. Checked here rather than on TypeDecl because the deciding attribute
 // may come from the base block, or be an override that tightens only
 // `required` — both invisible until the base has been merged in.
-func checkIdPrefix(name string, decl *TypeDecl, attributes *Ordered[*ResolvedAttribute]) error {
-	if decl.IdPrefix == nil || decl.IdPrefix.Decl == nil {
+func checkIDPrefix(name string, decl *TypeDecl, attributes *Ordered[*ResolvedAttribute]) error {
+	if decl.IDPrefix == nil || decl.IDPrefix.Decl == nil {
 		return nil
 	}
-	spec := decl.IdPrefix.Decl
+	spec := decl.IDPrefix.Decl
 	attr, ok := attributes.Get(spec.By)
 	if !ok || len(attr.Enum) == 0 {
 		return errs.New("schema_error", fmt.Sprintf(
@@ -532,12 +532,12 @@ func checkIdPrefix(name string, decl *TypeDecl, attributes *Ordered[*ResolvedAtt
 	return nil
 }
 
-func idPrefixOf(spec *IdPrefixSpec) *IdPrefix {
+func idPrefixOf(spec *IDPrefixSpec) *IDPrefix {
 	if spec == nil {
 		return nil
 	}
 	if spec.Literal != nil {
-		return &IdPrefix{Literal: spec.Literal}
+		return &IDPrefix{Literal: spec.Literal}
 	}
 	members := make([]PrefixMember, 0, spec.Decl.Map.Len())
 	for _, k := range spec.Decl.Map.Keys() {
@@ -545,7 +545,7 @@ func idPrefixOf(spec *IdPrefixSpec) *IdPrefix {
 		members = append(members, PrefixMember{Value: k, Prefix: prefix})
 	}
 	by := spec.Decl.By
-	return &IdPrefix{By: &by, Members: members}
+	return &IDPrefix{By: &by, Members: members}
 }
 
 func resolveAttr(name string, ad *AttrDecl, overridden bool) *ResolvedAttribute {
@@ -658,7 +658,7 @@ func smuggledError(list []vocabErr) *errs.Located {
 }
 
 // pyStrListRepr renders a []string as Python's repr of a list[str] — the shape
-// checkIdPrefix's message interpolates (`missing ['constraint'], unknown []`).
+// checkIDPrefix's message interpolates (`missing ['constraint'], unknown []`).
 func pyStrListRepr(items []string) string {
 	if len(items) == 0 {
 		return "[]"

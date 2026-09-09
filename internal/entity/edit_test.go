@@ -72,7 +72,7 @@ func TestEnumRevalidationLeavesFileUnchanged(t *testing.T) {
 	before := readFile(t, path)
 
 	_, err := Update(ws, "initech-deal", UpdateOpts{Fields: fields("stage", "banana")})
-	requireCode(t, err, "enum_violation")
+	_ = requireCode(t, err, "enum_violation")
 	if readFile(t, path) != before {
 		t.Fatal("a refused edit rewrote the file")
 	}
@@ -207,7 +207,7 @@ func TestStrictEditorRejectsUnknown(t *testing.T) {
 	path := deal(t, ws)
 
 	_, err := Update(ws, "initech-deal", UpdateOpts{Fields: fields("vibe", "high"), Strict: true})
-	requireCode(t, err, "strict_unknown_field")
+	_ = requireCode(t, err, "strict_unknown_field")
 
 	_, err = Update(ws, "initech-deal", UpdateOpts{Fields: fields("vibe", "high")})
 	requireNoError(t, err)

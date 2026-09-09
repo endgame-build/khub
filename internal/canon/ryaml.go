@@ -20,7 +20,12 @@ import (
 
 const bestIndent = 2
 
-func DumpRT(v any) (string, error)   { return dump(v, 80) }
+// DumpRT emits YAML in ruamel's round-trip profile at width 80 — entity
+// frontmatter and collections, the human-edited surface.
+func DumpRT(v any) (string, error) { return dump(v, 80) }
+
+// DumpWide emits YAML in ruamel's safe profile at width 4096 — the schema
+// layer files, where long scalars stay on one line.
 func DumpWide(v any) (string, error) { return dump(v, 4096) }
 
 func dump(v any, width int) (string, error) {
@@ -273,7 +278,7 @@ func analyze(s string) analysis {
 		if isBreak(ch) {
 			lineBreaks = true
 		}
-		if !(ch == '\n' || (ch >= 0x20 && ch <= 0x7e)) {
+		if ch != '\n' && (ch < 0x20 || ch > 0x7e) {
 			allowed := (ch == 0x85 || (ch >= 0xa0 && ch <= 0xd7ff) ||
 				(ch >= 0xe000 && ch <= 0xfffd) ||
 				(ch >= 0x10000 && ch <= 0x10ffff)) && ch != 0xfeff
@@ -374,14 +379,14 @@ func (e *emitter) writeScalarStr(s string, indent int, split, keyContext bool) {
 func chooseStyle(s string, a analysis, keyContext bool) string {
 	implicitStr := !a.empty && !resolvesAsOtherType(s)
 	if implicitStr {
-		if !(keyContext && (a.empty || a.multiline)) && a.allowBlockPlain {
+		if (!keyContext || (!a.empty && !a.multiline)) && a.allowBlockPlain {
 			return "plain"
 		}
 	}
 	if strings.ContainsRune(s, '\'') || strings.ContainsRune(s, '\n') {
 		return "double"
 	}
-	if a.allowSingle && !(keyContext && a.multiline) {
+	if a.allowSingle && (!keyContext || !a.multiline) {
 		return "single"
 	}
 	return "double"

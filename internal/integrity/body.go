@@ -4,6 +4,7 @@
 // the split is the whole point. A body whose headings are wrong is not the
 // document it claims to be; a body whose prose is thin is that document,
 // unfinished.
+
 package integrity
 
 import (

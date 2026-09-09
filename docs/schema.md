@@ -46,7 +46,7 @@ ontology:
     project:
       attributes:
         active: { type: bool, default: true }
-        external_repo: { type: text, pattern: '^endgame-build/[a-z0-9-]+$' }
+        external_repo: { type: text, pattern: '^[a-z0-9-]+/[a-z0-9-]+$' }
       relations:
         client: { to: client,  required: true }
         owner:  { to: person,  required: true }

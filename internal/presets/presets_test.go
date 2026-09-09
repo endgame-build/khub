@@ -249,7 +249,7 @@ func TestBuildHubPreset(t *testing.T) {
 		{"repo", "knowledge/repos", "rp-slug"},
 	} {
 		assertPath(t, s, tc.typ, tc.path)
-		if got := typeOf(t, s, tc.typ).IdShape(); got != tc.shape {
+		if got := typeOf(t, s, tc.typ).IDShape(); got != tc.shape {
 			t.Errorf("%s id shape = %q, want %q", tc.typ, got, tc.shape)
 		}
 	}

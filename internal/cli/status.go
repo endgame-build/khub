@@ -1,6 +1,7 @@
 // status.go ports cli/status_cmd.py: per-type counts, the draft/active split,
 // orphan/stale counts, and the OKF flag — every number derived from the graph
 // projection, none stored.
+
 package cli
 
 import (

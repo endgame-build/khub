@@ -125,6 +125,15 @@ func SpliceMapping(src []byte, want *omap.Map, mode ResolveMode) ([]byte, error)
 		// bytes are not guaranteed to survive, so refuse rather than guess.
 		return nil, ErrNoSplice
 	}
+	for _, tk := range toks {
+		if tk.Type == token.MappingKeyType {
+			// An explicit `? key` loads fine but its value sits on the line
+			// after the key, which the target collector does not model: it
+			// would read the key as "?" and append the real key as new. The
+			// emitter re-renders such a document correctly, so refuse here.
+			return nil, ErrNoSplice
+		}
+	}
 	have, nonMap, err := LoadDocMap(text, mode)
 	if err != nil || nonMap != nil {
 		return nil, ErrNoSplice

@@ -2,6 +2,7 @@
 // it into the agent context files and write the first index.md. Both tails
 // are best-effort (the wire one skippable with --no-wire); neither unwinds a
 // successful scaffold.
+
 package cli
 
 import (

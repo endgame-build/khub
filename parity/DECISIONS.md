@@ -121,7 +121,7 @@ live workspaces:
 | Workspace | Files | T1c (byte-exact reconstruction) |
 |---|---|---|
 | `khub-test` (firm-ops) | 6 | 6/6 |
-| `firm-ops-khub` (production) | 1781 | **1780/1781** |
+| a production firm-ops workspace | 1781 | **1780/1781** |
 
 The single diff is a line carrying **trailing whitespace after a scalar**
 (`$ref: '…'   `) in an archived OpenAPI spec — a raw `.yml` file khub never
@@ -585,3 +585,22 @@ upgrade-no-schema,upgrade-no-preset,upgrade-prose}`, and
 `init-wire-skills/skills-replace` for the `install-skills` change that landed
 with it (a skill directory is replaced, not overlaid, so files a release no
 longer ships are removed and reported as `removed`).
+
+## D26 — the Python-era leftovers go
+
+**Date 2026-09-08.** Three things the cutover left behind are deleted in one
+commit, each for the same reason: nothing runs them and nothing can.
+
+- `tests/eval/` — the agent-wiring eval restored above (see "`tests/eval/`
+  should not have been deleted"). It needs a Python venv and a headless Claude
+  Code session, no CI job invokes it, and it was the only Python left in a tree
+  whose README says Python was retired. Its findings survive in
+  `tests/eval/FINDINGS.md` at the last commit that carried it.
+- `parity/runner/differential.go` + `workflows.go` — the `-differential` mode
+  needs `-bin-b`, a second binary that died with Python (D-table above:
+  "`-differential` against Python"). 654 lines reachable only through a flag no
+  CI step passes. Recover from history if a self-invariant property test is
+  ever written.
+- `integrity.test`, `query.test`, `search.test` — three darwin/arm64 `go test
+  -c` binaries, 30 MB, tracked since the cutover commit because `.gitignore`
+  had no `*.test` line. It does now.

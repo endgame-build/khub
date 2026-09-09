@@ -82,7 +82,7 @@ func TestFieldValidationEnumAndPattern(t *testing.T) {
 		Fields: fields("client", "initech", "owner", "noor", "stage", "prospect",
 			"crm_id", "abc"),
 		UseTemplate: true})
-	requireCode(t, err, "pattern_violation")
+	_ = requireCode(t, err, "pattern_violation")
 }
 
 // A bad number raises a located error, not a bare ValueError; inf/nan rejected.
@@ -91,7 +91,7 @@ func TestNumberFieldRejectsNonNumericAndNonFinite(t *testing.T) {
 	for _, bad := range []string{"abc", "inf", "nan", "1e999"} {
 		_, err := Create(ws, "fragment", CreateOpts{
 			Fields: fields("stage", "raw", "confidence", bad), UseTemplate: true})
-		requireCode(t, err, "number_violation")
+		_ = requireCode(t, err, "number_violation")
 	}
 	ok, err := Create(ws, "fragment", CreateOpts{
 		Fields: fields("title", "Sure", "stage", "raw", "confidence", "0.8"), UseTemplate: true})

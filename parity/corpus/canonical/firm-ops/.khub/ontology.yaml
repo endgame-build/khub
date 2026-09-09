@@ -17,11 +17,11 @@ ontology:
           required: true
         source:
           enum:
-          - event
+          - partner
           - referral
           - outbound
           - inbound
-          - partner
+          - event
           - existing-client
         crm_id:
           type: text
@@ -49,15 +49,15 @@ ontology:
           default: true
         source:
           enum:
-          - event
+          - partner
           - referral
           - outbound
           - inbound
-          - partner
+          - event
           - existing-client
         external_repo:
           type: text
-          pattern: ^endgame-build/[a-z0-9-]+$
+          pattern: ^[a-z0-9-]+/[a-z0-9-]+$
         crm_id:
           type: text
           pattern: ^[0-9]+$

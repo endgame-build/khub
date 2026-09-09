@@ -12,6 +12,7 @@
 //
 // Every verb is schema-generic: it introspects the compiled schema at runtime
 // and has no per-type code path. The schema and git are the only gates.
+
 package entity
 
 import (

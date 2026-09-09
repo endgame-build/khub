@@ -145,7 +145,7 @@ schema until decided:
 1. **Zero behavior change for md/file/folder workspaces** — all command output,
    text and JSON, byte-identical before and after (no `locator`, no new keys,
    additive schema change only).
-2. **HQ pilot** (Noor, 2026-07-07): port real hq's `project-repos.yaml` into a
-   `repo` collection type in `a live firm-ops workspace`: rows become entities
+2. **Live pilot** (2026-07-07): port a real `project-repos.yaml` into a
+   `repo` collection type in a live firm-ops workspace: rows become entities
    with edges to projects; `validate`/`check`/`query`/`search` run green
    against the real corpus.

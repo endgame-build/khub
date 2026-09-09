@@ -1,5 +1,6 @@
 // search.go ports cli/search_cmd.py: full-text over title and body. Raw FTS5
 // MATCH syntax passes through ("quoted phrases", OR, NEAR, prefix*).
+
 package cli
 
 import (

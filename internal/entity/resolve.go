@@ -1,6 +1,7 @@
 // Port of the resolution half of src/khub/core/entity.py: resolve_id,
 // _same_target, _canonical_target, _resolve_write_target, _edges and
 // _inbound_edges.
+
 package entity
 
 import (

@@ -385,12 +385,3 @@ func fieldMatches(value any, wanted string) bool {
 	}
 	return values.Str(value) == wanted
 }
-
-func contains(ss []string, s string) bool {
-	for _, x := range ss {
-		if x == s {
-			return true
-		}
-	}
-	return false
-}

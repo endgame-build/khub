@@ -1,4 +1,5 @@
 // Ports the `stale` half of src/khub/core/gitlog.py (gitlog.py:90-148).
+
 package gitlog
 
 import (

@@ -178,7 +178,7 @@ func TestCollectionMintAndCollision(t *testing.T) {
 	requireMessageContains(t, e, "already taken")
 	_, err = Create(ws, "repo", CreateOpts{
 		Fields: fields("repo", "endgame-build/z"), UseTemplate: true})
-	requireCode(t, err, "no_slug_source")
+	_ = requireCode(t, err, "no_slug_source")
 }
 
 // editing one row leaves the sibling row's line byte-identical; a no-op unlink

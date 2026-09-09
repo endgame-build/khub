@@ -1,0 +1,9 @@
+khub
+Copyright 2026 ENDGAME
+
+This product includes software developed by third parties:
+
+- Cytoscape.js (https://js.cytoscape.org), Copyright (c) 2016-2025 The Cytoscape
+  Consortium, MIT License. Vendored as internal/assets/cytoscape.min.js with its
+  license header intact; the same text is at internal/assets/LICENSE.cytoscape.
+  It is inlined into the HTML that `khub viz` and `khub serve` render.

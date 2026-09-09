@@ -1,6 +1,7 @@
 // backfill.go ports cli/backfill_cmd.py: additive frontmatter/date writes for
 // cutover. It does not gate — an already-valid tree and a non-git workspace are
 // both success.
+
 package cli
 
 import (

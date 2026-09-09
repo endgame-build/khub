@@ -56,36 +56,22 @@ type caseSpec struct {
 }
 
 var (
-	binFlag      = flag.String("bin", "", "command to run (space-split; argv appended)")
-	record       = flag.Bool("record", false, "record expectations instead of verifying")
-	casesDir     = flag.String("cases", "parity/cases", "cases root")
-	only         = flag.String("only", "", "family or family/case filter")
-	coverage     = flag.String("coverage", "", "coverage.yaml path: report fixture gaps instead of running")
-	subsetBin    = flag.String("subset-of", "", "with -coverage: assert this binary's command set is a subset of coverage.yaml's (catches commands the port ADDS)")
-	differ       = flag.Bool("differential", false, "property mode: random verb sequences through two binaries, compared after every step")
-	binB         = flag.String("bin-b", "", "second binary for -differential")
-	seedWS       = flag.String("seed-ws", "", "workspace to clone for each -differential seed")
-	seeds        = flag.Int("seeds", 20, "-differential: number of seeded sequences")
-	seqLen       = flag.Int("len", 40, "-differential: steps per sequence")
-	verboseSteps = flag.Bool("v", false, "-differential: print every command as it runs")
-	workflowMode = flag.Bool("workflows", false, "-differential: emit realistic workflow arcs instead of uniform random verbs")
-	setupBin     = flag.String("setup-bin", "", "run steps whose verb is not yet ported with this binary (dual-ship bridge)")
-	portedCSV    = flag.String("ported", "", "comma-separated verbs -bin implements; others use -setup-bin")
-	repoRoot     = flag.String("repo", ".", "repo root (for tool paths)")
-	showDiffN    = flag.Int("diffs", 6, "max diffs to print per case")
+	binFlag   = flag.String("bin", "", "command to run (space-split; argv appended)")
+	record    = flag.Bool("record", false, "record expectations instead of verifying")
+	casesDir  = flag.String("cases", "parity/cases", "cases root")
+	only      = flag.String("only", "", "family or family/case filter")
+	coverage  = flag.String("coverage", "", "coverage.yaml path: report fixture gaps instead of running")
+	subsetBin = flag.String("subset-of", "", "with -coverage: assert this binary's command set is a subset of coverage.yaml's (catches commands the port ADDS)")
+	setupBin  = flag.String("setup-bin", "", "run steps whose verb is not yet ported with this binary (dual-ship bridge)")
+	portedCSV = flag.String("ported", "", "comma-separated verbs -bin implements; others use -setup-bin")
+	repoRoot  = flag.String("repo", ".", "repo root (for tool paths)")
+	showDiffN = flag.Int("diffs", 6, "max diffs to print per case")
 )
 
 func main() {
 	flag.Parse()
 	if *coverage != "" {
 		os.Exit(runCoverage(*coverage))
-	}
-	if *differ {
-		if *binFlag == "" || *binB == "" || *seedWS == "" {
-			fmt.Fprintln(os.Stderr, "-differential needs -bin, -bin-b and -seed-ws")
-			os.Exit(2)
-		}
-		os.Exit(runDifferential(*binFlag, *binB, *seedWS, *seeds, *seqLen))
 	}
 	if *binFlag == "" {
 		fmt.Fprintln(os.Stderr, "need -bin")
@@ -187,7 +173,7 @@ func runCase(dir string) (bool, error) {
 			cmd.Env = env
 			out, err := cmd.CombinedOutput()
 			if err != nil {
-				return false, fmt.Errorf("sh step failed: %s: %v\n%s", st.Sh, err, out)
+				return false, fmt.Errorf("sh step failed: %s: %w\n%s", st.Sh, err, out)
 			}
 			continue
 		}
@@ -219,7 +205,7 @@ func runCase(dir string) (bool, error) {
 		wantErr, eerr := os.ReadFile(base + ".stderr")
 		wantCodeRaw, cerr := os.ReadFile(base + ".exit")
 		if oerr != nil || eerr != nil || cerr != nil {
-			return false, fmt.Errorf("missing expectation for step %d (re-record with parity/tools/record.sh): %v",
+			return false, fmt.Errorf("missing expectation for step %d (re-record with parity/tools/record.sh): %w",
 				argvIdx, firstErr(oerr, eerr, cerr))
 		}
 		wantCode, aerr := strconv.Atoi(strings.TrimSpace(string(wantCodeRaw)))

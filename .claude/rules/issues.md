@@ -2,10 +2,9 @@
 
 The backlog is GitHub issues plus the org project board
 [#15 "khub"](https://github.com/endgame-build/khub/issues). Nothing else
-is a backlog: `docs/feature-candidates.md` is an **index** (a new candidate
-becomes an issue first, then the doc gains a line pointing at it), and the
-`docs/*.md` design documents hold *rationale*. An issue holds the *decision
-and its acceptance*.
+is a backlog: the `docs/*.md` design documents hold *rationale*; a new
+candidate becomes an issue first. An issue holds the *decision and its
+acceptance*.
 
 ## Standing verdicts — do not reopen without new evidence
 
@@ -21,12 +20,6 @@ and its acceptance*.
   (parked deliberately — say why in the body). GitHub's defaults mean what
   they say; `critical` means "blocks a shipped feature from reaching users"
   and nothing softer; `okf` is the OKF-spec theme and rides beside an area.
-- **Cross-repo federation work is not a khub issue.** HQ's cutover, the
-  Recorder lane, Registry MCP, GraphStore hosting, the ingester service: #137
-  names them and excludes them. Do not add them here.
-- **Numbering.** Candidate *n* in the doc is roughly issue #73+*n*, and such a
-  body opens with `Candidate #n`. Never cite a candidate number where an
-  issue number exists — the two ranges overlap (candidate #41 ≠ issue #41).
 - **P0 today** is the federation contracts plus OKF provenance, because both
   are cheaper to design in than to retrofit. That is the board's statement,
   restated here only so a session does not start elsewhere by default.

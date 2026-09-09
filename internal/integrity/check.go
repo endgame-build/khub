@@ -6,6 +6,7 @@
 // active-but-incomplete entities, drafts that cannot satisfy a required
 // relation, orphans, dangling edges, stray files, misplaced files, malformed
 // files, and edge cycles.
+
 package integrity
 
 import (

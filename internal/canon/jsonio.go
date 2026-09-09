@@ -20,6 +20,8 @@ import (
 	"github.com/endgame-build/khub/internal/omap"
 )
 
+// EncodeCLI renders v in the CLI dialect: one line, ASCII-escaped, a space
+// after each separator — what every --format json read prints.
 func EncodeCLI(v any) (string, error) {
 	var b strings.Builder
 	if err := encodeJSON(&b, v, true, -1, 0); err != nil {
@@ -28,6 +30,8 @@ func EncodeCLI(v any) (string, error) {
 	return b.String(), nil
 }
 
+// EncodeDisk renders v in the on-disk dialect: two-space indent, raw UTF-8,
+// trailing newline — the bytes of a .json entity.
 func EncodeDisk(v any) (string, error) {
 	var b strings.Builder
 	if err := encodeJSON(&b, v, false, 2, 0); err != nil {
@@ -36,6 +40,7 @@ func EncodeDisk(v any) (string, error) {
 	return b.String() + "\n", nil
 }
 
+// EncodeJSONLRow renders one jsonl collection row with slug as its first key.
 func EncodeJSONLRow(slug string, row *omap.Map) (string, error) {
 	merged := omap.New()
 	merged.Set("slug", slug)

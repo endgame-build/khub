@@ -1,6 +1,7 @@
 // root.go ports cli/main.py: the command registry (help order: init, upgrade,
 // status, …), the global options parsed before the command name, and the
 // exit-code trichotomy (0 success, 1 a gate failed, 2 a refusal or usage error).
+
 package cli
 
 import (

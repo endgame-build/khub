@@ -27,8 +27,14 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest]
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-go@v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # Names of clients, partners, people, internal systems and local paths do
+      # not ship. CHANGELOG.md is history and keeps the old attribute names its
+      # migration notes have to spell.
+      - name: No internal names ship
+        run: |
+          ! git grep -nIiE 'claude\.ai/code/session|/Users/|~/Sites|npm\.pkg\.github\.com|orgs/endgame-build' -- . ':!CHANGELOG.md' ':!.github/workflows/ci.yml'
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
         with:
           go-version: "1.25"
           cache: true
@@ -60,7 +66,7 @@ jobs:
         if: matrix.os == 'ubuntu-latest'
         run: go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12
       - name: Choke-point lint (only internal/canon may import a YAML library)
-        uses: golangci/golangci-lint-action@v9
+        uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
         with:
           # Pinned, not `latest`: a linter release could turn the tree red
           # with no commit of ours, and the choke-point rules are a gate.
@@ -136,7 +142,7 @@ jobs:
       contents: read
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: shellcheck
         run: shellcheck npm/build-packages.sh npm/smoke.sh
       - name: POSIX sh syntax

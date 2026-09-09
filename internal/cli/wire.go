@@ -1,6 +1,7 @@
 // wire.go ports cli/wire_cmd.py: link the workspace into the agent context
 // files. CLAUDE.md gets `@.khub/*.yaml` schema imports; AGENTS.md gets schema
 // pointer. Bare `wire` updates whichever already exist.
+
 package cli
 
 import (

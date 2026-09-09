@@ -5,8 +5,10 @@ primary consumer is **an AI agent**. That design position decides these rules.
 
 ## One output gate
 
-Every command routes through `internal/cli/render.go`. Never print from a
-command body. `Emit` / `Fail` / `Guard` are the only exits.
+Every command routes through `internal/cli/render.go`. Never print outside an
+`Emit` render closure — the `fmt.Print*` calls in command files all sit inside
+the human-render `func()` handed to `Emit`. `Emit` / `Fail` / `Guard` are the
+only exits.
 
 - `WantJSON = --format json || !IsTTY()` — agents get machine output without
   knowing the flag exists. The single highest-leverage decision in the CLI.

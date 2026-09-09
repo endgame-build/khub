@@ -76,7 +76,7 @@ func TestTargetResolver(t *testing.T) {
 	linkPrereqs(t, ws)
 	project(t, ws)
 	_, err := Link(ws, "initech-pov", "partner", "ghost")
-	requireCode(t, err, "referential_integrity")
+	_ = requireCode(t, err, "referential_integrity")
 
 	_, err = Link(ws, "initech-pov", "owner", "ghost")
 	e := requireCode(t, err, "referential_integrity")

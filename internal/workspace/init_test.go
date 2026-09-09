@@ -7,6 +7,7 @@ package workspace
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -86,7 +87,8 @@ func located(t *testing.T, err error) *errs.Located {
 	if err == nil {
 		t.Fatal("expected an error")
 	}
-	l, ok := err.(*errs.Located)
+	var l *errs.Located
+	ok := errors.As(err, &l)
 	if !ok {
 		t.Fatalf("err is %T: %v", err, err)
 	}
@@ -465,7 +467,7 @@ func TestReinitOverEmptyWorkspaceIsNotACutover(t *testing.T) {
 }
 
 func TestForceSeedToleratesDirectoryNamedMd(t *testing.T) {
-	// HQ-port regression: rglob("*.md") matches directories; init must not
+	// Corpus-port regression: rglob("*.md") matches directories; init must not
 	// crash, and a directory is not an entity file.
 	dir := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(dir, "archive", "docs", "data-backup.md"), 0o777); err != nil {
@@ -803,7 +805,7 @@ func presetVersion(preset string) string {
 	case "build-hub":
 		return "0.6.0"
 	case "firm-ops":
-		return "0.2.0"
+		return "0.3.0"
 	}
 	return ""
 }

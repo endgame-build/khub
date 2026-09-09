@@ -178,7 +178,7 @@ func TestFailedPublicationDoesNotExposeTemporaryNameOrModifyOriginal(t *testing.
 	if err := os.Chmod(root, 0o555); err != nil {
 		t.Fatal(err)
 	}
-	defer os.Chmod(root, 0o755)
+	defer func() { _ = os.Chmod(root, 0o755) }()
 	err := AtomicWriteIn(root, path, []byte("replacement"))
 	var pe *fs.PathError
 	if !errors.As(err, &pe) || pe.Path != path {

@@ -2,7 +2,7 @@ package schema
 
 // Ports the schema/unit halves of tests/test_id_prefix.py — prefixed and dated
 // ids: the id_prefix/id_date vocabulary, the enum-coverage gate, the
-// singleton gate, the resolved IdPrefix shapes and IdShape. The minting tests
+// singleton gate, the resolved IDPrefix shapes and IDShape. The minting tests
 // (create/init) belong to the entity layer and are covered there / by
 // fixtures.
 
@@ -107,19 +107,19 @@ storage:
 		t.Fatalf("ResolveWith: %v", err)
 	}
 	rtype := typeOf(t, resolved, "requirement")
-	if rtype.IdPrefix == nil {
+	if rtype.IDPrefix == nil {
 		t.Fatal("requirement.IdPrefix = nil")
 	}
 	attrs := omap.New()
 	attrs.Set("kind", "constraint")
-	if got, ok := rtype.IdPrefix.Resolve(attrs); !ok || got != "cst" {
+	if got, ok := rtype.IDPrefix.Resolve(attrs); !ok || got != "cst" {
 		t.Errorf("Resolve(kind=constraint) = (%q, %v), want (cst, true)", got, ok)
 	}
 }
 
 func TestResolvedPrefixShapes(t *testing.T) {
 	ad := "ad"
-	literal := &IdPrefix{Literal: &ad}
+	literal := &IDPrefix{Literal: &ad}
 	if got, ok := literal.Resolve(omap.New()); !ok || got != "ad" {
 		t.Errorf("literal.Resolve({}) = (%q, %v), want (ad, true)", got, ok)
 	}
@@ -128,7 +128,7 @@ func TestResolvedPrefixShapes(t *testing.T) {
 	}
 
 	kind := "kind"
-	byKind := &IdPrefix{By: &kind, Members: []PrefixMember{
+	byKind := &IDPrefix{By: &kind, Members: []PrefixMember{
 		{Value: "functional", Prefix: "fr"},
 		{Value: "constraint", Prefix: "cst"},
 	}}
@@ -150,7 +150,7 @@ func TestResolvedPrefixShapes(t *testing.T) {
 	}
 
 	// All() deduplicates, first occurrence first (dict.fromkeys order).
-	shared := &IdPrefix{By: &kind, Members: []PrefixMember{
+	shared := &IDPrefix{By: &kind, Members: []PrefixMember{
 		{Value: "a", Prefix: "x"}, {Value: "b", Prefix: "x"}, {Value: "c", Prefix: "y"},
 	}}
 	if !eqStrings(shared.All(), []string{"x", "y"}) {
@@ -169,21 +169,21 @@ func TestEveryPresetPrefixIsDeclaredOnARealType(t *testing.T) {
 		for _, type_ := range schema.Types.Keys() {
 			rtype, _ := schema.Types.Get(type_)
 			if rtype.Storage.Layout == LayoutSingleton {
-				if rtype.IdPrefix != nil || rtype.IdDate {
+				if rtype.IDPrefix != nil || rtype.IDDate {
 					t.Errorf("%s/%s: a singleton mints nothing", name, type_)
 				}
-				if rtype.IdShape() != "" {
-					t.Errorf("%s/%s: singleton shape = %q, want empty", name, type_, rtype.IdShape())
+				if rtype.IDShape() != "" {
+					t.Errorf("%s/%s: singleton shape = %q, want empty", name, type_, rtype.IDShape())
 				}
 				continue
 			}
-			if !strings.HasSuffix(rtype.IdShape(), "slug") {
-				t.Errorf("%s/%s: shape = %q does not end in the slug", name, type_, rtype.IdShape())
+			if !strings.HasSuffix(rtype.IDShape(), "slug") {
+				t.Errorf("%s/%s: shape = %q does not end in the slug", name, type_, rtype.IDShape())
 			}
-			if rtype.IdPrefix == nil {
+			if rtype.IDPrefix == nil {
 				continue
 			}
-			for _, p := range rtype.IdPrefix.All() {
+			for _, p := range rtype.IDPrefix.All() {
 				if p == "" || p != strings.ToLower(p) {
 					t.Errorf("%s/%s: prefix %q is not a lowercase token", name, type_, p)
 				}
@@ -208,10 +208,10 @@ func TestShippedDatedTypes(t *testing.T) {
 		var dated, prefixed []string
 		for _, type_ := range schema.Types.Keys() {
 			rtype, _ := schema.Types.Get(type_)
-			if rtype.IdDate {
+			if rtype.IDDate {
 				dated = append(dated, type_)
 			}
-			if rtype.IdPrefix != nil {
+			if rtype.IDPrefix != nil {
 				prefixed = append(prefixed, type_)
 			}
 		}
@@ -252,7 +252,7 @@ storage:
 	}
 }
 
-// IdShape is the one rendering of a type's id pattern: the bad_id finding and
+// IDShape is the one rendering of a type's id pattern: the bad_id finding and
 // `schema show` both print it, so it is pinned here rather than in each.
 func TestIdShape(t *testing.T) {
 	s := resolveDocs(t, `
@@ -281,7 +281,7 @@ storage:
 		{"prd", ""},
 		{"both", "x|y-YYYY-MM-DD-slug"},
 	} {
-		if got := typeOf(t, s, tc.typ).IdShape(); got != tc.want {
+		if got := typeOf(t, s, tc.typ).IDShape(); got != tc.want {
 			t.Errorf("%s: IdShape() = %q, want %q", tc.typ, got, tc.want)
 		}
 	}

@@ -16,9 +16,16 @@ import (
 func AtomicWrite(path string, data []byte) error {
 	return AtomicWriteIn(filepath.Dir(path), path, data)
 }
-func WriteNew(path string, data []byte) error            { return WriteNewIn(filepath.Dir(path), path, data) }
+
+// WriteNew creates a file outside a workspace and refuses to replace one.
+func WriteNew(path string, data []byte) error { return WriteNewIn(filepath.Dir(path), path, data) }
+
+// AtomicWriteIn replaces path, confined to root, through a unique sibling
+// temporary: readers see the old bytes or the new, never a torn file.
 func AtomicWriteIn(root, path string, data []byte) error { return publish(root, path, data, false) }
-func WriteNewIn(root, path string, data []byte) error    { return publish(root, path, data, true) }
+
+// WriteNewIn is AtomicWriteIn for a path that must not exist yet.
+func WriteNewIn(root, path string, data []byte) error { return publish(root, path, data, true) }
 
 // linkFile is the exclusive-publish primitive; tests swap it to simulate a
 // filesystem without hard links.
@@ -50,7 +57,9 @@ func publish(root, path string, data []byte, exclusive bool) (err error) {
 	if err != nil {
 		return err
 	}
-	defer r.Remove(tmp)
+	// Best-effort cleanup: after a successful rename there is nothing at tmp
+	// to remove, and on the failure paths the error already returned wins.
+	defer func() { _ = r.Remove(tmp) }()
 	// Chmod the descriptor, never a path that could have been swapped.
 	if existed {
 		if err := f.Chmod(mode); err != nil {

@@ -18,17 +18,23 @@ type Located struct {
 	Target   string
 }
 
+// Error returns the message alone, never the code or the location fields.
 func (e *Located) Error() string { return e.Message }
 
 // Usage is the Click usage-error analog: plain text on stderr, exit 2.
 type Usage struct{ Message string }
 
+// Error returns the usage message as it is printed to stderr.
 func (e *Usage) Error() string { return e.Message }
 
+// New builds a located error from a code and a finished message. The named
+// factories below are preferred: they keep code and message together.
 func New(code, message string) *Located { return &Located{Code: code, Message: message} }
 
 // --- resolver ----------------------------------------------------------------
 
+// UnknownTarget is `unknown_relation_target`: a relation whose `to` names a
+// type the schema does not declare.
 func UnknownTarget(type_, relation, target string) *Located {
 	return &Located{
 		Code:     "unknown_relation_target",
@@ -39,6 +45,8 @@ func UnknownTarget(type_, relation, target string) *Located {
 	}
 }
 
+// RawLinkMLSmuggled is `raw_linkml_smuggled`: a construct outside khub's own
+// schema vocabulary, refused rather than passed through.
 func RawLinkMLSmuggled(type_, construct, location string) *Located {
 	where := ""
 	if location != "" {
@@ -52,6 +60,7 @@ func RawLinkMLSmuggled(type_, construct, location string) *Located {
 	}
 }
 
+// DuplicateType is `duplicate_type`: a type declared more than once.
 func DuplicateType(type_ string) *Located {
 	return &Located{Code: "duplicate_type", Message: fmt.Sprintf("Duplicate type '%s'", type_), Type: type_}
 }
@@ -85,6 +94,8 @@ func quoteAll(ss []string) []string {
 
 // --- workspace ---------------------------------------------------------------
 
+// UnknownPreset is `unknown_preset`: `init` named a preset the binary does
+// not ship; the message lists the ones it does.
 func UnknownPreset(name string, known []string) *Located {
 	return &Located{
 		Code:    "unknown_preset",
@@ -93,6 +104,8 @@ func UnknownPreset(name string, known []string) *Located {
 	}
 }
 
+// TargetNotEmpty is `target_not_empty`: `init` into a directory that already
+// holds files; the message names --force as the way through.
 func TargetNotEmpty(path string) *Located {
 	return &Located{
 		Code: "target_not_empty",
@@ -102,6 +115,7 @@ func TargetNotEmpty(path string) *Located {
 	}
 }
 
+// UnknownType is `unknown_type`: a type the resolved schema does not declare.
 func UnknownType(name, preset string, known []string) *Located {
 	return &Located{
 		Code:    "unknown_type",
@@ -110,6 +124,8 @@ func UnknownType(name, preset string, known []string) *Located {
 	}
 }
 
+// NoWorkspace is `no_workspace`: no .khub directory at or above the working
+// directory.
 func NoWorkspace() *Located {
 	return &Located{Code: "no_workspace", Message: "No .khub workspace found. Run khub init <preset>"}
 }
@@ -126,6 +142,8 @@ func NoPreset(path string) *Located {
 	}
 }
 
+// BadTarget is `bad_target`: a `wire --target` other than claude, agents or
+// both.
 func BadTarget(value string) *Located {
 	return &Located{
 		Code:    "bad_target",
@@ -136,6 +154,8 @@ func BadTarget(value string) *Located {
 
 // --- authoring ---------------------------------------------------------------
 
+// ReferentialIntegrity is `referential_integrity`: a relation names a target
+// entity that does not exist. noun defaults to "relation".
 func ReferentialIntegrity(targetType, target, predicate, noun string) *Located {
 	if noun == "" {
 		noun = "relation"
@@ -149,6 +169,8 @@ func ReferentialIntegrity(targetType, target, predicate, noun string) *Located {
 	}
 }
 
+// InvalidSlug is `invalid_slug`: the slug source leaves nothing to mint from
+// once slugified.
 func InvalidSlug(source string) *Located {
 	return &Located{
 		Code:    "invalid_slug",
@@ -169,10 +191,10 @@ func NoSlugSource(type_ string) *Located {
 	}
 }
 
-// IdPrefixUndecided is a by-value id_prefix whose deciding attribute is unset
+// IDPrefixUndecided is a by-value id_prefix whose deciding attribute is unset
 // at mint. Capture is never blocked, but an id has to come from something, and
 // the bare `NNN-slug` that used to stand in for the missing prefix is gone.
-func IdPrefixUndecided(type_, by string, members []string) *Located {
+func IDPrefixUndecided(type_, by string, members []string) *Located {
 	return &Located{
 		Code: "id_prefix_undecided",
 		Message: fmt.Sprintf("Type '%s' needs --%s <%s> to mint an id; "+
@@ -195,6 +217,8 @@ func SlugTaken(slug, type_ string, minted bool) *Located {
 	return &Located{Code: "slug_taken", Message: message, Type: type_, Target: slug}
 }
 
+// StrictUnknownField is `strict_unknown_field`: a field the type does not
+// declare, refused because --strict was passed.
 func StrictUnknownField(field string) *Located {
 	return &Located{
 		Code:    "strict_unknown_field",
@@ -203,6 +227,7 @@ func StrictUnknownField(field string) *Located {
 	}
 }
 
+// EnumViolation is `enum_violation`: a value outside the attribute's enum.
 func EnumViolation(value, field string, allowed []string) *Located {
 	return &Located{
 		Code:     "enum_violation",
@@ -212,6 +237,8 @@ func EnumViolation(value, field string, allowed []string) *Located {
 	}
 }
 
+// PatternViolation is `pattern_violation`: a value the attribute's pattern
+// does not match.
 func PatternViolation(value, field, pattern string) *Located {
 	return &Located{
 		Code:     "pattern_violation",
@@ -221,6 +248,8 @@ func PatternViolation(value, field, pattern string) *Located {
 	}
 }
 
+// NumberViolation is `number_violation`: a value that does not parse as a
+// number.
 func NumberViolation(value, field string) *Located {
 	return &Located{
 		Code:     "number_violation",
@@ -230,12 +259,15 @@ func NumberViolation(value, field string) *Located {
 	}
 }
 
+// LookupError is `lookup_error`: no entity resolves to the id.
 func LookupError(id string) *Located {
 	return &Located{Code: "lookup_error", Message: fmt.Sprintf("No entity '%s' found", id), Target: id}
 }
 
 // --- query -------------------------------------------------------------------
 
+// UnknownFilterField is `filter_error`: a `query` filter names a field the
+// type does not declare.
 func UnknownFilterField(field, type_ string) *Located {
 	return &Located{
 		Code:    "filter_error",
@@ -245,6 +277,7 @@ func UnknownFilterField(field, type_ string) *Located {
 	}
 }
 
+// FTSUnavailable is `fts_unavailable`: the SQLite build has no FTS5.
 func FTSUnavailable(detail string) *Located {
 	return &Located{
 		Code:    "fts_unavailable",
@@ -252,6 +285,7 @@ func FTSUnavailable(detail string) *Located {
 	}
 }
 
+// BadSearchQuery is `bad_search_query`: FTS5 rejected the MATCH expression.
 func BadSearchQuery(text, detail string) *Located {
 	return &Located{
 		Code:    "bad_search_query",
@@ -260,6 +294,8 @@ func BadSearchQuery(text, detail string) *Located {
 	}
 }
 
+// AmbiguousSlug is `ambiguity_error`: a bare slug names entities of more than
+// one type.
 func AmbiguousSlug(slug string, candidates []string) *Located {
 	return &Located{
 		Code:    "ambiguity_error",
@@ -268,6 +304,8 @@ func AmbiguousSlug(slug string, candidates []string) *Located {
 	}
 }
 
+// IllegalPredicate is `illegal_predicate`: a relation the source type does
+// not declare.
 func IllegalPredicate(predicate, type_ string) *Located {
 	return &Located{
 		Code:     "illegal_predicate",
@@ -277,6 +315,8 @@ func IllegalPredicate(predicate, type_ string) *Located {
 	}
 }
 
+// CardinalityViolation is `cardinality_violation`: `link` on a single-valued
+// relation that already has a target.
 func CardinalityViolation(predicate string) *Located {
 	return &Located{
 		Code: "cardinality_violation",
@@ -286,6 +326,8 @@ func CardinalityViolation(predicate string) *Located {
 	}
 }
 
+// InboundEdgeRefusal is `inbound_edge_refusal`: `remove` on an entity other
+// entities still point at, without --force.
 func InboundEdgeRefusal(type_, slug string, count int) *Located {
 	phrase := "edges resolve"
 	if count == 1 {

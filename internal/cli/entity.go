@@ -6,6 +6,7 @@
 // unknown ones. A missing required argument is a usage error (exit 2) with a
 // hand-written line — these commands opened a wizard for it until 0.9.0; khub
 // no longer prompts anywhere.
+
 package cli
 
 import (

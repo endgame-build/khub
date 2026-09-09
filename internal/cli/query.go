@@ -2,6 +2,7 @@
 // edges. Like add/edit it accepts arbitrary --<field> value filters, so it
 // parses its own flags; the declared ones (--type, --tag, --has, --missing,
 // --orphan, --stale, --draft/--active, --limit, --format) still bind.
+
 package cli
 
 import (

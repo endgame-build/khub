@@ -13,11 +13,11 @@ jobs:
   release:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           # goreleaser needs the full history to resolve the tag it is building.
           fetch-depth: 0
-      - uses: actions/setup-go@v6
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
         with:
           go-version: "1.25"
           cache: true
@@ -44,7 +44,7 @@ jobs:
       # force-runs on 24. Its only breaking change is the runtime — the
       # inputs below are unchanged. `version` pins the goreleaser TOOL,
       # a separate axis from the action tag.
-      - uses: goreleaser/goreleaser-action@v7
+      - uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7.2.3
         with:
           version: "~> v2"
           args: release --clean
@@ -53,7 +53,7 @@ jobs:
 
       # setup-node writes a userconfig whose auth reads NODE_AUTH_TOKEN at
       # publish time — the blessed way to authenticate npm in Actions.
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
         with:
           node-version: "22"
           registry-url: "https://npm.pkg.github.com"
@@ -134,7 +134,7 @@ jobs:
       # It never checks out; it installs the published package and runs it.
       packages: read
     steps:
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
         with:
           node-version: "22"
           registry-url: "https://npm.pkg.github.com"

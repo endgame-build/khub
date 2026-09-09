@@ -1,5 +1,6 @@
 # khub
 
+[![CI](https://github.com/endgame-build/khub/actions/workflows/ci.yml/badge.svg)](https://github.com/endgame-build/khub/actions/workflows/ci.yml)
 ![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-blue.svg)
 ![Go 1.25+](https://img.shields.io/badge/go-1.25%2B-00ADD8.svg)
 
@@ -85,7 +86,7 @@ A preset is a canonical ontology for one domain — a directory holding its thre
 
 **Two presets ship today:**
 
-- **`firm-ops`** — the HQ operations ontology (client, project, person, opportunity, meeting, and more); see [`docs/firm-ops-preset.md`](docs/firm-ops-preset.md).
+- **`firm-ops`** — the operating graph of a consulting and delivery firm (client, project, person, opportunity, meeting, and more); see [`docs/firm-ops-preset.md`](docs/firm-ops-preset.md).
 - **`build-hub`** — the knowledge hub of a build project: eleven types (prd, arc42, capability, actor, use-case, requirement, adr, system, component, api, repo) in one flat `knowledge/`; see [`docs/build-hub-preset.md`](docs/build-hub-preset.md). `build-lite` is an alias — `khub init build-lite` resolves to it and records `build-hub`. New to khub? Start with [`docs/getting-started.md`](docs/getting-started.md).
 
 ## Agent skills
@@ -109,7 +110,7 @@ npx skills add git@github.com:endgame-build/khub.git -s setup
 
 Use option 2 on a machine with no khub yet; option 1 is what you re-run afterwards.
 
-**Status:** v1 engine shipped and proven on a live corpus (the firm-hq cutover: the incumbent scripts retired). Design rationale in [`docs/design-memo.md`](docs/design-memo.md); the collections row model in [`docs/collections-design.md`](docs/collections-design.md).
+**Status:** v1 engine shipped and in daily use on a live firm-operations corpus that cut over from hand-rolled scripts. Design rationale in [`docs/design-memo.md`](docs/design-memo.md); the collections row model in [`docs/collections-design.md`](docs/collections-design.md).
 
 ## License
 

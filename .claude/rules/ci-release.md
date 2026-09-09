@@ -55,16 +55,16 @@ Each is commented where it lives:
   replaced the per-type collection locks; its LockFileEx support was never the
   thing standing in the way.
 
-## Gaps worth closing (risk per effort, descending)
+## Supply-chain decisions, closed
 
-Closed items keep their reasoning rather than being deleted: the reason is what
-stops one being reopened, or quietly undone.
+Each keeps its reasoning rather than being deleted: the reason is what stops
+one being reopened, or quietly undone. GitHub's immutable-releases toggle is a
+repository setting, not a file, and lives with the other repo settings in the
+release checklist rather than here.
 
-1. **GitHub immutable releases** (repo setting) — the tj-actions tag-repoint
-   class, applied to khub's own artifacts. **Still open, and not closable from
-   a PR**: no such field is exposed on `gh api repos/endgame-build/khub` and
-   repository properties are empty, so it is a toggle under Settings → General
-   → Releases and nothing else.
+1. ~~**GitHub immutable releases**~~ — the tj-actions tag-repoint class,
+   applied to khub's own artifacts; a Settings → General → Releases toggle,
+   not closable from a PR.
 2. ~~**`permissions: {}` root + per-job grants** in ci.yml.~~ **Closed.** Root
    grants nothing; `go` and `npm-package` each take `contents: read`, which is
    all either needs. release.yml keeps its root `contents: write` +
@@ -96,8 +96,9 @@ stops one being reopened, or quietly undone.
    across two workflow files, and it is not a Go tool — adding it puts a second
    toolchain in CI for a repo whose whole posture is one static Go binary.
    Revisit if the workflows grow.
-6. `mod_timestamp: "{{ .CommitTimestamp }}"` — deterministic archives make an
-   unexpected checksum change signal, not noise. **Still open.**
+6. ~~`mod_timestamp: "{{ .CommitTimestamp }}"`~~ **Closed** — set on the build,
+   so archives are byte-deterministic for a commit and an unexpected checksum
+   change is signal, not noise.
 
 Note `go-version: "1.25"` floats across 1.25 PATCH releases on purpose. A stdlib
 advisory is fixed by picking up the patch, so pinning it exactly would opt out
@@ -117,8 +118,7 @@ toolchains khub doesn't use).
 
 ## Threat model, plainly
 
-The security boundary is push access to `main` and `packages: write` on this
-repo (what can publish to the npm scope) — not the binary. It used to also
+What publishes is what matters, not the binary. The boundary used to
 include whatever host served `install.sh`, because that script was *designed*
 to locate a repo-scoped GitHub token from gh or the keychain: a replaced script
 needed no malware, it just exfiltrated the token, and the blast radius was
