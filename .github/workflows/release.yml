@@ -81,14 +81,23 @@ jobs:
           # the previous stable (by design, see the publish step above), so an
           # unpinned install would prove nothing about this tag.
           #
-          # Registry propagation is not instant; retry briefly before failing.
-          # This is the first read after publish, so the retry lives here.
-          for i in 1 2 3; do
-            npm install -g --no-audit --no-fund --ignore-scripts \
-              "@endgame-build/khub@${GITHUB_REF_NAME#v}" && break
-            test "$i" = 3 && exit 1
-            sleep 10
+          # A publish is not readable the instant it returns. npmjs.org fans a
+          # new version out to its read path over a minute or two, and 0.25.0
+          # failed a 30-second window on a package that was already live and
+          # correct. Wait for the version to appear before installing, so the
+          # install failing means something is wrong with the PACKAGE rather
+          # than with the clock. `npm view` is the cheapest read that answers
+          # "is it there yet"; ten minutes is far past observed propagation and
+          # still bounded.
+          version="${GITHUB_REF_NAME#v}"
+          for i in $(seq 1 40); do
+            npm view "@endgame-build/khub@$version" version >/dev/null 2>&1 && break
+            test "$i" = 40 && {
+              echo "@endgame-build/khub@$version never appeared on the registry"; exit 1; }
+            sleep 15
           done
+          npm install -g --no-audit --no-fund --ignore-scripts \
+            "@endgame-build/khub@$version"
           prefix=$(npm prefix -g)
           got=$("$prefix/bin/khub" --version)
           test "$got" = "${GITHUB_REF_NAME#v}" || {
@@ -136,14 +145,17 @@ jobs:
       - name: The published darwin binary runs
         run: |
           version="${GITHUB_REF_NAME#v}"
-          # Same retry as the global install above: this is another first read
-          # after publish and registry propagation is not instant.
-          for i in 1 2 3; do
-            npm install -g --no-audit --no-fund --ignore-scripts \
-              "@endgame-build/khub@$version" && break
-            test "$i" = 3 && exit 1
-            sleep 10
+          # Wait for the version to be readable before installing, exactly as
+          # the linux job does — this runner starts fresh, so it is another
+          # first read.
+          for i in $(seq 1 40); do
+            npm view "@endgame-build/khub@$version" version >/dev/null 2>&1 && break
+            test "$i" = 40 && {
+              echo "@endgame-build/khub@$version never appeared on the registry"; exit 1; }
+            sleep 15
           done
+          npm install -g --no-audit --no-fund --ignore-scripts \
+            "@endgame-build/khub@$version"
           prefix=$(npm prefix -g)
           got=$("$prefix/bin/khub" --version)
           test "$got" = "$version" || {

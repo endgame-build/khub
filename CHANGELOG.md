@@ -2,6 +2,15 @@
 
 Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); khub is pre-release.
 
+## [Unreleased]
+
+### Fixed
+
+- The release workflow waits for a published version to become readable
+  before installing it. Both post-publish checks retried for 30 seconds, less
+  than npmjs.org takes to fan a new version out to its read path, so 0.25.0
+  failed its own verification minutes after publishing correctly.
+
 ## [0.25.0] — 2026-09-09
 
 A housekeeping release. No command, flag or JSON field changes; the one
