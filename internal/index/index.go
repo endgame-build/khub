@@ -10,9 +10,11 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 
 	"github.com/endgame-build/khub/internal/canon"
 	"github.com/endgame-build/khub/internal/errs"
@@ -49,7 +51,8 @@ type Index struct {
 	Order       []Node
 	TypesBySlug map[string]map[string]bool
 	Meta        map[Node]*omap.Map
-	Malformed   []string // workspace-relative, sorted
+	Body        map[Node]string // nil unless built by BuildWithBodies
+	Malformed   []string        // workspace-relative, sorted
 
 	// folded maps casefolded slug -> stored slugs, built once on first
 	// case-insensitive miss. Without it CanonicalSlug casefolded EVERY stored
@@ -91,12 +94,25 @@ func (idx *Index) ResolveTarget(rel *schema.ResolvedRelation, target string) map
 
 // Build scans every declared type into an Index.
 func Build(root string, resolved *schema.ResolvedSchema) (*Index, error) {
+	return build(root, resolved, false)
+}
+
+// BuildWithBodies is Build that also keeps each entity's body, for search.
+// Other reads leave bodies to the garbage collector.
+func BuildWithBodies(root string, resolved *schema.ResolvedSchema) (*Index, error) {
+	return build(root, resolved, true)
+}
+
+func build(root string, resolved *schema.ResolvedSchema, bodies bool) (*Index, error) {
 	idx := &Index{
 		Resolved:    resolved,
 		Collections: map[string]*omap.Map{},
 		Nodes:       map[Node]bool{},
 		TypesBySlug: map[string]map[string]bool{},
 		Meta:        map[Node]*omap.Map{},
+	}
+	if bodies {
+		idx.Body = map[Node]string{}
 	}
 	var malformed []string
 	for _, tname := range resolved.Types.Keys() {
@@ -114,6 +130,9 @@ func Build(root string, resolved *schema.ResolvedSchema) (*Index, error) {
 			}
 			idx.TypesBySlug[p.Slug][tname] = true
 			idx.Meta[node] = p.Meta
+			if bodies {
+				idx.Body[node] = p.Body
+			}
 		}
 		malformed = append(malformed, bad...)
 	}
@@ -130,10 +149,11 @@ func Build(root string, resolved *schema.ResolvedSchema) (*Index, error) {
 	return idx, nil
 }
 
-// Pair is one scanned entity: its slug and frontmatter.
+// Pair is one scanned entity: its slug, frontmatter and body.
 type Pair struct {
 	Slug string
 	Meta *omap.Map
+	Body string
 }
 
 // ScanType returns the (slug, frontmatter) pairs stored for one type, plus its
@@ -159,16 +179,6 @@ func scanType(root string, rtype *schema.ResolvedType, collections map[string]*o
 	if rtype.Storage.Layout == schema.LayoutCollection {
 		return scanCollection(root, rtype, collections)
 	}
-	var out []Pair
-	var malformed []string
-	parse := func(raw []byte, path, slug string) {
-		meta, _, err := canon.Parse(canon.NormalizeNewlines(string(raw)), rtype.Storage.Fmt)
-		if err != nil {
-			malformed = append(malformed, path)
-		} else {
-			out = append(out, Pair{Slug: slug, Meta: meta})
-		}
-	}
 	if rtype.Storage.Layout == schema.LayoutSingleton {
 		if !info.Mode().IsRegular() {
 			return nil, nil, &fs.PathError{Op: "scan", Path: base, Err: fs.ErrInvalid}
@@ -177,8 +187,11 @@ func scanType(root string, rtype *schema.ResolvedType, collections map[string]*o
 		if err != nil {
 			return nil, nil, err
 		}
-		parse(raw, base, rtype.Name)
-		return out, malformed, nil
+		res := parseEntry(raw, base, rtype.Name, rtype.Storage.Fmt)
+		if res.malformed != "" {
+			return nil, []string{res.malformed}, nil
+		}
+		return []Pair{res.pair}, nil, nil
 	}
 	entries, err := fsio.ReadDirIn(r, baseRel, base)
 	if err != nil {
@@ -196,47 +209,105 @@ func scanType(root string, rtype *schema.ResolvedType, collections map[string]*o
 		return nil, nil, err
 	}
 	defer dir.Close()
-	for _, entry := range entries {
-		name := entry.Name()
-		path := filepath.Join(base, name)
-		if entry.Type()&os.ModeSymlink != 0 {
-			return nil, nil, errs.New("unsafe_path", fmt.Sprintf("Symlinks are not allowed in workspace storage: %s", path))
+
+	// Entries are read and parsed concurrently. Each result lands at its
+	// entry's index and is merged in listing order, so Order, Malformed and
+	// the first error reported are the same as a serial scan's.
+	results := make([]entryResult, len(entries))
+	each(len(entries), func(i int) {
+		results[i] = scanEntry(dir, root, base, rtype, entries[i])
+	})
+	var out []Pair
+	var malformed []string
+	for _, res := range results {
+		switch {
+		case res.err != nil:
+			return nil, nil, res.err
+		case res.skip:
+		case res.malformed != "":
+			malformed = append(malformed, res.malformed)
+		default:
+			out = append(out, res.pair)
 		}
-		slug := strings.TrimSuffix(name, "."+rtype.Storage.Fmt)
-		inDir := name
-		if rtype.Storage.Layout == schema.LayoutFolder {
-			if !entry.IsDir() {
-				continue
-			}
-			slug = name
-			inDir = filepath.Join(name, "_index."+rtype.Storage.Fmt)
-			path = filepath.Join(base, inDir)
-			st, err := dir.Lstat(inDir)
-			if errors.Is(err, fs.ErrNotExist) {
-				continue
-			}
-			if err != nil {
-				return nil, nil, rootRelative(err, root, path)
-			}
-			if !st.Mode().IsRegular() {
-				return nil, nil, &fs.PathError{Op: "scan", Path: path, Err: fs.ErrInvalid}
-			}
-		} else {
-			rel, _ := filepath.Rel(root, path)
-			if !rtype.AcceptsEntityPath(rel) {
-				continue
-			}
-			if !entry.Type().IsRegular() {
-				return nil, nil, &fs.PathError{Op: "scan", Path: path, Err: fs.ErrInvalid}
-			}
-		}
-		raw, err := dir.ReadFile(inDir)
-		if err != nil {
-			return nil, nil, rootRelative(err, root, path)
-		}
-		parse(raw, path, slug)
 	}
 	return out, malformed, nil
+}
+
+// entryResult is one directory entry's scan outcome: a pair, a malformed
+// path, a skip, or an error that aborts the whole scan.
+type entryResult struct {
+	pair      Pair
+	malformed string
+	skip      bool
+	err       error
+}
+
+// scanEntry reads and parses one entry of a type directory. It depends on
+// nothing but the entry, so entries may be scanned in any order.
+func scanEntry(dir *os.Root, root, base string, rtype *schema.ResolvedType, entry fs.DirEntry) entryResult {
+	name := entry.Name()
+	path := filepath.Join(base, name)
+	if entry.Type()&os.ModeSymlink != 0 {
+		return entryResult{err: errs.New("unsafe_path", fmt.Sprintf("Symlinks are not allowed in workspace storage: %s", path))}
+	}
+	slug := strings.TrimSuffix(name, "."+rtype.Storage.Fmt)
+	inDir := name
+	if rtype.Storage.Layout == schema.LayoutFolder {
+		if !entry.IsDir() {
+			return entryResult{skip: true}
+		}
+		slug = name
+		inDir = filepath.Join(name, "_index."+rtype.Storage.Fmt)
+		path = filepath.Join(base, inDir)
+		st, err := dir.Lstat(inDir)
+		if errors.Is(err, fs.ErrNotExist) {
+			return entryResult{skip: true}
+		}
+		if err != nil {
+			return entryResult{err: rootRelative(err, root, path)}
+		}
+		if !st.Mode().IsRegular() {
+			return entryResult{err: &fs.PathError{Op: "scan", Path: path, Err: fs.ErrInvalid}}
+		}
+	} else {
+		rel, _ := filepath.Rel(root, path)
+		if !rtype.AcceptsEntityPath(rel) {
+			return entryResult{skip: true}
+		}
+		if !entry.Type().IsRegular() {
+			return entryResult{err: &fs.PathError{Op: "scan", Path: path, Err: fs.ErrInvalid}}
+		}
+	}
+	raw, err := dir.ReadFile(inDir)
+	if err != nil {
+		return entryResult{err: rootRelative(err, root, path)}
+	}
+	return parseEntry(raw, path, slug, rtype.Storage.Fmt)
+}
+
+// parseEntry parses one entity file. A parse failure marks the file malformed
+// instead of failing the scan.
+func parseEntry(raw []byte, path, slug, format string) entryResult {
+	meta, body, err := canon.Parse(canon.NormalizeNewlines(string(raw)), format)
+	if err != nil {
+		return entryResult{malformed: path}
+	}
+	return entryResult{pair: Pair{Slug: slug, Meta: meta, Body: body}}
+}
+
+// each calls fn(0..n-1) on up to GOMAXPROCS goroutines and waits for all of
+// them. fn must write only to state owned by its own index.
+func each(n int, fn func(i int)) {
+	var next atomic.Int64
+	var wg sync.WaitGroup
+	for range min(runtime.GOMAXPROCS(0), n) {
+		wg.Go(func() {
+			for i := int(next.Add(1) - 1); i < n; i = int(next.Add(1) - 1) {
+				fn(i)
+			}
+		})
+	}
+	wg.Wait()
 }
 
 // rootRelative re-anchors a PathError from the type-directory Root to the
@@ -272,14 +343,14 @@ func scanCollection(root string, rtype *schema.ResolvedType, collections map[str
 		if !ok {
 			return nil, []string{cpath}, nil
 		}
-		meta, _, err := canon.SplitRow(row, rtype.Storage.Fmt)
+		meta, body, err := canon.SplitRow(row, rtype.Storage.Fmt)
 		if err != nil {
 			return nil, []string{cpath}, nil
 		}
 		if _, has := meta.Get("type"); !has {
 			meta.Set("type", rtype.Name)
 		}
-		out = append(out, Pair{Slug: slug, Meta: meta})
+		out = append(out, Pair{Slug: slug, Meta: meta, Body: body})
 	}
 	return out, nil, nil
 }
@@ -362,6 +433,9 @@ func Filter(idx *Index, drop map[Node]bool) *Index {
 		Meta:        map[Node]*omap.Map{},
 		Malformed:   idx.Malformed,
 	}
+	if idx.Body != nil {
+		out.Body = map[Node]string{}
+	}
 	for _, n := range idx.Order {
 		if drop[n] {
 			continue
@@ -373,6 +447,9 @@ func Filter(idx *Index, drop map[Node]bool) *Index {
 		}
 		out.TypesBySlug[n.Slug][n.Type] = true
 		out.Meta[n] = idx.Meta[n]
+		if idx.Body != nil {
+			out.Body[n] = idx.Body[n]
+		}
 	}
 	return out
 }

@@ -53,6 +53,11 @@ func Emit(data any, fmt_ string, human func()) error {
 	return nil
 }
 
+// Note prints one advisory line to stderr, in JSON and human modes alike. A
+// command calls it before Emit, so the line reaches the caller even when
+// stdout is piped through `head`.
+func Note(message string) { fmt.Fprintln(os.Stderr, "note: "+message) }
+
 // ExitError carries the process exit code through the command return path.
 type ExitError struct{ Code int }
 

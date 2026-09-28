@@ -2,10 +2,52 @@
 
 Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); khub is pre-release.
 
-## [Unreleased]
+## [0.26.0] — 2026-09-28
+
+Search gets faster, more forgiving and more informative, and every read
+command gets faster with it. No flag is removed and no JSON key is renamed:
+search records gain keys, their scores move, and search may now print one
+`note:` line on stderr.
+
+### Added
+
+- `khub search --plain` takes plain words instead of FTS5 MATCH syntax. Each
+  distinct word (case-insensitive) is quoted, prefix-matched from three
+  characters and ORed with the rest, up to 64 words. Punctuation never
+  becomes syntax, and text with no words returns no hits. `encrypt customer
+  sensitive payload` now finds the requirement raw MATCH missed, and
+  `nothing-matches-this` no longer fails on its hyphen. (#133)
+- Search records carry `draft`, `orphan` and `stale`, judged exactly as
+  `query` judges them, and `edges`: per-predicate counts, out-edges keyed by
+  predicate and in-edges by `<source type>.<predicate>`. An agent can pick a
+  hit to walk without a `get` per hit. (#131)
+- Under `--plain`, records also carry `match` and `title_match`: the share of
+  the query's distinct words the hit holds anywhere and in its title, each
+  word weighted by inverse document frequency. A `title_match` of 0 marks a
+  body-only collision. (#163)
+- Search prints one `note:` line to stderr, before its output and in every
+  format, when a result should not be taken at face value: rows `--limit`
+  dropped (with the total), no hits at all (with the entities searched and
+  the verbs to switch to), files the scan could not parse, or a `--plain`
+  query cut at 64 words. Otherwise stderr stays empty. (#163)
 
 ### Changed
 
+- Every read command is faster. The entity scan reads and parses files
+  concurrently, and search indexes the bodies the scan already parsed
+  instead of reading each file a second time. On a 10,000-entity workspace,
+  search goes from 830 to 168 ms, `query` from 395 to 134 ms and `check` from
+  705 to 443 ms. Scan order, malformed-file reports and the error a broken
+  workspace reports are unchanged. (#40)
+- Search ranks a title match five times a body match, and `score` reports
+  that weighted value, so scores differ from 0.25.0. The weight was chosen
+  against a new relevance regression suite
+  (`internal/search/relevance_test.go`). (#162)
+- A malformed `stale_days` in `.khub/config.yaml` now fails `search` (exit
+  2), as it already failed `query`.
+- The `khub` skill tells agents to use `--plain` for natural-language
+  lookups, to search before `add`, and to act on a search note. Re-run
+  `install-skills` to pick it up.
 - Every documented command runs khub as `npx @endgame-build/khub` instead of
   by the unscoped name. The unscoped npm name `khub` is an unrelated package:
   without a local install, npx downloads and runs it — in CI with only a
@@ -20,6 +62,9 @@ Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelo
 
 ### Fixed
 
+- Search read every entity file a second time after the scan, through a
+  path outside the workspace-confined file handle the scan uses. It now
+  reads nothing after the scan.
 - The release workflow waits for a published version to become readable
   before installing it. Both post-publish checks retried for 30 seconds, less
   than npmjs.org takes to fan a new version out to its read path, so 0.25.0

@@ -13,7 +13,7 @@ func BenchmarkSearchLargeCorpus(b *testing.B) {
 	}
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		if _, err := Search(ws, "modernization", nil, 20); err != nil {
+		if _, err := Search(ws, "modernization", Options{Limit: 20}); err != nil {
 			b.Fatal(err)
 		}
 	}

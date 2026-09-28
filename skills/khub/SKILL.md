@@ -27,7 +27,7 @@ The schema lives at `.khub/ontology.yaml` (the domain model) with `.khub/policy.
 - `khub neighbors <id> --format json` — one-hop adjacency.
 - `khub impact <id> --format json` — transitive closure over a predicate (blast radius).
 - `khub history <id> --format json` — a supersession chain.
-- `khub search <text> --format json` — BM25 full-text over titles, bodies, and fields.
+- `khub search <text> --format json` — BM25 full-text over titles, bodies, and fields; `--plain` takes words as typed (any may match) instead of FTS5 syntax. Hits carry `draft`/`orphan`/`stale` and per-predicate edge counts.
 
 ## Know when to write
 
@@ -155,6 +155,7 @@ not been found yet.
 - Gate before you commit: `khub validate` per entity, `khub check` graph-wide.
 - Run `khub validate --strict` in CI. Capture is never blocked, so a typo'd field name (`--knid`) is written to frontmatter and neither default gate reports it; `--strict` is what turns undeclared keys into a finding.
 - `khub search` and `khub query --has/--missing` both reach attribute values, so find an entity by what it holds (`search python`, `query --type component --missing repo`) rather than listing and filtering yourself.
+- Search before `add` (`khub search --plain "<title>"`) so you do not mint a duplicate. A `note:` line on stderr means the result is truncated, empty or missing unparseable files; follow it (raise `--limit`, switch to `query`/`neighbors`/`get`) rather than rephrasing the same search.
 
 ## What earns a document
 

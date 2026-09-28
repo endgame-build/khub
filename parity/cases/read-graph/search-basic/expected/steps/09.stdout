@@ -1,1 +1,1 @@
-[{"id": "requirement/req-auth-required", "type": "requirement", "slug": "req-auth-required", "title": "Auth required", "score": -1.9117572353117298, "snippet": "Auth required", "path": "knowledge/requirements/req-auth-required.md"}]
+[{"id": "requirement/req-auth-required", "type": "requirement", "slug": "req-auth-required", "title": "Auth required", "draft": false, "orphan": false, "stale": false, "score": -2.6008449123238946, "snippet": "Auth required", "path": "knowledge/requirements/req-auth-required.md", "edges": {"out": {"realized_in": 1}, "in": {}}}]

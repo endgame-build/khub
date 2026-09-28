@@ -255,11 +255,12 @@ Usage: khub search [OPTIONS] {text}
 Full-text search: khub search modernization --type transcript --format json.
 
 Arguments:
-  text <str>  FTS5 MATCH text: terms, "phrases", OR, NEAR, prefix*. [required]
+  text <str>  FTS5 MATCH text: terms, "phrases", OR, NEAR, prefix*. Plain words with --plain. [required]
 
 Options:
   --type <str>  Restrict to one entity type.
   --limit <int>  Cap the returned set. [default: 20]
+  --plain  Treat text as plain words: any may match, prefix-matched, punctuation literal.
   --format <str>  text (Rich table on a TTY), json, or ids. [default: text]
   --help  Show this message and exit.
 

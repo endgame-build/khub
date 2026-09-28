@@ -9,10 +9,14 @@ package search
 
 import (
 	"errors"
+	"fmt"
+	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/endgame-build/khub/internal/errs"
+	"github.com/endgame-build/khub/internal/query"
 )
 
 // sws is the search fixture: distinctive prose in file- and folder-layout bodies.
@@ -41,11 +45,11 @@ func sws(t *testing.T) string {
 
 func mustSearch(t *testing.T, root, text string, type_ *string, limit int) []Hit {
 	t.Helper()
-	got, err := Search(root, text, type_, limit)
+	got, err := Search(root, text, Options{Type: type_, Limit: limit})
 	if err != nil {
 		t.Fatalf("Search(%q): %v", text, err)
 	}
-	return got
+	return got.Hits
 }
 
 func hitSlugs(hs []Hit) []string {
@@ -112,7 +116,7 @@ func TestSearchTypeFilter(t *testing.T) {
 	if got := hitSlugs(mustSearch(t, ws, "modernization", ptr("client"), 20)); !eq(got, []string{"sparse"}) {
 		t.Fatalf("got %v", got)
 	}
-	_, err := Search(ws, "modernization", ptr("zzz"), 20)
+	_, err := Search(ws, "modernization", Options{Type: ptr("zzz"), Limit: 20})
 	var located *errs.Located
 	ok := errors.As(err, &located)
 	if !ok || located.Code != "unknown_type" {
@@ -147,7 +151,7 @@ func TestSearchEmptyIsSuccess(t *testing.T) {
 
 // A malformed FTS5 expression raises a located error, not a driver error.
 func TestSearchBadMatchSyntaxIsLocated(t *testing.T) {
-	_, err := Search(sws(t), `mainframe AND "`, nil, 20)
+	_, err := Search(sws(t), `mainframe AND "`, Options{Limit: 20})
 	var located *errs.Located
 	ok := errors.As(err, &located)
 	if !ok || located.Code != "bad_search_query" {
@@ -173,7 +177,7 @@ func TestSearchBadQueryDetailMatchesCPython(t *testing.T) {
 		{`NEAR(a`, `fts5: syntax error near ""`},
 		{`a OR OR b`, `fts5: syntax error near "OR"`},
 	} {
-		_, err := Search(ws, tc.q, nil, 20)
+		_, err := Search(ws, tc.q, Options{Limit: 20})
 		var located *errs.Located
 		ok := errors.As(err, &located)
 		if !ok {
@@ -286,5 +290,196 @@ func TestSearchDropsHintCommentsAndKeepsCode(t *testing.T) {
 	}
 	if got := hitSlugs(mustSearch(t, ws, "responsible", nil, 20)); len(got) != 0 {
 		t.Fatalf("a hint comment is indexed: %v", got)
+	}
+}
+
+// --plain quotes every distinct word, prefix-matches words of three runes and
+// more, and ORs them, so punctuation never reaches FTS5 as syntax.
+func TestPlainMatch(t *testing.T) {
+	for _, tc := range []struct{ in, want string }{
+		{"encrypt customer data", `"encrypt"* OR "customer"* OR "data"*`},
+		{"login rate-limit?", `"login"* OR "rate"* OR "limit"*`},
+		{"a to", `"a" OR "to"`},
+		{"Rate rate RATE", `"Rate"*`},
+		{"OR NEAR AND", `"OR" OR "NEAR"* OR "AND"*`},
+		{`col:val "quoted" x* ^y -z`, `"col"* OR "val"* OR "quoted"* OR "x" OR "y" OR "z"`},
+		{"café café", `"café"* OR "cafe` + "́" + `"*`},
+		{"हिन्दी", `"हिन्दी"*`},
+		{"((( ))) -- ^ *", ""},
+		{"", ""},
+	} {
+		if got := plainJoined(tc.in); got != tc.want {
+			t.Errorf("plainTerms(%q) = %q, want %q", tc.in, got, tc.want)
+		}
+	}
+	words := make([]string, 100)
+	for i := range words {
+		words[i] = fmt.Sprintf("w%03d", i)
+	}
+	if terms, capped := plainTerms(strings.Join(words, " ")); len(terms) != MaxPlainTerms || !capped {
+		t.Errorf("a 100-word query kept %d terms (capped %v), want %d", len(terms), capped, MaxPlainTerms)
+	}
+}
+
+func plainJoined(text string) string {
+	terms, _ := plainTerms(text)
+	return strings.Join(terms, " OR ")
+}
+
+// No plain input is a syntax error, whatever punctuation it carries.
+func TestPlainNeverRaisesASyntaxError(t *testing.T) {
+	ws := sws(t)
+	for _, q := range []string{`"`, `*`, `(((`, `)`, `^x`, `-x`, `a:b`, `NEAR(`, `x AND`, `'`, `{a b}`, `+`, "́", "  "} {
+		if _, err := Search(ws, q, Options{Limit: 20, Plain: true}); err != nil {
+			t.Errorf("plain %q: %v", q, err)
+		}
+	}
+}
+
+// Hits carry the verdicts query reports and per-predicate edge counts:
+// out-edges by predicate, in-edges by source type and predicate.
+func TestSearchHitsCarryFlagsAndEdgeCounts(t *testing.T) {
+	ws := wsFromPreset(t, "build-hub")
+	seedRaw(t, ws, "knowledge/components/cmp-api.md",
+		"---\ntype: component\ntitle: Gateway API\nupdated: 2025-01-01\n---\n")
+	seedRaw(t, ws, "knowledge/requirements/req-a.md",
+		"---\ntype: requirement\ntitle: Gateway auth\nrealized_in: [cmp-api]\n---\n")
+	seedRaw(t, ws, "knowledge/requirements/req-b.md",
+		"---\ntype: requirement\ntitle: Gateway limits\ndraft: true\nrealized_in: [cmp-api]\n---\n")
+	seedRaw(t, ws, "knowledge/requirements/req-lone.md",
+		"---\ntype: requirement\ntitle: Gateway lone\n---\n")
+	now := time.Date(2026, 1, 15, 0, 0, 0, 0, time.UTC)
+	res, err := Search(ws, "gateway", Options{Limit: 20, Now: now})
+	if err != nil {
+		t.Fatal(err)
+	}
+	bySlug := map[string]Hit{}
+	for _, h := range res.Hits {
+		bySlug[h.Slug] = h
+	}
+	api, a, b, lone := bySlug["cmp-api"], bySlug["req-a"], bySlug["req-b"], bySlug["req-lone"]
+	if !api.Stale || a.Stale {
+		t.Errorf("stale: cmp-api %v (updated a year ago), req-a %v (undated)", api.Stale, a.Stale)
+	}
+	if !b.Draft || a.Draft {
+		t.Errorf("draft: req-b %v, req-a %v", b.Draft, a.Draft)
+	}
+	if !lone.Orphan || a.Orphan || api.Orphan {
+		t.Errorf("orphan: req-lone %v, req-a %v, cmp-api %v", lone.Orphan, a.Orphan, api.Orphan)
+	}
+	if want := []EdgeCount{{"requirement.realized_in", 2}}; !reflect.DeepEqual(api.In, want) || api.Out != nil {
+		t.Errorf("cmp-api edges: in %v out %v", api.In, api.Out)
+	}
+	if want := []EdgeCount{{"realized_in", 1}}; !reflect.DeepEqual(a.Out, want) || a.In != nil {
+		t.Errorf("req-a edges: out %v in %v", a.Out, a.In)
+	}
+	if lone.Out != nil || lone.In != nil {
+		t.Errorf("req-lone edges: out %v in %v", lone.Out, lone.In)
+	}
+}
+
+// search and query judge draft, orphan and stale the same way, for every hit.
+func TestSearchFlagsAgreeWithQuery(t *testing.T) {
+	ws := relevanceWS(t)
+	seedRaw(t, ws, "knowledge/components/cmp-stale-probe.md",
+		"---\ntype: component\ntitle: Probe\ndraft: true\nupdated: 2024-01-01\n---\nprobe\n")
+	now := time.Date(2026, 1, 15, 0, 0, 0, 0, time.UTC)
+	matches, err := query.Query(ws, query.Filters{}, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]query.Match{}
+	for _, m := range matches {
+		want[m.Type+"/"+m.Slug] = m
+	}
+	res, err := Search(ws, "probe OR the OR a", Options{Limit: 100, Now: now})
+	if err != nil {
+		t.Fatal(err)
+	}
+	hits := res.Hits
+	if len(hits) < 10 {
+		t.Fatalf("only %d hits; the comparison needs a spread", len(hits))
+	}
+	for _, h := range hits {
+		m := want[h.Type+"/"+h.Slug]
+		if h.Draft != m.Draft || h.Orphan != m.Orphan || h.Stale != m.Stale {
+			t.Errorf("%s/%s: search (draft %v orphan %v stale %v), query (draft %v orphan %v stale %v)",
+				h.Type, h.Slug, h.Draft, h.Orphan, h.Stale, m.Draft, m.Orphan, m.Stale)
+		}
+	}
+}
+
+// A result reports every match before the limit, how many entities were
+// searched, and the workspace's malformed files. Plain hits carry match
+// shares: a hit holding every word scores 1, and a word missing from the
+// title lowers title_match below match.
+func TestSearchResultTotalsAndShares(t *testing.T) {
+	ws := relevanceWS(t)
+	res, err := Search(ws, "encrypt customer sensitive payload", Options{Limit: 2, Plain: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(res.Hits) != 2 || res.Total != 10 || res.Searched != 41 || res.Malformed != 0 || res.Capped {
+		t.Fatalf("hits %d total %d searched %d malformed %d capped %v",
+			len(res.Hits), res.Total, res.Searched, res.Malformed, res.Capped)
+	}
+	top, next := res.Hits[0], res.Hits[1]
+	if top.Match != 1 || !(top.TitleMatch > 0 && top.TitleMatch < 1) {
+		t.Errorf("top hit %s: match %v title_match %v", top.Slug, top.Match, top.TitleMatch)
+	}
+	if next.Match >= top.Match {
+		t.Errorf("second hit %s matches %v, top %v", next.Slug, next.Match, top.Match)
+	}
+
+	raw, err := Search(ws, "encryption", Options{Limit: 20})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, h := range raw.Hits {
+		if h.Match != 0 || h.TitleMatch != 0 {
+			t.Errorf("raw hit %s carries shares", h.Slug)
+		}
+	}
+
+	words := make([]string, 100)
+	for i := range words {
+		words[i] = fmt.Sprintf("w%03d", i)
+	}
+	long, err := Search(ws, strings.Join(words, " "), Options{Limit: 20, Plain: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !long.Capped {
+		t.Error("a 100-word plain query is not reported capped")
+	}
+
+	seedRaw(t, ws, "knowledge/components/cmp-broken.md", "---\nkey: [unclosed\n---\n")
+	broken, err := Search(ws, "kiosk", Options{Limit: 20})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if broken.Malformed != 1 {
+		t.Errorf("malformed = %d, want 1", broken.Malformed)
+	}
+}
+
+// Match shares cover every hit when the hits outnumber one rowid batch.
+func TestPlainSharesSpanRowidBatches(t *testing.T) {
+	ws := freshWS(t)
+	const n = 2*rowidBatch + 100
+	for i := range n {
+		seedRaw(t, ws, fmt.Sprintf("clients/c%04d.md", i), "---\ntype: client\nname: Walrus\n---\n")
+	}
+	res, err := Search(ws, "walrus", Options{Limit: 5000, Plain: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(res.Hits) != n {
+		t.Fatalf("hits = %d, want %d", len(res.Hits), n)
+	}
+	for _, h := range res.Hits {
+		if h.Match != 1 || h.TitleMatch != 1 {
+			t.Fatalf("%s: match %v title_match %v, want 1 and 1", h.Slug, h.Match, h.TitleMatch)
+		}
 	}
 }

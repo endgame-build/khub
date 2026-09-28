@@ -8,7 +8,9 @@ primary consumer is **an AI agent**. That design position decides these rules.
 Every command routes through `internal/cli/render.go`. Never print outside an
 `Emit` render closure — the `fmt.Print*` calls in command files all sit inside
 the human-render `func()` handed to `Emit`. `Emit` / `Fail` / `Guard` are the
-only exits.
+only exits. An advisory line a caller must see whatever the format (search's
+dropped-rows and thin-result note) goes through `Note`, to stderr, before
+`Emit`.
 
 - `WantJSON = --format json || !IsTTY()` — agents get machine output without
   knowing the flag exists. Do not narrow it.

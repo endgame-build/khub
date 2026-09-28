@@ -1,1 +1,1 @@
-[{"id": "adr/ad-2026-01-15-use-jwt", "type": "adr", "slug": "ad-2026-01-15-use-jwt", "title": "Use JWT", "score": -1.5701460814175094, "snippet": "Use JWT", "path": "knowledge/decisions/ad-2026-01-15-use-jwt.md"}]
+[{"id": "adr/ad-2026-01-15-use-jwt", "type": "adr", "slug": "ad-2026-01-15-use-jwt", "title": "Use JWT", "draft": false, "orphan": false, "stale": false, "score": -2.4554861612728796, "snippet": "Use JWT", "path": "knowledge/decisions/ad-2026-01-15-use-jwt.md", "edges": {"out": {"affects": 1}, "in": {}}}]
