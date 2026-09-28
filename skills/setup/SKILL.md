@@ -17,11 +17,14 @@ khub version per repo, reviewed in git:
 
 ```bash
 npm install -D @endgame-build/khub
-npx khub --version
+npx @endgame-build/khub --version
 ```
 
 If the project already pins khub in `package.json`, just `npm ci` (or
-`npm install`) and use `npx khub`. For a machine-global install instead:
+`npm install`) and use `npx @endgame-build/khub`. Always write the full
+scoped name: the unscoped npm name `khub` is an unrelated package, and npx
+downloads and runs it wherever the local install is missing. For a
+machine-global install instead:
 
 ```bash
 npm install -g @endgame-build/khub

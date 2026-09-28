@@ -75,7 +75,7 @@ shipped=$(tar tzf "$proj"/*.tgz | grep -c '^package/binaries/.*/khub$')
 (cd "$proj" \
   && npm init -y >/dev/null \
   && npm install --ignore-scripts --no-audit --no-fund ./*.tgz >/dev/null \
-  && [ "$(npx --no-install khub)" = "9.9.9-fixture" ]) \
+  && [ "$(npx --no-install @endgame-build/khub)" = "9.9.9-fixture" ]) \
   || die "the packed package did not install and run under --ignore-scripts"
 
 # A tampered archive must be refused.

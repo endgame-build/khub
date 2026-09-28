@@ -33,11 +33,13 @@ Full command surface and JSON contracts: [`docs/cli.md`](docs/cli.md). Feature h
 khub is a single static binary for macOS and Linux (amd64, arm64). The primary install is the npm package [`@endgame-build/khub`](https://www.npmjs.com/package/@endgame-build/khub) — one package carrying a prebuilt binary per platform behind a launcher that picks the matching one — pinned per repo, so everyone (and every agent) touching that repo runs the same khub:
 
 ```bash
-npm install -D @endgame-build/khub       # exact per-repo pin (or: npx @endgame-build/khub@latest)
-npx khub init firm-ops ./my-hub          # scaffold .khub/ (+ templates, singletons), wire agent files
+npm install -D @endgame-build/khub                  # exact per-repo pin (required: later commands run it)
+npx @endgame-build/khub init firm-ops ./my-hub      # scaffold .khub/ (+ templates, singletons), wire agent files
 cd my-hub
-npx khub install-skills                  # copy the agent skills in (offline)
+npx @endgame-build/khub install-skills              # copy the agent skills in (offline)
 ```
+
+With no version after the name, `npx @endgame-build/khub` runs the version `package.json` pins.
 
 Upgrading a repo is a one-line `package.json` bump in a PR: any on-disk byte changes a release makes land in that reviewed commit, not in everyone's unrelated diffs. More in [`docs/getting-started.md`](docs/getting-started.md#install).
 
@@ -88,7 +90,7 @@ khub ships two skills: `khub` (the read and write verbs) and `setup` (install th
 
 ```bash
 npm install -D @endgame-build/khub
-npx khub install-skills
+npx @endgame-build/khub install-skills
 ```
 
 That writes both skills into `.claude/skills/`, `.agents/skills/`, and `.opencode/skills/`, and gitignores them (they are reproducible from the CLI). Narrow it with `--target claude|agents|opencode` or `--skill khub|setup`; `--global` installs into your home directories instead, once per machine; `--dry-run` shows the writes first.

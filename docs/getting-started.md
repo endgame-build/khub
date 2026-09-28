@@ -12,7 +12,7 @@ everyone (and every agent) touching that repo runs the same khub:
 
 ```bash
 npm install -D @endgame-build/khub
-npx khub --version
+npx @endgame-build/khub --version
 ```
 
 For a machine-global install instead, `npm install -g @endgame-build/khub`,
@@ -29,7 +29,7 @@ go build -o khub ./cmd/khub
 ./khub --help    # prefix every command below with `./`
 ```
 
-The rest of this guide writes `khub …`. With the per-repo install read that as `npx khub …`; with a global install, as `khub …`; if you built from source, as `./khub …`. The output is the same.
+The rest of this guide writes `khub …`. With the per-repo install read that as `npx @endgame-build/khub …`; with a global install, as `khub …`; if you built from source, as `./khub …`. The output is the same.
 
 This walkthrough passes every value as a flag, which is the only way khub takes input: it never prompts, so a missing argument is a usage error rather than a question. That is also exactly how an agent drives it — pipe the output or add `--format json` to get machine-readable records.
 

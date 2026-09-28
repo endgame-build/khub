@@ -108,7 +108,7 @@ jobs:
           mkdir /tmp/khub-pin && cd /tmp/khub-pin
           npm init -y >/dev/null
           npm install --no-audit --no-fund --ignore-scripts "@endgame-build/khub@${GITHUB_REF_NAME#v}"
-          got=$(npx khub --version)
+          got=$(npx @endgame-build/khub --version)
           test "$got" = "${GITHUB_REF_NAME#v}" || {
             echo "resolved $got, expected ${GITHUB_REF_NAME#v}"; exit 1; }
 

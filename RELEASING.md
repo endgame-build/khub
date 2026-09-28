@@ -94,7 +94,7 @@ npm/build-packages.sh X.Y.Z dist /tmp/khub-pkgs
 cd "$(mktemp -d)" && npm init -y >/dev/null
 npm pack /tmp/khub-pkgs/khub            # tarball, not the dir: `npm install <dir>`
 npm install ./*.tgz                     # symlinks a file: dep and so bypasses
-npx --no-install khub --version         # package.json's `files` allowlist entirely
+npx --no-install @endgame-build/khub --version  # package.json's `files` allowlist entirely
 ```
 
 `npm/smoke.sh` does all of that against fixture tarballs and needs no

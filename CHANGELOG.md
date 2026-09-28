@@ -4,6 +4,20 @@ Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+### Changed
+
+- Every documented command runs khub as `npx @endgame-build/khub` instead of
+  by the unscoped name. The unscoped npm name `khub` is an unrelated package:
+  without a local install, npx downloads and runs it — in CI with only a
+  warning. The change reaches the README, `docs/getting-started.md`, the
+  `setup` skill, and the install hint `wire` writes into `CLAUDE.md` and
+  `AGENTS.md`. The README's `npx @endgame-build/khub@latest` alternative to
+  installing is gone, because the commands after it assumed an install. The
+  program is still `khub` (`node_modules/.bin/khub`). **Adopting hubs:**
+  re-run `npx @endgame-build/khub install-skills` and `wire` (or `upgrade`) to
+  pick up the new text, and change any agent allowlist entry that permits
+  the unscoped command to `Bash(npx @endgame-build/khub *)`.
+
 ### Fixed
 
 - The release workflow waits for a published version to become readable
