@@ -163,15 +163,18 @@ func validateFilterNames(resolved *schema.ResolvedSchema, root string, filters F
 			sort.Strings(known)
 			return errs.UnknownType(*filters.Type, preset, known)
 		}
+		fields := map[string]bool{}
+		for _, n := range rtype.FieldNames() {
+			fields[n] = true
+		}
 		for _, fname := range fieldKeys(filters) {
-			if !rtype.Attributes.Has(fname) && !rtype.Relations.Has(fname) {
-				return errs.UnknownFilterField(fname, *filters.Type)
+			if !fields[fname] {
+				return errs.UnknownFilterField(fname, *filters.Type, declaredNames(nil, "", fields))
 			}
 		}
 		for _, pred := range preds {
-			if !rtype.Relations.Has(pred) && !rtype.Attributes.Has(pred) &&
-				len(inverses[inverseKey{*filters.Type, pred}]) == 0 {
-				return errs.UnknownFilterField(pred, *filters.Type)
+			if !fields[pred] && len(inverses[inverseKey{*filters.Type, pred}]) == 0 {
+				return errs.UnknownFilterField(pred, *filters.Type, declaredNames(inverses, *filters.Type, fields))
 			}
 		}
 		return nil
@@ -188,15 +191,38 @@ func validateFilterNames(resolved *schema.ResolvedSchema, root string, filters F
 	}
 	for _, fname := range fieldKeys(filters) {
 		if !attrs[fname] && !rels[fname] {
-			return errs.UnknownFilterField(fname, "any")
+			return errs.UnknownFilterField(fname, "any", declaredNames(nil, "", attrs, rels))
 		}
 	}
 	for _, pred := range preds {
 		if !rels[pred] && !attrs[pred] && len(inverses[inverseKey{"", pred}]) == 0 {
-			return errs.UnknownFilterField(pred, "any")
+			return errs.UnknownFilterField(pred, "any", declaredNames(inverses, "", attrs, rels))
 		}
 	}
 	return nil
+}
+
+// declaredNames is the sorted name list a filter_error offers: the union of
+// sets, plus the inverse names keyed to type_ ("" is the no-type key, which
+// holds every inverse).
+func declaredNames(inverses inverseIndex, type_ string, sets ...map[string]bool) []string {
+	all := map[string]bool{}
+	for _, set := range sets {
+		for n := range set {
+			all[n] = true
+		}
+	}
+	for k := range inverses {
+		if k.Type == type_ {
+			all[k.Name] = true
+		}
+	}
+	out := make([]string, 0, len(all))
+	for n := range all {
+		out = append(out, n)
+	}
+	sort.Strings(out)
+	return out
 }
 
 func fieldKeys(f Filters) []string {

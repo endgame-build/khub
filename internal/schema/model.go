@@ -11,12 +11,11 @@ package schema
 
 import (
 	"fmt"
-	"github.com/dlclark/regexp2"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/endgame-build/khub/internal/omap"
 )
@@ -69,7 +68,7 @@ func (t *ResolvedType) IsOrphan(hasOut, hasIn bool) bool {
 // merged, overrides applied).
 type ResolvedAttribute struct {
 	patternOnce        sync.Once
-	patternRE          *regexp2.Regexp
+	patternRE          *regexp.Regexp
 	patternErr         error
 	Name               string
 	BaseType           string // "text" when undeclared
@@ -279,27 +278,28 @@ func (t *ResolvedType) AcceptsEntityPath(rel string) bool {
 
 // MatchPattern is the shared write/integrity full-match gate. Cache belongs to
 // the resolved schema, so serving edited schemas never retains stale patterns.
-func (a *ResolvedAttribute) MatchPattern(value string) (bool, error) {
+//
+// RE2 matches in linear time, so an author-supplied pattern needs no timeout.
+// Resolve compiles every pattern and refuses a bad one, so a compile error here
+// means an attribute bypassed Resolve.
+func (a *ResolvedAttribute) MatchPattern(value string) bool {
 	if a.Pattern == nil {
-		return true, nil
+		return true
 	}
 	if err := a.CompilePattern(); err != nil {
-		return false, err
+		panic(fmt.Sprintf("pattern for %s was not validated at resolve: %v", a.Name, err))
 	}
 	return a.patternRE.MatchString(value)
 }
 
-// CompilePattern compiles the attribute's pattern once, with the shared match
-// timeout; MatchPattern calls it, callers rarely need to.
+// CompilePattern compiles the attribute's pattern once, anchored at both ends;
+// Resolve calls it to refuse a bad pattern before any verb runs.
 func (a *ResolvedAttribute) CompilePattern() error {
 	a.patternOnce.Do(func() {
 		if a.Pattern == nil {
 			return
 		}
-		a.patternRE, a.patternErr = regexp2.Compile(`\A(?:`+*a.Pattern+`)\z`, regexp2.None)
-		if a.patternErr == nil {
-			a.patternRE.MatchTimeout = time.Second
-		}
+		a.patternRE, a.patternErr = regexp.Compile(`\A(?:` + *a.Pattern + `)\z`)
 	})
 	return a.patternErr
 }

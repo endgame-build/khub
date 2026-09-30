@@ -1,0 +1,1 @@
+{"error": {"code": "filter_error", "message": "No field 'nope' on type 'component'. Declared fields: aliases, author, consumes, created, depends_on, description, draft, kind, lifecycle, owner, references, related, repo, resource, serves, sources, stack, system, tags, tier, title, type, updated"}}

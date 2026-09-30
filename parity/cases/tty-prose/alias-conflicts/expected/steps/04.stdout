@@ -1,0 +1,4 @@
+active-but-incomplete person/pat: missing role
+orphan client/initech-corp
+orphan person/pat
+alias 'Initech' names more than one entity: client/initech-corp, person/pat

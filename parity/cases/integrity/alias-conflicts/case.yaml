@@ -1,0 +1,12 @@
+# An alias naming more than one entity fails check: two entities claiming it
+# (matched case-insensitively, as lookup matches), or an alias that is another
+# entity's slug. An alias repeating its own entity's slug conflicts with
+# nothing. Drafts count, because lookup resolves their aliases too. validate
+# stays per-entity and does not see either.
+steps:
+- argv: ["init", "firm-ops", ".", "--no-wire"]
+- argv: ["add", "client", "--name", "Initech Corp", "--aliases", "Initech,initech-corp"]
+- argv: ["add", "person", "--name", "Pat", "--aliases", "INITECH"]
+- argv: ["add", "person", "--name", "Sam", "--aliases", "initech-corp"]
+- argv: ["validate", "--format", "json"]
+- argv: ["check", "--format", "json"]

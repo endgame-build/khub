@@ -66,6 +66,14 @@ type Misplaced struct {
 	Expected string
 }
 
+// AliasConflict is one alias that names more than one entity: two or more
+// entities declare it, or it is some other entity's slug. Either way an ID
+// lookup through it is ambiguous or silently lands on the slug's owner.
+type AliasConflict struct {
+	Alias     string
+	Claimants []string // qualified ids, sorted
+}
+
 // CheckReport is integrity.CheckReport: the graph-wide structural verdict —
 // empty everywhere means pass.
 //
@@ -128,6 +136,8 @@ type CheckReport struct {
 	// Files declaring a known type that live outside every declared layout — an
 	// entity the scan never reaches. See Misplaced.
 	Misplaced []Misplaced
+	// Aliases that name more than one entity. Fails the gate.
+	AliasConflicts []AliasConflict
 }
 
 // Passed is CheckReport.passed.
@@ -146,7 +156,8 @@ func (r *CheckReport) Passed() bool {
 		len(r.Malformed) == 0 &&
 		len(r.MissingSingletons) == 0 &&
 		len(r.DraftRequiredSingletons) == 0 &&
-		len(r.Misplaced) == 0
+		len(r.Misplaced) == 0 &&
+		len(r.AliasConflicts) == 0
 }
 
 // Check is integrity.check: walk the active subgraph for completeness,
@@ -293,7 +304,44 @@ func Check(root string, strict bool) (*CheckReport, error) {
 		Misplaced:               misplaced,
 		StrayTemplates:          strayTemplates,
 		MissingTemplates:        missingTemplates,
+		AliasConflicts:          aliasConflicts(valid, entityNodes),
 	}, nil
+}
+
+// aliasConflicts groups every declared alias case-insensitively, the way ID
+// lookup matches it, and reports each one naming more than one entity: a
+// second claimant, or another entity whose slug it is. An entity whose alias
+// repeats its own slug conflicts with nothing. Drafts count: lookup resolves
+// their aliases too, so a draft claimant makes the alias just as ambiguous.
+func aliasConflicts(valid *index.Index, nodes []index.Node) []AliasConflict {
+	spelling := map[string]string{}
+	claimants := map[string]map[string]bool{}
+	var keys []string
+	for _, n := range nodes {
+		for _, a := range index.AliasesOf(valid.Meta[n]) {
+			k := index.Casefold(a)
+			if claimants[k] == nil {
+				claimants[k] = map[string]bool{}
+				spelling[k] = a
+				keys = append(keys, k)
+			}
+			claimants[k][n.ID()] = true
+		}
+	}
+	sort.Strings(keys)
+	out := []AliasConflict{}
+	for _, k := range keys {
+		ids := claimants[k]
+		if slug, ok := valid.CanonicalSlug(spelling[k]); ok {
+			for t := range valid.TypesBySlug[slug] {
+				ids[t+"/"+slug] = true
+			}
+		}
+		if len(ids) > 1 {
+			out = append(out, AliasConflict{Alias: spelling[k], Claimants: sortedKeys(ids)})
+		}
+	}
+	return out
 }
 
 // draftFlag is `meta.get("draft", False)` — a missing key defaults to False,

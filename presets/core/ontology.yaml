@@ -30,6 +30,7 @@ ontology:
       description: { type: text }                    # OKF
       resource:    { type: text }                    # OKF — canonical URI / link-out
       tags:        { type: list }
+      aliases:     { type: list }                    # other names an ID lookup resolves to
     relations:
       related:     { to: any, many: true }
       sources:     { to: any, many: true }

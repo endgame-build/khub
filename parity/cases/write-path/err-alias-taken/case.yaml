@@ -1,0 +1,8 @@
+# A new entity whose slug is already another entity's alias would be a second
+# record of the same thing, so add refuses (exit 2, nothing written) and names
+# the owner and the way out. An explicit --id that is not an alias writes.
+steps:
+- argv: ["init", "firm-ops", ".", "--no-wire"]
+- argv: ["add", "client", "--name", "Initech Corp", "--aliases", "Initech"]
+- argv: ["add", "client", "--name", "Initech"]
+- argv: ["add", "client", "--name", "Initech", "--id", "initech-labs"]

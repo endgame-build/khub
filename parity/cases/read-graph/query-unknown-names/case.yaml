@@ -1,0 +1,14 @@
+# A query filter that names something the schema does not declare refuses
+# (exit 2) instead of returning an empty success, and the refusal lists what is
+# declared. --type is checked against the types; --has/--missing against the
+# type's fields plus the inverses that land on it (component carries `serves`),
+# or against every type's when --type is absent. An unmatched VALUE stays a
+# legitimate zero-hit at exit 0.
+steps:
+- argv: ["init", "build-hub", ".", "--no-wire"]
+- argv: ["query", "--type", "nope"]
+- argv: ["query", "--type", "component", "--has", "nope"]
+- argv: ["query", "--type", "component", "--missing", "nope"]
+- argv: ["query", "--missing", "nope"]
+- argv: ["query", "--type", "component", "--has", "serves"]
+- argv: ["query", "--type", "component", "--lifecycle", "nope"]

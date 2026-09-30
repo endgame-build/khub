@@ -1,0 +1,1 @@
+{"error": {"code": "invalid_snapshot", "message": ".khub/schema.applied.yaml is not a schema snapshot \u2014 rerun `khub schema snapshot` to record the baseline again"}}

@@ -13,10 +13,10 @@
 - **gonum** links a handful of leaf packages, no `mat`/BLAS; it is used only
   for strongly connected components.
 - **ncruces/go-sqlite3** is `wasm2go`-translated Go: no wazero, no CGO.
-- **regexp2 is backtracking with no default timeout.** Schema `pattern`s are
-  author-supplied, so the shared cached matcher sets `MatchTimeout` to one
-  second (`internal/schema/model.go` `MatchPattern`). Writes and integrity
-  must use it.
+- **Author regexes compile as RE2, never a backtracking engine.** Schema
+  `pattern`s and template `{pattern:}` rules are author-supplied and run over
+  untrusted values; stdlib `regexp` matches in linear time, so no timeout is
+  needed. Do not add a lookaround-capable engine to win syntax back.
 - `os.Root` (Go 1.24+) confines workspace storage operations and resists path
   swaps. Keep the explicit schema path checks and symlink refusals around it.
 

@@ -217,6 +217,18 @@ func SlugTaken(slug, type_ string, minted bool) *Located {
 	return &Located{Code: "slug_taken", Message: message, Type: type_, Target: slug}
 }
 
+// AliasTaken is `alias_taken`: a new entity's slug is already another
+// entity's alias, so creating it would split one thing into two. The way out
+// names the flag the caller has not yet used, as SlugTaken does.
+func AliasTaken(slug, owner string, minted bool) *Located {
+	message := fmt.Sprintf("'%s' is an alias of %s; choose another --id", slug, owner)
+	if minted {
+		message = fmt.Sprintf("'%s' is an alias of %s; pass --id <slug> to name this one differently",
+			slug, owner)
+	}
+	return &Located{Code: "alias_taken", Message: message, Target: slug}
+}
+
 // StrictUnknownField is `strict_unknown_field`: a field the type does not
 // declare, refused because --strict was passed.
 func StrictUnknownField(field string) *Located {
@@ -267,13 +279,15 @@ func LookupError(id string) *Located {
 // --- query -------------------------------------------------------------------
 
 // UnknownFilterField is `filter_error`: a `query` filter names a field the
-// type does not declare.
-func UnknownFilterField(field, type_ string) *Located {
+// type does not declare. It lists the declared names, so the caller can
+// correct the call without a second lookup.
+func UnknownFilterField(field, type_ string, declared []string) *Located {
 	return &Located{
-		Code:    "filter_error",
-		Message: fmt.Sprintf("No field '%s' on type '%s'", field, type_),
-		Type:    type_,
-		Target:  field,
+		Code: "filter_error",
+		Message: fmt.Sprintf("No field '%s' on type '%s'. Declared fields: %s",
+			field, type_, strings.Join(declared, ", ")),
+		Type:   type_,
+		Target: field,
 	}
 }
 
@@ -301,6 +315,16 @@ func AmbiguousSlug(slug string, candidates []string) *Located {
 		Code:    "ambiguity_error",
 		Message: fmt.Sprintf("Slug '%s' is ambiguous: %s. Qualify as type/slug", slug, strings.Join(candidates, ", ")),
 		Target:  slug,
+	}
+}
+
+// AmbiguousAlias is `ambiguity_error` for an alias two entities claim.
+func AmbiguousAlias(alias string, candidates []string) *Located {
+	return &Located{
+		Code: "ambiguity_error",
+		Message: fmt.Sprintf("Alias '%s' is ambiguous: %s. Qualify as type/slug",
+			alias, strings.Join(candidates, ", ")),
+		Target: alias,
 	}
 }
 

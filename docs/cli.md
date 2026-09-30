@@ -56,6 +56,8 @@ Schema storage paths must be workspace-relative, normalized, outside `.khub`, an
 
 - **A comma-list on a single-valued relation is rejected**: pass one target; a many-valued relation takes the list.
 - **An ambiguous bare target is rejected**: when a slug names entities of two types, qualify it as `type/slug`.
+- **A target named by alias is stored as the real slug.** `add`/`edit` relation values and `link`/`unlink` targets resolve through `aliases` once the slug lookups miss, and the write stores the owner's slug (qualified when the bare slug would be ambiguous), so no edge on disk depends on another file's aliases. A value on disk still resolves by slug only: a hand-written alias there dangles, and `check` reports it.
+- **A slug that is already another entity's alias is rejected** (`alias_taken`): creating it would record the same thing twice. The refusal names the owner; pass `--id` for a different slug.
 - **Malformed dates and booleans are rejected** on write (a non-ISO date, a non-boolean for a `bool` field).
 - **A self-link is rejected**: an entity cannot link to itself.
 - **Without `--id`**, the id is minted from `name`, then `title`, in the type's scheme (`<prefix>-<YYYY-MM-DD>-<slug>`, each part optional per type — `khub schema show <type>` prints it as `id_shape`; see [Ids](schema.md#ids-id_prefix-id_date-in-storage)). Minting reads no siblings, so it never races across branches. A type with neither `name` nor `title` **refuses** (`no_slug_source`): there is no type-name fallback any more, so **pass `--id` for a type you do not title.** A by-value `id_prefix` whose deciding attribute is unset refuses too (`id_prefix_undecided`, naming the flag).
@@ -94,6 +96,8 @@ A type stores its entities as `md` (the default: YAML frontmatter + prose body),
 | `khub schema show <type>` | `--format` | one type's fields, enums, required, relations, layout, id scheme (`id_prefix`, `id_date`, and the rendered `id_shape` — `ad-YYYY-MM-DD-slug`; `null` on a singleton), and `when` — the moment to capture it (view) |
 | `khub schema edges` | `--format` | the relation vocabulary (view) |
 | `khub schema base` | `--format` | the effective base block every type inherits — embedded in the binary since the layer split, so no workspace file carries it (view) |
+| `khub schema snapshot` | `--format` | record the current resolved schema at `.khub/schema.applied.yaml` as the baseline `schema diff` compares against, replacing any earlier one. The file is tracked in git and records the resolved form, not the layer files: per type its storage, id scheme, `required`/`orphan`, template, and every attribute and relation with its facets. Derived inverses, provenance and `when` are left out, since none of them decides validity. `init` and `upgrade` never write it, so a preset upgrade shows up as pending. Returns `{path, types}` |
+| `khub schema diff` | `--format` | the schema changes since the snapshot: `{pending, changes: [{op, path, from, to}]}`, `op` one of `added`/`removed`/`changed`, `path` dotted (`types.component.attributes.lifecycle.enum`). Key order is not a change. Exits 0 whether or not changes are pending; `pending` says which. With no snapshot it refuses (`no_schema_snapshot`, exit 2) and names `khub schema snapshot`; an unreadable one refuses with `invalid_snapshot` |
 | `khub status` | `--format` | counts per type, draft vs active, orphan and stale counts, OKF-conformance flag (projectable-to-OKF) |
 
 ## Author
@@ -109,9 +113,11 @@ A type stores its entities as `md` (the default: YAML frontmatter + prose body),
 
 ## Lookup
 
+Every command that takes an entity ID (`get`, `edit`, `link`, `unlink`, `remove`, `neighbors`, `impact`, `history`) resolves it the same way: the exact slug, then the slug case-insensitively, then an entity's `aliases` (a base attribute, a list), case-insensitively. A real slug always wins, so an alias never shadows one. Aliases are free text, so case never picks between claimants: an alias two entities claim, in any spelling, refuses as `ambiguity_error` and must be qualified, `type/alias`. Matching folds case but does not normalize Unicode, the same as slugs.
+
 | Command | Args and options | Does |
 |---|---|---|
-| `khub query` | `--type <t>`, `--draft` / `--active`, `--orphan`, `--stale`, `--<field> <value>`, `--tag <tag>`, `--has <name>`, `--missing <name>`, `--limit <n>`, `--format json\|table\|ids` | filter entities by frontmatter; includes drafts and carries `title` plus `orphan`/`stale` flags by default. `--has`/`--missing` take a relation, a declared inverse, OR an attribute — for an attribute, absent/null/empty counts as missing, so `--missing repo` surfaces the gap |
+| `khub query` | `--type <t>`, `--draft` / `--active`, `--orphan`, `--stale`, `--<field> <value>`, `--tag <tag>`, `--has <name>`, `--missing <name>`, `--limit <n>`, `--format json\|table\|ids` | filter entities by frontmatter; includes drafts and carries `title` plus `orphan`/`stale` flags by default. `--has`/`--missing` take a relation, a declared inverse, OR an attribute — for an attribute, absent/null/empty counts as missing, so `--missing repo` surfaces the gap. A name the schema does not declare refuses (exit 2): `--type` with `unknown_type`, a `--<field>` or `--has`/`--missing` name with `filter_error`, both listing the declared names. An unmatched value, or an unused `--tag`, is a legitimate empty result at exit 0 |
 | `khub search <text>` | `--type <t>`, `--limit <n=20>`, `--plain`, `--format text\|json\|ids` | full-text over title, body, and every scalar frontmatter value (SQLite FTS5, BM25-ranked, in-memory projection built per call, never stale). Raw MATCH syntax passes through: terms, `"phrases"`, `OR`, `NEAR`, `prefix*`. `--plain` takes plain words instead: each distinct word (case-insensitive) is quoted, prefix-matched from three characters, and ORed with the rest, up to 64 words; punctuation never becomes syntax, and text with no words returns no hits. Ranking weights a title match five times a body match. Records add `title`, the `draft`/`orphan`/`stale` flags `query` reports, `score` (lower = better; the same weighted value that orders the hits), `snippet`, `path`, and `edges`: `{"out": {<predicate>: n}, "in": {"<source type>.<predicate>": n}}`, non-zero counts only, out-keys in relation declaration order and in-keys sorted. Under `--plain`, each record also carries `match` and `title_match` after `score`: the share of the query's distinct words the hit contains anywhere and in its title, each word weighted by inverse document frequency, 0..1 to three decimals; a `title_match` of 0 means only the body matched. When a result should not be taken at face value, one `note:` line goes to stderr before the output, in every format: rows `--limit` dropped (with the total), no match at all (with the entities searched and the verbs to try instead), files that could not be parsed, or a `--plain` query cut at 64 words |
 
 ## Traversal
@@ -156,6 +162,7 @@ Every finding carries a stable location — the `field` on a `validate` row, the
 | `draft_singletons` | gap; error for `draft_required_singletons` | no | yes | a singleton present but `draft: true`; only a required one fails the gate — `edit <type> draft false` publishes |
 | `incomplete` | error | no | yes | an active entity with a required field or relation empty (`missing_fields`, `missing_relations`) — legal to write, wrong to publish; fill it, or `edit <id> draft true` |
 | `orphans` | gap; error under `--strict` | no | yes | no relation in or out; a type declaring `orphan: true` is exempt and never listed |
+| `alias_conflicts` | error | no | yes | an alias naming more than one entity, `{alias, claimants}`: two entities declare it (matched case-insensitively, as lookup matches), or it is another entity's slug. An ID lookup through it is ambiguous or lands on the slug's owner; drop or change the alias on one claimant. Drafts count, since lookup resolves their aliases too |
 | `thin` | informational | no | yes | the corpus-wide `body_rule` gaps, `{id, type, slug, reason}`; never affects `passed` |
 
 **Exit codes.** `0` clean · `1` the gate failed · `2` a refusal or a usage error. `check` returns 0 when only gaps remain, which is what makes it safe to run on every commit; `--strict` makes orphans fail too — and only orphans. `body_rule` stays informational under `--strict` on purpose: otherwise every rule a template gained would turn a green corpus red on upgrade, and nobody would declare one.
@@ -228,6 +235,7 @@ Every finding carries a stable location — the `field` on a `validate` row, the
   "missing_singletons": [],
   "draft_singletons": [],
   "draft_required_singletons": [],
+  "alias_conflicts": [],
   "strict": false,
   "thin": [
     {

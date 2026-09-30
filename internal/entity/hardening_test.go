@@ -363,19 +363,14 @@ func TestBlankAttributeClearsToNull(t *testing.T) {
 	}
 }
 
-func TestPatternMatchTimeoutFires(t *testing.T) {
-	// Schema `pattern`s are author-supplied and regexp2 backtracks with no
-	// linear-time guarantee: without fullMatch's MatchTimeout this exact
-	// pattern/input pair runs for centuries, hanging the write verb. The
-	// guard is the error; if a future edit drops the timeout, this test
-	// hangs until `go test`'s own deadline kills the run — loudly.
+func TestPatternMatchIsLinear(t *testing.T) {
+	// Schema `pattern`s are author-supplied. Under a backtracking engine this
+	// pattern/input pair runs for centuries and hangs the write verb; RE2
+	// answers in linear time. If a future edit swaps the engine back, this
+	// test hangs until `go test`'s own deadline kills the run — loudly.
 	pattern := `(a+)+$`
 	attr := &schema.ResolvedAttribute{Pattern: &pattern}
-	_, err := attr.MatchPattern(strings.Repeat("a", 36) + "b")
-	if err == nil {
-		t.Fatal("catastrophic pattern returned no error; MatchTimeout is not set")
-	}
-	if !strings.Contains(err.Error(), "timeout") {
-		t.Fatalf("err = %v, want match timeout", err)
+	if attr.MatchPattern(strings.Repeat("a", 10000) + "!") {
+		t.Fatal("pattern matched a value ending in '!'")
 	}
 }

@@ -1,0 +1,21 @@
+# `aliases` (a base attribute) gives an entity other names. Every ID a caller
+# passes resolves through them once the slug lookups miss: bare or qualified,
+# exactly or case-folded. A write target named by alias is stored as the real
+# slug, so no edge on disk depends on another file's aliases, and unlink
+# removes it by alias too. Two entities claiming one alias must be qualified.
+# A real slug always beats an alias.
+steps:
+- argv: ["init", "firm-ops", ".", "--no-wire"]
+- argv: ["add", "client", "--name", "Initech Corp", "--aliases", "Initech,INTC"]
+- argv: ["get", "initech"]
+- argv: ["get", "client/intc"]
+- argv: ["add", "opportunity", "--name", "Initech POV", "--stage", "prospect", "--client", "Initech"]
+- sh: "grep '^client:' opportunities/initech-pov/_index.md"
+- argv: ["link", "initech-pov", "related", "INTC"]
+- sh: "grep -A1 '^related:' opportunities/initech-pov/_index.md"
+- argv: ["unlink", "initech-pov", "related", "intc"]
+- argv: ["add", "person", "--name", "Pat", "--aliases", "Initech"]
+- argv: ["get", "Initech"]
+- argv: ["get", "person/initech"]
+- argv: ["add", "client", "--name", "Globex", "--aliases", "initech-pov"]
+- argv: ["get", "initech-pov"]

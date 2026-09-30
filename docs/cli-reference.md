@@ -483,6 +483,8 @@ Commands:
   show  Detail one type: fields, enums, required flags, relations, layout.
   edges  List the relation vocabulary by predicate.
   base  Show the effective base block every type inherits.
+  snapshot  Record the current resolved schema as the baseline in .khub/schema.applied.yaml.
+  diff  List schema changes since the last `khub schema snapshot`.
 
 ```
 
@@ -538,6 +540,34 @@ $ khub schema base --help
 Usage: khub schema base [OPTIONS]
 
 Show the effective base block every type inherits.
+
+Options:
+  --format <str>  text (Rich table on a TTY) or json. [default: text]
+  --help  Show this message and exit.
+
+```
+
+## khub schema snapshot
+
+```console
+$ khub schema snapshot --help
+Usage: khub schema snapshot [OPTIONS]
+
+Record the current resolved schema as the baseline in .khub/schema.applied.yaml.
+
+Options:
+  --format <str>  text (Rich table on a TTY) or json. [default: text]
+  --help  Show this message and exit.
+
+```
+
+## khub schema diff
+
+```console
+$ khub schema diff --help
+Usage: khub schema diff [OPTIONS]
+
+List schema changes since the last `khub schema snapshot`.
 
 Options:
   --format <str>  text (Rich table on a TTY) or json. [default: text]

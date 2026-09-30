@@ -272,3 +272,20 @@ storage:
 		t.Errorf("other.CollectionRelpath() = %q, want data/repos.yaml", got)
 	}
 }
+
+func TestPatternRefusesNonRE2Syntax(t *testing.T) {
+	// Author patterns compile as RE2 on every surface, so lookaround and
+	// backreferences refuse at resolve instead of compiling in one place and
+	// not the other.
+	for _, pattern := range []string{`^(?=a)a$`, `^(a)\1$`} {
+		t.Run(pattern, func(t *testing.T) {
+			doc := matrixBase + "  entities:\n    note:\n      attributes:\n        code: { type: text, pattern: '" +
+				pattern + "' }\nstorage:\n  note: { layout: file, path: notes }\n"
+			e := resolveLocated(t, doc)
+			if e.Code != "invalid_schema" ||
+				!strings.HasPrefix(e.Message, "Invalid pattern at ontology.entities.note.attributes.code: error parsing regexp: ") {
+				t.Errorf("got %s: %q", e.Code, e.Message)
+			}
+		})
+	}
+}

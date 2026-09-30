@@ -237,6 +237,16 @@ func checkPayload(report *integrity.CheckReport) *omap.Map {
 	payload.Set("draft_singletons", strList(report.DraftSingletons))
 	// The subset that fails the gate, so a consumer can tell a finding from a note.
 	payload.Set("draft_required_singletons", strList(report.DraftRequiredSingletons))
+	// Aliases naming more than one entity: an ID lookup through one is
+	// ambiguous, or lands on another entity's slug.
+	conflicts := make([]any, 0, len(report.AliasConflicts))
+	for _, c := range report.AliasConflicts {
+		record := omap.New()
+		record.Set("alias", c.Alias)
+		record.Set("claimants", strList(c.Claimants))
+		conflicts = append(conflicts, record)
+	}
+	payload.Set("alias_conflicts", conflicts)
 	// Say which gate ran: `orphans` populated with passed=true means default mode.
 	payload.Set("strict", report.Strict)
 	// Last, after `strict`: the one bucket that never affects `passed`. A body
@@ -303,6 +313,9 @@ func checkHuman(report *integrity.CheckReport) {
 	}
 	for _, name := range report.MissingSingletons {
 		fmt.Printf("required singleton %s is missing\n", name)
+	}
+	for _, c := range report.AliasConflicts {
+		fmt.Printf("alias '%s' names more than one entity: %s\n", c.Alias, strings.Join(c.Claimants, ", "))
 	}
 	required := map[string]bool{}
 	for _, name := range report.DraftRequiredSingletons {

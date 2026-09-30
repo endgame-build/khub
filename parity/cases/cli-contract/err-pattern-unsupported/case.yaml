@@ -1,0 +1,8 @@
+# Author patterns compile as RE2 on every surface. A lookahead in an attribute
+# `pattern:` is not RE2 syntax, so the schema refuses at resolve and every verb
+# that loads it exits 2 naming the attribute, before anything is read or written.
+steps:
+- argv: ["init", "build-hub", ".", "--no-wire"]
+- sh: 'perl -pi -e "s/\^\[a-z0-9\._-\]\+\(/^(?=[a-z])[a-z0-9._-]+(/" .khub/ontology.yaml && grep -c "(?=" .khub/ontology.yaml'
+- argv: ["query", "--type", "repo"]
+- argv: ["add", "repo", "--title", "Good", "--repo", "org/name", "--status", "active"]

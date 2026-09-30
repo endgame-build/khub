@@ -1,0 +1,3 @@
++ types.component.attributes.region
+~ types.component.attributes.lifecycle.enum: ["experimental", "production", "deprecated"] → ["experimental", "production"]
+- types.component.relations.consumes

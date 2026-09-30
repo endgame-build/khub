@@ -1,1 +1,1 @@
-{"error": {"code": "filter_error", "message": "No field 'bogusfield' on type 'requirement'"}}
+{"error": {"code": "filter_error", "message": "No field 'bogusfield' on type 'requirement'. Declared fields: aliases, author, capabilities, created, depends_on, description, draft, enforcement, kind, realized_in, references, related, resource, sources, tags, title, type, updated, use_cases"}}

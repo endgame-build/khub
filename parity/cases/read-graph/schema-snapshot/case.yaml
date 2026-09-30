@@ -1,0 +1,17 @@
+# `schema snapshot` records the resolved schema at .khub/schema.applied.yaml
+# (tracked, so it travels with the corpus); `schema diff` lists what changed
+# since. With no snapshot, diff refuses and names the call that records one.
+# An added attribute, a narrowed enum and a dropped relation each report at
+# their own dotted path. Pending changes are a
+# report (exit 0), not a failed gate. A file that is not a snapshot refuses.
+steps:
+- argv: ["init", "build-hub", ".", "--no-wire"]
+- argv: ["schema", "diff"]
+- argv: ["schema", "snapshot"]
+- argv: ["schema", "diff"]
+- sh: 'perl -0pi -e "s/(        stack:\n          type: text\n)/\$1        region:\n          type: text\n/; s/          - deprecated\n//; s/        consumes:\n          to: api\n          many: true\n          inverse: consumed_by\n//" .khub/ontology.yaml'
+- argv: ["schema", "diff", "--format", "json"]
+- argv: ["schema", "snapshot", "--format", "json"]
+- argv: ["schema", "diff"]
+- sh: 'printf "just text\n" > .khub/schema.applied.yaml'
+- argv: ["schema", "diff"]

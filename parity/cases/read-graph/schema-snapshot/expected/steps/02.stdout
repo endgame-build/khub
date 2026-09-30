@@ -1,0 +1,1 @@
+{"error": {"code": "no_schema_snapshot", "message": "No schema snapshot at .khub/schema.applied.yaml \u2014 run `khub schema snapshot` to record the baseline"}}

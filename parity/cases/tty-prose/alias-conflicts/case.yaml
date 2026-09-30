@@ -1,0 +1,8 @@
+mode: human
+normalize:
+- tty-layout-free
+steps:
+- argv: ["init", "firm-ops", ".", "--no-wire"]
+- argv: ["add", "client", "--name", "Initech Corp", "--aliases", "Initech"]
+- argv: ["add", "person", "--name", "Pat", "--aliases", "initech"]
+- argv: ["check"]

@@ -11,6 +11,7 @@
 │ description  │ text         │          │                     │               │
 │ resource     │ text         │          │                     │               │
 │ tags         │ list         │          │                     │               │
+│ aliases      │ list         │          │                     │               │
 │ kind         │ text         │ ✓        │ functional,         │               │
 │              │              │          │ non-functional,     │               │
 │              │              │          │ constraint,         │               │

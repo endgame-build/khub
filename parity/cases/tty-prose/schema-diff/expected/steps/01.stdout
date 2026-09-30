@@ -1,0 +1,6 @@
+Initialized build-hub workspace at .
+created singletons: prd, arc42
+index.md created
+
+Agent skill not installed. To install:
+  khub install-skills

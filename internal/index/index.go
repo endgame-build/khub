@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -21,6 +22,7 @@ import (
 	"github.com/endgame-build/khub/internal/fsio"
 	"github.com/endgame-build/khub/internal/omap"
 	"github.com/endgame-build/khub/internal/schema"
+	"github.com/endgame-build/khub/internal/values"
 )
 
 // Node is the (type, slug) key every projection is built on.
@@ -60,6 +62,11 @@ type Index struct {
 	// workspace that was 428 misses x 5000 slugs = 2.1M casefolds, 19% of CPU.
 	foldOnce sync.Once
 	folded   map[string][]string
+
+	// aliases maps each casefolded alias to the nodes claiming it, in scan
+	// order. Built once, on the first lookup that misses every slug.
+	aliasOnce sync.Once
+	aliases   map[string][]Node
 }
 
 // foldIndex builds (once) the casefolded slug lookup.
@@ -85,6 +92,57 @@ func (idx *Index) CanonicalSlug(slug string) (string, bool) {
 		return hits[0], true
 	}
 	return "", false
+}
+
+// AliasesOf is the entity's declared `aliases`: a list, or a scalar read as a
+// one-item list. Empty strings name nothing and are dropped.
+func AliasesOf(meta *omap.Map) []string {
+	v, _ := meta.Get("aliases")
+	var raw []any
+	switch x := v.(type) {
+	case nil:
+		return nil
+	case []any:
+		raw = x
+	default:
+		raw = []any{x}
+	}
+	out := make([]string, 0, len(raw))
+	for _, a := range raw {
+		if s := strings.TrimSpace(values.Str(a)); s != "" {
+			out = append(out, s)
+		}
+	}
+	return out
+}
+
+func (idx *Index) aliasIndex() {
+	idx.aliasOnce.Do(func() {
+		idx.aliases = map[string][]Node{}
+		for _, n := range idx.Order {
+			for _, a := range AliasesOf(idx.Meta[n]) {
+				f := casefold(a)
+				idx.aliases[f] = appendNode(idx.aliases[f], n)
+			}
+		}
+	})
+}
+
+func appendNode(ns []Node, n Node) []Node {
+	if slices.Contains(ns, n) {
+		return ns
+	}
+	return append(ns, n)
+}
+
+// AliasOwners returns the nodes declaring alias, matched case-insensitively,
+// in scan order. Aliases are free text, so case never picks one claimant over
+// another: `Globex` and `globex` on two entities are one ambiguous alias.
+// Callers consult it only after the slug lookups miss, so an alias never
+// shadows a real slug.
+func (idx *Index) AliasOwners(alias string) []Node {
+	idx.aliasIndex()
+	return idx.aliases[casefold(alias)]
 }
 
 // ResolveTarget returns the nodes a relation value resolves to.

@@ -1,0 +1,9 @@
+mode: human
+normalize:
+- tty-layout-free
+steps:
+- argv: ["init", "build-hub", ".", "--no-wire"]
+- argv: ["schema", "snapshot"]
+- argv: ["schema", "diff"]
+- sh: 'perl -0pi -e "s/(        stack:\n          type: text\n)/\$1        region:\n          type: text\n/; s/          - deprecated\n//; s/        consumes:\n          to: api\n          many: true\n          inverse: consumed_by\n//" .khub/ontology.yaml'
+- argv: ["schema", "diff"]

@@ -1,1 +1,1 @@
-{"error": {"code": "filter_error", "message": "No field '_C' on type 'any'"}}
+{"error": {"code": "filter_error", "message": "No field '_C' on type 'any'. Declared fields: actor, affects, aliases, author, capabilities, capability, consumes, created, depends_on, description, draft, enforcement, kind, lifecycle, owner, provider, realized_in, references, related, repo, resource, served_by, sources, stack, status, supersedes, system, tags, tier, title, trigger, type, updated, use_cases"}}

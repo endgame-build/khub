@@ -21,7 +21,7 @@ OUT="$REPO/docs/cli-reference.md"
 COMMANDS=(
   init upgrade status add get edit link unlink remove query search neighbors impact
   history validate check stale reindex viz serve backfill wire install-skills schema
-  "schema types" "schema show" "schema edges" "schema base"
+  "schema types" "schema show" "schema edges" "schema base" "schema snapshot" "schema diff"
 )
 
 # COLUMNS is pinned so the panels wrap identically wherever this runs.

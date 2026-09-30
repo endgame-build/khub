@@ -1,0 +1,1 @@
+{"path": ".", "preset": "build-hub", "version": "0.6.0", "name": "ws", "source": null, "entity_files_modified": 0, "seeded_over_corpus": false, "singletons_created": ["prd", "arc42"], "preserved": [], "index": "created", "skill_hint": "khub install-skills"}

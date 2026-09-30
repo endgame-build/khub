@@ -115,13 +115,17 @@ func create(root, typeName string, opts CreateOpts) (*CreateResult, error) {
 	// byte is written.
 	for _, predicate := range part.rels.Keys() {
 		rel, _ := rtype.Relations.Get(predicate)
-		vals, _ := part.rels.Get(predicate)
-		for _, value := range vals.([]string) {
+		raw, _ := part.rels.Get(predicate)
+		vals, err := aliasTargets(idx, rel, raw.([]string))
+		if err != nil {
+			return nil, err
+		}
+		for _, value := range vals {
 			if _, err := resolveWriteTarget(rel, value, idx, predicate, "relation"); err != nil {
 				return nil, err
 			}
 		}
-		unique := uniqueTargets(idx, rel, vals.([]string))
+		unique := uniqueTargets(idx, rel, vals)
 		if !rel.Many && len(unique) > 1 {
 			return nil, errs.CardinalityViolation(predicate)
 		}
@@ -191,6 +195,9 @@ func create(root, typeName string, opts CreateOpts) (*CreateResult, error) {
 		if err != nil {
 			return nil, err
 		}
+		if err := aliasTaken(idx, slug, opts.ID == ""); err != nil {
+			return nil, err
+		}
 		if err := createRow(root, rtype, typeName, meta, body, slug, opts.ID != ""); err != nil {
 			return nil, err
 		}
@@ -216,6 +223,9 @@ func create(root, typeName string, opts CreateOpts) (*CreateResult, error) {
 	if idx.Nodes[index.Node{Type: typeName, Slug: slug}] {
 		return nil, errs.SlugTaken(slug, typeName, !explicit)
 	}
+	if err := aliasTaken(idx, slug, !explicit); err != nil {
+		return nil, err
+	}
 	path := entityPath(root, rtype, slug)
 	if err := fsio.MkdirAll(root, filepath.Dir(path)); err != nil {
 		return nil, err
@@ -227,6 +237,15 @@ func create(root, typeName string, opts CreateOpts) (*CreateResult, error) {
 		return nil, err
 	}
 	return &CreateResult{Type: typeName, Slug: slug, Path: path, Draft: isDraft}, nil
+}
+
+// aliasTaken refuses a new slug that is already another entity's alias: the
+// name is taken for that entity, and a second one under it is a duplicate.
+func aliasTaken(idx *index.Index, slug string, minted bool) error {
+	if owners := idx.AliasOwners(slug); len(owners) > 0 {
+		return errs.AliasTaken(slug, owners[0].ID(), minted)
+	}
+	return nil
 }
 
 // createRow inserts one new row into a collection under slug.
@@ -339,14 +358,8 @@ func validateAttr(attr *schema.ResolvedAttribute, raw, storageFmt string) (any, 
 		}
 		return nil, errs.EnumViolation(raw, attr.Name, attr.Enum)
 	}
-	if attr.Pattern != nil {
-		matched, err := attr.MatchPattern(raw)
-		if err != nil {
-			return nil, err
-		}
-		if !matched {
-			return nil, errs.PatternViolation(raw, attr.Name, *attr.Pattern)
-		}
+	if attr.Pattern != nil && !attr.MatchPattern(raw) {
+		return nil, errs.PatternViolation(raw, attr.Name, *attr.Pattern)
 	}
 	switch attr.BaseType {
 	case "bool":
@@ -503,8 +516,12 @@ func update(root, id string, opts UpdateOpts) (*UpdateResult, error) {
 	}
 	for _, predicate := range part.rels.Keys() {
 		rel, _ := rtype.Relations.Get(predicate)
-		vals, _ := part.rels.Get(predicate)
-		for _, value := range vals.([]string) {
+		raw, _ := part.rels.Get(predicate)
+		vals, err := aliasTargets(idx, rel, raw.([]string))
+		if err != nil {
+			return nil, err
+		}
+		for _, value := range vals {
 			matches, rerr := resolveWriteTarget(rel, value, idx, predicate, "relation")
 			if rerr != nil {
 				return nil, rerr
@@ -513,7 +530,7 @@ func update(root, id string, opts UpdateOpts) (*UpdateResult, error) {
 				return nil, selfLink(id, predicate)
 			}
 		}
-		unique := uniqueTargets(idx, rel, vals.([]string))
+		unique := uniqueTargets(idx, rel, vals)
 		if !rel.Many && len(unique) > 1 {
 			return nil, errs.CardinalityViolation(predicate)
 		}
@@ -622,6 +639,9 @@ func link(root, id, predicate, target string) (*LinkResult, error) {
 	if err != nil {
 		return nil, err
 	}
+	if target, err = aliasTarget(idx, rel, target); err != nil {
+		return nil, err
+	}
 	matches, err := resolveWriteTarget(rel, target, idx, predicate, "predicate")
 	if err != nil {
 		return nil, err
@@ -694,6 +714,16 @@ func unlink(root, id, predicate, target string) (*LinkResult, error) {
 	if err != nil {
 		return nil, err
 	}
+	// An alias names its owner's edge, reported by the owner's slug as link
+	// reports it; the literal spelling still matches, so a hand-written alias
+	// value on disk can be unlinked too.
+	literal := target
+	if target, err = aliasTarget(idx, rel, target); err != nil {
+		return nil, err
+	}
+	matchesTarget := func(v string) bool {
+		return sameTarget(idx, rel, v, target) || sameTarget(idx, rel, v, literal)
+	}
 	apply := func(m *omap.Map) (bool, error) {
 		existing, has := m.Get(predicate)
 		if rel.Many {
@@ -701,7 +731,7 @@ func unlink(root, id, predicate, target string) (*LinkResult, error) {
 			hit := false
 			remaining := []any{}
 			for _, v := range list {
-				if sameTarget(idx, rel, values.Str(v), target) {
+				if matchesTarget(values.Str(v)) {
 					hit = true
 					continue
 				}
@@ -717,7 +747,7 @@ func unlink(root, id, predicate, target string) (*LinkResult, error) {
 			}
 			return true, nil
 		}
-		if has && existing != nil && sameTarget(idx, rel, values.Str(existing), target) {
+		if has && existing != nil && matchesTarget(values.Str(existing)) {
 			m.Delete(predicate)
 			return true, nil
 		}

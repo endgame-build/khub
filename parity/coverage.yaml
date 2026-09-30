@@ -162,7 +162,14 @@ commands:
 - name: 'schema base'
   params:
   - '--format'
+- name: 'schema snapshot'
+  params:
+  - '--format'
+- name: 'schema diff'
+  params:
+  - '--format'
 error_codes:
+- alias_taken
 - ambiguity_error
 - bad_search_query
 - bad_target
@@ -182,6 +189,7 @@ error_codes:
 - internal_path_error
 - inbound_edge_refusal
 - invalid_schema
+- invalid_snapshot
 - invalid_slug
 - lookup_error
 - malformed_entity
@@ -191,6 +199,7 @@ error_codes:
 # and the legacy shape that could still trip it is deleted with legacy.go.
 - missing_root
 - no_preset
+- no_schema_snapshot
 - no_slug_source
 - no_workspace
 - number_violation

@@ -10,6 +10,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/endgame-build/khub/internal/canon"
 	"github.com/endgame-build/khub/internal/introspect"
 	"github.com/endgame-build/khub/internal/omap"
 	"github.com/endgame-build/khub/internal/schema"
@@ -67,8 +68,78 @@ func registerSchema(root *cobra.Command) {
 	edgesCmd.Args = clickArity(0)
 	edgesCmd.Flags().StringVar(&edgesFormat, "format", "text", formatHelp)
 
-	schemaCmd.AddCommand(typesCmd, showCmd, edgesCmd, baseCmd)
+	var snapshotFormat, diffFormat string
+	snapshotCmd := newCmd("snapshot",
+		"Record the current resolved schema as the baseline in .khub/schema.applied.yaml.", "",
+		func(cmd *cobra.Command, args []string) error {
+			return Guard(snapshotFormat, func() error { return schemaSnapshot(snapshotFormat) })
+		})
+	snapshotCmd.Args = clickArity(0)
+	snapshotCmd.Flags().StringVar(&snapshotFormat, "format", "text", formatHelp)
+
+	diffCmd := newCmd("diff", "List schema changes since the last `khub schema snapshot`.", "",
+		func(cmd *cobra.Command, args []string) error {
+			return Guard(diffFormat, func() error { return schemaDiff(diffFormat) })
+		})
+	diffCmd.Args = clickArity(0)
+	diffCmd.Flags().StringVar(&diffFormat, "format", "text", formatHelp)
+
+	schemaCmd.AddCommand(typesCmd, showCmd, edgesCmd, baseCmd, snapshotCmd, diffCmd)
 	root.AddCommand(schemaCmd)
+}
+
+func schemaSnapshot(format string) error {
+	root, err := resolveRoot()
+	if err != nil {
+		return err
+	}
+	res, err := workspace.WriteSnapshot(root)
+	if err != nil {
+		return err
+	}
+	payload := omap.New()
+	payload.Set("path", res.Path)
+	payload.Set("types", res.Types)
+	return Emit(payload, format, func() {
+		fmt.Printf("Recorded the schema snapshot (%d types) at %s\n", res.Types, res.Path)
+	})
+}
+
+// schemaDiff reports the changes since the snapshot. Pending changes are a
+// report, not a failed gate: it exits 0 either way and `pending` says which.
+func schemaDiff(format string) error {
+	root, err := resolveRoot()
+	if err != nil {
+		return err
+	}
+	changes, err := workspace.DiffSnapshot(root)
+	if err != nil {
+		return err
+	}
+	payload := omap.New()
+	payload.Set("pending", len(changes) > 0)
+	payload.Set("changes", changes)
+	return Emit(payload, format, func() {
+		if len(changes) == 0 {
+			fmt.Println("No pending schema changes")
+			return
+		}
+		for _, c := range changes {
+			cm := c.(*omap.Map)
+			op, _ := cm.Get("op")
+			path, _ := cm.Get("path")
+			from, _ := cm.Get("from")
+			to, _ := cm.Get("to")
+			switch op {
+			case "added":
+				fmt.Printf("+ %v\n", path)
+			case "removed":
+				fmt.Printf("- %v\n", path)
+			default:
+				fmt.Printf("~ %v: %s → %s\n", path, diffValue(from), diffValue(to))
+			}
+		}
+	})
 }
 
 func loadResolved() (string, *schema.ResolvedSchema, error) {
@@ -296,6 +367,23 @@ func pyBool(v any) string {
 		return "False"
 	}
 	return fmt.Sprint(v)
+}
+
+// diffValue renders one side of a changed snapshot leaf on one line; a list
+// or mapping renders as JSON.
+func diffValue(v any) string {
+	switch x := v.(type) {
+	case nil:
+		return "null"
+	case []any, *omap.Map:
+		// Loaded YAML always encodes; a failure here is a bug, not input.
+		s, err := canon.EncodeCLI(x)
+		if err != nil {
+			panic(err)
+		}
+		return s
+	}
+	return pyValue(v)
 }
 
 func pyValue(v any) string {

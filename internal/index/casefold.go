@@ -9,3 +9,7 @@ import "golang.org/x/text/cases"
 var folder = cases.Fold()
 
 func casefold(s string) string { return folder.String(s) }
+
+// Casefold folds s the way the index matches slugs and aliases, for callers
+// that must group names exactly as lookup does.
+func Casefold(s string) string { return casefold(s) }

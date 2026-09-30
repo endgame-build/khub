@@ -2,15 +2,15 @@
 ┏━━━━━━━━━━━━━┳━━━━━━━━┳━━━━━━━━━━━┳━━━━━━━━━━━┓
 ┃ type        │ fields │ relations │ layout    ┃
 ┡━━━━━━━━━━━━━╇━━━━━━━━╇━━━━━━━━━━━╇━━━━━━━━━━━┩
-│ prd         │ 9      │ 4         │ singleton │
-│ arc42       │ 9      │ 4         │ singleton │
-│ capability  │ 9      │ 4         │ file      │
-│ actor       │ 9      │ 4         │ file      │
-│ use-case    │ 10     │ 7         │ file      │
-│ requirement │ 11     │ 7         │ file      │
-│ adr         │ 10     │ 7         │ file      │
-│ system      │ 10     │ 4         │ file      │
-│ component   │ 14     │ 8         │ file      │
-│ api         │ 11     │ 6         │ file      │
-│ repo        │ 11     │ 4         │ file      │
+│ prd         │ 10     │ 4         │ singleton │
+│ arc42       │ 10     │ 4         │ singleton │
+│ capability  │ 10     │ 4         │ file      │
+│ actor       │ 10     │ 4         │ file      │
+│ use-case    │ 11     │ 7         │ file      │
+│ requirement │ 12     │ 7         │ file      │
+│ adr         │ 11     │ 7         │ file      │
+│ system      │ 11     │ 4         │ file      │
+│ component   │ 15     │ 8         │ file      │
+│ api         │ 12     │ 6         │ file      │
+│ repo        │ 12     │ 4         │ file      │
 └─────────────┴────────┴───────────┴───────────┘

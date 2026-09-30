@@ -8,6 +8,7 @@ package query
 import (
 	"errors"
 	"sort"
+	"strings"
 	"testing"
 	"time"
 
@@ -141,7 +142,7 @@ func TestQueryUnknownFieldRaises(t *testing.T) {
 	if located.Target != "vibe" || located.Type != "opportunity" {
 		t.Fatalf("want the field and type located, got %+v", located)
 	}
-	if located.Message != "No field 'vibe' on type 'opportunity'" {
+	if !strings.HasPrefix(located.Message, "No field 'vibe' on type 'opportunity'. Declared fields: ") {
 		t.Fatalf("message drift: %q", located.Message)
 	}
 }
@@ -153,6 +154,13 @@ func TestQueryUnknownPredicateRaises(t *testing.T) {
 	ok := errors.As(err, &located)
 	if !ok || located.Code != "filter_error" || located.Target != "ownre" {
 		t.Fatalf("want filter_error on 'ownre', got %#v", err)
+	}
+	// The refusal lists what the type does declare, inverses included, so the
+	// caller corrects the call without a second lookup.
+	for _, name := range []string{"owner", "client"} {
+		if !strings.Contains(located.Message, name) {
+			t.Fatalf("declared list misses %q: %q", name, located.Message)
+		}
 	}
 }
 

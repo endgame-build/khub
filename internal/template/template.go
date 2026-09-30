@@ -387,8 +387,9 @@ func wordBounds(stem, where string, v any) (low, high *int, err error) {
 
 // textRules is kb _text_rules: `required_text` / `forbidden_text`, a list of
 // literals and `{pattern: …}` maps. A pattern compiles case-insensitively
-// through RE2 (`(?i)` prefixed): no backreferences or lookaround, unlike
-// Python's re — a template leaning on either is refused as not compiling.
+// through RE2 (`(?i)` prefixed), the engine attribute patterns use too: no
+// backreferences or lookaround, so a template leaning on either is refused as
+// not compiling.
 func textRules(stem, where string, v any) ([]TextRule, error) {
 	if v == nil {
 		return nil, nil

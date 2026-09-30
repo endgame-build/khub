@@ -17,6 +17,7 @@ Never hardcode a type or a field. Read the live schema:
 - `khub status --format json` — counts per type, draft/active, and the active preset.
 - `khub schema --format json` — every type with its fields, enums, required flags, and relations.
 - `khub schema show <type> --format json` — one type's shape; build an `add`/`edit` from it.
+- `khub schema diff --format json` — schema changes since the last `khub schema snapshot`; `pending: true` means existing entities may predate the current schema.
 
 The schema lives at `.khub/ontology.yaml` (the domain model) with `.khub/policy.yaml` and `.khub/storage.yaml` beside it; the active preset (`firm-ops` or `build-hub`; `build-lite` is an alias that `init` resolves and records as `build-hub`) is recorded in `.khub/config.yaml`. `khub wire` links the schema into the agent context files (`CLAUDE.md`, `AGENTS.md`), so the ontology may already be in your context.
 
@@ -156,6 +157,7 @@ not been found yet.
 - Run `khub validate --strict` in CI. Capture is never blocked, so a typo'd field name (`--knid`) is written to frontmatter and neither default gate reports it; `--strict` is what turns undeclared keys into a finding.
 - `khub search` and `khub query --has/--missing` both reach attribute values, so find an entity by what it holds (`search python`, `query --type component --missing repo`) rather than listing and filtering yourself.
 - Search before `add` (`khub search --plain "<title>"`) so you do not mint a duplicate. A `note:` line on stderr means the result is truncated, empty or missing unparseable files; follow it (raise `--limit`, switch to `query`/`neighbors`/`get`) rather than rephrasing the same search.
+- When sources call an entity by another name, record it: `khub edit <id> aliases "Initech,INTC"`. Every ID you pass then resolves through it, a relation written by alias stores the real slug, and `add` refuses a slug that is already someone's alias.
 
 ## What earns a document
 

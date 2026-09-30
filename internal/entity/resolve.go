@@ -6,6 +6,7 @@ package entity
 
 import (
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 
@@ -21,7 +22,8 @@ import (
 // A bare slug shared by two types is ambiguous; a `type/slug` qualifier is
 // exact. Case is resolved leniently as a fallback (see index.CanonicalSlug):
 // writes slugify to lowercase, so an agent that reuses the --id it passed must
-// still be able to read the entity back.
+// still be able to read the entity back. A declared alias resolves last, only
+// once every slug lookup has missed, so it never shadows a real slug.
 func resolveID(idx *index.Index, id string) (index.Node, error) {
 	if strings.Contains(id, "/") {
 		parts := strings.SplitN(id, "/", 2)
@@ -36,7 +38,7 @@ func resolveID(idx *index.Index, id string) (index.Node, error) {
 				}
 			}
 		}
-		return index.Node{}, errs.LookupError(id)
+		return resolveAlias(idx, slug, id, func(n index.Node) bool { return foldEqual(n.Type, typeName) })
 	}
 	types := idx.TypesBySlug[id]
 	if len(types) == 0 {
@@ -45,7 +47,7 @@ func resolveID(idx *index.Index, id string) (index.Node, error) {
 		}
 	}
 	if len(types) == 0 {
-		return index.Node{}, errs.LookupError(id)
+		return resolveAlias(idx, id, id, func(index.Node) bool { return true })
 	}
 	names := sortedTypes(types)
 	if len(names) > 1 {
@@ -56,6 +58,79 @@ func resolveID(idx *index.Index, id string) (index.Node, error) {
 		return index.Node{}, errs.AmbiguousSlug(id, candidates)
 	}
 	return index.Node{Type: names[0], Slug: id}, nil
+}
+
+// aliasOwner is the one node declaring alias among those keep accepts:
+// found is false when none does, and two or more is an ambiguity error.
+func aliasOwner(idx *index.Index, alias string, keep func(index.Node) bool) (owner index.Node, found bool, err error) {
+	var owners []index.Node
+	for _, n := range idx.AliasOwners(alias) {
+		if keep(n) {
+			owners = append(owners, n)
+		}
+	}
+	switch len(owners) {
+	case 0:
+		return index.Node{}, false, nil
+	case 1:
+		return owners[0], true, nil
+	}
+	ids := make([]string, len(owners))
+	for i, n := range owners {
+		ids[i] = n.ID()
+	}
+	sort.Strings(ids)
+	return index.Node{}, false, errs.AmbiguousAlias(alias, ids)
+}
+
+// resolveAlias is resolveID's last step: no owner is a lookup error on id, the
+// spelling the caller passed.
+func resolveAlias(idx *index.Index, alias, id string, keep func(index.Node) bool) (index.Node, error) {
+	owner, found, err := aliasOwner(idx, alias, keep)
+	if err == nil && !found {
+		err = errs.LookupError(id)
+	}
+	return owner, err
+}
+
+// aliasTarget rewrites a write-time relation value that names an entity only
+// by an alias to that entity's slug, so a stored edge always holds a real slug
+// and never depends on another file's aliases. A value that resolves as a slug,
+// or that no alias matches, passes through unchanged for resolveWriteTarget to
+// judge. The rewrite is qualified when the caller qualified it, or when the
+// bare slug would be ambiguous under this relation.
+func aliasTarget(idx *index.Index, rel *schema.ResolvedRelation, target string) (string, error) {
+	if len(idx.ResolveTarget(rel, target)) > 0 {
+		return target, nil
+	}
+	typeName, alias := "", target
+	if i := strings.Index(target, "/"); i >= 0 {
+		typeName, alias = target[:i], target[i+1:]
+	}
+	owner, found, err := aliasOwner(idx, alias, func(n index.Node) bool {
+		return (typeName == "" || foldEqual(n.Type, typeName)) &&
+			(rel.Kind == schema.KindAny || slices.Contains(rel.Targets, n.Type))
+	})
+	if err != nil || !found {
+		return target, err
+	}
+	if typeName != "" || len(idx.ResolveTarget(rel, owner.Slug)) > 1 {
+		return owner.ID(), nil
+	}
+	return owner.Slug, nil
+}
+
+// aliasTargets is aliasTarget over a list of values.
+func aliasTargets(idx *index.Index, rel *schema.ResolvedRelation, list []string) ([]string, error) {
+	out := make([]string, len(list))
+	for i, v := range list {
+		t, err := aliasTarget(idx, rel, v)
+		if err != nil {
+			return nil, err
+		}
+		out[i] = t
+	}
+	return out, nil
 }
 
 // sameTarget reports whether two target spellings name one node.

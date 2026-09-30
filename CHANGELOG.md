@@ -2,6 +2,53 @@
 
 Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); khub is pre-release.
 
+## [0.27.0] — 2026-09-29
+
+Entities get aliases, the schema gets a recorded baseline to diff against,
+and khub has one regex engine. **One breaking change:** an attribute
+`pattern:` using lookaround or a backreference now refuses when the schema
+loads (see Changed). The `check` JSON payload gains an `alias_conflicts`
+key, every schema view gains the `aliases` base field, and `filter_error`
+messages gain a list of declared names.
+
+### Added
+
+- `khub schema snapshot` records the current resolved schema at
+  `.khub/schema.applied.yaml`, a tracked file, and `khub schema diff` lists
+  what changed since: `{pending, changes: [{op, path, from, to}]}` at exit 0.
+  With no snapshot, diff refuses (`no_schema_snapshot`) and names the command
+  that records one. `init` and `upgrade` never write the snapshot, so a preset
+  upgrade shows up as pending. This is the baseline later migration work
+  builds on. (#74)
+- Entity aliases. `aliases` joins the base block (a list, on every type), and
+  every command taking an ID (`get`, `edit`, `link`, `unlink`, `remove`,
+  `neighbors`, `impact`, `history`) resolves it once the slug lookups miss,
+  case-insensitively; a real slug always wins. An alias two entities claim,
+  in any spelling, refuses as `ambiguity_error`. A relation value or link target
+  named by alias is stored as the real slug, so no edge on disk depends on
+  another file's aliases. `add` refuses a slug that is already another
+  entity's alias (`alias_taken`), which closes the path where an agent
+  searching for "Initech" minted a duplicate of `initech-corp`. `check`
+  fails on `alias_conflicts`: an alias two entities declare, or one that is
+  another entity's slug. The `check` payload gains the `alias_conflicts`
+  key, and `schema` views list the new base field. (#165)
+
+### Changed
+
+- A query filter naming an undeclared field (`--<field>`, `--has`,
+  `--missing`) already refused with `filter_error`; the message now lists the
+  declared names, as `unknown_type` and `unknown_predicate` do, so an agent
+  corrects the call without a second lookup. The code is unchanged. (#161)
+
+- **Breaking:** an attribute `pattern:` compiles as Go RE2, the engine template
+  `{pattern:}` rules already used, so khub has one regex engine. A pattern
+  using lookaround or a backreference now refuses when the schema loads
+  (`invalid_schema`, naming the attribute) instead of compiling. Every
+  shipped preset pattern is unaffected. Matching runs in linear time, so the
+  one-second match timeout is gone, along with the write path where a timed-out
+  `add`/`edit` exited 1 with no message. The `regexp2` dependency is dropped.
+  (#160)
+
 ## [0.26.0] — 2026-09-28
 
 Search gets faster, more forgiving and more informative, and every read

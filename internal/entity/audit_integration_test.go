@@ -24,7 +24,7 @@ func auditWorkspace(t *testing.T) string {
   entities:
     a:
       attributes:
-        code: {type: text, pattern: '(?=OK)OK'}
+        code: {type: text, pattern: 'O[K]'}
       relations:
         owns: {to: c, many: true, inverse: owned_by}
         one: {to: c}
@@ -134,7 +134,7 @@ func TestAuditValidationAndScanFailures(t *testing.T) {
 		}
 	}
 	if !found {
-		t.Fatal("lookaround pattern skipped by validate")
+		t.Fatal("pattern skipped by validate")
 	}
 	auditWrite(t, root, "a/nested/hidden.yaml", "type: a\n")
 	check, err := integrity.Check(root, false)
