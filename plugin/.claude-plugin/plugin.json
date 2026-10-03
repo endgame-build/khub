@@ -1,0 +1,41 @@
+{
+  "name": "khub",
+  "version": "0.1.0",
+  "description": "khub in the session: compact rows for khub calls, integrity warnings on writes, a status line, a band and a pane over the graph",
+  "author": { "name": "ENDGAME" },
+  "types": "./types/index.d.ts",
+  "userConfig": {
+    "binary": {
+      "type": "string",
+      "title": "khub binary",
+      "description": "Command that runs khub. Empty resolves node_modules/.bin/khub, then khub on the path.",
+      "default": ""
+    },
+    "sidebar": {
+      "type": "string",
+      "title": "Sidebar",
+      "description": "on-request opens the pane on /khub or a click. wide also docks it at session start on wide terminals.",
+      "options": ["on-request", "wide"],
+      "default": "on-request"
+    },
+    "gate": {
+      "type": "string",
+      "title": "Gate",
+      "description": "advisory reports new check errors. block also keeps a turn from finishing while they remain.",
+      "options": ["advisory", "block"],
+      "default": "advisory"
+    },
+    "agent_author": {
+      "type": "string",
+      "title": "Agent author",
+      "description": "The author stamped on an entity the agent adds without naming one. Empty leaves it unset.",
+      "default": "claude-code"
+    },
+    "guard_new_files": {
+      "type": "boolean",
+      "title": "Guard new entity files",
+      "description": "Deny a Write that creates a file inside a type's storage path, so entities are created with khub add.",
+      "default": true
+    }
+  }
+}

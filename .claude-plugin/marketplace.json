@@ -1,0 +1,12 @@
+{
+  "name": "khub",
+  "owner": { "name": "ENDGAME" },
+  "description": "khub for Claude Code: the agent skills and the session mod",
+  "plugins": [
+    {
+      "name": "khub",
+      "source": "./plugin",
+      "description": "khub in the session: the khub and setup skills, compact rows for khub calls, integrity warnings on writes, a status line, a band and a pane over the graph"
+    }
+  ]
+}
