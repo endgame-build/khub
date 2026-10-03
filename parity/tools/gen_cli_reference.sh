@@ -20,7 +20,7 @@ OUT="$REPO/docs/cli-reference.md"
 # `khub --help` lists them in, so the reference reads the same way.
 COMMANDS=(
   init upgrade status add get edit link unlink remove query search neighbors impact
-  history validate check stale reindex viz serve backfill wire install-skills schema
+  history validate check stale reindex viz serve backfill wire schema
   "schema types" "schema show" "schema edges" "schema base" "schema snapshot" "schema diff"
 )
 

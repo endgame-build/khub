@@ -30,7 +30,6 @@ steps:
 - argv: ["viz", "--help"]
 - argv: ["backfill", "--help"]
 - argv: ["wire", "--help"]
-- argv: ["install-skills", "--help"]
 - argv: ["schema", "--help"]
 - argv: ["schema", "types", "--help"]
 - argv: ["schema", "show", "--help"]

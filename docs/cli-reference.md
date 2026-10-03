@@ -16,7 +16,7 @@ Options:
 
 Commands:
   init  Scaffold a workspace from a preset and wire it into the agent context files.
-  upgrade  Refresh an existing workspace: the shipped schema and templates, new scaffolds, the skills, the wire block.
+  upgrade  Refresh an existing workspace: the shipped schema and templates, new scaffolds, the wire block.
   status  Summarize the workspace: counts, draft/active, orphan/stale, OKF conformance.
   add  Create an entity: khub add opportunity --client initech --owner noor --stage prospect.
   get  Read entities' frontmatter and body, optionally with derived edges.
@@ -38,7 +38,6 @@ Commands:
   backfill  Backfill missing dates and frontmatter: khub backfill [--type T] [--dry-run].
   wire  Wire the workspace into agent context files (CLAUDE.md gets ``@`` imports of the
 schema layer files; AGENTS.md gets a schema pointer). Bare ``wire`` updates whichever already exist.
-  install-skills  Install khub's agent skills: khub install-skills [--target agents] [--global].
   schema  Introspect the active schema.
 
 ```
@@ -52,7 +51,7 @@ Usage: khub init [OPTIONS] [preset] [path]
 Scaffold a workspace from a preset and wire it into the agent context files.
 
 A missing PRESET is a usage error; PATH defaults to the working directory.
-Installing the agent skill is a separate step: ``khub install-skills``.
+Installing the agent skill is a separate step: ``npx skills add endgame-build/khub``.
 
 Arguments:
   preset <str>  Named preset to seed from (e.g. firm-ops).
@@ -74,14 +73,13 @@ Options:
 $ khub upgrade --help
 Usage: khub upgrade [OPTIONS]
 
-Refresh an existing workspace: the shipped schema and templates, new scaffolds, the skills, the wire block.
+Refresh an existing workspace: the shipped schema and templates, new scaffolds, the wire block.
 
-Replaces .khub/{ontology,policy,storage}.yaml and .khub/templates/*.yaml from the preset recorded in .khub/config.yaml, copying an edited file to <name>.bak first; preflights the candidate schema and scaffolds before publishing, then re-installs the agent skills, re-wires the agent files, and regenerates index.md. Refuses outside a workspace: ``khub init`` scaffolds, ``khub upgrade`` refreshes.
+Replaces .khub/{ontology,policy,storage}.yaml and .khub/templates/*.yaml from the preset recorded in .khub/config.yaml, copying an edited file to <name>.bak first; preflights the candidate schema and scaffolds before publishing, then removes the agent skill copies earlier khub releases installed, re-wires the agent files, and regenerates index.md. Refuses outside a workspace: ``khub init`` scaffolds, ``khub upgrade`` refreshes.
 
 Options:
   --dry-run  Preview core and tail outcomes without changing the workspace.
   --no-schema  Keep this workspace's .khub/ files — schema and templates — as they are; report what the shipped ontology has that they do not.
-  --no-skill  Skip refreshing the agent skills; scaffolds, wire and index only.
   --no-wire  Skip re-wiring CLAUDE.md and AGENTS.md.
   --format <str>  text confirmation (default); json emits every step's outcome. [default: text]
   --help  Show this message and exit.
@@ -444,24 +442,6 @@ schema layer files; AGENTS.md gets a schema pointer). Bare ``wire`` updates whic
 Options:
   --target <str>  Create and wire a specific file: claude, agents, or both. Omit to update the agent files that already exist.
   --dry-run  Print the block(s); write nothing.
-  --help  Show this message and exit.
-
-```
-
-## khub install-skills
-
-```console
-$ khub install-skills --help
-Usage: khub install-skills [OPTIONS]
-
-Install khub's agent skills: khub install-skills [--target agents] [--global].
-
-Options:
-  --target <str>  claude, agents, or opencode (repeatable). Default: all three.
-  --skill <str>  Which skill to install (repeatable). Default: all shipped.
-  --global  Install into the home directories instead of this workspace.
-  --dry-run  Report what would be written, and write nothing.
-  --format <str>  text (Rich table on a TTY) or json. [default: text]
   --help  Show this message and exit.
 
 ```

@@ -1,9 +1,10 @@
 # The text rendering of init-wire-skills/upgrade: one line per write, the .bak
-# hint under a replaced file, and `nothing to do` when a run changed nothing.
+# hint under a replaced file, a `removed` line for a skill copy an earlier khub
+# installed, and `nothing to do` when a run changed nothing.
 mode: human
 steps:
 - argv: ["init", "build-hub", "."]
 - argv: ["upgrade"]
-- sh: "printf '\\n# mine\\n' >> .khub/storage.yaml && rm .khub/templates/adr.yaml knowledge/prd.md"
+- sh: "printf '\\n# mine\\n' >> .khub/storage.yaml && rm .khub/templates/adr.yaml knowledge/prd.md && mkdir -p .claude/skills/khub && printf '# khub\\n' > .claude/skills/khub/SKILL.md && printf '.claude/skills/khub/\\n' >> .gitignore"
 - argv: ["upgrade"]
 - argv: ["upgrade"]

@@ -1,5 +1,5 @@
-Usage: khub schema types [OPTIONS]
-Try 'khub schema types --help' for help.
+Usage: khub schema show [OPTIONS] {type}
+Try 'khub schema show --help' for help.
 ╭─ Error ──────────────────────────────────────────────────────────────────────╮
-│ Got unexpected extra argument(s) (foo)                                       │
+│ Got unexpected extra argument(s) (b)                                         │
 ╰──────────────────────────────────────────────────────────────────────────────╯

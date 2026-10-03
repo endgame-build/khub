@@ -41,9 +41,9 @@ type UpgradeOptions struct {
 	// Preview runs dry-run tails against the prepared temporary workspace.
 	Preview func(string) error
 	// Tails runs after a real upgrade has published, still under the workspace
-	// lock, so the skill, wire and index tails see exactly the tree the core
-	// committed. The callee must use the Held variants (skill.InstallHeld,
-	// wire.WireHeld, reindex.ReindexHeld): fsio.Locked is not re-entrant.
+	// lock, so the cleanup, wire and index tails see exactly the tree the core
+	// committed. The callee must use the Held variants (wire.WireHeld,
+	// reindex.ReindexHeld): fsio.Locked is not re-entrant.
 	// Tails are non-fatal; the hook returns nothing.
 	Tails func(root string)
 }

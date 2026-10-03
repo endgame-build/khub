@@ -20,7 +20,6 @@ commands:
   params:
   - '--dry-run'
   - '--no-schema'
-  - '--no-skill'
   - '--no-wire'
   - '--format'
 - name: 'status'
@@ -139,13 +138,6 @@ commands:
   params:
   - '--target'
   - '--dry-run'
-- name: 'install-skills'
-  params:
-  - '--target'
-  - '--skill'
-  - '--global'
-  - '--dry-run'
-  - '--format'
 - name: 'schema'
   params:
   - '--format'
@@ -197,7 +189,6 @@ error_codes:
 # missing_base: unreachable through the CLI since the ontology/policy/storage
 # split — LoadSchema always supplies the embedded base as the layered fallback,
 # and the legacy shape that could still trip it is deleted with legacy.go.
-- missing_root
 - no_preset
 - no_schema_snapshot
 - no_slug_source
@@ -212,7 +203,6 @@ error_codes:
 - self_link
 - singleton_exists
 - singleton_id
-- skills_missing
 - slug_taken
 - strict_unknown_field
 - target_not_empty
@@ -233,7 +223,5 @@ modes:
 - human
 unreachable:  # documented, not fixture-coverable
 - fts_unavailable    # build-dependent: fires only when the sqlite build lacks FTS5
-- skills_missing     # packaging-dependent: fires only when package data is absent
 - 'viz --open'       # opens a real browser; side effect excluded from fixtures
-- missing_root       # CLI resolves the workspace first (no_workspace wins); library-only
 - duplicate_type     # dead in the Python baseline: the factory has zero callers

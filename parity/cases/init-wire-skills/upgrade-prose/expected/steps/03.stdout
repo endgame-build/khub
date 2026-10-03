@@ -2,4 +2,5 @@ replaced .khub/storage.yaml
   your edits are in .khub/storage.yaml.bak — khub replaced a file you had changed
 created .khub/templates/adr.yaml
 created singletons: prd
+removed .claude/skills/khub
 index.md unchanged

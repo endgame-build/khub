@@ -1,0 +1,14 @@
+# Earlier khub releases copied their agent skills into the workspace on every
+# upgrade (`.claude/skills`, `.agents/skills`, `.opencode/skills`, one SKILL.md
+# per skill, one .gitignore line each). The skills now install from the plugin
+# marketplace or `npx skills`, so upgrade removes those copies: a dry run lists
+# them and writes nothing, the real run removes the folders, the agent
+# directories they emptied and their .gitignore lines, and a folder the user
+# added a file to stays with its line. A folder with no .gitignore line is one
+# `npx skills` installed, and it stays too. A second run has none left.
+steps:
+- argv: ["init", "build-hub", ".", "--no-wire"]
+- sh: "for d in .claude .agents .opencode; do for s in khub setup; do mkdir -p $d/skills/$s && printf '# %s\\n' $s > $d/skills/$s/SKILL.md && printf '%s/skills/%s/\\n' $d $s >> .gitignore; done; done && printf 'mine\\n' > .agents/skills/setup/notes.md && grep -v '^.opencode/skills/setup/$' .gitignore > .gitignore.new && mv .gitignore.new .gitignore"
+- argv: ["upgrade", "--dry-run", "--no-wire", "--format", "json"]
+- argv: ["upgrade", "--no-wire", "--format", "json"]
+- argv: ["upgrade", "--no-wire", "--format", "json"]

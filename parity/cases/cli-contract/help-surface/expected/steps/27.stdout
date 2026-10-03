@@ -1,8 +1,0 @@
-Usage: khub schema edges [OPTIONS]
-
-List the relation vocabulary by predicate.
-
-Options:
-  --format <str>  text (Rich table on a TTY) or json. [default: text]
-  --help  Show this message and exit.
-

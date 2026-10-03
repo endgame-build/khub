@@ -330,9 +330,8 @@ func pyRepr(v any) string {
 	return pyStr(v)
 }
 
-// pathAction is the {path, action} pair every file-writing tail reports —
-// wire's Outcome and skill's Write share the shape, and init, upgrade and
-// install-skills all render it the same way.
+// pathAction is the {path, action} pair a file-writing tail reports. Wire's
+// Outcome is one, and init and upgrade render it the same way.
 type pathAction struct{ Path, Action string }
 
 // pathActionRecords renders the pairs as the JSON list those commands carry:
@@ -349,7 +348,7 @@ func pathActionRecords(items []pathAction) []any {
 }
 
 // tail is one best-effort step run after a scaffold or an upgrade — wire,
-// skills, index. Result is set when it ran clean, Err (the located prose)
+// the legacy skill cleanup, index. Result is set when it ran clean, Err (the located prose)
 // when it failed, neither when the caller skipped it. By the time a tail runs
 // the workspace is already written, so none of them is ever fatal.
 type tail[T any] struct {

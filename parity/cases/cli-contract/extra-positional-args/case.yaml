@@ -22,7 +22,6 @@ steps:
 - argv: ["viz", "x"]
 - argv: ["backfill", "x"]
 - argv: ["wire", "x"]
-- argv: ["install-skills", "x"]
 - argv: ["init", "a", "b", "c"]
 - argv: ["schema", "types", "foo"]
 - argv: ["schema", "show", "a", "b"]

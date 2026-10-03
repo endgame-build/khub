@@ -8,7 +8,6 @@ import (
 	"testing"
 
 	"github.com/endgame-build/khub/internal/reindex"
-	"github.com/endgame-build/khub/internal/skill"
 	"github.com/endgame-build/khub/internal/wire"
 	"github.com/endgame-build/khub/internal/workspace"
 )
@@ -101,9 +100,9 @@ func TestUpgradePayloadKeyOrder(t *testing.T) {
 	}
 	unchanged := "unchanged"
 	payload := upgradePayload(result,
-		tailOf(&skill.Report{}, nil), tailOf(&wire.Result{}, nil), tailOf(&unchanged, nil))
+		tailOf(&[]string{}, nil), tailOf(&wire.Result{}, nil), tailOf(&unchanged, nil))
 	want := []string{"path", "preset", "version_from", "version_to", "config", "singletons_created",
-		"schema_drift", "skills", "wire", "index", "dry_run", "removed_types"}
+		"schema_drift", "removed_skills", "wire", "index", "dry_run", "removed_types"}
 	if !reflect.DeepEqual(payload.Keys(), want) {
 		t.Errorf("keys = %v, want %v", payload.Keys(), want)
 	}
@@ -114,15 +113,15 @@ func TestUpgradePayloadKeyOrder(t *testing.T) {
 	}
 
 	payload = upgradePayload(result,
-		tailOf[skill.Report](nil, errors.New("skills broke")),
+		tailOf[[]string](nil, errors.New("cleanup broke")),
 		tailOf[wire.Result](nil, errors.New("wire broke")),
 		tailOf[string](nil, errors.New("index broke")))
 	want = []string{"path", "preset", "version_from", "version_to", "config", "singletons_created",
-		"schema_drift", "skills", "skills_error", "wire", "wire_error", "index", "index_error", "dry_run", "removed_types"}
+		"schema_drift", "removed_skills", "removed_skills_error", "wire", "wire_error", "index", "index_error", "dry_run", "removed_types"}
 	if !reflect.DeepEqual(payload.Keys(), want) {
 		t.Errorf("keys = %v, want %v", payload.Keys(), want)
 	}
-	for _, key := range []string{"skills", "wire", "index"} {
+	for _, key := range []string{"removed_skills", "wire", "index"} {
 		if v, _ := payload.Get(key); v != nil {
 			t.Errorf("%s = %v on failure, want null", key, v)
 		}

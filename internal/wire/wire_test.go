@@ -330,10 +330,9 @@ func TestBuildBlockInstallHintNamesTheShippedChannel(t *testing.T) {
 	if !strings.Contains(block, "npm install -D @endgame-build/khub") {
 		t.Error("the install hint does not name the npm channel")
 	}
-	// The unscoped npm name `khub` is an unrelated package that npx downloads
-	// and runs without a local install; only the scoped name is safe.
-	if !strings.Contains(block, "then `npx @endgame-build/khub install-skills`") {
-		t.Error("the install hint does not run khub by its scoped package name")
+	// The agent skill installs through the skills CLI, from the repository.
+	if !strings.Contains(block, "then `npx skills add endgame-build/khub`") {
+		t.Error("the install hint does not name the skill install")
 	}
 	for _, retired := range []string{"uv tool install", "install.sh", "pip install"} {
 		if strings.Contains(block, retired) {
@@ -360,8 +359,8 @@ func TestGoldenWiredFiles(t *testing.T) {
 	ws := freshWS(t, "build-hub")
 	mustWire(t, ws, Options{})
 	want := map[string]string{
-		"CLAUDE.md": "d90081784a5c47a2482d8082d9ed823b5c3d93dc7420af6a971ab65916f4b644",
-		"AGENTS.md": "fdec0f7600f84cce71b56ca1c1360bf61206c9dbe0a3a1bab5cbc3968690982d",
+		"CLAUDE.md": "4fe2cd89dad6af88acd65cdb64afbb707b850874d8e5db073a866fbc139ba3ee",
+		"AGENTS.md": "1636e1ae8cfc7068d2fc30b2c7018d14cdf2b0ba329c4715ad2ea122e190f883",
 	}
 	for name, digest := range want {
 		sum := sha256.Sum256([]byte(read(t, filepath.Join(ws, name))))

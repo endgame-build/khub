@@ -236,7 +236,7 @@ func BuildBlock(spec BlockSpec, importSupported bool) string {
 			"and `wire` are operator commands and print prose.)",
 		"",
 		"Not installed? `npm install -D @endgame-build/khub`, "+
-			"then `npx @endgame-build/khub install-skills`.",
+			"then `npx skills add endgame-build/khub`.",
 		End,
 	)
 	return strings.Join(lines, "\n")

@@ -1,9 +1,6 @@
-Usage: khub schema show [OPTIONS] {type}
+Usage: khub schema edges [OPTIONS]
 
-Detail one type: fields, enums, required flags, relations, layout.
-
-Arguments:
-  type <str>  Type name. [required]
+List the relation vocabulary by predicate.
 
 Options:
   --format <str>  text (Rich table on a TTY) or json. [default: text]

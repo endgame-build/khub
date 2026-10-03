@@ -3,7 +3,7 @@ Usage: khub init [OPTIONS] [preset] [path]
 Scaffold a workspace from a preset and wire it into the agent context files.
 
 A missing PRESET is a usage error; PATH defaults to the working directory.
-Installing the agent skill is a separate step: ``khub install-skills``.
+Installing the agent skill is a separate step: ``npx skills add endgame-build/khub``.
 
 Arguments:
   preset <str>  Named preset to seed from (e.g. firm-ops).

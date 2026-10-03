@@ -2,4 +2,4 @@
 steps:
 - argv: [init, build-lite, ., --no-wire]
 - argv: [upgrade, --dry-run, --format, json]
-- argv: [upgrade, --dry-run, --no-schema, --no-skill, --no-wire, --format, json]
+- argv: [upgrade, --dry-run, --no-schema, --no-wire, --format, json]

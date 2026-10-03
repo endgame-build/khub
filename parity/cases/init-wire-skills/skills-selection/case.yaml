@@ -1,5 +1,0 @@
-steps:
-- argv: ["init", "build-hub", ".", "--no-wire"]
-- argv: ["install-skills", "--skill", "nope"]
-- argv: ["install-skills", "--skill", "khub", "--target", "claude", "--format", "json"]
-- argv: ["install-skills", "--global", "--dry-run", "--format", "json"]
