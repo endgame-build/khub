@@ -17,7 +17,7 @@ The product is two things at once:
 
 The **agent is the primary consumer**. khub exists to be the structured context an agent operates from: it reads typed context to act, and writes its results back as typed entities. The **human** authors the schema (the operational setup) and the seed context, and reviews.
 
-Both are first-class, symmetric writers of the same graph through the same library, with no propose-then-approve gate: the schema and git are the gate. Because the agent is a named user, the CLI and the Claude Code skill ship together, and the skill is a required surface.
+Both are first-class, symmetric writers of the same graph through the same library, with no propose-then-approve gate: the schema and git are the gate. Because the agent is a named user, the agent skill is a required surface: it ships from the same repo as the CLI, in the Claude Code plugin and through `npx skills add`.
 
 ## The Engine
 
@@ -84,7 +84,7 @@ The concrete stack under the five layers. Each pick stays dependency-light and e
 | Git history | `git` subprocess | `stale` and `backfill` batch file history reads where possible; git is present, so no library dependency |
 | Tooling | **Go**, **gofmt**, **go vet**, **golangci-lint**, `go test` | a golden-corpus test runs khub against a firm-ops corpus snapshot and asserts it validates and checks cleanly (a functional cutover, judged on its own output) |
 
-Go, shipped as a single static binary. It was a Python console script through 0.18.0; the rewrite removed the interpreter from every install. Agent skills, thin `SKILL.md` files over the same commands, are embedded in the binary and install with `khub install-skills`.
+Go, shipped as a single static binary. It was a Python console script through 0.18.0; the rewrite removed the interpreter from every install. Agent skills, thin `SKILL.md` files over the same commands, ship apart from the binary: in the Claude Code plugin under `plugin/`, and through `npx skills add` for other agents.
 ### Principles (Invariants)
 
 1. **Markdown is truth.** One entity equals one file in git. Audit, diff, PR review, and portability come for free.

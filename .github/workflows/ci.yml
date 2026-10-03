@@ -161,3 +161,34 @@ jobs:
       # runnable locally and covered by the shellcheck step above.
       - name: Assembly smoke over fixture tarballs
         run: npm/smoke.sh
+
+  # The Claude Code plugin under plugin/, and the marketplace manifest at the root.
+  # Neither command needs credentials or the network once Claude Code is installed.
+  plugin:
+    permissions:
+      contents: read
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          go-version: "1.25"
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version: "22"
+      # Pinned: the mod API is early access and moves between releases.
+      - name: Install Claude Code
+        run: npm install -g @anthropic-ai/claude-code@2.1.288
+      - name: shellcheck
+        run: shellcheck plugin/tools/record-fixtures.sh plugin/tools/try.sh
+      - name: Marketplace manifest
+        run: claude plugin validate --strict .
+      - name: Plugin manifest and hooks
+        run: claude plugin validate --strict plugin
+      # The fixtures are khub's real output. A JSON shape that moved shows as a diff.
+      - name: Fixtures match the built binary
+        run: |
+          bash plugin/tools/record-fixtures.sh
+          git diff --exit-code plugin/tests/fixtures.ts
+      - name: Plugin tests
+        run: claude plugin test plugin

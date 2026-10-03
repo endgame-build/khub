@@ -42,6 +42,18 @@ bash smoke.sh                                                    # end-to-end, b
 bash parity/tools/gen_cli_reference.sh                           # regenerate docs/cli-reference.md
 ```
 
+The Claude Code plugin lives under `plugin/` (the two agent skills and the mod),
+listed by the marketplace manifest `.claude-plugin/marketplace.json`. The binary
+carries no skills. Its gates (CI runs these as the `plugin` job; see
+`.claude/rules/plugin.md`):
+
+```bash
+claude plugin validate --strict .          # the marketplace manifest
+claude plugin validate --strict plugin     # the plugin manifest and what the hooks call
+claude plugin test plugin                  # the plugin's tests
+bash plugin/tools/record-fixtures.sh       # re-record khub's output the tests read
+```
+
 The npm channel has its own gates (CI runs these as the `npm-package` job):
 
 ```bash

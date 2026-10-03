@@ -33,7 +33,7 @@ The rest of this guide writes `khub …`. With the per-repo install read that as
 
 This walkthrough passes every value as a flag, which is the only way khub takes input: it never prompts, so a missing argument is a usage error rather than a question. That is also exactly how an agent drives it — pipe the output or add `--format json` to get machine-readable records.
 
-To hand the setup to an agent instead, install the `setup` skill with `npx skills add endgame-build/khub -s setup` and ask it to set khub up; see [Agent skills](../README.md#agent-skills) for both install options.
+To hand the setup to an agent instead, install the `setup` skill with `npx skills add endgame-build/khub -s setup` and ask it to set khub up; see [Agent skills](../README.md#agent-skills) for the Claude Code plugin and the other agents.
 
 ## Seed a workspace
 
@@ -50,14 +50,15 @@ created AGENTS.md
 index.md created
 
 Agent skill not installed. To install:
-  khub install-skills
+  cd my-hub && npx skills add endgame-build/khub
+In Claude Code: /plugin marketplace add endgame-build/khub, then /plugin install khub@khub
 ```
 
 ```bash
 cd my-hub
 ```
 
-`init` does three things: it scaffolds the tree, wires the schema into your agent files (`CLAUDE.md` and `AGENTS.md`; next section), and writes the first `index.md` — the one-file view of the corpus an agent reads before anything else. Pass `--no-wire` to skip the wire tail. Installing the agent skills is a separate step, `khub install-skills` — scaffolding a workspace and populating your agent directories are different decisions, so `init` names the command rather than running it.
+`init` does three things: it scaffolds the tree, wires the schema into your agent files (`CLAUDE.md` and `AGENTS.md`; next section), and writes the first `index.md` — the one-file view of the corpus an agent reads before anything else. Pass `--no-wire` to skip the wire tail. Installing the agent skills is a separate step — scaffolding a workspace and populating your agent directories are different decisions, so `init` names the commands rather than running them.
 
 init wrote a `.khub/` control directory and one folder per entity type:
 
@@ -91,21 +92,22 @@ updated AGENTS.md
 
 Bare `khub wire` updates whichever agent files already exist. `khub wire --target claude|agents|both` creates a specific one (`CLAUDE.md` gets the import, `AGENTS.md` the pointer).
 
-Now install khub's agent skills. This is a file copy out of the installed package — no network, and safe to re-run:
+Now install khub's agent skills. They ship apart from the binary.
 
-```bash
-khub install-skills
+In Claude Code, install the plugin. It carries both skills (`khub` and `setup`) and a session mod; see [the plugin guide](plugin.md):
+
+```text
+/plugin marketplace add endgame-build/khub
+/plugin install khub@khub
 ```
 
-Both skills (`khub` and `setup`) land in `.claude/skills/`, `.agents/skills/`, and `.opencode/skills/`, covering Claude Code, opencode, Cursor, Codex, and the rest. Narrow it with `--target claude|agents|opencode` or `--skill khub|setup`, preview with `--dry-run`, or pass `--global` to install into your home directories once per machine instead.
-
-khub gitignores the installed directories for you: the copies are reproducible from the CLI, so committing them would be committing a duplicate. After upgrading khub, run `khub upgrade --dry-run`, inspect the candidate outcomes, then run `khub upgrade`. The preview creates no workspace artifacts. The real run refreshes `.khub/` from the preset (an edited file is kept in `<name>.bak`), validates and publishes the core changes transactionally, then re-installs skills, re-wires agent files, and rebuilds `index.md`. An edited skill copy is overwritten either way, so make changes in the repo's `skills/`, not in an installed one.
-
-On a machine with no khub yet, the same skills install straight from the repo with [`npx skills`](https://skills.sh) (Node and repo access required):
+For opencode, Cursor, Codex and the rest, [`npx skills`](https://skills.sh) copies the two skills into each agent's skill folder (Node and repo access required):
 
 ```bash
-npx skills add endgame-build/khub -s setup
+npx skills add endgame-build/khub
 ```
+
+After upgrading khub, run `khub upgrade --dry-run`, inspect the candidate outcomes, then run `khub upgrade`. The preview creates no workspace artifacts. The real run refreshes `.khub/` from the preset (an edited file is kept in `<name>.bak`), validates and publishes the core changes transactionally, then removes the skill copies earlier khub versions installed into the workspace, re-wires agent files, and rebuilds `index.md`.
 
 ## Author your first entities
 
