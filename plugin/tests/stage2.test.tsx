@@ -716,9 +716,9 @@ test('a schema edit reloads the schema, tells the model what changed and offers 
   host.ran.length = 0
   await line.press({ key: 'snapshot' })
 
-  // The line leaves the band once the user acted on it.
+  // The schema line leaves the band once the user acted on it, and the quiet summary returns.
   expect(host.ran).toEqual(['schema snapshot'])
-  expect(await shows(line, /^engine drawing$/)).toBe(true)
+  expect(await shows(line, /^✓ · 8 entities$/)).toBe(true)
 })
 
 test('Rewire runs khub wire and clears the schema line', async ($, on) => {
@@ -735,7 +735,7 @@ test('Rewire runs khub wire and clears the schema line', async ($, on) => {
   await line.press({ key: 'rewire' })
 
   expect(host.ran).toEqual(['wire'])
-  expect(await shows(line, /^engine drawing$/)).toBe(true)
+  expect(await shows(line, /^✓ · 8 entities$/)).toBe(true)
 })
 
 test('a schema edit with no snapshot to compare against says so and offers a snapshot', async ($, on) => {
@@ -771,7 +771,7 @@ test('a schema edit that breaks the schema says so on the band, the status line 
   // No diff is asked of a schema that does not resolve.
   expect(host.ran).toEqual(['schema --format json', 'check --format json', 'status --format json'])
   expect(ran.context).toEqual(["khub: the schema no longer resolves. schema: No entity 'nope' found"])
-  expect(host.statuses.at(-1)).toBe("khub ! schema: No entity 'nope' found")
+  expect(host.statuses.at(-1)).toBe("schema: No entity 'nope' found")
   const line = await band($)
 
   // khub's complaint is the line, and neither schema action runs on a broken schema.
@@ -800,7 +800,7 @@ test('a workspace that needs nothing shows no doctor line', async ($, on) => {
 
   await ui.press({ key: 'tab-health' })
 
-  expect(await shows(await band($), /^engine drawing$/)).toBe(true)
+  expect(await keys(await band($))).toEqual([])
   expect(await shows(ui, /^WORKSPACE$/)).toBe(false)
 })
 
@@ -987,6 +987,6 @@ test('/khub doctor reads the workspace again and prints what it needs', async ($
   const ran = await $.command.run(slash('khub', 'doctor'))
 
   expect(ran.text).toBe(
-    ['khub doctor', 'preset build-hub 0.6.0 → 0.7.0, applied by `khub upgrade`', 'schema drift types.adr'].join('\n'),
+    ['doctor', 'preset build-hub 0.6.0 → 0.7.0, applied by `khub upgrade`', 'schema drift types.adr'].join('\n'),
   )
 })

@@ -85,6 +85,12 @@ These follow from khub's own rules, and each has a reason.
 - **Generated type files exist only under `--plugin-dir`.** A marketplace
   install lays no `.claude-plugin/types/`, so `tsc` runs against a checkout
   loaded with `--plugin-dir`.
+- **The engine draws a plugin's status line as a warning.** `$.ui.status(text)`
+  takes text alone, and the engine shows it as `⚠ <plugin>: <text>` in yellow,
+  from a marketplace install as from `--plugin-dir`. So the status line carries
+  problems only, its text never starts with the plugin's name, and the everyday
+  summary is the band's dim line. Command output gets the same `<plugin>:`
+  prefix, so the text a `command.run` hook returns drops its own leading `khub`.
 - **`--strict` validation needs an `author`** in `plugin.json`.
 
 ## Rules for calling khub from the shell

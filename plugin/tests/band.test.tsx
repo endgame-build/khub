@@ -135,7 +135,7 @@ test('a doctor notice offers nothing but to hide it', async ($, on) => {
   expect(ran).toEqual(['hide'])
 })
 
-test('with nothing to say the mod leaves the band to the engine', async ($, on) => {
+test('with nothing to say the band shows the workspace\'s state as one dim line', async ($, on) => {
   fakeHost(on, [F.check_base, F.status_base])
   on('ui.render', ($, e) => {
     const { Text } = $.ui.resolve(e)
@@ -146,6 +146,26 @@ test('with nothing to say the mod leaves the band to the engine', async ($, on) 
 
   const ui = await $.ui.mount({ plugin: 'khub', surface: 'terminal', component: 'AbovePrompt', props: BAND })
 
-  expect(await ui.find({ type: 'Text', text: /engine band/ })).toBeDefined()
+  expect((await ui.find({ type: 'Text', text: /^✓ · 8 entities$/ }))?.props.dimColor).toBe(true)
+  expect(await ui.find({ type: 'Text', text: /engine band/ })).toBe(undefined)
   expect(await ui.find({ type: 'Button' })).toBe(undefined)
+})
+
+test('before the first check, and while a survey shows, the band is the engine\'s', async ($, on) => {
+  fakeHost(on, [F.check_base, F.status_base])
+  on('ui.render', ($, e) => {
+    const { Text } = $.ui.resolve(e)
+
+    return <Text>engine band</Text>
+  })
+  await $.session.start(START)
+
+  const ui = await $.ui.mount({
+    plugin: 'khub',
+    surface: 'terminal',
+    component: 'AbovePrompt',
+    props: { ...BAND, hasSurvey: true },
+  })
+
+  expect(await ui.find({ type: 'Text', text: /engine band/ })).toBeDefined()
 })

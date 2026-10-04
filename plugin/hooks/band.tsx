@@ -46,3 +46,26 @@ export function bandLine(
     </Box>
   )
 }
+
+// The quiet line a healthy or dismissed band shows: the workspace's state in one glance.
+// A failing check is red, and anything else stays dim.
+export function summaryLine({ Box, Text }: El, text: string, isFailing: boolean, columns: number): RenderElement {
+  return (
+    <Box width={columns}>
+      <Box flexShrink={0} marginRight={2}>
+        <Text dimColor>khub</Text>
+      </Box>
+      <Box flexShrink={1}>
+        {isFailing ? (
+          <Text color="red" wrap="truncate-end">
+            {text}
+          </Text>
+        ) : (
+          <Text dimColor wrap="truncate-end">
+            {text}
+          </Text>
+        )}
+      </Box>
+    </Box>
+  )
+}

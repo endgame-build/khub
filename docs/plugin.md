@@ -22,7 +22,7 @@ credentials.
 The plugin needs Claude Code 2.1.288 or later and the khub CLI, 0.27.0 or
 later. It looks for khub in this order: the `binary` setting,
 `node_modules/.bin/khub` under the workspace, then `khub` on the path. With an
-older khub the status line reads `khub ! needs khub 0.27.0 or newer` and the
+older khub the status line reads `khub: needs khub 0.27.0 or newer` and the
 plugin does nothing else.
 
 Outside a khub workspace (no `.khub/` at or above the working directory) the
@@ -34,8 +34,8 @@ plugin does nothing.
 |---|---|
 | Tool rows | A khub call the agent makes draws as one line: `● khub add adr`, then `+ adr/ad-…`. A `json` button on the row shows the raw output. |
 | After a write | khub `validate` and `check` run, and the agent is told about findings its write introduced, as `<id> › <rule>: <message>`. This holds for `khub` calls and for hand edits of entity files. |
-| Status line | `khub ✓ · 146 entities · 3 draft · p50 38 ms`, or `khub ✗ 1 error · …` while `check` fails. |
-| Band above the prompt | One line, only when something needs attention: what the turn wrote, new errors, a pending schema change, a preset upgrade. |
+| Band above the prompt | One line. Normally a dim summary: `khub  ✓ · 146 entities · 3 draft · p50 38 ms`. When something needs attention it says so instead, with buttons: what the turn wrote, new errors, a pending schema change, a preset upgrade. |
+| Status line | Problems only, since Claude Code draws a plugin's status line as a warning: `khub: ✗ 1 error · …` while `check` fails, a schema that does not resolve, a khub that is missing or too old. |
 | Pane | `/khub` opens it. Five tabs: Session, Health, Browse, Search, Stats. |
 
 Guards on the agent's tool calls:

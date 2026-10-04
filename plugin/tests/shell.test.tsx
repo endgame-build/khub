@@ -115,7 +115,8 @@ test('a write that leaves a new finding tells the model in a hidden note', async
   on('tool.call', () => ({ result: { stdout: F.add_adr.stdout, stderr: '', interrupted: false } }))
   await $.session.start(START)
 
-  expect(host.statuses.at(-1)).toBe('khub ✓ · 8 entities')
+  // A passing workspace sets no status line, since the engine draws one as a warning.
+  expect(host.statuses.at(-1)).toBe(undefined)
 
   const ran = await $.tool.call({ tool: 'Bash', command: ADD_ADR })
 
@@ -126,7 +127,7 @@ test('a write that leaves a new finding tells the model in a hidden note', async
       `${REQ} › orphans`,
     ].join('\n'),
   ])
-  expect(host.statuses.at(-1)).toBe('khub ✗ 1 error · 10 entities')
+  expect(host.statuses.at(-1)).toBe('✗ 1 error · 10 entities')
 })
 
 test('a finding the model was told about is not repeated on the next write', async ($, on) => {
@@ -296,7 +297,7 @@ test('an Edit of an entity file is validated, noted and marked under its row', a
   ])
   expect(await row.find({ type: 'Text', text: /^engine row$/ })).toBeDefined()
   expect((await row.find({ type: 'Text', text: /^validate · 1 error · realized_in/ }))?.props.color).toBe('red')
-  expect(host.statuses.at(-1)).toBe('khub ✗ 1 error · 10 entities')
+  expect(host.statuses.at(-1)).toBe('✗ 1 error · 10 entities')
   expect(host.logs).toEqual([])
 })
 
@@ -394,7 +395,7 @@ test('the slash command runs khub and leaves the model a note without the body',
 
   const ran = await $.command.run(slash('khub', 'get cmp-search'))
 
-  expect(ran.text?.split('\n')[0]).toBe('khub get cmp-search  component/cmp-search · Search · 3 edges')
+  expect(ran.text?.split('\n')[0]).toBe('get cmp-search  component/cmp-search · Search · 3 edges')
   expect(ran.text?.includes('kind: service')).toBe(true)
   expect(ran.text?.includes('Responsibilities')).toBe(false)
   expect(ran.context).toEqual([
@@ -430,7 +431,7 @@ test('a write through the slash command is the user\'s, validated and noted', { 
 
   // The user's own add carries their name.
   expect(host.ran).toEqual([add.join(' '), ...AFTER_ADD])
-  expect(ran.text?.split('\n')[0]).toBe(`khub add adr  + ${ADR}`)
+  expect(ran.text?.split('\n')[0]).toBe(`add adr  + ${ADR}`)
   expect(ran.context).toEqual([
     `khub: the user ran \`khub add adr\`, which answered: + ${ADR}`,
     'khub check: new findings:',
@@ -453,7 +454,7 @@ test('where the khub skill owns /khub the mod shares the name with it', async ($
 
   // A khub command is the mod's, and so is the bare name. Anything else is the skill's.
   expect(host.commands).toEqual([])
-  expect((await $.command.run(slash('khub', 'get cmp-search'))).text?.startsWith('khub get cmp-search')).toBe(true)
+  expect((await $.command.run(slash('khub', 'get cmp-search'))).text?.startsWith('get cmp-search')).toBe(true)
   expect(host.ran).toEqual(['get cmp-search --format json'])
   expect((await $.command.run(slash('khub', 'how do I record a decision'))).text).toBe(
     'the skill ran with: how do I record a decision',
@@ -472,7 +473,7 @@ test('the plugin\'s own skill takes /khub under its full name, and the mod share
   await $.session.start(START)
   host.ran.length = 0
 
-  expect((await $.command.run(slash('khub:khub', 'get cmp-search'))).text?.startsWith('khub get cmp-search')).toBe(true)
+  expect((await $.command.run(slash('khub:khub', 'get cmp-search'))).text?.startsWith('get cmp-search')).toBe(true)
   expect(host.ran).toEqual(['get cmp-search --format json'])
   expect((await $.command.run(slash('khub:khub', 'how do I record a decision'))).text).toBe(
     'the skill ran with: how do I record a decision',
@@ -497,7 +498,7 @@ test('a khub older than the mod reads is named on the status line, and the mod s
   await $.session.start(START)
 
   // Only the version was asked.
-  expect(host.statuses).toEqual(['khub ! needs khub 0.27.0 or newer'])
+  expect(host.statuses).toEqual(['needs khub 0.27.0 or newer'])
   expect(host.ran).toEqual(['--version'])
   host.ran.length = 0
 
@@ -565,7 +566,7 @@ test('a schema that does not resolve is said on the status line', async ($, on) 
 
   await $.session.start(START)
 
-  expect(host.statuses.at(-1)).toBe("khub ! schema: No entity 'nope' found")
+  expect(host.statuses.at(-1)).toBe("schema: No entity 'nope' found")
 })
 
 test('a check khub does not answer is said on the status line', async ($, on) => {
@@ -573,7 +574,7 @@ test('a check khub does not answer is said on the status line', async ($, on) =>
 
   await $.session.start(START)
 
-  expect(host.statuses.at(-1)?.startsWith('khub ! check: ')).toBe(true)
+  expect(host.statuses.at(-1)?.startsWith('check: ')).toBe(true)
 })
 
 test('a turn start reads the schema and health again in the background', async ($, on) => {
@@ -586,7 +587,7 @@ test('a turn start reads the schema and health again in the background', async (
   await settled(() => host.ran.length >= 3)
 
   expect(host.ran).toEqual(['schema --format json', 'check --format json', 'status --format json'])
-  expect(host.statuses.at(-1)).toBe('khub ✗ 1 error · 10 entities')
+  expect(host.statuses.at(-1)).toBe('✗ 1 error · 10 entities')
   expect(host.logs).toEqual([])
 })
 

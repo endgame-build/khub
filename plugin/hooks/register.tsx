@@ -5,7 +5,7 @@ import { atom, memberOf, read, update } from 'claude-code'
 import type { EngineInterface, Register, ToolCallResult } from 'claude-code'
 
 import type { KhubCall, KhubForm, KhubNotice, KhubStats, KhubTab, KhubType } from '../types'
-import { bandLine } from './band'
+import { bandLine, summaryLine } from './band'
 import { firstLine, isRow, parseJson, refusal } from './cli'
 import { passthrough, route } from './commands'
 import { doctorNotice, doctorOf, doctorText } from './doctor'
@@ -188,14 +188,16 @@ async function detect($: EngineInterface, cwd: string, binary: string): Promise<
   return 'ok'
 }
 
-// Redraws the status line and the band from health and the ledger.
+// Redraws the status line and the band from health and the ledger. The engine draws a
+// plugin's status line as a warning, so it carries problems only, and the band's quiet
+// line carries the everyday summary.
 async function show($: EngineInterface) {
   const health = await read($, healthAtom)
   const ledger = await read($, ledgerAtom)
   const notice = noticeOf(ledger, health, turn) ?? schemaLine ?? doctorNotice(await read($, doctorAtom))
   const said = notice?.parts.map(part => part.text).join(' · ') ?? ''
 
-  $.ui.status(trouble === '' ? statusText(health, await read($, statsAtom)) : `khub ! ${trouble}`)
+  $.ui.status(trouble !== '' ? trouble : health.passed === false ? statusText(health, await read($, statsAtom)) : undefined)
   await update($, noticeAtom, () => (said === dismissed ? null : notice))
 }
 
@@ -319,7 +321,10 @@ function answerCommand<E extends { args: string }, R>(
   const isWhole = !isShared && !isSkills
   const isOurs = ws !== null && (isWhole || e.args.trim() === '' || isVerb(first) || e.args.trim() === 'doctor')
 
-  return isOurs ? runCommand($, e.args) : next(e)
+  if (!isOurs) return next(e)
+
+  // The engine prints the plugin's name before the text, so the text's own goes.
+  return runCommand($, e.args).then(said => (said.text === undefined ? said : { ...said, text: said.text.replace(/^khub:? /, '') }))
 }
 
 async function openPane($: EngineInterface, tab?: KhubTab) {
@@ -648,8 +653,8 @@ export const register: Register = (on, options) => {
   on('session.start', async ($, e, next) => {
     const found = await detect($, e.cwd, String(options.binary ?? ''))
 
-    if (found === 'no-binary') $.ui.status('khub not installed')
-    if (found === 'old') $.ui.status(`khub ! needs khub ${MIN_KHUB} or newer`)
+    if (found === 'no-binary') $.ui.status('not installed')
+    if (found === 'old') $.ui.status(`needs khub ${MIN_KHUB} or newer`)
 
     if (found === 'ok') {
       await registerCommand($)
@@ -861,9 +866,20 @@ export const register: Register = (on, options) => {
   })
 
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
-    const notice = ws ? await read($, noticeAtom) : null
+    if (!ws || e.props.hasSurvey) return next(e)
 
-    if (notice === null || e.props.hasSurvey) return next(e)
+    const notice = await read($, noticeAtom)
+
+    if (notice === null) {
+      const health = await read($, healthAtom)
+
+      // Before the first check there is nothing to say yet.
+      if (health.passed === null) return next(e)
+
+      const text = statusText(health, await read($, statsAtom))
+
+      return summaryLine($.ui.resolve(e), text, !health.passed, e.props.bodyColumns)
+    }
 
     return bandLine($.ui.resolve(e), notice, e.props.bodyColumns, {
       review: () => background($, openPane($, 'session')),
