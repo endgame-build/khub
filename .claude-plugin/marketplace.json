@@ -1,0 +1,12 @@
+{
+  "name": "khub",
+  "owner": { "name": "ENDGAME" },
+  "description": "khub for Claude Code: the agent skills, a band above the prompt and compact rows for khub calls",
+  "plugins": [
+    {
+      "name": "khub",
+      "source": "./plugin",
+      "description": "khub in the session: the khub and setup skills, a band above the prompt, and compact rows for the khub calls Claude makes"
+    }
+  ]
+}

@@ -1,19 +1,12 @@
-// Package khub carries khub's embedded data trees and nothing else.
+// Package khub carries khub's embedded preset tree and nothing else.
 //
 // It exists only because `//go:embed` patterns may not contain "..": a pattern
 // resolves against the package's own directory, so a package under internal/
-// cannot reach a tree at the module root. Both trees the binary ships live at
-// the root — presets/ and skills/ — which is why this file sits here rather
-// than inside internal/presets.
+// cannot reach a tree at the module root. presets/ lives at the root, which is
+// why this file sits here rather than inside internal/presets.
 //
-// The pre-cutover note here said the presets would move to /presets and this
-// file would collapse into internal/presets. Half of that happened: the presets
-// did move off the retired Python package, but skills/ stays at the root where
-// `npx skills` expects to find it, so one root-level embed still has to serve
-// both trees.
-//
-// No logic lives here. internal/presets and internal/skills sub-root these
-// filesystems and are the only importers.
+// No logic lives here. internal/presets sub-roots the filesystem and is the
+// only importer.
 package khub
 
 import "embed"
@@ -29,10 +22,3 @@ import "embed"
 //go:embed presets/*/storage.yaml
 //go:embed presets/*/templates
 var PresetsData embed.FS
-
-// SkillsData embeds the repo-root skills tree (one directory per skill, each
-// holding a SKILL.md). This is a build-time copy: the binary carries the
-// skills, so `khub install-skills` needs nothing on disk beside it.
-//
-//go:embed skills
-var SkillsData embed.FS

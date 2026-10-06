@@ -42,6 +42,18 @@ bash smoke.sh                                                    # end-to-end, b
 bash parity/tools/gen_cli_reference.sh                           # regenerate docs/cli-reference.md
 ```
 
+The Claude Code plugin lives under `plugin/` (the two agent skills and the mod),
+listed by the marketplace manifest `.claude-plugin/marketplace.json`. The binary
+carries no skills. Its gates (CI runs these as the `plugin` job; see
+`.claude/rules/plugin.md`):
+
+```bash
+claude plugin validate --strict .          # the marketplace manifest
+claude plugin validate --strict plugin     # the plugin manifest and what the hooks call
+claude plugin test plugin                  # the plugin's tests
+bash plugin/tools/record-fixtures.sh       # re-record khub's output the tests read
+```
+
 The npm channel has its own gates (CI runs these as the `npm-package` job):
 
 ```bash
@@ -83,6 +95,12 @@ thin, schema-introspecting adapter with zero per-type code.**
 Adding or changing an entity type is a schema edit — **no surface code changes.**
 If you find yourself branching on a type name in `internal/cli/`, that's the bug;
 push it into the schema or the generic core path.
+
+The Claude Code plugin under `plugin/` sits outside the five layers. It carries
+the two agent skills and a small mod that draws a band above the prompt and
+compact rows for khub calls. The mod runs the `khub` binary and renders what
+comes back, with zero per-type code and no logic of its own. See
+`.claude/rules/plugin.md`.
 
 ### Choke-point rules (lint-enforced)
 

@@ -23,7 +23,7 @@ Built on top of the [Open Knowledge Format (OKF)](https://github.com/GoogleCloud
 - **Gate** — `validate` (per-entity well-formedness, including body structure against the type's template: required section headings as an ordered subsequence; per-section rules report as `gaps`, which never gate) and `check` (graph-wide completeness, dangling edges, strays, cycles, missing required singletons, body shape; orphans informational unless `--strict`, thin bodies informational as `thin`); `stale` reads git at entity altitude, row-accurate even inside collections.
 - **Project** — `reindex` (OKF `index.md`), `viz` (Cytoscape HTML), `backfill` (git-derived dates and scaffolding).
 - **Store** — per-type `layout` (file / folder / collection / singleton) × `format` (md / json / yaml; collections take json / jsonl / yaml). A singleton is one fixed file whose slug is the type name (`khub get prd`). Non-md entities carry prose in a reserved `body` field. Every existing-workspace mutation holds one workspace-wide lock from scan through publication; atomic writes preserve existing permissions and refuse workspace storage symlinks.
-- **Scaffold** — presets are directories (`<name>/{ontology,policy,storage}.yaml` + `templates/*.yaml`); `khub init` copies them into `.khub/` and creates every missing md singleton from its template (creations only — an existing file is never touched); `khub upgrade --dry-run` preflights the complete candidate and tails without workspace artifacts. A real upgrade publishes schema, templates and scaffolds transactionally, preserves edited files as `<name>.bak`, writes the version last, then refreshes skills, wiring and `index.md` as non-fatal tails.
+- **Scaffold** — presets are directories (`<name>/{ontology,policy,storage}.yaml` + `templates/*.yaml`); `khub init` copies them into `.khub/` and creates every missing md singleton from its template (creations only — an existing file is never touched); `khub upgrade --dry-run` preflights the complete candidate and tails without workspace artifacts. A real upgrade publishes schema, templates and scaffolds transactionally, preserves edited files as `<name>.bak`, writes the version last, then refreshes wiring and `index.md` as non-fatal tails.
 - **Wire** — `wire`: link the schema into a project's agent files. Bare `wire` updates whichever of `CLAUDE.md` / `AGENTS.md` exist; `--target claude|agents|both` creates one. `CLAUDE.md` gets `@.khub/ontology.yaml` (+ policy/storage) imports, `AGENTS.md` a schema pointer, both with the command surface — so an agent reasons in the ontology with or without the CLI.
 
 Full command surface and JSON contracts: [`docs/cli.md`](docs/cli.md). Feature history: [`CHANGELOG.md`](CHANGELOG.md). All documentation: [`docs/`](docs/).
@@ -36,7 +36,7 @@ khub is a single static binary for macOS and Linux (amd64, arm64). The primary i
 npm install -D @endgame-build/khub                  # exact per-repo pin (required: later commands run it)
 npx @endgame-build/khub init firm-ops ./my-hub      # scaffold .khub/ (+ templates, singletons), wire agent files
 cd my-hub
-npx @endgame-build/khub install-skills              # copy the agent skills in (offline)
+npx skills add endgame-build/khub                   # the agent skills (Claude Code: the plugin, below)
 ```
 
 With no version after the name, `npx @endgame-build/khub` runs the version `package.json` pins.
@@ -84,24 +84,23 @@ A preset is a canonical ontology for one domain — a directory holding its thre
 
 ## Agent skills
 
-khub ships two skills: `khub` (the read and write verbs) and `setup` (install the CLI, set up a project). They work in Claude Code, opencode, Cursor, Codex, Gemini CLI, and any other agent that reads a `SKILL.md`.
+khub ships two skills: `khub` (the read and write verbs) and `setup` (install the CLI, set up a project). They live in this repo under `plugin/skills/`, apart from the binary.
 
-**Option 1 — the CLI, then its skills.** A file copy out of the binary itself: offline, safe to re-run.
+**Claude Code — the plugin.** The repo is a plugin marketplace. The `khub` plugin carries both skills and a small session mod. The mod draws a one-line band above the prompt with the entity count, what the session added, removed and edited, the draft count and the `check` verdict. In a verbose session it also draws each khub call Claude makes as a compact row. See [`docs/plugin.md`](docs/plugin.md).
 
-```bash
-npm install -D @endgame-build/khub
-npx @endgame-build/khub install-skills
+```text
+/plugin marketplace add endgame-build/khub
+/plugin install khub@khub
 ```
 
-That writes both skills into `.claude/skills/`, `.agents/skills/`, and `.opencode/skills/`, and gitignores them (they are reproducible from the CLI). Narrow it with `--target claude|agents|opencode` or `--skill khub|setup`; `--global` installs into your home directories instead, once per machine; `--dry-run` shows the writes first.
-
-**Option 2 — let an agent do it.** Installs the `setup` skill, which tells the agent how to install the CLI and set up the project. Needs Node and network:
+**Every other agent — `npx skills`.** opencode, Cursor, Codex, Gemini CLI and any other agent that reads a `SKILL.md` get the two skills, with no mod. Needs Node and access to the repo:
 
 ```bash
-npx skills add endgame-build/khub -s setup
+npx skills add endgame-build/khub             # both skills, into the agents it finds
+npx skills add endgame-build/khub -s setup    # only setup, on a machine with no khub yet
 ```
 
-Use option 2 on a machine with no khub yet; option 1 is what you re-run afterwards.
+On a machine with no khub yet, install `setup` and ask the agent to set khub up.
 
 **Status:** v1 engine shipped and in daily use on a live firm-operations corpus that cut over from hand-rolled scripts. Design rationale in [`docs/design-memo.md`](docs/design-memo.md); the collections row model in [`docs/collections-design.md`](docs/collections-design.md).
 

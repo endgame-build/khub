@@ -1,5 +1,5 @@
-Usage: khub init [OPTIONS] [preset] [path]
-Try 'khub init --help' for help.
+Usage: khub schema types [OPTIONS]
+Try 'khub schema types --help' for help.
 ╭─ Error ──────────────────────────────────────────────────────────────────────╮
-│ Got unexpected extra argument(s) (c)                                         │
+│ Got unexpected extra argument(s) (foo)                                       │
 ╰──────────────────────────────────────────────────────────────────────────────╯

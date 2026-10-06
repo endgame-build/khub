@@ -1,8 +1,8 @@
 # --no-schema keeps the workspace's .khub/ files as they are and reports what the
 # shipped ontology declares that they do not (`schema_drift`), instead of
-# replacing them; --no-skill and --no-wire leave those tails null.
+# replacing them; --no-wire leaves that tail null.
 steps:
 - argv: ["init", "build-hub", ".", "--no-wire"]
 - sh: "perl -0pi -e 's/^    adr:\\n(?:(?: {6}.*)?\\n)*//m' .khub/ontology.yaml && perl -0pi -e 's/^  adr:\\n(?:    .*\\n)*//m' .khub/storage.yaml"
-- argv: ["upgrade", "--no-schema", "--no-skill", "--no-wire", "--format", "json"]
+- argv: ["upgrade", "--no-schema", "--no-wire", "--format", "json"]
 - argv: ["status", "--format", "json"]

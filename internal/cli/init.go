@@ -11,6 +11,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -24,18 +25,38 @@ import (
 // skillHint is printed after a scaffold and carried as `skill_hint` in the JSON
 // payload, so an agent driving `init --format json` learns the follow-up
 // without parsing prose.
-const skillHint = "khub install-skills"
+const skillHint = "npx skills add endgame-build/khub"
 
 // skillHintFor aims the follow-up at the workspace that was just scaffolded.
-// install-skills resolves its root by walking up from the working directory, so
-// a bare hint after `khub init firm-ops ./my-hub` would either find no
-// workspace or — worse — find an unrelated one above cwd.
+// `npx skills` installs into the working directory, so a bare hint after
+// `khub init firm-ops ./my-hub` would install beside the workspace, not in it.
 func skillHintFor(scaffolded string) string {
 	if resolvePath(scaffolded) == resolvePath(".") {
 		return skillHint
 	}
-	return "khub -C " + scaffolded + " install-skills"
+	return "cd " + shellQuote(scaffolded) + " && " + skillHint
 }
+
+// shellPlain matches a path the shell reads as one word with no quoting.
+var shellPlain = regexp.MustCompile(`^[A-Za-z0-9_./-]+$`)
+
+// shellQuote returns path as one shell word, so the hint runs as pasted. A
+// path the shell would split or expand is wrapped in single quotes, and a
+// leading dash gets `./` so `cd` does not read it as an option.
+func shellQuote(path string) string {
+	if strings.HasPrefix(path, "-") {
+		path = "./" + path
+	}
+	if shellPlain.MatchString(path) {
+		return path
+	}
+	return "'" + strings.ReplaceAll(path, "'", `'\''`) + "'"
+}
+
+// pluginHint is the same follow-up for Claude Code, where the skills ship in a
+// plugin with the session mod. It is prose only, since a slash command is typed
+// at the Claude Code prompt and no shell runs it.
+const pluginHint = "In Claude Code: /plugin marketplace add endgame-build/khub, then /plugin install khub@khub"
 
 // resolvePath is Path.resolve(): absolute, symlinks followed when they exist.
 func resolvePath(path string) string {
@@ -121,14 +142,13 @@ func registerInit(root *cobra.Command) {
 					} else {
 						fmt.Printf("index.md %s\n", *indexStep.Result)
 					}
-					fmt.Printf("\nAgent skill not installed. To install:\n  %s\n",
-						skillHintFor(result.Path))
+					fmt.Printf("\nAgent skill not installed. To install:\n  %s\n%s\n", skillHintFor(result.Path), pluginHint)
 				})
 			})
 		})
 	cmd.Args = clickArity(2)
 	cmd.Long = cmd.Short + "\n\nA missing PRESET is a usage error; PATH defaults to the working directory." +
-		"\nInstalling the agent skill is a separate step: ``khub install-skills``."
+		"\nInstalling the agent skill is a separate step: ``npx skills add endgame-build/khub``."
 	cmd.Flags().StringVar(&presetSource, "preset-source", "",
 		"Where to resolve the preset if not packaged with khub.")
 	cmd.Flags().StringVar(&name, "name", "", "Workspace name (default: the target dir name).")

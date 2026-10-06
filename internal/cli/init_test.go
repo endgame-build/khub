@@ -8,7 +8,6 @@ import (
 	"testing"
 
 	"github.com/endgame-build/khub/internal/reindex"
-	"github.com/endgame-build/khub/internal/skill"
 	"github.com/endgame-build/khub/internal/wire"
 	"github.com/endgame-build/khub/internal/workspace"
 )
@@ -71,6 +70,23 @@ func TestIndexTailReportsARefusalInsteadOfFailing(t *testing.T) {
 	}
 }
 
+func TestSkillHintQuotesAPathTheShellWouldSplit(t *testing.T) {
+	// The hint is pasted into a shell, so the path must stay one word.
+	cases := map[string]string{
+		".":                 skillHint,
+		"deeper/nested/dir": "cd deeper/nested/dir && " + skillHint,
+		"my hub":            "cd 'my hub' && " + skillHint,
+		"it's":              `cd 'it'\''s' && ` + skillHint,
+		"$HOME/hub":         "cd '$HOME/hub' && " + skillHint,
+		"-hub":              "cd ./-hub && " + skillHint,
+	}
+	for path, want := range cases {
+		if got := skillHintFor(path); got != want {
+			t.Errorf("skillHintFor(%q) = %q, want %q", path, got, want)
+		}
+	}
+}
+
 func TestInitPayloadCarriesIndexBeforeTheSkillHint(t *testing.T) {
 	result := &workspace.InitResult{Path: ".", Preset: "build-lite", Version: "0.2.0", Name: "ws"}
 	created := "created"
@@ -100,10 +116,9 @@ func TestUpgradePayloadKeyOrder(t *testing.T) {
 		SingletonsCreated: []string{}, SchemaDrift: []string{},
 	}
 	unchanged := "unchanged"
-	payload := upgradePayload(result,
-		tailOf(&skill.Report{}, nil), tailOf(&wire.Result{}, nil), tailOf(&unchanged, nil))
+	payload := upgradePayload(result, tailOf(&wire.Result{}, nil), tailOf(&unchanged, nil))
 	want := []string{"path", "preset", "version_from", "version_to", "config", "singletons_created",
-		"schema_drift", "skills", "wire", "index", "dry_run", "removed_types"}
+		"schema_drift", "wire", "index", "dry_run", "removed_types"}
 	if !reflect.DeepEqual(payload.Keys(), want) {
 		t.Errorf("keys = %v, want %v", payload.Keys(), want)
 	}
@@ -114,15 +129,14 @@ func TestUpgradePayloadKeyOrder(t *testing.T) {
 	}
 
 	payload = upgradePayload(result,
-		tailOf[skill.Report](nil, errors.New("skills broke")),
 		tailOf[wire.Result](nil, errors.New("wire broke")),
 		tailOf[string](nil, errors.New("index broke")))
 	want = []string{"path", "preset", "version_from", "version_to", "config", "singletons_created",
-		"schema_drift", "skills", "skills_error", "wire", "wire_error", "index", "index_error", "dry_run", "removed_types"}
+		"schema_drift", "wire", "wire_error", "index", "index_error", "dry_run", "removed_types"}
 	if !reflect.DeepEqual(payload.Keys(), want) {
 		t.Errorf("keys = %v, want %v", payload.Keys(), want)
 	}
-	for _, key := range []string{"skills", "wire", "index"} {
+	for _, key := range []string{"wire", "index"} {
 		if v, _ := payload.Get(key); v != nil {
 			t.Errorf("%s = %v on failure, want null", key, v)
 		}

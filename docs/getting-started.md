@@ -33,7 +33,7 @@ The rest of this guide writes `khub …`. With the per-repo install read that as
 
 This walkthrough passes every value as a flag, which is the only way khub takes input: it never prompts, so a missing argument is a usage error rather than a question. That is also exactly how an agent drives it — pipe the output or add `--format json` to get machine-readable records.
 
-To hand the setup to an agent instead, install the `setup` skill with `npx skills add endgame-build/khub -s setup` and ask it to set khub up; see [Agent skills](../README.md#agent-skills) for both install options.
+To hand the setup to an agent instead, install the `setup` skill with `npx skills add endgame-build/khub -s setup` and ask it to set khub up; see [Agent skills](../README.md#agent-skills) for the Claude Code plugin and the other agents.
 
 ## Seed a workspace
 
@@ -43,25 +43,26 @@ To hand the setup to an agent instead, install the `setup` skill with `npx skill
 khub init firm-ops ./my-hub
 ```
 
-```
+```text
 Initialized firm-ops workspace at my-hub
 created CLAUDE.md
 created AGENTS.md
 index.md created
 
 Agent skill not installed. To install:
-  khub install-skills
+  cd my-hub && npx skills add endgame-build/khub
+In Claude Code: /plugin marketplace add endgame-build/khub, then /plugin install khub@khub
 ```
 
 ```bash
 cd my-hub
 ```
 
-`init` does three things: it scaffolds the tree, wires the schema into your agent files (`CLAUDE.md` and `AGENTS.md`; next section), and writes the first `index.md` — the one-file view of the corpus an agent reads before anything else. Pass `--no-wire` to skip the wire tail. Installing the agent skills is a separate step, `khub install-skills` — scaffolding a workspace and populating your agent directories are different decisions, so `init` names the command rather than running it.
+`init` does three things: it scaffolds the tree, wires the schema into your agent files (`CLAUDE.md` and `AGENTS.md`; next section), and writes the first `index.md` — the one-file view of the corpus an agent reads before anything else. Pass `--no-wire` to skip the wire tail. Installing the agent skills is a separate step — scaffolding a workspace and populating your agent directories are different decisions, so `init` names the commands rather than running them.
 
 init wrote a `.khub/` control directory and one folder per entity type:
 
-```
+```text
 my-hub/
 ├── .khub/
 │   ├── config.yaml            # workspace name, preset, stale_days
@@ -84,28 +85,31 @@ my-hub/
 khub wire
 ```
 
-```
+```text
 updated CLAUDE.md
 updated AGENTS.md
 ```
 
 Bare `khub wire` updates whichever agent files already exist. `khub wire --target claude|agents|both` creates a specific one (`CLAUDE.md` gets the import, `AGENTS.md` the pointer).
 
-Now install khub's agent skills. This is a file copy out of the installed package — no network, and safe to re-run:
+Now install khub's agent skills. They ship apart from the binary.
 
-```bash
-khub install-skills
+In Claude Code, install the plugin. It carries both skills (`khub` and `setup`) and a small session mod that draws a status band and compact rows for khub calls; see [the plugin guide](plugin.md):
+
+```text
+/plugin marketplace add endgame-build/khub
+/plugin install khub@khub
 ```
 
-Both skills (`khub` and `setup`) land in `.claude/skills/`, `.agents/skills/`, and `.opencode/skills/`, covering Claude Code, opencode, Cursor, Codex, and the rest. Narrow it with `--target claude|agents|opencode` or `--skill khub|setup`, preview with `--dry-run`, or pass `--global` to install into your home directories once per machine instead.
-
-khub gitignores the installed directories for you: the copies are reproducible from the CLI, so committing them would be committing a duplicate. After upgrading khub, run `khub upgrade --dry-run`, inspect the candidate outcomes, then run `khub upgrade`. The preview creates no workspace artifacts. The real run refreshes `.khub/` from the preset (an edited file is kept in `<name>.bak`), validates and publishes the core changes transactionally, then re-installs skills, re-wires agent files, and rebuilds `index.md`. An edited skill copy is overwritten either way, so make changes in the repo's `skills/`, not in an installed one.
-
-On a machine with no khub yet, the same skills install straight from the repo with [`npx skills`](https://skills.sh) (Node and repo access required):
+For opencode, Cursor, Codex and the rest, [`npx skills`](https://skills.sh) copies the two skills into each agent's skill folder (Node and repo access required):
 
 ```bash
-npx skills add endgame-build/khub -s setup
+npx skills add endgame-build/khub
 ```
+
+After upgrading khub, run `khub upgrade --dry-run`, inspect the candidate outcomes, then run `khub upgrade`. The preview creates no workspace artifacts. The real run refreshes `.khub/` from the preset (an edited file is kept in `<name>.bak`), validates and publishes the core changes transactionally, then re-wires agent files and rebuilds `index.md`.
+
+A workspace set up with khub 0.27.0 or earlier still holds the skill copies that release wrote under `.claude/skills/`, `.agents/skills/` and `.opencode/skills/`. khub leaves them, so delete those folders and their `.gitignore` lines by hand.
 
 ## Author your first entities
 
@@ -115,7 +119,7 @@ Each `add` mints a slug from `--name` or `--title` ("Acme Corp" becomes `acme-co
 khub add client --name "Acme Corp" --industry manufacturing
 ```
 
-```
+```text
 clients/acme-corp.md
 Created client 'acme-corp' (active)
 ```
@@ -124,7 +128,7 @@ Created client 'acme-corp' (active)
 khub add person --name "Dana Lee" --role partner
 ```
 
-```
+```text
 identity/team/dana-lee.md
 Created person 'dana-lee' (active)
 ```
@@ -135,7 +139,7 @@ A project requires two relations: `client` points at a client, `owner` points at
 khub add project --title "Acme Diagnostic" --client acme-corp --owner dana-lee
 ```
 
-```
+```text
 projects/acme-diagnostic/_index.md
 Created project 'acme-diagnostic' (active)
 ```
@@ -146,7 +150,7 @@ Read the project back as an agent-facing record. Every JSON entity carries a qua
 khub get acme-diagnostic --format json
 ```
 
-```
+```text
 {"id": "project/acme-diagnostic", "type": "project", "slug": "acme-diagnostic", "path": "projects/acme-diagnostic/_index.md", "frontmatter": {"type": "project", "created": "2026-07-08", "updated": "2026-07-08", "draft": false, "title": "Acme Diagnostic", "client": "acme-corp", "owner": "dana-lee"}, "body": ""}
 ```
 
@@ -156,7 +160,7 @@ That JSON is a projection. The file on disk is the truth, plain Markdown with YA
 cat projects/acme-diagnostic/_index.md
 ```
 
-```
+```text
 ---
 type: project
 created: 2026-07-08
@@ -178,7 +182,7 @@ Point the project's owner at a person who does not exist. khub checks the target
 khub add project --title "Broken Project" --client acme-corp --owner nobody
 ```
 
-```
+```text
 No person 'nobody' to satisfy relation 'owner'
 ```
 
@@ -192,7 +196,7 @@ Add a person without a `--role`, even though the schema marks role required. The
 khub add person --name "Sam Rivera"
 ```
 
-```
+```text
 identity/team/sam-rivera.md
 Created person 'sam-rivera' (active)
 ```
@@ -203,7 +207,7 @@ Per-entity `validate` passes; the record is well-formed as far as it goes:
 khub validate person/sam-rivera
 ```
 
-```
+```text
 {"count": 1, "errors": [], "fixed": []}
 ```
 
@@ -213,7 +217,7 @@ The gap surfaces at graph level. `check` reads required-completeness across the 
 khub check
 ```
 
-```
+```text
 active-but-incomplete person/sam-rivera: missing role
 orphan person/sam-rivera
 ```
@@ -228,7 +232,7 @@ Filter entities by type. Read commands print a Rich table on a terminal and JSON
 khub query --type project
 ```
 
-```
+```text
                             query
 ┏━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━┳━━━━━━━┳━━━━━━━━┳━━━━━━━┓
 ┃ id                      ┃ type    ┃ draft ┃ orphan ┃ stale ┃
@@ -243,7 +247,7 @@ Walk one hop out from the project to see its edges, the client and the owner you
 khub neighbors acme-diagnostic
 ```
 
-```
+```text
                      neighbors
 ┏━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━┳━━━━━━━━━━━┳━━━━━━━┓
 ┃ id               ┃ predicate ┃ direction ┃ depth ┃
@@ -259,7 +263,7 @@ khub neighbors acme-diagnostic
 khub status
 ```
 
-```
+```text
           status
 ┏━━━━━━━━━━━━━━━━┳━━━━━━━┓
 ┃ type           ┃ count ┃
@@ -292,7 +296,7 @@ khub edit person/sam-rivera role consultant
 khub check
 ```
 
-```
+```text
 orphan person/sam-rivera (informational)
 Graph check passed
 ```

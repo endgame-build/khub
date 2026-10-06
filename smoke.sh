@@ -153,7 +153,6 @@ hasnt "storage.yaml is shipped again" "$U/.khub/storage.yaml" "# mine"
 printf '\n# mine\n' >> "$U/.khub/ontology.yaml"
 ok 0 "upgrade --no-schema"         $KHUB -C "$U" upgrade --no-schema
 has  "--no-schema keeps the edit"  "$U/.khub/ontology.yaml" "# mine"
-ok 0 "upgrade --no-skill"          $KHUB -C "$U" upgrade --no-skill
 ok 0 "upgrade --no-wire"           $KHUB -C "$U" upgrade --no-wire
 $KHUB -C "$U" upgrade --format json > "$U/upgrade.json"
 has  "json: version_to"            "$U/upgrade.json" '"version_to"'

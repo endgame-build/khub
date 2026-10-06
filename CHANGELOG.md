@@ -2,6 +2,50 @@
 
 Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); khub is pre-release.
 
+## [0.28.0] — 2026-10-06
+
+The agent skills leave the binary. khub becomes a Claude Code plugin
+marketplace, and `install-skills` is gone. **Breaking:** `khub install-skills`,
+`khub upgrade --no-skill` and the `skills` / `skills_error` keys of upgrade's
+JSON are removed. **Adopting hubs:** `khub upgrade` leaves the skill copies
+earlier releases wrote under `.claude/skills/`, `.agents/skills/` and
+`.opencode/skills/`. Delete those folders and their `.gitignore` lines by hand,
+then install the plugin or run `npx skills add endgame-build/khub`. Until the
+old copy is gone, Claude Code lists the skill twice beside the plugin's.
+
+### Added
+
+- **The `khub` plugin for Claude Code**, under `plugin/`, installed with
+  `/plugin marketplace add endgame-build/khub` then `/plugin install khub@khub`.
+  The repo is its marketplace, through `.claude-plugin/marketplace.json`. The
+  plugin carries the `khub` and `setup` skills and a small session mod. The mod
+  draws a one-line band above the prompt: preset and version, entity count,
+  what the session added, removed and edited, draft count, and the `check`
+  verdict. In a verbose session it also draws each khub call Claude makes as a
+  compact row. See `docs/plugin.md`.
+
+### Changed
+
+- `khub init`'s `skill_hint` is `npx skills add endgame-build/khub`, behind
+  `cd <path> &&` when the workspace is not the working directory, and its
+  prose names that command and the Claude Code plugin install. The path is
+  quoted for the shell when it holds a space or another character the shell
+  would split or expand.
+- The block `khub wire` writes into `CLAUDE.md` and `AGENTS.md` ends with
+  `npx skills add endgame-build/khub`. Run `khub wire` or `khub upgrade` to
+  refresh an existing workspace.
+- The skills moved from `skills/` to `plugin/skills/`. `npx skills add
+  endgame-build/khub` finds them through the marketplace manifest.
+
+### Removed
+
+- `khub install-skills`, with its `--target`, `--skill`, `--global` and
+  `--dry-run` options. Other agents install the skills with
+  `npx skills add endgame-build/khub`.
+- `khub upgrade --no-skill`, and the `skills` and `skills_error` keys of
+  upgrade's JSON.
+- The `missing_root`, `unknown_skill` and `unknown_target` error codes.
+
 ## [0.27.0] — 2026-09-29
 
 Entities get aliases, the schema gets a recorded baseline to diff against,

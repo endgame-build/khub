@@ -8,6 +8,6 @@ steps:
 - argv: ["init", "build-lite", ".", "--no-wire", "--format", "json"]
 - argv: ["status", "--format", "json"]
 - sh: "perl -pi -e 's/^preset: build-hub$/preset: build-lite/' .khub/config.yaml"
-- argv: ["upgrade", "--no-skill", "--no-wire", "--format", "json"]
+- argv: ["upgrade", "--no-wire", "--format", "json"]
 - argv: ["status", "--format", "json"]
 - argv: ["schema", "types", "--format", "json"]

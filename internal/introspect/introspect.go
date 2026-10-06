@@ -388,7 +388,7 @@ func relationView(rel *schema.ResolvedRelation) *omap.Map {
 // `supersedes: {to: adr, inverse: superseded}` means an adr answers to
 // `superseded` — `get --edges` returns it and `query --missing superseded`
 // filters on it — while nothing writes it to disk. Introspection listed only
-// the stored side, so the one surface skills/khub/SKILL.md tells agents to
+// the stored side, so the one surface plugin/skills/khub/SKILL.md tells agents to
 // build writes from ("never from a hardcoded shape") omitted predicates those
 // same agents are allowed to use.
 type derivedInverse struct {

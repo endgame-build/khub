@@ -2,4 +2,5 @@ Initialized firm-ops workspace at .
 index.md created
 
 Agent skill not installed. To install:
-  khub install-skills
+  npx skills add endgame-build/khub
+In Claude Code: /plugin marketplace add endgame-build/khub, then /plugin install khub@khub

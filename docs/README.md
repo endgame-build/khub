@@ -10,6 +10,7 @@ khub's docs, organized by [Diátaxis](https://diataxis.fr): learning, tasks, ref
 
 - [Author and extend a schema](schema.md) — the `base` block, attributes and relations, storage config, and `--strict`.
 - Wire khub into an agent — see [Agent skills](../README.md#agent-skills) in the README and the `khub wire` entry in the [CLI reference](cli.md).
+- [Use khub inside Claude Code](plugin.md) — the plugin: the skills, a status band above the prompt, compact rows for khub calls.
 
 ## Reference — look it up
 

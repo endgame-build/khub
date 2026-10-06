@@ -1,5 +1,5 @@
 # upgrade refreshes a workspace from the preset init recorded: on a fresh init
-# only the skills (which init never installs) are new; after an edit to a layer
+# there is nothing to do; after an edit to a layer
 # file, a deleted template and a deleted singleton, the file is replaced with the
 # edit kept in <name>.bak, the template is created again and the singleton
 # scaffolded again; a third run has nothing left to do. Twin case:

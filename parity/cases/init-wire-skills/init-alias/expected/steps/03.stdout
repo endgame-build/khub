@@ -1,1 +1,1 @@
-{"path": ".", "preset": "build-hub", "version_from": "0.6.0", "version_to": "0.6.0", "config": [], "singletons_created": [], "schema_drift": [], "skills": null, "wire": null, "index": "unchanged", "dry_run": false, "removed_types": []}
+{"path": ".", "preset": "build-hub", "version_from": "0.6.0", "version_to": "0.6.0", "config": [], "singletons_created": [], "schema_drift": [], "wire": null, "index": "unchanged", "dry_run": false, "removed_types": []}
