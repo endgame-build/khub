@@ -60,6 +60,13 @@ In Claude Code the skills come with the khub plugin, which also draws a band abo
 /plugin install khub@khub
 ```
 
+The user types those two at the Claude Code prompt. To update the plugin later, the user runs these from a shell, then starts a new session:
+
+```bash
+claude plugin marketplace update khub
+claude plugin update khub@khub
+```
+
 **Workspace already present** (a cloned engagement repo)? Do not re-scaffold; just wire it:
 
 ```bash

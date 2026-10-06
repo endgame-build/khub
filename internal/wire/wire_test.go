@@ -326,18 +326,28 @@ func TestBuildBlockInstallHintNamesTheShippedChannel(t *testing.T) {
 	// The hint reaches a reader who has no khub and cannot check the claim, so
 	// it must name the channel khub actually ships through. npm is the only one
 	// the retired uv and curl channels build nothing.
-	block := BuildBlock(BlockSpec{Preset: "p", Version: "1", Types: []string{"a"}, Layers: threeLayers}, true)
-	if !strings.Contains(block, "npm install -D @endgame-build/khub") {
-		t.Error("the install hint does not name the npm channel")
-	}
-	// The agent skill installs through the skills CLI, from the repository.
-	if !strings.Contains(block, "then `npx skills add endgame-build/khub`") {
-		t.Error("the install hint does not name the skill install")
-	}
-	for _, retired := range []string{"uv tool install", "install.sh", "pip install"} {
-		if strings.Contains(block, retired) {
-			t.Errorf("the install hint still offers the retired %q channel", retired)
+	spec := BlockSpec{Preset: "p", Version: "1", Types: []string{"a"}, Layers: threeLayers}
+	claude, agents := BuildBlock(spec, true), BuildBlock(spec, false)
+	for name, block := range map[string]string{"CLAUDE.md": claude, "AGENTS.md": agents} {
+		if !strings.Contains(block, "npm install -D @endgame-build/khub") {
+			t.Errorf("%s: the install hint does not name the npm channel", name)
 		}
+		for _, retired := range []string{"uv tool install", "install.sh", "pip install"} {
+			if strings.Contains(block, retired) {
+				t.Errorf("%s: the install hint still offers the retired %q channel", name, retired)
+			}
+		}
+	}
+	// CLAUDE.md is read by Claude Code, where the skills come with the plugin.
+	if !strings.Contains(claude, "`/plugin marketplace add endgame-build/khub` and `/plugin install khub@khub`") {
+		t.Error("CLAUDE.md: the install hint does not name the plugin install")
+	}
+	if strings.Contains(claude, "npx skills add") {
+		t.Error("CLAUDE.md: the install hint names the skills CLI")
+	}
+	// Every other agent installs the skills through the skills CLI, from the repository.
+	if !strings.Contains(agents, "then `npx skills add endgame-build/khub`") {
+		t.Error("AGENTS.md: the install hint does not name the skill install")
 	}
 }
 
@@ -359,7 +369,7 @@ func TestGoldenWiredFiles(t *testing.T) {
 	ws := freshWS(t, "build-hub")
 	mustWire(t, ws, Options{})
 	want := map[string]string{
-		"CLAUDE.md": "4fe2cd89dad6af88acd65cdb64afbb707b850874d8e5db073a866fbc139ba3ee",
+		"CLAUDE.md": "ca3538e9e8ef7472b6e3237aa4f8d00476b1d929516afeef341a5a55a7996ba3",
 		"AGENTS.md": "1636e1ae8cfc7068d2fc30b2c7018d14cdf2b0ba329c4715ad2ea122e190f883",
 	}
 	for name, digest := range want {

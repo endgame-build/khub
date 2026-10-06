@@ -200,6 +200,14 @@ func BuildBlock(spec BlockSpec, importSupported bool) string {
 		fileRefs = append(fileRefs, ref)
 	}
 
+	// CLAUDE.md is read by Claude Code, where the agent skills come with the khub
+	// plugin. Every other agent takes them from `npx skills`.
+	skills := "then `npx skills add endgame-build/khub`."
+	if importSupported {
+		skills = "then the khub plugin for Claude Code, which the user installs with " +
+			"`/plugin marketplace add endgame-build/khub` and `/plugin install khub@khub`."
+	}
+
 	lines := []string{
 		Begin,
 		"## khub workspace",
@@ -235,8 +243,7 @@ func BuildBlock(spec BlockSpec, importSupported bool) string {
 			"JSON by default; a table is only for a TTY. (`reindex`, `viz`, `backfill` "+
 			"and `wire` are operator commands and print prose.)",
 		"",
-		"Not installed? `npm install -D @endgame-build/khub`, "+
-			"then `npx skills add endgame-build/khub`.",
+		"Not installed? `npm install -D @endgame-build/khub`, "+skills,
 		End,
 	)
 	return strings.Join(lines, "\n")

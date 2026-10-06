@@ -9,6 +9,14 @@ Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelo
 - The Claude Code plugin (0.1.1) draws a command made only of khub calls joined
   by `;` or `&&` as one compact row per call. A command that pipes or redirects
   khub's output, or runs another program, keeps Claude Code's raw drawing.
+- The block `khub wire` writes into `CLAUDE.md` ends with the install of the
+  khub plugin for Claude Code, `/plugin marketplace add endgame-build/khub` and
+  `/plugin install khub@khub`, where it named `npx skills add`. The block in
+  `AGENTS.md` keeps `npx skills add endgame-build/khub`. Run `khub wire` or
+  `khub upgrade` to refresh an existing workspace.
+- The README, `docs/plugin.md` and the `setup` skill (plugin 0.1.2) say how to
+  update the plugin: `claude plugin marketplace update khub`, then
+  `claude plugin update khub@khub`.
 
 ### Fixed
 

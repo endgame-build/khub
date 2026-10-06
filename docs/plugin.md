@@ -108,6 +108,19 @@ From a shell the same two steps are `claude plugin marketplace add
 endgame-build/khub` and `claude plugin install khub@khub`. Both use the user's
 own git credentials.
 
+## Update
+
+The plugin updates apart from the khub CLI. From a shell:
+
+```bash
+claude plugin marketplace update khub    # fetch the marketplace again
+claude plugin update khub@khub           # install the version it lists
+claude plugin list                       # shows the installed version
+```
+
+The update applies to sessions started after it. An open session takes it
+with `/reload-plugins`.
+
 The mod needs the khub CLI, 0.27.0 or later. Trouble shows on the plugin's
 status line under the prompt, which Claude Code draws as a warning.
 

@@ -39,7 +39,7 @@ Reading the graph is a khub operation too — query it, do not grep it:
 - Write: `khub add <type> --<field> <v>`, `khub edit <id> <field> <v>`, `khub link <id> <pred> <target>`, `khub unlink`, `khub remove <id>`. Capture is never blocked; `--draft` marks an entity unpublished.
 - Every read and every write above takes `--format json`. Piped output is JSON by default; a table is only for a TTY. (`reindex`, `viz`, `backfill` and `wire` are operator commands and print prose.)
 
-Not installed? `npm install -D @endgame-build/khub`, then `npx skills add endgame-build/khub`.
+Not installed? `npm install -D @endgame-build/khub`, then the khub plugin for Claude Code, which the user installs with `/plugin marketplace add endgame-build/khub` and `/plugin install khub@khub`.
 <!-- khub:end -->
 
 # AGENTS.md

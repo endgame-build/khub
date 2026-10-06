@@ -93,6 +93,13 @@ khub ships two skills: `khub` (the read and write verbs) and `setup` (install th
 /plugin install khub@khub
 ```
 
+To update the plugin later, run these from a shell, then start a new session or run `/reload-plugins`:
+
+```bash
+claude plugin marketplace update khub
+claude plugin update khub@khub
+```
+
 **Every other agent — `npx skills`.** opencode, Cursor, Codex, Gemini CLI and any other agent that reads a `SKILL.md` get the two skills, with no mod. Needs Node and access to the repo:
 
 ```bash
