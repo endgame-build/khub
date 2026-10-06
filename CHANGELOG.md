@@ -2,6 +2,20 @@
 
 Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); khub is pre-release.
 
+## [Unreleased]
+
+### Changed
+
+- The Claude Code plugin (0.1.1) draws a command made only of khub calls joined
+  by `;` or `&&` as one compact row per call. A command that pipes or redirects
+  khub's output, or runs another program, keeps Claude Code's raw drawing.
+
+### Fixed
+
+- In the ctrl+o detailed transcript the plugin's compact row was followed by
+  the raw result. The row now stands for the whole call there, and its `json`
+  button shows the raw drawing.
+
 ## [0.28.0] — 2026-10-06
 
 The agent skills leave the binary. khub becomes a Claude Code plugin

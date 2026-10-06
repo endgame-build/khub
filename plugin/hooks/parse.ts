@@ -13,9 +13,14 @@ export type Simple = {
   flags: Record<string, string | true>
 }
 
-// `simple` is one khub call whose stdout is khub's alone. `compound` runs khub among
-// other things, and lists the khub calls it could read.
-export type Parsed = { kind: 'none' } | { kind: 'compound'; calls: Simple[] } | Simple
+// `simple` is one khub call whose stdout is khub's alone. `chain` is several such calls
+// joined by `&&` or `;`. `compound` runs khub among other things, and lists the khub
+// calls it could read.
+export type Parsed =
+  | { kind: 'none' }
+  | { kind: 'compound'; calls: Simple[] }
+  | { kind: 'chain'; calls: Simple[] }
+  | Simple
 
 type Word = { text: string }
 type Operator = { op: '&&' | '||' | ';' | '|' | '&' | '>out' | '>err' | '<' }
@@ -330,25 +335,26 @@ export function classify(command: string): Parsed {
 
   if (calls.length === 0) return NONE
 
-  const last = filled[filled.length - 1] as Segment
-  const lastCall = read[read.length - 1]
+  const firstKhub = read.findIndex(found => found !== null)
 
-  // A call is simple when it is the one khub call, last, after nothing but `cd <dir> &&`,
-  // with stdout left alone.
-  const isSimple =
-    calls.length === 1 &&
-    lastCall !== null &&
-    lastCall !== undefined &&
+  // The output is khub's alone when nothing but `cd <dir>` comes before the first khub call,
+  // every part from there on is a khub call with stdout left alone, and `&&` or `;` joins them.
+  const isKhubOnly =
     separators.every(op => op === '&&' || op === ';') &&
-    filled.slice(0, -1).every(segment => segment.words[0] === 'cd' && segment.words.length === 2) &&
-    !last.ops.includes('>out')
+    filled.every((segment, i) =>
+      i < firstKhub
+        ? segment.words[0] === 'cd' && segment.words.length === 2
+        : read[i] !== null && !segment.ops.includes('>out'),
+    )
 
-  return isSimple ? lastCall : { kind: 'compound', calls }
+  if (!isKhubOnly) return { kind: 'compound', calls }
+
+  return calls.length === 1 ? (calls[0] as Simple) : { kind: 'chain', calls }
 }
 
 // Returns the khub calls of a command, however it was read.
 export const callsOf = (parsed: Parsed): Simple[] =>
-  parsed.kind === 'simple' ? [parsed] : parsed.kind === 'compound' ? parsed.calls : []
+  parsed.kind === 'simple' ? [parsed] : parsed.kind === 'none' ? [] : parsed.calls
 
 export const isWrite = (found: Simple) => WRITES.has(found.verb)
 

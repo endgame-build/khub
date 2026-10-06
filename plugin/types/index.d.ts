@@ -40,7 +40,8 @@ export type KhubRow = {
   flags: string[]
 }
 
-// One simple khub call the agent ran through Bash, keyed by tool_use_id.
+// One khub call the agent ran through Bash. A command's calls are keyed by tool_use_id,
+// and the first one carries the command's duration.
 export type KhubCall = {
   head: string
   line: string
@@ -57,7 +58,7 @@ declare module 'claude-code' {
       workspace: KhubWorkspace | null
       summary: KhubSummary | null
       session: KhubSession
-      calls: StateFamily<KhubCall | null>
+      calls: StateFamily<KhubCall[] | null>
       rawRows: StateFamily<boolean>
     }
   }

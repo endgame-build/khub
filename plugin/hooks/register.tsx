@@ -6,11 +6,11 @@ import type { EngineInterface, Register } from 'claude-code'
 
 import type { KhubCall, KhubType } from '../types'
 import { summaryLine } from './band'
-import { clean, firstLine, parseJson, refusal } from './cli'
+import { clean, documentsOf, firstLine, parseJson, refusal } from './cli'
 import { callsOf, classify, mutates } from './parse'
-import { callRow } from './rows'
+import { callRow, emptyBlock } from './rows'
 import { bandParts, diffOf, editedBy, EMPTY_SESSION, summaryOf, withEdited, withIds } from './session'
-import { previewOf, summarize } from './summarize'
+import { finished, waiting } from './summarize'
 import { ancestors, binCandidates, entityAt, isElsewhere, isOlder, MIN_KHUB, relative } from './workspace'
 import type { Ws } from './workspace'
 
@@ -232,8 +232,9 @@ export const register: Register = (on, options) => {
     return next(e)
   })
 
-  // The call runs unchanged and the model reads what khub printed. A simple call gets a
-  // compact row, and a call that changes the workspace is followed by a refresh.
+  // The call runs unchanged and the model reads what khub printed. A simple call and a
+  // chain of calls get a compact row, and a call that changes the workspace is followed
+  // by a refresh.
   on('tool.call', { tool: 'Bash' }, async ($, e, next) => {
     if (!ws) return next(e)
 
@@ -244,11 +245,13 @@ export const register: Register = (on, options) => {
     if (calls.length === 0) return next(e)
 
     const simple = parsed.kind === 'simple' ? parsed : null
+
+    // A chain keeps its row only while every call in it is aimed at this workspace.
+    const chain = parsed.kind === 'chain' && calls.length === parsed.calls.length ? parsed.calls : null
+    const shown = simple ? [simple] : (chain ?? [])
     const row = memberOf(callRows, { requestId: e.tool_use_id ?? '' })
 
-    if (simple) {
-      await update($, row, (): KhubCall => ({ ...summarize(simple, undefined, ''), isRunning: true, ms: 0, rows: [], more: 0 }))
-    }
+    if (shown.length > 0) await update($, row, (): KhubCall[] => waiting(shown))
 
     const startedAt = await $.clock.now()
     const ran = await next(e)
@@ -256,30 +259,33 @@ export const register: Register = (on, options) => {
 
     // A call the user or a hook refused never ran, so its row is the engine's.
     if (ran.deny !== undefined) {
-      if (simple) await update($, row, () => null)
+      if (shown.length > 0) await update($, row, () => null)
 
       return ran
     }
 
-    if (simple) {
+    if (shown.length > 0) {
       // A failed gate or a refusal arrives as an error whose text is what khub printed.
       const result = (ran.isError === true ? undefined : ran.result) as
         | { stdout?: string; stderr?: string; persistedOutputPath?: string }
         | undefined
       const stdout = ran.isError === true ? (ran.text ?? '') : (result?.stdout ?? '')
       const stderr = result?.stderr ?? ''
-      const json = parseJson(stdout)
 
-      // A prose command prints no document, so its first line is the result.
-      const summary = summarize(simple, json, json === undefined ? stdout || stderr : stderr)
-      const edited = editedBy(simple, json)
+      // A simple call may print prose, or notes around its document. A chain must print
+      // one document per call, and one that does not is the engine's row.
+      const docs = simple ? [parseJson(stdout)] : documentsOf(stdout, shown.length)
+      const isProse = simple !== null && docs?.[0] === undefined
 
       // Output the engine moved to disk may be cut here. A cut document is the engine's row.
-      const isCut = json === undefined && result?.persistedOutputPath !== undefined
+      const isCut = isProse && result?.persistedOutputPath !== undefined
 
-      await update($, row, (): KhubCall | null =>
-        isCut ? null : { ...summary, isRunning: false, ms, ...previewOf(simple, json) },
-      )
+      // A prose command prints no document, so its first line is the result. stderr does
+      // not say which call of a chain wrote it, so a chain's rows carry no note.
+      const note = simple ? (isProse ? stdout || stderr : stderr) : ''
+      const edited = docs === null ? [] : shown.flatMap((call, i) => editedBy(call, docs[i]))
+
+      await update($, row, (): KhubCall[] | null => (docs === null || isCut ? null : finished(shown, docs, ms, note)))
       if (edited.length > 0) await update($, sessionAtom, session => withEdited(session, edited))
     }
 
@@ -309,16 +315,28 @@ export const register: Register = (on, options) => {
     return ran
   }).catch(($, e, next) => next(e))
 
-  // A verbose session draws a call's result inside its ToolUse row, so the compact row
-  // stands for both. The `json` button hands the row back to the engine.
+  // The compact row holds a call's head, its result and its list, so it stands for the
+  // whole row. The `json` button hands the row back to the engine.
   on('ui.render', { component: 'ToolUse' }, async ($, e, next) => {
     if (!ws || e.props.tool !== 'Bash') return next(e)
 
-    const call = await read($, memberOf(callRows, e))
+    const calls = await read($, memberOf(callRows, e))
 
-    if (call === null || (await read($, memberOf(rawRows, e)))) return next(e)
+    if (calls === null || (await read($, memberOf(rawRows, e)))) return next(e)
 
-    return callRow($.ui.resolve(e), call, () => background($, update($, memberOf(rawRows, e), () => true)))
+    return callRow($.ui.resolve(e), calls, () => background($, update($, memberOf(rawRows, e), () => true)))
+  })
+
+  // The detailed transcript draws a call's result as a block of its own. The compact row
+  // already shows the result, so the block of a row the mod drew is drawn as nothing.
+  on('ui.render', { component: 'ToolResult' }, async ($, e, next) => {
+    if (!ws || e.props.tool !== 'Bash') return next(e)
+
+    const calls = await read($, memberOf(callRows, e))
+
+    if (calls === null || (await read($, memberOf(rawRows, e)))) return next(e)
+
+    return emptyBlock($.ui.resolve(e))
   })
 
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {

@@ -59,8 +59,17 @@ row in place of Claude Code's raw drawing.
   predicate. A `check` line holds the bucket and the id or path. A `validate`
   line holds the id, the field and the reason.
 - The `json` button returns that compact row to Claude Code's raw drawing.
-- A compound command keeps the raw drawing. That covers a pipe and a command
-  with several khub calls.
+- A command made only of khub calls joined by `;` or `&&` draws one compact row
+  per call, with the time and the `json` button on the first. A leading
+  `cd <dir>` is allowed. The row keeps the raw drawing when the output does not
+  hold one JSON document per call. Its rows leave out khub's stderr notes, such
+  as a search's thin-result note.
+- A command that pipes khub's output, redirects it, runs in a subshell or runs
+  another program keeps the raw drawing, because its output is not khub's alone.
+- In the ctrl+o detailed transcript the compact row stands for the whole call.
+  Claude Code's raw result block is hidden there, along with the notes it
+  draws under that block, such as the auto-mode line. The `json` button shows
+  them again.
 - A command the user types with `!` is not redrawn.
 - With verbose off, Claude Code folds shell commands into one count line, so
   the compact rows do not show. The band still does.

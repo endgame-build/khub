@@ -27,6 +27,14 @@ const useRow = (id: string, command: string, surface: (typeof SURFACES)[number] 
   props: { tool_use_id: id, tool: 'Bash', input: { command }, isRunning: false, isErrored: false, isInterrupted: false },
 })
 
+const resultBlock = (id: string, surface: (typeof SURFACES)[number] = 'terminal') => ({
+  plugin: 'khub',
+  surface,
+  component: 'ToolResult' as const,
+  requestId: id,
+  props: { tool_use_id: id, tool: 'Bash', output: { stdout: '', stderr: '', interrupted: false }, isErrored: false },
+})
+
 // The engine's own drawing, for a row or a band the mod leaves alone.
 function engine(on: On) {
   on('ui.render', ($, e) => {
@@ -178,6 +186,96 @@ test('the json button hands a row back to the engine', async ($, on) => {
     expect(await row.find({ type: 'Text', text: /^khub add adr$/ })).toBe(undefined)
     await row.unmount()
   }
+})
+
+test('a chain of khub calls draws one compact row per call', async ($, on) => {
+  const chain = 'khub query --type component --format json; khub query --format json'
+  const host = fakeHost(on, [F.check_base, F.query_base])
+  const seen = answering(on, `${F.query_components.stdout}\n${F.query_base.stdout}\n`)
+
+  engine(on)
+  await $.session.start(START)
+  host.ran.length = 0
+  await $.tool.call({ tool: 'Bash', command: chain })
+
+  for (const surface of SURFACES) {
+    const row = await $.ui.mount(useRow(seen.id, chain, surface))
+
+    expect(await row.find({ type: 'Text', text: /^khub query component$/ })).toBeDefined()
+    expect(await row.find({ type: 'Text', text: /^khub query$/ })).toBeDefined()
+    expect(await row.find({ type: 'Text', text: /^2 entities$/ })).toBeDefined()
+    expect(await row.find({ type: 'Text', text: /^8 entities$/ })).toBeDefined()
+    expect((await row.findAll({ type: 'Button', key: 'json' })).length).toBe(1)
+    expect(await row.find({ type: 'Text', text: /^engine drawing$/ })).toBe(undefined)
+    await row.unmount()
+  }
+
+  // Two reads are followed by no refresh.
+  await settled(() => host.ran.length > 0, 10)
+  expect(host.ran).toEqual([])
+
+  // The chain's result block is hidden, and json hands the row and the block back.
+  const block = await $.ui.mount(resultBlock(seen.id))
+  const row = await $.ui.mount(useRow(seen.id, chain))
+
+  expect(await block.find({ type: 'Text' })).toBe(undefined)
+  await row.press({ key: 'json' })
+
+  expect(await row.find({ type: 'Text', text: /^engine drawing$/ })).toBeDefined()
+  expect(await block.find({ type: 'Text', text: /^engine drawing$/ })).toBeDefined()
+})
+
+test('a chain whose output does not hold one document per call keeps the engine row', async ($, on) => {
+  const chain = 'khub query --type component --format json; khub query --format json'
+
+  fakeHost(on, [F.check_base, F.query_base])
+  engine(on)
+
+  const seen = answering(on, F.query_components.stdout)
+
+  await $.session.start(START)
+  await $.tool.call({ tool: 'Bash', command: chain })
+
+  expect(await (await $.ui.mount(useRow(seen.id, chain))).find({ type: 'Text', text: /^engine drawing$/ })).toBeDefined()
+  expect(await (await $.ui.mount(resultBlock(seen.id))).find({ type: 'Text', text: /^engine drawing$/ })).toBeDefined()
+})
+
+test('a chain that edits counts the entity and is followed by a refresh', async ($, on) => {
+  const chain = 'khub edit cmp-search lifecycle deprecated && khub check --format json'
+  const host = fakeHost(on, [F.check_base, F.query_base])
+
+  on('tool.call', () => bash(`${F.edit_component.stdout}\n${F.check_base.stdout}\n`))
+  await $.session.start(START)
+  host.ran.length = 0
+
+  await $.tool.call({ tool: 'Bash', command: chain })
+  await settled(() => host.ran.length >= 2)
+
+  expect(host.ran).toEqual(REFRESH)
+  expect(await (await $.ui.mount(band())).find({ type: 'Text', text: /^~1$/ })).toBeDefined()
+})
+
+test('the result block of a row the mod drew is drawn as nothing, until json hands the row back', async ($, on) => {
+  fakeHost(on, [F.check_base, F.query_base, F.query_added])
+  const seen = answering(on, F.add_adr.stdout)
+
+  engine(on)
+  await $.session.start(START)
+  await $.tool.call({ tool: 'Bash', command: ADD })
+
+  for (const surface of SURFACES) {
+    const block = await $.ui.mount(resultBlock(seen.id, surface))
+
+    expect(await block.find({ type: 'Text' })).toBe(undefined)
+    await block.unmount()
+  }
+
+  const row = await $.ui.mount(useRow(seen.id, ADD))
+
+  await row.press({ key: 'json' })
+
+  expect(await (await $.ui.mount(resultBlock(seen.id))).find({ type: 'Text', text: /^engine drawing$/ })).toBeDefined()
+  expect(await (await $.ui.mount(resultBlock('unknown'))).find({ type: 'Text', text: /^engine drawing$/ })).toBeDefined()
 })
 
 test('a row that is no recorded khub call stays the engine\'s', async ($, on) => {

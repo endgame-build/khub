@@ -1,4 +1,4 @@
-import type { KhubRow, KhubTone } from '../types'
+import type { KhubCall, KhubRow, KhubTone } from '../types'
 import { clean, count, firstLine, INFORMATIONAL, isRow, refusal, rowsOf, text } from './cli'
 import type { Row } from './cli'
 import { edited } from './parse'
@@ -265,3 +265,17 @@ export function previewOf(call: Simple, json: unknown): { rows: KhubRow[]; more:
     more: Math.max(0, all.length - PREVIEW),
   }
 }
+
+// Returns the rows of a command's calls while the command runs.
+export const waiting = (calls: Simple[]): KhubCall[] =>
+  calls.map(call => ({ ...summarize(call, undefined, ''), isRunning: true, ms: 0, rows: [], more: 0 }))
+
+// Returns the rows of a command's calls once it has answered, each read from its own
+// document. The first row carries the command's duration.
+export const finished = (calls: Simple[], docs: unknown[], ms: number, note: string): KhubCall[] =>
+  calls.map((call, i) => ({
+    ...summarize(call, docs[i], note),
+    isRunning: false,
+    ms: i === 0 ? ms : 0,
+    ...previewOf(call, docs[i]),
+  }))

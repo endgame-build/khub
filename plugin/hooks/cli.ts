@@ -3,12 +3,15 @@
 export type Row = Record<string, unknown>
 export type Refusal = { code: string; message: string }
 
+// Returns the lines that may hold a JSON document. khub prints each document on one line.
+const documentLines = (text: string) => text.split('\n').filter(line => /^[[{]/.test(line))
+
 // Returns the first JSON document in khub's output. A `2>&1` call may carry `note:` lines
 // around it.
 export function parseJson(text: string): unknown {
   const trimmed = text.trim()
 
-  for (const candidate of [trimmed, ...trimmed.split('\n').filter(line => /^[[{]/.test(line))]) {
+  for (const candidate of [trimmed, ...documentLines(trimmed)]) {
     try {
       return JSON.parse(candidate)
     } catch {
@@ -17,6 +20,20 @@ export function parseJson(text: string): unknown {
   }
 
   return undefined
+}
+
+// Returns one JSON document per call of a chain, or null when the output does not hold
+// exactly `count` of them.
+export function documentsOf(text: string, count: number): unknown[] | null {
+  const lines = documentLines(text)
+
+  if (lines.length !== count) return null
+
+  try {
+    return lines.map(line => JSON.parse(line) as unknown)
+  } catch {
+    return null
+  }
 }
 
 // khub's error envelope is `{"error": {"code", "message"}}`, printed on stdout with exit 2.

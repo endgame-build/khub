@@ -91,10 +91,21 @@ below under "Engine rules" was observed on Claude Code 2.1.288 and 2.1.291.
   blocks a tool. In a `.catch`, `next(e)` replays what the call settled to and
   runs nothing twice. The Bash hook's handler also clears the call's row, so a
   row never stays running.
-- **A verbose session draws each call as a `ToolUse` row with the result
-  inline, and raises no `ToolResult` event.** The compact row is one tree drawn
-  by the `ToolUse` hook, holding the head line, the result line and the list
-  rows. Its `json` button hands the row back to the engine.
+- **A grouped row draws its result inline, and a standalone row gets a
+  `ToolResult` block.** The normal view of a verbose session groups calls, draws
+  each as a `ToolUse` row with the result inside it, and raises no `ToolResult`
+  event. The ctrl+o detailed transcript draws each call standalone and raises
+  `ToolResult` for its result. So the compact row is one tree drawn by the
+  `ToolUse` hook, holding the head line, the result line and the list rows, and
+  the `ToolResult` hook draws nothing for a row the mod drew. That also hides
+  the notes the engine draws under the block, such as the auto-mode line and
+  the hooks line. The `json` button hands both back to the engine.
+- **A chain is khub calls joined by `;` or `&&`, with nothing else in the
+  command but a leading `cd <dir>`.** It draws one compact row per call. khub
+  prints each JSON document on one line, so the shell reads one document per
+  call from the output. A chain whose output does not hold exactly one per call
+  is the engine's row. stderr does not say which call wrote it, so a chain's
+  rows carry no note.
 - **With verbose off, Bash calls fold into a `ToolGroup` count line** such as
   `Ran 3 shell commands`, khub writes included, and no row event fires. The mod
   leaves that alone, so compact rows show in verbose sessions only.
@@ -169,3 +180,6 @@ test. It gives a workspace at a fixed root and khub answering from the fixtures.
 
 `khub query --format ids` prints bare slugs, which two types may share. The mod
 reads `query --format json` for qualified ids.
+
+On a pipe khub prints each JSON document on one line. The chain rows depend on
+that.

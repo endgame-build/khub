@@ -2,7 +2,7 @@ import { expect, test } from 'claude-code/testing'
 import type { EngineInterface, On, RenderElement } from 'claude-code'
 
 import type { El } from '../hooks/el'
-import { callRow } from '../hooks/rows'
+import { callRow, emptyBlock } from '../hooks/rows'
 import type { KhubCall } from '../types'
 
 const ADD = 'khub add adr --title "Use RE2 patterns" --status accepted'
@@ -49,7 +49,7 @@ function draw(on: On, view: (el: El) => RenderElement) {
 }
 
 test('the head line is a bullet, the bold head, the duration and a json button', async ($, on) => {
-  draw(on, el => callRow(el, CALL, () => {}))
+  draw(on, el => callRow(el, [CALL], () => {}))
 
   for (const surface of SURFACES) {
     const ui = await $.ui.mount(row('r1', surface))
@@ -68,7 +68,7 @@ test('the head line is a bullet, the bold head, the duration and a json button',
 })
 
 test('a running row dims its bullet, shows no duration and waits with an ellipsis', async ($, on) => {
-  draw(on, el => callRow(el, { ...CALL, line: '', tone: 'plain', ms: 0, isRunning: true }, () => {}))
+  draw(on, el => callRow(el, [{ ...CALL, line: '', tone: 'plain', ms: 0, isRunning: true }], () => {}))
 
   const ui = await $.ui.mount(row('r3'))
   const bullet = await ui.find({ type: 'Text', text: /^● $/ })
@@ -80,7 +80,7 @@ test('a running row dims its bullet, shows no duration and waits with an ellipsi
 })
 
 test('a finished call that printed nothing says so', async ($, on) => {
-  draw(on, el => callRow(el, { ...CALL, line: '', tone: 'plain' }, () => {}))
+  draw(on, el => callRow(el, [{ ...CALL, line: '', tone: 'plain' }], () => {}))
 
   const ui = await $.ui.mount(row('r4'))
 
@@ -93,7 +93,7 @@ test('the bullet takes the tone, and a long call is shown in seconds', async ($,
 
   // One instance per tone: the bottom hook reads the tone from the instance's id.
   on('ui.render', ($: EngineInterface, e) =>
-    callRow($.ui.resolve(e), { ...CALL, tone: e.requestId as keyof typeof colors, ms: 1234 }, () => {}),
+    callRow($.ui.resolve(e), [{ ...CALL, tone: e.requestId as keyof typeof colors, ms: 1234 }], () => {}),
   )
 
   for (const [tone, color] of Object.entries(colors)) {
@@ -106,7 +106,7 @@ test('the bullet takes the tone, and a long call is shown in seconds', async ($,
 })
 
 test('an ok result line colors its sign and its check, and truncates in the middle part', async ($, on) => {
-  draw(on, el => callRow(el, CALL, () => {}))
+  draw(on, el => callRow(el, [CALL], () => {}))
 
   for (const surface of SURFACES) {
     const ui = await $.ui.mount(row('r5', surface))
@@ -131,7 +131,7 @@ test('a warning or an error colors the whole result line', async ($, on) => {
   on('ui.render', ($: EngineInterface, e) => {
     const tone = e.requestId as keyof typeof lines
 
-    return callRow($.ui.resolve(e), { ...CALL, tone, line: lines[tone].line }, () => {})
+    return callRow($.ui.resolve(e), [{ ...CALL, tone, line: lines[tone].line }], () => {})
   })
 
   for (const [tone, { color, line }] of Object.entries(lines)) {
@@ -145,7 +145,7 @@ test('a warning or an error colors the whole result line', async ($, on) => {
 })
 
 test('list rows sit under the result line, padded to one column, with dim flags and the count left over', async ($, on) => {
-  draw(on, el => callRow(el, LIST, () => {}))
+  draw(on, el => callRow(el, [LIST], () => {}))
 
   for (const surface of SURFACES) {
     const ui = await $.ui.mount(row('r6', surface))
@@ -164,7 +164,7 @@ test('list rows sit under the result line, padded to one column, with dim flags 
 })
 
 test('a call with no list draws no list rows', async ($, on) => {
-  draw(on, el => callRow(el, CALL, () => {}))
+  draw(on, el => callRow(el, [CALL], () => {}))
 
   const ui = await $.ui.mount(row('r7'))
 
@@ -176,11 +176,37 @@ test('one very long first column does not push every note off the row', async ($
   const long = 'requirement/'.padEnd(80, 'x')
 
   draw(on, el =>
-    callRow(el, { ...LIST, rows: [{ text: long, note: 'A', flags: [] }, { text: 'adr/a', note: 'B', flags: [] }], more: 0 }, () => {}),
+    callRow(el, [{ ...LIST, rows: [{ text: long, note: 'A', flags: [] }, { text: 'adr/a', note: 'B', flags: [] }], more: 0 }], () => {}),
   )
 
   const ui = await $.ui.mount(row('r8'))
 
   // The short id is padded to the cap of 48, not to the long id's 80.
   expect(await ui.find({ type: 'Text', text: new RegExp(`^ {4}adr/a {43}$`) })).toBeDefined()
+})
+
+test('a chain draws its calls one after another, with the duration and the json button on the first', async ($, on) => {
+  const second: KhubCall = { ...LIST, head: 'khub query api', line: '2 entities', ms: 0, more: 0 }
+
+  draw(on, el => callRow(el, [CALL, second], () => {}))
+
+  for (const surface of SURFACES) {
+    const ui = await $.ui.mount(row('r9', surface))
+
+    expect(await ui.find({ type: 'Text', text: /^khub add adr$/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /^khub query api$/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /^2 entities$/ })).toBeDefined()
+    expect((await ui.findAll({ type: 'Text', text: /^● $/ })).length).toBe(2)
+    expect((await ui.findAll({ type: 'Text', text: /ms$/ })).length).toBe(1)
+    expect((await ui.findAll({ type: 'Button', key: 'json' })).length).toBe(1)
+    await ui.unmount()
+  }
+})
+
+test('a hidden result block draws no text', async ($, on) => {
+  draw(on, el => emptyBlock(el))
+
+  const ui = await $.ui.mount(row('r10'))
+
+  expect(await ui.find({ type: 'Text' })).toBe(undefined)
 })

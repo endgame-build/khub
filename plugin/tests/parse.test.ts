@@ -56,10 +56,24 @@ test('stderr and stdin redirections stay simple, a stdout redirection or a pipe 
 
   expect(classify('khub query --type adr > out.json').kind).toBe('compound')
   expect(classify('khub query --type adr | jq .').kind).toBe('compound')
-  expect(classify('khub add adr --title x && khub check').kind).toBe('compound')
-  expect(verbs('khub add adr --title x && khub check')).toEqual(['add', 'check'])
   expect(classify('ls && khub status').kind).toBe('compound')
   expect(verbs('ls && khub status')).toEqual(['status'])
+})
+
+test('khub calls joined by && or ; are a chain, and anything else among them is compound', () => {
+  expect(classify('khub add adr --title x && khub check').kind).toBe('chain')
+  expect(verbs('khub add adr --title x && khub check')).toEqual(['add', 'check'])
+  expect(verbs('khub query --type component --format json; khub query --type api --format json')).toEqual(['query', 'query'])
+  expect(classify('khub query --type component; khub query --type api').kind).toBe('chain')
+  expect(classify('cd ws && khub status && khub check 2>&1').kind).toBe('chain')
+  expect(classify('khub status\nkhub check\nkhub query').kind).toBe('chain')
+
+  expect(classify('khub status || khub check').kind).toBe('compound')
+  expect(classify('khub status; khub query | head -5').kind).toBe('compound')
+  expect(classify('khub status; khub query > out.json').kind).toBe('compound')
+  expect(classify('khub status; cat knowledge/prd.md').kind).toBe('compound')
+  expect(classify('khub status && cd ws && khub check').kind).toBe('compound')
+  expect(classify('(khub status 2>&1 || npx khub status 2>&1) | head -40; cat knowledge/prd.md | head -30').kind).toBe('compound')
 })
 
 test('a compound command lists the khub calls it holds, in full', () => {
