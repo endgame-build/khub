@@ -236,4 +236,4 @@ kb 0.14.0 ships those six types with the same ids, paths and predicates. A corpu
 
 ## Design capture
 
-The `ontology.yaml` header carries the authoring decisions and the cut list; `init` strips comments from the workspace copy, so the header costs an agent nothing. This page is the reading copy, and the brief that argued for the merge is at (link removed)
+The `ontology.yaml` header carries the authoring decisions and the cut list; `init` strips comments from the workspace copy, so the header costs an agent nothing. This page is the reading copy.

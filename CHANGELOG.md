@@ -192,14 +192,14 @@ and the npm package is now public.
 
 ### BREAKING
 
-- **firm-ops 0.3.0 drops its vendor-specific fields.** `crm_id` → `crm_id`,
-  `budget_id` → `budget_id`, `notes_folder` → `notes_folder`,
-  `notes_folder_id` → `notes_folder_id`; `opportunity.source` and
+- **firm-ops 0.3.0 drops its vendor-specific fields.** The CRM and notes keys
+  are now `crm_id`, `budget_id`, `notes_folder` and `notes_folder_id`;
+  `opportunity.source` and
   `project.source` are `referral | outbound | inbound | partner | event |
   existing-client`; `meeting.source` is `recording | manual` and
   `transcript.source` is `recording`; `project.external_repo` accepts any
   `owner/name`. An existing firm-ops workspace renames the keys in its
-  frontmatter and maps its old `source` values (`recording` → `recording`, a
+  frontmatter and maps its old `source` values (a recording tool → `recording`, a
   partner name → `partner`) before `khub upgrade`.
 
 ### Added

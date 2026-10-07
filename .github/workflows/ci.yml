@@ -28,14 +28,12 @@ jobs:
         os: [ubuntu-latest, macos-latest]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      # Names of clients, partners, people, internal systems and local paths do
-      # not ship. CHANGELOG.md is history and keeps the old attribute names its
-      # migration notes have to spell; the vendored Cytoscape build has a
-      # texture "atlas". Plain ERE only: `\b` is a glibc extension that macOS
-      # git evaluates as a literal, so the two runners would disagree.
+      # Local paths, agent session links and private registry references do
+      # not ship. Plain ERE only: `\b` is a glibc extension that macOS git
+      # evaluates as a literal, so the two runners would disagree.
       - name: No internal names ship
         run: |
-          ! git grep -nIiE 'claude\.ai/code/session|/Users/|~/Sites|npm\.pkg\.github\.com|orgs/endgame-build' -- . ':!CHANGELOG.md' ':!.github/workflows/ci.yml' ':!internal/assets/cytoscape.min.js'
+          ! git grep -nIiE 'claude\.ai/code/session|/Users/|~/Sites|npm\.pkg\.github\.com|orgs/endgame-build' -- . ':!.github/workflows/ci.yml'
       - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
         with:
           go-version: "1.25"
