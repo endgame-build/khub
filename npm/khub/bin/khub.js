@@ -2,7 +2,8 @@
 "use strict";
 // Launcher for the khub static binary.
 //
-// One package carries every binary, under binaries/<platform>-<arch>/khub.
+// One package carries every binary, under binaries/<platform>-<arch>/khub
+// (khub.exe on win32, which is experimental).
 // package.json's `bin` is a single path, so this shim exists to pick the right
 // one at run time and hand over: stdio is inherited (khub's own TTY detection
 // and EPIPE handling see the real file descriptors), the exit code is forwarded
@@ -22,7 +23,7 @@ const path = require("path");
 
 const root = path.join(__dirname, "..", "binaries");
 const target = `${process.platform}-${process.arch}`;
-const bin = path.join(root, target, "khub");
+const bin = path.join(root, target, process.platform === "win32" ? "khub.exe" : "khub");
 
 if (!fs.existsSync(bin)) {
   // No fallback if binaries/ is unreadable: node's own ENOENT names the path,
@@ -43,6 +44,13 @@ if (result.error) {
 }
 if (result.signal) {
   // Re-raise so the parent observes the same termination the binary did.
-  process.kill(process.pid, result.signal);
+  // Windows has no signals to re-raise: node emulates SIGINT, SIGTERM and
+  // SIGKILL as an unconditional kill and throws for any other name, so a
+  // failed re-raise falls through to the exit below rather than crashing.
+  try {
+    process.kill(process.pid, result.signal);
+  } catch {
+    // fall through
+  }
 }
 process.exit(result.status === null ? 1 : result.status);

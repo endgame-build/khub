@@ -20,6 +20,13 @@ func main() {
 	// children (`git` in gitlog, the viz opener) would inherit an ignored
 	// SIGPIPE. A Go handler is reset to SIG_DFL on exec — same EPIPE behavior
 	// for khub itself, clean signal disposition for children.
+	//
+	// Windows has no SIGPIPE: the runtime never raises it there and this
+	// Notify is inert. A write to a closed pipe already returns an error
+	// (ERROR_NO_DATA or ERROR_BROKEN_PIPE), which Guard treats as EPIPE.
 	signal.Notify(make(chan os.Signal, 1), syscall.SIGPIPE)
+	// Windows consoles render the human view's ANSI colours only once asked
+	// to; a no-op elsewhere.
+	cli.PrepareConsole()
 	os.Exit(cli.Execute(os.Args[1:]))
 }

@@ -11,7 +11,18 @@ import { callsOf, classify, mutates } from './parse'
 import { callRow, emptyBlock } from './rows'
 import { bandParts, diffOf, editedBy, EMPTY_SESSION, summaryOf, withEdited, withIds } from './session'
 import { finished, waiting } from './summarize'
-import { ancestors, binCandidates, entityAt, isElsewhere, isOlder, MIN_KHUB, relative } from './workspace'
+import {
+  ancestors,
+  binCandidates,
+  childOf,
+  entityAt,
+  installedAt,
+  isElsewhere,
+  isOlder,
+  isWindowsPath,
+  MIN_KHUB,
+  relative,
+} from './workspace'
 import type { Ws } from './workspace'
 
 // The engine reads which state a module touches from atoms that are consts of this file.
@@ -85,19 +96,21 @@ async function loadSchema($: EngineInterface) {
     presetVersion: clean(view.provenance?.version ?? ''),
   }
 
-  ws = { ...workspace, types }
+  ws = { ...workspace, types, isWindows: here.isWindows }
   $.ui.status(undefined)
   await update($, workspaceAtom, () => workspace)
 }
 
-// Finds the workspace above `cwd`, resolves khub and loads the schema.
+// Finds the workspace above `cwd`, resolves khub and loads the schema. A Windows session is
+// told by the spelling of its directory.
 async function detect($: EngineInterface, cwd: string, binary: string): Promise<'ok' | 'none' | 'no-binary' | 'old'> {
   ws = null
 
+  const isWindows = isWindowsPath(cwd)
   let root: string | undefined
 
-  for (const dir of ancestors(cwd)) {
-    if (await $.fs.exists(`${dir}/.khub`)) {
+  for (const dir of ancestors(cwd, isWindows)) {
+    if (await $.fs.exists(childOf(dir, '.khub', isWindows))) {
       root = dir
       break
     }
@@ -107,16 +120,16 @@ async function detect($: EngineInterface, cwd: string, binary: string): Promise<
 
   let found: Ws | null = null
 
-  for (const bin of binCandidates(root, binary)) {
-    const program = bin[0] as string
+  for (const bin of binCandidates(root, binary, isWindows)) {
+    const file = installedAt(bin, isWindows)
 
-    if (program.startsWith('/') && !(await $.fs.exists(program))) continue
+    if (file !== null && !(await $.fs.exists(file))) continue
 
     try {
       const ran = await $.process.run([...bin, '--version'], { timeoutMs: 5_000 })
 
       if (ran.exitCode === 0) {
-        found = { root, bin, version: ran.stdout.trim(), preset: '', presetVersion: '', types: [] }
+        found = { root, bin, version: ran.stdout.trim(), preset: '', presetVersion: '', types: [], isWindows }
         break
       }
     } catch {
@@ -239,7 +252,7 @@ export const register: Register = (on, options) => {
     if (!ws) return next(e)
 
     const here = ws
-    const parsed = classify(e.command)
+    const parsed = classify(e.command, here.isWindows === true)
     const calls = callsOf(parsed).filter(call => !isElsewhere(here, call.workspace))
 
     if (calls.length === 0) return next(e)

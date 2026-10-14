@@ -64,6 +64,7 @@ type ConfigChange struct {
 // CLI's JSON payload preserves. Every slice is initialised empty, never nil,
 // so the payload renders [] rather than null.
 type UpgradeResult struct {
+	// Path is in slash form on every platform, as khub prints every path.
 	Path        string
 	Preset      string
 	VersionFrom string
@@ -153,7 +154,7 @@ func upgradeCandidate(root string, opt UpgradeOptions, sourceDir string) (*Upgra
 		drift = schemaDrift(merged, resolved)
 	}
 	return &UpgradeResult{
-		Path:              osPath(target),
+		Path:              target,
 		Preset:            preset,
 		VersionFrom:       versionFrom,
 		VersionTo:         versionTo,

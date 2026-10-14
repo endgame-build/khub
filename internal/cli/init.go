@@ -185,7 +185,7 @@ func initPayload(result *workspace.InitResult, wired tail[wire.Result], indexed 
 func wireOutcomes(result *wire.Result) []any {
 	items := make([]pathAction, 0, len(result.Outcomes))
 	for _, o := range result.Outcomes {
-		items = append(items, pathAction{o.Path, o.Action})
+		items = append(items, pathAction{filepath.ToSlash(o.Path), o.Action})
 	}
 	return pathActionRecords(items)
 }

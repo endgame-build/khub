@@ -17,6 +17,7 @@ import (
 	"testing"
 
 	"github.com/endgame-build/khub/internal/errs"
+	"github.com/endgame-build/khub/internal/fsio"
 	"github.com/endgame-build/khub/internal/presets"
 )
 
@@ -285,14 +286,18 @@ func TestTemplatesAreCopiedIntoTheWorkspace(t *testing.T) {
 
 func TestPresetSourceIsRecordedAsProvenance(t *testing.T) {
 	// source is str(preset_source) — echoed into both config.yaml and the
-	// result — and "" (Python's None) when the packaged presets were used.
+	// result, in slash form on every platform — and "" (Python's None) when
+	// the packaged presets were used.
 	src := presetSource(t)
 	ws := filepath.Join(t.TempDir(), "ws")
 	res := mustInit(t, "note", ws, InitOptions{PresetSource: src + string(filepath.Separator)})
-	if res.Source != src {
-		t.Errorf("source = %q, want %q", res.Source, src)
+	if res.Source != filepath.ToSlash(src) {
+		t.Errorf("source = %q, want %q", res.Source, filepath.ToSlash(src))
 	}
-	if !strings.Contains(readFile(t, filepath.Join(ws, ".khub", "config.yaml")), "source: "+src) {
+	if res.Path != filepath.ToSlash(ws) {
+		t.Errorf("path = %q, want %q", res.Path, filepath.ToSlash(ws))
+	}
+	if !strings.Contains(readFile(t, filepath.Join(ws, ".khub", "config.yaml")), "source: "+filepath.ToSlash(src)) {
 		t.Error("config.yaml does not carry the source")
 	}
 
@@ -332,7 +337,7 @@ func TestNonemptyTargetGuarded(t *testing.T) {
 		t.Fatalf("code = %s", l.Code)
 	}
 	for _, want := range []string{
-		fmt.Sprintf("Target %s is not empty", dir),
+		fmt.Sprintf("Target %s is not empty", filepath.ToSlash(dir)),
 		"scaffold alongside the existing files; no file already there is modified",
 	} {
 		if !strings.Contains(l.Message, want) {
@@ -380,7 +385,7 @@ func TestReinitRefusesADifferentPreset(t *testing.T) {
 	}
 	want := fmt.Sprintf("%s is a 'firm-ops' workspace; refusing to scaffold 'build-hub' over it. "+
 		"Its .khub schema files are workspace-owned and would be kept, leaving files for "+
-		"types the schema does not declare.", ws)
+		"types the schema does not declare.", filepath.ToSlash(ws))
 	if l.Message != want {
 		t.Fatalf("message = %q", l.Message)
 	}
@@ -900,4 +905,20 @@ func contains(ss []string, s string) bool {
 		}
 	}
 	return false
+}
+
+// A target that is a regular file is not an empty directory on any platform:
+// isEmptyDir reports it as open/not-a-directory, never as missing. Windows
+// opens a file as a directory with an errno that reads as not-exist, which is
+// the case the Stat check exists for.
+func TestIsEmptyDirRefusesAFile(t *testing.T) {
+	file := filepath.Join(t.TempDir(), "plain")
+	if err := os.WriteFile(file, []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	empty, err := isEmptyDir(filepath.ToSlash(file))
+	var pe *os.PathError
+	if empty || !errors.As(err, &pe) || pe.Op != "open" || !errors.Is(pe.Err, fsio.NotADirectory) {
+		t.Fatalf("isEmptyDir(file) = %v, %v; want open/not-a-directory", empty, err)
+	}
 }

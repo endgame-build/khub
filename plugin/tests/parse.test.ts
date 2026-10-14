@@ -187,3 +187,41 @@ test('an edit names the fields it changed, and a body by name alone', () => {
   expect(edited(simple('khub edit cmp-search --body-file notes.md'))).toBe('body')
   expect(edited(simple('khub edit cmp-search body "the secret text"'))).toBe('body')
 })
+
+test('on Windows the binary may carry .exe, any case and either separator, and dirs are Windows dirs', () => {
+  const win = (command: string) => classify(command, true) as Simple
+
+  for (const binary of [
+    'khub',
+    'khub.exe',
+    'KHUB.EXE',
+    'khub.cmd',
+    './node_modules/.bin/khub',
+    '/c/tools/khub.exe',
+    'C:/tools/khub.exe',
+    'C:\\\\tools\\\\khub.exe',
+    "'C:\\Program Files\\khub\\khub.exe'",
+    '"C:\\Program Files\\khub\\khub.exe"',
+  ]) {
+    expect(win(`${binary} status --format json`).verb).toBe('status')
+  }
+
+  for (const dir of ['/c/Work/me/ws', 'C:/Work/me/ws', 'C:\\\\Work\\\\me\\\\ws', '"C:\\Work\\me\\ws"']) {
+    expect(win(`cd ${dir} && khub.exe query --format json`).verb).toBe('query')
+    expect(win(`khub.exe -C ${dir} add adr --title x`).verb).toBe('add')
+  }
+
+  expect(win('khub.exe -C C:\\\\Work\\\\me\\\\ws status').workspace).toBe('C:\\Work\\me\\ws')
+  expect(classify('cd /c/ws && khub.exe edit ad-1 status accepted; khub.exe check', true).kind).toBe('chain')
+  expect(classify('khub.exe query | jq .', true).kind).toBe('compound')
+  expect(callsOf(classify('(C:\\\\tools\\\\khub.exe add adr --title x)', true)).map(call => call.verb)).toEqual(['add'])
+  expect(classify('khubx status', true).kind).toBe('none')
+  expect(classify('mykhub.exe status', true).kind).toBe('none')
+})
+
+test('unix reads khub.exe and a backslash path as some other program', () => {
+  expect(classify('khub.exe status').kind).toBe('none')
+  expect(classify('KHUB status').kind).toBe('none')
+  expect(classify('C:\\\\tools\\\\khub status').kind).toBe('none')
+  expect(classify('(khub.exe add adr --title x)').kind).toBe('none')
+})

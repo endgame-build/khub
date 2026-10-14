@@ -80,7 +80,7 @@ func TestUpgradeRefusesWithoutAPreset(t *testing.T) {
 	if l.Code != "no_preset" {
 		t.Errorf("code = %s", l.Code)
 	}
-	if l.Message != "Workspace "+ws+" records no preset in .khub/config.yaml; run khub init <preset> first" {
+	if l.Message != "Workspace "+filepath.ToSlash(ws)+" records no preset in .khub/config.yaml; run khub init <preset> first" {
 		t.Errorf("message = %q", l.Message)
 	}
 }
@@ -102,7 +102,7 @@ func TestUpgradeOnAFreshInitReportsNothing(t *testing.T) {
 	if !strings.Contains(readFile(t, filepath.Join(ws, ".khub", "config.yaml")), "version: "+res.VersionTo+"\n") {
 		t.Error("config.yaml does not carry the version the result reports")
 	}
-	if res.Preset != "build-hub" || res.Path != ws {
+	if res.Preset != "build-hub" || res.Path != filepath.ToSlash(ws) {
 		t.Errorf("preset/path = %q/%q", res.Preset, res.Path)
 	}
 	if baks := bakFiles(t, ws); len(baks) != 0 {
@@ -398,11 +398,13 @@ func TestUpgradeReadsTheRecordedPresetSource(t *testing.T) {
 
 func TestPresetSourceResolvesRelativeToTheWorkspace(t *testing.T) {
 	ws := t.TempDir()
+	// "/abs" is drive-relative, not absolute, on Windows.
+	abs := filepath.Join(filepath.VolumeName(ws)+string(filepath.Separator), "abs", "presets")
 	cases := []struct{ config, want string }{
 		{"preset: note\nsource: null\n", ""},
 		{"preset: note\n", ""},
 		{"preset: note\nsource: presets\n", filepath.Join(ws, "presets")},
-		{"preset: note\nsource: /abs/presets\n", "/abs/presets"},
+		{"preset: note\nsource: " + abs + "\n", abs},
 	}
 	for _, tc := range cases {
 		writeFile(t, filepath.Join(ws, ".khub", "config.yaml"), tc.config)

@@ -16,6 +16,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -464,6 +465,9 @@ func TestListenRefusesPrivilegedPort(t *testing.T) {
 	// cause is the environment, not the workspace, so it names --port too.
 	if os.Geteuid() == 0 {
 		t.Skip("running as root: binding port 80 would succeed")
+	}
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows has no privileged ports: binding port 80 succeeds")
 	}
 	_, err := Listen(80)
 	var located *errs.Located

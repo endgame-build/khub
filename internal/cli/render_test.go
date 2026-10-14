@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"runtime"
 	"strings"
 	"syscall"
 	"testing"
@@ -43,7 +44,11 @@ func TestPathConstructionBugRendersThroughAWrapWithoutPanicking(t *testing.T) {
 	// pathBugMessage used to assert unchecked, so it was safe only because
 	// Guard gates on isPathConstructionBug first. Once the guard matches
 	// through a wrap, a renderer that does not would panic instead of print.
-	wrapped := fmt.Errorf("deleting: %w", pathErr("remove", "/a/b.md/b.md", syscall.ENOTDIR))
+	notDir := syscall.ENOTDIR
+	if runtime.GOOS == "windows" {
+		notDir = syscall.Errno(267) // ERROR_DIRECTORY, what Windows returns here
+	}
+	wrapped := fmt.Errorf("deleting: %w", pathErr("remove", "/a/b.md/b.md", notDir))
 
 	if !isPathConstructionBug(wrapped) {
 		t.Fatal("a wrapped ENOTDIR is not recognised as a path-construction bug")

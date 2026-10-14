@@ -26,7 +26,7 @@ func OpenPath(root, path string) (*os.Root, string, error) {
 	}
 	rel, err := filepath.Rel(base, absolute)
 	if err != nil || !filepath.IsLocal(rel) {
-		return nil, "", errs.New("unsafe_path", fmt.Sprintf("Path %s is outside workspace %s", path, root))
+		return nil, "", errs.New("unsafe_path", fmt.Sprintf("Path %s is outside workspace %s", filepath.ToSlash(path), filepath.ToSlash(root)))
 	}
 	r, err := os.OpenRoot(base)
 	if err != nil {
@@ -43,9 +43,9 @@ func OpenPath(root, path string) (*os.Root, string, error) {
 			r.Close()
 			return nil, "", err
 		}
-		if info.Mode()&os.ModeSymlink != 0 {
+		if err := RefuseLink(info, path); err != nil {
 			r.Close()
-			return nil, "", errs.New("unsafe_path", fmt.Sprintf("Symlinks are not allowed in workspace storage: %s", path))
+			return nil, "", err
 		}
 	}
 	return r, rel, nil
@@ -94,7 +94,7 @@ func ReadDirIn(r *os.Root, rel, path string) ([]os.DirEntry, error) {
 		// Go uses fdopendir on Darwin and readdirent on Linux; keep CLI errors stable.
 		var pe *os.PathError
 		if errors.As(err, &pe) {
-			return nil, &os.PathError{Op: "readdir", Path: path, Err: pe.Err}
+			return nil, &os.PathError{Op: "readdir", Path: path, Err: readdirErrno(pe)}
 		}
 		return nil, err
 	}
@@ -139,25 +139,51 @@ func Remove(root, path string, recursive bool) error {
 	}
 	defer r.Close()
 	if recursive {
-		err = r.RemoveAll(rel)
+		err = robust(func() error { return r.RemoveAll(rel) })
 	} else {
-		err = r.Remove(rel)
+		err = robust(func() error { return r.Remove(rel) })
 	}
 	if err != nil {
 		return err
 	}
 	if err := syncParent(r, rel); err != nil {
-		return errs.New("write_durability_uncertain", fmt.Sprintf("Removed %s, but durability could not be confirmed (%s). Inspect the path before retrying", path, err))
+		return errs.New("write_durability_uncertain", fmt.Sprintf("Removed %s, but durability could not be confirmed (%s). Inspect the path before retrying", filepath.ToSlash(path), err))
 	}
 	return nil
 }
-func syncParent(r *os.Root, rel string) error {
-	dir, err := r.Open(filepath.Dir(rel))
-	if err != nil {
-		return err
+
+// The Windows reparse-point attribute bit (winnt.h), named here so the test is
+// a pure function every platform can exercise.
+const fileAttributeReparsePoint = 0x400 // FILE_ATTRIBUTE_REPARSE_POINT
+
+// reparseAttr reports whether a Windows entry with these attributes is a
+// reparse point: a symlink, a junction or mount point, or any other entry a
+// filter driver resolves, such as a OneDrive Files On-Demand placeholder.
+// Workspace storage holds plain files and directories only, so every reparse
+// point is refused, exactly as a symlink is.
+func reparseAttr(attrs uint32) bool { return attrs&fileAttributeReparsePoint != 0 }
+
+// IsLink reports whether info is an entry workspace storage refuses: a
+// symlink, and on Windows any reparse point.
+func IsLink(info fs.FileInfo) bool {
+	return info.Mode()&os.ModeSymlink != 0 || reparse(info)
+}
+
+// RefuseLink is the unsafe_path refusal for info at path, or nil when info is
+// a plain file or directory. A symlink keeps its message on every platform; a
+// Windows reparse point that is not a symlink gets its own, naming the way out.
+func RefuseLink(info fs.FileInfo, path string) error {
+	if info.Mode()&os.ModeSymlink != 0 {
+		return symlinkRefusal(path)
 	}
-	defer dir.Close()
-	return dir.Sync()
+	if reparse(info) {
+		return errs.New("unsafe_path", fmt.Sprintf("Reparse points are not allowed in workspace storage: %s. A junction or a cloud placeholder (OneDrive Files On-Demand) is one; keep the workspace outside a synced folder", filepath.ToSlash(path)))
+	}
+	return nil
+}
+
+func symlinkRefusal(path string) error {
+	return errs.New("unsafe_path", fmt.Sprintf("Symlinks are not allowed in workspace storage: %s", filepath.ToSlash(path)))
 }
 
 // Hide implementation-only temporary names and root-relative syscall paths.

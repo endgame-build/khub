@@ -1,6 +1,20 @@
+# The setup denies writes on a directory. Root, and on Windows an
+# administrator with the backup and restore privileges (GitHub's runner),
+# ignore that, so on such an account the runner skips this case.
+requires: [write-denial]
 steps:
 - argv: ["init", "build-hub", ".", "--no-wire"]
 - argv: ["add", "requirement", "--title", "R", "--kind", "functional"]
+# A directory khub may not create files in. chmod has no effect on a Windows
+# directory, so there the same state is an explicit deny ACE for Everyone
+# (S-1-1-0) on add file and add subdirectory (WD,AD), which binds an
+# administrator too unless its token carries the backup and restore
+# privileges (see requires above). Not (W): that also denies SYNCHRONIZE, so the directory
+# could not even be listed, where chmod 500 still allows reading it.
+# MSYS_NO_PATHCONV stops Git Bash from rewriting icacls's /deny and /remove
+# switches into paths.
 - sh: "chmod 500 knowledge/requirements"
+  sh_windows: "MSYS_NO_PATHCONV=1 icacls 'knowledge\\requirements' /deny '*S-1-1-0:(WD,AD)'"
 - argv: ["add", "requirement", "--title", "T", "--kind", "functional"]
 - sh: "chmod 755 knowledge/requirements"
+  sh_windows: "MSYS_NO_PATHCONV=1 icacls 'knowledge\\requirements' /remove:d '*S-1-1-0'"

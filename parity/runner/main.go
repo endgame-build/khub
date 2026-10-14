@@ -7,16 +7,40 @@
 //
 //	mode: pipe | human | pty        # default pipe
 //	env:  {K: V}                    # optional extras
+//	requires: [write-denial]        # optional: what the machine must enforce
 //	steps:
 //	  - sh: "git init -q ."         # deterministic setup, must exit 0
+//	  - sh: "chmod 500 dir"         # a step may carry a per-OS override:
+//	    sh_windows: "icacls …"      #   Windows runs sh_windows INSTEAD of sh;
+//	                                #   every other OS ignores the key
 //	  - argv: [init, build-hub, ., --no-wire]
 //	    stdin: "optional bytes"
+//
+// sh steps run under `sh -c` on unix. On Windows they run under Git Bash's
+// sh (see platform_windows.go). `sh_windows` exists for the few setups whose
+// unix spelling has no effect there (chmod on a directory); it must leave the
+// same observable state, because the expected bytes are shared across
+// platforms. A step holding only `sh_windows` is a no-op off Windows.
 //
 // Every argv step records stdout, stderr, and exit code separately under
 // expected/steps/NN.{stdout,stderr,exit}; after the last step the workspace
 // tree (minus .git/** and .khub/generated/**) digests into
 // expected/tree.manifest. Verification is byte-exact except two named
 // normalizers (cycles-canonical, tty-layout-free) declared per case.
+//
+// `requires` names an OS guarantee a case's setup depends on. The only one is
+// write-denial: denying writes on a directory stops this process writing
+// there, which root (and, on Windows, an administrator with the backup and
+// restore privileges) does not honour. The runner probes it once, the way the
+// cases deny writes, and on a machine without it reports the case as SKIP
+// with the reason, never as a pass. See capability.go.
+//
+// One exception is platform-wide rather than per case: on Windows a
+// `mode: pty` step runs on a ConPTY, which re-renders the screen instead of
+// passing bytes through, so there the runner asserts BEHAVIOUR (exit code and
+// output mode: JSON, human, or empty) and says so on every run with a
+// PTY-BEHAVIOURAL line. The tree manifest is still byte-checked. See
+// ptymode.go and pty_windows.go.
 package main
 
 import (
@@ -31,14 +55,18 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"unicode/utf16"
+	"unicode/utf8"
 
 	"github.com/goccy/go-yaml"
 )
 
 type step struct {
-	Sh    string   `yaml:"sh"`
-	Argv  []string `yaml:"argv"`
-	Stdin *string  `yaml:"stdin"`
+	Sh string `yaml:"sh"`
+	// ShWindows replaces Sh on Windows; every other OS ignores it.
+	ShWindows string   `yaml:"sh_windows"`
+	Argv      []string `yaml:"argv"`
+	Stdin     *string  `yaml:"stdin"`
 }
 
 type caseSpec struct {
@@ -46,6 +74,8 @@ type caseSpec struct {
 	Env       map[string]string `yaml:"env"`
 	Normalize []string          `yaml:"normalize"`
 	Steps     []step            `yaml:"steps"`
+	// Requires lists OS guarantees the case's setup depends on (capability.go).
+	Requires []string `yaml:"requires"`
 	// Divergence records a KNOWN, accepted difference from Python for this
 	// case. The case still runs and still reports,
 	// but a mismatch counts as XFAIL rather than FAIL. It is deliberately
@@ -92,12 +122,16 @@ func main() {
 		fmt.Fprintln(os.Stderr, "no cases matched")
 		os.Exit(2)
 	}
-	pass, fail, xfail := 0, 0, 0
+	pass, fail, xfail, skip := 0, 0, 0, 0
 	for _, dir := range caseDirs {
 		ok, err := runCase(dir)
 		rel, _ := filepath.Rel(*casesDir, dir)
 		reason := divergenceOf(dir)
+		var skipped *skipError
 		switch {
+		case errors.As(err, &skipped):
+			fmt.Printf("SKIP %s: %s\n", rel, skipped.reason)
+			skip++
 		case err != nil:
 			fmt.Printf("ERROR %s: %v\n", rel, err)
 			fail++
@@ -117,8 +151,12 @@ func main() {
 	if *record {
 		verb = "recorded"
 	}
-	fmt.Printf("\n%s %d cases: %d pass, %d fail, %d xfail (recorded divergences)\n",
+	fmt.Printf("\n%s %d cases: %d pass, %d fail, %d xfail (recorded divergences)",
 		verb, len(caseDirs), pass, fail, xfail)
+	if skip > 0 {
+		fmt.Printf(", %d skipped (this machine cannot set them up)", skip)
+	}
+	fmt.Println()
 	if fail > 0 {
 		os.Exit(1)
 	}
@@ -136,10 +174,24 @@ func runCase(dir string) (bool, error) {
 	if spec.Mode == "" {
 		spec.Mode = "pipe"
 	}
+	// Before anything runs or the expected/ directory is cleared for
+	// recording: a case this machine cannot set up is skipped, not recorded.
+	if why, err := unmetRequirement(spec.Requires); err != nil {
+		return false, err
+	} else if why != "" {
+		return false, &skipError{reason: why}
+	}
+	// Refused before the expected/ directory is cleared for recording.
+	if *record && spec.Mode == "pty" && ptyBehavioural {
+		return false, errors.New("cannot record a pty case on this OS: its pseudo-terminal re-renders the output, so what it captures is not the contract; record on darwin or linux")
+	}
 	work, err := os.MkdirTemp("", "parity-*")
 	if err != nil {
 		return false, err
 	}
+	// The identity on unix. On Windows the temp root can come back in 8.3
+	// form (C:\Users\RUNNER~1\…); khub is handed the long form a user has.
+	work = canonicalTemp(work)
 	defer os.RemoveAll(work)
 	home := filepath.Join(work, ".home")
 	ws := filepath.Join(work, "ws")
@@ -160,20 +212,31 @@ func runCase(dir string) (bool, error) {
 
 	norm := newPathNormalizer(ws, home)
 	ok := true
+	rel, _ := filepath.Rel(*casesDir, dir)
+	if spec.Mode == "pty" && ptyBehavioural {
+		fmt.Printf("PTY-BEHAVIOURAL %s: exit code and output mode checked, bytes NOT compared (this OS's pseudo-terminal re-renders the screen)\n", rel)
+	}
 	// A `divergence:` line is case-scoped, so record WHICH steps actually
 	// mismatched: the reason names one behaviour, and a case with many steps
 	// must not let an unrelated regression in a different step ride along
 	// silently under the same exemption.
 	divergedSteps := map[int]bool{}
 	argvIdx := 0
-	for _, st := range spec.Steps {
-		if st.Sh != "" {
-			cmd := exec.Command("sh", "-c", st.Sh)
+	for i, st := range spec.Steps {
+		if st.Sh != "" || st.ShWindows != "" {
+			script := shScript(st)
+			if script == "" {
+				continue // a Windows-only step, off Windows
+			}
+			cmd, err := shCommand(script, work, i)
+			if err != nil {
+				return false, err
+			}
 			cmd.Dir = ws
 			cmd.Env = env
 			out, err := cmd.CombinedOutput()
 			if err != nil {
-				return false, fmt.Errorf("sh step failed: %s: %w\n%s", st.Sh, err, out)
+				return false, fmt.Errorf("sh step failed: %s: %w\n%s", script, err, out)
 			}
 			continue
 		}
@@ -212,8 +275,14 @@ func runCase(dir string) (bool, error) {
 		if aerr != nil {
 			return false, fmt.Errorf("unreadable exit expectation for step %d: %w", argvIdx, aerr)
 		}
-		rel, _ := filepath.Rel(*casesDir, dir)
 		label := fmt.Sprintf("%s step %d [%s]", rel, argvIdx, strings.Join(st.Argv, " "))
+		if spec.Mode == "pty" && ptyBehavioural {
+			if !ptyBehaviourMatches(label, stdout, code, wantOut, wantErr, wantCode) {
+				ok = false
+				divergedSteps[argvIdx] = true
+			}
+			continue
+		}
 		if code != wantCode {
 			fmt.Printf("FAIL %s: exit %d want %d\n", label, code, wantCode)
 			ok = false
@@ -247,7 +316,6 @@ func runCase(dir string) (bool, error) {
 	}
 	wantMan, _ := os.ReadFile(manPath)
 	if manifest != string(wantMan) {
-		rel, _ := filepath.Rel(*casesDir, dir)
 		fmt.Printf("FAIL %s tree.manifest:\n%s", rel, firstDiff(wantMan, []byte(manifest)))
 		ok = false
 	}
@@ -349,6 +417,9 @@ func baseEnv(home, mode string) []string {
 		"GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_SYSTEM=/dev/null",
 		"PATH=" + os.Getenv("PATH"),
 	}
+	// Nothing on unix. On Windows: the variables a Windows process cannot run
+	// without, and the git pins Git for Windows' own config would undo.
+	env = append(env, platformEnv(home)...)
 	// The recorder side needs the pyshim on PYTHONPATH; harmless for Go.
 	abs, _ := filepath.Abs(*repoRoot)
 	env = append(env, "PYTHONPATH="+filepath.Join(abs, "parity", "tools", "pyshim"))
@@ -402,7 +473,10 @@ func runStepWith(bin, ws string, env []string, st step, mode string) (stdout, st
 	absRepo, _ := filepath.Abs(*repoRoot)
 	stepArgv := make([]string, len(st.Argv))
 	for i, a := range st.Argv {
-		stepArgv[i] = strings.ReplaceAll(a, "PRESETSRC", filepath.Join(absRepo, "parity", "corpus"))
+		// ToSlash is the identity on unix. On Windows it hands khub the
+		// forward-slash spelling, which Windows accepts and which is what the
+		// recorded `source` field (%REPO%/parity/corpus) holds.
+		stepArgv[i] = strings.ReplaceAll(a, "PRESETSRC", filepath.ToSlash(filepath.Join(absRepo, "parity", "corpus")))
 	}
 	argv := append(append([]string{}, parts[1:]...), stepArgv...)
 	cmd := exec.Command(parts[0], argv...)
@@ -479,11 +553,12 @@ func newPathNormalizer(ws, home string) *pathNormalizer {
 		if p == "" {
 			return
 		}
-		real, err := filepath.EvalSymlinks(p)
-		if err == nil && real != p {
-			n.pairs = append(n.pairs, [2]string{real, placeholder})
+		// unix: the realpath when it differs (/private on macOS), then p.
+		// Windows adds the long, short, forward-slash and Git Bash (/c/…)
+		// spellings.
+		for _, form := range pathForms(p) {
+			n.pairs = append(n.pairs, [2]string{form, placeholder})
 		}
-		n.pairs = append(n.pairs, [2]string{p, placeholder})
 	}
 	add(ws, "%WS%")
 	add(home, "%HOME%")
@@ -500,8 +575,7 @@ func newPathNormalizer(ws, home string) *pathNormalizer {
 func (n *pathNormalizer) apply(b []byte) []byte {
 	s := string(b)
 	for _, pr := range n.pairs {
-		s = strings.ReplaceAll(s, pr[0], pr[1])
-		s = strings.ReplaceAll(s, strings.ReplaceAll(pr[0], "/", `\/`), pr[1]) // JSON-escaped form
+		s = replacePath(s, pr[0], pr[1])
 	}
 	return []byte(s)
 }
@@ -758,4 +832,22 @@ func runCoverage(specPath string) int {
 		return 1
 	}
 	return 0
+}
+
+// jsonASCII spells s the way an ensure_ascii JSON encoder does (Python's
+// json.dumps default, which khub matches): every non-ASCII rune as \uXXXX in
+// lowercase hex, past the BMP as a surrogate pair. A path with a non-ASCII
+// character only ever reaches JSON output in this form.
+func jsonASCII(s string) string {
+	var b strings.Builder
+	for _, r := range s {
+		if r < utf8.RuneSelf {
+			b.WriteRune(r)
+			continue
+		}
+		for _, u := range utf16.Encode([]rune{r}) {
+			fmt.Fprintf(&b, `\u%04x`, u)
+		}
+	}
+	return b.String()
 }

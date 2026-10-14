@@ -20,6 +20,10 @@ func TestStorageOwnershipAndPathSafety(t *testing.T) {
 		{"file as directory", "a: {layout: collection, path: objects.json}\n  b: {layout: file, path: objects.json/b}", false},
 		{"siblings", "a: {layout: file, path: objects/a}\n  b: {layout: file, path: objects/b}", true},
 		{"normalize", "a: {layout: file, path: ./objects/a}\n  b: {layout: file, path: objects/b}", true},
+		{"reserved singleton", "a: {layout: singleton, path: con.md}\n  b: {layout: file, path: b}", false},
+		{"reserved folder", "a: {layout: file, path: notes/NUL/a}\n  b: {layout: file, path: b}", false},
+		{"reserved collection", "a: {layout: collection, path: com0.jsonl}\n  b: {layout: file, path: b}", false},
+		{"reserved-looking", "a: {layout: singleton, path: console.md}\n  b: {layout: file, path: con-b}", true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			doc := "ontology:\n  entities:\n    a: {}\n    b: {}\nstorage:\n  " + tc.storage + "\n"
@@ -40,6 +44,15 @@ func TestStorageOwnershipAndPathSafety(t *testing.T) {
 func TestInvalidPatternRejectedAtResolve(t *testing.T) {
 	_, err := ResolveWith(nil, writeSchemaFiles(t, "ontology:\n  entities:\n    item:\n      attributes:\n        code: {type: text, pattern: '['}\n"))
 	if err == nil || !strings.Contains(err.Error(), "Invalid pattern") {
+		t.Fatalf("err=%v", err)
+	}
+}
+
+// A type with no storage path is stored under its own name, so a type named
+// after a device is refused too, and the message names the part and the fix.
+func TestReservedDeviceNameRefusedInStoragePaths(t *testing.T) {
+	_, err := ResolveWith(nil, writeSchemaFiles(t, "ontology:\n  entities:\n    aux: {}\n"))
+	if err == nil || !strings.Contains(err.Error(), "storage.aux.path: 'aux' is a reserved device name on Windows") {
 		t.Fatalf("err=%v", err)
 	}
 }

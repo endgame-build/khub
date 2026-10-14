@@ -40,10 +40,16 @@ func LayerFiles(root string) ([]string, error) {
 		fi, statErr := fsio.Stat(root, p)
 		if statErr != nil {
 			if errors.Is(statErr, fs.ErrNotExist) {
-				continue
+				// Windows reports a FILE at .khub as ERROR_PATH_NOT_FOUND, which
+				// matches ErrNotExist; POSIX says ENOTDIR and never gets here.
+				khub, khubErr := fsio.Stat(root, filepath.Join(root, ".khub"))
+				if khubErr != nil || khub.IsDir() {
+					continue
+				}
+				statErr = fmt.Errorf("%s is not a directory", filepath.ToSlash(filepath.Join(root, ".khub")))
 			}
 			return nil, errs.New("schema_error",
-				fmt.Sprintf("Cannot read schema %s: %s", p, statErr.Error()))
+				fmt.Sprintf("Cannot read schema %s: %s", filepath.ToSlash(p), statErr.Error()))
 		}
 		if fi.Mode().IsRegular() {
 			out = append(out, ".khub/"+name)
@@ -71,7 +77,8 @@ func LoadSchemaLayers(root string) (*schema.ResolvedSchema, []string, error) {
 	if err != nil {
 		return nil, nil, err
 	}
-	ontologyPath := filepath.Join(root, ".khub", presets.OntologyFile)
+	// Printed only, so in the slash form khub shows every path in.
+	ontologyPath := filepath.ToSlash(filepath.Join(root, ".khub", presets.OntologyFile))
 	if len(layers) == 0 {
 		return nil, nil, errs.New("schema_error",
 			fmt.Sprintf("Cannot read schema %s: file not found", ontologyPath))

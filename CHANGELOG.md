@@ -4,10 +4,32 @@ Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+### Added
+
+- **Windows support (experimental)**, for windows/amd64 and windows/arm64. The
+  release ships `khub_windows_<arch>.zip` archives, and the npm package carries
+  `khub.exe` beside the darwin and linux binaries. khub prints the same output
+  on Windows as on macOS and Linux: the same error wording and every path with
+  forward slashes. It takes the workspace lock with `LockFileEx`, retries a
+  write while another program holds the file open, and treats Git Bash's
+  terminal (mintty) as a terminal. CI runs the full parity suite on a Windows
+  runner, which does not block a merge yet.
+- The Claude Code plugin (0.1.3) finds the workspace and khub on Windows and
+  reads Windows and Git Bash paths and `khub.exe` commands.
+
 ### Changed
 
 - Building khub from source needs Go 1.26 (`go.mod` says `go 1.26.0`). Go 1.25
   no longer receives security fixes.
+- **Breaking:** khub refuses the Windows device names `con`, `prn`, `aux`,
+  `nul`, `com0`–`com9` and `lpt0`–`lpt9` on every platform, so a workspace
+  made anywhere checks out on Windows. `add` refuses one as a minted or
+  explicit slug (`invalid_slug`, naming `--id`), and a schema refuses one in a
+  storage path (`invalid_schema`). `req-con` and dated ids stay valid.
+- **Breaking, Windows only:** workspace storage refuses every reparse point the
+  way it refuses symlinks (`unsafe_path`): a junction, and a cloud placeholder
+  such as OneDrive Files On-Demand. Keep a workspace outside a OneDrive-synced
+  folder.
 - The Claude Code plugin (0.1.1) draws a command made only of khub calls joined
   by `;` or `&&` as one compact row per call. A command that pipes or redirects
   khub's output, or runs another program, keeps Claude Code's raw drawing.

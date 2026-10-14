@@ -1,13 +1,16 @@
-# goreleaser builds the four binaries a khub release ships.
+# goreleaser builds the six binaries a khub release ships.
 #
 # CGO stays off everywhere, which is what makes cross-compiling trivial: the
 # SQLite behind `khub search` is ncruces/go-sqlite3 (a wasm build, pure Go), so
 # nothing here needs a C toolchain or a per-platform runner.
 #
-# Windows is deliberately absent. khub serializes collection writes with an
-# advisory lock; the Windows path would be LockFileEx, which no khub has ever
-# shipped or been tested against, so the target is out of scope rather than
-# quietly half-supported.
+# Windows ships, marked EXPERIMENTAL. It was held back because khub serializes
+# every workspace mutation with an advisory lock and the Windows path had never
+# been written. It now is: internal/fsio/lock_windows.go takes the same
+# exclusive, handle-scoped lock with LockFileEx over the whole range, released
+# when the handle closes exactly as flock is, so a crashed writer cannot strand
+# the workspace. Experimental means it carries the same features as darwin and
+# linux, with far less use behind it.
 version: 2
 
 project_name: khub
@@ -21,7 +24,7 @@ builds:
     mod_timestamp: "{{ .CommitTimestamp }}"
     env:
       - CGO_ENABLED=0
-    goos: [darwin, linux]
+    goos: [darwin, linux, windows]
     goarch: [amd64, arm64]
     flags:
       - -trimpath
@@ -40,11 +43,17 @@ archives:
     # version still identifies the release (the tag) and the build
     # (`khub --version`).
     #
-    # npm/build-packages.sh derives this name from its platform table, so the
-    # template and that script have to move together. Nothing else consumes
+    # npm/build-packages.sh derives this name, and the zip-or-tar.gz split
+    # below, from its platform table, so the template and that script have to
+    # move together. Nothing else consumes
     # these assets: they are inputs to the npm package, not a channel.
     name_template: "khub_{{ .Os }}_{{ .Arch }}"
     formats: [tar.gz]
+    # Windows gets a zip (khub_windows_amd64.zip) holding khub.exe — goreleaser
+    # adds the .exe suffix for a windows build. darwin and linux keep tar.gz.
+    format_overrides:
+      - goos: windows
+        formats: [zip]
     files:
       - LICENSE
       - README.md

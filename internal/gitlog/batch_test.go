@@ -3,6 +3,8 @@ package gitlog
 import (
 	"fmt"
 	"path/filepath"
+	"runtime"
+	"strings"
 	"testing"
 )
 
@@ -35,6 +37,9 @@ func TestCommitDatesLinearNestedAndRenames(t *testing.T) {
 	root := t.TempDir()
 	gitInit(t, root)
 	paths := []string{"a.md", "white space.md", "tab\tname.md", "line\nname.md", "\nleading.md", "é.md", "old.md", "untracked.md"}
+	if runtime.GOOS == "windows" { // tab and newline are invalid in Windows names
+		paths = withoutControlChars(paths)
+	}
 	for _, path := range paths[:len(paths)-1] {
 		writeRaw(t, root, "nested/"+path, "first\n")
 	}
@@ -113,4 +118,14 @@ func BenchmarkStaleDates(b *testing.B) {
 			}
 		})
 	}
+}
+
+func withoutControlChars(paths []string) []string {
+	var out []string
+	for _, p := range paths {
+		if !strings.ContainsAny(p, "\t\n") {
+			out = append(out, p)
+		}
+	}
+	return out
 }

@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -154,7 +155,7 @@ func TestAuditValidationAndScanFailures(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer func() { _ = os.Chmod(filepath.Join(root, "a"), 0o755) }()
-	if os.Geteuid() != 0 {
+	if os.Geteuid() != 0 && runtime.GOOS != "windows" { // Windows ignores the mode bits
 		if _, err := integrity.Validate(root, nil, false); err == nil {
 			t.Fatal("unreadable scan succeeded")
 		}

@@ -8,6 +8,8 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"syscall"
+	"time"
 
 	"github.com/endgame-build/khub/internal/errs"
 )
@@ -59,7 +61,7 @@ func publish(root, path string, data []byte, exclusive bool) (err error) {
 	}
 	// Best-effort cleanup: after a successful rename there is nothing at tmp
 	// to remove, and on the failure paths the error already returned wins.
-	defer func() { _ = r.Remove(tmp) }()
+	defer func() { _ = robust(func() error { return r.Remove(tmp) }) }()
 	// Chmod the descriptor, never a path that could have been swapped.
 	if existed {
 		if err := f.Chmod(mode); err != nil {
@@ -92,7 +94,7 @@ func publish(root, path string, data []byte, exclusive bool) (err error) {
 			if _, lerr := r.Lstat(rel); lerr == nil {
 				err = &fs.PathError{Op: "create", Path: path, Err: fs.ErrExist}
 			} else if errors.Is(lerr, fs.ErrNotExist) {
-				err = r.Rename(tmp, rel)
+				err = robust(func() error { return r.Rename(tmp, rel) })
 			} else {
 				err = lerr
 			}
@@ -101,11 +103,11 @@ func publish(root, path string, data []byte, exclusive bool) (err error) {
 			return err
 		}
 		if linked {
-			if err := r.Remove(tmp); err != nil {
+			if err := robust(func() error { return r.Remove(tmp) }); err != nil {
 				return publishedError(path, err)
 			}
 		}
-	} else if err = r.Rename(tmp, rel); err != nil {
+	} else if err = robust(func() error { return r.Rename(tmp, rel) }); err != nil {
 		return err
 	}
 	if err := syncParent(r, rel); err != nil {
@@ -115,5 +117,54 @@ func publish(root, path string, data []byte, exclusive bool) (err error) {
 }
 
 func publishedError(path string, err error) error {
-	return errs.New("write_durability_uncertain", fmt.Sprintf("Published %s, but durability could not be confirmed (%s). Read the file before retrying", path, err))
+	return errs.New("write_durability_uncertain", fmt.Sprintf("Published %s, but durability could not be confirmed (%s). Read the file before retrying", filepath.ToSlash(path), err))
+}
+
+// Windows error codes (winerror.h) raised when another process holds a file
+// open without FILE_SHARE_DELETE: a concurrent khub read (os.Open does not
+// share delete), an antivirus scan, the search indexer. Each clears once that
+// handle closes. Named here so the classifier is a pure function every
+// platform can exercise; only the Windows build wires it in.
+const (
+	errorAccessDenied     syscall.Errno = 5  // ERROR_ACCESS_DENIED
+	errorSharingViolation syscall.Errno = 32 // ERROR_SHARING_VIOLATION
+	errorLockViolation    syscall.Errno = 33 // ERROR_LOCK_VIOLATION
+)
+
+// sharingViolation reports whether err is a Windows error that waiting can
+// clear, after cmd/internal/robustio. ERROR_ACCESS_DENIED is also a genuine
+// permission refusal; that costs one retry budget before the same error
+// surfaces.
+func sharingViolation(err error) bool {
+	var errno syscall.Errno
+	if !errors.As(err, &errno) {
+		return false
+	}
+	switch errno {
+	case errorAccessDenied, errorSharingViolation, errorLockViolation:
+		return true
+	}
+	return false
+}
+
+// retryBudget caps the total sleep one call may spend waiting out a transient
+// error, as cmd/internal/robustio does.
+const retryBudget = 2 * time.Second
+
+// retry runs op until it succeeds, fails with an error transient rejects, or
+// the sleep budget is spent. It returns op's last error untouched, so a caller
+// sees the same error kind it would have without retries.
+func retry(op func() error, transient func(error) bool, sleep func(time.Duration), budget time.Duration) error {
+	delay := time.Millisecond
+	var slept time.Duration
+	for {
+		err := op()
+		if err == nil || !transient(err) || slept >= budget {
+			return err
+		}
+		d := min(delay, budget-slept)
+		sleep(d)
+		slept += d
+		delay *= 2
+	}
 }

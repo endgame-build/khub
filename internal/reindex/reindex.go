@@ -213,7 +213,8 @@ func EntityLink(root string, resolved *schema.ResolvedSchema, tname, slug string
 	if err != nil {
 		link = entity.EntityPath(root, rtype, slug)
 	}
-	return mdlink.LinkDest(link)
+	// index.md is committed: a Markdown link is slash-separated on every host.
+	return mdlink.LinkDest(filepath.ToSlash(link))
 }
 
 // label is reindex._label: a human label for a link — the title if set, else

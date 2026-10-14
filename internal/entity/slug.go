@@ -66,6 +66,12 @@ func slugBase(source string) (string, error) {
 	return base, nil
 }
 
+// reservedName reports whether stem, the final file or folder name an entity
+// would be written under (prefix and date applied), is a Windows device name
+// (schema.ReservedDeviceName). A collection row is not a file and is never
+// checked.
+func reservedName(stem string) bool { return schema.ReservedDeviceName(stem) }
+
 // chooseSlug is the slug a create writes under: an explicit --id, slugified
 // and capped exactly like a minted one, else the minted id.
 func chooseSlug(rtype *schema.ResolvedType, meta *omap.Map, id string) (string, error) {

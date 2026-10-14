@@ -37,7 +37,7 @@ func today() time.Time {
 func relPath(root, path string) string {
 	rel, err := filepath.Rel(root, path)
 	if err != nil {
-		return path
+		return filepath.ToSlash(path)
 	}
 	return filepath.ToSlash(rel)
 }

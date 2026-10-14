@@ -63,8 +63,12 @@ func registerUpgrade(root *cobra.Command) {
 								}
 							}
 						}
-						wireStep.Err = strings.ReplaceAll(wireStep.Err, target, ws)
-						indexStep.Err = strings.ReplaceAll(indexStep.Err, target, ws)
+						// A message may carry the candidate in either form: an OS
+						// error the native one, khub's own prose the slash one.
+						for _, from := range []string{target, filepath.ToSlash(target)} {
+							wireStep.Err = strings.ReplaceAll(wireStep.Err, from, filepath.ToSlash(ws))
+							indexStep.Err = strings.ReplaceAll(indexStep.Err, from, filepath.ToSlash(ws))
+						}
 					}
 				}
 				opt := workspace.UpgradeOptions{NoSchema: noSchema, DryRun: dryRun}

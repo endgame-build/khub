@@ -10,6 +10,7 @@ import (
 	"net"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 
 	"github.com/spf13/cobra"
@@ -45,7 +46,7 @@ func registerServe(root *cobra.Command) {
 				if addr, ok := ln.Addr().(*net.TCPAddr); ok {
 					bound = addr.Port
 				}
-				fmt.Printf("Serving %s at http://127.0.0.1:%d (ctrl-c to stop)\n", ws, bound)
+				fmt.Printf("Serving %s at http://127.0.0.1:%d (ctrl-c to stop)\n", filepath.ToSlash(ws), bound)
 
 				ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 				defer stop()

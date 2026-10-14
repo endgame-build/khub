@@ -440,6 +440,7 @@ func misplacedFiles(root string, resolved *schema.ResolvedSchema) ([]Misplaced, 
 		if err != nil {
 			continue
 		}
+		rel = filepath.ToSlash(rel) // reported as Misplaced.Path
 		if skipped(rel) {
 			continue
 		}
@@ -509,7 +510,7 @@ func rglobMD(root string, resolved *schema.ResolvedSchema) ([]string, error) {
 				}
 			}
 			if e.IsDir() && !skipDir(e.Name()) && !strings.HasPrefix(e.Name(), ".") {
-				if isSymlink(path) {
+				if isLink(path) {
 					continue
 				}
 				if err := walk(path); err != nil {
@@ -522,7 +523,8 @@ func rglobMD(root string, resolved *schema.ResolvedSchema) ([]string, error) {
 	if err := walk(root); err != nil {
 		return nil, err
 	}
-	sort.Strings(out)
+	// Order by the slash form, so a Windows separator sorts as "/" does.
+	sort.Slice(out, func(i, j int) bool { return filepath.ToSlash(out[i]) < filepath.ToSlash(out[j]) })
 	return out, nil
 }
 
@@ -555,9 +557,9 @@ func underStorageTree(rel string, trees []string) bool {
 	return false
 }
 
-func isSymlink(path string) bool {
+func isLink(path string) bool {
 	fi, err := os.Lstat(path)
-	return err == nil && fi.Mode()&fs.ModeSymlink != 0
+	return err == nil && fsio.IsLink(fi)
 }
 
 // skipped applies the _SKIP_DIRS / leading-dot filter to every part of the
@@ -610,6 +612,7 @@ func strayLocator(root string, resolved *schema.ResolvedSchema, tname, slug stri
 	if err != nil {
 		rel = entity.EntityPath(root, rtype, slug)
 	}
+	rel = filepath.ToSlash(rel)
 	if rtype.Storage.Layout == schema.LayoutCollection {
 		return rel + "#" + slug
 	}

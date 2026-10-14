@@ -5,6 +5,8 @@ package errs
 
 import (
 	"fmt"
+	"path/filepath"
+	"runtime"
 	"strings"
 )
 
@@ -107,6 +109,7 @@ func UnknownPreset(name string, known []string) *Located {
 // TargetNotEmpty is `target_not_empty`: `init` into a directory that already
 // holds files; the message names --force as the way through.
 func TargetNotEmpty(path string) *Located {
+	path = filepath.ToSlash(path) // printed: khub shows every path with '/'
 	return &Located{
 		Code: "target_not_empty",
 		Message: fmt.Sprintf("Target %s is not empty. Pass --force to scaffold alongside the "+
@@ -134,6 +137,7 @@ func NoWorkspace() *Located {
 // preset has nothing to refresh from. Without it an upgrade would have to
 // guess which shipped preset to lay over the workspace's own schema.
 func NoPreset(path string) *Located {
+	path = filepath.ToSlash(path) // printed: khub shows every path with '/'
 	return &Located{
 		Code: "no_preset",
 		Message: fmt.Sprintf("Workspace %s records no preset in .khub/config.yaml; "+
@@ -215,6 +219,20 @@ func SlugTaken(slug, type_ string, minted bool) *Located {
 			"pass --id <slug> to name this one differently", slug, type_)
 	}
 	return &Located{Code: "slug_taken", Message: message, Type: type_, Target: slug}
+}
+
+// ReservedSlug is `invalid_slug`: the file or folder name the slug would
+// write is one Windows reserves for a device (CON, PRN, AUX, NUL, COM1-COM9,
+// LPT1-LPT9). It is refused on every platform, so a workspace written
+// anywhere checks out on Windows. As SlugTaken does, the way out names the
+// flag the caller has not yet used.
+func ReservedSlug(slug, type_ string, minted bool) *Located {
+	message := fmt.Sprintf("Slug '%s' in %s is a reserved device name on Windows; choose another --id", slug, type_)
+	if minted {
+		message = fmt.Sprintf("Slug '%s' in %s is a reserved device name on Windows; "+
+			"pass --id <slug> to name this one differently", slug, type_)
+	}
+	return &Located{Code: "invalid_slug", Message: message, Type: type_, Target: slug}
 }
 
 // AliasTaken is `alias_taken`: a new entity's slug is already another
@@ -382,10 +400,16 @@ func PortInUse(port int) *Located {
 // PortNotPermitted is the bind refusal for a port this process may not have:
 // ports below 1024 need privileges khub does not ask for.
 func PortNotPermitted(port int) *Located {
+	// On Windows the refusal is WSAEACCES: a port the system reserves
+	// (Hyper-V, WinNAT) or one another program holds exclusively, never a
+	// privilege rule.
+	reason := "ports below 1024 need privileges. Pass --port <n> to serve on an unprivileged port"
+	if runtime.GOOS == "windows" {
+		reason = "Windows reserves it or another program holds it. Pass --port <n> to serve on another port"
+	}
 	return &Located{
-		Code: "port_not_permitted",
-		Message: fmt.Sprintf("Not permitted to bind port %d; ports below 1024 need "+
-			"privileges. Pass --port <n> to serve on an unprivileged port", port),
+		Code:    "port_not_permitted",
+		Message: fmt.Sprintf("Not permitted to bind port %d; %s", port, reason),
 	}
 }
 

@@ -7,7 +7,6 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
-	"syscall"
 )
 
 // WorkspaceLockPath is stable: never delete lock files while a writer may run.
@@ -42,11 +41,11 @@ func Locked[T any](root string, fn func() (T, error)) (result T, err error) {
 		}
 	}
 	defer f.Close()
-	if err = syscall.Flock(int(f.Fd()), syscall.LOCK_EX); err != nil {
+	if err = lockFile(f); err != nil {
 		return result, err
 	}
 	defer func() {
-		if e := syscall.Flock(int(f.Fd()), syscall.LOCK_UN); err == nil {
+		if e := unlockFile(f); err == nil {
 			err = e
 		}
 	}()

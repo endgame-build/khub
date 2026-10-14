@@ -83,9 +83,9 @@ func Listen(port int) (net.Listener, error) {
 	ln, err := net.Listen("tcp", net.JoinHostPort("127.0.0.1", strconv.Itoa(port)))
 	if err != nil {
 		switch {
-		case errors.Is(err, syscall.EADDRINUSE):
+		case errors.Is(err, syscall.EADDRINUSE) || isWinsockAddrInUse(err):
 			return nil, errs.PortInUse(port)
-		case errors.Is(err, syscall.EACCES):
+		case errors.Is(err, syscall.EACCES) || isWinsockAccess(err):
 			// Below 1024 without privileges. Same class as a taken port — the
 			// cause is the environment, which the workspace cannot explain —
 			// so it gets the same corrective flag rather than a bare os_error.

@@ -5,6 +5,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"syscall"
@@ -127,6 +128,9 @@ func readAll(t *testing.T, path string) string {
 }
 
 func TestAtomicWritePreservesPermissionsAndUnrelatedTemp(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows has no POSIX permission bits to preserve")
+	}
 	root := t.TempDir()
 	path := filepath.Join(root, "data")
 	if err := os.WriteFile(path, []byte("original"), 0o600); err != nil {
@@ -167,6 +171,9 @@ func TestAtomicWritePreservesPermissionsAndUnrelatedTemp(t *testing.T) {
 }
 
 func TestFailedPublicationDoesNotExposeTemporaryNameOrModifyOriginal(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("a read-only directory mode does not stop creation on Windows")
+	}
 	if os.Geteuid() == 0 {
 		t.Skip("requires unprivileged user")
 	}
@@ -193,6 +200,9 @@ func TestConfinedOperationsRejectEscapes(t *testing.T) {
 	root := t.TempDir()
 	outside := t.TempDir()
 	if err := os.Symlink(outside, filepath.Join(root, "link")); err != nil {
+		if runtime.GOOS == "windows" {
+			t.Skipf("creating a symlink needs Developer Mode or elevation: %v", err)
+		}
 		t.Fatal(err)
 	}
 	for _, path := range []string{filepath.Join(outside, "file"), filepath.Join(root, "link", "file")} {
@@ -220,6 +230,10 @@ func TestReadDirFileErrorIsPlatformStable(t *testing.T) {
 	var pe *os.PathError
 	if !errors.As(err, &pe) || pe.Op != "readdir" || pe.Path != path {
 		t.Fatalf("ReadDir error = %v", err)
+	}
+	// Windows carries ERROR_DIRECTORY instead (platform_windows_test.go).
+	if runtime.GOOS != "windows" && !errors.Is(pe.Err, syscall.ENOTDIR) {
+		t.Fatalf("ReadDir errno = %v, want ENOTDIR", pe.Err)
 	}
 }
 

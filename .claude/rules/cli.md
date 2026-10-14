@@ -16,6 +16,10 @@ dropped-rows and thin-result note) goes through `Note`, to stderr, before
   knowing the flag exists. Do not narrow it.
 - `IsTTY()` precedence is `TTY_COMPATIBLE` → `FORCE_COLOR` → real isatty.
   Never add a fourth signal — the whole fixture suite drives this gate.
+  On Windows the third signal also recognises a Cygwin/MSYS2 pty (mintty,
+  the standalone Git Bash window), which reaches khub as a named pipe; that
+  check is the real isatty read the only way such a pty allows, not a fourth
+  signal.
 - EPIPE is not a failure (`khub schema | head`); `Guard` passes it through and
   `main.go` disables the SIGPIPE kill so the write error is visible at all.
 - Exit codes: 0 success · 1 a gate failed (`validate`/`check`) · 2 a refusal

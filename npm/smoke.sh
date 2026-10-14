@@ -5,9 +5,10 @@
 #
 # The real package is assembled from goreleaser artifacts on a tag
 # (release.yml). This proves the assembler itself without a release: fake
-# per-platform binaries in the same tarball + checksums.txt shape goreleaser
-# emits, then assert the package tree is sound, that a PACKED TARBALL carries
-# what it should, and that the launcher runs what landed.
+# per-platform binaries in the same archive + checksums.txt shape goreleaser
+# emits (a tar.gz holding khub, or for windows a zip holding khub.exe), then
+# assert the package tree is sound, that a PACKED TARBALL carries what it
+# should, and that the launcher runs what landed.
 set -eu
 
 die() { printf 'npm smoke: %s\n' "$*" >&2; exit 1; }
@@ -20,6 +21,7 @@ elif command -v shasum >/dev/null 2>&1; then
 else
   die "need sha256sum or shasum"
 fi
+command -v zip >/dev/null 2>&1 || die "need zip to build the windows fixture archives"
 
 dist=$(mktemp -d)
 work=$(mktemp -d)
@@ -32,7 +34,15 @@ for a in darwin_amd64 darwin_arm64 linux_amd64 linux_arm64; do
   chmod +x "$d/khub"
   tar czf "$dist/khub_$a.tar.gz" -C "$d" khub
 done
-(cd "$dist" && sums ./*.tar.gz | sed 's|\./||' >checksums.txt)
+# The windows binaries never run here; the fixture only has to be a khub.exe
+# inside a zip, which is the layout the assembler and the shim depend on.
+for a in windows_amd64 windows_arm64; do
+  d="$work/src-$a"
+  mkdir -p "$d"
+  printf 'MZ fixture\n' >"$d/khub.exe"
+  (cd "$d" && zip -q "$dist/khub_$a.zip" khub.exe)
+done
+(cd "$dist" && sums ./*.tar.gz ./*.zip | sed 's|\./||' >checksums.txt)
 
 out="$work/pkgs"
 "$here/build-packages.sh" 9.9.9 "$dist" "$out"
@@ -46,6 +56,9 @@ grep -q '"version": "9.9.9"' "$out/khub/package.json" || die "version not substi
 # and the launcher picks one at run time.
 for p in darwin-x64 darwin-arm64 linux-x64 linux-arm64; do
   [ -x "$out/khub/binaries/$p/khub" ] || die "no binary for $p"
+done
+for p in win32-x64 win32-arm64; do
+  [ -f "$out/khub/binaries/$p/khub.exe" ] || die "no binary for $p"
 done
 
 # No lifecycle scripts. Load-bearing supply-chain property
@@ -68,8 +81,13 @@ proj="$work/proj"
 mkdir -p "$proj"
 (cd "$out/khub" && npm pack --pack-destination "$proj" >/dev/null) \
   || die "npm pack failed"
-shipped=$(tar tzf "$proj"/*.tgz | grep -c '^package/binaries/.*/khub$')
-[ "$shipped" = 4 ] || die "tarball carries $shipped binaries, expected 4 — check \`files\`"
+listing=$(tar tzf "$proj"/*.tgz)
+shipped=$(printf '%s\n' "$listing" | grep -cE '^package/binaries/[^/]+/khub(\.exe)?$')
+[ "$shipped" = 6 ] || die "tarball carries $shipped binaries, expected 6 — check \`files\`"
+for p in win32-x64 win32-arm64; do
+  printf '%s\n' "$listing" | grep -qx "package/binaries/$p/khub.exe" \
+    || die "tarball carries no binaries/$p/khub.exe"
+done
 
 # --no-install so a missing local bin fails here instead of reaching the registry.
 (cd "$proj" \
@@ -78,7 +96,14 @@ shipped=$(tar tzf "$proj"/*.tgz | grep -c '^package/binaries/.*/khub$')
   && [ "$(npx --no-install @endgame-build/khub)" = "9.9.9-fixture" ]) \
   || die "the packed package did not install and run under --ignore-scripts"
 
-# A tampered archive must be refused.
+# A tampered archive must be refused, zip or tarball. Each is tampered alone,
+# so neither refusal can be the other's.
+cp "$dist/khub_windows_arm64.zip" "$work/zip.orig"
+printf 'tamper' >>"$dist/khub_windows_arm64.zip"
+if "$here/build-packages.sh" 9.9.9 "$dist" "$work/x" 2>/dev/null; then
+  die "checksum mismatch on a zip was not detected"
+fi
+cp "$work/zip.orig" "$dist/khub_windows_arm64.zip"
 printf 'tamper' >>"$dist/khub_linux_amd64.tar.gz"
 if "$here/build-packages.sh" 9.9.9 "$dist" "$work/x" 2>/dev/null; then
   die "checksum mismatch was not detected"
@@ -89,4 +114,4 @@ if "$here/build-packages.sh" 9.9.9-snapshot "$dist" "$work/y" 2>/dev/null; then
   die "snapshot version was not refused"
 fi
 
-printf 'npm smoke: ok — packed tarball carries 4 binaries, installs, and runs\n'
+printf 'npm smoke: ok — packed tarball carries 6 binaries, installs, and runs\n'

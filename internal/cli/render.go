@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"path/filepath"
 	"syscall"
 	"unicode"
 	"unicode/utf8"
@@ -15,12 +16,12 @@ import (
 	"github.com/endgame-build/khub/internal/canon"
 	"github.com/endgame-build/khub/internal/errs"
 	"github.com/endgame-build/khub/internal/omap"
-	"golang.org/x/term"
 )
 
 // IsTTY ports rich Console.is_terminal, the gate the whole suite drives:
 // TTY_COMPATIBLE ("0"/"1") wins, then FORCE_COLOR (set-and-nonempty → true,
-// set-and-empty → false), then a real isatty check on stdout.
+// set-and-empty → false), then a real isatty check on stdout (isTerminal,
+// which on Windows also recognises a Cygwin/MSYS2 pty such as mintty's).
 func IsTTY() bool {
 	switch os.Getenv("TTY_COMPATIBLE") {
 	case "0":
@@ -31,7 +32,7 @@ func IsTTY() bool {
 	if fc, set := os.LookupEnv("FORCE_COLOR"); set {
 		return fc != ""
 	}
-	return term.IsTerminal(int(os.Stdout.Fd()))
+	return isTerminal(os.Stdout)
 }
 
 // WantJSON is true for --format json or any non-TTY stream — for reads and writes alike.
@@ -146,7 +147,7 @@ func isPathConstructionBug(err error) bool {
 		return false
 	}
 	switch errnoOf(pe.Err) {
-	case int(syscall.ENOTDIR), int(syscall.EISDIR), int(syscall.ENAMETOOLONG):
+	case errnoENOTDIR, errnoEISDIR, errnoENAMETOOLONG:
 		return true
 	}
 	return false
@@ -172,10 +173,12 @@ func pathBugMessage(err error) string {
 		"Cannot %s '%s': %s. That path cannot exist as addressed. "+
 			"If you did not create it, khub built the path wrong — "+
 			"please report it with this line.",
-		pe.Op, pe.Path, strerror(pe.Err))
+		pe.Op, filepath.ToSlash(pe.Path), strerror(pe.Err))
 }
 
-func isEPIPE(err error) bool { return errors.Is(err, syscall.EPIPE) }
+// isEPIPE is a write to a closed pipe: EPIPE, and on Windows the two Win32
+// codes that mean the same (isBrokenPipe).
+func isEPIPE(err error) bool { return isBrokenPipe(err) }
 
 // asPathError is the one place that decides what counts as a *os.PathError.
 // The guard (isPathConstructionBug) and the two renderers all go through it so
@@ -211,16 +214,27 @@ func osErrorMessage(err error) string {
 		case errors.Is(pe, fs.ErrExist):
 			name = "FileExistsError"
 		}
+		var se syscall.Errno
+		if errors.As(pe.Err, &se) {
+			if n, _, mapped := osErrno(se); mapped {
+				// A mapped Win32 code is named by the errno it prints, so
+				// ERROR_SHARING_VIOLATION reads PermissionError beside its 13.
+				name = errnoClassName(n)
+			}
+		}
 		errno := errnoOf(pe.Err)
-		return fmt.Sprintf("%s: [Errno %d] %s: '%s'", name, errno, strerror(pe.Err), pe.Path)
+		return fmt.Sprintf("%s: [Errno %d] %s: '%s'", name, errno, strerror(pe.Err), filepath.ToSlash(pe.Path))
 	}
 	return fmt.Sprintf("OSError: %s", err.Error())
 }
 
+// errnoOf is the errno khub prints. On Windows a Win32 code is mapped onto the
+// darwin errno the fixtures pin (osErrno); elsewhere it is the errno itself.
 func errnoOf(err error) int {
 	var se syscall.Errno
 	if errors.As(err, &se) {
-		return int(se)
+		n, _, _ := osErrno(se)
+		return n
 	}
 	return 0
 }
@@ -228,9 +242,16 @@ func errnoOf(err error) int {
 // strerror is the C strerror(3) text Python's OSError carries, which is the
 // syscall message with its first letter capitalized ("Permission denied", "No
 // such file or directory"). Go's syscall table lowercases it, and the os_error
-// envelope is byte-pinned, so restore the case here.
+// envelope is byte-pinned, so restore the case here. A Win32 code osErrno
+// maps takes the darwin message in place of Windows' own text.
 func strerror(err error) string {
 	msg := err.Error()
+	var se syscall.Errno
+	if errors.As(err, &se) {
+		if _, text, mapped := osErrno(se); mapped {
+			msg = text
+		}
+	}
 	if msg == "" {
 		return msg
 	}

@@ -162,3 +162,53 @@ jobs:
           test "$got" = "$version" || {
             echo "installed $got, expected $version"; exit 1; }
           "$prefix/bin/khub" --help >/dev/null
+
+  # The same detector for Windows, which ships EXPERIMENTAL. Nothing else in a
+  # release runs a khub.exe: the binaries are cross-compiled on ubuntu, and the
+  # npm smoke packs fixture zips it never executes. On Windows npm reaches the
+  # launcher through the khub.cmd shim it writes into the global prefix and
+  # node_modules/.bin, a path no other job takes. Both are proven here: a
+  # global install run through that shim, and a per-repo pin run through npx.
+  #
+  # Like verify-macos it runs exactly what was published and cannot un-publish:
+  # a red run here says the Windows channel is broken for this tag.
+  verify-windows:
+    needs: release
+    runs-on: windows-latest
+    # Windows ships as experimental: a failure here is reported on the run
+    # but does not turn the release red.
+    continue-on-error: true
+    permissions: {}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version: "22"
+      - name: The published windows binary runs
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          for i in $(seq 1 40); do
+            npm view "@endgame-build/khub@$version" version >/dev/null 2>&1 && break
+            test "$i" = 40 && {
+              echo "@endgame-build/khub@$version never appeared on the registry"; exit 1; }
+            sleep 15
+          done
+          npm install -g --no-audit --no-fund --ignore-scripts \
+            "@endgame-build/khub@$version"
+          # On Windows the global bin is <prefix>/khub.cmd, not <prefix>/bin/khub.
+          prefix=$(npm prefix -g)
+          got=$("$prefix/khub.cmd" --version | tr -d '\r')
+          test "$got" = "$version" || {
+            echo "installed $got, expected $version"; exit 1; }
+          "$prefix/khub.cmd" --help >/dev/null
+      - name: Per-repo install resolves the exact version
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          mkdir "$RUNNER_TEMP/khub-pin" && cd "$RUNNER_TEMP/khub-pin"
+          npm init -y >/dev/null
+          npm install --no-audit --no-fund --ignore-scripts "@endgame-build/khub@$version"
+          got=$(npx --no-install @endgame-build/khub --version | tr -d '\r')
+          test "$got" = "$version" || {
+            echo "resolved $got, expected $version"; exit 1; }

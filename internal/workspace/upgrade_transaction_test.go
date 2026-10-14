@@ -7,8 +7,8 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"strings"
-	"syscall"
 	"testing"
 )
 
@@ -104,6 +104,9 @@ func TestUpgradeRollbackRestoresFilesBackupsModesAndCreations(t *testing.T) {
 	if os.Geteuid() == 0 {
 		t.Skip("permission failure requires unprivileged user")
 	}
+	if runtime.GOOS == "windows" {
+		t.Skip("a read-only directory still accepts new files on Windows")
+	}
 	blocked := filepath.Join(root, "blocked")
 	if err := os.Mkdir(blocked, 0o555); err != nil {
 		t.Fatal(err)
@@ -145,7 +148,7 @@ func TestUpgradeConcurrentEditPreservesEvidence(t *testing.T) {
 		t.Fatal("external edit overwritten")
 	}
 	journals, _ := filepath.Glob(filepath.Join(root, ".khub", "generated", "upgrade-*"))
-	if len(journals) != 1 || !strings.Contains(err.Error(), journals[0]) {
+	if len(journals) != 1 || !strings.Contains(err.Error(), filepath.ToSlash(journals[0])) {
 		t.Fatalf("missing recovery location: %v %v", journals, err)
 	}
 	for _, file := range []string{"manifest.yaml", "0.original", "0.replacement"} {
@@ -239,13 +242,15 @@ func TestUpgradeCandidateSkipsVendoredDirsAndSpecialFiles(t *testing.T) {
 	mustInit(t, "note", root, InitOptions{PresetSource: src})
 	growPreset(t, src)
 	writeFile(t, filepath.Join(root, "node_modules", "pkg", "index.js"), "module.exports = 1\n")
-	if err := syscall.Mkfifo(filepath.Join(root, "pipe"), 0o600); err != nil {
-		t.Fatal(err)
+	// Windows has no fifo; the vendored-dir half of the test still runs there.
+	special := []string{"node_modules"}
+	if makeFifo(t, filepath.Join(root, "pipe")) {
+		special = append(special, "pipe")
 	}
 	visited := false
 	got := mustUpgrade(t, root, UpgradeOptions{DryRun: true, Preview: func(candidate string) error {
 		visited = true
-		for _, skipped := range []string{"node_modules", "pipe"} {
+		for _, skipped := range special {
 			if _, err := os.Lstat(filepath.Join(candidate, skipped)); !errors.Is(err, fs.ErrNotExist) {
 				t.Fatalf("candidate copied %s: %v", skipped, err)
 			}
@@ -255,7 +260,11 @@ func TestUpgradeCandidateSkipsVendoredDirsAndSpecialFiles(t *testing.T) {
 	if !visited || !got.DryRun || got.VersionTo != "10.0.0" {
 		t.Fatalf("result: %+v visited=%v", got, visited)
 	}
-	for _, kept := range []string{filepath.Join("node_modules", "pkg", "index.js"), "pipe"} {
+	kept := []string{filepath.Join("node_modules", "pkg", "index.js")}
+	if len(special) > 1 {
+		kept = append(kept, "pipe")
+	}
+	for _, kept := range kept {
 		if _, err := os.Lstat(filepath.Join(root, kept)); err != nil {
 			t.Fatalf("workspace lost %s: %v", kept, err)
 		}

@@ -1,19 +1,18 @@
 package workspace
 
 import (
-	"errors"
 	"os"
 	"path/filepath"
 	"strings"
-	"syscall"
 	"testing"
 
 	"github.com/endgame-build/khub/internal/fsio"
 )
 
-// lockHeld probes the workspace lock from a second descriptor: flock is held
-// per open file description, so a non-blocking request from a fresh fd fails
-// with EWOULDBLOCK exactly when another descriptor holds it — the hook's own.
+// lockHeld probes the workspace lock from a second handle: the lock is held
+// per open file (flock's open file description, LockFileEx's handle), so a
+// non-blocking request from a fresh one is refused exactly when another
+// handle holds it — the hook's own. tryLock is per platform (lockprobe_*).
 func lockHeld(t *testing.T, root string) bool {
 	t.Helper()
 	f, err := os.OpenFile(fsio.WorkspaceLockPath(root), os.O_RDWR, 0o644)
@@ -21,15 +20,14 @@ func lockHeld(t *testing.T, root string) bool {
 		t.Fatalf("lock file: %v", err)
 	}
 	defer f.Close()
-	err = syscall.Flock(int(f.Fd()), syscall.LOCK_EX|syscall.LOCK_NB)
-	if err == nil {
-		_ = syscall.Flock(int(f.Fd()), syscall.LOCK_UN)
-		return false
+	got, err := tryLock(f)
+	if err != nil {
+		t.Fatalf("lock probe: %v", err)
 	}
-	if !errors.Is(err, syscall.EWOULDBLOCK) {
-		t.Fatalf("flock probe: %v", err)
+	if got {
+		_ = releaseLock(f)
 	}
-	return true
+	return !got
 }
 
 // The tails a CLI hangs on init (wire, index) run inside the same lock as the

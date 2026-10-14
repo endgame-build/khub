@@ -1,6 +1,6 @@
 {
   "name": "khub",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "khub in the session: the khub and setup skills, a band above the prompt with what the session changed, and compact rows for khub calls",
   "author": { "name": "ENDGAME" },
   "types": "./types/index.d.ts",
@@ -8,7 +8,7 @@
     "binary": {
       "type": "string",
       "title": "khub binary",
-      "description": "Command that runs khub. Empty resolves node_modules/.bin/khub under the workspace, then khub on the PATH.",
+      "description": "Command that runs khub. Empty resolves node_modules/.bin/khub under the workspace (on Windows, the npm package's launcher run by node), then khub on the PATH.",
       "default": ""
     }
   }

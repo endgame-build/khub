@@ -305,8 +305,8 @@ type entryResult struct {
 func scanEntry(dir *os.Root, root, base string, rtype *schema.ResolvedType, entry fs.DirEntry) entryResult {
 	name := entry.Name()
 	path := filepath.Join(base, name)
-	if entry.Type()&os.ModeSymlink != 0 {
-		return entryResult{err: errs.New("unsafe_path", fmt.Sprintf("Symlinks are not allowed in workspace storage: %s", path))}
+	if err := fsio.RefuseLinkEntry(entry, path); err != nil {
+		return entryResult{err: err}
 	}
 	slug := strings.TrimSuffix(name, "."+rtype.Storage.Fmt)
 	inDir := name

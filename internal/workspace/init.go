@@ -43,6 +43,8 @@ import (
 // preserves (path, preset, version, name, source, entity_files_modified,
 // seeded_over_corpus, singletons_created, preserved).
 type InitResult struct {
+	// Path and Source are in slash form on every platform, as khub prints
+	// every path; an OS call takes them through osPath.
 	Path    string
 	Preset  string
 	Version string
@@ -122,11 +124,12 @@ func Init(preset, path string, opt InitOptions) (*InitResult, error) {
 }
 func initWorkspace(preset, path string, opt InitOptions) (*InitResult, error) {
 	// str(Path(...)) at the boundary: PresetSource is echoed into config.yaml
-	// and InitResult.Source, so it carries pathlib's spelling, not the caller's.
+	// and InitResult.Source, so it carries pathlib's spelling, not the caller's,
+	// in slash form; resolving the preset takes the native form.
 	if opt.PresetSource != "" {
-		opt.PresetSource = osPath(pyPath(filepath.ToSlash(opt.PresetSource)))
+		opt.PresetSource = pyPath(filepath.ToSlash(opt.PresetSource))
 	}
-	source := presets.Source(opt.PresetSource)
+	source := presets.Source(osPath(opt.PresetSource))
 	// A retired name resolves to the directory that replaced it, and the
 	// workspace records the canonical one.
 	preset = presets.Canonical(preset, source)
@@ -143,14 +146,14 @@ func initWorkspace(preset, path string, opt InitOptions) (*InitResult, error) {
 		return nil, errs.New("preset_mismatch", fmt.Sprintf(
 			"%s is a '%s' workspace; refusing to scaffold '%s' over it. "+
 				"Its .khub schema files are workspace-owned and would be kept, leaving files for "+
-				"types the schema does not declare.", osPath(target), existing, preset))
+				"types the schema does not declare.", target, existing, preset))
 	}
 	empty, err := isEmptyDir(target)
 	if err != nil {
 		return nil, err
 	}
 	if !empty && !opt.Force {
-		return nil, errs.TargetNotEmpty(osPath(target))
+		return nil, errs.TargetNotEmpty(target)
 	}
 
 	// Snapshot pre-existing entity files so the cutover guarantee is measured,
@@ -201,7 +204,7 @@ func initWorkspace(preset, path string, opt InitOptions) (*InitResult, error) {
 		created = append(created, s.typeName)
 	}
 	return &InitResult{
-		Path:                osPath(target),
+		Path:                target,
 		Preset:              preset,
 		Version:             merged.Version,
 		Name:                wsName,
@@ -534,6 +537,12 @@ func isEmptyDir(target string) (bool, error) {
 	entries, err := os.ReadDir(osPath(target))
 	if err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
+			// Windows opens a regular file as a directory with syscall.ENOTDIR,
+			// which is ERROR_PATH_NOT_FOUND there and so reads as missing. A
+			// target that exists is not missing: name it the way darwin does.
+			if info, serr := os.Stat(osPath(target)); serr == nil && !info.IsDir() {
+				return false, &os.PathError{Op: "open", Path: osPath(target), Err: fsio.NotADirectory}
+			}
 			return true, nil
 		}
 		return false, err
@@ -687,74 +696,106 @@ func pathExists(path string) bool {
 
 func osPath(p string) string { return filepath.FromSlash(p) }
 
-// pyPath is str(PurePosixPath(p)): empty and "." components dropped, ".."
-// kept, trailing slash removed; "" and "." both render ".".
-func pyPath(p string) string {
-	abs := strings.HasPrefix(p, "/")
-	parts := pySplit(p)
+// pathVolume is the volume a slash path starts with, in slash form: "C:" for
+// a drive path, "//server/share" for a UNC one. filepath.VolumeName is "" on
+// every platform but Windows, so off Windows no path has a volume, the anchor
+// is a leading "/" alone, and the PurePosixPath semantics below hold byte for
+// byte.
+func pathVolume(p string) string {
+	return filepath.ToSlash(filepath.VolumeName(filepath.FromSlash(p)))
+}
+
+// pyAnchor splits slash path p into its anchor and the rest: the volume (see
+// pathVolume) followed by the root "/" when one follows it. The anchor is ""
+// for a relative path, "/" for a rooted one, "C:/" or "//server/share/" for a
+// Windows absolute one, and "C:" for a drive-relative one.
+func pyAnchor(p string) (anchor, rest string) { return splitAnchor(p, pathVolume) }
+
+// splitAnchor is pyAnchor with the volume detection passed in, so the Windows
+// shapes are testable on every platform.
+func splitAnchor(p string, volume func(string) string) (anchor, rest string) {
+	drive := volume(p)
+	rest = p[len(drive):]
+	if strings.HasPrefix(rest, "/") {
+		return drive + "/", rest[1:]
+	}
+	return drive, rest
+}
+
+// anchored renders anchor plus parts: "." for a bare relative path, the
+// anchor alone for a bare anchored one.
+func anchored(anchor string, parts []string) string {
 	if len(parts) == 0 {
-		if abs {
-			return "/"
+		if anchor != "" {
+			return anchor
 		}
 		return "."
 	}
-	joined := strings.Join(parts, "/")
-	if abs {
-		return "/" + joined
-	}
-	return joined
+	return anchor + strings.Join(parts, "/")
 }
 
-// pyJoin is str(PurePosixPath(base).joinpath(rest...)): an absolute component
-// resets the path, exactly as pathlib's / operator does.
-func pyJoin(base string, rest ...string) string {
+// pyPath is str(PurePosixPath(p)): empty and "." components dropped, ".."
+// kept, trailing slash removed; "" and "." both render ".". A Windows volume
+// belongs to the anchor, so "C:/x" stays absolute.
+func pyPath(p string) string { return pathPy(p, pathVolume) }
+
+func pathPy(p string, volume func(string) string) string {
+	anchor, rest := splitAnchor(p, volume)
+	return anchored(anchor, pySplit(rest))
+}
+
+// pyJoin is str(PurePosixPath(base).joinpath(rest...)): an anchored component
+// resets the path, exactly as pathlib's / operator does. A component rooted
+// without a volume ("/x") keeps the volume of what it joins onto, as
+// PureWindowsPath does; with no volumes (every platform but Windows) that is
+// the plain reset.
+func pyJoin(base string, rest ...string) string { return joinPy(pathVolume, base, rest...) }
+
+func joinPy(volume func(string) string, base string, rest ...string) string {
 	out := base
 	for _, r := range rest {
-		if strings.HasPrefix(r, "/") {
+		if anchor, _ := splitAnchor(r, volume); anchor != "" {
+			if volume(r) == "" {
+				r = volume(out) + r
+			}
 			out = r
 			continue
 		}
 		out += "/" + r
 	}
-	return pyPath(out)
+	return pathPy(out, volume)
 }
 
 // pyParent is str(PurePosixPath(p).parent).
-func pyParent(p string) string {
-	abs := strings.HasPrefix(p, "/")
-	parts := pySplit(p)
-	if len(parts) == 0 {
-		if abs {
-			return "/"
-		}
-		return "."
+func pyParent(p string) string { return parentPy(p, pathVolume) }
+
+func parentPy(p string, volume func(string) string) string {
+	anchor, rest := splitAnchor(p, volume)
+	parts := pySplit(rest)
+	if len(parts) > 0 {
+		parts = parts[:len(parts)-1]
 	}
-	parts = parts[:len(parts)-1]
-	if len(parts) == 0 {
-		if abs {
-			return "/"
-		}
-		return "."
-	}
-	joined := strings.Join(parts, "/")
-	if abs {
-		return "/" + joined
-	}
-	return joined
+	return anchored(anchor, parts)
 }
 
-// pyName is PurePosixPath(p).name — "" for "." and "/".
-func pyName(p string) string {
-	parts := pySplit(p)
+// pyName is PurePosixPath(p).name — "" for "." and for a bare anchor.
+func pyName(p string) string { return namePy(p, pathVolume) }
+
+func namePy(p string, volume func(string) string) string {
+	_, rest := splitAnchor(p, volume)
+	parts := pySplit(rest)
 	if len(parts) == 0 {
 		return ""
 	}
 	return parts[len(parts)-1]
 }
 
-// pyParts is PurePosixPath(p).parts, minus the "/" root element (nothing in
+// pyParts is PurePosixPath(p).parts, minus the anchor element (nothing in
 // _SKIP_PARTS can equal it).
-func pyParts(p string) []string { return pySplit(p) }
+func pyParts(p string) []string {
+	_, rest := pyAnchor(p)
+	return pySplit(rest)
+}
 
 // pySuffix is PurePosixPath(name).suffix: "" when the dot leads the name or
 // ends it.

@@ -167,12 +167,9 @@ say "khub · a file the scan cannot reach"
 M=$WORK/misplaced; mkdir -p "$M"; cd "$M"
 $KHUB init build-hub . >/dev/null 2>&1
 $KHUB -C "$M" add component --title "API" --kind service >/dev/null 2>&1
-python3 - "$M" <<'PY'
-import pathlib, sys
-p = pathlib.Path(sys.argv[1]) / ".khub" / "storage.yaml"
-p.write_text(p.read_text().replace("path: knowledge/components",
-                                   "path: knowledge/architecture/components"))
-PY
+# sed to a temp file, not sed -i: GNU and BSD disagree on -i's argument.
+S=$M/.khub/storage.yaml
+sed 's|path: knowledge/components|path: knowledge/architecture/components|' "$S" >"$S.tmp" && mv "$S.tmp" "$S"
 ok 1 "check reports the misplaced entity" $KHUB -C "$M" check --format json
 
 printf '\n\033[1m%s cases, %s failed\033[0m\n' "$CASES" "$FAILED"

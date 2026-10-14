@@ -21,12 +21,38 @@ jobs:
     # locking, path handling and terminal detection, which are exactly the three
     # things that differ between the two — so both run every gate, and neither is
     # allowed to cancel the other's evidence.
+    #
+    # Windows is EXPERIMENTAL. Its leg runs the same gates, the full parity
+    # suite included, but continue-on-error keeps a red Windows run from
+    # failing the workflow, so it never blocks a merge. Do not make it a
+    # required check until it has been green for a while.
     runs-on: ${{ matrix.os }}
+    continue-on-error: ${{ matrix.os == 'windows-latest' }}
+    # bash on every OS: Git Bash on Windows, so one spelling of every step
+    # serves all three. On ubuntu and macos this differs from the implicit
+    # `bash -e {0}` only by pipefail, and only the YAML gate (already
+    # `shell: bash`) pipes.
+    defaults:
+      run:
+        shell: bash
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        include:
+          # exec.LookPath on Windows finds a binary by its extension; `go
+          # build -o khub` would write one it cannot find. Empty elsewhere.
+          - os: windows-latest
+            exe: .exe
     steps:
+      # Before checkout: Git for Windows defaults core.autocrlf to true, which
+      # would check every expected/ byte file, every case.yaml and every
+      # embedded preset out with CRLF. Those bytes are the contract.
+      - name: Check out LF bytes on Windows
+        if: matrix.os == 'windows-latest'
+        run: |
+          git config --global core.autocrlf false
+          git config --global core.eol lf
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       # Local paths, agent session links and private registry references do
       # not ship. Plain ERE only: `\b` is a glibc extension that macOS git
@@ -44,6 +70,11 @@ jobs:
           unformatted=$(gofmt -l ./cmd ./internal ./parity)
           test -z "$unformatted" || { echo "gofmt needed on:"; echo "$unformatted"; exit 1; }
       - run: go vet ./...
+      # The cross-compile check: Windows breakage shows up here, on the
+      # blocking leg, without waiting for (or trusting) the experimental one.
+      - name: go vet for Windows
+        if: matrix.os == 'ubuntu-latest'
+        run: GOOS=windows go vet ./...
       # None of the three below is platform-dependent, and the matrix exists
       # to test file locking, path handling and terminal detection — not to
       # query a vulnerability database twice.
@@ -80,31 +111,49 @@ jobs:
       - run: go test ./...
       - name: Build
         run: |
-          go build -o khub ./cmd/khub
-          go build -o parity-run ./parity/runner
+          go build -o khub${{ matrix.exe }} ./cmd/khub
+          go build -o parity-run${{ matrix.exe }} ./parity/runner
       # The recorded bytes are the spec. Before the cutover they described
       # Python and this step proved the port grew into them; now they describe
       # khub itself and the same run is the regression suite.
       #
       # UNAIDED: no -setup-bin, no -ported. Every verb is implemented, so the
       # binary runs every step of every fixture itself.
+      #
+      # On Windows too, the whole suite against the same expected bytes. Git
+      # Bash hands $PWD over as /d/a/…, which MSYS rewrites to D:/a/… for a
+      # native program. Its pty cases run on a ConPTY and are checked by
+      # behaviour, not bytes; the runner prints a PTY-BEHAVIOURAL line for
+      # each (parity/runner/ptymode.go).
       - name: Every fixture passes, unaided
-        run: ./parity-run -bin "$PWD/khub" -cases parity/cases
+        run: ./parity-run${{ matrix.exe }} -bin "$PWD/khub${{ matrix.exe }}" -cases parity/cases
       # Appendix A: every command, flag, error code, format special, and mode
       # must map to at least one recorded fixture. Fails on any gap.
       - name: Coverage gate
         run: |
           # -subset-of also asserts the binary offers no command the coverage
           # table does not know about (cobra ships `completion` by default).
-          ./parity-run -coverage parity/coverage.yaml -cases parity/cases -subset-of "$PWD/khub"
+          ./parity-run${{ matrix.exe }} -coverage parity/coverage.yaml -cases parity/cases -subset-of "$PWD/khub${{ matrix.exe }}"
       # The fixtures prove the core; this proves the binary end to end — every
       # command over both build presets, with exit codes asserted.
       - name: CLI smoke
+        if: matrix.os != 'windows-latest'
         run: bash smoke.sh
+      # The Windows smoke runs all of smoke.sh against khub.exe, then what
+      # Windows is likeliest to break: native C:\ paths, git-dated stale and
+      # backfill, the lock under concurrent writers, line endings, and
+      # serve's TTY refusal.
+      - name: CLI smoke (Windows)
+        if: matrix.os == 'windows-latest'
+        run: bash smoke-windows.sh
       # Replaces the Typer doc generator, which read the Python app's
       # decorators. This regenerates from what the binary prints, so the
       # reference cannot advertise a flag the CLI does not have.
+      #
+      # Not on Windows: the reference is generated text, and the help it is
+      # generated from is already byte-checked there by the parity suite.
       - name: CLI reference is current
+        if: matrix.os != 'windows-latest'
         run: |
           bash parity/tools/gen_cli_reference.sh
           git diff --exit-code docs/cli-reference.md
@@ -117,8 +166,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          go build -o yamlgate ./parity/yamlgate
-          ./yamlgate parity/corpus | tee gate.txt
+          go build -o yamlgate${{ matrix.exe }} ./parity/yamlgate
+          ./yamlgate${{ matrix.exe }} parity/corpus | tee gate.txt
           files=$(sed -n 's/^files: //p' gate.txt)
           test "$files" -ge 130 || { echo "corpus shrank to $files files"; exit 1; }
           grep -qE "^t1c: ok=$files diff=0 error=0 skip=0$" gate.txt

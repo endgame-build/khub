@@ -1,6 +1,10 @@
+//go:build !windows
+
 package main
 
-// pty.go implements `mode: pty` — the third leg of the output gate.
+// pty.go implements `mode: pty` — the third leg of the output gate — on unix.
+// Windows has no pty device to hand a child; pty_windows.go runs the same
+// cases on a ConPTY and asserts behaviour rather than bytes (see ptymode.go).
 //
 // khub's gate (cli/_render.py `is_tty`, ported in internal/cli/render.go) is a
 // ladder: TTY_COMPATIBLE → FORCE_COLOR → stdout.isatty(). `pipe` and `human`
@@ -44,6 +48,11 @@ import (
 	"github.com/creack/pty"
 	"golang.org/x/term"
 )
+
+// ptyBehavioural is false here: a unix pty passes the child's bytes through
+// untouched (OPOST cleared), so a pty step is compared byte-exact like any
+// other.
+const ptyBehavioural = false
 
 // ptyWinsize pins the terminal geometry so `os.get_terminal_size` (Rich's
 // width probe, tried before COLUMNS) cannot vary with the recording machine.

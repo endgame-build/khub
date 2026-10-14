@@ -208,8 +208,15 @@ export function tokenize(input: string): Token[] | null {
   return tokens
 }
 
+// On Windows the binary may carry its extension and any case, and its path either separator.
+const WINDOWS_BINARY = /(?:^|[\\/])khub(?:\.exe|\.cmd)?$/i
+
+// Tells whether a word names the khub binary. Unix takes `khub` or a path ending `/khub`.
+const isKhubBinary = (word: string, isWindows: boolean) =>
+  isWindows ? WINDOWS_BINARY.test(word) : word === 'khub' || word.endsWith('/khub')
+
 // Reads one segment's words as a khub call, or null when it runs something else.
-function khubCall(words: string[]): Simple | null {
+function khubCall(words: string[], isWindows: boolean): Simple | null {
   let i = 0
 
   while (/^[A-Za-z_][A-Za-z0-9_]*=/.test(words[i] ?? '')) i += 1
@@ -220,7 +227,7 @@ function khubCall(words: string[]): Simple | null {
     i += 1
     while ((words[i] ?? '').startsWith('-')) i += 1
     if (!/^@endgame-build\/khub(@|$)/.test(words[i] ?? '')) return null
-  } else if (binary !== 'khub' && !binary.endsWith('/khub')) {
+  } else if (!isKhubBinary(binary, isWindows)) {
     return null
   }
 
@@ -286,9 +293,11 @@ function khubCall(words: string[]): Simple | null {
 
 // Reads the khub calls off the text of a command the tokenizer could not follow. It keeps
 // each verb, and whether `--force` or `--dry-run` follows it.
-function scan(command: string): Simple[] {
+function scan(command: string, isWindows: boolean): Simple[] {
   const calls = command.matchAll(
-    /(?:^|[\s;&|(`])(?:[^\s;&|]*\/)?khub\s+(?:(?:-C|--workspace)\s+\S+\s+)?([a-z][a-z-]*)([^;&|\n]*)/g,
+    isWindows
+      ? /(?:^|[\s;&|(`])(?:[^\s;&|]*[\\/])?khub(?:\.exe|\.cmd)?\s+(?:(?:-C|--workspace)\s+\S+\s+)?([a-z][a-z-]*)([^;&|\n]*)/g
+      : /(?:^|[\s;&|(`])(?:[^\s;&|]*\/)?khub\s+(?:(?:-C|--workspace)\s+\S+\s+)?([a-z][a-z-]*)([^;&|\n]*)/g,
   )
 
   return [...calls].map(match => {
@@ -301,13 +310,15 @@ function scan(command: string): Simple[] {
   })
 }
 
-export function classify(command: string): Parsed {
-  if (!command.includes('khub')) return NONE
+// Reads a Bash command. On Windows, where Git Bash runs it, the binary may be `khub.exe` and
+// its path may hold backslashes.
+export function classify(command: string, isWindows = false): Parsed {
+  if (!(isWindows ? command.toLowerCase() : command).includes('khub')) return NONE
 
   const tokens = tokenize(command)
 
   if (tokens === null) {
-    const calls = scan(command)
+    const calls = scan(command, isWindows)
 
     return calls.length === 0 ? NONE : { kind: 'compound', calls }
   }
@@ -330,7 +341,7 @@ export function classify(command: string): Parsed {
   }
 
   const filled = segments.filter(segment => segment.words.length > 0)
-  const read = filled.map(segment => khubCall(segment.words))
+  const read = filled.map(segment => khubCall(segment.words, isWindows))
   const calls = read.filter((found): found is Simple => found !== null)
 
   if (calls.length === 0) return NONE

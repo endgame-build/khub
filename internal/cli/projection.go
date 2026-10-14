@@ -88,7 +88,7 @@ func registerViz(root *cobra.Command) {
 				if err != nil {
 					return err
 				}
-				fmt.Printf("Wrote %s (%d nodes, %d edges)\n", out, result.Nodes, result.Edges)
+				fmt.Printf("Wrote %s (%d nodes, %d edges)\n", filepath.ToSlash(out), result.Nodes, result.Edges)
 				if open {
 					// A file:// URI, not a bare path — the openers treat a
 					// scheme-less path as relative/invalid.
@@ -109,15 +109,31 @@ func fileURI(path string) string {
 	if err != nil {
 		abs = path
 	}
-	return "file://" + filepath.ToSlash(abs)
+	return slashedFileURI(filepath.ToSlash(abs), runtime.GOOS)
+}
+
+// slashedFileURI prefixes the file scheme. A Windows drive path (`C:/x`) has
+// no leading slash, and the URI needs one before the drive for an empty
+// authority: file:///C:/x. A UNC path (`//host/share`) already starts with a
+// slash and is left as browsers accept it.
+func slashedFileURI(slashed, goos string) string {
+	if goos == "windows" && !strings.HasPrefix(slashed, "/") {
+		slashed = "/" + slashed
+	}
+	return "file://" + slashed
 }
 
 // openBrowser is webbrowser.open: best effort, and never a failure of the
 // render that already succeeded.
 func openBrowser(uri string) {
-	opener := "xdg-open"
-	if runtime.GOOS == "darwin" {
-		opener = "open"
+	switch runtime.GOOS {
+	case "darwin":
+		_ = exec.Command("open", uri).Start()
+	case "windows":
+		// The URL handler start and webbrowser.open use, without cmd.exe's
+		// quoting rules between khub and the path.
+		_ = exec.Command("rundll32", "url.dll,FileProtocolHandler", uri).Start()
+	default:
+		_ = exec.Command("xdg-open", uri).Start()
 	}
-	_ = exec.Command(opener, uri).Start()
 }

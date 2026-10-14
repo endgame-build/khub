@@ -70,7 +70,7 @@ func prepareUpgrade(root string, opt UpgradeOptions) (*UpgradeResult, error) {
 	if err != nil {
 		return nil, err
 	}
-	result.Path = osPath(pyPath(filepath.ToSlash(root)))
+	result.Path = pyPath(filepath.ToSlash(root))
 	result.DryRun = opt.DryRun
 	result.RemovedTypes = []string{}
 	resolved, err := introspect.LoadSchema(candidate)
@@ -273,7 +273,7 @@ func publishUpgrade(root string, writes []upgradeWrite, dirs []string) error {
 	records := []any{}
 	for i, w := range writes {
 		rec := omap.New()
-		rec.Set("path", w.name)
+		rec.Set("path", filepath.ToSlash(w.name))
 		rec.Set("existed", w.before != nil)
 		rec.Set("mode", int(w.after.mode))
 		if w.before != nil {
@@ -291,7 +291,7 @@ func publishUpgrade(root string, writes []upgradeWrite, dirs []string) error {
 	manifest.Set("files", records)
 	dirRecords := make([]any, len(dirs))
 	for i, dir := range dirs {
-		dirRecords[i] = dir
+		dirRecords[i] = filepath.ToSlash(dir)
 	}
 	manifest.Set("directories", dirRecords)
 	text, err := canon.DumpWide(manifest)
@@ -313,7 +313,7 @@ func publishUpgrade(root string, writes []upgradeWrite, dirs []string) error {
 			w := applied[i]
 			current, err := readUpgradeFile(root, w.name)
 			if err != nil || !sameUpgradeFile(current, &w.after) {
-				failed = append(failed, w.name)
+				failed = append(failed, filepath.ToSlash(w.name))
 				continue
 			}
 			if w.before == nil {
@@ -322,19 +322,19 @@ func publishUpgrade(root string, writes []upgradeWrite, dirs []string) error {
 				err = fsio.AtomicWriteIn(root, filepath.Join(root, w.name), w.before.data)
 			}
 			if err != nil {
-				failed = append(failed, w.name)
+				failed = append(failed, filepath.ToSlash(w.name))
 			}
 		}
 		for i := len(created) - 1; i >= 0; i-- {
 			if err := fsio.Remove(root, filepath.Join(root, created[i]), false); err != nil {
-				failed = append(failed, created[i])
+				failed = append(failed, filepath.ToSlash(created[i]))
 			}
 		}
 		if len(failed) > 0 {
-			return errs.New("upgrade_recovery_failed", fmt.Sprintf("Upgrade failed (%s); recovery incomplete at %s. Originals and replacements retained in %s", cause, strings.Join(failed, ", "), journal))
+			return errs.New("upgrade_recovery_failed", fmt.Sprintf("Upgrade failed (%s); recovery incomplete at %s. Originals and replacements retained in %s", cause, strings.Join(failed, ", "), filepath.ToSlash(journal)))
 		}
 		if err := fsio.Remove(root, journal, true); err != nil {
-			return errs.New("upgrade_recovery_failed", fmt.Sprintf("Upgrade failed (%s); recovery evidence could not be removed at %s: %s", cause, journal, err))
+			return errs.New("upgrade_recovery_failed", fmt.Sprintf("Upgrade failed (%s); recovery evidence could not be removed at %s: %s", cause, filepath.ToSlash(journal), err))
 		}
 		return cause
 	}
@@ -353,10 +353,10 @@ func publishUpgrade(root string, writes []upgradeWrite, dirs []string) error {
 	for _, w := range writes {
 		current, err := readUpgradeFile(root, w.name)
 		if err != nil {
-			return recoverFailure(errs.New("upgrade_recovery_failed", fmt.Sprintf("Workspace could not be compared with its staged original at %s (%s); evidence in %s", w.name, err, journal)))
+			return recoverFailure(errs.New("upgrade_recovery_failed", fmt.Sprintf("Workspace could not be compared with its staged original at %s (%s); evidence in %s", filepath.ToSlash(w.name), err, filepath.ToSlash(journal))))
 		}
 		if !sameUpgradeFile(current, w.before) {
-			return recoverFailure(errs.New("upgrade_recovery_failed", fmt.Sprintf("Workspace changed during upgrade at %s; staged evidence in %s", w.name, journal)))
+			return recoverFailure(errs.New("upgrade_recovery_failed", fmt.Sprintf("Workspace changed during upgrade at %s; staged evidence in %s", filepath.ToSlash(w.name), filepath.ToSlash(journal))))
 		}
 		if w.before == nil {
 			err = fsio.WriteNewIn(root, filepath.Join(root, w.name), w.after.data)
@@ -370,14 +370,14 @@ func publishUpgrade(root string, writes []upgradeWrite, dirs []string) error {
 			w.after.mode = now.mode
 			applied = append(applied, w)
 		} else if readErr != nil || err == nil || !sameUpgradeFile(now, w.before) {
-			return recoverFailure(errs.New("upgrade_recovery_failed", fmt.Sprintf("Publication state changed or could not be read at %s; staged evidence in %s", w.name, journal)))
+			return recoverFailure(errs.New("upgrade_recovery_failed", fmt.Sprintf("Publication state changed or could not be read at %s; staged evidence in %s", filepath.ToSlash(w.name), filepath.ToSlash(journal))))
 		}
 		if err != nil {
 			return recoverFailure(err)
 		}
 	}
 	if err := fsio.Remove(root, journal, true); err != nil {
-		return errs.New("upgrade_recovery_failed", fmt.Sprintf("Upgrade committed; recovery material remains at %s: %s", journal, err))
+		return errs.New("upgrade_recovery_failed", fmt.Sprintf("Upgrade committed; recovery material remains at %s: %s", filepath.ToSlash(journal), err))
 	}
 	return nil
 }
