@@ -63,7 +63,13 @@ var NotADirectory error = notADirectory{}
 // that case as ERROR_PATH_NOT_FOUND, which reads as missing, so the nearest
 // existing ancestor inside root decides (see fileInPath).
 func FileInPath(err error, root, path string) error {
-	return fileInPath(err, root, path, os.Lstat)
+	return fileInPath(err, root, path, false, os.Lstat)
+}
+
+// DirInPath is FileInPath for a caller that asked for a directory at path, so
+// a regular file at path itself counts too.
+func DirInPath(err error, root, path string) error {
+	return fileInPath(err, root, path, true, os.Lstat)
 }
 
 // RefuseSyncedFolder refuses a workspace inside a OneDrive folder up front,

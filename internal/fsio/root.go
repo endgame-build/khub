@@ -92,7 +92,7 @@ func ReadDir(root, path string) ([]os.DirEntry, error) {
 func ReadDirIn(r *os.Root, rel, path string) ([]os.DirEntry, error) {
 	f, err := r.Open(rel)
 	if err != nil {
-		return nil, FileInPath(err, r.Name(), path)
+		return nil, DirInPath(err, r.Name(), path)
 	}
 	defer f.Close()
 	entries, err := f.ReadDir(-1)
@@ -102,7 +102,7 @@ func ReadDirIn(r *os.Root, rel, path string) ([]os.DirEntry, error) {
 		if errors.As(err, &pe) {
 			err = &os.PathError{Op: "readdir", Path: path, Err: pe.Err}
 		}
-		return nil, FileInPath(err, r.Name(), path)
+		return nil, DirInPath(err, r.Name(), path)
 	}
 	// os.File.ReadDir is directory order; callers rely on os.ReadDir's sort.
 	slices.SortFunc(entries, func(a, b os.DirEntry) int { return strings.Compare(a.Name(), b.Name()) })
@@ -158,13 +158,14 @@ func Remove(root, path string, recursive bool) error {
 	return nil
 }
 
-// fileInPath is FileInPath's walk, with lstat passed in so every platform can
-// test it. A not-exist err becomes NotADirectory, keeping its Op and Path,
-// when the nearest existing ancestor of path is a regular file. path itself
-// never counts: a file there may have been created after err was taken. The
-// walk stops at root, or at a volume or share root, so it never stats outside
-// the workspace.
-func fileInPath(err error, root, path string, lstat func(string) (fs.FileInfo, error)) error {
+// fileInPath is the walk behind FileInPath and DirInPath, with lstat passed in
+// so every platform can test it. A not-exist err becomes NotADirectory,
+// keeping its Op and Path, when the nearest existing entry above path is a
+// regular file. path itself counts only when self is set, because the caller
+// asked for a directory there; otherwise a file at path may have been created
+// after err was taken. The walk stops at root, or at a volume or share root,
+// so it never stats outside the workspace.
+func fileInPath(err error, root, path string, self bool, lstat func(string) (fs.FileInfo, error)) error {
 	var pe *fs.PathError
 	if !errors.Is(err, fs.ErrNotExist) || !errors.As(err, &pe) {
 		return err
@@ -177,12 +178,13 @@ func fileInPath(err error, root, path string, lstat func(string) (fs.FileInfo, e
 	if rel, rerr := filepath.Rel(base, p); rerr != nil || !filepath.IsLocal(rel) {
 		return err
 	}
-	for !samePath(p, base) {
-		parent := filepath.Dir(p)
-		if parent == p {
+	if !self {
+		if samePath(p, base) || filepath.Dir(p) == p {
 			return err
 		}
-		p = parent
+		p = filepath.Dir(p)
+	}
+	for {
 		info, lerr := lstat(p)
 		if lerr == nil {
 			if info.Mode().IsRegular() {
@@ -190,11 +192,15 @@ func fileInPath(err error, root, path string, lstat func(string) (fs.FileInfo, e
 			}
 			return err
 		}
-		if !errors.Is(lerr, fs.ErrNotExist) {
+		if !errors.Is(lerr, fs.ErrNotExist) || samePath(p, base) {
 			return err
 		}
+		parent := filepath.Dir(p)
+		if parent == p {
+			return err
+		}
+		p = parent
 	}
-	return err
 }
 
 // samePath compares paths as the platform does: Windows ignores case.

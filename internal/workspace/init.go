@@ -540,7 +540,7 @@ func existingPreset(target string) (string, bool) {
 func isEmptyDir(target string) (bool, error) {
 	entries, err := os.ReadDir(osPath(target))
 	if err != nil {
-		err = fsio.FileInPath(err, osPath(target), osPath(target))
+		err = fsio.DirInPath(err, osPath(target), osPath(target))
 		if errors.Is(err, fs.ErrNotExist) {
 			return true, nil
 		}

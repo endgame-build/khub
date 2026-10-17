@@ -129,21 +129,24 @@ func TestFileInPathNamesTheFileInTheWay(t *testing.T) {
 		return info, err
 	}
 	missing := func(path string) error { return &fs.PathError{Op: "statat", Path: path, Err: fs.ErrNotExist} }
+	// self marks a caller that asked for a directory at path, as a listing does.
 	cases := []struct {
 		name, root, path string
-		notDir           bool
+		self, notDir     bool
 	}{
-		{"below the file", root, filepath.Join(file, "a", "b"), true},
-		{"below the root, which is the file", file, filepath.Join(file, "a"), true},
-		{"the file itself, created after the error", root, file, false},
-		{"the root is the file", file, file, false},
-		{"below a directory", root, filepath.Join(root, "dir", "gone"), false},
-		{"nothing exists", root, filepath.Join(root, "gone", "deeper"), false},
-		{"outside root", filepath.Join(root, "dir", "sub"), filepath.Join(file, "x"), false},
+		{"below the file", root, filepath.Join(file, "a", "b"), false, true},
+		{"below the root, which is the file", file, filepath.Join(file, "a"), false, true},
+		{"the file itself, listed", root, file, true, true},
+		{"the file itself, created after the error", root, file, false, false},
+		{"the root is the file, listed", file, file, true, true},
+		{"the root is the file", file, file, false, false},
+		{"below a directory", root, filepath.Join(root, "dir", "gone"), true, false},
+		{"nothing exists", root, filepath.Join(root, "gone", "deeper"), true, false},
+		{"outside root", filepath.Join(root, "dir", "sub"), filepath.Join(file, "x"), true, false},
 	}
 	for _, c := range cases {
 		in := missing(filepath.ToSlash(c.path))
-		got := fileInPath(in, c.root, c.path, lstat)
+		got := fileInPath(in, c.root, c.path, c.self, lstat)
 		var pe *fs.PathError
 		switch {
 		case c.notDir && (!errors.As(got, &pe) || !errors.Is(pe.Err, NotADirectory) || pe.Op != "statat" || pe.Path != filepath.ToSlash(c.path)):
@@ -153,7 +156,7 @@ func TestFileInPathNamesTheFileInTheWay(t *testing.T) {
 		}
 	}
 	for _, err := range []error{nil, fs.ErrNotExist, &fs.PathError{Op: "statat", Path: file, Err: fs.ErrPermission}} {
-		if got := fileInPath(err, root, filepath.Join(file, "x"), lstat); !errors.Is(got, err) {
+		if got := fileInPath(err, root, filepath.Join(file, "x"), true, lstat); !errors.Is(got, err) {
 			t.Errorf("fileInPath(%v) = %v, want it unchanged", err, got)
 		}
 	}
@@ -185,7 +188,7 @@ func TestFileInPathStopsAtTheWorkspace(t *testing.T) {
 			return nil, &fs.PathError{Op: "lstat", Path: p, Err: fs.ErrNotExist}
 		}
 		in := &fs.PathError{Op: "statat", Path: r.path, Err: fs.ErrNotExist}
-		if got := fileInPath(in, r.root, r.path, lstat); !errors.Is(got, in) || calls != r.stats {
+		if got := fileInPath(in, r.root, r.path, false, lstat); !errors.Is(got, in) || calls != r.stats {
 			t.Errorf("%s: got %v after %d stats, want the error unchanged after %d", r.name, got, calls, r.stats)
 		}
 	}

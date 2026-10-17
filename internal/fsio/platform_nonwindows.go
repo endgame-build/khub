@@ -41,5 +41,8 @@ var NotADirectory error = syscall.ENOTDIR
 // regular file where a directory belongs, so no stat is paid.
 func FileInPath(err error, _, _ string) error { return err }
 
+// DirInPath is the identity here, for the same reason.
+func DirInPath(err error, _, _ string) error { return err }
+
 // RefuseSyncedFolder is Windows-only: OneDrive placeholders are its concern.
 func RefuseSyncedFolder(string) error { return nil }
