@@ -34,8 +34,8 @@ Bash (`/c/…`) spellings, case-insensitively.
 
 ## Windows: what the runner does differently
 
-The expected bytes are shared across all three OSes. Four mechanisms let
-Windows run them without a second set.
+The expected bytes are shared across all three OSes. Three runner
+mechanisms let Windows run them without a second set.
 
 - **`sh_windows`** on a step replaces `sh` on Windows and is ignored
   elsewhere. Use it only when the unix setup has no effect there (`chmod` on
@@ -49,10 +49,11 @@ Windows run them without a second set.
   the screen, so the runner compares exit code and output mode (JSON, human,
   empty) and prints a `PTY-BEHAVIOURAL` line per case. The tree manifest is
   still byte-checked. Pty cases record on darwin or linux only.
-- **CI runs `err-os-error` as a standard user.** GitHub's Windows runner is
-  such an admin, so the full suite skips that case there. A second step
-  creates a non-admin local user and runs the case as it, and fails on a
-  SKIP as well as a FAIL.
+
+CI adds one step outside the runner, because GitHub's Windows runner is such
+an admin and the full suite skips `err-os-error` there. The step creates a
+non-admin local user and runs that case as it, and fails on a SKIP as well as
+a FAIL.
 
 ## What golden bytes cannot catch — add tests here
 

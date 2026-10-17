@@ -69,7 +69,9 @@ func isCygwinPty(h windows.Handle) bool {
 // they are a Windows console, so the human view's colours render rather than
 // print as escape codes. A stream that is not a console, or a console that
 // refuses, is left as it is: the bytes khub writes do not change either way.
-// The console mode outlives khub, so restore puts back each mode it changed.
+// The console mode outlives khub, so restore puts back each mode it changed,
+// last changed first: stdout and stderr can share one screen buffer, and the
+// first saved mode is the one from before khub ran.
 func PrepareConsole() (restore func()) {
 	var undo []func()
 	for _, f := range []*os.File{os.Stdout, os.Stderr} {
@@ -83,8 +85,8 @@ func PrepareConsole() (restore func()) {
 		}
 	}
 	return func() {
-		for _, u := range undo {
-			u()
+		for i := len(undo) - 1; i >= 0; i-- {
+			undo[i]()
 		}
 	}
 }

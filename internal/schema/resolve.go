@@ -310,13 +310,18 @@ func validateResolved(resolved *ResolvedSchema) error {
 		rel := filepath.Clean(t.StorageRelpath())
 		first := strings.Split(filepath.ToSlash(rel), "/")[0]
 		normalized := filepath.ToSlash(rel)
-		// Device names first: on Windows IsLocal refuses them too, and the
-		// escape message below would misname the cause.
+		outside := errs.New("invalid_schema", fmt.Sprintf("Invalid schema at storage.%s.path: path must stay in workspace storage and cannot own khub control files (%s)", name, t.StorageRelpath()))
+		// An escape or a control path is refused first, with the same text on
+		// every platform. Device names come next, because Windows IsLocal
+		// refuses them too and the escape text would misname the cause.
+		if filepath.IsAbs(rel) || filepath.VolumeName(rel) != "" || normalized == ".." || strings.HasPrefix(normalized, "../") || rel == "." || first == ".khub" || first == ".git" || first == ".claude" || first == ".agents" || first == ".opencode" || rel == "index.md" || rel == "AGENTS.md" || rel == "CLAUDE.md" {
+			return outside
+		}
 		if err := reservedDevicePart(name, normalized); err != nil {
 			return err
 		}
-		if !filepath.IsLocal(rel) || rel == "." || first == ".khub" || first == ".git" || first == ".claude" || first == ".agents" || first == ".opencode" || rel == "index.md" || rel == "AGENTS.md" || rel == "CLAUDE.md" {
-			return errs.New("invalid_schema", fmt.Sprintf("Invalid schema at storage.%s.path: path must stay in workspace storage and cannot own khub control files (%s)", name, t.StorageRelpath()))
+		if !filepath.IsLocal(rel) {
+			return outside
 		}
 		if t.Storage.Path != nil {
 			t.Storage.Path = &normalized

@@ -4,11 +4,12 @@ import { parseJson } from '../hooks/cli'
 import { classify } from '../hooks/parse'
 import type { Simple } from '../hooks/parse'
 import { bandParts, diffOf, editedBy, EMPTY_SESSION, summaryOf, withEdited, withIds } from '../hooks/session'
+import { UNIX } from '../hooks/workspace'
 import type { KhubSummary } from '../types'
 import { F } from './fixtures'
 
 const doc = (fixture: { stdout: string }) => parseJson(fixture.stdout)
-const call = (command: string) => classify(command) as Simple
+const call = (command: string) => classify(command, UNIX) as Simple
 const line = (...args: Parameters<typeof bandParts>) => bandParts(...args).map(part => part.text).join('')
 
 const SUMMARY: KhubSummary = { total: 87, draft: 4, passed: true, errors: 0 }

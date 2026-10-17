@@ -4,6 +4,7 @@ import { parseJson } from '../hooks/cli'
 import { classify } from '../hooks/parse'
 import type { Simple } from '../hooks/parse'
 import { previewOf, summarize } from '../hooks/summarize'
+import { UNIX } from '../hooks/workspace'
 import { F } from './fixtures'
 import type { Fixture } from './fixtures'
 
@@ -12,10 +13,10 @@ const REQ = 'req-search-answers-within-300-ms'
 
 // The summary of a command, answered by a recorded khub reply.
 const say = (command: string, fixture: Fixture) =>
-  summarize(classify(command) as Simple, parseJson(fixture.stdout), fixture.stderr)
+  summarize(classify(command, UNIX) as Simple, parseJson(fixture.stdout), fixture.stderr)
 
 // The summary of a command, answered by a document written here.
-const sayOf = (command: string, json: unknown, note = '') => summarize(classify(command) as Simple, json, note)
+const sayOf = (command: string, json: unknown, note = '') => summarize(classify(command, UNIX) as Simple, json, note)
 
 test('the head names the verb and what the call is about', () => {
   const head = (command: string) => sayOf(command, undefined).head
@@ -192,8 +193,8 @@ test('any other verb shows the first line of its note, or nothing', () => {
 })
 
 // The list rows of a command, answered by a recorded khub reply or by a document written here.
-const list = (command: string, fixture: Fixture) => previewOf(classify(command) as Simple, parseJson(fixture.stdout))
-const listOf = (command: string, json: unknown) => previewOf(classify(command) as Simple, json)
+const list = (command: string, fixture: Fixture) => previewOf(classify(command, UNIX) as Simple, parseJson(fixture.stdout))
+const listOf = (command: string, json: unknown) => previewOf(classify(command, UNIX) as Simple, json)
 
 test('a query, a search and a stale list show id, title and flags', () => {
   expect(list('khub query --type component --format json', F.query_components)).toEqual({

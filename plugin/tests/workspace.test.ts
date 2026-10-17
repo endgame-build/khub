@@ -1,7 +1,7 @@
 import { expect, test } from 'claude-code/testing'
 
 import type { KhubType } from '../types'
-import { binCandidates, dirname, entityAt, isElsewhere, isOlder, isWindowsPath, relative, UNIX, WINDOWS } from '../hooks/workspace'
+import { binCandidates, dirname, entityAt, isElsewhere, isOlder, isWindowsPath, relative, settingWords, UNIX, WINDOWS } from '../hooks/workspace'
 import type { Ws } from '../hooks/workspace'
 
 const type = (name: string, layout: string, format: string, path: string): KhubType => ({ name, layout, format, path })
@@ -85,11 +85,11 @@ test('the directories above a path run up to the root', () => {
 })
 
 test('khub is looked for in the setting, else in the repo, else on the path', () => {
-  expect(binCandidates('/ws', '')).toEqual([['/ws/node_modules/.bin/khub'], ['khub']])
-  expect(binCandidates('/ws', '   ')).toEqual([['/ws/node_modules/.bin/khub'], ['khub']])
-  expect(binCandidates('/ws', ' npx  @endgame-build/khub ')).toEqual([['npx', '@endgame-build/khub']])
-  expect(binCandidates('/ws', 'node /x/khub.js')).toEqual([['node', '/x/khub.js']])
-  expect(binCandidates('/ws', "'/opt/my tools/khub' --verbose")).toEqual([['/opt/my tools/khub', '--verbose']])
+  expect(binCandidates('/ws', '', UNIX)).toEqual([['/ws/node_modules/.bin/khub'], ['khub']])
+  expect(binCandidates('/ws', '   ', UNIX)).toEqual([['/ws/node_modules/.bin/khub'], ['khub']])
+  expect(binCandidates('/ws', ' npx  @endgame-build/khub ', UNIX)).toEqual([['npx', '@endgame-build/khub']])
+  expect(binCandidates('/ws', 'node /x/khub.js', UNIX)).toEqual([['node', '/x/khub.js']])
+  expect(binCandidates('/ws', "'/opt/my tools/khub' --verbose", UNIX)).toEqual([['/opt/my tools/khub', '--verbose']])
 })
 
 test('a quoted setting keeps a Windows path with spaces, and its backslashes, in one word', () => {
@@ -97,6 +97,24 @@ test('a quoted setting keeps a Windows path with spaces, and its backslashes, in
     ['C:\\Program Files\\khub\\khub.exe', '--flag'],
   ])
   expect(binCandidates('C:\\ws', 'node "C:\\my tools\\khub.js"', WINDOWS)).toEqual([['node', 'C:\\my tools\\khub.js']])
+})
+
+test('a quote inside a word is a plain character', () => {
+  expect(settingWords("C:\\Users\\O'Brien\\khub.exe")).toEqual(["C:\\Users\\O'Brien\\khub.exe"])
+  expect(settingWords("/home/o'brien/bin/khub --verbose")).toEqual(["/home/o'brien/bin/khub", '--verbose'])
+  expect(settingWords('node /x/a"b c"/khub.js')).toEqual(['node', '/x/a"b', 'c"/khub.js'])
+})
+
+test('a quote that opens a word but never closes is a plain character', () => {
+  expect(settingWords('"C:\\Program Files\\khub.exe')).toEqual(['"C:\\Program', 'Files\\khub.exe'])
+  expect(settingWords("node '/opt/my tools/khub.js")).toEqual(['node', "'/opt/my", 'tools/khub.js'])
+})
+
+test('a setting with no word but an empty one is an empty setting', () => {
+  expect(settingWords('""')).toEqual([])
+  expect(settingWords(" '' \"\" ")).toEqual([])
+  expect(binCandidates('/ws', '""', UNIX)).toEqual([['/ws/node_modules/.bin/khub'], ['khub']])
+  expect(binCandidates('C:\\ws', "''", WINDOWS)).toEqual(WINDOWS.installs('C:\\ws'))
 })
 
 test('a version before the one the mod reads is older, and a build with no version is not', () => {

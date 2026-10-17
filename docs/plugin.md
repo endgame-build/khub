@@ -94,6 +94,23 @@ The baseline is the set of entity ids khub reports when the session starts.
 |---|---|---|
 | `binary` | empty | The command that runs khub. Empty resolves `<workspace>/node_modules/.bin/khub`, then `khub` on the `PATH`. |
 
+The setting splits into words at spaces. A double or single quote that opens a
+word and has its closing quote keeps a path with spaces in one word, as in
+`"C:\Program Files\khub\khub.exe"`. Any other quote is a plain character, so
+`C:\Users\O'Brien\khub.exe` stays one word. A backslash is a plain character
+too, so a Windows path keeps its separators. A setting with no words, such as
+`""`, counts as empty.
+
+On Windows, empty resolves these in order, and a candidate that fails to start
+or exits non-zero passes to the next:
+
+1. `node <workspace>\node_modules\@endgame-build\khub\bin\khub.js`, the npm
+   package's launcher, when that file exists.
+2. `khub` on the `PATH`, which finds a `khub.exe`.
+3. `cmd /c khub`, which reaches npm's global `khub.cmd`. cmd may read `%`, `!`,
+   `^`, `&`, `|`, `<`, `>`, `"` or a parenthesis as its own, so a workspace
+   path holding one skips this step.
+
 Set it at install with `claude plugin install khub@khub --config binary=<command>`,
 or later with `claude plugin configure khub@khub`.
 
@@ -126,7 +143,7 @@ status line under the prompt, which Claude Code draws as a warning.
 
 | Status text | Cause | What the mod does |
 |---|---|---|
-| `not installed` | No khub at the `binary` setting, in `node_modules/.bin` or on the `PATH`. | Stands aside. |
+| `not installed` | No khub at the `binary` setting, in `node_modules/.bin` or on the `PATH`, nor on Windows through the npm launcher or `cmd /c khub`. | Stands aside. |
 | `needs khub 0.27.0 or newer` | The khub it found is older. | Stands aside. |
 | `schema: <message>` | khub could not load the workspace's schema. | Reports khub's message. |
 

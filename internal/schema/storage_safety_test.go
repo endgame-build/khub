@@ -59,6 +59,23 @@ func TestReservedDeviceNameRefusedInStoragePaths(t *testing.T) {
 	}
 }
 
+// An escape or a control path keeps the storage text even when a part is a
+// device name; a device name inside storage gets the device text.
+func TestStoragePathRefusalNamesTheCause(t *testing.T) {
+	const storageText = "path must stay in workspace storage and cannot own khub control files"
+	for _, tc := range []struct{ path, want string }{
+		{"../con", storageText},
+		{".khub/nul", storageText},
+		{"notes/con", "'con' is a reserved device name on Windows (notes/con); choose another path"},
+	} {
+		doc := "ontology:\n  entities:\n    a: {}\nstorage:\n  a: {layout: file, path: " + tc.path + "}\n"
+		_, err := ResolveWith(nil, writeSchemaFiles(t, doc))
+		if err == nil || !strings.Contains(err.Error(), "storage.a.path: "+tc.want) {
+			t.Errorf("%s: err=%v, want %q", tc.path, err, tc.want)
+		}
+	}
+}
+
 func TestReservedDeviceName(t *testing.T) {
 	for _, name := range []string{
 		"con", "CON", "Prn", "aux", "nul", "com0", "com1", "COM9", "lpt0", "lpt1", "lpt9",

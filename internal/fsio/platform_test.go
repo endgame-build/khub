@@ -5,6 +5,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"runtime"
 	"syscall"
 	"testing"
 	"time"
@@ -153,6 +154,38 @@ func TestFileInPathNamesTheFileInTheWay(t *testing.T) {
 	for _, err := range []error{nil, fs.ErrNotExist, &fs.PathError{Op: "statat", Path: file, Err: fs.ErrPermission}} {
 		if got := fileInPath(err, root, filepath.Join(file, "x"), lstat); !errors.Is(got, err) {
 			t.Errorf("fileInPath(%v) = %v, want it unchanged", err, got)
+		}
+	}
+}
+
+// The walk stats nothing above the workspace, and ends at a volume or share
+// root whose Dir is itself. Each row counts the stats a path that never
+// exists costs.
+func TestFileInPathStopsAtTheWorkspace(t *testing.T) {
+	vol := filepath.VolumeName(t.TempDir()) + string(filepath.Separator)
+	type row struct {
+		name, root, path string
+		stats            int
+	}
+	rows := []row{{"volume root", vol, filepath.Join(vol, "a", "b"), 3}}
+	if runtime.GOOS == "windows" {
+		rows = append(rows,
+			row{"share root", `\\server\share`, `\\server\share\a`, 2},
+			row{"root in another case", `C:\WS`, `c:\ws\a\b`, 3},
+		)
+	}
+	for _, r := range rows {
+		calls := 0
+		lstat := func(p string) (fs.FileInfo, error) {
+			calls++
+			if calls > 10 {
+				return nil, fs.ErrPermission
+			}
+			return nil, &fs.PathError{Op: "lstat", Path: p, Err: fs.ErrNotExist}
+		}
+		in := &fs.PathError{Op: "statat", Path: r.path, Err: fs.ErrNotExist}
+		if got := fileInPath(in, r.root, r.path, lstat); !errors.Is(got, in) || calls != r.stats {
+			t.Errorf("%s: got %v after %d stats, want the error unchanged after %d", r.name, got, calls, r.stats)
 		}
 	}
 }

@@ -316,7 +316,7 @@ func idError(rtype *schema.ResolvedType, slug string, meta *omap.Map) (string, b
 	// collection row is not a file, so its slug is exempt.
 	if rtype.Storage.Layout != schema.LayoutCollection && schema.ReservedDeviceName(slug) {
 		return "slug is a reserved device name on Windows — " +
-			"`git mv` the file to another name, then fix references to it", true
+			"rename it with `git mv`, then fix references to it", true
 	}
 	shape := rtype.IDShape()
 	rest := slug

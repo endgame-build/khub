@@ -187,8 +187,8 @@ func replacePath(s, from, to string) string {
 }
 
 // foldRegexps caches replacePath's patterns by variant: every step
-// normalizes its output against the same few paths.
-// ponytail: unguarded map, the runner calls replacePath from one goroutine.
+// normalizes its output against the same few paths. The map has no lock
+// because the runner calls replacePath from one goroutine.
 var foldRegexps = map[string]*regexp.Regexp{}
 
 func longPath(p string) string  { return convertPath(p, windows.GetLongPathName) }

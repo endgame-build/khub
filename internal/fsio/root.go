@@ -7,6 +7,7 @@ import (
 	"os"
 	pathpkg "path"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 
@@ -36,7 +37,9 @@ func OpenPath(root, path string) (*os.Root, string, error) {
 	part := ""
 	for _, name := range strings.Split(rel, string(filepath.Separator)) {
 		part = filepath.Join(part, name)
+		// Windows reports a file in the path as missing; name it as darwin does.
 		info, err := r.Lstat(part)
+		err = FileInPath(err, base, filepath.Join(base, part))
 		if errors.Is(err, fs.ErrNotExist) {
 			break
 		}
@@ -59,7 +62,8 @@ func ReadFile(root, path string) ([]byte, error) {
 		return nil, err
 	}
 	defer r.Close()
-	return r.ReadFile(rel)
+	data, err := r.ReadFile(rel)
+	return data, FileInPath(err, root, path)
 }
 
 // Stat stats path confined to root; OpenPath's refusals apply.
@@ -157,7 +161,8 @@ func Remove(root, path string, recursive bool) error {
 // fileInPath is FileInPath's walk, with lstat passed in so every platform can
 // test it. A not-exist err becomes NotADirectory, keeping its Op and Path,
 // when the nearest existing entry at or above path is a regular file. The walk
-// stops at root, so it never stats outside the workspace.
+// stops at root, or at a volume or share root, so it never stats outside the
+// workspace.
 func fileInPath(err error, root, path string, lstat func(string) (fs.FileInfo, error)) error {
 	var pe *fs.PathError
 	if !errors.Is(err, fs.ErrNotExist) || !errors.As(err, &pe) {
@@ -179,11 +184,23 @@ func fileInPath(err error, root, path string, lstat func(string) (fs.FileInfo, e
 			}
 			return err
 		}
-		if !errors.Is(lerr, fs.ErrNotExist) || p == base {
+		if !errors.Is(lerr, fs.ErrNotExist) || samePath(p, base) {
 			return err
 		}
-		p = filepath.Dir(p)
+		parent := filepath.Dir(p)
+		if parent == p {
+			return err
+		}
+		p = parent
 	}
+}
+
+// samePath compares paths as the platform does: Windows ignores case.
+func samePath(a, b string) bool {
+	if runtime.GOOS == "windows" {
+		return strings.EqualFold(a, b)
+	}
+	return a == b
 }
 
 // The Windows reparse-point attribute bit (winnt.h), named here so the test is

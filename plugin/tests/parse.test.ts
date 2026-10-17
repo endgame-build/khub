@@ -2,10 +2,10 @@ import { expect, test } from 'claude-code/testing'
 
 import { callsOf, classify, edited, isWrite, mutates, tokenize } from '../hooks/parse'
 import type { Simple } from '../hooks/parse'
-import { WINDOWS } from '../hooks/workspace'
+import { UNIX, WINDOWS } from '../hooks/workspace'
 
-const simple = (command: string) => classify(command) as Simple
-const verbs = (command: string) => callsOf(classify(command)).map(call => call.verb)
+const simple = (command: string) => classify(command, UNIX) as Simple
+const verbs = (command: string) => callsOf(classify(command, UNIX)).map(call => call.verb)
 
 test('a plain khub call is simple, with verb, positionals and flags', () => {
   const call = simple('khub add adr --title "Use RE2 patterns" --status accepted --draft --format json')
@@ -23,9 +23,9 @@ test('every spelling of the binary is recognized', () => {
     expect(simple(`${binary} status --format json`).verb).toBe('status')
   }
 
-  expect(classify('npx khub status').kind).toBe('none')
-  expect(classify('echo khub').kind).toBe('none')
-  expect(classify('ls -la').kind).toBe('none')
+  expect(classify('npx khub status', UNIX).kind).toBe('none')
+  expect(classify('echo khub', UNIX).kind).toBe('none')
+  expect(classify('ls -la', UNIX).kind).toBe('none')
 })
 
 test('env assignments, -C and a leading cd do not hide the call', () => {
@@ -50,35 +50,35 @@ test('a two-word schema verb keeps its view', () => {
 })
 
 test('stderr and stdin redirections stay simple, a stdout redirection or a pipe does not', () => {
-  expect(classify('khub check --format json 2>&1').kind).toBe('simple')
+  expect(classify('khub check --format json 2>&1', UNIX).kind).toBe('simple')
   expect(simple('khub check 2>/dev/null --strict').flags).toEqual({ strict: true })
   expect(simple('khub add adr --title x --body-file - < body.md').flags).toEqual({ title: 'x', 'body-file': '-' })
   expect(simple('khub add adr --title x --body-file - <<< "one line"').flags).toEqual({ title: 'x', 'body-file': '-' })
 
-  expect(classify('khub query --type adr > out.json').kind).toBe('compound')
-  expect(classify('khub query --type adr | jq .').kind).toBe('compound')
-  expect(classify('ls && khub status').kind).toBe('compound')
+  expect(classify('khub query --type adr > out.json', UNIX).kind).toBe('compound')
+  expect(classify('khub query --type adr | jq .', UNIX).kind).toBe('compound')
+  expect(classify('ls && khub status', UNIX).kind).toBe('compound')
   expect(verbs('ls && khub status')).toEqual(['status'])
 })
 
 test('khub calls joined by && or ; are a chain, and anything else among them is compound', () => {
-  expect(classify('khub add adr --title x && khub check').kind).toBe('chain')
+  expect(classify('khub add adr --title x && khub check', UNIX).kind).toBe('chain')
   expect(verbs('khub add adr --title x && khub check')).toEqual(['add', 'check'])
   expect(verbs('khub query --type component --format json; khub query --type api --format json')).toEqual(['query', 'query'])
-  expect(classify('khub query --type component; khub query --type api').kind).toBe('chain')
-  expect(classify('cd ws && khub status && khub check 2>&1').kind).toBe('chain')
-  expect(classify('khub status\nkhub check\nkhub query').kind).toBe('chain')
+  expect(classify('khub query --type component; khub query --type api', UNIX).kind).toBe('chain')
+  expect(classify('cd ws && khub status && khub check 2>&1', UNIX).kind).toBe('chain')
+  expect(classify('khub status\nkhub check\nkhub query', UNIX).kind).toBe('chain')
 
-  expect(classify('khub status || khub check').kind).toBe('compound')
-  expect(classify('khub status; khub query | head -5').kind).toBe('compound')
-  expect(classify('khub status; khub query > out.json').kind).toBe('compound')
-  expect(classify('khub status; cat knowledge/prd.md').kind).toBe('compound')
-  expect(classify('khub status && cd ws && khub check').kind).toBe('compound')
-  expect(classify('(khub status 2>&1 || npx khub status 2>&1) | head -40; cat knowledge/prd.md | head -30').kind).toBe('compound')
+  expect(classify('khub status || khub check', UNIX).kind).toBe('compound')
+  expect(classify('khub status; khub query | head -5', UNIX).kind).toBe('compound')
+  expect(classify('khub status; khub query > out.json', UNIX).kind).toBe('compound')
+  expect(classify('khub status; cat knowledge/prd.md', UNIX).kind).toBe('compound')
+  expect(classify('khub status && cd ws && khub check', UNIX).kind).toBe('compound')
+  expect(classify('(khub status 2>&1 || npx khub status 2>&1) | head -40; cat knowledge/prd.md | head -30', UNIX).kind).toBe('compound')
 })
 
 test('a compound command lists the khub calls it holds, in full', () => {
-  expect(classify('khub remove cmp-search --force 2>&1 | head')).toEqual({
+  expect(classify('khub remove cmp-search --force 2>&1 | head', UNIX)).toEqual({
     kind: 'compound',
     calls: [
       { kind: 'simple', verb: 'remove', sub: null, workspace: null, positional: ['cmp-search'], flags: { force: true } },
@@ -129,17 +129,17 @@ test('a subshell or an open quote is read off the text', () => {
   expect(tokenize("khub add adr --title 'open")).toBe(null)
   expect(tokenize('khub get "$(khub query')).toBe(null)
 
-  expect(classify('(cd ws && khub remove x --force)')).toEqual({
+  expect(classify('(cd ws && khub remove x --force)', UNIX)).toEqual({
     kind: 'compound',
     calls: [{ kind: 'simple', verb: 'remove', sub: null, workspace: null, positional: [], flags: { force: true } }],
   })
-  expect(classify('(khub -C ./ws upgrade --dry-run)')).toEqual({
+  expect(classify('(khub -C ./ws upgrade --dry-run)', UNIX)).toEqual({
     kind: 'compound',
     calls: [{ kind: 'simple', verb: 'upgrade', sub: null, workspace: null, positional: [], flags: { 'dry-run': true } }],
   })
   expect(verbs('khub add adr --title "open')).toEqual(['add'])
   expect(verbs('(./bin/khub add adr --title x; khub check)')).toEqual(['add', 'check'])
-  expect(classify('(echo khub)').kind).toBe('none')
+  expect(classify('(echo khub)', UNIX).kind).toBe('none')
 })
 
 test('the tokenizer splits words, quotes and operators', () => {
@@ -158,8 +158,8 @@ test('the tokenizer splits words, quotes and operators', () => {
 })
 
 test('the calls of a command come out however it was read', () => {
-  expect(callsOf(classify('ls -la'))).toEqual([])
-  expect(callsOf(classify('khub status')).map(call => call.verb)).toEqual(['status'])
+  expect(callsOf(classify('ls -la', UNIX))).toEqual([])
+  expect(callsOf(classify('khub status', UNIX)).map(call => call.verb)).toEqual(['status'])
   expect(verbs('khub add adr --title x | tee out.txt')).toEqual(['add'])
 })
 
@@ -233,8 +233,8 @@ test('on Windows the binary and the text scan agree on any case of the name, and
 })
 
 test('unix reads khub.exe and a backslash path as some other program', () => {
-  expect(classify('khub.exe status').kind).toBe('none')
-  expect(classify('KHUB status').kind).toBe('none')
-  expect(classify('C:\\\\tools\\\\khub status').kind).toBe('none')
-  expect(classify('(khub.exe add adr --title x)').kind).toBe('none')
+  expect(classify('khub.exe status', UNIX).kind).toBe('none')
+  expect(classify('KHUB status', UNIX).kind).toBe('none')
+  expect(classify('C:\\\\tools\\\\khub status', UNIX).kind).toBe('none')
+  expect(classify('(khub.exe add adr --title x)', UNIX).kind).toBe('none')
 })

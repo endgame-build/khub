@@ -1,7 +1,7 @@
 # Releasing khub
 
 A release is a version bump, a green suite, and a tag on `main`. Pushing the tag
-builds four binaries and publishes them; nothing is uploaded by hand.
+builds six binaries and publishes them; nothing is uploaded by hand.
 
 1. Bump `Version` in `internal/version/version.go` and add a section to
    `CHANGELOG.md` (Keep a Changelog format). That constant is the single source
@@ -88,7 +88,7 @@ Archive names still carry no version (`khub_darwin_arm64.tar.gz`):
 
 ## Dry run
 
-`goreleaser release --snapshot --clean --skip=publish` builds all four archives
+`goreleaser release --snapshot --clean --skip=publish` builds all six archives
 into `dist/` without touching git or GitHub. To exercise the npm packaging
 against them (the assembler refuses `-snapshot`, so name a real-looking
 version), assemble, pack, and install locally:

@@ -1,6 +1,5 @@
 // This file recognizes khub invocations in a Bash command string.
 
-import { UNIX } from './workspace'
 import type { Flavour } from './workspace'
 
 export type Simple = {
@@ -311,7 +310,7 @@ function scan(command: string, flavour: Flavour): Simple[] {
 
 // Reads a Bash command. On Windows, where Git Bash runs it, the binary may be `khub.exe` and
 // its path may hold backslashes.
-export function classify(command: string, flavour: Flavour = UNIX): Parsed {
+export function classify(command: string, flavour: Flavour): Parsed {
   if (!new RegExp(flavour.name).test(command)) return NONE
 
   const tokens = tokenize(command)

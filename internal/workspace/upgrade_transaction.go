@@ -156,13 +156,12 @@ func copyUpgradeWorkspace(root, dest string) (map[string]upgradeFile, map[string
 			}
 			return os.Symlink(link, to)
 		}
-		// A Windows junction or placeholder is refused, never skipped.
-		if err := fsio.RefuseLinkEntry(d, path); err != nil {
-			return err
-		}
 		if !d.Type().IsRegular() {
-			// Sockets, fifos and devices are not khub files; readUpgradeFile
-			// still refuses one at any path the upgrade writes.
+			// Sockets, fifos, devices and Windows junctions are not khub
+			// files, so the copy skips them. A cloud placeholder lists as a
+			// plain entry and reaches readUpgradeFile. Every storage scan
+			// refuses a reparse point, and readUpgradeFile refuses one at any
+			// path the upgrade writes, so nothing in storage is lost silently.
 			return nil
 		}
 		f, err := readUpgradeFile(root, rel)
@@ -217,9 +216,6 @@ func upgradeDiff(root string, before map[string]upgradeFile, dirs map[string]boo
 		}
 		if d.Type()&os.ModeSymlink != 0 {
 			return nil
-		}
-		if err := fsio.RefuseLinkEntry(d, path); err != nil {
-			return err
 		}
 		after, err := readUpgradeFile(root, rel)
 		if err != nil {

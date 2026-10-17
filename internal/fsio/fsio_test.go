@@ -237,6 +237,31 @@ func TestReadDirFileErrorIsPlatformStable(t *testing.T) {
 	}
 }
 
+// A regular file where a storage directory belongs refuses every confined
+// read with darwin's error, "statat <rel>: not a directory", on every OS.
+func TestConfinedReadsBelowAFileAreNotADirectory(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "knowledge"), nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(root, "knowledge", "prd.md")
+	want := "statat " + filepath.Join("knowledge", "prd.md") + ": not a directory"
+	_, rerr := ReadFile(root, path)
+	_, serr := Stat(root, path)
+	_, derr := ReadDir(root, filepath.Join(root, "knowledge", "decisions"))
+	for _, c := range []struct {
+		name string
+		err  error
+	}{{"ReadFile", rerr}, {"Stat", serr}} {
+		if !errors.Is(c.err, NotADirectory) || c.err.Error() != want {
+			t.Errorf("%s error = %v, want %q", c.name, c.err, want)
+		}
+	}
+	if !errors.Is(derr, NotADirectory) {
+		t.Errorf("ReadDir error = %v, want NotADirectory", derr)
+	}
+}
+
 // Filesystems without hard links (exFAT, some SMB and FUSE mounts) still get an
 // exclusive publish: re-check the target, then rename (review of PR #143, finding 3).
 func TestWriteNewFallsBackWhenHardLinksAreUnsupported(t *testing.T) {

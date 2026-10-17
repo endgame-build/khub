@@ -133,14 +133,24 @@ export const WINDOWS: Flavour = {
 
 export const flavourOf = (cwd: string): Flavour => (isWindowsPath(cwd) ? WINDOWS : UNIX)
 
-// Splits the `binary` setting into words. Double or single quotes keep a path with spaces in
-// one word. A backslash is a plain character, so a Windows path keeps its separators.
-export const settingWords = (setting: string): string[] =>
-  (setting.match(/(?:"[^"]*"|'[^']*'|[^\s"'])+/g) ?? []).map(word => word.replace(/"([^"]*)"|'([^']*)'/g, '$1$2'))
+// Splits the `binary` setting into words at whitespace. A double or single quote that opens
+// a word and has its closing quote keeps a path with spaces in one word. Any other quote is
+// a plain character, as is a backslash, so `C:\Users\O'Brien\khub.exe` stays one word. A
+// setting with no word but an empty one is an empty setting.
+export function settingWords(setting: string): string[] {
+  const words = [...setting.matchAll(/(["'])([\s\S]*?)\1(\S*)|\S+/g)].map(found =>
+    found[1] === undefined ? found[0] : `${found[2]}${found[3]}`,
+  )
+
+  return words.some(word => word !== '') ? words : []
+}
 
 // Lists the commands to try for khub, in order: the setting, the repo's pinned install, the path.
-export const binCandidates = (root: string, setting: string, flavour: Flavour = UNIX): string[][] =>
-  setting.trim() ? [settingWords(setting)] : flavour.installs(root)
+export function binCandidates(root: string, setting: string, flavour: Flavour): string[][] {
+  const words = settingWords(setting)
+
+  return words.length > 0 ? [words] : flavour.installs(root)
+}
 
 // Returns the path under the workspace root, or null outside it.
 export const relative = (ws: Ws, path: string): string | null => ws.flavour.under(ws.root, path)

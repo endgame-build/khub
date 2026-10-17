@@ -7,6 +7,7 @@ package integrity
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -325,7 +326,6 @@ func TestIdGateThreeArms(t *testing.T) {
 	adr("ad-2026-01-15-001-old", "Old")
 	adr("ad-undated", "Undated")
 	adr("no-prefix", "No prefix")
-	adr("con", "Con") // the device arm fires before the prefix arm
 	cmp("cmp-api", "API")
 	cmp("cmp-001-api", "API")
 	cmp("cmp-404-handling", "404 handling")
@@ -339,8 +339,6 @@ func TestIdGateThreeArms(t *testing.T) {
 			"ad-YYYY-MM-DD-slug — `git mv` the file to drop the ordinal, then fix references to it",
 		"adr/ad-undated": "slug carries no date — this type mints ad-YYYY-MM-DD-slug",
 		"adr/no-prefix":  "slug does not start with a prefix this type mints (ad-YYYY-MM-DD-slug)",
-		"adr/con": "slug is a reserved device name on Windows — " +
-			"`git mv` the file to another name, then fix references to it",
 		"component/cmp-001-api": "slug uses the retired '001-' ordinal scheme; this type mints " +
 			"cmp-slug — `git mv` the file to drop the ordinal, then fix references to it",
 	}
@@ -364,6 +362,27 @@ func TestIdGateThreeArms(t *testing.T) {
 	}
 	if count != len(want) {
 		t.Errorf("%d id findings, want %d: %v", count, len(want), got)
+	}
+}
+
+// A hand-named file or folder carrying a device name is an id finding, and the
+// device arm fires before the prefix arm.
+func TestIdGateDeviceSlug(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows refuses a device-named file or opens the device instead")
+	}
+	const reason = "slug is a reserved device name on Windows — rename it with `git mv`, then fix references to it"
+	file := wsFor(t, "build-hub")
+	seed(t, file, "knowledge/decisions/con.md", kv{"type", "adr"}, kv{"title", "Con"},
+		kv{"status", "proposed"}, kv{"created", "2026-01-15"})
+	folder := wsFor(t, "firm-ops")
+	seed(t, folder, "projects/nul/_index.md", kv{"type", "project"}, kv{"title", "Nul"},
+		kv{"updated", "2026-01-15"})
+	for _, c := range []struct{ root, id string }{{file, "adr/con"}, {folder, "project/nul"}} {
+		got := errorKeys(mustValidate(t, c.root, nil, false))
+		if got[[2]string{c.id, "id"}] != reason {
+			t.Errorf("%s: id finding = %q, want %q (all: %v)", c.id, got[[2]string{c.id, "id"}], reason, got)
+		}
 	}
 }
 
