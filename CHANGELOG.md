@@ -6,6 +6,8 @@ Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelo
 
 ### Changed
 
+- Building khub from source needs Go 1.26 (`go.mod` says `go 1.26.0`). Go 1.25
+  no longer receives security fixes.
 - The Claude Code plugin (0.1.1) draws a command made only of khub calls joined
   by `;` or `&&` as one compact row per call. A command that pipes or redirects
   khub's output, or runs another program, keeps Claude Code's raw drawing.
@@ -23,6 +25,14 @@ Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelo
 - In the ctrl+o detailed transcript the plugin's compact row was followed by
   the raw result. The row now stands for the whole call there, and its `json`
   button shows the raw drawing.
+
+### Security
+
+- Release binaries are built with the newest Go 1.26 patch. Binaries built with
+  Go 1.25.14 reach eight standard-library advisories that go1.26.9 fixes:
+  GO-2026-6603, 6611, 6612, 6613 and 6617 (`net/http`), GO-2026-6608
+  (`mime/multipart`), GO-2026-6607 (`crypto/tls`) and GO-2026-6604 (`os`:
+  `Root.Mkdir` can follow a junction out of the root on Windows).
 
 ## [0.28.0] — 2026-10-06
 

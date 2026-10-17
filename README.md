@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/endgame-build/khub/actions/workflows/ci.yml/badge.svg)](https://github.com/endgame-build/khub/actions/workflows/ci.yml)
 ![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-blue.svg)
-![Go 1.25+](https://img.shields.io/badge/go-1.25%2B-00ADD8.svg)
+![Go 1.26+](https://img.shields.io/badge/go-1.26%2B-00ADD8.svg)
 
 **Schema-bound, agent-facing context management.**
 

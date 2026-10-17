@@ -48,4 +48,7 @@
 
 Check `pkg.go.dev/vuln` before adding anything; `govulncheck` runs in CI
 (call-graph reachability, catches stdlib CVEs). Pin tool versions —
-`version: latest` in CI is an unpinned dependency.
+`version: latest` in CI is an unpinned dependency. The Go toolchain is the
+one exception: `setup-go` pins the minor and floats the patch
+(`check-latest: true`), because a stdlib advisory is fixed only by the patch
+release.
