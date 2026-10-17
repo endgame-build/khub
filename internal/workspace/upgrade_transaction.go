@@ -16,6 +16,7 @@ import (
 	"github.com/endgame-build/khub/internal/fsio"
 	"github.com/endgame-build/khub/internal/introspect"
 	"github.com/endgame-build/khub/internal/omap"
+	"github.com/endgame-build/khub/internal/schema"
 	"github.com/endgame-build/khub/internal/template"
 )
 
@@ -62,7 +63,7 @@ func prepareUpgrade(root string, opt UpgradeOptions) (*UpgradeResult, error) {
 	// for an exact candidate scan; an unreadable regular file elsewhere still
 	// aborts. Narrow the copy to schema paths, or use a read overlay,
 	// if corpus size makes the temporary disk footprint material.
-	before, dirs, err := copyUpgradeWorkspace(root, candidate)
+	before, dirs, err := copyUpgradeWorkspace(root, candidate, old)
 	if err != nil {
 		return nil, err
 	}
@@ -127,7 +128,7 @@ func prepareUpgrade(root string, opt UpgradeOptions) (*UpgradeResult, error) {
 	return result, nil
 }
 
-func copyUpgradeWorkspace(root, dest string) (map[string]upgradeFile, map[string]bool, error) {
+func copyUpgradeWorkspace(root, dest string, old *schema.ResolvedSchema) (map[string]upgradeFile, map[string]bool, error) {
 	files := map[string]upgradeFile{}
 	dirs := map[string]bool{}
 	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
@@ -157,11 +158,13 @@ func copyUpgradeWorkspace(root, dest string) (map[string]upgradeFile, map[string
 			return os.Symlink(link, to)
 		}
 		if !d.Type().IsRegular() {
-			// Sockets, fifos, devices and Windows junctions are not khub
-			// files, so the copy skips them. A cloud placeholder lists as a
-			// plain entry and reaches readUpgradeFile. Every storage scan
-			// refuses a reparse point, and readUpgradeFile refuses one at any
-			// path the upgrade writes, so nothing in storage is lost silently.
+			// Sockets, fifos and devices are not khub files, so the copy skips
+			// them. A Windows junction or cloud placeholder lists here too and
+			// cannot be copied as a link. Inside storage it is refused, as the
+			// candidate scan refuses a symlink there; elsewhere it is skipped.
+			if inStorage(old, rel) {
+				return fsio.RefuseLinkEntry(d, path)
+			}
 			return nil
 		}
 		f, err := readUpgradeFile(root, rel)
@@ -175,6 +178,22 @@ func copyUpgradeWorkspace(root, dest string) (map[string]upgradeFile, map[string
 		return os.WriteFile(to, f.data, 0o666)
 	})
 	return files, dirs, err
+}
+
+// inStorage reports whether rel lies in a storage path old declares. An
+// unreadable current schema (old is nil) declares none.
+func inStorage(old *schema.ResolvedSchema, rel string) bool {
+	if old == nil {
+		return false
+	}
+	rel = filepath.ToSlash(rel)
+	for _, name := range old.Types.Keys() {
+		t, _ := old.Types.Get(name)
+		if sp := t.StorageRelpath(); rel == sp || strings.HasPrefix(rel, sp+"/") {
+			return true
+		}
+	}
+	return false
 }
 func readUpgradeFile(root, name string) (*upgradeFile, error) {
 	path := filepath.Join(root, name)

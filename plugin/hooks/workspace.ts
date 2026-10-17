@@ -135,14 +135,14 @@ export const flavourOf = (cwd: string): Flavour => (isWindowsPath(cwd) ? WINDOWS
 
 // Splits the `binary` setting into words at whitespace. A double or single quote that opens
 // a word and has its closing quote keeps a path with spaces in one word. Any other quote is
-// a plain character, as is a backslash, so `C:\Users\O'Brien\khub.exe` stays one word. A
-// setting with no word but an empty one is an empty setting.
+// a plain character, as is a backslash, so `C:\Users\O'Brien\khub.exe` stays one word. An
+// empty word (`''`) is dropped, so a setting of only empty words is an empty setting.
 export function settingWords(setting: string): string[] {
   const words = [...setting.matchAll(/(["'])([\s\S]*?)\1(\S*)|\S+/g)].map(found =>
     found[1] === undefined ? found[0] : `${found[2]}${found[3]}`,
   )
 
-  return words.some(word => word !== '') ? words : []
+  return words.filter(word => word !== '')
 }
 
 // Lists the commands to try for khub, in order: the setting, the repo's pinned install, the path.

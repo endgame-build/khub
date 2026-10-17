@@ -194,7 +194,7 @@ func TestFileInPathStopsAtTheWorkspace(t *testing.T) {
 // platform runs the cases.
 func TestSyncedFolderMatchesAtAComponentBoundary(t *testing.T) {
 	env := map[string]string{
-		"OneDrive":           `C:\Users\me\OneDrive`,
+		"OneDrive":           `C:\Profiles\me\OneDrive`,
 		"OneDriveCommercial": `D:\Work\OneDrive - Acme\`,
 	}
 	getenv := func(k string) string { return env[k] }
@@ -202,13 +202,13 @@ func TestSyncedFolderMatchesAtAComponentBoundary(t *testing.T) {
 		root, want string
 		ok         bool
 	}{
-		{`C:\Users\me\OneDrive`, env["OneDrive"], true},
-		{`C:\Users\me\OneDrive\notes\kb`, env["OneDrive"], true},
-		{`c:/users/ME/onedrive/kb`, env["OneDrive"], true},
+		{`C:\Profiles\me\OneDrive`, env["OneDrive"], true},
+		{`C:\Profiles\me\OneDrive\notes\kb`, env["OneDrive"], true},
+		{`c:/profiles/ME/onedrive/kb`, env["OneDrive"], true},
 		{`D:\Work\OneDrive - Acme\kb`, env["OneDriveCommercial"], true},
-		{`C:\Users\me\OneDriveX`, "", false},
-		{`C:\Users\me\OneDrive2\kb`, "", false},
-		{`C:\Users\me`, "", false},
+		{`C:\Profiles\me\OneDriveX`, "", false},
+		{`C:\Profiles\me\OneDrive2\kb`, "", false},
+		{`C:\Profiles\me`, "", false},
 		{`E:\kb`, "", false},
 	}
 	for _, c := range cases {

@@ -110,7 +110,8 @@ test('a quote that opens a word but never closes is a plain character', () => {
   expect(settingWords("node '/opt/my tools/khub.js")).toEqual(['node', "'/opt/my", 'tools/khub.js'])
 })
 
-test('a setting with no word but an empty one is an empty setting', () => {
+test('empty words are dropped, and a setting of only empty words is an empty setting', () => {
+  expect(settingWords("'' khub --verbose")).toEqual(['khub', '--verbose'])
   expect(settingWords('""')).toEqual([])
   expect(settingWords(" '' \"\" ")).toEqual([])
   expect(binCandidates('/ws', '""', UNIX)).toEqual([['/ws/node_modules/.bin/khub'], ['khub']])

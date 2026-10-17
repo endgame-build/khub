@@ -94,7 +94,7 @@ The baseline is the set of entity ids khub reports when the session starts.
 |---|---|---|
 | `binary` | empty | The command that runs khub. Empty resolves `<workspace>/node_modules/.bin/khub`, then `khub` on the `PATH`. |
 
-The setting splits into words at spaces. A double or single quote that opens a
+The setting splits into words at whitespace. A double or single quote that opens a
 word and has its closing quote keeps a path with spaces in one word, as in
 `"C:\Program Files\khub\khub.exe"`. Any other quote is a plain character, so
 `C:\Users\O'Brien\khub.exe` stays one word. A backslash is a plain character

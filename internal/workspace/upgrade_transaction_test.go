@@ -10,6 +10,8 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+
+	"github.com/endgame-build/khub/internal/introspect"
 )
 
 func upgradeTree(t *testing.T, root string) map[string]string {
@@ -268,5 +270,44 @@ func TestUpgradeCandidateSkipsVendoredDirsAndSpecialFiles(t *testing.T) {
 		if _, err := os.Lstat(filepath.Join(root, kept)); err != nil {
 			t.Fatalf("workspace lost %s: %v", kept, err)
 		}
+	}
+}
+
+// Only a Windows reparse point inside storage is refused; a fifo there is
+// still skipped, as one elsewhere is.
+func TestUpgradeCandidateSkipsSpecialFileInStorage(t *testing.T) {
+	src := presetSource(t)
+	root := filepath.Join(t.TempDir(), "ws")
+	mustInit(t, "note", root, InitOptions{PresetSource: src})
+	growPreset(t, src)
+	if err := os.MkdirAll(filepath.Join(root, "notes"), 0o777); err != nil {
+		t.Fatal(err)
+	}
+	if !makeFifo(t, filepath.Join(root, "notes", "pipe")) {
+		t.Skip("no fifo on this platform")
+	}
+	mustUpgrade(t, root, UpgradeOptions{DryRun: true})
+}
+
+func TestInStorageMatchesStoragePathsOnly(t *testing.T) {
+	src := presetSource(t)
+	root := filepath.Join(t.TempDir(), "ws")
+	mustInit(t, "note", root, InitOptions{PresetSource: src})
+	old, err := introspect.LoadSchema(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for rel, want := range map[string]bool{
+		"notes":                        true,
+		filepath.Join("notes", "a.md"): true,
+		"notesx":                       false,
+		"README.md":                    false,
+	} {
+		if got := inStorage(old, rel); got != want {
+			t.Errorf("inStorage(%q) = %v, want %v", rel, got, want)
+		}
+	}
+	if inStorage(nil, "notes") {
+		t.Error("a nil schema declared a storage path")
 	}
 }
