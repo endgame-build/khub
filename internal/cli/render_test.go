@@ -10,12 +10,12 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"runtime"
 	"strings"
 	"syscall"
 	"testing"
 
 	"github.com/endgame-build/khub/internal/errs"
+	"github.com/endgame-build/khub/internal/fsio"
 )
 
 func pathErr(op, path string, errno syscall.Errno) *os.PathError {
@@ -44,11 +44,8 @@ func TestPathConstructionBugRendersThroughAWrapWithoutPanicking(t *testing.T) {
 	// pathBugMessage used to assert unchecked, so it was safe only because
 	// Guard gates on isPathConstructionBug first. Once the guard matches
 	// through a wrap, a renderer that does not would panic instead of print.
-	notDir := syscall.ENOTDIR
-	if runtime.GOOS == "windows" {
-		notDir = syscall.Errno(267) // ERROR_DIRECTORY, what Windows returns here
-	}
-	wrapped := fmt.Errorf("deleting: %w", pathErr("remove", "/a/b.md/b.md", notDir))
+	// fsio.NotADirectory is what a file in the path carries on every platform.
+	wrapped := fmt.Errorf("deleting: %w", &os.PathError{Op: "remove", Path: "/a/b.md/b.md", Err: fsio.NotADirectory})
 
 	if !isPathConstructionBug(wrapped) {
 		t.Fatal("a wrapped ENOTDIR is not recognised as a path-construction bug")

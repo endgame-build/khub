@@ -29,6 +29,31 @@ binaries), `TTY_COMPATIBLE`/`FORCE_COLOR` (isatty), pinned git identity +
 Trap: the runner pins `COLUMNS=80` **and** pty winsize 80 — two width code
 paths agree only because both constants are 80.
 
+On Windows the path normalizer also replaces the 8.3, forward-slash and Git
+Bash (`/c/…`) spellings, case-insensitively.
+
+## Windows: what the runner does differently
+
+The expected bytes are shared across all three OSes. Four mechanisms let
+Windows run them without a second set.
+
+- **`sh_windows`** on a step replaces `sh` on Windows and is ignored
+  elsewhere. Use it only when the unix setup has no effect there (`chmod` on
+  a directory). It must leave the same observable state.
+- **`requires: [write-denial]`** makes the runner probe once whether denying
+  writes on a directory binds this account. A create that succeeds under the
+  denial (root; a Windows admin with backup and restore privileges) reports
+  the case as SKIP with the reason. Any other probe failure is an ERROR and
+  fails the run.
+- **`mode: pty` on Windows is checked by behaviour.** A ConPTY re-renders
+  the screen, so the runner compares exit code and output mode (JSON, human,
+  empty) and prints a `PTY-BEHAVIOURAL` line per case. The tree manifest is
+  still byte-checked. Pty cases record on darwin or linux only.
+- **CI runs `err-os-error` as a standard user.** GitHub's Windows runner is
+  such an admin, so the full suite skips that case there. A second step
+  creates a non-admin local user and runs the case as it, and fails on a
+  SKIP as well as a FAIL.
+
 ## What golden bytes cannot catch — add tests here
 
 - **Inputs outside the corpus.** `internal/canon/fuzz_test.go` holds four
@@ -65,4 +90,3 @@ paths agree only because both constants are 80.
   it before a release or after touching `index`, `graph`, `integrity`,
   `query`, `search`. Nothing in it spells an id or a title, so an id-scheme
   change never touches it.
-

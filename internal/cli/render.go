@@ -6,7 +6,6 @@ package cli
 import (
 	"errors"
 	"fmt"
-	"io/fs"
 	"os"
 	"path/filepath"
 	"syscall"
@@ -205,25 +204,7 @@ func isOSError(err error) bool {
 // pinned by fixtures — PermissionError/FileNotFoundError map from errno.
 func osErrorMessage(err error) string {
 	if pe, ok := asPathError(err); ok {
-		name := "OSError"
-		switch {
-		case errors.Is(pe, fs.ErrNotExist):
-			name = "FileNotFoundError"
-		case errors.Is(pe, fs.ErrPermission):
-			name = "PermissionError"
-		case errors.Is(pe, fs.ErrExist):
-			name = "FileExistsError"
-		}
-		var se syscall.Errno
-		if errors.As(pe.Err, &se) {
-			if n, _, mapped := osErrno(se); mapped {
-				// A mapped Win32 code is named by the errno it prints, so
-				// ERROR_SHARING_VIOLATION reads PermissionError beside its 13.
-				name = errnoClassName(n)
-			}
-		}
-		errno := errnoOf(pe.Err)
-		return fmt.Sprintf("%s: [Errno %d] %s: '%s'", name, errno, strerror(pe.Err), filepath.ToSlash(pe.Path))
+		return fmt.Sprintf("%s: [Errno %d] %s: '%s'", errorClass(pe.Err), errnoOf(pe.Err), strerror(pe.Err), filepath.ToSlash(pe.Path))
 	}
 	return fmt.Sprintf("OSError: %s", err.Error())
 }

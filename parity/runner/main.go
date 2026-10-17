@@ -33,7 +33,8 @@
 // there, which root (and, on Windows, an administrator with the backup and
 // restore privileges) does not honour. The runner probes it once, the way the
 // cases deny writes, and on a machine without it reports the case as SKIP
-// with the reason, never as a pass. See capability.go.
+// with the reason, never as a pass. A probe that breaks is an ERROR. See
+// capability.go.
 //
 // One exception is platform-wide rather than per case: on Windows a
 // `mode: pty` step runs on a ConPTY, which re-renders the screen instead of
@@ -110,7 +111,9 @@ func main() {
 	var caseDirs []string
 	_ = filepath.Walk(*casesDir, func(p string, info os.FileInfo, err error) error {
 		if err == nil && !info.IsDir() && info.Name() == "case.yaml" {
+			// -only is spelled with slashes on every OS.
 			rel, _ := filepath.Rel(*casesDir, filepath.Dir(p))
+			rel = filepath.ToSlash(rel)
 			if *only == "" || rel == *only || strings.HasPrefix(rel, *only+"/") {
 				caseDirs = append(caseDirs, filepath.Dir(p))
 			}
@@ -174,6 +177,7 @@ func runCase(dir string) (bool, error) {
 	if spec.Mode == "" {
 		spec.Mode = "pipe"
 	}
+	behavioural := spec.Mode == "pty" && ptyBehavioural
 	// Before anything runs or the expected/ directory is cleared for
 	// recording: a case this machine cannot set up is skipped, not recorded.
 	if why, err := unmetRequirement(spec.Requires); err != nil {
@@ -182,7 +186,7 @@ func runCase(dir string) (bool, error) {
 		return false, &skipError{reason: why}
 	}
 	// Refused before the expected/ directory is cleared for recording.
-	if *record && spec.Mode == "pty" && ptyBehavioural {
+	if *record && behavioural {
 		return false, errors.New("cannot record a pty case on this OS: its pseudo-terminal re-renders the output, so what it captures is not the contract; record on darwin or linux")
 	}
 	work, err := os.MkdirTemp("", "parity-*")
@@ -213,7 +217,7 @@ func runCase(dir string) (bool, error) {
 	norm := newPathNormalizer(ws, home)
 	ok := true
 	rel, _ := filepath.Rel(*casesDir, dir)
-	if spec.Mode == "pty" && ptyBehavioural {
+	if behavioural {
 		fmt.Printf("PTY-BEHAVIOURAL %s: exit code and output mode checked, bytes NOT compared (this OS's pseudo-terminal re-renders the screen)\n", rel)
 	}
 	// A `divergence:` line is case-scoped, so record WHICH steps actually
@@ -276,7 +280,7 @@ func runCase(dir string) (bool, error) {
 			return false, fmt.Errorf("unreadable exit expectation for step %d: %w", argvIdx, aerr)
 		}
 		label := fmt.Sprintf("%s step %d [%s]", rel, argvIdx, strings.Join(st.Argv, " "))
-		if spec.Mode == "pty" && ptyBehavioural {
+		if behavioural {
 			if !ptyBehaviourMatches(label, stdout, code, wantOut, wantErr, wantCode) {
 				ok = false
 				divergedSteps[argvIdx] = true

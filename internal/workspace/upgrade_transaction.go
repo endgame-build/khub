@@ -156,6 +156,10 @@ func copyUpgradeWorkspace(root, dest string) (map[string]upgradeFile, map[string
 			}
 			return os.Symlink(link, to)
 		}
+		// A Windows junction or placeholder is refused, never skipped.
+		if err := fsio.RefuseLinkEntry(d, path); err != nil {
+			return err
+		}
 		if !d.Type().IsRegular() {
 			// Sockets, fifos and devices are not khub files; readUpgradeFile
 			// still refuses one at any path the upgrade writes.
@@ -213,6 +217,9 @@ func upgradeDiff(root string, before map[string]upgradeFile, dirs map[string]boo
 		}
 		if d.Type()&os.ModeSymlink != 0 {
 			return nil
+		}
+		if err := fsio.RefuseLinkEntry(d, path); err != nil {
+			return err
 		}
 		after, err := readUpgradeFile(root, rel)
 		if err != nil {

@@ -325,6 +325,7 @@ func TestIdGateThreeArms(t *testing.T) {
 	adr("ad-2026-01-15-001-old", "Old")
 	adr("ad-undated", "Undated")
 	adr("no-prefix", "No prefix")
+	adr("con", "Con") // the device arm fires before the prefix arm
 	cmp("cmp-api", "API")
 	cmp("cmp-001-api", "API")
 	cmp("cmp-404-handling", "404 handling")
@@ -338,6 +339,8 @@ func TestIdGateThreeArms(t *testing.T) {
 			"ad-YYYY-MM-DD-slug — `git mv` the file to drop the ordinal, then fix references to it",
 		"adr/ad-undated": "slug carries no date — this type mints ad-YYYY-MM-DD-slug",
 		"adr/no-prefix":  "slug does not start with a prefix this type mints (ad-YYYY-MM-DD-slug)",
+		"adr/con": "slug is a reserved device name on Windows — " +
+			"`git mv` the file to another name, then fix references to it",
 		"component/cmp-001-api": "slug uses the retired '001-' ordinal scheme; this type mints " +
 			"cmp-slug — `git mv` the file to drop the ordinal, then fix references to it",
 	}
@@ -361,6 +364,15 @@ func TestIdGateThreeArms(t *testing.T) {
 	}
 	if count != len(want) {
 		t.Errorf("%d id findings, want %d: %v", count, len(want), got)
+	}
+}
+
+// A collection row is not a file, so a device-named slug passes the id gate.
+func TestIdGateExemptsCollectionDeviceSlug(t *testing.T) {
+	root := collectionWS(t)
+	create(t, root, "repo", "nul", "repo", "acme/nul", "status", "active")
+	if report := mustValidate(t, root, nil, false); len(report.Errors) != 0 {
+		t.Fatalf("errors = %v", report.Errors)
 	}
 }
 

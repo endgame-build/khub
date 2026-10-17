@@ -4,6 +4,8 @@ import (
 	"errors"
 	"io/fs"
 	"os"
+	"path/filepath"
+	"syscall"
 	"testing"
 	"time"
 )
@@ -103,5 +105,86 @@ func TestReparseAttr(t *testing.T) {
 		if got := reparseAttr(c.attrs); got != c.want {
 			t.Errorf("%s: reparseAttr(%#x) = %v, want %v", c.name, c.attrs, got, c.want)
 		}
+	}
+}
+
+// fileInPath's walk is platform-neutral. The not-exist errors are built by
+// hand, as Windows reports a file in the path.
+func TestFileInPathNamesTheFileInTheWay(t *testing.T) {
+	root := t.TempDir()
+	file := filepath.Join(root, "dir", "file")
+	if err := os.MkdirAll(filepath.Dir(file), 0o777); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(file, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	// The host's lstat, reporting a file in the path as Windows does.
+	lstat := func(p string) (fs.FileInfo, error) {
+		info, err := os.Lstat(p)
+		if errors.Is(err, syscall.ENOTDIR) {
+			err = &fs.PathError{Op: "lstat", Path: p, Err: fs.ErrNotExist}
+		}
+		return info, err
+	}
+	missing := func(path string) error { return &fs.PathError{Op: "statat", Path: path, Err: fs.ErrNotExist} }
+	cases := []struct {
+		name, root, path string
+		notDir           bool
+	}{
+		{"below the file", root, filepath.Join(file, "a", "b"), true},
+		{"the file itself", root, file, true},
+		{"the root is the file", file, file, true},
+		{"below a directory", root, filepath.Join(root, "dir", "gone"), false},
+		{"nothing exists", root, filepath.Join(root, "gone", "deeper"), false},
+		{"outside root", filepath.Join(root, "dir", "sub"), filepath.Join(file, "x"), false},
+	}
+	for _, c := range cases {
+		in := missing(filepath.ToSlash(c.path))
+		got := fileInPath(in, c.root, c.path, lstat)
+		var pe *fs.PathError
+		switch {
+		case c.notDir && (!errors.As(got, &pe) || !errors.Is(pe.Err, NotADirectory) || pe.Op != "statat" || pe.Path != filepath.ToSlash(c.path)):
+			t.Errorf("%s: got %v, want statat %s: NotADirectory", c.name, got, filepath.ToSlash(c.path))
+		case !c.notDir && !errors.Is(got, in):
+			t.Errorf("%s: got %v, want the error unchanged", c.name, got)
+		}
+	}
+	for _, err := range []error{nil, fs.ErrNotExist, &fs.PathError{Op: "statat", Path: file, Err: fs.ErrPermission}} {
+		if got := fileInPath(err, root, filepath.Join(file, "x"), lstat); !errors.Is(got, err) {
+			t.Errorf("fileInPath(%v) = %v, want it unchanged", err, got)
+		}
+	}
+}
+
+// SyncedFolder compares Windows paths; they are plain strings here, so every
+// platform runs the cases.
+func TestSyncedFolderMatchesAtAComponentBoundary(t *testing.T) {
+	env := map[string]string{
+		"OneDrive":           `C:\Users\me\OneDrive`,
+		"OneDriveCommercial": `D:\Work\OneDrive - Acme\`,
+	}
+	getenv := func(k string) string { return env[k] }
+	cases := []struct {
+		root, want string
+		ok         bool
+	}{
+		{`C:\Users\me\OneDrive`, env["OneDrive"], true},
+		{`C:\Users\me\OneDrive\notes\kb`, env["OneDrive"], true},
+		{`c:/users/ME/onedrive/kb`, env["OneDrive"], true},
+		{`D:\Work\OneDrive - Acme\kb`, env["OneDriveCommercial"], true},
+		{`C:\Users\me\OneDriveX`, "", false},
+		{`C:\Users\me\OneDrive2\kb`, "", false},
+		{`C:\Users\me`, "", false},
+		{`E:\kb`, "", false},
+	}
+	for _, c := range cases {
+		got, ok := SyncedFolder(c.root, getenv)
+		if got != c.want || ok != c.ok {
+			t.Errorf("SyncedFolder(%q) = %q, %v; want %q, %v", c.root, got, ok, c.want, c.ok)
+		}
+	}
+	if _, ok := SyncedFolder(`C:\kb`, func(string) string { return "" }); ok {
+		t.Error("an unset variable matched")
 	}
 }

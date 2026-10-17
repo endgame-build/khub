@@ -34,9 +34,12 @@ func RefuseLinkEntry(d fs.DirEntry, path string) error {
 	return nil
 }
 
-// readdirErrno is the errno a failed directory read reports: here the
-// kernel's own, ENOTDIR for a regular file read as a directory.
-func readdirErrno(pe *os.PathError) error { return pe.Err }
+// NotADirectory is the error for a regular file where a directory belongs.
+var NotADirectory error = syscall.ENOTDIR
 
-// NotADirectory is the errno for a regular file opened as a directory.
-const NotADirectory = syscall.ENOTDIR
+// FileInPath is the identity here: the kernel already says ENOTDIR for a
+// regular file where a directory belongs, so no stat is paid.
+func FileInPath(err error, _, _ string) error { return err }
+
+// RefuseSyncedFolder is Windows-only: OneDrive placeholders are its concern.
+func RefuseSyncedFolder(string) error { return nil }

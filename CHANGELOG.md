@@ -10,26 +10,37 @@ Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelo
   release ships `khub_windows_<arch>.zip` archives, and the npm package carries
   `khub.exe` beside the darwin and linux binaries. khub prints the same output
   on Windows as on macOS and Linux: the same error wording and every path with
-  forward slashes. It takes the workspace lock with `LockFileEx`, retries a
-  write while another program holds the file open, and treats Git Bash's
-  terminal (mintty) as a terminal. CI runs the full parity suite on a Windows
-  runner, which does not block a merge yet.
-- The Claude Code plugin (0.1.3) finds the workspace and khub on Windows and
-  reads Windows and Git Bash paths and `khub.exe` commands.
+  forward slashes. It takes the workspace lock with `LockFileEx`, and treats
+  Git Bash's terminal (mintty) as a terminal. A rename or delete that another
+  program's open handle blocks is retried for up to 2 seconds, so a genuine
+  permission refusal on Windows also surfaces after that wait. On Windows the
+  `source:` khub records in `config.yaml` and the upgrade journal's paths are
+  written with forward slashes, as on macOS and Linux. CI runs the full parity
+  suite on a Windows runner, which does not block a merge yet.
+- The Claude Code plugin (0.1.4) finds the workspace and khub on Windows and
+  reads Windows and Git Bash paths and `khub.exe` commands. With no `binary`
+  setting it tries the npm package's launcher, then `khub` on the `PATH`, then
+  `cmd /c khub` for npm's global `khub.cmd`. The `binary` setting keeps a
+  quoted path with spaces as one word.
 
 ### Changed
 
 - Building khub from source needs Go 1.26 (`go.mod` says `go 1.26.0`). Go 1.25
   no longer receives security fixes.
 - **Breaking:** khub refuses the Windows device names `con`, `prn`, `aux`,
-  `nul`, `com0`–`com9` and `lpt0`–`lpt9` on every platform, so a workspace
-  made anywhere checks out on Windows. `add` refuses one as a minted or
-  explicit slug (`invalid_slug`, naming `--id`), and a schema refuses one in a
-  storage path (`invalid_schema`). `req-con` and dated ids stay valid.
+  `nul`, `conin$`, `conout$`, `com0`–`com9`, `com¹`–`com³`, `lpt0`–`lpt9` and
+  `lpt¹`–`lpt³` on every platform, with or without an extension or trailing
+  spaces, so a workspace made anywhere checks out on Windows. `add` refuses one
+  as a minted or explicit slug (`invalid_slug`, naming `--id`), a schema
+  refuses one in a storage path (`invalid_schema`), and `validate` reports an
+  entity file or folder that already carries one. `req-con` and dated ids stay
+  valid.
 - **Breaking, Windows only:** workspace storage refuses every reparse point the
   way it refuses symlinks (`unsafe_path`): a junction, and a cloud placeholder
-  such as OneDrive Files On-Demand. Keep a workspace outside a OneDrive-synced
-  folder.
+  such as OneDrive Files On-Demand. A workspace inside a OneDrive-synced folder
+  is refused by every command and by `init`, before anything is written.
+- `serve`'s `port_not_permitted` message is the same on every platform: the
+  port needs privileges, the system reserves it, or another program holds it.
 - The Claude Code plugin (0.1.1) draws a command made only of khub calls joined
   by `;` or `&&` as one compact row per call. A command that pipes or redirects
   khub's output, or runs another program, keeps Claude Code's raw drawing.

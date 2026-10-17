@@ -22,12 +22,25 @@ changes what the model reads.
   a newer field.
 - The plugin's version lives in `plugin/.claude-plugin/plugin.json` only, never
   in the marketplace entry.
-- The one setting is `binary`, the command that runs khub. Empty resolves
-  `node_modules/.bin/khub` under the workspace root, then `khub` on the `PATH`.
-  On Windows `$.process.run` has no shell to run npm's `.cmd` shim, so empty
-  resolves `node <root>\node_modules\@endgame-build\khub\bin\khub.js`, then
-  `khub` on the `PATH`. The engine reports no platform: the mod reads Windows
-  from the session directory's shape (a drive or a `\\server` share).
+- The one setting is `binary`, the command that runs khub. Its words split on
+  spaces, and double or single quotes keep a path with spaces in one word, as
+  in `"C:\Program Files\khub\khub.exe"`. A backslash is a plain character, so
+  a Windows path keeps its separators. Empty resolves `node_modules/.bin/khub`
+  under the workspace root, then `khub` on the `PATH`.
+- On Windows `$.process.run` has no shell to run npm's `.cmd` shim, so empty
+  resolves, in order:
+  1. `node <root>\node_modules\@endgame-build\khub\bin\khub.js`, when that
+     file exists.
+  2. `khub` on the `PATH`, which finds a `khub.exe`.
+  3. `cmd /c khub`, which reaches npm's global `khub.cmd`. The mod hands khub
+     fixed words and the workspace root, and cmd may read `%`, `!`, `^`, `&`,
+     `|`, `<`, `>`, `"` or a parenthesis as its own, so a root holding one
+     skips this step.
+
+  A candidate that fails to start or exits non-zero passes to the next. The
+  engine reports no platform: the mod reads Windows from the session
+  directory's shape (a drive or a `\\server` share), once per detection, and
+  hands the pure functions the matching `Flavour` from `hooks/workspace.ts`.
 
 The mod API is early access and moves between Claude Code releases. Everything
 below under "Engine rules" was observed on Claude Code 2.1.288 and 2.1.291.

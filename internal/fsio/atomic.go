@@ -89,12 +89,13 @@ func publish(root, path string, data []byte, exclusive bool) (err error) {
 			err = &fs.PathError{Op: "create", Path: path, Err: fs.ErrExist}
 		} else if err != nil {
 			// No hard links (exFAT, some SMB and FUSE mounts): re-check the
-			// target, then rename. The window is the Lstat-to-rename gap only.
+			// target, then rename. The window is the Lstat-to-rename gap only,
+			// so the rename is never retried: a retry would widen it.
 			linked = false
 			if _, lerr := r.Lstat(rel); lerr == nil {
 				err = &fs.PathError{Op: "create", Path: path, Err: fs.ErrExist}
 			} else if errors.Is(lerr, fs.ErrNotExist) {
-				err = robust(func() error { return r.Rename(tmp, rel) })
+				err = r.Rename(tmp, rel)
 			} else {
 				err = lerr
 			}

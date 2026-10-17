@@ -20,6 +20,8 @@ dropped-rows and thin-result note) goes through `Note`, to stderr, before
   the standalone Git Bash window), which reaches khub as a named pipe; that
   check is the real isatty read the only way such a pty allows, not a fourth
   signal.
+- Every path khub prints goes through `filepath.ToSlash`, so Windows prints
+  what darwin does. The Windows parity leg is the check.
 - EPIPE is not a failure (`khub schema | head`); `Guard` passes it through and
   `main.go` disables the SIGPIPE kill so the write error is visible at all.
 - Exit codes: 0 success · 1 a gate failed (`validate`/`check`) · 2 a refusal

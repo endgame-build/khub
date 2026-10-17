@@ -30,7 +30,7 @@ Full command surface and JSON contracts: [`docs/cli.md`](docs/cli.md). Feature h
 
 ## Quickstart
 
-khub is a single static binary for macOS and Linux (amd64, arm64). The primary install is the npm package [`@endgame-build/khub`](https://www.npmjs.com/package/@endgame-build/khub) — one package carrying a prebuilt binary per platform behind a launcher that picks the matching one — pinned per repo, so everyone (and every agent) touching that repo runs the same khub:
+khub is a single static binary for macOS, Linux and Windows (amd64, arm64; Windows is experimental). The primary install is the npm package [`@endgame-build/khub`](https://www.npmjs.com/package/@endgame-build/khub) — one package carrying a prebuilt binary per platform behind a launcher that picks the matching one — pinned per repo, so everyone (and every agent) touching that repo runs the same khub:
 
 ```bash
 npm install -D @endgame-build/khub                  # exact per-repo pin (required: later commands run it)

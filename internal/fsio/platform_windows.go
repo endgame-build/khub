@@ -1,13 +1,16 @@
 package fsio
 
 import (
-	"errors"
+	"fmt"
 	"io/fs"
 	"os"
+	"path/filepath"
 	"syscall"
 	"time"
 
 	"golang.org/x/sys/windows"
+
+	"github.com/endgame-build/khub/internal/errs"
 )
 
 // syncParent is a no-op on Windows. FlushFileBuffers needs a handle opened for
@@ -46,23 +49,32 @@ func RefuseLinkEntry(d fs.DirEntry, path string) error {
 	return RefuseLink(info, path)
 }
 
-// NotADirectory is the errno for a regular file opened as a directory:
-// ERROR_DIRECTORY, which the CLI prints as ENOTDIR (see readdirErrno for why
-// syscall.ENOTDIR is the wrong code here).
-const NotADirectory = windows.ERROR_DIRECTORY
+// notADirectory is NotADirectory on Windows. It prints darwin's text and
+// unwraps to ERROR_DIRECTORY, the Win32 code the CLI prints as ENOTDIR.
+type notADirectory struct{}
 
-// readdirErrno names a regular file read as a directory with the Win32 code
-// that means it. Go's Windows readdir reports that case as
-// &PathError{Op: "readdir", Err: syscall.ENOTDIR} (os/dir_windows.go), but
-// syscall.ENOTDIR is ERROR_PATH_NOT_FOUND on Windows — the code a missing
-// path raises too, which the CLI prints as ENOENT. ERROR_DIRECTORY ("The
-// directory name is invalid") is the code the CLI prints as ENOTDIR, so a file
-// sitting where a directory belongs reads as internal_path_error, as it does
-// on darwin and Linux. Any other readdir failure carries Go's op
-// "GetFileInformationByHandleEx" and its own code, and passes through.
-func readdirErrno(pe *os.PathError) error {
-	if pe.Op == "readdir" && errors.Is(pe.Err, syscall.ENOTDIR) {
-		return windows.ERROR_DIRECTORY
+func (notADirectory) Error() string { return "not a directory" }
+func (notADirectory) Unwrap() error { return windows.ERROR_DIRECTORY }
+
+// NotADirectory is the error for a regular file where a directory belongs.
+var NotADirectory error = notADirectory{}
+
+// FileInPath names a regular file where a directory belongs. Windows reports
+// that case as ERROR_PATH_NOT_FOUND, which reads as missing, so the nearest
+// existing ancestor inside root decides (see fileInPath).
+func FileInPath(err error, root, path string) error {
+	return fileInPath(err, root, path, os.Lstat)
+}
+
+// RefuseSyncedFolder refuses a workspace inside a OneDrive folder up front,
+// before a placeholder turns up mid-write as a reparse point.
+func RefuseSyncedFolder(root string) error {
+	abs, err := filepath.Abs(root)
+	if err != nil {
+		return err
 	}
-	return pe.Err
+	if dir, ok := SyncedFolder(abs, os.Getenv); ok {
+		return errs.New("unsafe_path", fmt.Sprintf("Synced folders are not allowed for workspace storage: %s is inside %s. OneDrive makes its files cloud placeholders (OneDrive Files On-Demand), which are reparse points; keep the workspace outside a synced folder", filepath.ToSlash(abs), filepath.ToSlash(dir)))
+	}
+	return nil
 }

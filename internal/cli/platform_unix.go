@@ -25,5 +25,6 @@ func isBrokenPipe(err error) bool { return errors.Is(err, syscall.EPIPE) }
 // isTerminal is IsTTY's third rung, the real isatty.
 func isTerminal(f *os.File) bool { return term.IsTerminal(int(f.Fd())) }
 
-// PrepareConsole has nothing to do where terminals take ANSI natively.
-func PrepareConsole() {}
+// PrepareConsole has nothing to do where terminals take ANSI natively, so
+// its restore does nothing either.
+func PrepareConsole() (restore func()) { return func() {} }

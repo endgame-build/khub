@@ -75,10 +75,11 @@ func TestAtomicWriteWaitsOutAnOpenReader(t *testing.T) {
 	}
 }
 
-// A regular file read as a directory carries ERROR_DIRECTORY, the code the CLI
-// prints as ENOTDIR, not Go's syscall.ENOTDIR — which on Windows is
-// ERROR_PATH_NOT_FOUND and would print as a missing file.
-func TestReadDirOfAFileIsERROR_DIRECTORY(t *testing.T) {
+// A regular file read as a directory carries NotADirectory, which unwraps to
+// ERROR_DIRECTORY, the code the CLI prints as ENOTDIR. Go's own report is
+// syscall.ENOTDIR, which on Windows is ERROR_PATH_NOT_FOUND and would print as
+// a missing file.
+func TestReadDirOfAFileIsNotADirectory(t *testing.T) {
 	root := t.TempDir()
 	path := filepath.Join(root, "file")
 	if err := os.WriteFile(path, nil, 0o600); err != nil {
@@ -86,18 +87,23 @@ func TestReadDirOfAFileIsERROR_DIRECTORY(t *testing.T) {
 	}
 	_, err := ReadDir(root, path)
 	var pe *os.PathError
-	if !errors.As(err, &pe) || pe.Op != "readdir" || !errors.Is(pe.Err, windows.ERROR_DIRECTORY) {
-		t.Fatalf("ReadDir error = %#v, want readdir ERROR_DIRECTORY", err)
+	if !errors.As(err, &pe) || pe.Op != "readdir" || !errors.Is(pe.Err, NotADirectory) || !errors.Is(err, windows.ERROR_DIRECTORY) {
+		t.Fatalf("ReadDir error = %#v, want readdir NotADirectory", err)
+	}
+	if pe.Error() != "readdir "+path+": not a directory" {
+		t.Errorf("message = %q", pe.Error())
 	}
 }
 
-func TestReaddirErrnoLeavesOtherFailuresAlone(t *testing.T) {
-	for _, pe := range []*os.PathError{
-		{Op: "GetFileInformationByHandleEx", Path: "x", Err: syscall.ENOTDIR},
-		{Op: "readdir", Path: "x", Err: windows.ERROR_ACCESS_DENIED},
-	} {
-		if got := readdirErrno(pe); !errors.Is(got, pe.Err) {
-			t.Errorf("readdirErrno(%v) = %v, want it unchanged", pe, got)
-		}
+// Stat below a regular file names the file in the way, as darwin does.
+func TestStatBelowAFileIsNotADirectory(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "file"), nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	_, err := Stat(root, filepath.Join(root, "file", "child"))
+	var pe *os.PathError
+	if !errors.As(err, &pe) || pe.Op != "statat" || !errors.Is(pe.Err, NotADirectory) {
+		t.Fatalf("Stat error = %#v, want statat NotADirectory", err)
 	}
 }

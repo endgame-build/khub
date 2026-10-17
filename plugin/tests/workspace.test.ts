@@ -1,18 +1,7 @@
 import { expect, test } from 'claude-code/testing'
 
 import type { KhubType } from '../types'
-import {
-  ancestors,
-  binCandidates,
-  childOf,
-  dirname,
-  entityAt,
-  installedAt,
-  isElsewhere,
-  isOlder,
-  isWindowsPath,
-  relative,
-} from '../hooks/workspace'
+import { binCandidates, dirname, entityAt, isElsewhere, isOlder, isWindowsPath, relative, UNIX, WINDOWS } from '../hooks/workspace'
 import type { Ws } from '../hooks/workspace'
 
 const type = (name: string, layout: string, format: string, path: string): KhubType => ({ name, layout, format, path })
@@ -26,7 +15,7 @@ const TYPES = [
   type('spec', 'file', 'json', 'specs'),
 ]
 
-const at = (root: string): Ws => ({ root, bin: ['khub'], version: '0.27.0', preset: 'test', presetVersion: '1.0.0', types: TYPES })
+const at = (root: string): Ws => ({ root, bin: ['khub'], version: '0.27.0', preset: 'test', presetVersion: '1.0.0', types: TYPES, flavour: UNIX })
 const WS = at('/ws')
 
 test('a file maps to its entity through the layout of its type', () => {
@@ -89,8 +78,8 @@ test('a -C value is elsewhere only when it is another absolute path', () => {
 })
 
 test('the directories above a path run up to the root', () => {
-  expect(ancestors('/a/b/c')).toEqual(['/a/b/c', '/a/b', '/a', '/'])
-  expect(ancestors('/')).toEqual(['/'])
+  expect(UNIX.ancestors('/a/b/c')).toEqual(['/a/b/c', '/a/b', '/a', '/'])
+  expect(UNIX.ancestors('/')).toEqual(['/'])
   expect(dirname('/a/b')).toBe('/a')
   expect(dirname('/a')).toBe('/')
 })
@@ -99,6 +88,15 @@ test('khub is looked for in the setting, else in the repo, else on the path', ()
   expect(binCandidates('/ws', '')).toEqual([['/ws/node_modules/.bin/khub'], ['khub']])
   expect(binCandidates('/ws', '   ')).toEqual([['/ws/node_modules/.bin/khub'], ['khub']])
   expect(binCandidates('/ws', ' npx  @endgame-build/khub ')).toEqual([['npx', '@endgame-build/khub']])
+  expect(binCandidates('/ws', 'node /x/khub.js')).toEqual([['node', '/x/khub.js']])
+  expect(binCandidates('/ws', "'/opt/my tools/khub' --verbose")).toEqual([['/opt/my tools/khub', '--verbose']])
+})
+
+test('a quoted setting keeps a Windows path with spaces, and its backslashes, in one word', () => {
+  expect(binCandidates('C:\\ws', '"C:\\Program Files\\khub\\khub.exe" --flag', WINDOWS)).toEqual([
+    ['C:\\Program Files\\khub\\khub.exe', '--flag'],
+  ])
+  expect(binCandidates('C:\\ws', 'node "C:\\my tools\\khub.js"', WINDOWS)).toEqual([['node', 'C:\\my tools\\khub.js']])
 })
 
 test('a version before the one the mod reads is older, and a build with no version is not', () => {
@@ -113,7 +111,7 @@ test('a version before the one the mod reads is older, and a build with no versi
 })
 
 // A Windows workspace, as Claude Code names its directory there.
-const WIN = { ...at('C:\\Work\\me\\ws'), isWindows: true }
+const WIN = { ...at('C:\\Work\\me\\ws'), flavour: WINDOWS }
 
 test('a Windows directory is told from a unix one by its spelling', () => {
   expect(isWindowsPath('C:\\Work\\me\\ws')).toBe(true)
@@ -125,31 +123,36 @@ test('a Windows directory is told from a unix one by its spelling', () => {
 })
 
 test('the directories above a Windows path run up to its drive or share, in its own separator', () => {
-  expect(ancestors('C:\\Work\\me\\ws', true)).toEqual(['C:\\Work\\me\\ws', 'C:\\Work\\me', 'C:\\Work', 'C:\\'])
-  expect(ancestors('C:\\Work\\me\\', true)).toEqual(['C:\\Work\\me', 'C:\\Work', 'C:\\'])
-  expect(ancestors('C:\\', true)).toEqual(['C:\\'])
-  expect(ancestors('D:/work/ws', true)).toEqual(['D:/work/ws', 'D:/work', 'D:/'])
-  expect(ancestors('\\\\server\\share\\ws', true)).toEqual(['\\\\server\\share\\ws', '\\\\server\\share\\'])
-  expect(childOf('C:\\Work\\me\\ws', '.khub', true)).toBe('C:\\Work\\me\\ws\\.khub')
-  expect(childOf('C:\\', '.khub', true)).toBe('C:\\.khub')
-  expect(childOf('D:/work', '.khub', true)).toBe('D:/work/.khub')
-  expect(childOf('/ws', '.khub')).toBe('/ws/.khub')
-  expect(childOf('/', '.khub')).toBe('//.khub')
+  expect(WINDOWS.ancestors('C:\\Work\\me\\ws')).toEqual(['C:\\Work\\me\\ws', 'C:\\Work\\me', 'C:\\Work', 'C:\\'])
+  expect(WINDOWS.ancestors('C:\\Work\\me\\')).toEqual(['C:\\Work\\me', 'C:\\Work', 'C:\\'])
+  expect(WINDOWS.ancestors('C:\\')).toEqual(['C:\\'])
+  expect(WINDOWS.ancestors('D:/work/ws')).toEqual(['D:/work/ws', 'D:/work', 'D:/'])
+  expect(WINDOWS.ancestors('\\\\server\\share\\ws')).toEqual(['\\\\server\\share\\ws', '\\\\server\\share\\'])
+  expect(WINDOWS.childOf('C:\\Work\\me\\ws', '.khub')).toBe('C:\\Work\\me\\ws\\.khub')
+  expect(WINDOWS.childOf('C:\\', '.khub')).toBe('C:\\.khub')
+  expect(WINDOWS.childOf('D:/work', '.khub')).toBe('D:/work/.khub')
+  expect(UNIX.childOf('/ws', '.khub')).toBe('/ws/.khub')
+  expect(UNIX.childOf('/', '.khub')).toBe('//.khub')
 })
 
 test('on Windows khub is looked for in the setting, else in the npm launcher run by node, else on the path', () => {
   const launcher = 'C:\\ws\\node_modules\\@endgame-build\\khub\\bin\\khub.js'
 
-  expect(binCandidates('C:\\ws', '', true)).toEqual([['node', launcher], ['khub']])
-  expect(binCandidates('C:\\ws', 'C:\\tools\\khub.exe', true)).toEqual([['C:\\tools\\khub.exe']])
-  expect(installedAt(['node', launcher], true)).toBe(launcher)
-  expect(installedAt(['khub'], true)).toBe(null)
-  expect(installedAt(['C:\\tools\\khub.exe'], true)).toBe(null)
+  expect(binCandidates('C:\\ws', '', WINDOWS)).toEqual([['node', launcher], ['khub'], ['cmd', '/c', 'khub']])
+  expect(binCandidates('C:\\ws', 'C:\\tools\\khub.exe', WINDOWS)).toEqual([['C:\\tools\\khub.exe']])
+  expect(WINDOWS.installedAt(['node', launcher])).toBe(launcher)
+  expect(WINDOWS.installedAt(['khub'])).toBe(null)
+  expect(WINDOWS.installedAt(['C:\\tools\\khub.exe'])).toBe(null)
+  expect(WINDOWS.installedAt(['cmd', '/c', 'khub'])).toBe(null)
+
+  // cmd would read a `&` or a `%` in the root it is handed, so such a root never goes through it.
+  expect(binCandidates('C:\\A&B\\ws', '', WINDOWS).at(-1)).toEqual(['khub'])
+  expect(binCandidates('C:\\100%\\ws', '', WINDOWS).at(-1)).toEqual(['khub'])
 
   // Unix is unchanged: an absolute program must exist, and a bare name is looked up.
-  expect(installedAt(['/ws/node_modules/.bin/khub'])).toBe('/ws/node_modules/.bin/khub')
-  expect(installedAt(['khub'])).toBe(null)
-  expect(installedAt(['npx', '@endgame-build/khub'])).toBe(null)
+  expect(UNIX.installedAt(['/ws/node_modules/.bin/khub'])).toBe('/ws/node_modules/.bin/khub')
+  expect(UNIX.installedAt(['khub'])).toBe(null)
+  expect(UNIX.installedAt(['npx', '@endgame-build/khub'])).toBe(null)
 })
 
 test('a Windows file maps to its entity whatever its separators and the case of its root', () => {

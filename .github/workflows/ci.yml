@@ -108,6 +108,17 @@ jobs:
           # Pinned, not `latest`: a linter release could turn the tree red
           # with no commit of ours, and the choke-point rules are a gate.
           version: "v2.13.2"
+      # The same lint over the Windows build, on a blocking leg. golangci-lint
+      # loads packages through go/packages, which honours GOOS, so this lints
+      # every *_windows.go file. The action downloads its binary by the
+      # runner's own platform, so GOOS reaches only the lint.
+      - name: Choke-point lint for Windows
+        if: matrix.os == 'ubuntu-latest'
+        uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
+        env:
+          GOOS: windows
+        with:
+          version: "v2.13.2"
       - run: go test ./...
       - name: Build
         run: |
@@ -127,6 +138,44 @@ jobs:
       # each (parity/runner/ptymode.go).
       - name: Every fixture passes, unaided
         run: ./parity-run${{ matrix.exe }} -bin "$PWD/khub${{ matrix.exe }}" -cases parity/cases
+      # GitHub's Windows runner is an administrator whose token holds the
+      # backup and restore privileges, so the deny ACE in err-os-error does not
+      # bind it and the step above reports that case as SKIP. A standard local
+      # user is bound by the ACE, so this runs the case as one, and a SKIP
+      # fails the step as surely as a FAIL. The password is random per run.
+      # TEMP points at a directory the user owns: Start-Process hands the child
+      # this shell's environment, and the runner's TEMP is not writable to it.
+      - name: err-os-error runs as a standard user (Windows)
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $PSNativeCommandUseErrorActionPreference = $true
+          $bytes = [byte[]]::new(24)
+          [System.Security.Cryptography.RandomNumberGenerator]::Fill($bytes)
+          $plain = 'Aa1!' + [Convert]::ToBase64String($bytes)
+          Write-Output "::add-mask::$plain"
+          $secure = ConvertTo-SecureString $plain -AsPlainText -Force
+          New-LocalUser -Name parity -Password $secure -AccountNeverExpires | Out-Null
+          $cred = [pscredential]::new('parity', $secure)
+          icacls "$PWD" /grant 'parity:(OI)(CI)F' /T /Q
+          $tmp = Join-Path $env:RUNNER_TEMP 'parity-user-tmp'
+          New-Item -ItemType Directory $tmp | Out-Null
+          icacls $tmp /grant 'parity:(OI)(CI)F' /Q
+          $env:TEMP = $tmp
+          $env:TMP = $tmp
+          $out = Join-Path $env:RUNNER_TEMP 'parity-user.out'
+          $err = Join-Path $env:RUNNER_TEMP 'parity-user.err'
+          $p = Start-Process -FilePath "$PWD\parity-run.exe" `
+            -ArgumentList '-bin', "$PWD\khub.exe", '-cases', 'parity/cases', '-only', 'cli-contract/err-os-error' `
+            -WorkingDirectory "$PWD" -Credential $cred -LoadUserProfile `
+            -NoNewWindow -Wait -PassThru `
+            -RedirectStandardOutput $out -RedirectStandardError $err
+          $text = "$(Get-Content -Raw $out)$(Get-Content -Raw $err)"
+          Write-Output $text
+          if ($text -match 'SKIP') { throw 'err-os-error was skipped: the write denial did not bind the standard user' }
+          if ($text -notmatch '(?m)^verified 1 cases: 1 pass, 0 fail') { throw 'no pass summary for err-os-error' }
+          if ($p.ExitCode -ne 0) { throw "parity-run exited $($p.ExitCode)" }
       # Appendix A: every command, flag, error code, format special, and mode
       # must map to at least one recorded fixture. Fails on any gap.
       - name: Coverage gate
@@ -150,12 +199,10 @@ jobs:
       # decorators. This regenerates from what the binary prints, so the
       # reference cannot advertise a flag the CLI does not have.
       #
-      # Not on Windows: the reference is generated text, and the help it is
-      # generated from is already byte-checked there by the parity suite.
+      # On Windows too: khub.exe must print the same help, byte for byte.
       - name: CLI reference is current
-        if: matrix.os != 'windows-latest'
         run: |
-          bash parity/tools/gen_cli_reference.sh
+          KHUB=./khub${{ matrix.exe }} bash parity/tools/gen_cli_reference.sh
           git diff --exit-code docs/cli-reference.md
       # The M0 YAML gate is a standing regression, not a one-off: the emitter
       # must keep reproducing ruamel byte-for-byte, because that is khub's

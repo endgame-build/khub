@@ -1,8 +1,11 @@
 package cli
 
 import (
+	"errors"
+	"io/fs"
 	"regexp"
 	"strings"
+	"syscall"
 )
 
 // posixErrno is one errno as khub prints it in the os_error envelope: the
@@ -71,6 +74,28 @@ var windowsToPOSIX = map[uint32]posixErrno{
 	206: posixENAMETOOLONG, // ERROR_FILENAME_EXCED_RANGE
 	232: posixEPIPE,        // ERROR_NO_DATA ("The pipe is being closed")
 	267: posixENOTDIR,      // ERROR_DIRECTORY
+}
+
+// errorClass is the exception name khub prints beside err. A Win32 code
+// osErrno maps is classed by the darwin errno it prints (errnoClassName), so
+// ERROR_SHARING_VIOLATION reads PermissionError beside its 13. Anything else
+// is classed as it reports itself, which on darwin is the same answer.
+func errorClass(err error) string {
+	var se syscall.Errno
+	if errors.As(err, &se) {
+		if n, _, mapped := osErrno(se); mapped {
+			return errnoClassName(n)
+		}
+	}
+	switch {
+	case errors.Is(err, fs.ErrNotExist):
+		return "FileNotFoundError"
+	case errors.Is(err, fs.ErrPermission):
+		return "PermissionError"
+	case errors.Is(err, fs.ErrExist):
+		return "FileExistsError"
+	}
+	return "OSError"
 }
 
 // errnoClassName is the exception name a darwin build prints beside errno n:

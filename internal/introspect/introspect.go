@@ -40,13 +40,12 @@ func LayerFiles(root string) ([]string, error) {
 		fi, statErr := fsio.Stat(root, p)
 		if statErr != nil {
 			if errors.Is(statErr, fs.ErrNotExist) {
-				// Windows reports a FILE at .khub as ERROR_PATH_NOT_FOUND, which
-				// matches ErrNotExist; POSIX says ENOTDIR and never gets here.
-				khub, khubErr := fsio.Stat(root, filepath.Join(root, ".khub"))
-				if khubErr != nil || khub.IsDir() {
-					continue
-				}
-				statErr = fmt.Errorf("%s is not a directory", filepath.ToSlash(filepath.Join(root, ".khub")))
+				continue
+			}
+			// The root-relative path is printed, so in slash form.
+			var pe *fs.PathError
+			if errors.As(statErr, &pe) {
+				statErr = &fs.PathError{Op: pe.Op, Path: filepath.ToSlash(pe.Path), Err: pe.Err}
 			}
 			return nil, errs.New("schema_error",
 				fmt.Sprintf("Cannot read schema %s: %s", filepath.ToSlash(p), statErr.Error()))

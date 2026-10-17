@@ -11,18 +11,7 @@ import { callsOf, classify, mutates } from './parse'
 import { callRow, emptyBlock } from './rows'
 import { bandParts, diffOf, editedBy, EMPTY_SESSION, summaryOf, withEdited, withIds } from './session'
 import { finished, waiting } from './summarize'
-import {
-  ancestors,
-  binCandidates,
-  childOf,
-  entityAt,
-  installedAt,
-  isElsewhere,
-  isOlder,
-  isWindowsPath,
-  MIN_KHUB,
-  relative,
-} from './workspace'
+import { binCandidates, entityAt, flavourOf, isElsewhere, isOlder, MIN_KHUB, relative } from './workspace'
 import type { Ws } from './workspace'
 
 // The engine reads which state a module touches from atoms that are consts of this file.
@@ -96,21 +85,21 @@ async function loadSchema($: EngineInterface) {
     presetVersion: clean(view.provenance?.version ?? ''),
   }
 
-  ws = { ...workspace, types, isWindows: here.isWindows }
+  ws = { ...workspace, types, flavour: here.flavour }
   $.ui.status(undefined)
   await update($, workspaceAtom, () => workspace)
 }
 
-// Finds the workspace above `cwd`, resolves khub and loads the schema. A Windows session is
-// told by the spelling of its directory.
+// Finds the workspace above `cwd`, resolves khub and loads the schema. The session's
+// platform is told by the spelling of its directory.
 async function detect($: EngineInterface, cwd: string, binary: string): Promise<'ok' | 'none' | 'no-binary' | 'old'> {
   ws = null
 
-  const isWindows = isWindowsPath(cwd)
+  const flavour = flavourOf(cwd)
   let root: string | undefined
 
-  for (const dir of ancestors(cwd, isWindows)) {
-    if (await $.fs.exists(childOf(dir, '.khub', isWindows))) {
+  for (const dir of flavour.ancestors(cwd)) {
+    if (await $.fs.exists(flavour.childOf(dir, '.khub'))) {
       root = dir
       break
     }
@@ -120,8 +109,8 @@ async function detect($: EngineInterface, cwd: string, binary: string): Promise<
 
   let found: Ws | null = null
 
-  for (const bin of binCandidates(root, binary, isWindows)) {
-    const file = installedAt(bin, isWindows)
+  for (const bin of binCandidates(root, binary, flavour)) {
+    const file = flavour.installedAt(bin)
 
     if (file !== null && !(await $.fs.exists(file))) continue
 
@@ -129,11 +118,11 @@ async function detect($: EngineInterface, cwd: string, binary: string): Promise<
       const ran = await $.process.run([...bin, '--version'], { timeoutMs: 5_000 })
 
       if (ran.exitCode === 0) {
-        found = { root, bin, version: ran.stdout.trim(), preset: '', presetVersion: '', types: [], isWindows }
+        found = { root, bin, version: ran.stdout.trim(), preset: '', presetVersion: '', types: [], flavour }
         break
       }
     } catch {
-      // This candidate is not installed, so the next one is tried.
+      // This candidate did not start, so the next one is tried, as after a failed exit.
     }
   }
 
@@ -252,7 +241,7 @@ export const register: Register = (on, options) => {
     if (!ws) return next(e)
 
     const here = ws
-    const parsed = classify(e.command, here.isWindows === true)
+    const parsed = classify(e.command, here.flavour)
     const calls = callsOf(parsed).filter(call => !isElsewhere(here, call.workspace))
 
     if (calls.length === 0) return next(e)

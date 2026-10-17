@@ -312,6 +312,12 @@ func idError(rtype *schema.ResolvedType, slug string, meta *omap.Map) (string, b
 	if rtype.Storage.Layout == schema.LayoutSingleton {
 		return "", false
 	}
+	// A hand-named file or folder can carry a device name `add` refuses. A
+	// collection row is not a file, so its slug is exempt.
+	if rtype.Storage.Layout != schema.LayoutCollection && schema.ReservedDeviceName(slug) {
+		return "slug is a reserved device name on Windows — " +
+			"`git mv` the file to another name, then fix references to it", true
+	}
 	shape := rtype.IDShape()
 	rest := slug
 

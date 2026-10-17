@@ -16,6 +16,9 @@ type HostOptions = {
   // False for a machine with no khub to run.
   hasKhub?: boolean
 
+  // Programs that fail to start, as a spawn of a missing file does.
+  missing?: string[]
+
   // The paths that exist, when not the workspace's `.khub` under ROOT.
   files?: string[]
 }
@@ -63,7 +66,7 @@ export function fakeHost(on: On, replies: Fixture[] = [], options: HostOptions =
   on('session.start', (_$, e) => ({ cwd: e.cwd }))
   on('turn.start', (_$, e) => ({ turnId: e.turnId }))
   on('process.run', (_$, e) => {
-    if (options.hasKhub === false) throw new Error('spawn khub ENOENT')
+    if (options.hasKhub === false || options.missing?.includes(e.argv[0] ?? '')) throw new Error('spawn khub ENOENT')
 
     // A call is `<program…> -C <root> <args>`, or `<program…> --version`.
     const at = e.argv.indexOf('-C')

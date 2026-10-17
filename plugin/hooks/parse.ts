@@ -1,5 +1,8 @@
 // This file recognizes khub invocations in a Bash command string.
 
+import { UNIX } from './workspace'
+import type { Flavour } from './workspace'
+
 export type Simple = {
   kind: 'simple'
   verb: string
@@ -208,26 +211,26 @@ export function tokenize(input: string): Token[] | null {
   return tokens
 }
 
-// On Windows the binary may carry its extension and any case, and its path either separator.
-const WINDOWS_BINARY = /(?:^|[\\/])khub(?:\.exe|\.cmd)?$/i
+// Matches a word that names the khub binary: the name alone or at the end of a path.
+const binaryOf = ({ name, separator }: Flavour) => new RegExp(`(?:^|${separator})${name}$`)
 
-// Tells whether a word names the khub binary. Unix takes `khub` or a path ending `/khub`.
-const isKhubBinary = (word: string, isWindows: boolean) =>
-  isWindows ? WINDOWS_BINARY.test(word) : word === 'khub' || word.endsWith('/khub')
+// Matches a khub call in raw command text, capturing its verb and the rest of its segment.
+const scanOf = ({ name, separator }: Flavour) =>
+  new RegExp(`(?:^|[\\s;&|(\`])(?:[^\\s;&|]*${separator})?${name}\\s+(?:(?:-C|--workspace)\\s+\\S+\\s+)?([a-z][a-z-]*)([^;&|\\n]*)`, 'g')
 
 // Reads one segment's words as a khub call, or null when it runs something else.
-function khubCall(words: string[], isWindows: boolean): Simple | null {
+function khubCall(words: string[], binary: RegExp): Simple | null {
   let i = 0
 
   while (/^[A-Za-z_][A-Za-z0-9_]*=/.test(words[i] ?? '')) i += 1
 
-  const binary = words[i] ?? ''
+  const program = words[i] ?? ''
 
-  if (binary === 'npx') {
+  if (program === 'npx') {
     i += 1
     while ((words[i] ?? '').startsWith('-')) i += 1
     if (!/^@endgame-build\/khub(@|$)/.test(words[i] ?? '')) return null
-  } else if (!isKhubBinary(binary, isWindows)) {
+  } else if (!binary.test(program)) {
     return null
   }
 
@@ -293,12 +296,8 @@ function khubCall(words: string[], isWindows: boolean): Simple | null {
 
 // Reads the khub calls off the text of a command the tokenizer could not follow. It keeps
 // each verb, and whether `--force` or `--dry-run` follows it.
-function scan(command: string, isWindows: boolean): Simple[] {
-  const calls = command.matchAll(
-    isWindows
-      ? /(?:^|[\s;&|(`])(?:[^\s;&|]*[\\/])?khub(?:\.exe|\.cmd)?\s+(?:(?:-C|--workspace)\s+\S+\s+)?([a-z][a-z-]*)([^;&|\n]*)/g
-      : /(?:^|[\s;&|(`])(?:[^\s;&|]*\/)?khub\s+(?:(?:-C|--workspace)\s+\S+\s+)?([a-z][a-z-]*)([^;&|\n]*)/g,
-  )
+function scan(command: string, flavour: Flavour): Simple[] {
+  const calls = command.matchAll(scanOf(flavour))
 
   return [...calls].map(match => {
     const rest = match[2] ?? ''
@@ -312,13 +311,13 @@ function scan(command: string, isWindows: boolean): Simple[] {
 
 // Reads a Bash command. On Windows, where Git Bash runs it, the binary may be `khub.exe` and
 // its path may hold backslashes.
-export function classify(command: string, isWindows = false): Parsed {
-  if (!(isWindows ? command.toLowerCase() : command).includes('khub')) return NONE
+export function classify(command: string, flavour: Flavour = UNIX): Parsed {
+  if (!new RegExp(flavour.name).test(command)) return NONE
 
   const tokens = tokenize(command)
 
   if (tokens === null) {
-    const calls = scan(command, isWindows)
+    const calls = scan(command, flavour)
 
     return calls.length === 0 ? NONE : { kind: 'compound', calls }
   }
@@ -341,7 +340,8 @@ export function classify(command: string, isWindows = false): Parsed {
   }
 
   const filled = segments.filter(segment => segment.words.length > 0)
-  const read = filled.map(segment => khubCall(segment.words, isWindows))
+  const binary = binaryOf(flavour)
+  const read = filled.map(segment => khubCall(segment.words, binary))
   const calls = read.filter((found): found is Simple => found !== null)
 
   if (calls.length === 0) return NONE

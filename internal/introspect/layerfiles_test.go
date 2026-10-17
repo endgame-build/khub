@@ -51,7 +51,10 @@ func TestLayerFilesReportsAStatFailureAsItself(t *testing.T) {
 	if strings.Contains(located.Error(), "file not found") {
 		t.Errorf("the message still claims absence: %s", located.Error())
 	}
-	if !strings.Contains(located.Error(), "ontology.yaml") {
-		t.Errorf("the message does not name the layer: %s", located.Error())
+	// darwin's own text, which every platform prints.
+	want := "Cannot read schema " + filepath.ToSlash(filepath.Join(root, ".khub", "ontology.yaml")) +
+		": statat .khub/ontology.yaml: not a directory"
+	if located.Message != want {
+		t.Errorf("message = %q, want %q", located.Message, want)
 	}
 }

@@ -2,6 +2,7 @@ import { expect, test } from 'claude-code/testing'
 
 import { callsOf, classify, edited, isWrite, mutates, tokenize } from '../hooks/parse'
 import type { Simple } from '../hooks/parse'
+import { WINDOWS } from '../hooks/workspace'
 
 const simple = (command: string) => classify(command) as Simple
 const verbs = (command: string) => callsOf(classify(command)).map(call => call.verb)
@@ -189,7 +190,7 @@ test('an edit names the fields it changed, and a body by name alone', () => {
 })
 
 test('on Windows the binary may carry .exe, any case and either separator, and dirs are Windows dirs', () => {
-  const win = (command: string) => classify(command, true) as Simple
+  const win = (command: string) => classify(command, WINDOWS) as Simple
 
   for (const binary of [
     'khub',
@@ -212,11 +213,23 @@ test('on Windows the binary may carry .exe, any case and either separator, and d
   }
 
   expect(win('khub.exe -C C:\\\\Work\\\\me\\\\ws status').workspace).toBe('C:\\Work\\me\\ws')
-  expect(classify('cd /c/ws && khub.exe edit ad-1 status accepted; khub.exe check', true).kind).toBe('chain')
-  expect(classify('khub.exe query | jq .', true).kind).toBe('compound')
-  expect(callsOf(classify('(C:\\\\tools\\\\khub.exe add adr --title x)', true)).map(call => call.verb)).toEqual(['add'])
-  expect(classify('khubx status', true).kind).toBe('none')
-  expect(classify('mykhub.exe status', true).kind).toBe('none')
+  expect(classify('cd /c/ws && khub.exe edit ad-1 status accepted; khub.exe check', WINDOWS).kind).toBe('chain')
+  expect(classify('khub.exe query | jq .', WINDOWS).kind).toBe('compound')
+  expect(callsOf(classify('(C:\\\\tools\\\\khub.exe add adr --title x)', WINDOWS)).map(call => call.verb)).toEqual(['add'])
+  expect(classify('khubx status', WINDOWS).kind).toBe('none')
+  expect(classify('mykhub.exe status', WINDOWS).kind).toBe('none')
+})
+
+test('on Windows the binary and the text scan agree on any case of the name, and a verb is lowercase only', () => {
+  const win = (command: string) => callsOf(classify(command, WINDOWS)).map(call => call.verb)
+
+  for (const command of ['KHUB.EXE add adr --title x', 'C:\\\\tools\\\\Khub.cmd query']) {
+    expect(win(command)).toHaveLength(1)
+    expect(win(`(${command})`)).toEqual(win(command))
+  }
+
+  expect(win('(khub ADD adr --title x)')).toEqual([])
+  expect(win('(KHUB.EXE Query)')).toEqual([])
 })
 
 test('unix reads khub.exe and a backslash path as some other program', () => {

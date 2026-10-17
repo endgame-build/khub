@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	pathpkg "path"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -68,7 +69,8 @@ func Stat(root, path string) (fs.FileInfo, error) {
 		return nil, err
 	}
 	defer r.Close()
-	return r.Stat(rel)
+	info, err := r.Stat(rel)
+	return info, FileInPath(err, root, path)
 }
 
 // ReadDir lists path confined to root; OpenPath's refusals apply.
@@ -86,7 +88,7 @@ func ReadDir(root, path string) ([]os.DirEntry, error) {
 func ReadDirIn(r *os.Root, rel, path string) ([]os.DirEntry, error) {
 	f, err := r.Open(rel)
 	if err != nil {
-		return nil, err
+		return nil, FileInPath(err, r.Name(), path)
 	}
 	defer f.Close()
 	entries, err := f.ReadDir(-1)
@@ -94,9 +96,9 @@ func ReadDirIn(r *os.Root, rel, path string) ([]os.DirEntry, error) {
 		// Go uses fdopendir on Darwin and readdirent on Linux; keep CLI errors stable.
 		var pe *os.PathError
 		if errors.As(err, &pe) {
-			return nil, &os.PathError{Op: "readdir", Path: path, Err: readdirErrno(pe)}
+			err = &os.PathError{Op: "readdir", Path: path, Err: pe.Err}
 		}
-		return nil, err
+		return nil, FileInPath(err, r.Name(), path)
 	}
 	// os.File.ReadDir is directory order; callers rely on os.ReadDir's sort.
 	slices.SortFunc(entries, func(a, b os.DirEntry) int { return strings.Compare(a.Name(), b.Name()) })
@@ -144,12 +146,44 @@ func Remove(root, path string, recursive bool) error {
 		err = robust(func() error { return r.Remove(rel) })
 	}
 	if err != nil {
-		return err
+		return FileInPath(err, root, path)
 	}
 	if err := syncParent(r, rel); err != nil {
 		return errs.New("write_durability_uncertain", fmt.Sprintf("Removed %s, but durability could not be confirmed (%s). Inspect the path before retrying", filepath.ToSlash(path), err))
 	}
 	return nil
+}
+
+// fileInPath is FileInPath's walk, with lstat passed in so every platform can
+// test it. A not-exist err becomes NotADirectory, keeping its Op and Path,
+// when the nearest existing entry at or above path is a regular file. The walk
+// stops at root, so it never stats outside the workspace.
+func fileInPath(err error, root, path string, lstat func(string) (fs.FileInfo, error)) error {
+	var pe *fs.PathError
+	if !errors.Is(err, fs.ErrNotExist) || !errors.As(err, &pe) {
+		return err
+	}
+	base, berr := filepath.Abs(root)
+	p, perr := filepath.Abs(path)
+	if berr != nil || perr != nil {
+		return err
+	}
+	if rel, rerr := filepath.Rel(base, p); rerr != nil || !filepath.IsLocal(rel) {
+		return err
+	}
+	for {
+		info, lerr := lstat(p)
+		if lerr == nil {
+			if info.Mode().IsRegular() {
+				return &fs.PathError{Op: pe.Op, Path: pe.Path, Err: NotADirectory}
+			}
+			return err
+		}
+		if !errors.Is(lerr, fs.ErrNotExist) || p == base {
+			return err
+		}
+		p = filepath.Dir(p)
+	}
 }
 
 // The Windows reparse-point attribute bit (winnt.h), named here so the test is
@@ -193,6 +227,37 @@ func pathError(err error, path string) error {
 		return &fs.PathError{Op: e.Op, Path: path, Err: e.Err}
 	}
 	return err
+}
+
+// oneDriveVars are the variables OneDrive sets to the folders it syncs.
+var oneDriveVars = []string{"OneDrive", "OneDriveConsumer", "OneDriveCommercial"}
+
+// SyncedFolder reports the OneDrive folder root sits in, read through getenv.
+// Paths compare as Windows compares them: either separator, any case, and at
+// a component boundary, so C:\OneDriveX is not inside C:\OneDrive. It is pure
+// so every platform can test it; only the Windows build calls it.
+func SyncedFolder(root string, getenv func(string) string) (string, bool) {
+	r := windowsClean(root)
+	for _, name := range oneDriveVars {
+		dir := getenv(name)
+		d := windowsClean(dir)
+		if d == "" {
+			continue
+		}
+		if strings.EqualFold(r, d) || len(r) > len(d) && r[len(d)] == '/' && strings.EqualFold(r[:len(d)], d) {
+			return dir, true
+		}
+	}
+	return "", false
+}
+
+// windowsClean is a Windows path in slash form, cleaned, with no trailing
+// slash; "" stays "".
+func windowsClean(p string) string {
+	if p == "" {
+		return ""
+	}
+	return strings.TrimSuffix(pathpkg.Clean(strings.ReplaceAll(p, `\`, "/")), "/")
 }
 
 // SkipDirs are vendored or foreign trees khub never scans and never copies:

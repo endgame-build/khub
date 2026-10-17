@@ -310,20 +310,13 @@ func validateResolved(resolved *ResolvedSchema) error {
 		rel := filepath.Clean(t.StorageRelpath())
 		first := strings.Split(filepath.ToSlash(rel), "/")[0]
 		normalized := filepath.ToSlash(rel)
-		// On Windows IsLocal also refuses reserved device names, so a path that
-		// does not escape would otherwise be reported as escaping — name the
-		// device instead. Elsewhere !IsLocal always means an escape.
-		escapes := filepath.IsAbs(rel) || filepath.VolumeName(rel) != "" || rel == ".." || strings.HasPrefix(normalized, "../")
-		if !filepath.IsLocal(rel) && !escapes {
-			if err := reservedDevicePart(name, normalized); err != nil {
-				return err
-			}
+		// Device names first: on Windows IsLocal refuses them too, and the
+		// escape message below would misname the cause.
+		if err := reservedDevicePart(name, normalized); err != nil {
+			return err
 		}
 		if !filepath.IsLocal(rel) || rel == "." || first == ".khub" || first == ".git" || first == ".claude" || first == ".agents" || first == ".opencode" || rel == "index.md" || rel == "AGENTS.md" || rel == "CLAUDE.md" {
 			return errs.New("invalid_schema", fmt.Sprintf("Invalid schema at storage.%s.path: path must stay in workspace storage and cannot own khub control files (%s)", name, t.StorageRelpath()))
-		}
-		if err := reservedDevicePart(name, normalized); err != nil {
-			return err
 		}
 		if t.Storage.Path != nil {
 			t.Storage.Path = &normalized
@@ -353,22 +346,26 @@ func reservedDevicePart(name, normalized string) error {
 
 // reservedDevice holds the names Windows reserves for devices. A file or
 // folder carrying one, with or without an extension, cannot be created there.
-// COM0 and LPT0 are on Microsoft's current list beside 1-9.
+// COM0 and LPT0 are on Microsoft's current list beside 1-9, and Windows reads
+// the superscripts ¹ ² ³ as digits too.
 var reservedDevice = map[string]bool{
-	"con": true, "prn": true, "aux": true, "nul": true,
+	"con": true, "prn": true, "aux": true, "nul": true, "conin$": true, "conout$": true,
 	"com0": true, "com1": true, "com2": true, "com3": true, "com4": true, "com5": true,
 	"com6": true, "com7": true, "com8": true, "com9": true,
+	"com\u00b9": true, "com\u00b2": true, "com\u00b3": true,
 	"lpt0": true, "lpt1": true, "lpt2": true, "lpt3": true, "lpt4": true, "lpt5": true,
 	"lpt6": true, "lpt7": true, "lpt8": true, "lpt9": true,
+	"lpt\u00b9": true, "lpt\u00b2": true, "lpt\u00b3": true,
 }
 
 // ReservedDeviceName reports whether name, one file or folder name, is a
-// Windows device name. The test is case-insensitive and ignores everything
-// from the first dot, as Windows does. khub refuses these on every platform,
-// so a workspace made anywhere checks out on Windows.
+// Windows device name. As Windows does, the test is case-insensitive, ignores
+// everything from the first dot and drops trailing spaces, so `con `, `con.`
+// and `con .txt` are all CON. khub refuses these on every platform, so a
+// workspace made anywhere checks out on Windows.
 func ReservedDeviceName(name string) bool {
 	stem, _, _ := strings.Cut(name, ".")
-	return reservedDevice[strings.ToLower(stem)]
+	return reservedDevice[strings.ToLower(strings.TrimRight(stem, " "))]
 }
 
 func storageOverlap(a, b *ResolvedType) bool {

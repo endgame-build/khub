@@ -23,6 +23,8 @@ func TestStorageOwnershipAndPathSafety(t *testing.T) {
 		{"reserved singleton", "a: {layout: singleton, path: con.md}\n  b: {layout: file, path: b}", false},
 		{"reserved folder", "a: {layout: file, path: notes/NUL/a}\n  b: {layout: file, path: b}", false},
 		{"reserved collection", "a: {layout: collection, path: com0.jsonl}\n  b: {layout: file, path: b}", false},
+		{"reserved trailing space", "a: {layout: file, path: 'notes/con /a'}\n  b: {layout: file, path: b}", false},
+		{"reserved superscript", "a: {layout: file, path: com¹}\n  b: {layout: file, path: b}", false},
 		{"reserved-looking", "a: {layout: singleton, path: console.md}\n  b: {layout: file, path: con-b}", true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -54,5 +56,27 @@ func TestReservedDeviceNameRefusedInStoragePaths(t *testing.T) {
 	_, err := ResolveWith(nil, writeSchemaFiles(t, "ontology:\n  entities:\n    aux: {}\n"))
 	if err == nil || !strings.Contains(err.Error(), "storage.aux.path: 'aux' is a reserved device name on Windows") {
 		t.Fatalf("err=%v", err)
+	}
+}
+
+func TestReservedDeviceName(t *testing.T) {
+	for _, name := range []string{
+		"con", "CON", "Prn", "aux", "nul", "com0", "com1", "COM9", "lpt0", "lpt1", "lpt9",
+		"con.md", "nul.tar.gz", "Aux.json",
+		"com\u00b9", "COM\u00b2", "lpt\u00b3", "LPT\u00b9.md",
+		"conin$", "CONOUT$", "conin$.txt",
+		"con ", "con.", "con .txt", "nul  ", "aux. ",
+	} {
+		if !ReservedDeviceName(name) {
+			t.Errorf("ReservedDeviceName(%q) = false", name)
+		}
+	}
+	for _, name := range []string{
+		"", "co", "conn", "con-x", "ad-con", "2026-01-15-con", "com", "com10",
+		"xnul", "nul-", "my.con", " con", "com\u2074", "com\u00b9\u00b9", "conin", "conout",
+	} {
+		if ReservedDeviceName(name) {
+			t.Errorf("ReservedDeviceName(%q) = true", name)
+		}
 	}
 }

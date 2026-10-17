@@ -88,11 +88,15 @@ const generatedIgnore = ".khub/generated/"
 
 // Init is init_workspace: scaffold a workspace at path from preset.
 //
-// Guards run before any write, in order — unknown preset, preset mismatch
-// against an existing workspace, non-empty target without Force. On failure
+// Guards run before any write, in order — a OneDrive folder (Windows),
+// unknown preset, preset mismatch against an existing workspace, non-empty
+// target without Force. On failure
 // the .khub/ it created and the singletons it minted are removed; directories
 // and the .gitignore line may remain (harmless, idempotent on retry).
 func Init(preset, path string, opt InitOptions) (*InitResult, error) {
+	if err := fsio.RefuseSyncedFolder(path); err != nil {
+		return nil, err
+	}
 	tails := func() (struct{}, error) {
 		if opt.Tails != nil {
 			opt.Tails(path)
@@ -536,13 +540,8 @@ func existingPreset(target string) (string, bool) {
 func isEmptyDir(target string) (bool, error) {
 	entries, err := os.ReadDir(osPath(target))
 	if err != nil {
+		err = fsio.FileInPath(err, osPath(target), osPath(target))
 		if errors.Is(err, fs.ErrNotExist) {
-			// Windows opens a regular file as a directory with syscall.ENOTDIR,
-			// which is ERROR_PATH_NOT_FOUND there and so reads as missing. A
-			// target that exists is not missing: name it the way darwin does.
-			if info, serr := os.Stat(osPath(target)); serr == nil && !info.IsDir() {
-				return false, &os.PathError{Op: "open", Path: osPath(target), Err: fsio.NotADirectory}
-			}
 			return true, nil
 		}
 		return false, err

@@ -4,8 +4,34 @@
 import type { KhubType, KhubWorkspace } from '../types'
 
 export type Entity = { type: string; slug: string }
-// `isWindows` is set when the session runs on Windows. Absent, paths are unix paths.
-export type Ws = KhubWorkspace & { types: KhubType[]; isWindows?: boolean }
+
+// What the session's platform changes. The shell picks one from the shape of the session's
+// directory, once, and hands it to the functions here and in parse.ts.
+export type Flavour = {
+  // Lists every directory from `cwd` up to the root, nearest first.
+  ancestors: (cwd: string) => string[]
+
+  // Returns `name` inside `dir`, with the directory's own separator.
+  childOf: (dir: string, name: string) => string
+
+  // Returns the path under `root`, or null outside it.
+  under: (root: string, path: string) => string | null
+
+  isAbsolute: (path: string) => boolean
+
+  // Lists the commands to try for khub when the setting names none.
+  installs: (root: string) => string[][]
+
+  // Returns the file a candidate needs on disk before it is worth running, or null when it
+  // is looked up on the path.
+  installedAt: (bin: readonly string[]) => string | null
+
+  // The binary's file name, and a path separator, as regular expression sources.
+  name: string
+  separator: string
+}
+
+export type Ws = KhubWorkspace & { types: KhubType[]; flavour: Flavour }
 
 export const dirname = (path: string) => path.replace(/\/[^/]*$/, '') || '/'
 
@@ -16,10 +42,7 @@ export const isWindowsPath = (cwd: string) => /^[A-Za-z]:[\\/]/.test(cwd) || /^\
 // The separator a Windows path is spelled with: a slash only when it holds no backslash.
 const separatorOf = (path: string) => (path.includes('/') && !path.includes('\\') ? '/' : '\\')
 
-// Returns `name` inside `dir`, with the directory's own separator.
-export function childOf(dir: string, name: string, isWindows = false): string {
-  return isWindows ? `${dir.replace(/[\\/]+$/, '')}${separatorOf(dir)}${name}` : `${dir}/${name}`
-}
+const windowsChildOf = (dir: string, name: string) => `${dir.replace(/[\\/]+$/, '')}${separatorOf(dir)}${name}`
 
 // Lists the directories from a Windows path up to its drive or share, nearest first, with
 // the path's own separator. `C:\a\b` gives `C:\a\b`, `C:\a` and `C:\`.
@@ -37,10 +60,7 @@ function windowsAncestors(cwd: string): string[] {
   return dirs
 }
 
-// Lists every directory from `cwd` up to the root, nearest first.
-export function ancestors(cwd: string, isWindows = false): string[] {
-  if (isWindows) return windowsAncestors(cwd)
-
+function unixAncestors(cwd: string): string[] {
   const dirs = [cwd]
 
   while (dirs[dirs.length - 1] !== '/') dirs.push(dirname(dirs[dirs.length - 1] as string))
@@ -48,39 +68,27 @@ export function ancestors(cwd: string, isWindows = false): string[] {
   return dirs
 }
 
-// Lists the commands to try for khub, in order: the setting, the repo's pinned install, the path.
-// Windows runs neither the shell script nor the `.cmd` npm lays in `node_modules/.bin` without
-// a shell, so there the repo's install is the npm package's launcher run by node, which is
-// what `khub.cmd` runs.
-export function binCandidates(root: string, setting: string, isWindows = false): string[][] {
-  if (setting.trim()) return [setting.trim().split(/\s+/)]
-  if (!isWindows) return [[`${root}/node_modules/.bin/khub`], ['khub']]
+// cmd may take these characters in a command line as its own.
+const CMD_SPECIAL = /[%!^&|<>"()]/
 
-  const launcher = ['node_modules', '@endgame-build', 'khub', 'bin', 'khub.js'].reduce(
-    (dir, name) => childOf(dir, name, true),
-    root,
-  )
+// Windows runs neither the shell script nor the `.cmd` npm lays in `node_modules/.bin`
+// without a shell, so there the repo's install is the npm package's launcher run by node,
+// which is what `khub.cmd` runs. The last candidate reaches npm's global `khub.cmd` through
+// cmd. The shell passes khub fixed words and the workspace root, so that candidate is left
+// out for a root cmd would read.
+function windowsInstalls(root: string): string[][] {
+  const launcher = ['node_modules', '@endgame-build', 'khub', 'bin', 'khub.js'].reduce(windowsChildOf, root)
 
-  return [['node', launcher], ['khub']]
-}
-
-// Returns the file a candidate needs on disk before it is worth running, or null when it is
-// looked up on the path. On Windows that is the launcher node runs.
-export function installedAt(bin: readonly string[], isWindows = false): string | null {
-  if (!isWindows) return (bin[0] ?? '').startsWith('/') ? (bin[0] as string) : null
-
-  const file = bin[1] ?? ''
-
-  return bin.length === 2 && bin[0] === 'node' && isWindowsPath(file) ? file : null
+  return [['node', launcher], ['khub'], ...(CMD_SPECIAL.test(root) ? [] : [['cmd', '/c', 'khub']])]
 }
 
 // Spells a Windows path for comparison: forward slashes, and a Git Bash drive such as
 // `/c/Users` as `c:/Users`.
 const windowsForm = (path: string) => path.replace(/\\/g, '/').replace(/^\/(?:cygdrive\/)?([A-Za-z])(?=\/|$)/, '$1:')
 
-// Returns the path under a Windows root, with forward slashes, or null outside it. The
-// root matches whatever the separators and the case, since the file system ignores case.
-function relativeOnWindows(root: string, path: string): string | null {
+// Returns the path under a Windows root, with forward slashes. The root matches whatever
+// the separators and the case, since the file system ignores case.
+function windowsUnder(root: string, path: string): string | null {
   const base = `${windowsForm(root).replace(/\/+$/, '')}/`
   const rel = windowsForm(path)
 
@@ -89,16 +97,53 @@ function relativeOnWindows(root: string, path: string): string | null {
     : null
 }
 
-// Returns the path under the workspace root, or null outside it. macOS spells /tmp and /var
-// two ways.
-export function relative(ws: Ws, path: string): string | null {
-  if (ws.isWindows === true) return relativeOnWindows(ws.root, path)
+// macOS spells /tmp and /var two ways.
+function unixUnder(root: string, path: string): string | null {
+  const roots = [root, root.replace(/^\/private/, ''), `/private${root}`]
+  const found = roots.find(candidate => path.startsWith(`${candidate}/`))
 
-  const roots = [ws.root, ws.root.replace(/^\/private/, ''), `/private${ws.root}`]
-  const root = roots.find(candidate => path.startsWith(`${candidate}/`))
-
-  return root === undefined ? null : path.slice(root.length + 1)
+  return found === undefined ? null : path.slice(found.length + 1)
 }
+
+// A unix session takes paths as spelled, and the binary is `khub` alone.
+export const UNIX: Flavour = {
+  ancestors: unixAncestors,
+  childOf: (dir, name) => `${dir}/${name}`,
+  under: unixUnder,
+  isAbsolute: path => path.startsWith('/'),
+  installs: root => [[`${root}/node_modules/.bin/khub`], ['khub']],
+  installedAt: bin => ((bin[0] ?? '').startsWith('/') ? (bin[0] as string) : null),
+  name: 'khub',
+  separator: '/',
+}
+
+// Git Bash runs a Windows session's commands, so a path may take either separator and a
+// Git Bash drive, and the binary may carry its extension and any case. A verb is always
+// lowercase, so the name spells its case out rather than ignoring it.
+export const WINDOWS: Flavour = {
+  ancestors: windowsAncestors,
+  childOf: windowsChildOf,
+  under: windowsUnder,
+  isAbsolute: path => /^(?:[A-Za-z]:)?[\\/]/.test(path),
+  installs: windowsInstalls,
+  installedAt: bin => (bin.length === 2 && bin[0] === 'node' && isWindowsPath(bin[1] ?? '') ? (bin[1] as string) : null),
+  name: '[Kk][Hh][Uu][Bb](?:\\.[Ee][Xx][Ee]|\\.[Cc][Mm][Dd])?',
+  separator: '[\\\\/]',
+}
+
+export const flavourOf = (cwd: string): Flavour => (isWindowsPath(cwd) ? WINDOWS : UNIX)
+
+// Splits the `binary` setting into words. Double or single quotes keep a path with spaces in
+// one word. A backslash is a plain character, so a Windows path keeps its separators.
+export const settingWords = (setting: string): string[] =>
+  (setting.match(/(?:"[^"]*"|'[^']*'|[^\s"'])+/g) ?? []).map(word => word.replace(/"([^"]*)"|'([^']*)'/g, '$1$2'))
+
+// Lists the commands to try for khub, in order: the setting, the repo's pinned install, the path.
+export const binCandidates = (root: string, setting: string, flavour: Flavour = UNIX): string[][] =>
+  setting.trim() ? [settingWords(setting)] : flavour.installs(root)
+
+// Returns the path under the workspace root, or null outside it.
+export const relative = (ws: Ws, path: string): string | null => ws.flavour.under(ws.root, path)
 
 // Returns the entity a file holds, by its type's layout. A collection file holds many, so
 // its slug is `*`.
@@ -152,14 +197,9 @@ export function isOlder(printed: string, min: string): boolean {
 
 // Tells whether a `-C` value names a workspace other than this one. khub resolves the
 // nearest `.khub` at or above the path, so a directory inside the root is this workspace,
-// and a relative value is taken as this one. On Windows an absolute value starts with a
-// drive, a slash or a backslash.
+// and a relative value is taken as this one.
 export function isElsewhere(ws: Ws, workspace: string | null): boolean {
-  if (workspace === null) return false
+  if (workspace === null || !ws.flavour.isAbsolute(workspace)) return false
 
-  if (ws.isWindows === true) {
-    return /^(?:[A-Za-z]:)?[\\/]/.test(workspace) && relative(ws, `${workspace.replace(/[\\/]$/, '')}/.`) === null
-  }
-
-  return workspace.startsWith('/') && relative(ws, `${workspace.replace(/\/$/, '')}/.`) === null
+  return relative(ws, `${workspace.replace(new RegExp(`${ws.flavour.separator}$`), '')}/.`) === null
 }

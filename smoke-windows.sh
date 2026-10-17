@@ -69,12 +69,6 @@ rm -rf "$WORK"; mkdir -p "$WORK"
 
 # --------------------------------------------------------------- all of smoke.sh
 say "smoke.sh against $KHUB"
-# smoke.sh calls python3 once. On a Windows runner python3 can be the Store
-# alias, which prints an install hint and exits non-zero; hand it python.
-if ! python3 -c 'import sys' >/dev/null 2>&1 && python -c 'import sys' >/dev/null 2>&1; then
-  python3() { python "$@"; }
-  export -f python3
-fi
 CASES=$((CASES + 1))
 if bash "$REPO/smoke.sh" "$WORK/smoke"; then printf '  ok   %-50s\n' "smoke.sh"
 else FAILED=$((FAILED + 1)); printf '  \033[31mFAIL\033[0m %-50s\n' "smoke.sh"; fi

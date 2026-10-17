@@ -6,25 +6,6 @@ import (
 	"testing"
 )
 
-func TestReservedName(t *testing.T) {
-	for _, name := range []string{
-		"con", "CON", "Prn", "aux", "nul", "com0", "com1", "COM9", "lpt0", "lpt1", "lpt9",
-		"con.md", "nul.tar.gz", "Aux.json",
-	} {
-		if !reservedName(name) {
-			t.Errorf("reservedName(%q) = false", name)
-		}
-	}
-	for _, name := range []string{
-		"", "co", "conn", "con-x", "ad-con", "2026-01-15-con", "com", "com10",
-		"xnul", "nul-", "my.con",
-	} {
-		if reservedName(name) {
-			t.Errorf("reservedName(%q) = true", name)
-		}
-	}
-}
-
 // requireAbsent fails if relpath exists under ws: a refusal writes nothing.
 func requireAbsent(t *testing.T, ws, relpath string) {
 	t.Helper()

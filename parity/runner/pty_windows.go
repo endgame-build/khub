@@ -129,6 +129,7 @@ func runOnPTY(cmd *exec.Cmd) (stdout, stderr []byte, code int, err error) {
 		_ = windows.TerminateProcess(proc, 1)
 		return nil, nil, 0, fmt.Errorf("pty child still running after %s; killed (a serve step in a pty case never exits)", ptyStepTimeout)
 	}
+	exited := time.Now()
 	var exit uint32
 	if err := windows.GetExitCodeProcess(proc, &exit); err != nil {
 		return nil, nil, 0, fmt.Errorf("pty child exit code: %w", err)
@@ -136,11 +137,13 @@ func runOnPTY(cmd *exec.Cmd) (stdout, stderr []byte, code int, err error) {
 
 	// conhost paints asynchronously: the child can be gone before its last
 	// write reaches the pipe. Wait for the output to go quiet before closing,
-	// or the tail of the screen can be lost.
+	// or the tail of the screen can be lost. Quiet counts from the later of
+	// the last output and the exit, so a child that went quiet and then
+	// exited still gets its final paint.
 	settleDeadline := time.Now().Add(3 * time.Second)
 	for time.Now().Before(settleDeadline) {
 		mu.Lock()
-		quiet := time.Since(lastOutput) > 250*time.Millisecond
+		quiet := time.Since(lastOutput) > 250*time.Millisecond && time.Since(exited) > 250*time.Millisecond
 		mu.Unlock()
 		if quiet {
 			break

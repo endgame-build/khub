@@ -6,7 +6,6 @@ package errs
 import (
 	"fmt"
 	"path/filepath"
-	"runtime"
 	"strings"
 )
 
@@ -222,8 +221,8 @@ func SlugTaken(slug, type_ string, minted bool) *Located {
 }
 
 // ReservedSlug is `invalid_slug`: the file or folder name the slug would
-// write is one Windows reserves for a device (CON, PRN, AUX, NUL, COM1-COM9,
-// LPT1-LPT9). It is refused on every platform, so a workspace written
+// write is one Windows reserves for a device (schema.ReservedDeviceName holds
+// the list). It is refused on every platform, so a workspace written
 // anywhere checks out on Windows. As SlugTaken does, the way out names the
 // flag the caller has not yet used.
 func ReservedSlug(slug, type_ string, minted bool) *Located {
@@ -397,19 +396,14 @@ func PortInUse(port int) *Located {
 	}
 }
 
-// PortNotPermitted is the bind refusal for a port this process may not have:
-// ports below 1024 need privileges khub does not ask for.
+// PortNotPermitted is the bind refusal for a port this process may not have.
+// The cause differs by OS (a privileged port, a range Windows reserves, a port
+// another program holds exclusively), so one message names them all.
 func PortNotPermitted(port int) *Located {
-	// On Windows the refusal is WSAEACCES: a port the system reserves
-	// (Hyper-V, WinNAT) or one another program holds exclusively, never a
-	// privilege rule.
-	reason := "ports below 1024 need privileges. Pass --port <n> to serve on an unprivileged port"
-	if runtime.GOOS == "windows" {
-		reason = "Windows reserves it or another program holds it. Pass --port <n> to serve on another port"
-	}
 	return &Located{
-		Code:    "port_not_permitted",
-		Message: fmt.Sprintf("Not permitted to bind port %d; %s", port, reason),
+		Code: "port_not_permitted",
+		Message: fmt.Sprintf("Not permitted to bind port %d; it needs privileges, the system "+
+			"reserves it, or another program holds it. Pass --port <n> to serve on another port", port),
 	}
 }
 

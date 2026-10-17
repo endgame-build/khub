@@ -65,6 +65,16 @@ test('with no npm install a Windows session runs khub from the path', async ($, 
   expect(host.programs[0]).toEqual(['khub'])
 })
 
+test('when khub on the path will not start, a Windows session reaches npm\'s global khub.cmd through cmd', async ($, on) => {
+  const host = fakeHost(on, [F.check_base, F.query_base], { files: [KHUB_DIR], missing: ['khub'] })
+
+  await $.session.start(START)
+
+  expect(host.ran).toEqual(BASELINE)
+  expect(host.programs[0]).toEqual(['cmd', '/c', 'khub'])
+  expect(host.statuses).toEqual([undefined])
+})
+
 test('a Windows Edit of an entity file, in any spelling of the root, shows ~1 on the band', async ($, on) => {
   const host = fakeHost(on, [F.check_base, F.query_base], { files: [KHUB_DIR] })
 

@@ -33,6 +33,9 @@ func TestWindowsMappingAgreesWithDarwin(t *testing.T) {
 		if got := errnoClassName(p.num); got != want {
 			t.Errorf("errno %d: errnoClassName = %q, darwin prints %q", p.num, got, want)
 		}
+		if got := errorClass(e); got != want {
+			t.Errorf("errno %d: errorClass = %q, darwin prints %q", p.num, got, want)
+		}
 	}
 	for want, p := range map[syscall.Errno]posixErrno{
 		syscall.ENOTDIR: posixENOTDIR, syscall.EISDIR: posixEISDIR,

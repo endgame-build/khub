@@ -27,39 +27,28 @@ func shScript(st step) string {
 	return st.Sh
 }
 
-var gitBash struct {
-	once sync.Once
-	path string
-	err  error
-}
-
 // gitBashSh finds the sh that setup scripts run under: Git for Windows'
 // bin\sh.exe, which GitHub's Windows runners put on PATH. A bash.exe under
 // the Windows directory is the WSL launcher, a different system with its own
 // filesystem, and is never taken.
-func gitBashSh() (string, error) {
-	gitBash.once.Do(func() {
-		winDir := strings.ToLower(os.Getenv("SYSTEMROOT"))
-		for _, name := range []string{"sh", "bash"} {
-			p, err := exec.LookPath(name)
-			if err != nil {
-				continue
-			}
-			if winDir != "" && strings.HasPrefix(strings.ToLower(p), winDir) {
-				continue
-			}
-			gitBash.path = p
-			return
+var gitBashSh = sync.OnceValues(func() (string, error) {
+	winDir := strings.ToLower(os.Getenv("SYSTEMROOT"))
+	for _, name := range []string{"sh", "bash"} {
+		p, err := exec.LookPath(name)
+		if err != nil {
+			continue
 		}
-		fallback := filepath.Join(os.Getenv("ProgramFiles"), "Git", "bin", "sh.exe")
-		if _, err := os.Stat(fallback); err == nil {
-			gitBash.path = fallback
-			return
+		if winDir != "" && strings.HasPrefix(strings.ToLower(p), winDir) {
+			continue
 		}
-		gitBash.err = errors.New(`sh steps need Git Bash: no sh or bash on PATH outside the Windows directory, and no %ProgramFiles%\Git\bin\sh.exe; install Git for Windows or put its bin directory on PATH`)
-	})
-	return gitBash.path, gitBash.err
-}
+		return p, nil
+	}
+	fallback := filepath.Join(os.Getenv("ProgramFiles"), "Git", "bin", "sh.exe")
+	if _, err := os.Stat(fallback); err == nil {
+		return fallback, nil
+	}
+	return "", errors.New(`sh steps need Git Bash: no sh or bash on PATH outside the Windows directory, and no %ProgramFiles%\Git\bin\sh.exe; install Git for Windows or put its bin directory on PATH`)
+})
 
 // shCommand runs a setup script under Git Bash. The script goes through a
 // file, not `-c`: the MSYS runtime re-parses a Windows command line with its
@@ -187,10 +176,20 @@ func replacePath(s, from, to string) string {
 		}
 	}
 	for _, v := range variants {
-		s = regexp.MustCompile("(?i)"+regexp.QuoteMeta(v)).ReplaceAllLiteralString(s, to)
+		re, ok := foldRegexps[v]
+		if !ok {
+			re = regexp.MustCompile("(?i)" + regexp.QuoteMeta(v))
+			foldRegexps[v] = re
+		}
+		s = re.ReplaceAllLiteralString(s, to)
 	}
 	return s
 }
+
+// foldRegexps caches replacePath's patterns by variant: every step
+// normalizes its output against the same few paths.
+// ponytail: unguarded map, the runner calls replacePath from one goroutine.
+var foldRegexps = map[string]*regexp.Regexp{}
 
 func longPath(p string) string  { return convertPath(p, windows.GetLongPathName) }
 func shortPath(p string) string { return convertPath(p, windows.GetShortPathName) }

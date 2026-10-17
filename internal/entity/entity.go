@@ -222,7 +222,9 @@ func create(root, typeName string, opts CreateOpts) (*CreateResult, error) {
 	explicit := opts.ID != ""
 	// The slug is the file stem (file layout) or the folder name (folder
 	// layout), so a Windows device name is refused before anything is written.
-	if reservedName(slug) {
+	// The test is on the final stem, prefix and date applied; a collection row
+	// returned above, since it is not a file.
+	if schema.ReservedDeviceName(slug) {
 		return nil, errs.ReservedSlug(slug, typeName, !explicit)
 	}
 	if idx.Nodes[index.Node{Type: typeName, Slug: slug}] {

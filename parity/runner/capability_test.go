@@ -2,7 +2,9 @@ package main
 
 import (
 	"errors"
+	"io/fs"
 	"os"
+	"syscall"
 	"testing"
 )
 
@@ -19,19 +21,25 @@ func TestNoRequirementsIsRunnable(t *testing.T) {
 	}
 }
 
-// The probe agrees with what this account can actually do: an ordinary user
-// is stopped by the denial, root is not. Either way the answer is consistent
-// with a direct attempt, and a refusal comes with a reason.
-func TestWriteDenialProbeMatchesTheAccount(t *testing.T) {
-	ok, why := probeWriteDenial()
-	if !ok && why == "" {
-		t.Fatal("a skipped capability must say why")
-	}
-	if ok && why != "" {
-		t.Fatalf("a held capability carries no reason, got %q", why)
-	}
-	if os.Getuid() == 0 && ok {
-		t.Fatal("root ignores mode bits, yet the probe says the denial holds")
+// Only a create that succeeds under the denial is a skip. A permission
+// refusal means the denial holds; anything else is the probe breaking.
+func TestProbeOutcome(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		create   error
+		wantSkip bool
+		wantErr  bool
+	}{
+		{"create succeeded", nil, true, false},
+		{"permission denied", &fs.PathError{Op: "openat", Path: "probe", Err: syscall.EACCES}, false, false},
+		{"bare ErrPermission", os.ErrPermission, false, false},
+		{"exists", &fs.PathError{Op: "openat", Path: "probe", Err: fs.ErrExist}, false, true},
+		{"other", errors.New("disk on fire"), false, true},
+	} {
+		skip, err := probeOutcome(tc.create)
+		if (skip != "") != tc.wantSkip || (err != nil) != tc.wantErr {
+			t.Errorf("%s: skip=%q err=%v", tc.name, skip, err)
+		}
 	}
 }
 

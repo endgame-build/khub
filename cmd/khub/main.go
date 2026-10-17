@@ -26,7 +26,10 @@ func main() {
 	// (ERROR_NO_DATA or ERROR_BROKEN_PIPE), which Guard treats as EPIPE.
 	signal.Notify(make(chan os.Signal, 1), syscall.SIGPIPE)
 	// Windows consoles render the human view's ANSI colours only once asked
-	// to; a no-op elsewhere.
-	cli.PrepareConsole()
-	os.Exit(cli.Execute(os.Args[1:]))
+	// to, and keep the mode after khub exits, so it is put back before exit.
+	// A no-op elsewhere.
+	restore := cli.PrepareConsole()
+	code := cli.Execute(os.Args[1:])
+	restore()
+	os.Exit(code)
 }

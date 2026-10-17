@@ -15,6 +15,7 @@ import (
 	"github.com/spf13/pflag"
 
 	"github.com/endgame-build/khub/internal/errs"
+	"github.com/endgame-build/khub/internal/fsio"
 	"github.com/endgame-build/khub/internal/version"
 	"github.com/endgame-build/khub/internal/workspace"
 )
@@ -444,5 +445,12 @@ func resolveRoot() (string, error) {
 		}
 		start = cwd
 	}
-	return workspace.FindWorkspace(start)
+	root, err := workspace.FindWorkspace(start)
+	if err != nil {
+		return "", err
+	}
+	if err := fsio.RefuseSyncedFolder(root); err != nil {
+		return "", err
+	}
+	return root, nil
 }
