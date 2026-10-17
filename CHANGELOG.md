@@ -4,6 +4,14 @@ Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [0.29.0] — 2026-10-17
+
+khub runs on Windows, as an experimental platform with the same output as
+macOS and Linux. **Breaking:** Windows device names are refused as slugs and
+storage paths on every platform, and on Windows workspace storage refuses
+every reparse point and any workspace inside a OneDrive folder. Building from
+source needs Go 1.26.
+
 ### Added
 
 - **Windows support (experimental)**, for windows/amd64 and windows/arm64. The
