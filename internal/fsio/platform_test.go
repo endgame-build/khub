@@ -134,8 +134,9 @@ func TestFileInPathNamesTheFileInTheWay(t *testing.T) {
 		notDir           bool
 	}{
 		{"below the file", root, filepath.Join(file, "a", "b"), true},
-		{"the file itself", root, file, true},
-		{"the root is the file", file, file, true},
+		{"below the root, which is the file", file, filepath.Join(file, "a"), true},
+		{"the file itself, created after the error", root, file, false},
+		{"the root is the file", file, file, false},
 		{"below a directory", root, filepath.Join(root, "dir", "gone"), false},
 		{"nothing exists", root, filepath.Join(root, "gone", "deeper"), false},
 		{"outside root", filepath.Join(root, "dir", "sub"), filepath.Join(file, "x"), false},
@@ -167,11 +168,11 @@ func TestFileInPathStopsAtTheWorkspace(t *testing.T) {
 		name, root, path string
 		stats            int
 	}
-	rows := []row{{"volume root", vol, filepath.Join(vol, "a", "b"), 3}}
+	rows := []row{{"volume root", vol, filepath.Join(vol, "a", "b"), 2}}
 	if runtime.GOOS == "windows" {
 		rows = append(rows,
-			row{"share root", `\\server\share`, `\\server\share\a`, 2},
-			row{"root in another case", `C:\WS`, `c:\ws\a\b`, 3},
+			row{"share root", `\\server\share`, `\\server\share\a`, 1},
+			row{"root in another case", `C:\WS`, `c:\ws\a\b`, 2},
 		)
 	}
 	for _, r := range rows {
