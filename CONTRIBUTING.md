@@ -5,7 +5,7 @@ schema-generic and the gates green.
 
 ## Dev setup
 
-khub is a Go program. Go 1.25+, nothing else — no interpreter, no package
+khub is a Go program. Go 1.26+, nothing else — no interpreter, no package
 manager, no virtualenv.
 
 ```bash

@@ -36,7 +36,8 @@ jobs:
           ! git grep -nIiE 'claude\.ai/code/session|/Users/|~/Sites|npm\.pkg\.github\.com|orgs/endgame-build' -- . ':!.github/workflows/ci.yml'
       - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
         with:
-          go-version: "1.25"
+          go-version: "1.26"
+          check-latest: true
           cache: true
       - name: gofmt
         run: |
@@ -52,8 +53,13 @@ jobs:
       # Pinned, per .claude/rules/dependencies.md. Call-graph reachability, so
       # it reports what khub actually calls rather than everything in go.sum —
       # which is why it is preferred to an SBOM. Note go-version above
-      # floats across 1.25 PATCHES deliberately: a stdlib advisory is fixed by
-      # picking up the patch release, and pinning it exactly would opt out.
+      # floats across 1.26 PATCHES deliberately (check-latest): a stdlib
+      # advisory is fixed by picking up the patch release, and pinning it
+      # exactly would opt out. check-latest also stops the runner image's
+      # cached patch, which lags a release, from standing in for the newest.
+      # Go patches only its two newest minors, so once a minor leaves that
+      # window an advisory has no fix in it and this step fails until
+      # go-version (here, in the plugin job and in release.yml) moves up.
       - name: govulncheck
         if: matrix.os == 'ubuntu-latest'
         run: go run golang.org/x/vuln/cmd/govulncheck@v1.1.4 ./...
@@ -170,7 +176,8 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
         with:
-          go-version: "1.25"
+          go-version: "1.26"
+          check-latest: true
       - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
         with:
           node-version: "22"
