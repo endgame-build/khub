@@ -179,7 +179,7 @@ func fileInPath(err error, root, path string, self bool, lstat func(string) (fs.
 		return err
 	}
 	if !self {
-		if samePath(p, base) || filepath.Dir(p) == p {
+		if samePath(p, base) {
 			return err
 		}
 		p = filepath.Dir(p)

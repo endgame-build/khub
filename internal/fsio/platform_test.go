@@ -164,18 +164,24 @@ func TestFileInPathNamesTheFileInTheWay(t *testing.T) {
 
 // The walk stats nothing above the workspace, and ends at a volume or share
 // root whose Dir is itself. Each row counts the stats a path that never
-// exists costs.
+// exists costs; a listing also stats the path itself.
 func TestFileInPathStopsAtTheWorkspace(t *testing.T) {
 	vol := filepath.VolumeName(t.TempDir()) + string(filepath.Separator)
 	type row struct {
 		name, root, path string
+		self             bool
 		stats            int
 	}
-	rows := []row{{"volume root", vol, filepath.Join(vol, "a", "b"), 2}}
+	rows := []row{
+		{"volume root", vol, filepath.Join(vol, "a", "b"), false, 2},
+		{"volume root, listed", vol, filepath.Join(vol, "a", "b"), true, 3},
+	}
 	if runtime.GOOS == "windows" {
 		rows = append(rows,
-			row{"share root", `\\server\share`, `\\server\share\a`, 1},
-			row{"root in another case", `C:\WS`, `c:\ws\a\b`, 2},
+			row{"share root", `\\server\share`, `\\server\share\a`, false, 1},
+			row{"share root, listed", `\\server\share`, `\\server\share\a`, true, 2},
+			row{"root in another case", `C:\WS`, `c:\ws\a\b`, false, 2},
+			row{"root in another case, listed", `C:\WS`, `c:\ws\a\b`, true, 3},
 		)
 	}
 	for _, r := range rows {
@@ -188,7 +194,7 @@ func TestFileInPathStopsAtTheWorkspace(t *testing.T) {
 			return nil, &fs.PathError{Op: "lstat", Path: p, Err: fs.ErrNotExist}
 		}
 		in := &fs.PathError{Op: "statat", Path: r.path, Err: fs.ErrNotExist}
-		if got := fileInPath(in, r.root, r.path, false, lstat); !errors.Is(got, in) || calls != r.stats {
+		if got := fileInPath(in, r.root, r.path, r.self, lstat); !errors.Is(got, in) || calls != r.stats {
 			t.Errorf("%s: got %v after %d stats, want the error unchanged after %d", r.name, got, calls, r.stats)
 		}
 	}
