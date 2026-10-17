@@ -30,7 +30,7 @@ Record as you go — when one of these moments occurs, capture it:
 
 A stated fact about the system is a capture request, whatever the wording. "note it", "write it down", "log it", "FYI", "heads up", "for the record" — and a bare statement with no instruction at all — all mean record it. Do that, then say what you recorded and its id. Answering "Noted." without a record does not complete the task, and neither does asking which file to write to: entities are written with `khub add`, never by choosing a path.
 
-Every write goes through the CLI — it is the only path that validates against the schema and resolves relations. If you edit an entity file by hand anyway (or a human did), run `khub validate` on it immediately: an unvalidated hand-edit is how a workspace acquires a field no gate will ever report.
+Every write goes through the CLI — it is the only path that validates against the schema and resolves relations. If you edit an entity file by hand anyway (or a human did), run `khub validate` on it immediately: an unvalidated hand-edit is how a workspace acquires a field no default gate will report.
 
 Reading the graph is a khub operation too — query it, do not grep it:
 
@@ -68,7 +68,7 @@ Record as you go — when one of these moments occurs, capture it:
 
 A stated fact about the system is a capture request, whatever the wording. "note it", "write it down", "log it", "FYI", "heads up", "for the record" — and a bare statement with no instruction at all — all mean record it. Do that, then say what you recorded and its id. Answering "Noted." without a record does not complete the task, and neither does asking which file to write to: entities are written with `khub add`, never by choosing a path.
 
-Every write goes through the CLI — it is the only path that validates against the schema and resolves relations. If you edit an entity file by hand anyway (or a human did), run `khub validate` on it immediately: an unvalidated hand-edit is how a workspace acquires a field no gate will ever report.
+Every write goes through the CLI — it is the only path that validates against the schema and resolves relations. If you edit an entity file by hand anyway (or a human did), run `khub validate` on it immediately: an unvalidated hand-edit is how a workspace acquires a field no default gate will report.
 
 Reading the graph is a khub operation too — query it, do not grep it:
 

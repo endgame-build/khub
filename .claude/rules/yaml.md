@@ -53,4 +53,4 @@ the corpora (they need `ruamel.yaml`; see `parity/tools/README.md`).
 
 - `internal/canon/yamlload.go` — the dual-mode loader.
 - `internal/canon/splice.go` — the token-splice writer.
-- `internal/canon/yamlio.go` — the ruamel-shaped emitter, both profiles.
+- `internal/canon/ryaml.go` — the ruamel-shaped emitter, both profiles.

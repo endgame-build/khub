@@ -228,7 +228,7 @@ func BuildBlock(spec BlockSpec, importSupported bool) string {
 		"Every write goes through the CLI — it is the only path that validates against "+
 			"the schema and resolves relations. If you edit an entity file by hand anyway "+
 			"(or a human did), run `khub validate` on it immediately: an unvalidated "+
-			"hand-edit is how a workspace acquires a field no gate will ever report.",
+			"hand-edit is how a workspace acquires a field no default gate will report.",
 		"",
 		"Reading the graph is a khub operation too — query it, do not grep it:",
 		"",

@@ -14,6 +14,11 @@ Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelo
   `/plugin install khub@khub`, where it named `npx skills add`. The block in
   `AGENTS.md` keeps `npx skills add endgame-build/khub`. Run `khub wire` or
   `khub upgrade` to refresh an existing workspace.
+- The block `khub wire` writes says an unvalidated hand-edit can leave a field
+  "no default gate will report", where it said "no gate will ever report".
+  `khub validate --strict` does report undeclared fields, as the `khub` skill
+  already said. Run `khub wire` or `khub upgrade` to refresh an existing
+  workspace.
 - The README, `docs/plugin.md` and the `setup` skill (plugin 0.1.2) say how to
   update the plugin: `claude plugin marketplace update khub`, then
   `claude plugin update khub@khub`.
