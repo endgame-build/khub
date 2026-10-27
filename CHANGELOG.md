@@ -4,6 +4,20 @@ Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+### Added
+- **Nested storage.** A `file` type's `path` may be a template, or a list of
+  them: `work/{epic}/{slug}.md`, `spokes/{slug}/spec.md`. A templated type
+  claims a file only when its `type` names it, so types share a directory.
+  `add` fills field placeholders from the entity's fields
+  (`path_field_missing`, `invalid_path_value` refuse), and `check` reports a
+  duplicate slug or an entity outside the directory its fields name as
+  `misplaced`. `schema` prints `paths`.
+- **Path references.** Policy `path_refs: true` resolves a relation value that
+  names no entity as a workspace path: an entity's file is an edge, any other
+  existing file satisfies a `to: any` relation.
+- **`id_ordinal`.** Storage `id_ordinal: true` accepts a `NNN-` slug opening
+  instead of reporting the retired ordinal scheme.
+
 ## [0.29.0] — 2026-10-17
 
 khub runs on Windows, as an experimental platform with the same output as

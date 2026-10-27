@@ -1,0 +1,38 @@
+# Nested storage: a `file` type's path may be a template. An epic and its
+# stories share work/<epic>/ and each type claims only the files whose `type`
+# names it; a spec takes its slug from its directory; `add` fills a field
+# placeholder from the entity's own field and refuses without it. `check`
+# reports a duplicate slug and a story whose epic disagrees with its
+# directory as misplaced. `path_refs` resolves a reference by path: an
+# entity's file is an edge, any other existing file satisfies an `any`
+# relation, a missing one dangles. `id_ordinal` accepts a `NNN-` slug.
+steps:
+- argv: ["init", "build-hub", ".", "--no-wire"]
+- sh: "rm -rf .khub/templates knowledge && printf 'ontology:\\n  entities:\\n    epic: {}\\n    story: {}\\n    spec: {}\\n    adr: {}\\n' > .khub/ontology.yaml && printf 'policy:\\n  story: {path_refs: true}\\n' > .khub/policy.yaml && printf 'storage:\\n  epic: {layout: file, path: [\"work/{slug}/{slug}.md\", \"projects/{project}/work/{slug}/{slug}.md\"]}\\n  story: {layout: file, path: [\"work/{epic}/{slug}.md\", \"projects/{project}/work/{epic}/{slug}.md\"]}\\n  spec: {layout: file, path: \"spokes/{slug}/spec.md\"}\\n  adr: {layout: file, path: decisions, id_ordinal: true}\\n' > .khub/storage.yaml"
+- argv: ["schema", "--format", "json"]
+- argv: ["add", "epic", "--title", "Hub", "--id", "ep-1", "--format", "json"]
+- argv: ["add", "epic", "--title", "Proj", "--id", "ep-2", "--project", "p1", "--format", "json"]
+- argv: ["add", "story", "--title", "Lost", "--format", "json"]
+- argv: ["add", "story", "--title", "Escape", "--epic", "..", "--format", "json"]
+- argv: ["add", "story", "--title", "First", "--epic", "ep-1", "--references", "work/ep-1/ep-1.md", "--format", "json"]
+- argv: ["add", "story", "--title", "Second", "--epic", "ep-2", "--project", "p1", "--format", "json"]
+- sh: "mkdir -p spokes/a spokes/b decisions work/ep-3 && printf -- '---\\ntype: spec\\ntitle: A\\ncreated: 2026-01-15\\n---\\n' > spokes/a/spec.md && printf -- '---\\ntype: spec\\ntitle: B\\ncreated: 2026-01-15\\n---\\n' > spokes/b/spec.md && printf -- '---\\ntype: note\\ntitle: Notes\\n---\\n' > work/ep-1/notes.md && printf -- '---\\ntype: adr\\ntitle: Old\\ncreated: 2026-01-15\\n---\\n' > decisions/001-old.md && printf -- '---\\ntype: story\\ntitle: Twin\\ncreated: 2026-01-15\\n---\\n' > work/ep-3/first.md && printf 'hi\\n' > README.md"
+- argv: ["edit", "story/first", "--sources", "spokes/a/spec.md", "--related", "README.md#top", "--format", "json"]
+- argv: ["edit", "story/first", "--depends_on", "missing.md", "--format", "json"]
+- argv: ["query", "--format", "json"]
+- argv: ["neighbors", "story/first", "--format", "json"]
+- argv: ["validate", "--format", "json"]
+- argv: ["check", "--format", "json"]
+- argv: ["edit", "story/first", "--epic", "ep-2", "--format", "json"]
+- argv: ["check", "--format", "json"]
+- argv: ["remove", "story/second", "--format", "json"]
+- sh: "printf -- '---\\ntype: story\\ntitle: Gone\\ncreated: 2026-01-15\\nreferences: [spokes/zz/spec.md]\\n---\\n' > work/ep-1/gone.md"
+- argv: ["validate", "story/gone", "--format", "json"]
+- sh: "printf 'storage:\\n  epic: {layout: folder, path: \"work/{slug}\"}\\n' > .khub/storage.yaml"
+- argv: ["status", "--format", "json"]
+- sh: "printf 'storage:\\n  epic: {layout: file, path: \"work/{epic}/x.md\"}\\n' > .khub/storage.yaml"
+- argv: ["status", "--format", "json"]
+- sh: "printf 'storage:\\n  epic: {layout: file, path: \"work/{slug}/{slug}.md\"}\\n  story: {layout: file, path: work/ep-1}\\n' > .khub/storage.yaml"
+- argv: ["status", "--format", "json"]
+- sh: "printf 'storage:\\n  spec: {layout: singleton, path: x.md, id_ordinal: true}\\n' > .khub/storage.yaml"
+- argv: ["status", "--format", "json"]

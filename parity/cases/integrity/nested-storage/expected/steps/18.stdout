@@ -1,0 +1,1 @@
+{"count": 1, "errors": [{"id": "story/gone", "type": "story", "slug": "gone", "field": "references", "reason": "no any 'spokes/zz/spec.md' to satisfy relation 'references'"}], "gaps": [], "body": {"words": 0, "sections": []}, "lenses": []}

@@ -234,6 +234,13 @@ func create(root, typeName string, opts CreateOpts) (*CreateResult, error) {
 		return nil, err
 	}
 	path := entityPath(root, rtype, slug)
+	if rtype.Templated() {
+		rel, err := templatedPath(rtype, slug, meta)
+		if err != nil {
+			return nil, err
+		}
+		path = filepath.Join(root, filepath.FromSlash(rel))
+	}
 	if err := fsio.MkdirAll(root, filepath.Dir(path)); err != nil {
 		return nil, err
 	}

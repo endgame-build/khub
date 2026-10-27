@@ -1,0 +1,1 @@
+{"error": {"code": "invalid_schema", "message": "Invalid schema at storage.epic: Value error, a path template or a list of paths applies only to layout: file"}}

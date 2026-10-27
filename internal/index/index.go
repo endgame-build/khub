@@ -55,6 +55,17 @@ type Index struct {
 	Meta        map[Node]*omap.Map
 	Body        map[Node]string // nil unless built by BuildWithBodies
 	Malformed   []string        // workspace-relative, sorted
+	// Root is the workspace the scan read; Paths each per-item or singleton
+	// node's workspace-relative file, slash-separated. Both serve path
+	// references (schema.ResolvedRelation.ByPath).
+	Root  string
+	Paths map[Node]string
+	// Duplicates are files a templated type matched under a slug an earlier
+	// file already holds. `check` reports each as misplaced.
+	Duplicates []Duplicate
+
+	pathOnce sync.Once
+	byPath   map[string]Node
 
 	// folded maps casefolded slug -> stored slugs, built once on first
 	// case-insensitive miss. Without it CanonicalSlug casefolded EVERY stored
@@ -146,8 +157,17 @@ func (idx *Index) AliasOwners(alias string) []Node {
 }
 
 // ResolveTarget returns the nodes a relation value resolves to.
+//
+// A relation resolving by path (rel.ByPath) that names no entity by id falls
+// back to the entity whose file the value names.
 func (idx *Index) ResolveTarget(rel *schema.ResolvedRelation, target string) map[Node]bool {
-	return resolveTarget(idx, rel, target)
+	out := resolveTarget(idx, rel, target)
+	if len(out) == 0 && rel.ByPath {
+		if n, ok := idx.pathNode(target); ok && (rel.Kind == schema.KindAny || contains(rel.Targets, n.Type)) {
+			out[n] = true
+		}
+	}
+	return out
 }
 
 // Build scans every declared type into an Index.
@@ -161,6 +181,11 @@ func BuildWithBodies(root string, resolved *schema.ResolvedSchema) (*Index, erro
 	return build(root, resolved, true)
 }
 
+// Duplicate is a templated file whose slug another file of its type holds.
+type Duplicate struct {
+	Path, Type, Holder string // workspace-relative, slash-separated
+}
+
 func build(root string, resolved *schema.ResolvedSchema, bodies bool) (*Index, error) {
 	idx := &Index{
 		Resolved:    resolved,
@@ -168,6 +193,8 @@ func build(root string, resolved *schema.ResolvedSchema, bodies bool) (*Index, e
 		Nodes:       map[Node]bool{},
 		TypesBySlug: map[string]map[string]bool{},
 		Meta:        map[Node]*omap.Map{},
+		Root:        root,
+		Paths:       map[Node]string{},
 	}
 	if bodies {
 		idx.Body = map[Node]string{}
@@ -175,12 +202,24 @@ func build(root string, resolved *schema.ResolvedSchema, bodies bool) (*Index, e
 	var malformed []string
 	for _, tname := range resolved.Types.Keys() {
 		rtype, _ := resolved.Types.Get(tname)
-		pairs, bad, err := scanType(root, rtype, idx.Collections)
+		var pairs []Pair
+		var bad []string
+		var err error
+		if rtype.Templated() {
+			var dups []Duplicate
+			pairs, bad, dups, err = scanTemplated(root, rtype)
+			idx.Duplicates = append(idx.Duplicates, dups...)
+		} else {
+			pairs, bad, err = scanType(root, rtype, idx.Collections)
+		}
 		if err != nil {
 			return nil, err
 		}
 		for _, p := range pairs {
 			node := Node{Type: tname, Slug: p.Slug}
+			if p.Rel != "" {
+				idx.Paths[node] = p.Rel
+			}
 			idx.Nodes[node] = true
 			idx.Order = append(idx.Order, node)
 			if idx.TypesBySlug[p.Slug] == nil {
@@ -194,13 +233,19 @@ func build(root string, resolved *schema.ResolvedSchema, bodies bool) (*Index, e
 		}
 		malformed = append(malformed, bad...)
 	}
+	// Templated types sharing a directory each meet an unparseable file there;
+	// it is one finding.
 	rel := make([]string, 0, len(malformed))
+	seen := map[string]bool{}
 	for _, p := range malformed {
 		r, err := filepath.Rel(root, p)
 		if err != nil {
 			r = p
 		}
-		rel = append(rel, filepath.ToSlash(r))
+		if r = filepath.ToSlash(r); !seen[r] {
+			seen[r] = true
+			rel = append(rel, r)
+		}
 	}
 	sort.Strings(rel)
 	idx.Malformed = rel
@@ -212,6 +257,7 @@ type Pair struct {
 	Slug string
 	Meta *omap.Map
 	Body string
+	Rel  string // the workspace-relative file, slash-separated; "" for a row
 }
 
 // ScanType returns the (slug, frontmatter) pairs stored for one type, plus its
@@ -249,6 +295,7 @@ func scanType(root string, rtype *schema.ResolvedType, collections map[string]*o
 		if res.malformed != "" {
 			return nil, []string{res.malformed}, nil
 		}
+		res.pair.Rel = filepath.ToSlash(baseRel)
 		return []Pair{res.pair}, nil, nil
 	}
 	entries, err := fsio.ReadDirIn(r, baseRel, base)
@@ -340,7 +387,11 @@ func scanEntry(dir *os.Root, root, base string, rtype *schema.ResolvedType, entr
 	if err != nil {
 		return entryResult{err: rootRelative(err, root, path)}
 	}
-	return parseEntry(raw, path, slug, rtype.Storage.Fmt)
+	res := parseEntry(raw, path, slug, rtype.Storage.Fmt)
+	if rel, err := filepath.Rel(root, path); err == nil {
+		res.pair.Rel = filepath.ToSlash(rel)
+	}
+	return res
 }
 
 // parseEntry parses one entity file. A parse failure marks the file malformed
@@ -490,6 +541,9 @@ func Filter(idx *Index, drop map[Node]bool) *Index {
 		TypesBySlug: map[string]map[string]bool{},
 		Meta:        map[Node]*omap.Map{},
 		Malformed:   idx.Malformed,
+		Root:        idx.Root,
+		Paths:       map[Node]string{},
+		Duplicates:  idx.Duplicates,
 	}
 	if idx.Body != nil {
 		out.Body = map[Node]string{}
@@ -505,6 +559,9 @@ func Filter(idx *Index, drop map[Node]bool) *Index {
 		}
 		out.TypesBySlug[n.Slug][n.Type] = true
 		out.Meta[n] = idx.Meta[n]
+		if p, ok := idx.Paths[n]; ok {
+			out.Paths[n] = p
+		}
 		if idx.Body != nil {
 			out.Body[n] = idx.Body[n]
 		}

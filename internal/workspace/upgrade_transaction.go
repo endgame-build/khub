@@ -189,8 +189,10 @@ func inStorage(old *schema.ResolvedSchema, rel string) bool {
 	rel = filepath.ToSlash(rel)
 	for _, name := range old.Types.Keys() {
 		t, _ := old.Types.Get(name)
-		if sp := t.StorageRelpath(); rel == sp || strings.HasPrefix(rel, sp+"/") {
-			return true
+		for _, sp := range t.StorageRoots() {
+			if rel == sp || strings.HasPrefix(rel, sp+"/") {
+				return true
+			}
 		}
 	}
 	return false

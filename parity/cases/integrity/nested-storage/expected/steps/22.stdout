@@ -1,0 +1,1 @@
+{"error": {"code": "invalid_schema", "message": "Invalid schema at storage.spec: Value error, 'id_ordinal' applies only to minting types (a singleton's id is its type name, so it carries no ordinal); drop the key"}}

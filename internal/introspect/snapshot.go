@@ -36,6 +36,7 @@ func snapshotType(rtype *schema.ResolvedType) *omap.Map {
 	v.Set("layout", rtype.Storage.Layout)
 	v.Set("format", rtype.Storage.Fmt)
 	v.Set("path", strPtr(rtype.Storage.Path))
+	storageExtras(v, rtype)
 	v.Set("id_prefix", idPrefixView(rtype.IDPrefix))
 	v.Set("id_date", rtype.IDDate)
 	v.Set("required", rtype.Required)

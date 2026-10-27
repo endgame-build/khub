@@ -9,12 +9,14 @@ import (
 	"fmt"
 	"io/fs"
 	"path/filepath"
+	"strings"
 
 	"github.com/endgame-build/khub/internal/canon"
 	"github.com/endgame-build/khub/internal/errs"
 	"github.com/endgame-build/khub/internal/fsio"
 	"github.com/endgame-build/khub/internal/omap"
 	"github.com/endgame-build/khub/internal/schema"
+	"github.com/endgame-build/khub/internal/values"
 )
 
 // entityPath is the on-disk path for slug of rtype: `_index` under a folder,
@@ -28,6 +30,14 @@ func entityPath(root string, rtype *schema.ResolvedType, slug string) string {
 	case schema.LayoutSingleton:
 		// One fixed file regardless of slug (the slug IS the type name).
 		return filepath.Join(root, storagePath(rtype, rtype.Name+"."+rtype.Storage.Fmt))
+	}
+	if rtype.Templated() {
+		// Where the scan found it; a slug no scan holds has no file, and the
+		// path under the first template's prefix names nothing.
+		if rel, ok := rtype.Located(slug); ok {
+			return filepath.Join(root, filepath.FromSlash(rel))
+		}
+		return filepath.Join(root, filepath.FromSlash(rtype.StorageRelpath()), slug+"."+rtype.Storage.Fmt)
 	}
 	base := filepath.Join(root, storagePath(rtype, rtype.Name))
 	if rtype.Storage.Layout == schema.LayoutFolder {
@@ -189,3 +199,52 @@ func mdNormalized(body string, rtype *schema.ResolvedType) string {
 }
 
 func hasSuffixNewline(s string) bool { return len(s) > 0 && s[len(s)-1] == '\n' }
+
+// templatedPath is the workspace-relative file a new entity of a templated
+// type is written to. Of the templates every field placeholder of which meta
+// supplies, the one naming the most fields wins (the most specific place),
+// the first declared on a tie. A relation value qualified as `type/slug`
+// places its slug.
+func templatedPath(rtype *schema.ResolvedType, slug string, meta *omap.Map) (string, error) {
+	field := func(name string) (string, bool) {
+		v, has := meta.Get(name)
+		if !has || v == nil {
+			return "", false
+		}
+		if _, isList := v.([]any); isList {
+			return "", false
+		}
+		s := values.Str(v)
+		if _, isRel := rtype.Relations.Get(name); isRel {
+			if _, after, qualified := strings.Cut(s, "/"); qualified {
+				s = after
+			}
+		}
+		return s, s != ""
+	}
+	best, bestFields := "", -1
+	var firstMissing []string
+	for _, tp := range rtype.Storage.Templates {
+		rel, missing, err := tp.Fill(slug, field)
+		var bad *schema.PathValueError
+		if errors.As(err, &bad) {
+			return "", errs.InvalidPathValue(rtype.Name, bad.Field, bad.Value)
+		}
+		if err != nil {
+			return "", err
+		}
+		if len(missing) > 0 {
+			if firstMissing == nil {
+				firstMissing = missing
+			}
+			continue
+		}
+		if n := len(tp.Fields()); n > bestFields {
+			best, bestFields = rel, n
+		}
+	}
+	if bestFields < 0 {
+		return "", errs.PathFieldMissing(rtype.Name, rtype.Storage.Templates[0].String(), firstMissing)
+	}
+	return best, nil
+}

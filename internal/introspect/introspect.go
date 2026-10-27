@@ -323,6 +323,7 @@ func typeView(resolved *schema.ResolvedSchema, rtype *schema.ResolvedType) *omap
 	v.Set("layout", rtype.Storage.Layout)
 	v.Set("format", rtype.Storage.Fmt)
 	v.Set("path", strPtr(rtype.Storage.Path))
+	storageExtras(v, rtype)
 	// The id scheme, as declared and as rendered: an agent building an `add`
 	// reads `id_shape` to know what the write will be named, and `id_prefix`
 	// to know which field decides it.
@@ -552,4 +553,26 @@ func idPrefixView(p *schema.IDPrefix) any {
 	v.Set("by", strPtr(p.By))
 	v.Set("map", m)
 	return v
+}
+
+// storageExtras adds the storage keys a type carries only when it uses them —
+// nested path templates, an accepted slug ordinal, path references — so a
+// schema that uses none prints exactly what it printed before they existed.
+func storageExtras(v *omap.Map, rtype *schema.ResolvedType) {
+	if rtype.Templated() {
+		paths := make([]any, len(rtype.Storage.Templates))
+		for i, tp := range rtype.Storage.Templates {
+			paths[i] = tp.Raw
+		}
+		v.Set("paths", paths)
+	}
+	if rtype.IDOrdinal {
+		v.Set("id_ordinal", true)
+	}
+	for _, name := range rtype.Relations.Keys() {
+		if rel, _ := rtype.Relations.Get(name); rel.ByPath {
+			v.Set("path_refs", true)
+			break
+		}
+	}
 }

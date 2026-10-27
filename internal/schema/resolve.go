@@ -307,6 +307,13 @@ func validateResolved(resolved *ResolvedSchema) error {
 				return errs.New("invalid_schema", fmt.Sprintf("Invalid pattern at ontology.entities.%s.attributes.%s: %s", name, attrName, err))
 			}
 		}
+		if t.Templated() {
+			if err := validateTemplated(name, t, types); err != nil {
+				return err
+			}
+			types = append(types, t)
+			continue
+		}
 		rel := filepath.Clean(t.StorageRelpath())
 		first := strings.Split(filepath.ToSlash(rel), "/")[0]
 		normalized := filepath.ToSlash(rel)
@@ -331,7 +338,7 @@ func validateResolved(resolved *ResolvedSchema) error {
 				if t.Storage.Layout == LayoutCollection && other.Storage.Layout == LayoutCollection {
 					return errs.CollectionPathCollision(normalized, []string{other.Name, t.Name})
 				}
-				return errs.New("invalid_schema", fmt.Sprintf("Storage paths for '%s' and '%s' overlap: %s, %s", other.Name, t.Name, other.StorageRelpath(), normalized))
+				return errs.New("invalid_schema", fmt.Sprintf("Storage paths for '%s' and '%s' overlap: %s, %s", other.Name, t.Name, other.StorageShape(), normalized))
 			}
 		}
 		types = append(types, t)
@@ -373,7 +380,44 @@ func ReservedDeviceName(name string) bool {
 	return reservedDevice[strings.ToLower(strings.TrimRight(stem, " "))]
 }
 
+// validateTemplated is validateResolved for a templated type: each
+// template's literal prefix obeys the plain path rules, and no template
+// overlaps a plain layout. Templates may overlap each other — a templated type
+// claims a file only when the file's `type` names it.
+func validateTemplated(name string, t *ResolvedType, earlier []*ResolvedType) error {
+	for _, tp := range t.Storage.Templates {
+		prefix := tp.Prefix()
+		first := strings.Split(prefix, "/")[0]
+		if !filepath.IsLocal(filepath.FromSlash(prefix)) || first == ".khub" || first == ".git" ||
+			first == ".claude" || first == ".agents" || first == ".opencode" {
+			return errs.New("invalid_schema", fmt.Sprintf("Invalid schema at storage.%s.path: path must stay in workspace storage and cannot own khub control files (%s)", name, tp.Raw))
+		}
+		if err := reservedDevicePart(name, tp.String()); err != nil {
+			return err
+		}
+	}
+	for _, other := range earlier {
+		if storageOverlap(t, other) {
+			return errs.New("invalid_schema", fmt.Sprintf("Storage paths for '%s' and '%s' overlap: %s, %s", other.Name, t.Name, other.StorageShape(), t.StorageShape()))
+		}
+	}
+	return nil
+}
+
 func storageOverlap(a, b *ResolvedType) bool {
+	if a.Templated() || b.Templated() {
+		if a.Templated() && b.Templated() {
+			return false
+		}
+		for _, x := range a.shapes() {
+			for _, y := range b.shapes() {
+				if x.intersects(y) {
+					return true
+				}
+			}
+		}
+		return false
+	}
 	ap, bp := a.StorageRelpath(), b.StorageRelpath()
 	if ap == bp {
 		return true
@@ -523,7 +567,11 @@ func resolveType(name string, decl *TypeDecl, base *BaseBlock, declared map[stri
 	if err := checkIDPrefix(name, decl, attributes); err != nil {
 		return nil, err
 	}
-	storage := StorageConfig{Layout: decl.Layout, Path: decl.Path, Fmt: decl.Format}
+	for _, rn := range relations.Keys() {
+		rr, _ := relations.Get(rn)
+		rr.ByPath = decl.PathRefs
+	}
+	storage := StorageConfig{Layout: decl.Layout, Path: decl.Path, Fmt: decl.Format, Templates: decl.Templates}
 	return &ResolvedType{
 		Name:        name,
 		Storage:     storage,
@@ -533,6 +581,7 @@ func resolveType(name string, decl *TypeDecl, base *BaseBlock, declared map[stri
 		Orphan:      decl.Orphan,
 		IDPrefix:    idPrefixOf(decl.IDPrefix),
 		IDDate:      decl.IDDate,
+		IDOrdinal:   decl.IDOrdinal,
 		Template:    decl.Template,
 		TemplateOff: decl.TemplateOff,
 		When:        decl.When,

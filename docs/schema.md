@@ -7,8 +7,8 @@ A schema is authored in khub's own YAML vocabulary, split across three layer fil
 | File | Layer | Carries |
 |---|---|---|
 | `ontology.yaml` | the domain | per-type `attributes`, `relations`, `when` |
-| `policy.yaml` | this workspace's gates | `required`, `orphan` |
-| `storage.yaml` | where bytes land | `layout`, `path`, `format`, `id_prefix`, `template` |
+| `policy.yaml` | this workspace's gates | `required`, `orphan`, `path_refs` |
+| `storage.yaml` | where bytes land | `layout`, `path`, `format`, `id_prefix`, `id_date`, `id_ordinal`, `template` |
 
 `khub init` copies a preset's three files into `.khub/`; you edit them directly, and they carry no runtime tie to the hub. The three reunite at load time into one resolved contract every command reads — the layers merge on their **top-level keys** (`ontology:` / `policy:` / `storage:`), never on filenames, so one file carrying all three blocks resolves identically (useful for fixtures; three files is the canonical layout). Ontology declares which types exist; policy and storage only annotate them, and an entry for a type ontology never declared is a resolve error. See [`concepts.md`](concepts.md) for why the schema is the contract.
 
@@ -64,10 +64,30 @@ Per type, keyed by the type's name. khub reads these directly.
 
 - `layout` — `file` (one entity per file, `{path}/{slug}.md`), `folder` (one entity per folder, `{path}/{slug}/_index.md`), `collection` (every entity of the type is a row in ONE file), or `singleton` (exactly one fixed file, 0..1 entity; the slug IS the type name, so `khub get prd` resolves it).
 - `format` — `md` (the default: YAML frontmatter + prose body), `json`, or `yaml`. Collections take `json | jsonl | yaml`. A non-md entity is a single mapping; prose rides in a reserved `body` field.
-- `path` — the inventory directory, relative to the workspace root (or the file, for a collection/singleton).
-- `id_prefix` and `template` — below.
+- `path` — the inventory directory, relative to the workspace root (or the file, for a collection/singleton). A `file` type may give a path template, or a list of them, instead — see [Nested storage](#nested-storage-path-templates).
+- `id_prefix`, `id_date`, `id_ordinal` and `template` — below.
 
 A type with no storage entry at all takes the default: one file per entity under a directory named for the type (`layout: file`, `path: <type>`), so an ontology-only schema resolves and runs. An entry that **does** exist must state its `layout` — a path with no layout is a half-statement, and silently defaulting it to `file` would turn a forgotten `layout: collection` into a directory of strays. A collection with no `path` stores at `{type}.{format}`; a singleton always needs its `path` — the exact file it lives at.
+
+## Nested storage (path templates)
+
+A `file` type whose entities live below more than one directory gives `path` as a template: literal directories, `{name}` directory segments, and a file name.
+
+```yaml
+storage:
+  epic:  { layout: file, path: ["work/{slug}/{slug}.md", "projects/{project}/work/{slug}/{slug}.md"] }
+  story: { layout: file, path: ["work/{epic}/{slug}.md", "projects/{project}/work/{epic}/{slug}.md"] }
+  blueprint: { layout: file, path: "spokes/{spoke}/architecture/{slug}.md" }
+  spec:  { layout: file, path: "spokes/{slug}/spec.md" }          # the slug is the directory
+```
+
+- `{slug}` is the entity's slug and must appear at least once; placed twice, both places hold the same value. Every other `{name}` is a field of the entity. A template that ends in a directory gets `{slug}.<format>` appended, so `work/{epic}` means `work/{epic}/{slug}.md`.
+- A segment is a whole placeholder or a literal, and the template starts with a literal directory. A placeholder never matches a hidden name (`.x`) or a vendored tree (`node_modules`).
+- A list gives every place the type's entities may live. A slug is unique per type across all of them: a second file under a slug another file holds is `misplaced`, naming the holder.
+- **A templated type claims a file only when its frontmatter `type` names that type.** Templates may therefore overlap — an epic and its stories share `work/<EP>/`, and a file there of some other type belongs to neither. A template may not overlap a plain layout, which claims every file in its directory whatever the file says; that is a resolve error.
+- `add` fills each field placeholder from the entity's own field (`khub add story --title … --epic EP-1`); a relation value qualified as `type/slug` places its slug. Of the templates whose fields are all given, the one naming the most fields wins, the first declared on a tie. A missing field refuses with `path_field_missing` (exit 2, naming the flags); a value that cannot be one directory name (`..`, `a/b`, a hidden or device name) refuses with `invalid_path_value`.
+- `check` reports an entity whose directory disagrees with a field its template names as `misplaced`, with `expected` where the field puts it. A field the entity leaves unset places nothing and is never a finding. Nothing moves files: after `edit --epic`, `git mv` the file.
+- `khub schema` prints the template as `path` and every template as `paths`.
 
 ## Workspace gates (`policy.yaml`)
 
@@ -75,6 +95,7 @@ Per type, keyed by the type's name — what `check` demands of it in *this* work
 
 - `required` — singleton-only: `check` reports a missing required singleton (e.g. a workspace without its `prd.md`).
 - `orphan` — `orphan: true` declares that edge-less is this type's *expected* state, so `check` stops reporting its entities as orphans, `--strict` stops failing on them, `query --orphan` stops flagging them and the `status` count stops including them. Default `false`. Use it for a narrative root nothing points at by design: build-hub declares it on its two narrative singletons (`prd`, `arc42`), because every stored edge in that preset points *up* the durability ladder and the documents sit above its top — so orphan-ness there is a finding no authoring could ever close, and without the flag `check --strict` could not go green on a correct workspace. Unlike `required` this is **not** singleton-only: any type whose members are legitimately unwired may declare it, and a singleton that *does* carry relations is still swept. It removes no signal — a missing required edge is still reported by required-completeness, which names the field.
+- `path_refs` — `path_refs: true` lets this type's relation values name a workspace file by its path (`sources: [system/prd.md]`), for a corpus whose documents cite each other by path. A value that resolves as an id still does; one that does not is read as a workspace-relative path, an `#anchor` and a leading `./` dropped. If it is an entity's file, it is an edge to that entity, subject to the relation's targets. Otherwise, on a `to: any` relation, any existing file or directory satisfies it without an edge (`manifest.yaml`, `docs/guide.md`). A path to nothing dangles, and a write naming one is refused, as for an id.
 
 ## Capture cues (`when`)
 
@@ -82,7 +103,7 @@ A type may declare `when` in its ontology entry — one line of domain language 
 
 A cue is **pure domain language — never a file path**. For a singleton (edited, never added to), `wire` derives the edit target from the type's storage path at render time and appends it to the rendered cue (`— edit [knowledge/prd.md](knowledge/prd.md), never add a second`), so a moved file can never strand a stale link in the ontology. A test holds every shipped cue to embedding no markdown link.
 
-## Ids (`id_prefix`, `id_date`, in storage)
+## Ids (`id_prefix`, `id_date`, `id_ordinal`, in storage)
 
 A minted id is `<prefix>-<YYYY-MM-DD>-<slug>`, with the prefix and the date each declared per type and each optional:
 
@@ -120,7 +141,9 @@ An explicit `--id` is slugified and written as given. It is *not* exempt from th
 
 1. **prefix** — the slug must start with a prefix the type mints (declared prefixes tried longest first), and for the by-value form with the one its deciding attribute chose: a `svc-` file whose `kind` says `external` is `slug says 'svc-' but the schema mints 'ext-' for kind 'external'`. That disagreement is invisible to every other gate — the enum is legal, the relations resolve, nothing dangles. An unset deciding attribute reports nothing here; `check` names it as incomplete.
 2. **date** — when `id_date`, the rest must open with `YYYY-MM-DD-`. Presence only, never absence: a title like "2026 07 28 audit" legitimately mints a date-shaped opening on an undated type.
-3. **retired ordinal** — a surviving `NNN-` from the old scheme is rejected with a message naming `git mv`, unless the title itself slugifies to start with those digits ("404 handling" → `cmp-404-handling` is fine; "Public API" does not produce the `001-` in `cmp-001-public-api`).
+3. **retired ordinal** — a surviving `NNN-` from the old scheme is rejected with a message naming `git mv`, unless the title itself slugifies to start with those digits ("404 handling" → `cmp-404-handling` is fine; "Public API" does not produce the `001-` in `cmp-001-public-api`), or the type declares `id_ordinal: true`.
+
+`id_ordinal: true` is for a corpus whose ids are ordinals by its own convention (`system/decisions/001-n-repos-one-hub.md`) and whose references would all have to move with a rename. It only accepts: nothing mints an ordinal, so `add` still names the entity by its title or `--id`. The shape it prints is `[NNN]-slug`. Like the other id keys it is refused on a singleton.
 
 The shape every message quotes (`ad-YYYY-MM-DD-slug`, `req-slug`, `svc|lib|ext-slug`, `slug`) is the same one `khub schema show <type>` prints as `id_shape`, so a reader fixing a slug against one is never told something different by the other.
 

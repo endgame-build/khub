@@ -1,0 +1,1 @@
+[{"id": "spec/a", "type": "spec", "slug": "a", "predicate": "sources", "direction": "out", "derived": false, "depth": 1}, {"id": "epic/ep-1", "type": "epic", "slug": "ep-1", "predicate": "references", "direction": "out", "derived": false, "depth": 1}]

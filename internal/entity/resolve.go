@@ -192,6 +192,9 @@ func resolveWriteTarget(
 	rel *schema.ResolvedRelation, target string, idx *index.Index, predicate, noun string,
 ) (map[index.Node]bool, error) {
 	matches := idx.ResolveTarget(rel, target)
+	if len(matches) == 0 && idx.ResolvesToFile(rel, target) {
+		return matches, nil
+	}
 	if len(matches) == 0 {
 		return nil, errs.ReferentialIntegrity(strings.Join(rel.Targets, "/"), target, predicate, noun)
 	}

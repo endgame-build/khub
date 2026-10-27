@@ -107,7 +107,13 @@ type IDPrefixSpec struct {
 type TypeDecl struct {
 	Layout string
 	Path   *string
-	Format string // post-storageMatrix: the effective format
+	// Paths is a `path:` authored as a list — templates only. Path holds its
+	// first entry.
+	Paths []string
+	// Templates is every path parsed as a template (storageMatrix); nil when
+	// the path is plain.
+	Templates []*PathTemplate
+	Format    string // post-storageMatrix: the effective format
 	// FormatSet is the model_fields_set analog: format was authored, not
 	// defaulted — an authored `format: md` on a collection is rejected where
 	// the default would derive from the path suffix.
@@ -123,6 +129,14 @@ type TypeDecl struct {
 	// it: the two resolve independently, so a by-value prefix and a date
 	// compose. Default false.
 	IDDate bool
+	// `id_ordinal: true` accepts a `NNN-` ordinal opening the slug (after any
+	// prefix and date) instead of reporting it as the retired scheme. Nothing
+	// mints one: an ordinal stays a name the author chose.
+	IDOrdinal bool
+	// Policy `path_refs: true`: this type's relation values may name a
+	// workspace file by its path. One that is an entity's file is an edge to
+	// it; any other existing file satisfies an `any` relation without an edge.
+	PathRefs bool
 	// The declared template stem (.khub/templates/<name>.yaml). nil = the
 	// standing convention (the type's own name); see TemplateOff for the
 	// explicit opt-out. A NAME, never a path: templates live in one directory,
@@ -225,6 +239,13 @@ func (t *TypeDecl) storageMatrix() error {
 				"use md, json, or yaml (jsonl is collection-only, gjson is deferred)", t.Format)
 		}
 	}
+	if err := t.parseTemplates(); err != nil {
+		return err
+	}
+	if t.IDOrdinal && t.Layout == "singleton" {
+		return errors.New("'id_ordinal' applies only to minting types " +
+			"(a singleton's id is its type name, so it carries no ordinal); drop the key")
+	}
 	// On any non-md type the `body` key is the prose channel: a field so named
 	// would be popped out of meta on every read and clobbered on write.
 	if t.Format != "md" && (declHas(t.Attributes, "body") || declHas(t.Relations, "body")) {
@@ -246,6 +267,34 @@ func (t *TypeDecl) storageMatrix() error {
 	if (t.IDPrefix != nil || t.IDDate) && t.Layout == "singleton" {
 		return errors.New("'id_prefix' and 'id_date' apply only to minting types " +
 			"(a singleton's id is its type name, so it mints nothing); drop the key")
+	}
+	return nil
+}
+
+// parseTemplates parses a templated path (or a list of them) once the format
+// is known. A template is a `file` layout's alone: a folder already names its
+// file, and a singleton or collection is one fixed file.
+func (t *TypeDecl) parseTemplates() error {
+	raws := t.Paths
+	if raws == nil {
+		if t.Path == nil || !IsPathTemplate(*t.Path) {
+			return nil
+		}
+		raws = []string{*t.Path}
+	}
+	if t.Layout != LayoutFile {
+		return errors.New("a path template or a list of paths applies only to layout: file")
+	}
+	for _, raw := range raws {
+		if !IsPathTemplate(raw) {
+			return fmt.Errorf("'%s' in a list of paths is not a template; "+
+				"each entry places {slug}", raw)
+		}
+		tp, err := ParseTemplate(raw, t.Format)
+		if err != nil {
+			return err
+		}
+		t.Templates = append(t.Templates, tp)
 	}
 	return nil
 }
@@ -449,7 +498,8 @@ func buildOntologyDecl(v any, loc []string, c *vocabCollector) *TypeDecl {
 func applyPolicyDecl(m *omap.Map, td *TypeDecl, loc []string, c *vocabCollector) {
 	td.Required = takeBool(m, "required", loc, c)
 	td.Orphan = takeBool(m, "orphan", loc, c)
-	addExtras(m, loc, c, "required", "orphan")
+	td.PathRefs = takeBool(m, "path_refs", loc, c)
+	addExtras(m, loc, c, "required", "orphan", "path_refs")
 }
 
 // applyStorageDecl folds a type's STORAGE delta — where and how its bytes
@@ -466,7 +516,7 @@ func applyStorageDecl(m *omap.Map, td *TypeDecl, loc []string, c *vocabCollector
 	} else {
 		c.add("missing", at(loc, "layout"), msgMissing)
 	}
-	td.Path = takeStrOrNil(m, "path", loc, c)
+	td.Path, td.Paths = takePaths(m, loc, c)
 	if fv, has := m.Get("format"); has {
 		td.FormatSet = true
 		if s, isStr := fv.(string); isStr {
@@ -479,6 +529,7 @@ func applyStorageDecl(m *omap.Map, td *TypeDecl, loc []string, c *vocabCollector
 		td.IDPrefix = buildIDPrefixSpec(pv, at(loc, "id_prefix"), c)
 	}
 	td.IDDate = takeBool(m, "id_date", loc, c)
+	td.IDOrdinal = takeBool(m, "id_ordinal", loc, c)
 	if tv, has := m.Get("template"); has && tv != nil {
 		switch x := tv.(type) {
 		case string:
@@ -498,7 +549,7 @@ func applyStorageDecl(m *omap.Map, td *TypeDecl, loc []string, c *vocabCollector
 			c.add("string_type", at(loc, "template"), msgString)
 		}
 	}
-	addExtras(m, loc, c, "layout", "path", "format", "id_prefix", "id_date", "template")
+	addExtras(m, loc, c, "layout", "path", "format", "id_prefix", "id_date", "id_ordinal", "template")
 }
 
 // storageDefaults fills the storage config of a type no storage layer named:
@@ -734,6 +785,25 @@ func takeStrOrNil(m *omap.Map, field string, loc []string, c *vocabCollector) *s
 	}
 	c.add("string_type", at(loc, field), msgString)
 	return nil
+}
+
+// takePaths reads `path`: a string, or a non-empty list of strings (path
+// templates, checked by the storage matrix). A list answers its first entry
+// as the path too.
+func takePaths(m *omap.Map, loc []string, c *vocabCollector) (*string, []string) {
+	v, has := m.Get("path")
+	list, isList := v.([]any)
+	if !has || !isList {
+		return takeStrOrNil(m, "path", loc, c), nil
+	}
+	paths := takeStrList(list, at(loc, "path"), c)
+	if len(paths) == 0 {
+		if paths != nil {
+			c.add("too_short", at(loc, "path"), "List should have at least 1 item after validation, not 0")
+		}
+		return nil, nil
+	}
+	return &paths[0], paths
 }
 
 func takeBool(m *omap.Map, field string, loc []string, c *vocabCollector) bool {
