@@ -1,0 +1,1 @@
+{"error": {"code": "path_ignored", "message": "Refusing to add story at work/fixtures/into-fixtures.md: .khub/ignore excludes that path; remove the pattern or store the type elsewhere"}}

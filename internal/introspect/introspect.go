@@ -111,6 +111,9 @@ func LoadSchemaLayers(root string) (*schema.ResolvedSchema, []string, error) {
 		// sibling layer.
 		return nil, nil, errs.New("schema_error", fmt.Sprintf("Cannot parse schema: %s", err.Error()))
 	}
+	if resolved.Ignore, err = schema.LoadIgnore(root); err != nil {
+		return nil, nil, err
+	}
 	return resolved, layers, nil
 }
 

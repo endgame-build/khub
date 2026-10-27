@@ -1,0 +1,19 @@
+# .khub/ignore keeps an example corpus and test fixtures out of the graph.
+# Before it, an example spec is a spec, a fixture story inside a plain layout
+# is a stray candidate, and a typed file outside every layout is misplaced;
+# after it, none of them is read: not an entity, a stray or a misplaced
+# finding. `add` refuses to write where the list excludes, and a malformed
+# list refuses the schema.
+steps:
+- argv: ["init", "build-hub", ".", "--no-wire"]
+- sh: "rm -rf .khub/templates knowledge && printf 'ontology:\\n  entities:\\n    story: {}\\n    spec: {}\\n    note: {}\\n' > .khub/ontology.yaml && printf 'policy: {}\\n' > .khub/policy.yaml && printf 'storage:\\n  story: {layout: file, path: \"work/{epic}/{slug}.md\"}\\n  spec: {layout: file, path: \"spokes/{slug}/spec.md\"}\\n  note: {layout: file, path: notes}\\n' > .khub/storage.yaml"
+- sh: "mkdir -p spokes/a spokes/example work/ep-1 work/fixtures notes/fixtures platform/jira-sync/phase8/create/work/EP-T docs/examples && printf -- '---\\ntype: spec\\ntitle: A\\ncreated: 2026-01-15\\n---\\n' > spokes/a/spec.md && printf -- '---\\ntype: spec\\ntitle: Example\\ncreated: 2026-01-15\\n---\\n' > spokes/example/spec.md && printf -- '---\\ntype: story\\ntitle: Real\\ncreated: 2026-01-15\\n---\\n' > work/ep-1/real.md && printf -- '---\\ntype: story\\ntitle: Fixture\\ncreated: 2026-01-15\\n---\\n' > work/fixtures/fake.md && printf -- '---\\ntype: story\\ntitle: Jira\\ncreated: 2026-01-15\\n---\\n' > platform/jira-sync/phase8/create/work/EP-T/EP-T-01.md && printf -- '---\\ntype: spec\\ntitle: Doc\\ncreated: 2026-01-15\\n---\\n' > docs/examples/spec.md && printf 'just prose\\n' > notes/fixtures/readme.txt && printf -- '---\\ntitle: no type\\n---\\n' > notes/scratch.draft.md"
+- argv: ["query", "--format", "json"]
+- argv: ["check", "--format", "json"]
+- sh: "printf '# examples and test data stay out of the graph\\ndocs/examples/\\n/spokes/example/\\nfixtures/\\nplatform/**/phase8/\\n*.draft.md\\n' > .khub/ignore"
+- argv: ["query", "--format", "json"]
+- argv: ["check", "--format", "json"]
+- argv: ["add", "story", "--title", "Into fixtures", "--epic", "fixtures", "--format", "json"]
+- argv: ["add", "story", "--title", "Kept", "--epic", "ep-1", "--format", "json"]
+- sh: "printf '!keep.md\\n' > .khub/ignore"
+- argv: ["status", "--format", "json"]

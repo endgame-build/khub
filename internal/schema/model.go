@@ -339,6 +339,8 @@ type ResolvedSchema struct {
 	Types          *Ordered[*ResolvedType]
 	BaseAttributes *Ordered[*ResolvedAttribute]
 	BaseRelations  *Ordered[*ResolvedRelation]
+	// Ignore is the workspace's `.khub/ignore`; nil ignores nothing.
+	Ignore *IgnoreList
 }
 
 // StorageRelpath is the effective path, shared by scanning and ownership checks.

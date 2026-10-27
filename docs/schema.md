@@ -89,6 +89,27 @@ storage:
 - `check` reports an entity whose directory disagrees with a field its template names as `misplaced`, with `expected` where the field puts it. A field the entity leaves unset places nothing and is never a finding. Nothing moves files: after `edit --epic`, `git mv` the file.
 - `khub schema` prints the template as `path` and every template as `paths`.
 
+## Excluded paths (`.khub/ignore`)
+
+`.khub/ignore` lists paths no scan reads, so an example corpus or test fixtures that declare a known `type` stay out of the graph: never an entity, a stray, or a misplaced finding. One pattern per line, a subset of gitignore:
+
+```
+# a directory, anchored at the workspace root
+docs/examples/
+# a file at the root
+/notes.md
+# no inner slash: a name at any depth
+fixtures/
+# `**` spans any number of directories
+platform/**/phase8/
+# `*`, `?` and `[…]` match within one name
+*.draft.md
+```
+
+A `#` starts a comment only at the beginning of a line.
+
+A trailing `/` matches directories only, and a matched directory excludes everything below it. Blank lines and `#` comments are skipped; negation (`!`) is refused rather than half-supported, as is a `..` segment or a malformed glob (`schema_error`, naming the line). The list is read with the schema, so every verb sees the same workspace. `add` refuses to write where the list excludes (`path_ignored`, exit 2), because the scan would never read the entity back. A path reference (`path_refs`) to an excluded file still satisfies a `to: any` relation — the file exists; it is just not an entity.
+
 ## Workspace gates (`policy.yaml`)
 
 Per type, keyed by the type's name — what `check` demands of it in *this* workspace.

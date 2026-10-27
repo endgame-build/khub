@@ -177,6 +177,9 @@ func create(root, typeName string, opts CreateOpts) (*CreateResult, error) {
 				"'%s' is a singleton — its id is always '%s' (drop --id)", typeName, typeName))
 		}
 		path := entityPath(root, rtype, typeName)
+		if err := refuseIgnored(root, path, resolved.Ignore, typeName); err != nil {
+			return nil, err
+		}
 		if err := fsio.MkdirAll(root, filepath.Dir(path)); err != nil {
 			return nil, err
 		}
@@ -193,6 +196,9 @@ func create(root, typeName string, opts CreateOpts) (*CreateResult, error) {
 	case schema.LayoutCollection:
 		slug, err := chooseSlug(rtype, meta, opts.ID)
 		if err != nil {
+			return nil, err
+		}
+		if err := refuseIgnored(root, collectionFile(root, rtype), resolved.Ignore, typeName); err != nil {
 			return nil, err
 		}
 		if err := aliasTaken(idx, slug, opts.ID == ""); err != nil {
@@ -240,6 +246,9 @@ func create(root, typeName string, opts CreateOpts) (*CreateResult, error) {
 			return nil, err
 		}
 		path = filepath.Join(root, filepath.FromSlash(rel))
+	}
+	if err := refuseIgnored(root, path, resolved.Ignore, typeName); err != nil {
+		return nil, err
 	}
 	if err := fsio.MkdirAll(root, filepath.Dir(path)); err != nil {
 		return nil, err

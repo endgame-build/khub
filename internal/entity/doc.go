@@ -248,3 +248,13 @@ func templatedPath(rtype *schema.ResolvedType, slug string, meta *omap.Map) (str
 	}
 	return best, nil
 }
+
+// refuseIgnored refuses to write a new entity where `.khub/ignore` excludes:
+// the scan would never read it back, so the write would vanish.
+func refuseIgnored(root, path string, ignore *schema.IgnoreList, typeName string) error {
+	rel, err := filepath.Rel(root, path)
+	if err != nil || !ignore.Ignored(rel, false) {
+		return nil
+	}
+	return errs.PathIgnored(typeName, filepath.ToSlash(rel))
+}

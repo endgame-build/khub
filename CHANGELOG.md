@@ -15,6 +15,10 @@ Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelo
 - **Path references.** Policy `path_refs: true` resolves a relation value that
   names no entity as a workspace path: an entity's file is an edge, any other
   existing file satisfies a `to: any` relation.
+- **`.khub/ignore`.** A gitignore-style list of paths no scan reads, so an
+  example corpus or test fixtures that declare a known type stay out of the
+  graph (no entity, stray or misplaced finding). `add` refuses to write there
+  (`path_ignored`); negation and malformed lines are refused.
 - **`id_ordinal`.** Storage `id_ordinal: true` accepts a `NNN-` slug opening
   instead of reporting the retired ordinal scheme.
 

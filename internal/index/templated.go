@@ -24,7 +24,7 @@ import (
 
 // scanTemplated returns the pairs a templated type holds, its malformed files
 // and its duplicates, and records where each entity lives (SetLocated).
-func scanTemplated(root string, rtype *schema.ResolvedType) ([]Pair, []string, []Duplicate, error) {
+func scanTemplated(root string, rtype *schema.ResolvedType, ignore *schema.IgnoreList) ([]Pair, []string, []Duplicate, error) {
 	r, err := os.OpenRoot(root)
 	if err != nil {
 		return nil, nil, nil, err
@@ -36,7 +36,7 @@ func scanTemplated(root string, rtype *schema.ResolvedType) ([]Pair, []string, [
 	located := map[string]string{}
 	for _, tp := range rtype.Storage.Templates {
 		var files []string
-		if err := walkTemplate(r, root, tp, 0, "", &files); err != nil {
+		if err := walkTemplate(r, root, tp, 0, "", ignore, &files); err != nil {
 			return nil, nil, nil, err
 		}
 		sort.Strings(files)
@@ -76,7 +76,7 @@ func scanTemplated(root string, rtype *schema.ResolvedType) ([]Pair, []string, [
 
 // walkTemplate collects the files under dir (workspace-relative, slash) that
 // segments i.. of tp can reach.
-func walkTemplate(r *os.Root, root string, tp *schema.PathTemplate, i int, dir string, out *[]string) error {
+func walkTemplate(r *os.Root, root string, tp *schema.PathTemplate, i int, dir string, ignore *schema.IgnoreList, out *[]string) error {
 	leaf := i == tp.Depth()-1
 	visit := func(name string) error {
 		rel := path.Join(dir, name)
@@ -86,6 +86,9 @@ func walkTemplate(r *os.Root, root string, tp *schema.PathTemplate, i int, dir s
 		}
 		if err != nil {
 			return err
+		}
+		if ignore.Ignored(rel, info.IsDir()) {
+			return nil
 		}
 		if fsio.IsLink(info) {
 			if leaf {
@@ -102,7 +105,7 @@ func walkTemplate(r *os.Root, root string, tp *schema.PathTemplate, i int, dir s
 		if !info.IsDir() {
 			return nil
 		}
-		return walkTemplate(r, root, tp, i+1, rel, out)
+		return walkTemplate(r, root, tp, i+1, rel, ignore, out)
 	}
 	if lit, ok := tp.Literal(i); ok {
 		return visit(lit)

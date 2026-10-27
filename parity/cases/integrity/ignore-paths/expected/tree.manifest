@@ -1,0 +1,16 @@
+ec9b399104e5dd366e2ba41a1de03d49eae7a1c26ce2dd22d000dc6e0e36c637 - .gitignore
+17aafe9aae9c3d00eeced1aabaf60478704e39525ca009666033c27710bbc30a - .khub/config.yaml
+6a2e22ff0b4daa8b2efb4445053b171f944ebcc0c5b532be2bc59d4202984225 - .khub/ignore
+6a6e1decc53da439d8415a7273cba9e03cb4cf204f4f162e06784099ca800c55 - .khub/ontology.yaml
+5c23dcec03d9af61e7b5d4a8b619cc31c294375815d279b246b003cc4e99b347 - .khub/policy.yaml
+711031fc0a81a9ff1e3e607dd0d9162a395e395adee7c9f29319582aab6bb476 - .khub/storage.yaml
+a19b201a62195b1bdd021d677ab5ccaac7b5390ecf45f3f06b6d6fe327e3afd8 - docs/examples/spec.md
+a41cc222d35435d401a8e1877129ab903db87ec181aee42dad7ab143697b2051 - index.md
+99c1bacd5cbfe3913f4167cf8f91d0b688d1dc5c9eaa955604b148f97d580461 - notes/fixtures/readme.txt
+e1e43c0a3fc70963b297f3f2d27918e1cd0b15a23d1f91779223371c039c1b2d - notes/scratch.draft.md
+53e9d7b5274f7e6457cddf98797fde683bea304fe574b5db7b5ba9d70641e685 - platform/jira-sync/phase8/create/work/EP-T/EP-T-01.md
+70e9f89feea9d2dd9da5bd2658f4467a9f76002b183735fbd7dfed0d49b89abb - spokes/a/spec.md
+6a524416f0cbc98e46b2d584cac061717769040f75837b5b95019eb5bc64b6e1 - spokes/example/spec.md
+a7a42b35c56d807d4d64068bb2148998071eafd97c41f336220cf161f7295710 - work/ep-1/kept.md
+40576d8fed709532d35d5144cdf8eb8837b0029ecc08c703a0388a2fb5bedc66 - work/ep-1/real.md
+22b54ade2f3275293766b80b8a0d0e237a16ccbbee92c224a141eb2cd7e7612c - work/fixtures/fake.md

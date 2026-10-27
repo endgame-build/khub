@@ -207,10 +207,10 @@ func build(root string, resolved *schema.ResolvedSchema, bodies bool) (*Index, e
 		var err error
 		if rtype.Templated() {
 			var dups []Duplicate
-			pairs, bad, dups, err = scanTemplated(root, rtype)
+			pairs, bad, dups, err = scanTemplated(root, rtype, resolved.Ignore)
 			idx.Duplicates = append(idx.Duplicates, dups...)
 		} else {
-			pairs, bad, err = scanType(root, rtype, idx.Collections)
+			pairs, bad, err = scanType(root, rtype, idx.Collections, resolved.Ignore)
 		}
 		if err != nil {
 			return nil, err
@@ -264,10 +264,16 @@ type Pair struct {
 // malformed files. A single unparseable file becomes a malformed entry instead
 // of raising — validate/check/query/status/get never crash on one bad file.
 func ScanType(root string, rtype *schema.ResolvedType) ([]Pair, []string, error) {
-	return scanType(root, rtype, nil)
+	return scanType(root, rtype, nil, nil)
 }
-func scanType(root string, rtype *schema.ResolvedType, collections map[string]*omap.Map) ([]Pair, []string, error) {
+
+// scanType skips what ignore excludes: a singleton or collection file reads
+// as absent, a per-item entry as not there.
+func scanType(root string, rtype *schema.ResolvedType, collections map[string]*omap.Map, ignore *schema.IgnoreList) ([]Pair, []string, error) {
 	base := filepath.Join(root, rtype.StorageRelpath())
+	if ignore.Ignored(rtype.StorageRelpath(), rtype.Storage.Layout == schema.LayoutFile || rtype.Storage.Layout == schema.LayoutFolder) {
+		return nil, nil, nil
+	}
 	r, baseRel, err := fsio.OpenPath(root, base)
 	if err != nil {
 		return nil, nil, err
@@ -320,7 +326,7 @@ func scanType(root string, rtype *schema.ResolvedType, collections map[string]*o
 	// the first error reported are the same as a serial scan's.
 	results := make([]entryResult, len(entries))
 	each(len(entries), func(i int) {
-		results[i] = scanEntry(dir, root, base, rtype, entries[i])
+		results[i] = scanEntry(dir, root, base, rtype, entries[i], ignore)
 	})
 	var out []Pair
 	var malformed []string
@@ -349,9 +355,12 @@ type entryResult struct {
 
 // scanEntry reads and parses one entry of a type directory. It depends on
 // nothing but the entry, so entries may be scanned in any order.
-func scanEntry(dir *os.Root, root, base string, rtype *schema.ResolvedType, entry fs.DirEntry) entryResult {
+func scanEntry(dir *os.Root, root, base string, rtype *schema.ResolvedType, entry fs.DirEntry, ignore *schema.IgnoreList) entryResult {
 	name := entry.Name()
 	path := filepath.Join(base, name)
+	if rel, err := filepath.Rel(root, path); err == nil && ignore.Ignored(rel, entry.IsDir()) {
+		return entryResult{skip: true}
+	}
 	if err := fsio.RefuseLinkEntry(entry, path); err != nil {
 		return entryResult{err: err}
 	}

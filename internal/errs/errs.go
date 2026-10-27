@@ -449,3 +449,15 @@ func InvalidPathValue(type_, field, value string) *Located {
 		Target: value,
 	}
 }
+
+// PathIgnored is `path_ignored`: the file a new entity would be written to is
+// excluded by .khub/ignore, so no scan would ever read it back.
+func PathIgnored(type_, path string) *Located {
+	return &Located{
+		Code: "path_ignored",
+		Message: fmt.Sprintf("Refusing to add %s at %s: .khub/ignore excludes that path; "+
+			"remove the pattern or store the type elsewhere", type_, path),
+		Type:   type_,
+		Target: path,
+	}
+}

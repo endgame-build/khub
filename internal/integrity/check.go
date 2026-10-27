@@ -543,6 +543,7 @@ func templatedMisplaced(idx *index.Index) []Misplaced {
 // already not a pinned contract; this uses the 3.12+ string order.
 func rglobMD(root string, resolved *schema.ResolvedSchema) ([]string, error) {
 	trees := storageTrees(resolved)
+	ignore := resolved.Ignore
 	var out []string
 	var walk func(dir string) error
 	walk = func(dir string) error {
@@ -552,6 +553,9 @@ func rglobMD(root string, resolved *schema.ResolvedSchema) ([]string, error) {
 		}
 		for _, e := range entries {
 			path := filepath.Join(dir, e.Name())
+			if rel, err := filepath.Rel(root, path); err == nil && ignore.Ignored(rel, e.IsDir()) {
+				continue
+			}
 			if e.Type().IsRegular() {
 				name := e.Name()
 				if strings.HasSuffix(name, ".md") {
