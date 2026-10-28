@@ -23,7 +23,7 @@ import (
 )
 
 // scanTemplated returns the pairs a templated type holds, its malformed files
-// and its duplicates, and records where each entity lives (SetLocated).
+// and its duplicates. The local path map detects duplicate slugs across templates.
 func scanTemplated(root string, rtype *schema.ResolvedType, ignore *schema.IgnoreList) ([]Pair, []string, []Duplicate, error) {
 	r, err := os.OpenRoot(root)
 	if err != nil {
@@ -70,7 +70,6 @@ func scanTemplated(root string, rtype *schema.ResolvedType, ignore *schema.Ignor
 			pairs = append(pairs, res.pair)
 		}
 	}
-	rtype.SetLocated(located)
 	return pairs, malformed, dups, nil
 }
 

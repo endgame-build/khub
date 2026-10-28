@@ -118,7 +118,7 @@ func Validate(root string, target *string, strict bool) (*ValidateReport, error)
 	if reviewed != nil {
 		rtype, _ := resolved.Types.Get(reviewed.Type)
 		if rtype.ReadsTemplate() {
-			if text, ok := readBody(entity.EntityPath(root, rtype, reviewed.Slug)); ok {
+			if text, ok := readBody(entity.EntityPath(root, valid, *reviewed)); ok {
 				m := template.Metrics(text)
 				metrics = &m
 			}

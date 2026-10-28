@@ -205,7 +205,9 @@ func TestEntityLinkWrapsProblematicPaths(t *testing.T) {
 		{"note", "clean/foo.md"},
 	}
 	for _, tc := range cases {
-		if got := EntityLink(root, resolved, tc.typeName, "foo"); got != tc.want {
+		idx := &index.Index{Resolved: resolved}
+		node := index.Node{Type: tc.typeName, Slug: "foo"}
+		if got := EntityLink(root, idx, node); got != tc.want {
 			t.Errorf("EntityLink(%s) = %q, want %q", tc.typeName, got, tc.want)
 		}
 	}

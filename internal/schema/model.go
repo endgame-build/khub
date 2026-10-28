@@ -18,6 +18,7 @@ import (
 	"sync"
 
 	"github.com/endgame-build/khub/internal/omap"
+	"github.com/endgame-build/khub/internal/values"
 )
 
 // Relation kinds (model.ResolvedRelation.kind literals).
@@ -178,30 +179,28 @@ type ResolvedType struct {
 	TemplateOff bool
 	// See TypeDecl.When: the moment to capture this type, in domain language.
 	When *string
-
-	// Where the last scan found each entity of a templated type, slug ->
-	// workspace-relative path. A templated path depends on more than the slug,
-	// so every verb that addresses an existing entity reads it from here.
-	locMu   sync.Mutex
-	located map[string]string
 }
 
 // Templated reports whether the type stores its entities by path template.
 func (t *ResolvedType) Templated() bool { return len(t.Storage.Templates) > 0 }
 
-// SetLocated records where a scan found each entity of a templated type.
-func (t *ResolvedType) SetLocated(located map[string]string) {
-	t.locMu.Lock()
-	defer t.locMu.Unlock()
-	t.located = located
-}
-
-// Located is the workspace-relative path the last scan found slug at.
-func (t *ResolvedType) Located(slug string) (string, bool) {
-	t.locMu.Lock()
-	defer t.locMu.Unlock()
-	rel, ok := t.located[slug]
-	return rel, ok
+// PathField reads a scalar path placeholder from frontmatter. Relation values
+// place their slug when qualified as type/slug.
+func (t *ResolvedType) PathField(meta *omap.Map, name string) (string, bool) {
+	v, has := meta.Get(name)
+	if !has || v == nil {
+		return "", false
+	}
+	if _, isList := v.([]any); isList {
+		return "", false
+	}
+	s := values.Str(v)
+	if _, isRel := t.Relations.Get(name); isRel {
+		if _, after, qualified := strings.Cut(s, "/"); qualified {
+			s = after
+		}
+	}
+	return s, s != ""
 }
 
 // MatchTemplate is the first of the type's templates rel matches, with its

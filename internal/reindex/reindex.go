@@ -149,7 +149,7 @@ func RenderIndex(
 		lines = append(lines, "## "+group.Type, "")
 		for _, slug := range group.Slugs {
 			node := index.Node{Type: group.Type, Slug: slug}
-			link := EntityLink(root, resolved, group.Type, slug)
+			link := EntityLink(root, idx, node)
 			label := label(idx.Meta[node], slug)
 			suffix := ""
 			if xlinks := CrossLinks(root, resolved, idx, g, node); len(xlinks) > 0 {
@@ -194,7 +194,7 @@ func CrossLinks(
 	var out []string
 	for _, e := range g.OutEdges(node) {
 		out = append(out, e.Predicate+" → ["+label(idx.Meta[e.To], e.To.Slug)+"]("+
-			EntityLink(root, resolved, e.To.Type, e.To.Slug)+")")
+			EntityLink(root, idx, e.To)+")")
 	}
 	sort.Strings(out)
 	return out
@@ -207,11 +207,11 @@ func CrossLinks(
 // so it is wrapped in angle brackets (the CommonMark escape); a clean path is
 // left as-is so the common case stays unadorned. Exported because the Python
 // suite exercises it directly.
-func EntityLink(root string, resolved *schema.ResolvedSchema, tname, slug string) string {
-	rtype, _ := resolved.Types.Get(tname)
-	link, err := filepath.Rel(root, entity.EntityPath(root, rtype, slug))
+func EntityLink(root string, idx *index.Index, node index.Node) string {
+	path := entity.EntityPath(root, idx, node)
+	link, err := filepath.Rel(root, path)
 	if err != nil {
-		link = entity.EntityPath(root, rtype, slug)
+		link = path
 	}
 	// index.md is committed: a Markdown link is slash-separated on every host.
 	return mdlink.LinkDest(filepath.ToSlash(link))

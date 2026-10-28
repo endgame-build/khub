@@ -176,7 +176,7 @@ func create(root, typeName string, opts CreateOpts) (*CreateResult, error) {
 			return nil, errs.New("singleton_id", fmt.Sprintf(
 				"'%s' is a singleton — its id is always '%s' (drop --id)", typeName, typeName))
 		}
-		path := entityPath(root, rtype, typeName)
+		path := entityPath(root, idx, index.Node{Type: typeName, Slug: typeName})
 		if err := refuseIgnored(root, path, resolved.Ignore, typeName); err != nil {
 			return nil, err
 		}
@@ -210,7 +210,7 @@ func create(root, typeName string, opts CreateOpts) (*CreateResult, error) {
 		return &CreateResult{
 			Type:    typeName,
 			Slug:    slug,
-			Path:    entityPath(root, rtype, slug),
+			Path:    entityPath(root, idx, index.Node{Type: typeName, Slug: slug}),
 			Draft:   isDraft,
 			Locator: locator(rtype, slug),
 		}, nil
@@ -239,7 +239,7 @@ func create(root, typeName string, opts CreateOpts) (*CreateResult, error) {
 	if err := aliasTaken(idx, slug, !explicit); err != nil {
 		return nil, err
 	}
-	path := entityPath(root, rtype, slug)
+	path := entityPath(root, idx, index.Node{Type: typeName, Slug: slug})
 	if rtype.Templated() {
 		rel, err := templatedPath(rtype, slug, meta)
 		if err != nil {
@@ -461,7 +461,7 @@ func getView(root string, idx *index.Index, node index.Node) (*EntityView, error
 	resolved := idx.Resolved
 	var err error
 	rtype, _ := resolved.Types.Get(node.Type)
-	path := entityPath(root, rtype, node.Slug)
+	path := entityPath(root, idx, node)
 
 	var meta *omap.Map
 	var body, raw string
@@ -560,7 +560,7 @@ func update(root, id string, opts UpdateOpts) (*UpdateResult, error) {
 		part.rels.Set(predicate, unique)
 	}
 
-	path := entityPath(root, rtype, node.Slug)
+	path := entityPath(root, idx, node)
 	apply := func(m *omap.Map) {
 		for _, name := range part.attrs.Keys() {
 			v, _ := part.attrs.Get(name)
@@ -658,7 +658,7 @@ func Link(root, id, predicate, target string) (*LinkResult, error) {
 }
 
 func link(root, id, predicate, target string) (*LinkResult, error) {
-	resolved, idx, node, rel, err := edgeContext(root, id, predicate)
+	_, idx, node, rel, err := edgeContext(root, id, predicate)
 	if err != nil {
 		return nil, err
 	}
@@ -706,8 +706,7 @@ func link(root, id, predicate, target string) (*LinkResult, error) {
 		return changed, nil
 	}
 
-	rtype, _ := resolved.Types.Get(node.Type)
-	changed, err := applyEdgeMutation(root, rtype, node.Slug, id, apply)
+	changed, err := applyEdgeMutation(root, idx, node, id, apply)
 	if err != nil {
 		return nil, err
 	}
@@ -733,7 +732,7 @@ func Unlink(root, id, predicate, target string) (*LinkResult, error) {
 }
 
 func unlink(root, id, predicate, target string) (*LinkResult, error) {
-	resolved, idx, node, rel, err := edgeContext(root, id, predicate)
+	_, idx, node, rel, err := edgeContext(root, id, predicate)
 	if err != nil {
 		return nil, err
 	}
@@ -776,8 +775,7 @@ func unlink(root, id, predicate, target string) (*LinkResult, error) {
 		}
 		return false, nil
 	}
-	rtype, _ := resolved.Types.Get(node.Type)
-	changed, err := applyEdgeMutation(root, rtype, node.Slug, id, apply)
+	changed, err := applyEdgeMutation(root, idx, node, id, apply)
 	if err != nil {
 		return nil, err
 	}
@@ -816,12 +814,13 @@ func edgeContext(root, id, predicate string) (
 // spurious rewrite). Collection: the same mutation on the row inside the locked
 // read-modify-write; an unchanged row skips the file write the same way.
 func applyEdgeMutation(
-	root string, rtype *schema.ResolvedType, slug, id string, apply func(*omap.Map) (bool, error),
+	root string, idx *index.Index, node index.Node, id string, apply func(*omap.Map) (bool, error),
 ) (bool, error) {
+	rtype, _ := idx.Resolved.Types.Get(node.Type)
 	if rtype.Storage.Layout == schema.LayoutCollection {
 		changed := false
 		err := mutateCollection(root, rtype, func(rows *omap.Map) (bool, error) {
-			rowAny, has := rows.Get(slug)
+			rowAny, has := rows.Get(node.Slug)
 			if !has {
 				return false, errs.LookupError(id)
 			}
@@ -834,7 +833,7 @@ func applyEdgeMutation(
 		}
 		return changed, nil
 	}
-	path := entityPath(root, rtype, slug)
+	path := entityPath(root, idx, node)
 	meta, body, err := readDoc(root, path)
 	if err != nil {
 		return false, err
@@ -895,7 +894,7 @@ func delete(root, id string, force bool) (*DeleteResult, error) {
 	}
 	// Reuse the one path resolver rather than re-deriving: it is the only place
 	// that knows a singleton's path IS the file, not a directory to append to.
-	path := entityPath(root, rtype, node.Slug)
+	path := entityPath(root, idx, node)
 	if rtype.Storage.Layout == schema.LayoutFolder {
 		// The entity is the folder, not just its _index.
 		if err := fsio.Remove(root, filepath.Dir(path), true); err != nil {

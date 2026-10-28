@@ -367,12 +367,11 @@ func buildFTS(conn *sqlite3.Conn, root string, idx *index.Index, type_ *string) 
 		if type_ != nil && node.Type != *type_ {
 			continue
 		}
-		rtype, ok := idx.Resolved.Types.Get(node.Type)
-		if !ok {
+		if !idx.Resolved.Types.Has(node.Type) {
 			continue
 		}
 		meta := idx.Meta[node]
-		path := entity.EntityPath(root, rtype, node.Slug)
+		path := entity.EntityPath(root, idx, node)
 		rel, rerr := filepath.Rel(root, path)
 		if rerr != nil {
 			rel = path

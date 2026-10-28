@@ -234,7 +234,7 @@ func Check(root string, strict bool) (*CheckReport, error) {
 
 	strayLocators := map[string]bool{}
 	for n := range strays {
-		strayLocators[strayLocator(root, resolved, n.Type, n.Slug)] = true
+		strayLocators[strayLocator(root, scanned, n)] = true
 	}
 	strayPaths := sortedKeys(strayLocators)
 
@@ -517,12 +517,7 @@ func templatedMisplaced(idx *index.Index) []Misplaced {
 			if _, isList := v.([]any); isList || !present(v) {
 				return caps[name], true
 			}
-			s := pyStr(v)
-			if _, isRel := rtype.Relations.Get(name); isRel {
-				if _, after, qualified := strings.Cut(s, "/"); qualified {
-					s = after
-				}
-			}
+			s, _ := rtype.PathField(meta, name)
 			moved = moved || s != caps[name]
 			return s, true
 		})
@@ -664,15 +659,16 @@ func derivativeDangle(resolved *schema.ResolvedSchema, d Dangling, broken map[st
 // strayLocator is integrity._stray_locator: a stray's address — its file path,
 // or "path#slug" for a collection row (N stray rows in one file must not
 // collapse into N copies of the same path).
-func strayLocator(root string, resolved *schema.ResolvedSchema, tname, slug string) string {
-	rtype, _ := resolved.Types.Get(tname)
-	rel, err := filepath.Rel(root, entity.EntityPath(root, rtype, slug))
+func strayLocator(root string, idx *index.Index, node index.Node) string {
+	rtype, _ := idx.Resolved.Types.Get(node.Type)
+	path := entity.EntityPath(root, idx, node)
+	rel, err := filepath.Rel(root, path)
 	if err != nil {
-		rel = entity.EntityPath(root, rtype, slug)
+		rel = path
 	}
 	rel = filepath.ToSlash(rel)
 	if rtype.Storage.Layout == schema.LayoutCollection {
-		return rel + "#" + slug
+		return rel + "#" + node.Slug
 	}
 	return rel
 }

@@ -12,6 +12,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/endgame-build/khub/internal/entity"
 	"github.com/endgame-build/khub/internal/index"
 	"github.com/endgame-build/khub/internal/introspect"
 	"github.com/endgame-build/khub/internal/workspace"
@@ -25,6 +26,7 @@ ontology:
     doc: {}
     rec: {}
     pack: {}
+    story: {}
 `
 
 const scanStorage = `
@@ -33,6 +35,7 @@ storage:
   doc: { layout: file, path: docs, format: json }
   rec: { layout: file, path: recs, format: yaml }
   pack: { layout: folder, path: packs }
+  story: { layout: file, path: ["work/{epic}/{slug}.md", "projects/{project}/work/{epic}/{slug}.md"] }
 `
 
 func scanWS(t *testing.T) string {
@@ -175,5 +178,52 @@ func TestBodiesAreKeptOnlyWhenAskedFor(t *testing.T) {
 	}
 	if _, has := kept.Body[index.Node{Type: "note", Slug: "stray"}]; has {
 		t.Fatal("Filter kept a dropped node's body")
+	}
+}
+
+func TestTemplatedPathsBelongToTheirScan(t *testing.T) {
+	root := scanWS(t)
+	node := index.Node{Type: "story", Slug: "a"}
+	firstRel := "work/ep-1/a.md"
+	secondRel := "projects/p1/work/ep-1/a.md"
+	write(t, root, firstRel, "---\ntype: story\n---\n")
+	resolved, err := introspect.LoadSchema(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	first, err := index.Build(root, resolved)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := os.MkdirAll(filepath.Join(root, "projects", "p1", "work", "ep-1"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Rename(filepath.Join(root, filepath.FromSlash(firstRel)), filepath.Join(root, filepath.FromSlash(secondRel))); err != nil {
+		t.Fatal(err)
+	}
+	second, err := index.Build(root, resolved)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, tc := range []struct {
+		name string
+		idx  *index.Index
+		rel  string
+	}{
+		{name: "first build", idx: first, rel: firstRel},
+		{name: "second build", idx: second, rel: secondRel},
+		{name: "filtered first build", idx: index.Filter(first, nil), rel: firstRel},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := tc.idx.Paths[node]; got != tc.rel {
+				t.Fatalf("Paths = %q, want %q", got, tc.rel)
+			}
+			want := filepath.Join(root, filepath.FromSlash(tc.rel))
+			if got := entity.EntityPath(root, tc.idx, node); got != want {
+				t.Fatalf("EntityPath = %q, want %q", got, want)
+			}
+		})
 	}
 }

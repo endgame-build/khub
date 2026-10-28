@@ -118,7 +118,7 @@ func backfill(root string, typeName *string, dryRun bool) (*BackfillReport, erro
 			if rtype.Storage.Layout == schema.LayoutCollection || (!absent(meta, "created") && !absent(meta, "updated")) {
 				continue
 			}
-			rel, err := filepath.Rel(root, entity.EntityPath(root, rtype, node.Slug))
+			rel, err := filepath.Rel(root, entity.EntityPath(root, idx, node))
 			if err != nil {
 				return nil, err
 			}
@@ -140,7 +140,7 @@ func backfill(root string, typeName *string, dryRun bool) (*BackfillReport, erro
 			continue
 		}
 		meta := idx.Meta[node]
-		path := entity.EntityPath(root, rtype, node.Slug)
+		path := entity.EntityPath(root, idx, node)
 		scaffold := typeName != nil && *typeName == node.Type
 		adds := additions(rtype, meta, scaffold, dates[paths[node]])
 		if len(adds.order) == 0 {

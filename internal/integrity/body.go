@@ -82,7 +82,7 @@ func bodyFindings(
 			if node.Type != tname || !inTarget(node, target) {
 				continue
 			}
-			body, ok := readBody(entity.EntityPath(root, rtype, node.Slug))
+			body, ok := readBody(entity.EntityPath(root, valid, node))
 			if !ok {
 				// Frontmatter parsed (the node exists) but the full read failed;
 				// the scan did NOT flag this file, so stay loud here.

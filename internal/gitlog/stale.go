@@ -74,7 +74,7 @@ func Stale(root string, days *int, now time.Time) (*StaleReport, error) {
 			if !absent(valid.Meta[node], "updated") || rtype.Storage.Layout == schema.LayoutCollection {
 				continue
 			}
-			rel, err := filepath.Rel(root, entity.EntityPath(root, rtype, node.Slug))
+			rel, err := filepath.Rel(root, entity.EntityPath(root, valid, node))
 			if err != nil {
 				return nil, err
 			}

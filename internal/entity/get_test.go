@@ -116,20 +116,42 @@ func TestGetEdgesIncludesDerivedInverses(t *testing.T) {
 // collection inventory file.
 func TestEntityPathPerLayout(t *testing.T) {
 	ws := collectionWS(t)
-	resolved, _ := buildIndex(t, ws)
+	_, idx := buildIndex(t, ws)
 	cases := []struct{ typeName, slug, want string }{
 		{"project", "initech-pov", filepath.Join(ws, "projects", "initech-pov", "_index.md")},
 		{"client", "acme", filepath.Join(ws, "clients", "acme.md")},
 		{"repo", "anything", filepath.Join(ws, "repo.jsonl")},
 	}
 	for _, c := range cases {
-		rtype, ok := resolved.Types.Get(c.typeName)
-		if !ok {
-			t.Fatalf("type %s missing from the fixture schema", c.typeName)
-		}
-		if got := EntityPath(ws, rtype, c.slug); got != c.want {
+		node := index.Node{Type: c.typeName, Slug: c.slug}
+		if got := EntityPath(ws, idx, node); got != c.want {
 			t.Errorf("EntityPath(%s) = %q, want %q", c.typeName, got, c.want)
 		}
+	}
+}
+
+func TestEntityPathTemplatedScanAndCreationFallback(t *testing.T) {
+	ws := t.TempDir()
+	tp, err := schema.ParseTemplate("work/{epic}", "md")
+	requireNoError(t, err)
+	rtype := &schema.ResolvedType{
+		Name: "story",
+		Storage: schema.StorageConfig{
+			Layout: schema.LayoutFile, Fmt: "md", Templates: []*schema.PathTemplate{tp},
+		},
+	}
+	types := schema.NewOrdered[*schema.ResolvedType]()
+	types.Set("story", rtype)
+	idx := &index.Index{Resolved: &schema.ResolvedSchema{Types: types}}
+	node := index.Node{Type: "story", Slug: "a"}
+
+	fallback := filepath.Join(ws, "work", "a.md")
+	if got := EntityPath(ws, idx, node); got != fallback {
+		t.Fatalf("creation fallback = %q, want %q", got, fallback)
+	}
+	idx.Paths = map[index.Node]string{node: "work/ep-1/a.md"}
+	if got := EntityPath(ws, idx, node); got != filepath.Join(ws, "work", "ep-1", "a.md") {
+		t.Fatalf("scanned path = %q", got)
 	}
 }
 

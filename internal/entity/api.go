@@ -7,7 +7,6 @@ package entity
 import (
 	"github.com/endgame-build/khub/internal/index"
 	"github.com/endgame-build/khub/internal/omap"
-	"github.com/endgame-build/khub/internal/schema"
 )
 
 // CreateResult is the outcome of a create: where it landed and whether it is a
@@ -97,8 +96,8 @@ type UpdateOpts struct {
 
 // EntityPath is the file backing one entity — for a collection type, the
 // shared inventory file.
-func EntityPath(root string, rtype *schema.ResolvedType, slug string) string {
-	return entityPath(root, rtype, slug)
+func EntityPath(root string, idx *index.Index, node index.Node) string {
+	return entityPath(root, idx, node)
 }
 
 // ResolveID resolves a bare or qualified id against the index, honoring the

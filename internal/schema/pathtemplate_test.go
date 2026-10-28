@@ -5,6 +5,9 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/endgame-build/khub/internal/canon"
+	"github.com/endgame-build/khub/internal/omap"
 )
 
 func TestParseTemplateAppendsTheSlugLeaf(t *testing.T) {
@@ -83,6 +86,46 @@ func TestTemplateFill(t *testing.T) {
 		if !errors.As(err, &pv) || pv.Field != "project" || pv.Value != bad {
 			t.Errorf("Fill with project %q = %v, want a PathValueError", bad, err)
 		}
+	}
+}
+
+func TestResolvedTypePathField(t *testing.T) {
+	rtype := &ResolvedType{Relations: NewOrdered[*ResolvedRelation]()}
+	rtype.Relations.Set("epic", &ResolvedRelation{Predicate: "epic"})
+	for _, tc := range []struct {
+		name    string
+		field   string
+		value   any
+		missing bool
+		want    string
+		ok      bool
+	}{
+		{name: "missing", field: "epic", missing: true},
+		{name: "nil", field: "epic", value: nil},
+		{name: "string", field: "epic", value: "ep-1", want: "ep-1", ok: true},
+		{name: "false", field: "epic", value: false, want: "False", ok: true},
+		{name: "true", field: "epic", value: true, want: "True", ok: true},
+		{name: "number", field: "epic", value: int64(42), want: "42", ok: true},
+		{name: "date", field: "epic", value: canon.Date{ISO: "2026-01-15"}, want: "2026-01-15", ok: true},
+		{name: "empty", field: "epic", value: ""},
+		{name: "whitespace", field: "epic", value: "  ", want: "  ", ok: true},
+		{name: "empty list", field: "epic", value: []any{}},
+		{name: "nonempty list", field: "epic", value: []any{"ep-1"}},
+		{name: "attribute slash", field: "project", value: "group/p1", want: "group/p1", ok: true},
+		{name: "bare relation", field: "epic", value: "ep-1", want: "ep-1", ok: true},
+		{name: "qualified relation", field: "epic", value: "epic/ep-1", want: "ep-1", ok: true},
+		{name: "multiple slashes", field: "epic", value: "epic/team/a", want: "team/a", ok: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			meta := omap.New()
+			if !tc.missing {
+				meta.Set(tc.field, tc.value)
+			}
+			got, ok := rtype.PathField(meta, tc.field)
+			if got != tc.want || ok != tc.ok {
+				t.Fatalf("PathField() = %q, %v; want %q, %v", got, ok, tc.want, tc.ok)
+			}
+		})
 	}
 }
 
