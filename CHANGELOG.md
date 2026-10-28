@@ -2,9 +2,14 @@
 
 Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); khub is pre-release.
 
-## [Unreleased]
+## [0.30.0] — 2026-10-28
+
+Storage can now follow a hub's existing nesting, relations can point to files
+by workspace path, and `.khub/ignore` keeps examples and fixtures out of the
+graph. `id_ordinal` accepts legacy `NNN-` slugs where a hub still uses them.
 
 ### Added
+
 - **Nested storage.** A `file` type's `path` may be a template, or a list of
   them: `work/{epic}/{slug}.md`, `spokes/{slug}/spec.md`. A templated type
   claims a file only when its `type` names it, so types share a directory.
