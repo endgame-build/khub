@@ -2,6 +2,18 @@
 
 Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); khub is pre-release.
 
+## [Unreleased]
+
+### Changed
+
+- **`get --edges` lists every inbound edge.** It skipped an inbound edge whose
+  relation declares no `inverse`, so it disagreed with `neighbors --in` and
+  `search`'s `edges.in` counts. Such an edge is now listed as `derived: true`,
+  named `<source type>.<predicate>`; that name is a label, so filter with the
+  raw predicate. A source that names the target in several spellings lists
+  once per relation, as `neighbors` counts it, and `remove`'s inbound-edge
+  count follows the same rule (#79).
+
 ## [0.30.0] — 2026-10-28
 
 Storage can now follow a hub's existing nesting, relations can point to files

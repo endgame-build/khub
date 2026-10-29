@@ -24,7 +24,7 @@ The schema lives at `.khub/ontology.yaml` (the domain model) with `.khub/policy.
 ## Retrieve
 
 - `khub query --type <t> [--<field> <v>] [--tag <t>] [--has <pred>] [--missing <pred>] --format json` — filter by frontmatter; `--missing` surfaces gaps.
-- `khub get <id>... --edges --format json` — one ID returns one object; multiple IDs return an all-or-nothing array in argument order, duplicates included. Raw output accepts one ID only.
+- `khub get <id>... --edges --format json` — one ID returns one object; multiple IDs return an all-or-nothing array in argument order, duplicates included. Raw output accepts one ID only. `--edges` lists every inbound edge from another entity as `derived: true`, named by the relation's declared inverse or else `<source type>.<predicate>`. A derived name is a label; filter with the raw predicate (`query --has <predicate>`).
 - `khub neighbors <id> --format json` — one-hop adjacency.
 - `khub impact <id> --format json` — transitive closure over a predicate (blast radius).
 - `khub history <id> --format json` — a supersession chain.

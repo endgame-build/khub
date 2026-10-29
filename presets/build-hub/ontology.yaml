@@ -61,7 +61,8 @@
 #  - api.provider is REQUIRED so `check` catches an interface nobody owns; a
 #    vendor API's provider is the external component.
 #  - `superseded`, `serves` and `consumed_by` are never stored — computed
-#    inverses, named so `get --edges` on the target shows them.
+#    inverses, named so `get --edges` on the target reads them by a word
+#    rather than `<source type>.<predicate>`.
 #  - No status field declares a `default` — `add` applies no schema defaults,
 #    so status is always an explicit statement.
 #
