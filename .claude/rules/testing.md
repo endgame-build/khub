@@ -64,6 +64,17 @@ a FAIL.
   emit is stable in both profiles). `go test` runs the seeds; `go test
   -fuzz=FuzzEmitRoundTrip ./internal/canon` explores. Every rustfmt/ruff
   idempotency bug on record was an input nobody's corpus held.
+- **Run-to-run drift.** A fixture records one run, so output that ranges a
+  map can pass it by luck. `internal/cli/repeatrun_test.go` runs every read
+  verb, plus refusals, help and `--version`, five times in separate
+  processes, in both output modes, and fails when a run's bytes differ from
+  the first. Detection is probabilistic: a Go map of up to eight keys often
+  keeps insertion order, so a two-entry tie slips through about half the
+  time. Every tie its workspace builds therefore holds nine entries or more;
+  a new call that leans on a smaller tie needs a wider one. Its
+  classification test fails when a command is added to `newRoot` without
+  being listed there as a read call or a write verb. It skips under `-race`
+  and `-short`.
 - **Non-idempotency.** T1c proves verbatim round-trip; add gofmt's loop:
   format the formatter's own output, assert no change.
 - **Cross-process locking.** `-race` cannot see separate processes. Keep the
