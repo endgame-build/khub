@@ -42,7 +42,7 @@
 │ stale      List entities past the `updated` threshold, oldest first: khub    │
 │            stale [--days N].                                                 │
 │ reindex    Regenerate the OKF index.md from the graph: khub reindex          │
-│            [--dry-run].                                                      │
+│            [--dry-run | --check].                                            │
 │ viz        Render the typed graph to a self-contained Cytoscape HTML: khub   │
 │            viz [--out F] [--open] [--type T].                                │
 │ serve      Serve a read-only graph view on loopback: khub serve [--port      │

@@ -1,8 +1,9 @@
 Usage: khub reindex [OPTIONS]
 
-Regenerate the OKF index.md from the graph: khub reindex [--dry-run].
+Regenerate the OKF index.md from the graph: khub reindex [--dry-run | --check].
 
 Options:
   --dry-run  Print the diff against the current index.md and write nothing.
+  --check  Exit 1 if index.md is missing or stale, printing the diff; write nothing.
   --help  Show this message and exit.
 

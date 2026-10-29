@@ -1,0 +1,5 @@
+Usage: khub reindex [OPTIONS]
+Try 'khub reindex --help' for help.
+╭─ Error ──────────────────────────────────────────────────────────────────────╮
+│ Invalid value: Pass --dry-run or --check, not both                           │
+╰──────────────────────────────────────────────────────────────────────────────╯

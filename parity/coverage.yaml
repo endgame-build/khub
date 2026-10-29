@@ -119,6 +119,7 @@ commands:
 - name: 'reindex'
   params:
   - '--dry-run'
+  - '--check'
 - name: 'viz'
   params:
   - '--out'

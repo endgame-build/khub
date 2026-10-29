@@ -253,11 +253,17 @@ Every finding carries a stable location — the `field` on a `validate` row, the
 
 | Command | Args and options | Does |
 |---|---|---|
-| `khub reindex` | `--dry-run` | regenerate the OKF `index.md` navigation from the graph |
+| `khub reindex` | `--dry-run`, `--check` | regenerate the OKF `index.md` navigation from the graph. `--dry-run` prints the diff against the current file and writes nothing. `--check` is that diff as a gate: it writes nothing, prints `index.md is up to date` and exits 0 when the file matches, and otherwise prints the diff, names the corrective `khub reindex` on stderr and exits 1, a missing `index.md` included. It compares with universal newlines, so a CRLF checkout of a current index passes. Unlike `--dry-run` it refuses (exit 2) whatever `reindex` would refuse: an entity file that does not parse (`malformed_projection`), and an `index.md` that is a symlink (`unsafe_path`), a directory or unreadable (`os_error`). The two flags are a usage error together |
 | `khub viz` | `--out <file.html=viz.html>`, `--open`, `--type <t>` | self-contained Cytoscape HTML over the typed graph |
 | `khub serve` | `--port <n=7777>` | read-only graph view over HTTP on `127.0.0.1`. Every request rebuilds from the live files, so a reload always shows the current tree and no cache can go stale; the page itself fetches once per load rather than polling. The live counterpart to `viz`, which stays the static, shareable, printable artifact. Blocks until interrupted, so it refuses on a non-terminal stdout (`TTY_COMPATIBLE=1` overrides); a port already in use is a refusal naming `--port`, never a silent hop. No write endpoints: the page composes `khub link` / `khub unlink` commands to run, so every mutation stays on the validated CLI path |
 | `khub backfill` | `--type <t>`, `--dry-run` | add missing frontmatter and dates from `git log` |
 | `khub wire` | `--target <claude\|agents\|both>`, `--dry-run` | inject a managed khub block into the workspace's agent files. Bare `wire` writes both `CLAUDE.md` and `AGENTS.md`, creating either that is missing; `--target` creates a specific file. `CLAUDE.md` gets `@.khub/{ontology,policy,storage}.yaml` imports; `AGENTS.md` (no import directive) gets schema pointers. Both carry the command surface, so an agent reasons in the workspace ontology even without running khub. Both end with an install hint: the khub plugin for Claude Code in `CLAUDE.md`, and `npx skills add endgame-build/khub` in `AGENTS.md`. Idempotent, minimal-diff |
+
+`index.md` is never regenerated on a write. To keep a committed one current, gate on it in CI or in a pre-commit hook:
+
+```bash
+khub reindex --check   # exits 1 while index.md lags the graph; run `khub reindex` and commit
+```
 
 `khub init` and `khub upgrade` both run `wire` and the index write as tails. khub installs no skills. They ship in the Claude Code plugin and through `npx skills add endgame-build/khub` (see [Agent skills](../README.md#agent-skills)). khub also leaves alone the skill copies that khub 0.27.0 and earlier wrote under `.claude/skills/`, `.agents/skills/` and `.opencode/skills/`; delete those folders and their `.gitignore` lines by hand.
 

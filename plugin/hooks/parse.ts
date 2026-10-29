@@ -31,7 +31,7 @@ type Segment = { words: string[]; ops: string[] }
 
 const NONE: Parsed = { kind: 'none' }
 const BOOLEAN_FLAGS = new Set([
-  'active', 'draft', 'dry-run', 'edges', 'force', 'help', 'in', 'no-schema',
+  'active', 'check', 'draft', 'dry-run', 'edges', 'force', 'help', 'in', 'no-schema',
   'no-template', 'no-wire', 'open', 'orphan', 'out', 'plain', 'reverse', 'stale', 'strict',
 ])
 const WRITES = new Set(['add', 'edit', 'link', 'unlink', 'remove'])
@@ -294,7 +294,7 @@ function khubCall(words: string[], binary: RegExp): Simple | null {
 }
 
 // Reads the khub calls off the text of a command the tokenizer could not follow. It keeps
-// each verb, and whether `--force` or `--dry-run` follows it.
+// each verb, and whether `--force`, `--dry-run` or `--check` follows it.
 function scan(command: string, flavour: Flavour): Simple[] {
   const calls = command.matchAll(scanOf(flavour))
 
@@ -304,6 +304,7 @@ function scan(command: string, flavour: Flavour): Simple[] {
     return call(match[1] as string, {
       ...(rest.includes('--force') ? { force: true as const } : {}),
       ...(rest.includes('--dry-run') ? { 'dry-run': true as const } : {}),
+      ...(/--check(?![\w-])/.test(rest) ? { check: true as const } : {}),
     })
   })
 }
@@ -368,10 +369,11 @@ export const callsOf = (parsed: Parsed): Simple[] =>
 
 export const isWrite = (found: Simple) => WRITES.has(found.verb)
 
-// Tells whether a call changes entities, the schema, the index or the agent files.
+// Tells whether a call changes entities, the schema, the index or the agent files. An
+// operator's `--dry-run` and `reindex --check` write nothing.
 export const mutates = (found: Simple) =>
   isWrite(found) ||
-  (OPERATORS.has(found.verb) && !isOn(found.flags['dry-run'])) ||
+  (OPERATORS.has(found.verb) && !isOn(found.flags['dry-run']) && !isOn(found.flags.check)) ||
   (found.verb === 'schema' && found.sub === 'snapshot')
 
 // Returns what a `khub edit` call changed, as `<field> <value>` pairs. A body is named,

@@ -1,0 +1,21 @@
+--- index.md
++++ index.md
+@@ -0,0 +1,18 @@
++---
++okf_version: '0.1'
++entity_count: 3
++---
++# Index
++
++## prd
++
++- [PRD](knowledge/prd.md)
++
++## arc42
++
++- [Architecture](knowledge/arc42.md)
++
++## requirement
++
++- [Alpha](knowledge/requirements/req-alpha.md)
++
