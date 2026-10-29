@@ -41,6 +41,8 @@
 │            strays, cycles, bodies.                                           │
 │ stale      List entities past the `updated` threshold, oldest first: khub    │
 │            stale [--days N].                                                 │
+│ recent     List entities touched within the window, newest first: khub       │
+│            recent [--days N].                                                │
 │ reindex    Regenerate the OKF index.md from the graph: khub reindex          │
 │            [--dry-run].                                                      │
 │ viz        Render the typed graph to a self-contained Cytoscape HTML: khub   │

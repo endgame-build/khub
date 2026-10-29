@@ -100,6 +100,7 @@ ok 0 "status"                      $KHUB -C "$L" status --format json
 ok 0 "schema types"                $KHUB -C "$L" schema types --format json
 ok 0 "schema show"                 $KHUB -C "$L" schema show adr --format json
 ok 0 "stale"                       $KHUB -C "$L" stale --format json
+ok 0 "recent"                      $KHUB -C "$L" recent --format json
 ok 0 "validate"                    $KHUB -C "$L" validate --format json
 $KHUB -C "$L" validate adr/ad-2026-01-15-use-stripe --format json > "$L/v.json"
 has  "validate one target: gaps"   "$L/v.json" '"gaps"'

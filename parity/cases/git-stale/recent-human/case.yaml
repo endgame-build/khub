@@ -1,0 +1,9 @@
+# `khub recent` on a terminal: the no-git notice, the table, and the line an
+# empty window prints.
+mode: human
+steps:
+- argv: ["init", "build-hub", ".", "--no-wire"]
+- argv: ["add", "requirement", "--title", "New", "--kind", "functional"]
+- argv: ["recent", "--limit", "2"]
+- sh: "find knowledge -name '*.md' -exec perl -pi -e 's/^updated:.*/updated: 2025-01-01/' {} +"
+- argv: ["recent"]

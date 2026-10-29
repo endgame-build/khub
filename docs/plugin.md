@@ -52,12 +52,15 @@ row in place of Claude Code's raw drawing.
 | Result | What came back, in one line: `⎿ 12 entities`, or `⎿ + adr/ad-… · draft` after an `add`. |
 | List | Up to five lines of a list result, then `… n more`. |
 
-- A list follows the result line for `query`, `stale`, `search`, `neighbors`, a
-  `get` with several ids, a failed `check` and a `validate` with errors.
+- A list follows the result line for `query`, `stale`, `recent`, `search`,
+  `neighbors`, a `get` with several ids, a failed `check` and a `validate` with
+  errors.
 - A list line for an entity holds its id, its title and its flags (`draft`,
   `orphan`, `stale`). A `neighbors` line holds the id, the direction and the
   predicate. A `check` line holds the bucket and the id or path. A `validate`
   line holds the id, the field and the reason.
+- The result line of a `search` or a `recent` carries khub's `note:` when it
+  printed one, such as rows `--limit` dropped.
 - The `json` button returns that compact row to Claude Code's raw drawing.
 - A command made only of khub calls joined by `;` or `&&` draws one compact row
   per call, with the time and the `json` button on the first. A leading

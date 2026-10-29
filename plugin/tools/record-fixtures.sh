@@ -72,6 +72,7 @@ rec check_base check --format json
 rec query_base query --format json
 rec query_components query --type component --format json
 rec query_draft query --draft --format json
+rec recent_limited recent --limit 2 --format json
 rec get_search get cmp-search --edges --format json
 rec neighbors_search neighbors cmp-search --format json
 rec impact_storage impact cmp-storage --reverse --format json

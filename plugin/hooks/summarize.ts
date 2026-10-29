@@ -145,6 +145,13 @@ function resultOf(call: Simple, json: unknown, note: string): Result {
     case 'stale':
       return entities
 
+    case 'recent': {
+      // khub's note says when --limit cut the list.
+      const noted = firstLine(note).replace(/^note: /, '').slice(0, 80)
+
+      return noted === '' ? entities : { line: `${entities.line} · ${noted}`, tone: 'warn' }
+    }
+
     case 'search':
       return searchResult(rows, note)
 
@@ -230,6 +237,7 @@ function listOf(call: Simple, json: unknown): KhubRow[] {
   switch (call.verb) {
     case 'get':
     case 'query':
+    case 'recent':
     case 'search':
     case 'stale':
       return rows.map(entityRow)

@@ -2,6 +2,25 @@
 
 Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); khub is pre-release.
 
+## [Unreleased]
+
+### Added
+
+- **`khub recent`** lists the entities touched within a window, newest first
+  (`--days N`, default 7; `--limit N`). It judges the same date `stale` does:
+  `updated`, else the file's last commit, else `created`. Rows carry `id`,
+  `type`, `slug`, `title`, `draft`, `effective_date`, `age` and `source`.
+  `--limit` is `query`'s (0 returns nothing, `-n` drops the last n), and a cut
+  says so in a `note:` line on stderr. The plugin (0.1.5) draws a compact row
+  for it, the note included.
+
+### Changed
+
+- The human view of `stale` (and `recent`) in a workspace without git history
+  now says `No git history; dates come from updated or created only`. It said
+  `using updated field only`, which was wrong: an undated entity falls back to
+  `created`.
+
 ## [0.30.0] — 2026-10-28
 
 Storage can now follow a hub's existing nesting, relations can point to files

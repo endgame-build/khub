@@ -28,6 +28,7 @@ The schema lives at `.khub/ontology.yaml` (the domain model) with `.khub/policy.
 - `khub neighbors <id> --format json` — one-hop adjacency.
 - `khub impact <id> --format json` — transitive closure over a predicate (blast radius).
 - `khub history <id> --format json` — a supersession chain.
+- `khub recent [--days N] --format json` — what was touched lately, newest first (default a week); the place to start when picking up where work left off. It dates by `updated`, else the last commit, so an uncommitted hand edit without `updated` does not show.
 - `khub search <text> --format json` — BM25 full-text over titles, bodies, and fields; `--plain` takes words as typed (any may match) instead of FTS5 syntax. Hits carry `draft`/`orphan`/`stale` and per-predicate edge counts.
 
 ## Know when to write

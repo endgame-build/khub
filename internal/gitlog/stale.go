@@ -12,24 +12,28 @@ import (
 	"github.com/endgame-build/khub/internal/introspect"
 	"github.com/endgame-build/khub/internal/omap"
 	"github.com/endgame-build/khub/internal/project"
+	"github.com/endgame-build/khub/internal/query"
 	"github.com/endgame-build/khub/internal/schema"
+	"github.com/endgame-build/khub/internal/values"
 	"github.com/endgame-build/khub/internal/workspace"
 )
 
-// StaleEntry is gitlog.StaleEntry: one entity past the threshold, with the
-// date it was judged against and where that date came from.
-type StaleEntry struct {
+// Entry is gitlog.StaleEntry: one entity with the date it was judged against
+// and where that date came from. `stale` and `recent` report the same shape.
+type Entry struct {
 	Type          string
 	Slug          string
+	Title         string // the title every read record carries (query.Title)
+	Draft         bool
 	EffectiveDate time.Time
-	Age           int    // days since the effective date; drives the oldest-first sort
+	Age           int    // days since the effective date; drives both sorts
 	Source        string // "updated" | "git log" | "created"
 }
 
 // StaleReport is gitlog.StaleReport: the stale set plus whether git was
 // available to backfill missing dates.
 type StaleReport struct {
-	Entries      []StaleEntry
+	Entries      []Entry
 	GitAvailable bool
 }
 
@@ -41,16 +45,7 @@ type StaleReport struct {
 // civil date at UTC midnight (the CLI's date.today()), so the day delta is
 // exact. Entities with no judgeable date are skipped.
 func Stale(root string, days *int, now time.Time) (*StaleReport, error) {
-	resolved, err := introspect.LoadSchema(root)
-	if err != nil {
-		return nil, err
-	}
-	scanned, err := index.Build(root, resolved)
-	if err != nil {
-		return nil, err
-	}
-	valid := index.Filter(scanned, index.StrayNodes(scanned)) // strays are not entities
-	gitOK, err := HasGitHistory(root)
+	s, err := scan(root)
 	if err != nil {
 		return nil, err
 	}
@@ -63,45 +58,14 @@ func Stale(root string, days *int, now time.Time) (*StaleReport, error) {
 	} else {
 		threshold = *days
 	}
-
-	nodes := sortedNodes(valid)
-	paths := map[index.Node]string{}
-	var requests []DateRequest
-	if gitOK {
-		for _, node := range nodes {
-			rtype, _ := resolved.Types.Get(node.Type)
-			// Collection commit dates never describe individual rows.
-			if !absent(valid.Meta[node], "updated") || rtype.Storage.Layout == schema.LayoutCollection {
-				continue
-			}
-			rel, err := filepath.Rel(root, entity.EntityPath(root, valid, node))
-			if err != nil {
-				return nil, err
-			}
-			paths[node] = filepath.ToSlash(rel)
-			requests = append(requests, DateRequest{Path: paths[node], Last: true})
-		}
-	}
-	dates, err := CommitDates(root, requests)
+	dated, err := s.judge(now)
 	if err != nil {
 		return nil, err
 	}
-	entries := []StaleEntry{}
-	for _, node := range nodes {
-		meta := valid.Meta[node]
-		var gitDate *time.Time
-		if d := dates[paths[node]].Last; !d.IsZero() {
-			gitDate = &d
-		}
-		eff, source := project.EffectiveDate(meta, gitDate)
-		if eff == nil {
-			continue
-		}
-		age := daysBetween(*eff, now)
-		if age > threshold {
-			entries = append(entries, StaleEntry{
-				Type: node.Type, Slug: node.Slug, EffectiveDate: *eff, Age: age, Source: source,
-			})
+	entries := []Entry{}
+	for _, e := range dated {
+		if e.Age > threshold {
+			entries = append(entries, e)
 		}
 	}
 	// list.sort(key=(age, type, slug), reverse=True): a reverse comparison on the
@@ -116,7 +80,85 @@ func Stale(root string, days *int, now time.Time) (*StaleReport, error) {
 		}
 		return a.Slug > b.Slug
 	})
-	return &StaleReport{Entries: entries, GitAvailable: gitOK}, nil
+	return &StaleReport{Entries: entries, GitAvailable: s.gitOK}, nil
+}
+
+// scope is one scan the git-derived reads judge: the schema, the valid
+// entities (strays are not entities), and whether git has history to
+// backfill a missing `updated` from.
+type scope struct {
+	root     string
+	resolved *schema.ResolvedSchema
+	valid    *index.Index
+	gitOK    bool
+}
+
+func scan(root string) (*scope, error) {
+	resolved, err := introspect.LoadSchema(root)
+	if err != nil {
+		return nil, err
+	}
+	scanned, err := index.Build(root, resolved)
+	if err != nil {
+		return nil, err
+	}
+	valid := index.Filter(scanned, index.StrayNodes(scanned))
+	gitOK, err := HasGitHistory(root)
+	if err != nil {
+		return nil, err
+	}
+	return &scope{root: root, resolved: resolved, valid: valid, gitOK: gitOK}, nil
+}
+
+// judge dates every entity that has a judgeable date, in (type, slug) order:
+// `updated`, else the file's last commit, else `created` (project.EffectiveDate,
+// the definition status and query share). Entities with no date are skipped.
+func (s *scope) judge(now time.Time) ([]Entry, error) {
+	nodes := sortedNodes(s.valid)
+	paths := map[index.Node]string{}
+	var requests []DateRequest
+	if s.gitOK {
+		for _, node := range nodes {
+			rtype, _ := s.resolved.Types.Get(node.Type)
+			// Collection commit dates never describe individual rows.
+			if !absent(s.valid.Meta[node], "updated") || rtype.Storage.Layout == schema.LayoutCollection {
+				continue
+			}
+			rel, err := filepath.Rel(s.root, entity.EntityPath(s.root, s.valid, node))
+			if err != nil {
+				return nil, err
+			}
+			paths[node] = filepath.ToSlash(rel)
+			requests = append(requests, DateRequest{Path: paths[node], Last: true})
+		}
+	}
+	dates, err := CommitDates(s.root, requests)
+	if err != nil {
+		return nil, err
+	}
+	entries := []Entry{}
+	for _, node := range nodes {
+		meta := s.valid.Meta[node]
+		var gitDate *time.Time
+		if d := dates[paths[node]].Last; !d.IsZero() {
+			gitDate = &d
+		}
+		eff, source := project.EffectiveDate(meta, gitDate)
+		if eff == nil {
+			continue
+		}
+		entries = append(entries, Entry{
+			Type: node.Type, Slug: node.Slug, Title: query.Title(meta, node.Slug), Draft: draft(meta),
+			EffectiveDate: *eff, Age: daysBetween(*eff, now), Source: source,
+		})
+	}
+	return entries, nil
+}
+
+// draft is the publish flag as query reads it.
+func draft(meta *omap.Map) bool {
+	v, _ := meta.Get("draft")
+	return values.AsBool(v)
 }
 
 // absent is `meta.get(key) is None`: a missing key and an explicit null read

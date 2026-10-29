@@ -103,17 +103,17 @@ func Query(root string, filters Filters, now time.Time) ([]Match, error) {
 			Draft:  values.AsBool(draftRaw),
 			Orphan: orphan,
 			Stale:  stale,
-			Title:  title(meta, node.Slug),
+			Title:  Title(meta, node.Slug),
 		})
 	}
 	if filters.Limit != nil {
-		matches = limitMatches(matches, *filters.Limit)
+		matches = Limit(matches, *filters.Limit)
 	}
 	return matches, nil
 }
 
-// title is `str(meta.get("title") or meta.get("name") or slug)`.
-func title(meta *omap.Map, slug string) string {
+// Title is `str(meta.get("title") or meta.get("name") or slug)`.
+func Title(meta *omap.Map, slug string) string {
 	for _, key := range []string{"title", "name"} {
 		v, _ := meta.Get(key)
 		if values.Truthy(v) {
@@ -123,8 +123,10 @@ func title(meta *omap.Map, slug string) string {
 	return slug
 }
 
-// limitMatches is Python's matches[:limit], including the negative-index form.
-func limitMatches(matches []Match, n int) []Match {
+// Limit is Python's matches[:limit], including the negative-index form: 0
+// keeps nothing and -n drops the last n. `query --limit` and `recent --limit`
+// share it, so the flag means one thing across the read commands.
+func Limit[T any](matches []T, n int) []T {
 	if n < 0 {
 		n += len(matches)
 		if n < 0 {
