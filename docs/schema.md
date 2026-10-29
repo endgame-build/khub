@@ -291,7 +291,7 @@ lenses:
 - `after` orders: lenses come out in declaration order, adjusted so every `after` holds (a stable topological sort — two lenses with no ordering between them keep their written order). An unknown code, a repeated code or a cycle is `template_invalid`.
 - `name` defaults to `code`; `instruction` is printed verbatim, indented, one lens per block.
 
-The [CLI reference](cli.md) covers the on-disk contract for entity formats and collections in full, and its [finding table](cli.md#reading-check-output) lists every body finding beside the rest.
+This page shows how to author a template. The template keys, how bodies are judged and the findings they raise are specified in [`cli.md`](cli.md#body-templates), as are the on-disk contract for [entity formats](cli.md#entity-formats) and [collections](cli.md#collections); the [finding table](cli.md#reading-check-output) lists every body finding beside the rest.
 
 ## Extend
 

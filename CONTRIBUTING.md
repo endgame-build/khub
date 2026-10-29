@@ -82,6 +82,17 @@ package ports. That provenance is deliberate; the Python source itself is gone
 - Read [`docs/design-memo.md`](docs/design-memo.md) for the invariants before
   non-trivial work. Each has a sentinel fixture under `parity/cases/invariants/`.
 
+## Docs: one canonical home per behaviour
+
+User-facing behaviour is specified in exactly one place, and rationale links to
+it rather than restating it: commands, flags, output shapes and exit codes live
+in [`docs/cli.md`](docs/cli.md); the schema vocabulary and storage in
+[`docs/schema.md`](docs/schema.md). [`docs/design-memo.md`](docs/design-memo.md)
+and [`docs/concepts.md`](docs/concepts.md) say why, and link. A change to
+behaviour updates its canonical page in the same commit and replaces any
+restatement it finds elsewhere with a link. The full map and the rules are in
+[`.claude/rules/docs.md`](.claude/rules/docs.md).
+
 ## Commits and releases
 
 Keep commits scoped and their messages descriptive. Update

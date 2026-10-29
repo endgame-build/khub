@@ -129,9 +129,9 @@ comes back, with zero per-type code and no logic of its own. See
   `.khub/generated/locks/workspace.lock` covers scan, validation, and commit for
   every existing-workspace mutation. Keep lock files while a process may hold them. Publication uses
   unique sibling temporaries, preserves permissions, and refuses unsafe paths and symlinks.
-- **Storage is per-type config**: `layout` (file / folder / collection) × `format`
-  (md / json / yaml; collections take json / jsonl / yaml). Non-md entities carry
-  prose in a reserved `body` field. Collections use the same workspace lock and
+- **Storage is per-type config**: `layout` × `format`, declared in `storage.yaml`
+  (the layouts and path templates: `docs/schema.md`; formats and collections:
+  `docs/cli.md`). Non-md entities carry prose in a reserved `body` field. Collections use the same workspace lock and
   atomic publication as every other mutation; `.khub/generated/` is gitignored.
 
 Each invariant has a sentinel fixture under `parity/cases/invariants/`.
