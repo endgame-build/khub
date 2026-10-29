@@ -14,8 +14,8 @@ If `khub` is not installed (`command not found`), load the `setup` skill first �
 
 Never hardcode a type or a field. Read the live schema:
 
-- `khub status --format json` — counts per type, draft/active, and the active preset.
-- `khub schema --format json` — every type with its fields, enums, required flags, and relations.
+- `khub status --format json` — counts per type, draft/active, orphan and stale.
+- `khub schema --format json` — every type with its fields, enums, required flags, and relations; `provenance` names the active preset and its version.
 - `khub schema show <type> --format json` — one type's shape; build an `add`/`edit` from it.
 - `khub schema diff --format json` — schema changes since the last `khub schema snapshot`; `pending: true` means existing entities may predate the current schema.
 

@@ -2,6 +2,19 @@
 
 Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); khub is pre-release.
 
+## [Unreleased]
+
+### Changed
+
+- The `setup` skill (plugin 0.1.5) says when setup is done: `khub status
+  --format json` and `khub check` answer from the workspace. It ends with a
+  fixed report for the user, collects its prohibitions in one never-do list,
+  and says when the plugin's band shows. Step 1 states that with the per-repo
+  install `khub …` runs as `npx @endgame-build/khub …`. Before, step 2 ran a
+  bare `khub` that a dev-dependency install does not put on the `PATH`.
+- The `khub` skill no longer says `status --format json` names the active
+  preset; `schema --format json` does, under `provenance`.
+
 ## [0.30.0] — 2026-10-28
 
 Storage can now follow a hub's existing nesting, relations can point to files
