@@ -1,0 +1,1 @@
+{"error": {"code": "path_not_entity", "message": "No entity at 'notes/bad.md': the file is malformed; khub check reports it"}}

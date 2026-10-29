@@ -1,0 +1,1 @@
+{"error": {"code": "path_is_collection", "message": "'repos.jsonl' is a repo collection holding 2 entities: repo/khub, repo/parity. Get one by id (khub get <id>) or list them (khub query --type repo)"}}

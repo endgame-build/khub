@@ -422,6 +422,17 @@ func Get(root, id string, edges bool) (*EntityView, error) {
 // GetMany resolves the whole request before reading results, preserving argument
 // order and duplicates. All records share one schema/index/collection snapshot.
 func GetMany(root string, ids []string, edges bool) ([]*EntityView, error) {
+	return getMany(root, ids, edges, func(idx *index.Index) func(string) (index.Node, error) {
+		return func(id string) (index.Node, error) { return resolveID(idx, id) }
+	})
+}
+
+// getMany is GetMany over any argument resolver: resolver builds, from the
+// scan, the function that turns one argument into a node.
+func getMany(
+	root string, args []string, edges bool,
+	resolver func(*index.Index) func(string) (index.Node, error),
+) ([]*EntityView, error) {
 	resolved, err := introspect.LoadSchema(root)
 	if err != nil {
 		return nil, err
@@ -430,15 +441,16 @@ func GetMany(root string, ids []string, edges bool) ([]*EntityView, error) {
 	if err != nil {
 		return nil, err
 	}
-	nodes := make([]index.Node, len(ids))
-	for i, id := range ids {
-		nodes[i], err = resolveID(idx, id)
+	resolve := resolver(idx)
+	nodes := make([]index.Node, len(args))
+	for i, arg := range args {
+		nodes[i], err = resolve(arg)
 		if err != nil {
 			return nil, err
 		}
 	}
 	valid := index.Filter(idx, index.StrayNodes(idx))
-	views := make([]*EntityView, 0, len(ids))
+	views := make([]*EntityView, 0, len(args))
 	cache := map[index.Node]*EntityView{}
 	for _, node := range nodes {
 		view := cache[node]

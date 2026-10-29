@@ -293,6 +293,47 @@ func LookupError(id string) *Located {
 	return &Located{Code: "lookup_error", Message: fmt.Sprintf("No entity '%s' found", id), Target: id}
 }
 
+// PathOutsideWorkspace is `path_outside_workspace`: `get --path` was handed a
+// path that does not lie inside the workspace.
+func PathOutsideWorkspace(path, root string) *Located {
+	return &Located{
+		Code: "path_outside_workspace",
+		Message: fmt.Sprintf("Path '%s' is outside workspace %s",
+			filepath.ToSlash(path), filepath.ToSlash(root)),
+		Target: path,
+	}
+}
+
+// PathNotEntity is `path_not_entity`: `get --path` was handed a workspace path
+// that holds no entity. reason says why: missing, malformed, or no entity
+// stored there.
+func PathNotEntity(rel, reason string) *Located {
+	return &Located{Code: "path_not_entity", Message: fmt.Sprintf("No entity at '%s': %s", rel, reason), Target: rel}
+}
+
+// PathIsCollection is `path_is_collection`: `get --path` named a collection
+// file, which holds many entities. It names the first ids and the calls that
+// read one or list them all.
+func PathIsCollection(rel, type_ string, ids []string) *Located {
+	const shown = 10
+	list := strings.Join(ids, ", ")
+	if len(ids) > shown {
+		list = fmt.Sprintf("%s and %d more", strings.Join(ids[:shown], ", "), len(ids)-shown)
+	}
+	noun := "entities"
+	if len(ids) == 1 {
+		noun = "entity"
+	}
+	return &Located{
+		Code: "path_is_collection",
+		Message: fmt.Sprintf("'%s' is a %s collection holding %d %s: %s. "+
+			"Get one by id (khub get <id>) or list them (khub query --type %s)",
+			rel, type_, len(ids), noun, list, type_),
+		Type:   type_,
+		Target: rel,
+	}
+}
+
 // --- query -------------------------------------------------------------------
 
 // UnknownFilterField is `filter_error`: a `query` filter names a field the

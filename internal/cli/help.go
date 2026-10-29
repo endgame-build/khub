@@ -818,7 +818,7 @@ var helpArguments = map[string][]helpArg{
 		{name: "TYPE", metavar: "<str>", help: "The entity type to create."},
 	},
 	"khub get": {
-		{name: "ID...", metavar: "<str>", help: "One or more bare slugs or qualified type/slug IDs, in output order."},
+		{name: "ID...", metavar: "<str>", help: "One or more bare slugs or qualified type/slug IDs (file paths under --path), in output order."},
 	},
 	"khub edit": {
 		{name: "ID", metavar: "<str>", help: "A bare slug, or type/slug on ambiguity."},

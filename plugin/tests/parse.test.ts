@@ -34,6 +34,13 @@ test('env assignments, -C and a leading cd do not hide the call', () => {
   expect(simple('cd docs/ws && khub link ad-1 affects cmp-search').verb).toBe('link')
 })
 
+test('get --path takes no value: every path is positional', () => {
+  const found = simple('khub get --path notes/a.md cards/b.json --format json')
+  expect(found.positional).toEqual(['notes/a.md', 'cards/b.json'])
+  expect(found.flags).toEqual({ path: true, format: 'json' })
+  expect(simple('khub add doc --path x/y.md').flags).toEqual({ path: 'x/y.md' })
+})
+
 test('the workspace a call names is kept', () => {
   expect(simple('khub -C /other/ws add adr --title x').workspace).toBe('/other/ws')
   expect(simple('khub --workspace ./ws status').workspace).toBe('./ws')

@@ -25,6 +25,7 @@ The schema lives at `.khub/ontology.yaml` (the domain model) with `.khub/policy.
 
 - `khub query --type <t> [--<field> <v>] [--tag <t>] [--has <pred>] [--missing <pred>] --format json` — filter by frontmatter; `--missing` surfaces gaps.
 - `khub get <id>... --edges --format json` — one ID returns one object; multiple IDs return an all-or-nothing array in argument order, duplicates included. Raw output accepts one ID only.
+- `khub get --path <file>... --format json` (khub 0.31.0 and later) — the entity stored in a file, the same record as `get <id>`. Use it on paths from `grep` or any file search, as printed from the current directory, instead of guessing the slug or reading the raw file. A collection file refuses and lists its ids.
 - `khub neighbors <id> --format json` — one-hop adjacency.
 - `khub impact <id> --format json` — transitive closure over a predicate (blast radius).
 - `khub history <id> --format json` — a supersession chain.

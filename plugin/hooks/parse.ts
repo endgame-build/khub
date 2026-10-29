@@ -34,6 +34,9 @@ const BOOLEAN_FLAGS = new Set([
   'active', 'draft', 'dry-run', 'edges', 'force', 'help', 'in', 'no-schema',
   'no-template', 'no-wire', 'open', 'orphan', 'out', 'plain', 'reverse', 'stale', 'strict',
 ])
+// A verb's own boolean flags. `add <type> --path <value>` may set a field named path, so
+// `get --path` cannot join the shared set: its paths are positional.
+const VERB_BOOLEAN_FLAGS: Record<string, Set<string>> = { get: new Set(['path']) }
 const WRITES = new Set(['add', 'edit', 'link', 'unlink', 'remove'])
 const OPERATORS = new Set(['backfill', 'init', 'reindex', 'upgrade', 'wire'])
 const SCHEMA_VIEWS = new Set(['base', 'diff', 'edges', 'show', 'snapshot', 'types'])
@@ -281,7 +284,7 @@ function khubCall(words: string[], binary: RegExp): Simple | null {
     if (equals >= 0) {
       found.flags[name] = word.slice(equals + 1)
       i += 1
-    } else if (BOOLEAN_FLAGS.has(name) || next === undefined || next.startsWith('--')) {
+    } else if (BOOLEAN_FLAGS.has(name) || VERB_BOOLEAN_FLAGS[verb]?.has(name) || next === undefined || next.startsWith('--')) {
       found.flags[name] = true
       i += 1
     } else {

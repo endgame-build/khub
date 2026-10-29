@@ -2,6 +2,20 @@
 
 Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); khub is pre-release.
 
+## [Unreleased]
+
+### Added
+
+- **`get --path`.** `khub get --path <file>...` reads each argument as a file
+  path, relative to the current directory (as `--body-file` is) or absolute,
+  and answers with the entity stored there, the same record `get <id>`
+  returns. A folder entity's directory and any file under it resolve to that
+  entity. A collection file refuses with its ids (`path_is_collection`), and
+  a path outside the workspace (`path_outside_workspace`) or one that holds
+  no entity (`path_not_entity`, with the reason) refuses the whole batch with
+  exit 2. A symlink inside the workspace is refused as storage refuses one
+  (`unsafe_path`). Closes #82.
+
 ## [0.30.0] — 2026-10-28
 
 Storage can now follow a hub's existing nesting, relations can point to files

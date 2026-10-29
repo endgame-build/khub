@@ -159,6 +159,12 @@ func (idx *Index) pathNode(target string) (Node, bool) {
 	if !ok {
 		return Node{}, false
 	}
+	return idx.FileNode(rel)
+}
+
+// FileNode is the per-item or singleton node stored in the file at rel, a
+// clean workspace-relative slash path matched byte for byte as scanned.
+func (idx *Index) FileNode(rel string) (Node, bool) {
 	idx.pathOnce.Do(func() {
 		idx.byPath = make(map[string]Node, len(idx.Paths))
 		for _, n := range idx.Order {

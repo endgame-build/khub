@@ -39,6 +39,7 @@ commands:
   params:
   - 'arg:id_'
   - '--edges'
+  - '--path'
   - '--format'
 - name: 'edit'
   params:
@@ -195,6 +196,9 @@ error_codes:
 - no_workspace
 - number_violation
 - os_error
+- path_is_collection
+- path_not_entity
+- path_outside_workspace
 - pattern_violation
 - preset_mismatch
 - raw_linkml_smuggled
