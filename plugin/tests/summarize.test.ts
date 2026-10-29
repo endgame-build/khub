@@ -131,6 +131,15 @@ test('search shows the top hit, and warns with khub\'s note', () => {
   expect(sayOf('khub search zzzz', []).line).toBe('no hits')
 })
 
+test('a --receipt document reads as its results', () => {
+  const receipt = { query: {}, matched: 3, returned: 2, truncated: true }
+  const doc = { receipt, results: [{ id: 'x/a', title: 'A' }, { id: 'x/b' }] }
+
+  expect(sayOf('khub query --receipt', doc).line).toBe('2 entities')
+  expect(sayOf('khub search api --receipt', doc).line).toBe('2 hits · top x/a')
+  expect(previewOf(classify('khub query --receipt', UNIX) as Simple, doc).rows.map(row => row.text)).toEqual(['x/a', 'x/b'])
+})
+
 test('the walks count what they reached', () => {
   expect(say('khub neighbors cmp-search --format json', F.neighbors_search).line).toBe('3 neighbors · in 1 · out 2')
   expect(say('khub impact cmp-storage --reverse --format json', F.impact_storage).line).toBe('1 affected · depth 1')

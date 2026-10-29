@@ -141,6 +141,29 @@ func TestSearchLimit(t *testing.T) {
 	}
 }
 
+// Result.Match is the expression that ran: raw text as given, the ORed
+// terms under --plain, and "" when --plain found no word to look for.
+func TestSearchResultEchoesMatch(t *testing.T) {
+	ws := sws(t)
+	for _, tc := range []struct {
+		text  string
+		plain bool
+		want  string
+	}{
+		{"modernization", false, "modernization"},
+		{"legacy modernization", true, `"legacy"* OR "modernization"*`},
+		{"!!!", true, ""},
+	} {
+		res, err := Search(ws, tc.text, Options{Limit: 20, Plain: tc.plain})
+		if err != nil {
+			t.Fatalf("Search(%q): %v", tc.text, err)
+		}
+		if res.Match != tc.want {
+			t.Errorf("Search(%q, plain %v).Match = %q, want %q", tc.text, tc.plain, res.Match, tc.want)
+		}
+	}
+}
+
 // No match returns an empty collection, never raising (QRY-002).
 func TestSearchEmptyIsSuccess(t *testing.T) {
 	got := mustSearch(t, sws(t), "chrysanthemum", nil, 20)

@@ -1,0 +1,1 @@
+{"receipt": {"query": {"type": null, "fields": {"kind": "nope"}, "tag": null, "has": null, "missing": null, "orphan": false, "stale": false, "draft": false, "active": false, "limit": null}, "matched": 0, "returned": 0, "truncated": false}, "results": []}

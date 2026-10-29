@@ -51,6 +51,11 @@ export const isRow = (value: unknown): value is Row =>
 
 export const rowsOf = (json: unknown): Row[] => (Array.isArray(json) ? json.filter(isRow) : [])
 
+// Returns the records of a `--receipt` document, `{receipt, results}`, and any other
+// document as it came.
+export const unwrapReceipt = (json: unknown): unknown =>
+  isRow(json) && isRow(json.receipt) && Array.isArray(json.results) ? json.results : json
+
 export const text = (value: unknown) => (value === undefined || value === null ? '' : String(value))
 
 export const count = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`

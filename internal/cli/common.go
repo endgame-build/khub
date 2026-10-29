@@ -390,3 +390,28 @@ func tailError(err error) string {
 	}
 	return err.Error()
 }
+
+// orNull is an optional flag's value as JSON: null when the caller left the
+// flag out.
+func orNull[T any](p *T) any {
+	if p == nil {
+		return nil
+	}
+	return *p
+}
+
+// withReceipt is the `--receipt` envelope around a read's records: what the
+// call applied, how many entities matched before --limit, how many came back,
+// and whether --limit dropped any. The receipt comes first so a reader learns
+// what the call did before it reads the rows.
+func withReceipt(applied *omap.Map, matched int, records []any) *omap.Map {
+	receipt := omap.New()
+	receipt.Set("query", applied)
+	receipt.Set("matched", matched)
+	receipt.Set("returned", len(records))
+	receipt.Set("truncated", len(records) < matched)
+	doc := omap.New()
+	doc.Set("receipt", receipt)
+	doc.Set("results", records)
+	return doc
+}

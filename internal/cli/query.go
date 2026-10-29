@@ -17,7 +17,7 @@ import (
 func registerQuery(root *cobra.Command) {
 	var (
 		typeName, tag, has, missing, format string
-		orphan, stale, draft, active        bool
+		orphan, stale, draft, active, rcpt  bool
 		limit                               int
 	)
 	cmd := newCmd("query", "Filter entities: khub query --type opportunity --stage prospect --format json.",
@@ -33,6 +33,7 @@ func registerQuery(root *cobra.Command) {
 	cmd.Flags().BoolVar(&active, "active", false, "Exclude drafts.")
 	cmd.Flags().IntVar(&limit, "limit", 0, "Cap the returned set.")
 	cmd.Flags().StringVar(&format, "format", "text", "text (Rich table on a TTY), json, or ids.")
+	cmd.Flags().BoolVar(&rcpt, "receipt", false, "Wrap JSON output with the applied filters, matched and returned counts, and truncation.")
 	cmd.RunE = func(cmd *cobra.Command, args []string) error {
 		_, extra, err := splitDynamic(cmd, args, 0)
 		if err != nil {
@@ -50,7 +51,7 @@ func registerQuery(root *cobra.Command) {
 			if rerr != nil {
 				return rerr
 			}
-			matches, qerr := query.Query(ws, query.Filters{
+			filters := query.Filters{
 				Type:       optString(cmd, "type", typeName),
 				Fields:     fields,
 				Tag:        optString(cmd, "tag", tag),
@@ -61,7 +62,8 @@ func registerQuery(root *cobra.Command) {
 				DraftOnly:  draft,
 				ActiveOnly: active,
 				Limit:      optInt(cmd, "limit", limit),
-			}, today())
+			}
+			matches, matched, qerr := query.QueryCounted(ws, filters, today())
 			if qerr != nil {
 				return qerr
 			}
@@ -88,7 +90,11 @@ func registerQuery(root *cobra.Command) {
 					pyBool(m.Draft), pyBool(m.Orphan), pyBool(m.Stale),
 				})
 			}
-			return Emit(records, format, func() {
+			var doc any = records
+			if rcpt {
+				doc = withReceipt(queryApplied(filters), matched, records)
+			}
+			return Emit(doc, format, func() {
 				if len(rows) == 0 {
 					fmt.Println("No entities match")
 					return
@@ -98,4 +104,26 @@ func registerQuery(root *cobra.Command) {
 		})
 	}
 	root.AddCommand(cmd)
+}
+
+// queryApplied echoes the filter set a query ran, every key present: an
+// option the caller left out is null (false for a switch), and fields holds
+// the --<field> filters in input order.
+func queryApplied(f query.Filters) *omap.Map {
+	fields := f.Fields
+	if fields == nil {
+		fields = omap.New()
+	}
+	applied := omap.New()
+	applied.Set("type", orNull(f.Type))
+	applied.Set("fields", fields)
+	applied.Set("tag", orNull(f.Tag))
+	applied.Set("has", orNull(f.Has))
+	applied.Set("missing", orNull(f.Missing))
+	applied.Set("orphan", f.Orphan)
+	applied.Set("stale", f.Stale)
+	applied.Set("draft", f.DraftOnly)
+	applied.Set("active", f.ActiveOnly)
+	applied.Set("limit", orNull(f.Limit))
+	return applied
 }

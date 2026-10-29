@@ -240,6 +240,7 @@ Options:
   --active  Exclude drafts.
   --limit <int>  Cap the returned set.
   --format <str>  text (Rich table on a TTY), json, or ids. [default: text]
+  --receipt  Wrap JSON output with the applied filters, matched and returned counts, and truncation.
   --help  Show this message and exit.
 
 ```
@@ -260,6 +261,7 @@ Options:
   --limit <int>  Cap the returned set. [default: 20]
   --plain  Treat text as plain words: any may match, prefix-matched, punctuation literal.
   --format <str>  text (Rich table on a TTY), json, or ids. [default: text]
+  --receipt  Wrap JSON output with the applied query, matched and returned counts, and truncation.
   --help  Show this message and exit.
 
 ```

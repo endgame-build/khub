@@ -275,6 +275,24 @@ func TestQueryLimit(t *testing.T) {
 	}
 }
 
+// QueryCounted counts every match before --limit cuts the set, so a caller
+// can tell a capped result from a complete one (`query --receipt`).
+func TestQueryCountedCountsBeforeLimit(t *testing.T) {
+	ws := qws(t)
+	for _, tc := range []struct {
+		limit       *int
+		total, kept int
+	}{{nil, 3, 3}, {ptr(2), 3, 2}, {ptr(5), 3, 3}, {ptr(0), 3, 0}, {ptr(-1), 3, 2}} {
+		got, total, err := QueryCounted(ws, Filters{Type: ptr("opportunity"), Limit: tc.limit}, now)
+		if err != nil {
+			t.Fatalf("QueryCounted: %v", err)
+		}
+		if total != tc.total || len(got) != tc.kept {
+			t.Errorf("limit %v: total %d kept %d, want %d and %d", tc.limit, total, len(got), tc.total, tc.kept)
+		}
+	}
+}
+
 // Results are ordered by the (type, slug) tuple compare, never a joined string.
 func TestQueryOrderIsTupleCompare(t *testing.T) {
 	got := mustQuery(t, qws(t), Filters{})

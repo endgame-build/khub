@@ -96,6 +96,10 @@ type Result struct {
 	Searched  int  // entities indexed, after the type filter
 	Malformed int  // files in the workspace the scan could not parse
 	Capped    bool // a plain query held more than MaxPlainTerms words
+	// Match is the FTS5 MATCH expression the search ran: the text as given,
+	// or under Plain the ORed terms built from it. "" when Plain found no
+	// words and nothing ran.
+	Match string
 }
 
 // EdgeCount is how many edges one predicate carries at a hit. Only non-zero
@@ -163,6 +167,7 @@ func Search(root, text string, opts Options) (Result, error) {
 		}
 		text = strings.Join(terms, " OR ")
 	}
+	res.Match = text
 	capped := opts.Limit
 	if capped < 0 {
 		capped = 0 // a negative LIMIT is "unbounded" in SQLite

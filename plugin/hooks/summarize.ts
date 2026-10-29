@@ -1,5 +1,5 @@
 import type { KhubCall, KhubRow, KhubTone } from '../types'
-import { clean, count, firstLine, INFORMATIONAL, isRow, refusal, rowsOf, text } from './cli'
+import { clean, count, firstLine, INFORMATIONAL, isRow, refusal, rowsOf, text, unwrapReceipt } from './cli'
 import type { Row } from './cli'
 import { edited } from './parse'
 import type { Simple } from './parse'
@@ -110,7 +110,8 @@ function schemaResult(call: Simple, json: unknown): Result {
 }
 
 // Reads what a call's JSON document says, by verb and by the document's shape.
-function resultOf(call: Simple, json: unknown, note: string): Result {
+function resultOf(call: Simple, doc: unknown, note: string): Result {
+  const json = unwrapReceipt(doc)
   const rows = rowsOf(json)
   const row = isRow(json) ? json : {}
   const entities = { line: rows.length === 0 ? 'no entities' : count(rows.length, 'entity', 'entities'), tone: 'plain' } as const
@@ -223,7 +224,8 @@ function findingRows(check: Row): KhubRow[] {
 }
 
 // Returns every row a call's document lists, by verb.
-function listOf(call: Simple, json: unknown): KhubRow[] {
+function listOf(call: Simple, doc: unknown): KhubRow[] {
+  const json = unwrapReceipt(doc)
   const rows = rowsOf(json)
   const row = isRow(json) ? json : {}
 

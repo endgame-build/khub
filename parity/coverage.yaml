@@ -76,6 +76,7 @@ commands:
   - '--active'
   - '--limit'
   - '--format'
+  - '--receipt'
 - name: 'search'
   params:
   - 'arg:text'
@@ -83,6 +84,7 @@ commands:
   - '--limit'
   - '--plain'
   - '--format'
+  - '--receipt'
 - name: 'neighbors'
   params:
   - 'arg:id_'

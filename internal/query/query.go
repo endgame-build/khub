@@ -58,6 +58,26 @@ type Filters struct {
 
 // Query returns the entities passing every filter, each annotated orphan/stale.
 func Query(root string, filters Filters, now time.Time) ([]Match, error) {
+	matches, _, err := QueryCounted(root, filters, now)
+	return matches, err
+}
+
+// QueryCounted is Query plus the number of entities that passed every filter
+// before Limit cut the set — what `query --receipt` reports as matched.
+func QueryCounted(root string, filters Filters, now time.Time) ([]Match, int, error) {
+	matches, err := queryAll(root, filters, now)
+	if err != nil {
+		return nil, 0, err
+	}
+	total := len(matches)
+	if filters.Limit != nil {
+		matches = limitMatches(matches, *filters.Limit)
+	}
+	return matches, total, nil
+}
+
+// queryAll returns every entity passing the filters, ignoring Limit.
+func queryAll(root string, filters Filters, now time.Time) ([]Match, error) {
 	resolved, err := introspect.LoadSchema(root)
 	if err != nil {
 		return nil, err
@@ -105,9 +125,6 @@ func Query(root string, filters Filters, now time.Time) ([]Match, error) {
 			Stale:  stale,
 			Title:  title(meta, node.Slug),
 		})
-	}
-	if filters.Limit != nil {
-		matches = limitMatches(matches, *filters.Limit)
 	}
 	return matches, nil
 }
