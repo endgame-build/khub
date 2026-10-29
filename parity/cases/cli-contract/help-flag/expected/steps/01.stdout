@@ -11,6 +11,7 @@ Commands:
   init  Scaffold a workspace from a preset and wire it into the agent context files.
   upgrade  Refresh an existing workspace: the shipped schema and templates, new scaffolds, the wire block.
   status  Summarize the workspace: counts, draft/active, orphan/stale, OKF conformance.
+  doctor  Diagnose the workspace: git, schema, provenance, lock, storage layout.
   add  Create an entity: khub add opportunity --client initech --owner noor --stage prospect.
   get  Read entities' frontmatter and body, optionally with derived edges.
   edit  Edit an entity: khub edit initech-deal stage proposal-sent  (or --field value).

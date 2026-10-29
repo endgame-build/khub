@@ -219,6 +219,7 @@ func newRoot() *cobra.Command {
 	registerInit(root)
 	registerUpgrade(root)
 	registerStatus(root)
+	registerDoctor(root)
 	registerAdd(root)
 	registerGet(root)
 	registerEdit(root)

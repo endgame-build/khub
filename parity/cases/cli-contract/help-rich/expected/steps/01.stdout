@@ -16,6 +16,8 @@
 │            new scaffolds, the wire block.                                    │
 │ status     Summarize the workspace: counts, draft/active, orphan/stale, OKF  │
 │            conformance.                                                      │
+│ doctor     Diagnose the workspace: git, schema, provenance, lock, storage    │
+│            layout.                                                           │
 │ add        Create an entity: khub add opportunity --client initech --owner   │
 │            noor --stage prospect.                                            │
 │ get        Read entities' frontmatter and body, optionally with derived      │

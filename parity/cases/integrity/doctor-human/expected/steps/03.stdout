@@ -1,0 +1,8 @@
+ok    workspace   %WS%
+warn  git         The workspace is not a git repository; stale and backfill read no dates from git until it is one with a commit
+ok    schema      11 types resolved from .khub/ontology.yaml, .khub/policy.yaml, .khub/storage.yaml
+ok    provenance  preset build-hub, version 0.6.0
+ok    lock        .khub/generated/locks/workspace.lock opens for writing
+fail  layout      requirement: knowledge/requirements is not a directory, which the file layout needs; move it aside or change the type's storage path
+skip  read        Skipped: fix the layout first
+Doctor failed: 1 failed check, 1 warning

@@ -1,0 +1,16 @@
+# The lock check with no lock file yet: on macOS and Linux doctor asks the
+# kernel whether .khub/generated takes a new entry; on Windows it creates and
+# removes one probe file there. Either way a directory that refuses new files
+# fails the check and nothing is left behind. Root, and on Windows
+# an administrator with the backup and restore privileges, ignore the denial,
+# so on such an account the runner skips this case (see err-os-error).
+requires: [write-denial]
+steps:
+- argv: ["init", "build-hub", ".", "--no-wire"]
+- sh: "rm -rf .khub/generated && mkdir .khub/generated"
+- sh: "chmod 500 .khub/generated"
+  sh_windows: "MSYS_NO_PATHCONV=1 icacls '.khub\\generated' /deny '*S-1-1-0:(WD,AD)'"
+- argv: ["doctor"]
+- sh: "chmod 755 .khub/generated"
+  sh_windows: "MSYS_NO_PATHCONV=1 icacls '.khub\\generated' /remove:d '*S-1-1-0'"
+- argv: ["doctor"]

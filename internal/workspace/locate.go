@@ -17,6 +17,7 @@ import (
 	"github.com/endgame-build/khub/internal/errs"
 	"github.com/endgame-build/khub/internal/fsio"
 	"github.com/endgame-build/khub/internal/omap"
+	"github.com/endgame-build/khub/internal/presets"
 )
 
 // DefaultStaleDays is workspace.py DEFAULT_STALE_DAYS: the staleness threshold
@@ -222,4 +223,26 @@ func staleDaysInt(raw any) (int, error) {
 	default:
 		return 0, fmt.Errorf("invalid stale_days value of type %T", raw)
 	}
+}
+
+// ShippedVersion is the version of the preset recorded in config.yaml as
+// `upgrade` would read it: from the recorded `source`, else the presets
+// embedded in the binary, under the canonical name. An unknown preset is
+// the unknown_preset error upgrade refuses with.
+func ShippedVersion(root, preset string) (string, error) {
+	sourceDir, err := PresetSource(root)
+	if err != nil {
+		return "", err
+	}
+	source := presets.Source(sourceDir)
+	name := presets.Canonical(preset, source)
+	schemaPath, err := presets.Resolve(name, source)
+	if err != nil {
+		return "", err
+	}
+	merged, err := flatten(name, source, schemaPath)
+	if err != nil {
+		return "", err
+	}
+	return merged.Version, nil
 }

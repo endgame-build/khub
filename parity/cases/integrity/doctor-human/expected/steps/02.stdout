@@ -1,0 +1,8 @@
+ok    workspace   %WS%
+warn  git         The workspace is not a git repository; stale and backfill read no dates from git until it is one with a commit
+ok    schema      11 types resolved from .khub/ontology.yaml, .khub/policy.yaml, .khub/storage.yaml
+ok    provenance  preset build-hub, version 0.6.0
+ok    lock        .khub/generated/locks/workspace.lock opens for writing
+ok    layout      Storage matches the layout of every type (11 types)
+ok    read        check reads every file it walks
+Doctor passed with 1 warning

@@ -129,6 +129,23 @@ func Guard(fmt_ string, fn func() error) error {
 	return err
 }
 
+// describeErr renders an error as Guard would, without failing: the code and
+// message of a Located error, or the message of an OS error with the caller's
+// code (doctor reports an OS error under the check that met it). ok is false
+// for an error Guard would not dress.
+func describeErr(err error) (code, message string, ok bool) {
+	var located *errs.Located
+	switch {
+	case errors.As(err, &located):
+		return located.Code, located.Message, true
+	case isPathConstructionBug(err):
+		return "", pathBugMessage(err), true
+	case isOSError(err):
+		return "", osErrorMessage(err), true
+	}
+	return "", "", false
+}
+
 // isPathConstructionBug reports errno values that mean khub assembled a path
 // that cannot exist, rather than the filesystem refusing a valid one.
 //

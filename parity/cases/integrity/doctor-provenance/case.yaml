@@ -1,0 +1,9 @@
+# The provenance stamp against the presets this binary ships: a preset it
+# does not know warns with upgrade's own unknown_preset, and a recorded
+# version newer than the shipped one warns provenance_newer. Neither fails.
+steps:
+- argv: ["init", "build-hub", ".", "--no-wire"]
+- sh: "perl -pi -e 's/^version:.*/version: 99.0.0/' .khub/config.yaml"
+- argv: ["doctor"]
+- sh: "perl -pi -e 's/^preset:.*/preset: nosuchpreset/' .khub/config.yaml"
+- argv: ["doctor"]

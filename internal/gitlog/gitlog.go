@@ -54,6 +54,42 @@ func HasGitHistory(root string) (bool, error) {
 	return code == 0, nil
 }
 
+// Repo is what git says about a workspace, for `khub doctor`.
+type Repo int
+
+// The answers Probe gives, from worst to best.
+const (
+	RepoGitBroken  Repo = iota // git starts but `git --version` does not succeed
+	RepoNone                   // root is not inside a git repository
+	RepoNoCommits              // a repository with an unborn HEAD
+	RepoHasHistory             // a repository with at least one commit
+)
+
+// Probe tells apart the states HasGitHistory folds together: a git that
+// runs but fails everything, a directory outside any repository, and a
+// repository with no commit yet. err is non-nil only when git cannot be
+// started at all, as for run.
+func Probe(root string) (Repo, error) {
+	if _, code, err := run(root, "--version"); err != nil {
+		return RepoGitBroken, err
+	} else if code != 0 {
+		return RepoGitBroken, nil
+	}
+	if _, code, err := run(root, "rev-parse", "--git-dir"); err != nil {
+		return RepoGitBroken, err
+	} else if code != 0 {
+		return RepoNone, nil
+	}
+	ok, err := HasGitHistory(root)
+	switch {
+	case err != nil:
+		return RepoGitBroken, err
+	case ok:
+		return RepoHasHistory, nil
+	}
+	return RepoNoCommits, nil
+}
+
 // LastCommitDate is gitlog.last_commit_date: the committer date of the last
 // commit touching relpath; ok=false when the path is untracked (Python's
 // None). Committer date, not author date, so one commit reads the same here

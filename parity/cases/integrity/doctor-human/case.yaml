@@ -1,0 +1,7 @@
+# doctor's terminal view: one line per check, then the verdict.
+mode: human
+steps:
+- argv: ["init", "build-hub", ".", "--no-wire"]
+- argv: ["doctor"]
+- sh: "rm -rf knowledge/requirements && touch knowledge/requirements"
+- argv: ["doctor"]
