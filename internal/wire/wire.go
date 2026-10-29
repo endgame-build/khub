@@ -26,6 +26,7 @@ import (
 
 	"github.com/endgame-build/khub/internal/errs"
 	"github.com/endgame-build/khub/internal/fsio"
+	"github.com/endgame-build/khub/internal/install"
 	"github.com/endgame-build/khub/internal/introspect"
 	"github.com/endgame-build/khub/internal/mdlink"
 	"github.com/endgame-build/khub/internal/schema"
@@ -202,17 +203,17 @@ func BuildBlock(spec BlockSpec, importSupported bool) string {
 
 	// CLAUDE.md is read by Claude Code, where the agent skills come with the khub
 	// plugin. Every other agent takes them from `npx skills`.
-	skills := "then `npx skills add endgame-build/khub`."
+	skills := "then `" + install.SkillsAdd + "`."
 	if importSupported {
 		skills = "then the khub plugin for Claude Code, which the user installs with " +
-			"`/plugin marketplace add endgame-build/khub` and `/plugin install khub@khub`."
+			"`" + install.MarketplaceAdd + "` and `" + install.PluginInstall + "`."
 	}
 
 	lines := []string{
 		Begin,
 		"## khub workspace",
 		"",
-		"This repository is a [khub](https://github.com/endgame-build/khub) " +
+		"This repository is a [khub](https://github.com/" + install.Repo + ") " +
 			"workspace: its domain is modeled as typed entities and typed relations, and " +
 			"the schema is the contract. Reason in that model.",
 		"",
@@ -243,7 +244,7 @@ func BuildBlock(spec BlockSpec, importSupported bool) string {
 			"JSON by default; a table is only for a TTY. (`reindex`, `viz`, `backfill` "+
 			"and `wire` are operator commands and print prose.)",
 		"",
-		"Not installed? `npm install -D @endgame-build/khub`, "+skills,
+		"Not installed? `"+install.NPMInstall+"`, "+skills,
 		End,
 	)
 	return strings.Join(lines, "\n")
