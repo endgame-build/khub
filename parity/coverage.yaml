@@ -160,6 +160,9 @@ commands:
 - name: 'schema diff'
   params:
   - '--format'
+- name: 'schema jsonschema'
+  params:
+  - '--format'
 error_codes:
 - alias_taken
 - ambiguity_error

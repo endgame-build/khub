@@ -299,6 +299,25 @@ Editing the `.khub/` layer files takes effect on the next command, with no build
 
 Inspect the effective schema with `khub schema` (full), `khub schema types`, `khub schema show <type>`, `khub schema edges`, and `khub schema base` (the embedded base block). For a complete worked schema, read the [firm-ops preset](firm-ops-preset.md).
 
+## Editor validation (JSON Schema)
+
+khub publishes a JSON Schema (draft-07) of the layer-file vocabulary, so an editor can complete keys, show what each one means, and flag a typo'd key or a bad value as you type. One schema covers all three files, since any of them may carry any layer block. Get it in either of two ways:
+
+- `khub schema jsonschema` prints the schema for the khub you run, so it never describes keys your binary does not have. It reads no workspace. On a terminal it prints indented JSON; piped, it prints one line, like every other command. Save it with `TTY_COMPATIBLE=1 khub schema jsonschema > .khub/layers.schema.json` and run it again after you upgrade khub.
+- [`schemas/layers.schema.json`](../schemas/layers.schema.json) in this repository holds the same bytes, from `https://raw.githubusercontent.com/endgame-build/khub/v<version>/schemas/layers.schema.json` for a release from 0.31.0 on. A Go test fails when the file and the binary disagree.
+
+Point the editor at it. With the YAML language server (VS Code's YAML extension, and editors built on it), map the files in settings, so the layer files stay as `khub init` wrote them. khub reads the layer files as YAML 1.2, which is the language server's default: leave `yaml.yamlVersion` unset. In 1.1 mode the server reads unquoted `yes`, `no`, `on`, `off`, `y` and `n` as booleans, so it flags values khub reads as strings, such as `enum: [yes, no]`.
+
+```json
+"yaml.schemas": {
+  ".khub/layers.schema.json": [".khub/ontology.yaml", ".khub/policy.yaml", ".khub/storage.yaml"]
+}
+```
+
+Or put a modeline at the top of each file: `# yaml-language-server: $schema=layers.schema.json`. The path is relative to the file. `khub upgrade` replaces an edited layer file with the preset's and keeps your copy as `<name>.bak`, so a modeline does not survive an upgrade and the settings mapping does.
+
+The JSON Schema checks one value at a time: the keys each mapping allows, the value sets (`layout`, `format`, scalar `type`), the `id_prefix` and `template` patterns, and that a storage entry states its `layout` and a relation its `to`. It accepts every boolean form khub reads (`yes`, `on`, `1`). It cannot check a rule that spans fields or files: the layout and format matrix, a policy or storage entry for a type ontology does not declare, a relation to an unknown type. khub reports those when it loads the schema, so the next khub command names them. An empty or comment-only file passes, as khub reads it as empty. The JSON Schema is stricter than khub in one place: khub also reads a layer block or a whole file written as `false`, `0`, `''` or an empty list as empty, and the JSON Schema asks for a mapping or nothing.
+
 ## Open schema and `--strict`
 
 khub enforces the schema-declared subset and leaves the rest alone. A declared field is checked against its type, enum, pattern, and cardinality; a relation to a non-existent target is rejected on write. Any key the schema does not declare is accepted, validated against nothing, and preserved verbatim on round-trip. `--strict` (on `validate`, `add`, and `edit`) closes the schema and rejects unknown keys, for when you want a closed contract.

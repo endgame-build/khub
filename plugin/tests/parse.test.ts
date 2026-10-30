@@ -47,6 +47,8 @@ test('a two-word schema verb keeps its view', () => {
   expect(call.sub).toBe('show')
   expect(call.positional).toEqual(['adr'])
   expect(simple('khub schema').sub).toBe(null)
+  expect(simple('khub schema jsonschema').sub).toBe('jsonschema')
+  expect(mutates(simple('khub schema jsonschema'))).toBe(false)
 })
 
 test('stderr and stdin redirections stay simple, a stdout redirection or a pipe does not', () => {

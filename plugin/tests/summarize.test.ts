@@ -183,6 +183,11 @@ test('schema views say how much they hold', () => {
     line: 'snapshot · 11 types',
     tone: 'ok',
   })
+  expect(sayOf('khub schema jsonschema', { $schema: 'http://json-schema.org/draft-07/schema#', type: 'object' })).toEqual({
+    head: 'khub schema jsonschema',
+    line: '',
+    tone: 'plain',
+  })
 })
 
 test('any other verb shows the first line of its note, or nothing', () => {

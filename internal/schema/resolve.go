@@ -73,13 +73,7 @@ func mergeLayers(docs []schemaDoc) (*authoredLayers, error) {
 
 	pre := &vocabCollector{}
 	for _, d := range docs {
-		for _, k := range d.m.Keys() {
-			switch k {
-			case "ontology", "policy", "storage", "version":
-			default:
-				pre.add("extra_forbidden", []string{k}, msgExtra)
-			}
-		}
+		addExtras(d.m, nil, pre, layerDocKeys...)
 		// ontology (entities) / policy / storage — the one authored shape.
 		if v, ok := d.m.Get("ontology"); ok && v != nil && !pyFalsy(v) {
 			om, isMap := v.(*omap.Map)
@@ -95,11 +89,7 @@ func mergeLayers(docs []schemaDoc) (*authoredLayers, error) {
 						"override a base attribute by redeclaring it on the type "+
 						"(see `khub schema base`)")
 			}
-			for _, k := range om.Keys() {
-				if k != "entities" {
-					pre.add("extra_forbidden", []string{"ontology", k}, msgExtra)
-				}
-			}
+			addExtras(om, []string{"ontology"}, pre, authoredOntologyKeys...)
 			if ev, has := om.Get("entities"); has && ev != nil && !pyFalsy(ev) {
 				if err := mergeInto(out.entities, ev, d.name, "ontology.entities"); err != nil {
 					return nil, err

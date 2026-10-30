@@ -465,6 +465,7 @@ Commands:
   base  Show the effective base block every type inherits.
   snapshot  Record the current resolved schema as the baseline in .khub/schema.applied.yaml.
   diff  List schema changes since the last `khub schema snapshot`.
+  jsonschema  Print the JSON Schema of the .khub/ layer files, for editor validation.
 
 ```
 

@@ -1,0 +1,5 @@
+# On a terminal `schema jsonschema` prints the indented on-disk JSON, byte for
+# byte schemas/layers.schema.json (a Go test holds that file to the generator).
+mode: human
+steps:
+- argv: ["schema", "jsonschema"]

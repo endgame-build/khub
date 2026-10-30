@@ -1,0 +1,8 @@
+Usage: khub schema jsonschema [OPTIONS]
+
+Print the JSON Schema of the .khub/ layer files, for editor validation.
+
+Options:
+  --format <str>  text (indented JSON on a TTY) or json (one line). [default: text]
+  --help  Show this message and exit.
+

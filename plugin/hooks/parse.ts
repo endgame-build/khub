@@ -36,7 +36,7 @@ const BOOLEAN_FLAGS = new Set([
 ])
 const WRITES = new Set(['add', 'edit', 'link', 'unlink', 'remove'])
 const OPERATORS = new Set(['backfill', 'init', 'reindex', 'upgrade', 'wire'])
-const SCHEMA_VIEWS = new Set(['base', 'diff', 'edges', 'show', 'snapshot', 'types'])
+const SCHEMA_VIEWS = new Set(['base', 'diff', 'edges', 'jsonschema', 'show', 'snapshot', 'types'])
 
 // These flags of `khub edit` name no field.
 const EDIT_OPTIONS = new Set(['format', 'strict'])

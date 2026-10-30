@@ -1,0 +1,404 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "khub layer file",
+  "description": "A khub layer file under .khub/. The layers merge on these top-level keys, never on the file name.",
+  "type": [
+    "object",
+    "null"
+  ],
+  "properties": {
+    "ontology": {
+      "description": "The domain: which types exist, their attributes and relations. The base block is embedded in khub and may not be authored here.",
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "entities": {
+              "description": "Entity types keyed by name.",
+              "anyOf": [
+                {
+                  "type": "object",
+                  "additionalProperties": {
+                    "$ref": "#/definitions/entity"
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "policy": {
+      "description": "This workspace's gates, keyed by a type ontology declares.",
+      "anyOf": [
+        {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/policy"
+          }
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "storage": {
+      "description": "Storage config, keyed by a type ontology declares. A type with no entry is stored one file per entity under a directory named for it.",
+      "anyOf": [
+        {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/storage"
+          }
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "version": {
+      "description": "The preset's version, stamped by a preset."
+    }
+  },
+  "additionalProperties": false,
+  "definitions": {
+    "entity": {
+      "description": "One entity type's ontology entry: the domain only, no storage or gates.",
+      "type": "object",
+      "properties": {
+        "when": {
+          "description": "The moment to capture this type, in one line of domain language. Never a file path.",
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "attributes": {
+          "description": "Attributes keyed by name. Redeclaring a base attribute overrides it facet by facet.",
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/attribute"
+          }
+        },
+        "relations": {
+          "description": "Relations keyed by predicate: the key is the edge's name.",
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/relation"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "attribute": {
+      "description": "An attribute declaration. Every facet is optional; an override inherits the ones it leaves out.",
+      "type": "object",
+      "properties": {
+        "type": {
+          "description": "The scalar type. Default text; may be left out when enum is given or on an override.",
+          "anyOf": [
+            {
+              "enum": [
+                "text",
+                "number",
+                "date",
+                "datetime",
+                "bool",
+                "list"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "required": {
+          "description": "Whether check demands a value on an active entity.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/bool"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "default": {
+          "description": "The field's default value."
+        },
+        "enum": {
+          "description": "The allowed values.",
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "pattern": {
+          "description": "A Go RE2 regex the whole value must match, anchored at both ends and case-sensitive.",
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "relation": {
+      "description": "A relation declaration. The key it sits under is the predicate.",
+      "type": "object",
+      "properties": {
+        "to": {
+          "description": "A type name, a list of type names (a union edge), or `any`.",
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          ]
+        },
+        "many": {
+          "description": "Multi-valued when true. Default false: single-valued.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/bool"
+            }
+          ]
+        },
+        "required": {
+          "description": "Whether check demands the edge on an active entity.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/bool"
+            }
+          ]
+        },
+        "inverse": {
+          "description": "The name of the derived edge on the target, computed at read time and never stored.",
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "acyclic": {
+          "description": "Whether check reports cycles over this predicate.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/bool"
+            }
+          ]
+        }
+      },
+      "required": [
+        "to"
+      ],
+      "additionalProperties": false
+    },
+    "policy": {
+      "description": "One type's workspace gates.",
+      "type": "object",
+      "properties": {
+        "required": {
+          "description": "Singleton only: check reports the type's file when it is missing.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/bool"
+            }
+          ]
+        },
+        "orphan": {
+          "description": "When true, an entity of this type with no edges is never reported as an orphan.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/bool"
+            }
+          ]
+        },
+        "path_refs": {
+          "description": "When true, this type's relation values may name a workspace file by its path.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/bool"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "storage": {
+      "description": "Where and how one type's bytes land. An entry must state its layout.",
+      "type": "object",
+      "properties": {
+        "layout": {
+          "description": "file: one entity per file. folder: one per folder (_index). collection: every entity a row of one file. singleton: one fixed file.",
+          "enum": [
+            "file",
+            "folder",
+            "collection",
+            "singleton"
+          ]
+        },
+        "path": {
+          "description": "The inventory directory, relative to the workspace root, or the file for a collection or singleton. A file layout may give a path template placing {slug}, or a list of them.",
+          "anyOf": [
+            {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "minItems": 1
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "format": {
+          "description": "md (the default), json or yaml per item; json, jsonl or yaml for a collection.",
+          "enum": [
+            "md",
+            "json",
+            "jsonl",
+            "yaml"
+          ]
+        },
+        "id_prefix": {
+          "description": "The prefix a minted id starts with: a slug token, or one chosen by the value of an attribute.",
+          "anyOf": [
+            {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9]*$"
+                },
+                {
+                  "$ref": "#/definitions/id_prefix_by"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "id_date": {
+          "description": "When true, a minted id carries the day it was minted: <prefix>-<YYYY-MM-DD>-<slug>.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/bool"
+            }
+          ]
+        },
+        "id_ordinal": {
+          "description": "When true, a slug may open with an NNN- ordinal instead of reporting it.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/bool"
+            }
+          ]
+        },
+        "template": {
+          "description": "The body template's name under .khub/templates/ (default: the type's own name), or false for none. Per-item and singleton md types only.",
+          "anyOf": [
+            {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9-]*$"
+                },
+                {
+                  "const": false
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "layout"
+      ],
+      "additionalProperties": false
+    },
+    "id_prefix_by": {
+      "description": "A prefix chosen by the value of another attribute, one per enum member.",
+      "type": "object",
+      "properties": {
+        "by": {
+          "description": "The attribute whose value picks the prefix.",
+          "type": "string"
+        },
+        "map": {
+          "description": "The prefix for each value of the attribute.",
+          "type": "object",
+          "additionalProperties": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9]*$"
+          }
+        }
+      },
+      "required": [
+        "by",
+        "map"
+      ],
+      "additionalProperties": false
+    },
+    "bool": {
+      "description": "A boolean. khub also reads 0, 1, yes, no, on, off, t, f, y and n, in any case.",
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "enum": [
+            0,
+            1
+          ]
+        },
+        {
+          "type": "string",
+          "pattern": "^(1|[tT][rR][uU][eE]|[tT]|[yY][eE][sS]|[yY]|[oO][nN]|0|[fF][aA][lL][sS][eE]|[fF]|[nN][oO]|[nN]|[oO][fF][fF])$"
+        }
+      ]
+    }
+  }
+}
