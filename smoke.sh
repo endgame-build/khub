@@ -12,6 +12,8 @@ KHUB="${KHUB:-$REPO/khub}"   # the built binary; override to smoke another build
 # Dated ids (adr) carry the mint day; pin the clock so the ids below are
 # stable — the same seam the parity recorder uses.
 export KHUB_PARITY_NOW=2026-01-15
+# No session: a write would print check warnings on stderr (docs/cli.md).
+export KHUB_SESSION=
 FAILED=0
 CASES=0
 

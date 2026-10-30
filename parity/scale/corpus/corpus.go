@@ -156,7 +156,10 @@ type khub struct {
 }
 
 func newKhub(bin, root string, today time.Time) *khub {
-	env := append(os.Environ(), "KHUB_PARITY_NOW="+today.Format("2006-01-02"))
+	env := append(os.Environ(), "KHUB_PARITY_NOW="+today.Format("2006-01-02"),
+		// No session: a write would run `check` and print warnings (cli.md,
+		// "Write warnings"), which this generator neither wants nor times.
+		"KHUB_SESSION=")
 	return &khub{bin: bin, root: root, env: env}
 }
 

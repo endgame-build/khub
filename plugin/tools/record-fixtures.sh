@@ -18,6 +18,8 @@ trap 'rm -rf "$TMP"' EXIT
 (cd "$REPO" && go build -o "$TMP/khub" ./cmd/khub)
 
 export KHUB_PARITY_NOW=2026-01-15
+# No session: write warnings go to stderr, which the fixtures must not depend on.
+export KHUB_SESSION=
 WS="$TMP/ws"
 BODY="$TMP/fixtures.body"
 ADR=ad-2026-01-15-use-re2-patterns

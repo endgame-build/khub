@@ -60,6 +60,14 @@ hand-edit is how a workspace acquires a field no default gate will report.
 - `khub link <id> <predicate> <target>` / `khub unlink <id> <predicate> <target> --format json` — relations, idempotent. Read `changed` to tell a write from a no-op; both exit 0.
 - `khub remove <id> --format json` — delete; refuses while an inbound edge resolves to it unless `--force`.
 
+A write may print `warning: <id> › <rule>: <message>` lines on stderr: `check` findings
+this session has not seen yet, the workspace's existing debt on your first write and only
+what changed after that, at most 20 and then a count. The write still succeeded. Fix a
+warning your change caused; the rest is debt to mention, not to chase. Parallel writes
+share the session, so a warning may land on a different call than the one that caused it.
+They do not replace step 5 of the loop. Claude Code names the session for you; any other
+agent sets `KHUB_SESSION` to one value for all its calls to get them.
+
 ## The loop
 
 1. `khub add <type> --title "..." …` — it mints the id (`khub schema show <type>` names the

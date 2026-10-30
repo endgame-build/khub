@@ -129,7 +129,10 @@ func main() {
 		roots[scale], sizes[scale], manifests[scale] = root, m.Total, m
 	}
 
-	env := append(os.Environ(), "KHUB_PARITY_NOW="+today.Format("2006-01-02"))
+	env := append(os.Environ(), "KHUB_PARITY_NOW="+today.Format("2006-01-02"),
+		// No session: a write would also run `check` for its warnings and
+		// skew the timings.
+		"KHUB_SESSION=")
 	rows := map[string]map[int]stats{}
 	for _, scale := range scales {
 		subs := handles(manifests[scale])

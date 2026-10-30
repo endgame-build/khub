@@ -162,6 +162,8 @@ M_SEED=$(field generated.seed); M_SCALE=$(field generated.scale); M_TODAY=$(fiel
 # The clock the corpus was written against, so every date-relative answer
 # (stale, status) is judged on the same day the manifest was.
 export KHUB_PARITY_NOW=$M_TODAY
+# No session, so a write prints no warnings and the timings stay the write's.
+export KHUB_SESSION=
 printf '  ..   %s entities, %s orphan gaps, %s stale past 90 days\n' \
   "$M_TOTAL" "$M_ORPHAN_N" "$M_STALE90"
 

@@ -2,6 +2,21 @@
 
 Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); khub is pre-release.
 
+## [Unreleased]
+
+### Added
+
+- **Write warnings per session.** In a session (`KHUB_SESSION`, or Claude
+  Code's `CLAUDE_CODE_SESSION_ID` when that is unset), `add`, `edit`, `link`,
+  `unlink` and `remove` print each gating `check` finding the session has not
+  been shown as a stderr line, `warning: <id> › <rule>: <message>`: the
+  standing debt on the first write, only what changed after that. Advisory:
+  stdout, exit codes and the gates are unchanged, and with no session nothing
+  is printed. `KHUB_SESSION=` turns it off. A write prints at most 20 warnings
+  and then a count, escapes control characters in workspace text, and costs
+  one `check` scan run outside the workspace lock. `backfill`, `wire` and
+  `upgrade` do not warn. Session records untouched for 30 days are pruned.
+
 ## [0.30.0] — 2026-10-28
 
 Storage can now follow a hub's existing nesting, relations can point to files

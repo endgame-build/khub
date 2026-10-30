@@ -1,0 +1,22 @@
+# Write verbs in a session (KHUB_SESSION) print the gating `check` findings the
+# session has not been shown, on stderr, before the result. The first write
+# surfaces debt that predates the session (ann, written by hand); later writes
+# surface only what changed; a finding fixed and then reintroduced is shown
+# again. A write with no new finding prints nothing extra; a refused write
+# prints no warning. The `check` gate itself is unchanged.
+env:
+  KHUB_SESSION: s1
+steps:
+- argv: ["init", "firm-ops", ".", "--no-wire"]
+- sh: "printf -- \"---\\ntype: person\\nname: Ann\\ncreated: 2026-01-15\\n---\\n\" > identity/team/ann.md"
+- argv: ["add", "client", "--name", "Initech Corp"]
+- argv: ["add", "person", "--name", "Pat"]
+- argv: ["add", "project", "--title", "Pov", "--client", "initech-corp", "--owner", "pat"]
+- argv: ["edit", "pat", "role", "partner"]
+- argv: ["add", "person", "--name", "Sam"]
+- argv: ["unlink", "pov", "client", "initech-corp"]
+- argv: ["remove", "sam"]
+- argv: ["link", "pov", "client", "initech-corp"]
+- argv: ["unlink", "pov", "client", "initech-corp"]
+- argv: ["add", "nosuch", "--name", "x"]
+- argv: ["check", "--format", "json"]

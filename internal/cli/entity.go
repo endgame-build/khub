@@ -82,6 +82,7 @@ func registerAdd(root *cobra.Command) {
 			if cerr != nil {
 				return emptyIDError(cmd, id, cerr)
 			}
+			warnAfterWrite(ws)
 			return Emit(refRecord(ws, result.Type, result.Slug, result.Path, result.Draft, result.Locator),
 				format, func() {
 					fmt.Println(relPath(ws, result.Path))
@@ -188,6 +189,7 @@ func registerEdit(root *cobra.Command) {
 			if uerr != nil {
 				return uerr
 			}
+			warnAfterWrite(ws)
 			return Emit(refRecord(ws, result.Type, result.Slug, result.Path, result.Draft, result.Locator),
 				format, func() { fmt.Printf("Updated %s '%s'\n", result.Type, result.Slug) })
 		})
@@ -212,6 +214,7 @@ func registerLink(root *cobra.Command) {
 				if err != nil {
 					return err
 				}
+				warnAfterWrite(ws)
 				return Emit(edgeRecord(result), format, func() {
 					// An unchanged edge already existed — idempotent success (exit 0).
 					if !result.Changed {
@@ -244,6 +247,7 @@ func registerUnlink(root *cobra.Command) {
 				if err != nil {
 					return err
 				}
+				warnAfterWrite(ws)
 				return Emit(edgeRecord(result), format, func() {
 					// No such edge — idempotent no-op success (exit 0).
 					if !result.Changed {
@@ -278,6 +282,7 @@ func registerRemove(root *cobra.Command) {
 					return err
 				}
 				if result.Removed {
+					warnAfterWrite(ws)
 					record := omap.New()
 					record.Set("id", result.Type+"/"+result.Slug)
 					record.Set("type", result.Type)
