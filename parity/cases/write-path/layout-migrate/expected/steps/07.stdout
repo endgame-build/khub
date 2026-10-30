@@ -1,0 +1,1 @@
+{"error": {"code": "migrate_singleton", "message": "'charter' is a singleton: one fixed file at charter.md, which has no layout to migrate. Move the file by hand and edit storage.charter.path"}}

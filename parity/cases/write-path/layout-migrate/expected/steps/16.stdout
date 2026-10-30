@@ -1,0 +1,1 @@
+{"error": {"code": "migrate_check", "message": "Refusing to migrate 'dossier': under the new storage `khub check` would report 1 new finding(s) \u2014 stray_templates: .khub/templates/dossier.yaml. Fix the cause first; `khub check` explains each bucket"}}

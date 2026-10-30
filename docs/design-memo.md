@@ -96,7 +96,7 @@ Go, shipped as a single static binary. It was a Python console script through 0.
 ### Authoring and Integrity
 
 - **Identity.** Each entity's **id is its slug**: one bare, human-readable token (`auth`, `initech-pov`) that names the file or folder on disk and identifies the node in the graph. No type prefix. Uniqueness is per type, `(type, slug)`, with the file path as the globally-unique key; a within-type collision is refused (`slug_taken`) rather than suffixed, because minting reads no siblings — an id is a function of the schema and the entity's own fields, nothing else on disk. Typed relations resolve by their schema-known target type (`lives_in: api`); polymorphic (`any`-typed) relations take a bare slug too, qualified as `type/slug` only when a slug is ambiguous across types. An entity may declare other names in `aliases`: every ID lookup falls back to them once the slug misses, a write target named by one is stored as the real slug, and `check` fails an alias that names two entities. An external identifier rides along as a non-authoritative `source_id` alias (the ingestion path). A preset may also declare integration routing keys (e.g. a notes-tool folder id) as first-class attributes; the `source_id` alias is specifically for an external system's record id. Renaming a slug is not yet supported.
-- **Storage layout is per-type config.** A type stores its entities as individual files or as a single-file collection. A preset sets the layout per type; an engagement can override it.
+- **Storage layout is per-type config.** A type stores its entities as individual files or as a single-file collection. A preset sets the layout per type; an engagement can override it. `khub layout migrate` moves a live type between layouts, formats and paths as one validated, journaled change, and the move is **diff-stable**: a same-format move copies bytes, a round trip through another format reproduces the per-item files khub wrote byte for byte, and a value that would read differently afterwards refuses rather than drifts — so storage is a choice that can be revisited, never a one-way door.
 
   Inventory as files (one entity per file):
   - `[inventory_name]/[item_name]/[slug].[md|json|jsonl|gjson|yaml]`
@@ -128,6 +128,8 @@ The CLI is a thin, schema-introspecting adapter over the core library's verbs: c
 | Workspace | `khub init <preset>` | scaffold a workspace from a preset |
 | | `khub schema [types \| show <type> \| edges]` | introspect the active schema: types, fields, enums, edges, required relations |
 | | `khub status` | counts per type, draft vs active, orphan and stale counts, OKF-conformance flag |
+| | `khub layout` | where each type's entities land: layout, format, path |
+| | `khub layout migrate <type>` | move a type's entities to another layout, format or path; dry run by default, `--execute` under the lock |
 | Author | `khub add <type> [--field v …]` | mint a slug, write a well-formed entity (active by default; `--draft` to mark unpublished) |
 | | `khub get <id>` | print an entity: frontmatter and body |
 | | `khub edit <id> <field> <value>` | edit a field, bump `updated`, re-validate |

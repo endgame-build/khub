@@ -21,3 +21,10 @@ func PresetVersion(preset string) string { return presetVersion(preset) }
 // IndexName exposes the package's private copy of reindex.IndexName so the
 // golden test can pin the two together.
 const IndexName = indexName
+
+// LockHeld reports whether another handle holds the workspace lock, for the
+// external tests that run a verb's tails (migrate_lock_test.go).
+func LockHeld(t *testing.T, root string) bool {
+	t.Helper()
+	return lockHeld(t, root)
+}

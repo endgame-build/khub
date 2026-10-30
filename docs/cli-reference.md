@@ -39,6 +39,7 @@ Commands:
   wire  Wire the workspace into agent context files (CLAUDE.md gets ``@`` imports of the
 schema layer files; AGENTS.md gets a schema pointer). Bare ``wire`` updates whichever already exist.
   schema  Introspect the active schema.
+  layout  Show where each type's entities land: khub layout [migrate].
 
 ```
 
@@ -551,6 +552,46 @@ List schema changes since the last `khub schema snapshot`.
 
 Options:
   --format <str>  text (Rich table on a TTY) or json. [default: text]
+  --help  Show this message and exit.
+
+```
+
+## khub layout
+
+```console
+$ khub layout --help
+Usage: khub layout [OPTIONS] COMMAND [ARGS]...
+
+Show where each type's entities land: khub layout [migrate].
+
+Options:
+  --format <str>  text (Rich table on a TTY) or json. [default: text]
+  --help  Show this message and exit.
+
+Commands:
+  migrate  Move a type's entities to another layout, format or path: khub layout migrate repo --layout collection --to-format jsonl.
+
+```
+
+## khub layout migrate
+
+```console
+$ khub layout migrate --help
+Usage: khub layout migrate [OPTIONS] {type}
+
+Move a type's entities to another layout, format or path: khub layout migrate repo --layout collection --to-format jsonl.
+
+A dry run by default: the plan is printed and nothing is written. --execute performs it under the workspace lock, journaled like ``khub upgrade``, then regenerates index.md. The plan refuses a destination that exists, a storage tree holding files that are not the type's entities, and a move the schema would not resolve.
+
+Arguments:
+  type <str>  Type name. [required]
+
+Options:
+  --layout <str>  Destination layout: file, folder or collection (default: unchanged).
+  --to-format <str>  Destination storage format: md, json, yaml, or jsonl for a collection (default: unchanged).
+  --path <str>  Destination directory or collection file (default: the current path, with the extension a collection needs).
+  --execute  Perform the migration (default: dry run).
+  --format <str>  text (default) or json (emits the plan and what ran). [default: text]
   --help  Show this message and exit.
 
 ```

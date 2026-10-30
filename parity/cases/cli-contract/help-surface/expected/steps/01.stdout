@@ -32,4 +32,5 @@ Commands:
   wire  Wire the workspace into agent context files (CLAUDE.md gets ``@`` imports of the
 schema layer files; AGENTS.md gets a schema pointer). Bare ``wire`` updates whichever already exist.
   schema  Introspect the active schema.
+  layout  Show where each type's entities land: khub layout [migrate].
 

@@ -1,0 +1,1 @@
+{"error": {"code": "migrate_unclean", "message": "Refusing to migrate 'note': 1 file(s) or row(s) in its storage are not entities of it \u2014 notes/stray.md (stray). Fix them first; `khub check` reports each"}}

@@ -95,11 +95,11 @@ func TestUpgradeRollbackRestoresFilesBackupsModesAndCreations(t *testing.T) {
 	if err := os.Chmod(filepath.Join(root, ".khub", "config.yaml"), 0o640); err != nil {
 		t.Fatal(err)
 	}
-	old, err := readUpgradeFile(root, ".khub/config.yaml")
+	old, err := ReadFileState(root, ".khub/config.yaml")
 	if err != nil {
 		t.Fatal(err)
 	}
-	bak, err := readUpgradeFile(root, ".khub/config.yaml.bak")
+	bak, err := ReadFileState(root, ".khub/config.yaml.bak")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -115,18 +115,18 @@ func TestUpgradeRollbackRestoresFilesBackupsModesAndCreations(t *testing.T) {
 	}
 	defer func() { _ = os.Chmod(blocked, 0o755) }()
 	// Read succeeds, publication fails, after earlier files have been published.
-	writes := []upgradeWrite{
-		{name: ".khub/config.yaml", before: old, after: upgradeFile{[]byte("new version\n"), old.mode}},
-		{name: ".khub/config.yaml.bak", before: bak, after: upgradeFile{old.data, bak.mode}},
-		{name: "new/singleton.md", after: upgradeFile{[]byte("new singleton\n"), 0o644}},
-		{name: "blocked/file", after: upgradeFile{[]byte("impossible"), 0o644}},
+	writes := []FileChange{
+		{Path: ".khub/config.yaml", Before: old, After: &FileState{[]byte("new version\n"), old.Mode}},
+		{Path: ".khub/config.yaml.bak", Before: bak, After: &FileState{old.Data, bak.Mode}},
+		{Path: "new/singleton.md", After: &FileState{[]byte("new singleton\n"), 0o644}},
+		{Path: "blocked/file", After: &FileState{[]byte("impossible"), 0o644}},
 	}
-	if err := publishUpgrade(root, writes, []string{"new"}); err == nil {
+	if err := PublishChanges(root, writes, []string{"new"}, UpgradeJournal); err == nil {
 		t.Fatal("failure expected")
 	}
-	now, _ := readUpgradeFile(root, ".khub/config.yaml")
-	backup, _ := readUpgradeFile(root, ".khub/config.yaml.bak")
-	if !sameUpgradeFile(now, old) || !sameUpgradeFile(backup, bak) {
+	now, _ := ReadFileState(root, ".khub/config.yaml")
+	backup, _ := ReadFileState(root, ".khub/config.yaml.bak")
+	if !sameFileState(now, old) || !sameFileState(backup, bak) {
 		t.Fatal("rollback did not preserve bytes and modes")
 	}
 	if _, err := os.Stat(filepath.Join(root, "new")); !os.IsNotExist(err) {
@@ -140,8 +140,8 @@ func TestUpgradeRollbackRestoresFilesBackupsModesAndCreations(t *testing.T) {
 func TestUpgradeConcurrentEditPreservesEvidence(t *testing.T) {
 	root := t.TempDir()
 	writeFile(t, filepath.Join(root, ".khub", "config.yaml"), "outside edit\n")
-	writes := []upgradeWrite{{name: ".khub/config.yaml", before: &upgradeFile{[]byte("original\n"), 0o644}, after: upgradeFile{[]byte("replacement\n"), 0o644}}}
-	err := publishUpgrade(root, writes, nil)
+	writes := []FileChange{{Path: ".khub/config.yaml", Before: &FileState{[]byte("original\n"), 0o644}, After: &FileState{[]byte("replacement\n"), 0o644}}}
+	err := PublishChanges(root, writes, nil, UpgradeJournal)
 	if err == nil || located(t, err).Code != "upgrade_recovery_failed" {
 		t.Fatalf("error = %v", err)
 	}
@@ -195,7 +195,7 @@ func TestUpgradeRepairsInvalidCurrentSchema(t *testing.T) {
 func TestUpgradeUnverifiableDestinationKeepsRecoveryEvidence(t *testing.T) {
 	root := t.TempDir()
 	writeFile(t, filepath.Join(root, ".khub", "config.yaml"), "old\n")
-	old, err := readUpgradeFile(root, ".khub/config.yaml")
+	old, err := ReadFileState(root, ".khub/config.yaml")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -205,7 +205,7 @@ func TestUpgradeUnverifiableDestinationKeepsRecoveryEvidence(t *testing.T) {
 	if err := os.Mkdir(filepath.Join(root, ".khub", "config.yaml"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	err = publishUpgrade(root, []upgradeWrite{{name: ".khub/config.yaml", before: old, after: upgradeFile{[]byte("new\n"), old.mode}}}, nil)
+	err = PublishChanges(root, []FileChange{{Path: ".khub/config.yaml", Before: old, After: &FileState{[]byte("new\n"), old.Mode}}}, nil, UpgradeJournal)
 	if err == nil || located(t, err).Code != "upgrade_recovery_failed" {
 		t.Fatalf("err=%v", err)
 	}
@@ -309,5 +309,44 @@ func TestInStorageMatchesStoragePathsOnly(t *testing.T) {
 	}
 	if inStorage(nil, "notes") {
 		t.Error("a nil schema declared a storage path")
+	}
+}
+
+// A removal is a change with no After: a failure later in the publication
+// restores the removed file from its staged original.
+func TestPublishChangesRollsBackARemoval(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, filepath.Join(root, "notes", "gone.md"), "keep me\n")
+	writeFile(t, filepath.Join(root, "outside.md"), "edited outside\n")
+	gone, err := ReadFileState(root, filepath.Join("notes", "gone.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	journal := Journal{Prefix: "migrate-", Noun: "Migration", Code: "migrate_recovery_failed"}
+	changes := []FileChange{
+		{Path: filepath.Join("notes", "gone.md"), Before: gone},
+		{Path: "outside.md", Before: &FileState{[]byte("staged\n"), 0o644}, After: &FileState{[]byte("new\n"), 0o644}},
+	}
+	err = PublishChanges(root, changes, nil, journal)
+	if err == nil || located(t, err).Code != "migrate_recovery_failed" || !strings.Contains(err.Error(), "during migration") {
+		t.Fatalf("err = %v", err)
+	}
+	if got := readFile(t, filepath.Join(root, "notes", "gone.md")); got != "keep me\n" {
+		t.Fatalf("removed file not restored: %q", got)
+	}
+	journals, _ := filepath.Glob(filepath.Join(root, ".khub", "generated", "migrate-*"))
+	if len(journals) != 1 {
+		t.Fatalf("journals: %v", journals)
+	}
+	if _, err := os.Stat(filepath.Join(journals[0], "0.replacement")); !os.IsNotExist(err) {
+		t.Fatal("a removal staged a replacement")
+	}
+
+	// The same removal alone commits, and the journal goes with it.
+	if err := PublishChanges(root, changes[:1], nil, journal); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(root, "notes", "gone.md")); !os.IsNotExist(err) {
+		t.Fatalf("file not removed: %v", err)
 	}
 }

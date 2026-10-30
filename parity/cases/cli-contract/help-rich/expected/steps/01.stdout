@@ -54,4 +54,5 @@
 │            schema layer files; AGENTS.md gets a schema pointer). Bare        │
 │            ``wire`` updates whichever already exist.                         │
 │ schema     Introspect the active schema.                                     │
+│ layout     Show where each type's entities land: khub layout [migrate].      │
 ╰──────────────────────────────────────────────────────────────────────────────╯

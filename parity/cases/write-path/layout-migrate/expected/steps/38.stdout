@@ -1,0 +1,1 @@
+{"error": {"code": "migrate_journal_present", "message": "Refusing to plan a migration: an earlier run left its journal at .khub/generated/migrate-left (manifest.yaml lists the originals and replacements it staged). Restore or finish that move by hand, then remove the directory"}}

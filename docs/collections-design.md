@@ -103,6 +103,30 @@ upgrade when a real corpus hits a 500-row file with one typo.
   row by slug: one `LogEntry` per changed row, same two-`git show`s-per-commit
   cost as today. `gitlog.path_to_node` becomes one-path-to-many-nodes.
 
+## Moving a type in or out of a collection
+
+`khub layout migrate <type> --layout collection --to-format jsonl|yaml|json`
+turns a per-item type into one collection file, and `--layout file|folder`
+unpacks a collection back into files; `--to-format` alone changes a
+collection's format in place. The row model above is what the migration
+renders to and reads from: a file's frontmatter and body become a row keyed
+by slug (jsonl: a `slug` key first) with the body in the reserved `body`
+field and no `type` (the binding supplies it), rows land in scan order, and a
+row becomes a file opening with `type:`. A file whose frontmatter carries a
+`slug` disagreeing with its slug, or a `body` field, is refused
+(`migrate_lossy`) rather than silently reshaped, as is a scalar the scan
+(YAML 1.1) and the editor (1.2) read as different values; a `slug` field
+equal to the slug is dropped (the row key carries it) and not restored. A
+collection file with a stray row refuses to migrate (`migrate_unclean`): the
+file is removed whole, and a row the type does not own would go with it. A
+round trip (file → collection → file) reproduces the original files byte for
+byte for per-item entities khub wrote; a hand-written frontmatter comment is
+the one thing a row cannot carry back, and the plan names such files as
+`rewritten`. The other direction (collection → file → collection) brings the
+rows back in slug order, since a directory lists sorted. The git caveat above
+applies to a migrated collection as to any other: rows take no commit date,
+so `stale` reads their own `updated`. See `docs/cli.md`, "Storage migration".
+
 ## Schema authoring
 
 ```yaml

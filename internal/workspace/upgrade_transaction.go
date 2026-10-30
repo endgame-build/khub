@@ -20,15 +20,32 @@ import (
 	"github.com/endgame-build/khub/internal/template"
 )
 
-type upgradeFile struct {
-	data []byte
-	mode fs.FileMode
+// FileState is one file's bytes and permission bits, as staged in a journal.
+type FileState struct {
+	Data []byte
+	Mode fs.FileMode
 }
-type upgradeWrite struct {
-	name   string
-	before *upgradeFile
-	after  upgradeFile
+
+// FileChange is one path's transition inside a journaled publication. Path is
+// workspace-relative in the OS's separators. A nil Before is a file that did
+// not exist; a nil After is a removal.
+type FileChange struct {
+	Path   string
+	Before *FileState
+	After  *FileState
 }
+
+// Journal names the verb a publication belongs to: the prefix of its
+// recovery directory under .khub/generated/, the noun its messages open
+// with, and the code a failed recovery is reported under.
+type Journal struct {
+	Prefix string
+	Noun   string
+	Code   string
+}
+
+// UpgradeJournal is the journal `khub upgrade` publishes under.
+var UpgradeJournal = Journal{Prefix: "upgrade-", Noun: "Upgrade", Code: "upgrade_recovery_failed"}
 
 // Upgrade preflights in isolation; writers recompute under the workspace lock.
 // A crash leaves a journal for manual inspection, never an automatic recovery claim.
@@ -54,19 +71,11 @@ func prepareUpgrade(root string, opt UpgradeOptions) (*UpgradeResult, error) {
 	// Replacement upgrades can repair invalid current schemas. --no-schema
 	// still validates the preserved schema when preparing the candidate below.
 	old, _ := introspect.LoadSchema(root)
-	candidate, err := os.MkdirTemp("", "khub-upgrade-")
+	candidate, before, dirs, cleanup, err := Candidate(root, old)
 	if err != nil {
 		return nil, err
 	}
-	defer os.RemoveAll(candidate)
-	// ponytail: copy the workspace (minus fsio.SkipDirs and non-regular files)
-	// for an exact candidate scan; an unreadable regular file elsewhere still
-	// aborts. Narrow the copy to schema paths, or use a read overlay,
-	// if corpus size makes the temporary disk footprint material.
-	before, dirs, err := copyUpgradeWorkspace(root, candidate, old)
-	if err != nil {
-		return nil, err
-	}
+	defer cleanup()
 	result, err := upgradeCandidate(candidate, opt, source)
 	if err != nil {
 		return nil, err
@@ -100,7 +109,7 @@ func prepareUpgrade(root string, opt UpgradeOptions) (*UpgradeResult, error) {
 	// Check real paths even for dry runs: a copied candidate must not hide an
 	// unsafe symlink or a non-directory destination in the live workspace.
 	for _, w := range writes {
-		if _, err := readUpgradeFile(root, w.name); err != nil {
+		if _, err := ReadFileState(root, w.Path); err != nil {
 			return nil, err
 		}
 	}
@@ -119,7 +128,7 @@ func prepareUpgrade(root string, opt UpgradeOptions) (*UpgradeResult, error) {
 		}
 		return result, nil
 	}
-	if err := publishUpgrade(root, writes, newDirs); err != nil {
+	if err := PublishChanges(root, writes, newDirs, UpgradeJournal); err != nil {
 		return nil, err
 	}
 	if opt.Tails != nil {
@@ -128,8 +137,33 @@ func prepareUpgrade(root string, opt UpgradeOptions) (*UpgradeResult, error) {
 	return result, nil
 }
 
-func copyUpgradeWorkspace(root, dest string, old *schema.ResolvedSchema) (map[string]upgradeFile, map[string]bool, error) {
-	files := map[string]upgradeFile{}
+// Candidate copies the workspace at root into a temporary directory an
+// operator verb can rewrite and scan in isolation, before anything is
+// published. The copy leaves out .git/, .khub/generated/, vendored trees and
+// non-regular files (see copyCandidate). It returns the copy's path, every
+// regular file it carried (workspace-relative, OS separators), every
+// directory, and the function that removes the copy. old is the schema the
+// live workspace resolves under, or nil when it does not resolve.
+func Candidate(root string, old *schema.ResolvedSchema) (dir string, files map[string]FileState, dirs map[string]bool, cleanup func(), err error) {
+	dir, err = os.MkdirTemp("", "khub-candidate-")
+	if err != nil {
+		return "", nil, nil, nil, err
+	}
+	cleanup = func() { os.RemoveAll(dir) }
+	// ponytail: copy the workspace (minus fsio.SkipDirs and non-regular files)
+	// for an exact candidate scan; an unreadable regular file elsewhere still
+	// aborts. Narrow the copy to schema paths, or use a read overlay,
+	// if corpus size makes the temporary disk footprint material.
+	files, dirs, err = copyCandidate(root, dir, old)
+	if err != nil {
+		cleanup()
+		return "", nil, nil, nil, err
+	}
+	return dir, files, dirs, cleanup, nil
+}
+
+func copyCandidate(root, dest string, old *schema.ResolvedSchema) (map[string]FileState, map[string]bool, error) {
+	files := map[string]FileState{}
 	dirs := map[string]bool{}
 	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
@@ -167,7 +201,7 @@ func copyUpgradeWorkspace(root, dest string, old *schema.ResolvedSchema) (map[st
 			}
 			return nil
 		}
-		f, err := readUpgradeFile(root, rel)
+		f, err := ReadFileState(root, rel)
 		if err != nil {
 			return err
 		}
@@ -175,7 +209,7 @@ func copyUpgradeWorkspace(root, dest string, old *schema.ResolvedSchema) (map[st
 			return fs.ErrNotExist
 		}
 		files[rel] = *f
-		return os.WriteFile(to, f.data, 0o666)
+		return os.WriteFile(to, f.Data, 0o666)
 	})
 	return files, dirs, err
 }
@@ -197,7 +231,11 @@ func inStorage(old *schema.ResolvedSchema, rel string) bool {
 	}
 	return false
 }
-func readUpgradeFile(root, name string) (*upgradeFile, error) {
+
+// ReadFileState reads the regular file at name (workspace-relative) through
+// workspace-confined I/O: nil for a path that does not exist, an error for a
+// symlink on the way or a non-regular entry.
+func ReadFileState(root, name string) (*FileState, error) {
 	path := filepath.Join(root, name)
 	info, err := fsio.Stat(root, path)
 	if errors.Is(err, fs.ErrNotExist) {
@@ -213,10 +251,11 @@ func readUpgradeFile(root, name string) (*upgradeFile, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &upgradeFile{data, info.Mode().Perm()}, nil
+	return &FileState{data, info.Mode().Perm()}, nil
 }
-func upgradeDiff(root string, before map[string]upgradeFile, dirs map[string]bool) ([]upgradeWrite, []string, error) {
-	writes := []upgradeWrite{}
+
+func upgradeDiff(root string, before map[string]FileState, dirs map[string]bool) ([]FileChange, []string, error) {
+	writes := []FileChange{}
 	newDirs := []string{}
 	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
@@ -238,49 +277,59 @@ func upgradeDiff(root string, before map[string]upgradeFile, dirs map[string]boo
 		if d.Type()&os.ModeSymlink != 0 {
 			return nil
 		}
-		after, err := readUpgradeFile(root, rel)
+		after, err := ReadFileState(root, rel)
 		if err != nil {
 			return err
 		}
 		prev, ok := before[rel]
-		if ok && bytes.Equal(prev.data, after.data) {
+		if ok && bytes.Equal(prev.Data, after.Data) {
 			return nil
 		}
-		w := upgradeWrite{name: rel, after: *after}
+		w := FileChange{Path: rel, After: after}
 		if ok {
-			w.before = &prev
-			w.after.mode = prev.mode
+			w.Before = &prev
+			w.After.Mode = prev.Mode
 		}
 		writes = append(writes, w)
 		return nil
 	})
 	// config.yaml carries the version and is always published last.
-	slices.SortStableFunc(writes, func(a, b upgradeWrite) int {
-		if a.name == filepath.Join(".khub", "config.yaml") {
+	slices.SortStableFunc(writes, func(a, b FileChange) int {
+		if a.Path == filepath.Join(".khub", "config.yaml") {
 			return 1
 		}
-		if b.name == filepath.Join(".khub", "config.yaml") {
+		if b.Path == filepath.Join(".khub", "config.yaml") {
 			return -1
 		}
-		return strings.Compare(a.name, b.name)
+		return strings.Compare(a.Path, b.Path)
 	})
 	return writes, newDirs, err
 }
-func sameUpgradeFile(a, b *upgradeFile) bool {
-	return a == nil && b == nil || a != nil && b != nil && a.mode == b.mode && bytes.Equal(a.data, b.data)
+
+// sameFileState is state equality where nil stands for an absent file.
+func sameFileState(a, b *FileState) bool {
+	return a == nil && b == nil || a != nil && b != nil && a.Mode == b.Mode && bytes.Equal(a.Data, b.Data)
 }
 
-func publishUpgrade(root string, writes []upgradeWrite, dirs []string) error {
-	if len(writes) == 0 && len(dirs) == 0 {
+// PublishChanges applies changes in order, creating dirs first, under a
+// journal in .khub/generated/<Prefix><random>/ that stages every original and
+// replacement before the first byte lands. Each path is compared with its
+// staged original before it is touched, so a concurrent edit aborts the
+// publication; a failure restores what was applied and removes only what it
+// created. The caller holds the workspace lock. Recovery that cannot be
+// completed is reported under the journal's Code with the journal retained
+// for manual inspection; khub makes no automatic crash-recovery guarantee.
+func PublishChanges(root string, changes []FileChange, dirs []string, journal Journal) error {
+	if len(changes) == 0 && len(dirs) == 0 {
 		return nil
 	}
-	journal := filepath.Join(root, ".khub", "generated", "upgrade-"+rand.Text())
-	if err := fsio.MkdirAll(root, journal); err != nil {
+	jdir := filepath.Join(root, ".khub", "generated", journal.Prefix+rand.Text())
+	if err := fsio.MkdirAll(root, jdir); err != nil {
 		return err
 	}
 	// Save both generations before publishing anything. A durable manifest maps
 	// numbered blobs to workspace paths and preserves modes and absence.
-	r, rel, err := fsio.OpenPath(root, journal)
+	r, rel, err := fsio.OpenPath(root, jdir)
 	if err != nil {
 		return err
 	}
@@ -295,19 +344,25 @@ func publishUpgrade(root string, writes []upgradeWrite, dirs []string) error {
 		return err
 	}
 	records := []any{}
-	for i, w := range writes {
+	for i, w := range changes {
 		rec := omap.New()
-		rec.Set("path", filepath.ToSlash(w.name))
-		rec.Set("existed", w.before != nil)
-		rec.Set("mode", int(w.after.mode))
-		if w.before != nil {
-			rec.Set("original_mode", int(w.before.mode))
-			if err := fsio.WriteNewIn(root, filepath.Join(journal, fmt.Sprintf("%d.original", i)), w.before.data); err != nil {
+		rec.Set("path", filepath.ToSlash(w.Path))
+		rec.Set("existed", w.Before != nil)
+		if w.After != nil {
+			rec.Set("mode", int(w.After.Mode))
+		} else {
+			rec.Set("removed", true)
+		}
+		if w.Before != nil {
+			rec.Set("original_mode", int(w.Before.Mode))
+			if err := fsio.WriteNewIn(root, filepath.Join(jdir, fmt.Sprintf("%d.original", i)), w.Before.Data); err != nil {
 				return err
 			}
 		}
-		if err := fsio.WriteNewIn(root, filepath.Join(journal, fmt.Sprintf("%d.replacement", i)), w.after.data); err != nil {
-			return err
+		if w.After != nil {
+			if err := fsio.WriteNewIn(root, filepath.Join(jdir, fmt.Sprintf("%d.replacement", i)), w.After.Data); err != nil {
+				return err
+			}
 		}
 		records = append(records, rec)
 	}
@@ -322,31 +377,32 @@ func publishUpgrade(root string, writes []upgradeWrite, dirs []string) error {
 	if err != nil {
 		return err
 	}
-	if err = fsio.WriteNewIn(root, filepath.Join(journal, "manifest.yaml"), []byte(text)); err != nil {
+	if err = fsio.WriteNewIn(root, filepath.Join(jdir, "manifest.yaml"), []byte(text)); err != nil {
 		return err
 	}
 	created := []string{}
-	applied := []upgradeWrite{}
+	applied := []FileChange{}
+	shown := filepath.ToSlash(jdir)
 	recoverFailure := func(cause error) error {
 		failed := []string{}
 		var located *errs.Located
-		if errors.As(cause, &located) && located.Code == "upgrade_recovery_failed" {
+		if errors.As(cause, &located) && located.Code == journal.Code {
 			failed = append(failed, "concurrent workspace edit")
 		}
 		for i := len(applied) - 1; i >= 0; i-- {
 			w := applied[i]
-			current, err := readUpgradeFile(root, w.name)
-			if err != nil || !sameUpgradeFile(current, &w.after) {
-				failed = append(failed, filepath.ToSlash(w.name))
+			current, err := ReadFileState(root, w.Path)
+			if err != nil || !sameFileState(current, w.After) {
+				failed = append(failed, filepath.ToSlash(w.Path))
 				continue
 			}
-			if w.before == nil {
-				err = fsio.Remove(root, filepath.Join(root, w.name), false)
+			if w.Before == nil {
+				err = fsio.Remove(root, filepath.Join(root, w.Path), false)
 			} else {
-				err = fsio.AtomicWriteIn(root, filepath.Join(root, w.name), w.before.data)
+				err = fsio.AtomicWriteIn(root, filepath.Join(root, w.Path), w.Before.Data)
 			}
 			if err != nil {
-				failed = append(failed, filepath.ToSlash(w.name))
+				failed = append(failed, filepath.ToSlash(w.Path))
 			}
 		}
 		for i := len(created) - 1; i >= 0; i-- {
@@ -355,10 +411,10 @@ func publishUpgrade(root string, writes []upgradeWrite, dirs []string) error {
 			}
 		}
 		if len(failed) > 0 {
-			return errs.New("upgrade_recovery_failed", fmt.Sprintf("Upgrade failed (%s); recovery incomplete at %s. Originals and replacements retained in %s", cause, strings.Join(failed, ", "), filepath.ToSlash(journal)))
+			return errs.New(journal.Code, fmt.Sprintf("%s failed (%s); recovery incomplete at %s. Originals and replacements retained in %s", journal.Noun, cause, strings.Join(failed, ", "), shown))
 		}
-		if err := fsio.Remove(root, journal, true); err != nil {
-			return errs.New("upgrade_recovery_failed", fmt.Sprintf("Upgrade failed (%s); recovery evidence could not be removed at %s: %s", cause, filepath.ToSlash(journal), err))
+		if err := fsio.Remove(root, jdir, true); err != nil {
+			return errs.New(journal.Code, fmt.Sprintf("%s failed (%s); recovery evidence could not be removed at %s: %s", journal.Noun, cause, shown, err))
 		}
 		return cause
 	}
@@ -374,34 +430,39 @@ func publishUpgrade(root string, writes []upgradeWrite, dirs []string) error {
 		}
 		created = append(created, dir)
 	}
-	for _, w := range writes {
-		current, err := readUpgradeFile(root, w.name)
+	for _, w := range changes {
+		current, err := ReadFileState(root, w.Path)
 		if err != nil {
-			return recoverFailure(errs.New("upgrade_recovery_failed", fmt.Sprintf("Workspace could not be compared with its staged original at %s (%s); evidence in %s", filepath.ToSlash(w.name), err, filepath.ToSlash(journal))))
+			return recoverFailure(errs.New(journal.Code, fmt.Sprintf("Workspace could not be compared with its staged original at %s (%s); evidence in %s", filepath.ToSlash(w.Path), err, shown)))
 		}
-		if !sameUpgradeFile(current, w.before) {
-			return recoverFailure(errs.New("upgrade_recovery_failed", fmt.Sprintf("Workspace changed during upgrade at %s; staged evidence in %s", filepath.ToSlash(w.name), filepath.ToSlash(journal))))
+		if !sameFileState(current, w.Before) {
+			return recoverFailure(errs.New(journal.Code, fmt.Sprintf("Workspace changed during %s at %s; staged evidence in %s", strings.ToLower(journal.Noun), filepath.ToSlash(w.Path), shown)))
 		}
-		if w.before == nil {
-			err = fsio.WriteNewIn(root, filepath.Join(root, w.name), w.after.data)
-		} else {
-			err = fsio.AtomicWriteIn(root, filepath.Join(root, w.name), w.after.data)
+		switch {
+		case w.After == nil:
+			err = fsio.Remove(root, filepath.Join(root, w.Path), false)
+		case w.Before == nil:
+			err = fsio.WriteNewIn(root, filepath.Join(root, w.Path), w.After.Data)
+		default:
+			err = fsio.AtomicWriteIn(root, filepath.Join(root, w.Path), w.After.Data)
 		}
 		// A failed fsync may still have published. Inspect before deciding rollback.
-		now, readErr := readUpgradeFile(root, w.name)
-		published := readErr == nil && now != nil && bytes.Equal(now.data, w.after.data)
+		now, readErr := ReadFileState(root, w.Path)
+		published := readErr == nil && (now == nil) == (w.After == nil) && (now == nil || bytes.Equal(now.Data, w.After.Data))
 		if published {
-			w.after.mode = now.mode
+			if now != nil {
+				w.After.Mode = now.Mode
+			}
 			applied = append(applied, w)
-		} else if readErr != nil || err == nil || !sameUpgradeFile(now, w.before) {
-			return recoverFailure(errs.New("upgrade_recovery_failed", fmt.Sprintf("Publication state changed or could not be read at %s; staged evidence in %s", filepath.ToSlash(w.name), filepath.ToSlash(journal))))
+		} else if readErr != nil || err == nil || !sameFileState(now, w.Before) {
+			return recoverFailure(errs.New(journal.Code, fmt.Sprintf("Publication state changed or could not be read at %s; staged evidence in %s", filepath.ToSlash(w.Path), shown)))
 		}
 		if err != nil {
 			return recoverFailure(err)
 		}
 	}
-	if err := fsio.Remove(root, journal, true); err != nil {
-		return errs.New("upgrade_recovery_failed", fmt.Sprintf("Upgrade committed; recovery material remains at %s: %s", filepath.ToSlash(journal), err))
+	if err := fsio.Remove(root, jdir, true); err != nil {
+		return errs.New(journal.Code, fmt.Sprintf("%s committed; recovery material remains at %s: %s", journal.Noun, shown, err))
 	}
 	return nil
 }

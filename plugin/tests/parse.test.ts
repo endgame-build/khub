@@ -170,6 +170,11 @@ test('a call that changes the workspace is told from a read', () => {
   expect(mutates(simple('khub reindex --dry-run=true'))).toBe(false)
   expect(mutates(simple('khub schema snapshot'))).toBe(true)
   expect(mutates(simple('khub get x'))).toBe(false)
+  expect(mutates(simple('khub layout'))).toBe(false)
+  expect(mutates(simple('khub layout migrate repo --layout collection --to-format jsonl'))).toBe(false)
+  expect(mutates(simple('khub layout migrate repo --layout collection --execute'))).toBe(true)
+  expect(simple('khub layout migrate repo --execute --format json').sub).toBe('migrate')
+  expect(simple('khub layout migrate repo --execute --format json').positional).toEqual(['repo'])
 })
 
 test('an edit names the fields it changed, and a body by name alone', () => {

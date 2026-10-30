@@ -1,0 +1,1 @@
+{"id": "note/beta", "type": "note", "slug": "beta", "path": "notes.jsonl", "frontmatter": {"created": "2026-01-15", "updated": "2026-01-15", "draft": false, "title": "Beta", "tags": ["a", "b"], "type": "note"}, "body": "Hello.\n", "locator": "notes.jsonl#beta"}

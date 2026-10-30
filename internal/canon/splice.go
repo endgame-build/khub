@@ -38,6 +38,7 @@ package canon
 
 import (
 	"errors"
+	"math"
 	"strings"
 	"unicode/utf8"
 
@@ -481,4 +482,46 @@ func oneKey(k string, v any) *omap.Map {
 	m := omap.New()
 	m.Set(k, v)
 	return m
+}
+
+// Equal is deep equality over the canon value set, key order included: the
+// test a caller uses to tell whether two loads of a document read the same
+// values (the scan's YAML 1.1 against the editor's 1.2, for one). Unlike the
+// splice's own comparison, two NaN floats are equal here: the same `.nan`
+// read twice is one value, not a change.
+func Equal(a, b any) bool {
+	switch x := a.(type) {
+	case float64:
+		y, ok := b.(float64)
+		return ok && (x == y || (math.IsNaN(x) && math.IsNaN(y)))
+	case *omap.Map:
+		y, ok := b.(*omap.Map)
+		if !ok || x.Len() != y.Len() {
+			return false
+		}
+		yKeys := y.Keys()
+		for i, k := range x.Keys() {
+			if yKeys[i] != k {
+				return false
+			}
+			xv, _ := x.Get(k)
+			yv, _ := y.Get(k)
+			if !Equal(xv, yv) {
+				return false
+			}
+		}
+		return true
+	case []any:
+		y, ok := b.([]any)
+		if !ok || len(x) != len(y) {
+			return false
+		}
+		for i := range x {
+			if !Equal(x[i], y[i]) {
+				return false
+			}
+		}
+		return true
+	}
+	return equalValue(a, b)
 }

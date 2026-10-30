@@ -160,6 +160,17 @@ commands:
 - name: 'schema diff'
   params:
   - '--format'
+- name: 'layout'
+  params:
+  - '--format'
+- name: 'layout migrate'
+  params:
+  - 'arg:type'
+  - '--layout'
+  - '--to-format'
+  - '--path'
+  - '--execute'
+  - '--format'
 error_codes:
 - alias_taken
 - ambiguity_error
@@ -186,6 +197,15 @@ error_codes:
 - lookup_error
 - malformed_entity
 - malformed_projection
+- migrate_check
+- migrate_invalid
+- migrate_journal_present
+- migrate_lossy
+- migrate_singleton
+- migrate_target
+- migrate_target_exists
+- migrate_unchanged
+- migrate_unclean
 # missing_base: unreachable through the CLI since the ontology/policy/storage
 # split — LoadSchema always supplies the embedded base as the layered fallback,
 # and the legacy shape that could still trip it is deleted with legacy.go.

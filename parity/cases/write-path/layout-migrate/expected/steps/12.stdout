@@ -1,0 +1,1 @@
+{"error": {"code": "migrate_lossy", "message": "Refusing to migrate 'note': 1 value(s) would not survive the move \u2014 note/stray: slug is 'other', which disagrees with the slug a collection row is keyed by. Quote or rewrite each one first (`khub edit`), then migrate"}}

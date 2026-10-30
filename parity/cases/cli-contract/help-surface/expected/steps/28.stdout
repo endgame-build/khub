@@ -1,0 +1,17 @@
+Usage: khub layout migrate [OPTIONS] {type}
+
+Move a type's entities to another layout, format or path: khub layout migrate repo --layout collection --to-format jsonl.
+
+A dry run by default: the plan is printed and nothing is written. --execute performs it under the workspace lock, journaled like ``khub upgrade``, then regenerates index.md. The plan refuses a destination that exists, a storage tree holding files that are not the type's entities, and a move the schema would not resolve.
+
+Arguments:
+  type <str>  Type name. [required]
+
+Options:
+  --layout <str>  Destination layout: file, folder or collection (default: unchanged).
+  --to-format <str>  Destination storage format: md, json, yaml, or jsonl for a collection (default: unchanged).
+  --path <str>  Destination directory or collection file (default: the current path, with the extension a collection needs).
+  --execute  Perform the migration (default: dry run).
+  --format <str>  text (default) or json (emits the plan and what ran). [default: text]
+  --help  Show this message and exit.
+
