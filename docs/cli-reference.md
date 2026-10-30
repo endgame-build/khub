@@ -234,6 +234,9 @@ Options:
   --tag <str>  Keep entities carrying this tag.
   --has <str>  Keep entities with a resolvable edge for the predicate.
   --missing <str>  Keep entities lacking a resolvable edge (gap finder).
+  --count <str>  Bound the edge count for a relation or inverse: 'depends_on>=2' (repeatable).
+  --in-count <str>  Bound the inbound edge count: '>=5', or 0 for none (repeatable).
+  --out-count <str>  Bound the outbound edge count: 0 finds leaves (repeatable).
   --orphan  Keep only orphan (edge-less) entities.
   --stale  Keep only stale entities.
   --draft  Isolate drafts.

@@ -308,6 +308,19 @@ func UnknownFilterField(field, type_ string, declared []string) *Located {
 	}
 }
 
+// UnknownCountRelation is `filter_error` for `query --count`: the name is not
+// a relation or declared inverse of the type, so it has no edges to count. An
+// attribute lands here too. The message lists the countable names.
+func UnknownCountRelation(name, type_ string, relations []string) *Located {
+	return &Located{
+		Code: "filter_error",
+		Message: fmt.Sprintf("No relation '%s' to count on type '%s'. Relations and inverses: %s",
+			name, type_, strings.Join(relations, ", ")),
+		Type:   type_,
+		Target: name,
+	}
+}
+
 // FTSUnavailable is `fts_unavailable`: the SQLite build has no FTS5.
 func FTSUnavailable(detail string) *Located {
 	return &Located{

@@ -2,6 +2,29 @@
 
 Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); khub is pre-release.
 
+## [Unreleased]
+
+### Added
+
+- **Cardinality filters on `query`.** `--count <relation><op><n>` keeps an
+  entity by how many entities it is joined to under one relation or declared
+  inverse (`--count superseded=0`, `--count 'depends_on>=2'`);
+  `--in-count` and `--out-count` take `<op><n>` (or a bare `n`) over every
+  inbound or outbound edge, so `--out-count 0` finds leaves and
+  `--in-count '>=5'` the hubs. The op is one of `=`, `!=`, `<`, `<=`, `>`,
+  `>=`; each flag repeats and every bound ANDs. The counts read the graph
+  `--has`, `--missing` and `--orphan` read. A name with no edges (an
+  attribute, a typo) refuses as `filter_error`; a malformed bound is a usage
+  error. Quote a bound holding `<` or `>`: the shell reads them as redirects.
+
+### Changed
+
+- **`query` reserves `--count`, `--in-count` and `--out-count`.** A field
+  named `count` can no longer be filtered as `query --count <value>`; a field
+  `in_count` or `out_count` is still filtered by its underscore spelling
+  (`--in_count 1`). A malformed bound names the clash when the schema declares
+  such a field. `add` and `edit` still write those fields.
+
 ## [0.30.0] — 2026-10-28
 
 Storage can now follow a hub's existing nesting, relations can point to files

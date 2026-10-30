@@ -1,0 +1,14 @@
+# The cardinality options take the names --count, --in-count and --out-count,
+# which a field filter would otherwise use. When a schema declares such a field
+# and a bound does not parse, the usage error names the clash. A dashed option
+# leaves the underscore spelling to the field (`--in_count 1` filters the
+# attribute in_count); `count` has no second spelling, so query cannot filter
+# it, and the message says so. A bound that parses is always the edge count.
+steps:
+- argv: ["init", "build-hub", ".", "--no-wire"]
+- sh: "perl -pi -e 's/^(\\s+)tier:$/$1count: { type: number }\\n$1in_count: { type: number }\\n$1tier:/' .khub/ontology.yaml && grep -c 'count:' .khub/ontology.yaml"
+- argv: ["add", "component", "--title", "API", "--kind", "service", "--count", "3", "--in-count", "1"]
+- argv: ["query", "--type", "component", "--count", "3"]
+- argv: ["query", "--type", "component", "--in-count", "one"]
+- argv: ["query", "--type", "component", "--in_count", "1"]
+- argv: ["query", "--type", "component", "--in-count", "1"]

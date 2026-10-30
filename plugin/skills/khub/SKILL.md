@@ -24,6 +24,7 @@ The schema lives at `.khub/ontology.yaml` (the domain model) with `.khub/policy.
 ## Retrieve
 
 - `khub query --type <t> [--<field> <v>] [--tag <t>] [--has <pred>] [--missing <pred>] --format json` — filter by frontmatter; `--missing` surfaces gaps.
+- `khub query --count '<pred>>=2'` / `--in-count '>=5'` / `--out-count 0` — filter by how many edges an entity has (ops `= != < <= > >=`; repeat to AND, e.g. a range). Quote the bound: `>` and `<` are shell redirects.
 - `khub get <id>... --edges --format json` — one ID returns one object; multiple IDs return an all-or-nothing array in argument order, duplicates included. Raw output accepts one ID only.
 - `khub neighbors <id> --format json` — one-hop adjacency.
 - `khub impact <id> --format json` — transitive closure over a predicate (blast radius).

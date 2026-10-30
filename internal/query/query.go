@@ -2,7 +2,8 @@
 // `khub query`.
 //
 // ANDs a set of filters (type, frontmatter field, tag, --has/--missing predicate
-// presence, orphan/stale flags, draft scope) over the entity index and the
+// presence, --count/--in-count/--out-count edge cardinality, orphan/stale
+// flags, draft scope) over the entity index and the
 // resolved edge graph. Filters read frontmatter and derived edges only, never
 // body prose (QRY-001). An empty result is a success, not an error (QRY-002).
 // Every match carries its orphan and stale flags (QRY-009), computed identically
@@ -45,10 +46,15 @@ type Filters struct {
 	Type *string
 	// Fields is the parsed --<field> <value> set in CLI input order; values are
 	// strings.
-	Fields     *omap.Map
-	Tag        *string
-	Has        *string
-	Missing    *string
+	Fields  *omap.Map
+	Tag     *string
+	Has     *string
+	Missing *string
+	// Counts, InCount and OutCount are the cardinality filters (count.go),
+	// each list ANDed.
+	Counts     []Count
+	InCount    []Comparison
+	OutCount   []Comparison
 	Orphan     bool
 	Stale      bool
 	DraftOnly  bool
@@ -177,6 +183,15 @@ func validateFilterNames(resolved *schema.ResolvedSchema, root string, filters F
 				return errs.UnknownFilterField(pred, *filters.Type, declaredNames(inverses, *filters.Type, fields))
 			}
 		}
+		rels := map[string]bool{}
+		for _, r := range rtype.Relations.Keys() {
+			rels[r] = true
+		}
+		for _, c := range filters.Counts {
+			if !rels[c.Name] && len(inverses[inverseKey{*filters.Type, c.Name}]) == 0 {
+				return errs.UnknownCountRelation(c.Name, *filters.Type, declaredNames(inverses, *filters.Type, rels))
+			}
+		}
 		return nil
 	}
 	attrs, rels := map[string]bool{}, map[string]bool{}
@@ -197,6 +212,11 @@ func validateFilterNames(resolved *schema.ResolvedSchema, root string, filters F
 	for _, pred := range preds {
 		if !rels[pred] && !attrs[pred] && len(inverses[inverseKey{"", pred}]) == 0 {
 			return errs.UnknownFilterField(pred, "any", declaredNames(inverses, "", attrs, rels))
+		}
+	}
+	for _, c := range filters.Counts {
+		if !rels[c.Name] && len(inverses[inverseKey{"", c.Name}]) == 0 {
+			return errs.UnknownCountRelation(c.Name, "any", declaredNames(inverses, "", rels))
 		}
 	}
 	return nil
@@ -268,6 +288,27 @@ func passes(node index.Node, meta *omap.Map, g *graph.Graph, f Filters,
 		hasValue(node, meta, g, resolved, inverses, *f.Missing)) {
 		return false
 	}
+	for _, c := range f.Counts {
+		// As with --missing, a type that cannot carry the relation is not a
+		// zero: `--count depends_on=0` without --type keeps only the types that
+		// declare depends_on.
+		if !countable(node.Type, resolved, inverses, c.Name) {
+			return false
+		}
+		if !c.Cmp.Holds(edgeCount(g, node, c.Name, inverses[inverseKey{node.Type, c.Name}])) {
+			return false
+		}
+	}
+	for _, c := range f.InCount {
+		if !c.Holds(g.InDegree(node)) {
+			return false
+		}
+	}
+	for _, c := range f.OutCount {
+		if !c.Holds(g.OutDegree(node)) {
+			return false
+		}
+	}
 	if f.Orphan && !orphan {
 		return false
 	}
@@ -286,6 +327,16 @@ func declares(type_ string, resolved *schema.ResolvedSchema, inverses inverseInd
 	}
 	return rtype.Relations.Has(name) || rtype.Attributes.Has(name) ||
 		len(inverses[inverseKey{type_, name}]) > 0
+}
+
+// countable reports whether type_ has edges under name at all — a relation or
+// a declared inverse. An attribute has no edges, so it is not countable.
+func countable(type_ string, resolved *schema.ResolvedSchema, inverses inverseIndex, name string) bool {
+	rtype, ok := resolved.Types.Get(type_)
+	if !ok {
+		return false
+	}
+	return rtype.Relations.Has(name) || len(inverses[inverseKey{type_, name}]) > 0
 }
 
 // hasValue reports whether node carries name: a resolved edge for a relation, a
