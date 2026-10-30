@@ -1,0 +1,19 @@
+# Every way --at and --as-of refuse, and a workspace nested in a larger
+# repository read through -C.
+steps:
+- argv: ["init", "build-hub", "hub", "--no-wire"]
+- argv: ["-C", "hub", "--at", "HEAD", "status"]
+- sh: "printf 'readme\\n' > README.md && git init -q . && git add README.md && GIT_AUTHOR_DATE=2025-06-01T10:00:00Z GIT_COMMITTER_DATE=2025-06-01T10:00:00Z git commit -qm readme"
+- sh: "git add -A && GIT_AUTHOR_DATE=2025-07-01T10:00:00Z GIT_COMMITTER_DATE=2025-07-01T10:00:00Z git commit -qm workspace"
+- argv: ["-C", "hub", "--at", "HEAD~1", "status"]
+- argv: ["-C", "hub", "--at", "HEAD", "status"]
+- argv: ["-C", "hub", "--at", "no-such-branch", "status"]
+- argv: ["-C", "hub", "--at", "2025-01-01", "status"]
+- argv: ["-C", "hub", "--at", "HEAD", "add", "requirement", "--title", "X", "--kind", "functional"]
+- argv: ["-C", "hub", "--at", "HEAD", "schema", "snapshot"]
+- argv: ["-C", "hub", "--at", "HEAD", "viz"]
+- argv: ["-C", "hub", "--as-of", "2025-6-1", "status"]
+- argv: ["-C", "hub", "--at"]
+- argv: ["-C", "hub", "--at=", "status"]
+- argv: ["-C", "hub", "--at", "2026-02-30", "status"]
+- argv: ["-C", "hub", "--at", "--force", "status"]

@@ -215,7 +215,7 @@ const binaryOf = ({ name, separator }: Flavour) => new RegExp(`(?:^|${separator}
 
 // Matches a khub call in raw command text, capturing its verb and the rest of its segment.
 const scanOf = ({ name, separator }: Flavour) =>
-  new RegExp(`(?:^|[\\s;&|(\`])(?:[^\\s;&|]*${separator})?${name}\\s+(?:(?:-C|--workspace)\\s+\\S+\\s+)?([a-z][a-z-]*)([^;&|\\n]*)`, 'g')
+  new RegExp(`(?:^|[\\s;&|(\`])(?:[^\\s;&|]*${separator})?${name}\\s+(?:(?:-C|--workspace|--at|--as-of)\\s+\\S+\\s+|--(?:workspace|at|as-of)=\\S*\\s+)*([a-z][a-z-]*)([^;&|\\n]*)`, 'g')
 
 // Reads one segment's words as a khub call, or null when it runs something else.
 function khubCall(words: string[], binary: RegExp): Simple | null {
@@ -246,6 +246,11 @@ function khubCall(words: string[], binary: RegExp): Simple | null {
       i += 2
     } else if (word.startsWith('--workspace=')) {
       workspace = word.slice('--workspace='.length)
+      i += 1
+    } else if (word === '--at' || word === '--as-of') {
+      // The point-in-time options take a value and change no verb.
+      i += 2
+    } else if (word.startsWith('--at=') || word.startsWith('--as-of=')) {
       i += 1
     } else {
       break

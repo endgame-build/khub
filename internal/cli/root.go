@@ -10,24 +10,34 @@ import (
 	"os"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 
 	"github.com/endgame-build/khub/internal/errs"
 	"github.com/endgame-build/khub/internal/fsio"
+	"github.com/endgame-build/khub/internal/gitlog"
 	"github.com/endgame-build/khub/internal/version"
 	"github.com/endgame-build/khub/internal/workspace"
 )
 
-// State is the global CLI state Typer stashes on ctx.obj.
-type State struct{ Workspace string }
+// State is the global CLI state Typer stashes on ctx.obj, plus the two
+// point-in-time options: At is the `--at` value, AsOf the pinned "today".
+type State struct {
+	Workspace string
+	At        string
+	AsOf      time.Time
+}
 
 var state State
 
 // Execute runs the CLI and returns the process exit code.
 func Execute(argv []string) int {
+	state = State{}
+	scrubbed = ""
 	root := newRoot() // registering -C resets state.Workspace to its default
+	defer closeSnapshot()
 	// Click parses the ROOT GROUP's own options itself, before the command name,
 	// and --version is eager: `khub --version status` prints the version and
 	// exits without ever resolving `status`. Cobra has no eager-option hook and
@@ -112,11 +122,46 @@ func parseGlobals(root *cobra.Command, argv []string) (rest []string, code int, 
 				i++
 			}
 			state.Workspace = value
+		case "--at", "--as-of":
+			if !attached {
+				if i+1 >= len(argv) {
+					fmt.Fprintln(os.Stderr,
+						richBox("Error", "Option "+quoteOpt(name)+" requires an argument."))
+					return nil, 2, true
+				}
+				value = argv[i+1]
+				i++
+			}
+			if name == "--at" {
+				if value == "" {
+					_ = usageBox(root, "Invalid value for '--at': name a commit, branch or tag, or a date as YYYY-MM-DD.")
+					return nil, 2, true
+				}
+				if _, isDate, valid := gitlog.AtDate(value); isDate && !valid {
+					_ = usageBox(root, "Invalid value for '--at': '"+value+"' is not a valid date.")
+					return nil, 2, true
+				}
+				state.At = value
+				break
+			}
+			d, err := time.ParseInLocation("2006-01-02", value, time.UTC)
+			if err != nil || d.Format("2006-01-02") != value {
+				_ = usageBox(root, "Invalid value for '--as-of': '"+value+"' is not a date as YYYY-MM-DD.")
+				return nil, 2, true
+			}
+			state.AsOf = d
 		default:
 			_ = usageBox(root, "No such option: "+name+suggest(name, optionNames(root)))
 			return nil, 2, true
 		}
 		i++
+	}
+	// A date --at reads the workspace as it stood that day, so "today" is that
+	// day too unless --as-of says otherwise. A date still to come leaves the
+	// clock alone: the newest commit judged from a future day would make
+	// everything stale.
+	if d, _, valid := gitlog.AtDate(state.At); valid && state.AsOf.IsZero() && !d.After(today()) {
+		state.AsOf = d
 	}
 	return append([]string{}, argv[i:]...), 0, false
 }
@@ -197,6 +242,10 @@ func newRoot() *cobra.Command {
 	// give a subcommand its group's options.
 	root.Flags().StringVarP(&state.Workspace, "workspace", "C", "",
 		"Operate on this workspace instead of the working directory.")
+	root.Flags().String("at", "",
+		"Read the workspace as a git commit holds it: a commit, branch, tag, or a date as YYYY-MM-DD. Read commands only.")
+	root.Flags().String("as-of", "",
+		"Pin today's date (YYYY-MM-DD) for the stale flag and khub stale.")
 	root.Flags().Bool("version", false, "Print the khub version and exit.")
 	root.SetFlagErrorFunc(func(cmd *cobra.Command, err error) error {
 		return usageBox(cmd, clickFlagMessage(cmd, err))
@@ -215,6 +264,10 @@ func newRoot() *cobra.Command {
 	// Cobra applies its unknown-subcommand check inside Find(), which
 	// TraverseChildren bypasses — say it explicitly, in Click's words.
 	root.Args = clickNoSuchCommand
+	// --at reads a past commit, so a command that writes, or serves the live
+	// tree, refuses before it runs. Cobra runs the nearest PersistentPreRunE,
+	// and no subcommand declares its own.
+	root.PersistentPreRunE = refuseWritesAt
 
 	registerInit(root)
 	registerUpgrade(root)
@@ -436,7 +489,15 @@ func dropHelpShorthand(cmd *cobra.Command) {
 func runeLen(s string) int { return len([]rune(s)) }
 
 // resolveRoot is cli/_render.resolve_root: the workspace root honoring -C.
+// Under --at it is the root of a scratch snapshot of the commit --at names.
 func resolveRoot() (string, error) {
+	if state.At != "" {
+		return snapshotRoot()
+	}
+	return liveRoot()
+}
+
+func liveRoot() (string, error) {
 	start := state.Workspace
 	if start == "" {
 		cwd, err := os.Getwd()

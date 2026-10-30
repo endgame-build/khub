@@ -1,0 +1,1 @@
+{"error": {"code": "read_only_at", "message": "khub add does not run under --at, which reads a past commit; drop --at to run it on the working tree"}}

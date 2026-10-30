@@ -44,6 +44,7 @@ func Emit(data any, fmt_ string, human func()) error {
 		if err != nil {
 			return err
 		}
+		doc = scrubSnapshotJSON(doc)
 		// The write error matters: EPIPE must reach Guard so `khub schema | head`
 		// stays a non-error, exactly as _render.py re-raises BrokenPipeError.
 		_, werr := fmt.Fprintln(os.Stdout, doc)
@@ -56,7 +57,7 @@ func Emit(data any, fmt_ string, human func()) error {
 // Note prints one advisory line to stderr, in JSON and human modes alike. A
 // command calls it before Emit, so the line reaches the caller even when
 // stdout is piped through `head`.
-func Note(message string) { fmt.Fprintln(os.Stderr, "note: "+message) }
+func Note(message string) { fmt.Fprintln(os.Stderr, "note: "+scrubSnapshot(message)) }
 
 // ExitError carries the process exit code through the command return path.
 type ExitError struct{ Code int }
@@ -74,6 +75,7 @@ func (e *ExitError) Error() string { return fmt.Sprintf("exit %d", e.Code) }
 // is wrong, not the call. Usage errors share 2 because they are the same
 // answer to the same question.
 func Fail(message, code, fmt_ string) error {
+	message = scrubSnapshot(message)
 	if WantJSON(fmt_) {
 		env := omap.New()
 		inner := omap.New()

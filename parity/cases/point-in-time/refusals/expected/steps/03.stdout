@@ -1,0 +1,1 @@
+{"error": {"code": "no_workspace", "message": "No .khub workspace at 'HEAD~1': that commit holds no .khub/ here; pass --at a later commit"}}

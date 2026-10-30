@@ -1,0 +1,25 @@
+# --at reads a past commit's tree; --as-of pins today. req-old has no
+# `updated`, so its stale date is the commit that last touched it — at the
+# commit --at names, not at HEAD.
+steps:
+- argv: ["init", "build-hub", ".", "--no-wire"]
+- argv: ["add", "requirement", "--title", "Old", "--kind", "functional"]
+- sh: "perl -pi -e \"s/^updated:.*\\n//\" knowledge/requirements/req-old.md"
+- sh: "git init -q . && git add -A && GIT_AUTHOR_DATE=2025-06-01T10:00:00Z GIT_COMMITTER_DATE=2025-06-01T10:00:00Z git commit -qm seed"
+- argv: ["add", "requirement", "--title", "New", "--kind", "functional"]
+- sh: "printf 'touched\\n' >> knowledge/requirements/req-old.md"
+- sh: "git add -A && GIT_AUTHOR_DATE=2025-09-01T10:00:00Z GIT_COMMITTER_DATE=2025-09-01T10:00:00Z git commit -qm second"
+- argv: ["add", "requirement", "--title", "Uncommitted", "--kind", "functional"]
+- argv: ["query", "--format", "ids"]
+- argv: ["--at", "HEAD~1", "query", "--format", "ids"]
+- argv: ["--at", "2025-07-01", "query", "--format", "json"]
+- argv: ["--at", "2025-07-01", "stale", "--days", "10"]
+- argv: ["--at", "HEAD~1", "--as-of", "2026-01-15", "stale", "--days", "10"]
+- argv: ["stale", "--days", "10"]
+- argv: ["--as-of", "2025-12-01", "stale", "--days", "30"]
+- argv: ["--at=HEAD~1", "status"]
+- argv: ["--at", "HEAD~1", "get", "req-old", "--format", "raw"]
+- argv: ["--at", "HEAD", "check"]
+- argv: ["--at", "HEAD", "schema", "types"]
+# A date still to come leaves the clock alone: ages count to 2026-01-15.
+- argv: ["--at", "2099-01-01", "stale", "--days", "10"]

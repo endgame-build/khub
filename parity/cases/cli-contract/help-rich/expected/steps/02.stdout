@@ -4,10 +4,15 @@
  khub — schema-bound context management.                                        
                                                                                 
 ╭─ Options ────────────────────────────────────────────────────────────────────╮
-│ --workspace  -C      <path>  Operate on this workspace instead of the        │
-│                              working directory.                              │
-│ --version                    Print the khub version and exit.                │
-│ --help                       Show this message and exit.                     │
+│ --workspace  -C      <path>      Operate on this workspace instead of the    │
+│                                  working directory.                          │
+│ --at                 <ref|date>  Read the workspace as a git commit holds    │
+│                                  it: a commit, branch, tag, or a date as     │
+│                                  YYYY-MM-DD. Read commands only.             │
+│ --as-of              <date>      Pin today's date (YYYY-MM-DD) for the stale │
+│                                  flag and khub stale.                        │
+│ --version                        Print the khub version and exit.            │
+│ --help                           Show this message and exit.                 │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 ╭─ Commands ───────────────────────────────────────────────────────────────────╮
 │ init       Scaffold a workspace from a preset and wire it into the agent     │

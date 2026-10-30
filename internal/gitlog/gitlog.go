@@ -46,20 +46,34 @@ func run(root string, args ...string) (stdout string, code int, err error) {
 // HasGitHistory is gitlog.has_git_history: whether root is a git repo with at
 // least one commit. An unborn HEAD reads the same as a non-repo — neither has
 // history to derive a date from.
-func HasGitHistory(root string) (bool, error) {
-	_, code, err := run(root, "rev-parse", "--verify", "HEAD")
+func HasGitHistory(root string) (bool, error) { return hasHistory(Head(root)) }
+
+func hasHistory(h History) (bool, error) {
+	_, code, err := run(h.Dir, "rev-parse", "--verify", "--quiet", h.Rev+"^{commit}")
 	if err != nil {
 		return false, err
 	}
 	return code == 0, nil
 }
 
+// History names where commit dates come from: the directory git runs in and
+// the commit whose history it reads. Paths are relative to Dir. Head is the
+// live workspace; a Snapshot's History reads up to the commit `--at` named.
+type History struct{ Dir, Rev string }
+
+// Head is the history of root's checkout: its HEAD.
+func Head(root string) History { return History{Dir: root, Rev: "HEAD"} }
+
 // LastCommitDate is gitlog.last_commit_date: the committer date of the last
 // commit touching relpath; ok=false when the path is untracked (Python's
 // None). Committer date, not author date, so one commit reads the same here
 // and anywhere else khub renders history.
 func LastCommitDate(root, relpath string) (d time.Time, ok bool, err error) {
-	stdout, code, err := run(root, "log", "-1", "--format=%cd", "--date=short", "--", relpath)
+	return lastCommitDate(Head(root), relpath)
+}
+
+func lastCommitDate(h History, relpath string) (d time.Time, ok bool, err error) {
+	stdout, code, err := run(h.Dir, "log", "-1", "--format=%cd", "--date=short", h.Rev, "--", relpath)
 	if err != nil {
 		return time.Time{}, false, err
 	}
@@ -83,7 +97,11 @@ func LastCommitDate(root, relpath string) (d time.Time, ok bool, err error) {
 // tail; lift to `git log --diff-filter=A` if a merge-heavy history mis-dates
 // `created`.
 func FirstCommitDate(root, relpath string) (d time.Time, ok bool, err error) {
-	stdout, code, err := run(root, "log", "--format=%cd", "--date=short", "--", relpath)
+	return firstCommitDate(Head(root), relpath)
+}
+
+func firstCommitDate(h History, relpath string) (d time.Time, ok bool, err error) {
+	stdout, code, err := run(h.Dir, "log", "--format=%cd", "--date=short", h.Rev, "--", relpath)
 	if err != nil {
 		return time.Time{}, false, err
 	}
@@ -135,6 +153,10 @@ type Dates struct{ First, Last time.Time }
 // CommitDates batches multiple paths on linear history. Merge history retains
 // the per-path helpers' history simplification and ordering semantics.
 func CommitDates(root string, requests []DateRequest) (map[string]Dates, error) {
+	return commitDates(Head(root), requests)
+}
+
+func commitDates(h History, requests []DateRequest) (map[string]Dates, error) {
 	out := map[string]Dates{}
 	if len(requests) == 0 {
 		return out, nil
@@ -157,14 +179,14 @@ func CommitDates(root string, requests []DateRequest) (map[string]Dates, error) 
 	}
 	requests = unique
 	if len(requests) > 1 {
-		merges, code, err := run(root, "rev-list", "--min-parents=2", "-1", "HEAD")
+		merges, code, err := run(h.Dir, "rev-list", "--min-parents=2", "-1", h.Rev)
 		if err != nil {
 			return nil, err
 		}
 		if code == 0 && strings.TrimSpace(merges) == "" {
 			// NUL framing preserves tabs/newlines and avoids core.quotePath.
 			// --relative keeps paths relative to nested workspace roots.
-			log, code, err := run(root, "log", "--no-renames", "--name-only", "-z", "--format=%x00%cd", "--date=short", "--relative", "--", ".")
+			log, code, err := run(h.Dir, "log", "--no-renames", "--name-only", "-z", "--format=%x00%cd", "--date=short", "--relative", h.Rev, "--", ".")
 			if err != nil {
 				return nil, err
 			}
@@ -214,7 +236,7 @@ func CommitDates(root string, requests []DateRequest) (map[string]Dates, error) 
 	for _, request := range requests {
 		var dates Dates
 		if request.First {
-			d, ok, err := FirstCommitDate(root, request.Path)
+			d, ok, err := firstCommitDate(h, request.Path)
 			if err != nil {
 				return nil, err
 			}
@@ -223,7 +245,7 @@ func CommitDates(root string, requests []DateRequest) (map[string]Dates, error) 
 			}
 		}
 		if request.Last {
-			d, ok, err := LastCommitDate(root, request.Path)
+			d, ok, err := lastCommitDate(h, request.Path)
 			if err != nil {
 				return nil, err
 			}

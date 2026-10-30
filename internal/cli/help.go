@@ -740,9 +740,19 @@ var pathMetavars = map[string]bool{
 	"khub init --preset-source": true,
 }
 
+// namedMetavars are options whose value is neither a path nor a plain
+// string: the point-in-time pair names what it takes.
+var namedMetavars = map[string]string{
+	"khub --at":    "<ref|date>",
+	"khub --as-of": "<date>",
+}
+
 func flagMetavar(cmd *cobra.Command, f *pflag.Flag) string {
 	if pathMetavars[cmd.CommandPath()+" --"+f.Name] {
 		return "<path>"
+	}
+	if m, ok := namedMetavars[cmd.CommandPath()+" --"+f.Name]; ok {
+		return m
 	}
 	switch f.Value.Type() {
 	case "bool":

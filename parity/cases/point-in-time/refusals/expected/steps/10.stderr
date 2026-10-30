@@ -1,0 +1,5 @@
+Usage: khub [OPTIONS] COMMAND [ARGS]...
+Try 'khub --help' for help.
+╭─ Error ──────────────────────────────────────────────────────────────────────╮
+│ Invalid value for '--as-of': '2025-6-1' is not a date as YYYY-MM-DD.         │
+╰──────────────────────────────────────────────────────────────────────────────╯

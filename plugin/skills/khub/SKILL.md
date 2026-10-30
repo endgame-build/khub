@@ -29,6 +29,7 @@ The schema lives at `.khub/ontology.yaml` (the domain model) with `.khub/policy.
 - `khub impact <id> --format json` — transitive closure over a predicate (blast radius).
 - `khub history <id> --format json` — a supersession chain.
 - `khub search <text> --format json` — BM25 full-text over titles, bodies, and fields; `--plain` takes words as typed (any may match) instead of FTS5 syntax. Hits carry `draft`/`orphan`/`stale` and per-predicate edge counts.
+- `khub --at <ref|date> <read command>` — the same read against the workspace as a git commit holds it (`--at 2026-03-01`, `--at v1.2`, `--at HEAD~5`); writes refuse with `read_only_at`. `--as-of <date>` pins today for the `stale` flag. Both go before the command name.
 
 ## Know when to write
 

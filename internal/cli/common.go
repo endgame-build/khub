@@ -20,9 +20,13 @@ import (
 	"github.com/endgame-build/khub/internal/omap"
 )
 
-// today is date.today() at the CLI's one clock seam. KHUB_PARITY_NOW — the env
-// var the parity recorder pins Python's clock with — overrides it.
+// today is date.today() at the CLI's one clock seam. --as-of (or a date
+// --at) pins it; otherwise KHUB_PARITY_NOW — the env var the parity recorder
+// pins Python's clock with — overrides it.
 func today() time.Time {
+	if !state.AsOf.IsZero() {
+		return state.AsOf
+	}
 	if pinned := os.Getenv("KHUB_PARITY_NOW"); pinned != "" {
 		if d, err := time.ParseInLocation("2006-01-02", pinned, time.UTC); err == nil {
 			return d

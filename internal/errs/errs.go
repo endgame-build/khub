@@ -461,3 +461,69 @@ func PathIgnored(type_, path string) *Located {
 		Target: path,
 	}
 }
+
+// --- point-in-time reads (--at) ------------------------------------------------
+
+// NoGitHistory is `no_git_history`: `--at` reads a past commit, and the
+// workspace is not in a git repository or the repository has no commits.
+func NoGitHistory() *Located {
+	return &Located{
+		Code: "no_git_history",
+		Message: "--at reads the workspace from a git commit, and this workspace has no git history; " +
+			"commit it first, or drop --at",
+	}
+}
+
+// UnknownRevision is `unknown_revision`: the `--at` value names no commit.
+func UnknownRevision(spec string) *Located {
+	return &Located{
+		Code: "unknown_revision",
+		Message: fmt.Sprintf("No commit '%s' found. Pass --at a commit, branch or tag, "+
+			"or a date as YYYY-MM-DD", spec),
+		Target: spec,
+	}
+}
+
+// NoCommitBefore is `unknown_revision` for a date: HEAD's first-parent history
+// holds no commit at or before the end of that day (UTC).
+func NoCommitBefore(date string) *Located {
+	return &Located{
+		Code: "unknown_revision",
+		Message: fmt.Sprintf("No commit on HEAD at or before %s (end of day, UTC); "+
+			"pass --at a later date", date),
+		Target: date,
+	}
+}
+
+// NoWorkspaceAt is `no_workspace` at a commit: the commit `--at` names holds
+// no .khub/ where the workspace lives today.
+func NoWorkspaceAt(spec string) *Located {
+	return &Located{
+		Code: "no_workspace",
+		Message: fmt.Sprintf("No .khub workspace at '%s': that commit holds no .khub/ here; "+
+			"pass --at a later commit", spec),
+		Target: spec,
+	}
+}
+
+// ReadOnlyAt is `read_only_at`: a command that writes, or serves the live
+// tree, run under `--at`. A past commit is read, never written.
+func ReadOnlyAt(command string) *Located {
+	return &Located{
+		Code: "read_only_at",
+		Message: fmt.Sprintf("%s does not run under --at, which reads a past commit; "+
+			"drop --at to run it on the working tree", command),
+		Target: command,
+	}
+}
+
+// SnapshotError is `snapshot_error`: the commit `--at` names could not be
+// read into a snapshot — a path this filesystem cannot hold, content the
+// repository lacks, or git answering in a shape khub does not expect.
+func SnapshotError(spec, detail string) *Located {
+	return &Located{
+		Code:    "snapshot_error",
+		Message: fmt.Sprintf("Cannot read the workspace at '%s': %s", spec, detail),
+		Target:  spec,
+	}
+}

@@ -25,7 +25,7 @@ func registerStale(root *cobra.Command) {
 					return err
 				}
 				// --days omitted → the workspace's configured stale_days.
-				report, err := gitlog.Stale(ws, optInt(cmd, "days", days), today())
+				report, err := gitlog.StaleFrom(ws, history(ws), optInt(cmd, "days", days), today())
 				if err != nil {
 					return err
 				}

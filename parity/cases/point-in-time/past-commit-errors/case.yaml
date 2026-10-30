@@ -1,0 +1,15 @@
+# What goes wrong inside a past commit is reported as at that commit: a path
+# reads `<ref>:<workspace path>`, never the scratch copy's. A commit whose
+# content the repository lacks is snapshot_error, exit 2.
+steps:
+- argv: ["init", "build-hub", ".", "--no-wire"]
+- sh: "git init -q . && git add -A && GIT_AUTHOR_DATE=2025-06-01T10:00:00Z GIT_COMMITTER_DATE=2025-06-01T10:00:00Z git commit -qm seed"
+- sh: "printf 'ontology: [\\n' > .khub/ontology.yaml && git add -A && GIT_AUTHOR_DATE=2025-07-01T10:00:00Z GIT_COMMITTER_DATE=2025-07-01T10:00:00Z git commit -qm broken"
+- sh: "git checkout -q HEAD~1 -- .khub/ontology.yaml && git add -A && GIT_AUTHOR_DATE=2025-08-01T10:00:00Z GIT_COMMITTER_DATE=2025-08-01T10:00:00Z git commit -qm fixed"
+- argv: ["status"]
+- argv: ["--at", "HEAD~1", "status"]
+- argv: ["--at", "HEAD~1", "check", "--format", "json"]
+- argv: ["--at", "2025-08-01", "status"]
+- sh: "obj=$(git rev-parse HEAD:knowledge/prd.md) && mv .git/objects/$(printf %s $obj | cut -c1-2)/$(printf %s $obj | cut -c3-) .git/moved-object"
+- argv: ["--at", "HEAD", "status"]
+- argv: ["status"]

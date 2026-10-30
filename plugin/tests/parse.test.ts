@@ -34,6 +34,16 @@ test('env assignments, -C and a leading cd do not hide the call', () => {
   expect(simple('cd docs/ws && khub link ad-1 affects cmp-search').verb).toBe('link')
 })
 
+test('the point-in-time options before the verb do not hide it', () => {
+  const call = simple('khub --at HEAD~3 query --type adr --format json')
+  expect(call.verb).toBe('query')
+  expect(call.flags).toEqual({ type: 'adr', format: 'json' })
+  expect(simple('khub -C ./ws --at=2026-01-01 --as-of 2026-02-01 get cmp-search').positional).toEqual(['cmp-search'])
+  expect(simple('khub --as-of=2026-02-01 -C ./ws stale').workspace).toBe('./ws')
+  expect(verbs('khub --at v1.2 status; khub --as-of 2026-01-01 stale')).toEqual(['status', 'stale'])
+  expect(verbs('(khub --at HEAD status; khub --at=HEAD -C ws check)')).toEqual(['status', 'check'])
+})
+
 test('the workspace a call names is kept', () => {
   expect(simple('khub -C /other/ws add adr --title x').workspace).toBe('/other/ws')
   expect(simple('khub --workspace ./ws status').workspace).toBe('./ws')

@@ -41,6 +41,13 @@ type StaleReport struct {
 // civil date at UTC midnight (the CLI's date.today()), so the day delta is
 // exact. Entities with no judgeable date are skipped.
 func Stale(root string, days *int, now time.Time) (*StaleReport, error) {
+	return StaleFrom(root, Head(root), days, now)
+}
+
+// StaleFrom is Stale with the commit dates read from hist rather than root's
+// HEAD: under --at, root is a snapshot with no .git and hist is the live
+// repository up to the commit the snapshot holds.
+func StaleFrom(root string, hist History, days *int, now time.Time) (*StaleReport, error) {
 	resolved, err := introspect.LoadSchema(root)
 	if err != nil {
 		return nil, err
@@ -50,7 +57,7 @@ func Stale(root string, days *int, now time.Time) (*StaleReport, error) {
 		return nil, err
 	}
 	valid := index.Filter(scanned, index.StrayNodes(scanned)) // strays are not entities
-	gitOK, err := HasGitHistory(root)
+	gitOK, err := hasHistory(hist)
 	if err != nil {
 		return nil, err
 	}
@@ -82,7 +89,7 @@ func Stale(root string, days *int, now time.Time) (*StaleReport, error) {
 			requests = append(requests, DateRequest{Path: paths[node], Last: true})
 		}
 	}
-	dates, err := CommitDates(root, requests)
+	dates, err := commitDates(hist, requests)
 	if err != nil {
 		return nil, err
 	}

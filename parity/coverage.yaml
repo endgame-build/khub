@@ -6,6 +6,8 @@ commands:
 - name: '(root)'
   params:
   - '--workspace'
+  - '--at'
+  - '--as-of'
   - '--version'
 - name: 'init'
   params:
@@ -189,6 +191,7 @@ error_codes:
 # missing_base: unreachable through the CLI since the ontology/policy/storage
 # split — LoadSchema always supplies the embedded base as the layered fallback,
 # and the legacy shape that could still trip it is deleted with legacy.go.
+- no_git_history
 - no_preset
 - no_schema_snapshot
 - no_slug_source
@@ -198,12 +201,14 @@ error_codes:
 - pattern_violation
 - preset_mismatch
 - raw_linkml_smuggled
+- read_only_at
 - referential_integrity
 - schema_error
 - self_link
 - singleton_exists
 - singleton_id
 - slug_taken
+- snapshot_error
 - strict_unknown_field
 - target_not_empty
 - template_invalid
@@ -212,6 +217,7 @@ error_codes:
 - unknown_predicate
 - unknown_preset
 - unknown_relation_target
+- unknown_revision
 - unknown_type
 format_specials:
 - json

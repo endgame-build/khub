@@ -1,0 +1,1 @@
+{"error": {"code": "snapshot_error", "message": "Cannot read the workspace at 'HEAD': the repository lacks the content of 'knowledge/prd.md' (a partial or shallow clone?); fetch it, or pick another commit"}}
