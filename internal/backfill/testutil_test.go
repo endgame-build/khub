@@ -157,7 +157,12 @@ func scaffoldWS(t *testing.T) string {
 
 func mustBackfill(t *testing.T, root string, typeName *string, dryRun bool) *BackfillReport {
 	t.Helper()
-	report, err := Backfill(root, typeName, dryRun)
+	return mustBackfillOpts(t, root, typeName, false, dryRun)
+}
+
+func mustBackfillOpts(t *testing.T, root string, typeName *string, inferType, dryRun bool) *BackfillReport {
+	t.Helper()
+	report, err := Backfill(root, typeName, inferType, dryRun)
 	if err != nil {
 		t.Fatalf("backfill: %v", err)
 	}

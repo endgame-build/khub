@@ -48,7 +48,7 @@
 │ serve      Serve a read-only graph view on loopback: khub serve [--port      │
 │            7777].                                                            │
 │ backfill   Backfill missing dates and frontmatter: khub backfill [--type T]  │
-│            [--dry-run].                                                      │
+│            [--infer-type] [--dry-run].                                       │
 │ wire       Wire the workspace into agent context files (CLAUDE.md gets ``@`` │
 │            imports of the                                                    │
 │            schema layer files; AGENTS.md gets a schema pointer). Bare        │

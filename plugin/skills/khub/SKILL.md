@@ -88,6 +88,10 @@ different things: on `check` it fails on orphans too; on `validate` and `add`/`e
 closes the schema so a typo like `realised_in` is rejected instead of silently producing no
 edge.
 
+A stray whose only fault is a missing `type:` is repaired by `khub backfill --infer-type`
+(preview with `--dry-run`): it stamps the type the file's layout holds and lists every stray
+it left, with the reason.
+
 ## Reviewing a body
 
 `validate` reports three things about the prose, and they are not the same kind of thing:

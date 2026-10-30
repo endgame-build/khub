@@ -9,3 +9,19 @@ steps:
 # entity: it must neither be read nor reported.
 - sh: "printf '{\"type\": \"requirement\", \"title\": \"data\"}\\n' > data.json"
 - argv: ["check", "--format", "json"]
+# The repair path for a stray (#78). backfill --infer-type stamps `type` on a
+# stray whose frontmatter lacks it, from the one layout that holds the file;
+# a fenceless file, one naming another type and one starting with a
+# byte-order mark are left and listed. The stamped requirement has no `kind`,
+# so it lands incomplete for check to report — capture is never blocked.
+- sh: "printf -- \"---\\ntitle: Found\\ncreated: 2026-01-15 # kept\\n---\\nBody stays.\\n\" > knowledge/requirements/req-found.md"
+- sh: "printf \"just prose\\n\" > knowledge/requirements/req-prose.md"
+- sh: "printf -- \"---\\ntype: adr\\ntitle: Wrong\\n---\\n\" > knowledge/requirements/req-wrong.md"
+# A byte-order mark hides the frontmatter from the scan but not from the
+# writer: the file is left whole, its authored type never overwritten.
+- sh: "printf '\\357\\273\\277---\\ntype: adr\\ntitle: Marked\\n---\\n' > knowledge/requirements/req-bom.md"
+- argv: ["check", "--format", "json"]
+- argv: ["backfill", "--infer-type", "--dry-run"]
+- argv: ["backfill", "--infer-type"]
+- argv: ["get", "requirement/req-found", "--format", "raw"]
+- argv: ["check", "--format", "json"]

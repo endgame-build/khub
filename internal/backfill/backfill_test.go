@@ -180,7 +180,7 @@ func TestTypeScaffolding(t *testing.T) {
 // Finding #5: a misspelled --type fails loudly instead of a silent no-op
 // success.
 func TestUnknownTypeFailsLoudly(t *testing.T) {
-	_, err := Backfill(scaffoldWS(t), ptr("opportunty"), false)
+	_, err := Backfill(scaffoldWS(t), ptr("opportunty"), false, false)
 	if err == nil {
 		t.Fatal("a misspelled --type scaffolded nothing and reported success")
 	}
