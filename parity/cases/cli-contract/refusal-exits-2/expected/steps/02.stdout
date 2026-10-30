@@ -1,1 +1,1 @@
-{"error": {"code": "enum_violation", "message": "'bogus' is not a valid status (proposed, accepted, rejected)"}}
+{"error": {"code": "enum_violation", "message": "'bogus' is not a valid status (proposed, accepted, rejected)", "field": "status", "expected": ["proposed", "accepted", "rejected"]}}

@@ -1,0 +1,1 @@
+{"error": {"code": "strict_unknown_field", "message": "Unknown field 'knid' rejected under --strict", "field": "knid", "expected": ["type", "draft", "author", "created", "updated", "title", "description", "resource", "tags", "aliases", "kind", "enforcement", "related", "sources", "references", "depends_on", "capabilities", "use_cases", "realized_in"], "suggestion": "kind"}}

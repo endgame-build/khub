@@ -1,1 +1,1 @@
-{"error": {"code": "bad_target", "message": "Unknown --target 'bogus'. Choose claude, agents, or both"}}
+{"error": {"code": "bad_target", "message": "Unknown --target 'bogus'. Choose claude, agents, or both", "expected": ["claude", "agents", "both"]}}

@@ -1,1 +1,1 @@
-{"error": {"code": "illegal_predicate", "message": "Predicate 'supersedes' is not legal for type 'requirement'"}}
+{"error": {"code": "illegal_predicate", "message": "Predicate 'supersedes' is not legal for type 'requirement'", "field": "supersedes", "expected": ["related", "sources", "references", "depends_on", "capabilities", "use_cases", "realized_in"]}}

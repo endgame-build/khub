@@ -349,5 +349,8 @@ func requirePredicate(resolved *schema.ResolvedSchema, predicate string) error {
 		"No predicate '%s' in the schema. Declared predicates: %s",
 		predicate, strings.Join(names, ", ")))
 	e.Relation = predicate
+	e.Field = predicate
+	e.Expected = names
+	e.Suggestion = errs.Nearest(predicate, names)
 	return e
 }

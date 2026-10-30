@@ -261,7 +261,7 @@ func suggest(want string, candidates []string) string {
 	}
 	best, bestDist := "", 0
 	for _, c := range candidates {
-		d := editDistance(want, c)
+		d := errs.EditDistance(want, c)
 		if d > limit {
 			continue
 		}
@@ -273,28 +273,6 @@ func suggest(want string, candidates []string) string {
 		return ""
 	}
 	return " Did you mean '" + best + "'?"
-}
-
-// editDistance is plain Levenshtein over runes, two rows.
-func editDistance(a, b string) int {
-	ar, br := []rune(a), []rune(b)
-	prev := make([]int, len(br)+1)
-	cur := make([]int, len(br)+1)
-	for j := range prev {
-		prev[j] = j
-	}
-	for i := 1; i <= len(ar); i++ {
-		cur[0] = i
-		for j := 1; j <= len(br); j++ {
-			cost := 1
-			if ar[i-1] == br[j-1] {
-				cost = 0
-			}
-			cur[j] = min(min(cur[j-1]+1, prev[j]+1), prev[j-1]+cost)
-		}
-		prev, cur = cur, prev
-	}
-	return prev[len(br)]
 }
 
 // commandNames lists the commands a user could have meant at cmd's level.

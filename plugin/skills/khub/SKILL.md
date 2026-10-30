@@ -152,7 +152,7 @@ not been found yet.
 - Every read AND write emits JSON on a pipe; a table is only for a TTY. `--format json` makes it explicit.
 - Every existing-workspace mutation is serialized workspace-wide from scan through commit. Never delete `.khub/generated/locks/workspace.lock` while khub may be running.
 - Build every write from `khub schema show`, never from a hardcoded shape.
-- On a failed command, read the located error (field, reason, or unresolved target) and correct the call. Exit 2 reports a refusal or write failure; `write_durability_uncertain` means publication happened, and `upgrade_recovery_failed` requires journal inspection. Exit 1 is a gate (`validate`, `check`) that ran and found the workspace wrong.
+- On a failed command, read the located error and correct the call. The JSON `error` carries `code` and `message`, and where they apply `field` (the attribute or relation at fault), `expected` (the values allowed) and `suggestion` (the nearest one: retry with it when it is what you meant). Exit 2 reports a refusal or write failure; `write_durability_uncertain` means publication happened, and `upgrade_recovery_failed` requires journal inspection. Exit 1 is a gate (`validate`, `check`) that ran and found the workspace wrong.
 - Gate before you commit: `khub validate` per entity, `khub check` graph-wide.
 - Run `khub validate --strict` in CI. Capture is never blocked, so a typo'd field name (`--knid`) is written to frontmatter and neither default gate reports it; `--strict` is what turns undeclared keys into a finding.
 - `khub search` and `khub query --has/--missing` both reach attribute values, so find an entity by what it holds (`search python`, `query --type component --missing repo`) rather than listing and filtering yourself.

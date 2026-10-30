@@ -1,1 +1,1 @@
-{"error": {"code": "strict_unknown_field", "message": "Unknown field 'mystery' rejected under --strict"}}
+{"error": {"code": "strict_unknown_field", "message": "Unknown field 'mystery' rejected under --strict", "field": "mystery", "expected": ["type", "draft", "author", "created", "updated", "title", "description", "resource", "tags", "aliases", "kind", "enforcement", "related", "sources", "references", "depends_on", "capabilities", "use_cases", "realized_in"]}}

@@ -2,7 +2,7 @@
 
 The CLI is a thin, schema-introspecting adapter over the core library's verbs (create, get, update, delete, link, query). It hardcodes no per-type knowledge; it reads the active schema at runtime. Commands emit JSON on a pipe and Rich output on a TTY; help follows the same gate, preserving section order without box drawing when piped. The agent skill maps intent onto these same commands. MCP was evaluated and rejected for this local, single-user product shape.
 
-> **Two CLI docs.** This page is the hand-written contract — JSON output shapes, exit codes, and the schema-driven `--<field>` options. The mechanical flag surface (every command with its declared flags and defaults) is generated from the Cobra app into [`cli-reference.md`](./cli-reference.md) and checked for drift in CI. The generated page cannot see the dynamic `--<field>` options on `add`/`edit`/`query` — those live here.
+> **Three CLI docs.** This page is the hand-written contract — JSON output shapes, exit codes, and the schema-driven `--<field>` options. The mechanical flag surface (every command with its declared flags and defaults) is generated from the Cobra app into [`cli-reference.md`](./cli-reference.md) and checked for drift in CI. The generated page cannot see the dynamic `--<field>` options on `add`/`edit`/`query` — those live here. The rules every command's output follows (when stdout is JSON, exit codes, the refusal envelope) are in [`cli-output-contract.md`](./cli-output-contract.md).
 
 ## Global options
 
@@ -26,8 +26,13 @@ Every input is a flag or an argument; a missing one is a usage error (exit 2), n
 Every refused call renders one line on stderr and exits 2: the call was
 malformed, or would have written something the schema forbids, and nothing was
 written — correct it and retry. Under `--format json` the failure is a JSON
-document instead — `{"error": {"code", "message"}}` — so an agent that asked for
-machine output never has to parse prose. A usage error (an unknown flag, a
+document instead — `{"error": {"code", "message"}}`, plus `field`, `expected`
+and `suggestion` when the refusal has them — so an agent that asked for
+machine output never has to parse prose. `suggestion` is the nearest valid
+value (an enum member, a declared field, type or relation, an existing id),
+present only when one is close. The envelope, the codes that carry each key,
+and the stdout, stderr and exit-code rules every command follows are in
+[`cli-output-contract.md`](./cli-output-contract.md). A usage error (an unknown flag, a
 missing argument) is also exit 2 and stays plain text. Exit 1 is reserved for a
 gate that ran and failed (`validate`, `check`): there the workspace is what is
 wrong, not the call, and the report names what to fix.

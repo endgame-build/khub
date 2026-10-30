@@ -121,7 +121,7 @@ func create(root, typeName string, opts CreateOpts) (*CreateResult, error) {
 			return nil, err
 		}
 		for _, value := range vals {
-			if _, err := resolveWriteTarget(rel, value, idx, predicate, "relation"); err != nil {
+			if _, err := resolveWriteTarget(rel, value, idx, predicate, "relation", nil); err != nil {
 				return nil, err
 			}
 		}
@@ -356,14 +356,16 @@ func partition(rtype *schema.ResolvedType, fields *omap.Map, strict bool) (*part
 			// removes); a comma-list on a single-valued relation used to drop its
 			// tail silently — refuse it with the cardinality error link raises.
 			if len(vals) == 0 {
-				return nil, errs.New("empty_relation_value", fmt.Sprintf(
+				e := errs.New("empty_relation_value", fmt.Sprintf(
 					"Empty value for relation '%s'; use unlink to remove an edge", key))
+				e.Field = key
+				return nil, e
 			}
 			part.rels.Set(key, vals)
 			continue
 		}
 		if strict {
-			return nil, errs.StrictUnknownField(key)
+			return nil, errs.StrictUnknownField(key, rtype.FieldNames())
 		}
 		part.extras.Set(key, raw)
 	}
@@ -386,15 +388,17 @@ func validateAttr(attr *schema.ResolvedAttribute, raw, storageFmt string) (any, 
 	}
 	switch attr.BaseType {
 	case "bool":
-		return toBool(raw)
+		return toBool(raw, attr.Name)
 	case "number":
 		return toNumber(raw, attr.Name)
 	case "date", "datetime":
 		// Mirror the number gate: reject a value validate would flag (e.g. an
 		// impossible 2026-13-45) at write time, not after it has landed.
 		if !values.IsDateish(raw) {
-			return nil, errs.New("date_violation", fmt.Sprintf(
+			e := errs.New("date_violation", fmt.Sprintf(
 				"'%s' is not a valid %s for %s", raw, attr.BaseType, attr.Name))
+			e.Field = attr.Name
+			return nil, e
 		}
 		return asDateObj(raw, storageFmt), nil
 	case "list":
@@ -545,7 +549,7 @@ func update(root, id string, opts UpdateOpts) (*UpdateResult, error) {
 			return nil, err
 		}
 		for _, value := range vals {
-			matches, rerr := resolveWriteTarget(rel, value, idx, predicate, "relation")
+			matches, rerr := resolveWriteTarget(rel, value, idx, predicate, "relation", &node)
 			if rerr != nil {
 				return nil, rerr
 			}
@@ -665,7 +669,7 @@ func link(root, id, predicate, target string) (*LinkResult, error) {
 	if target, err = aliasTarget(idx, rel, target); err != nil {
 		return nil, err
 	}
-	matches, err := resolveWriteTarget(rel, target, idx, predicate, "predicate")
+	matches, err := resolveWriteTarget(rel, target, idx, predicate, "predicate", &node)
 	if err != nil {
 		return nil, err
 	}
@@ -804,7 +808,7 @@ func edgeContext(root, id, predicate string) (
 	rtype, _ := resolved.Types.Get(node.Type)
 	rel, ok := rtype.Relations.Get(predicate)
 	if !ok {
-		return nil, nil, index.Node{}, nil, errs.IllegalPredicate(predicate, node.Type)
+		return nil, nil, index.Node{}, nil, errs.IllegalPredicate(predicate, node.Type, rtype.Relations.Keys())
 	}
 	return resolved, index.Filter(idx, index.StrayNodes(idx)), node, rel, nil
 }

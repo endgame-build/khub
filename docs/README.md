@@ -15,6 +15,7 @@ khub's docs, organized by [Diátaxis](https://diataxis.fr): learning, tasks, ref
 ## Reference — look it up
 
 - [CLI](cli.md) — every command, its flags, the JSON record shape, and validation semantics.
+- [CLI output contract](cli-output-contract.md) — what a program reading khub may rely on: when stdout is JSON, exit codes, and the refusal envelope with its `field`/`expected`/`suggestion` keys.
 - [CLI reference](cli-reference.md) — the `--help` text of every command, regenerated from the binary.
 - [firm-ops preset](firm-ops-preset.md) — the operating graph of a consulting and delivery firm: 9 entity types, 14 relation predicates, per-type attributes.
 - [build-hub preset](build-hub-preset.md) — the knowledge hub of a build project: eleven types, the edges and the walks they buy. `build-lite` is an alias that resolves to it.

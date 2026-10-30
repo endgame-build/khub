@@ -1,0 +1,1 @@
+{"error": {"code": "illegal_predicate", "message": "Predicate 'relatd' is not legal for type 'requirement'", "field": "relatd", "expected": ["related", "sources", "references", "depends_on", "capabilities", "use_cases", "realized_in"], "suggestion": "related"}}
