@@ -33,7 +33,7 @@ func TestSearchNote(t *testing.T) {
 		{"capped plain query", search.Result{Hits: five, Total: 5, Searched: 40, Capped: true}, true,
 			[]string{"cut to its first 64 distinct words"}, nil},
 	} {
-		got := searchNote(tc.res, tc.plain)
+		got := searchNote(tc.res, tc.plain, nil)
 		if tc.want == nil {
 			if got != "" {
 				t.Errorf("%s: want no note, got %q", tc.name, got)
@@ -49,6 +49,34 @@ func TestSearchNote(t *testing.T) {
 			if strings.Contains(got, a) {
 				t.Errorf("%s: note %q should not contain %q", tc.name, got, a)
 			}
+		}
+	}
+}
+
+// Several texts: bare words the shell split are named with the quoted
+// spelling that searches them as one text, and a plain text cut at the word
+// cap is named by its position.
+func TestSearchNoteSeveralTexts(t *testing.T) {
+	one := []search.Hit{{}}
+	for _, tc := range []struct {
+		name  string
+		res   search.Result
+		texts []string
+		want  string
+	}{
+		{"bare words", search.Result{Hits: one, Total: 1}, []string{"auth", "flow"},
+			`searched 2 texts as separate groups and fused them; quote "auth flow" to search it as one text`},
+		{"one bare word", search.Result{Hits: one, Total: 1}, []string{"auth"}, ""},
+		{"a phrase among them", search.Result{Hits: one, Total: 1}, []string{"auth", `"ForbiddenError"`}, ""},
+		{"a spaced text among them", search.Result{Hits: one, Total: 1}, []string{"auth flow", "token"}, ""},
+		{"a prefix among them", search.Result{Hits: one, Total: 1}, []string{"auth", "tok*"}, ""},
+		{"one text cut", search.Result{Hits: one, Total: 1, CappedGroups: []int{2}}, []string{"a b", "c d"},
+			"text 2 was cut to its first 64 distinct words"},
+		{"two texts cut", search.Result{Hits: one, Total: 1, CappedGroups: []int{1, 3}}, []string{"a b", "c d", "e f"},
+			"texts 1, 3 were cut to their first 64 distinct words"},
+	} {
+		if got := searchNote(tc.res, true, tc.texts); got != tc.want {
+			t.Errorf("%s: got %q, want %q", tc.name, got, tc.want)
 		}
 	}
 }

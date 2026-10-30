@@ -28,7 +28,7 @@ The schema lives at `.khub/ontology.yaml` (the domain model) with `.khub/policy.
 - `khub neighbors <id> --format json` — one-hop adjacency.
 - `khub impact <id> --format json` — transitive closure over a predicate (blast radius).
 - `khub history <id> --format json` — a supersession chain.
-- `khub search <text> --format json` — BM25 full-text over titles, bodies, and fields; `--plain` takes words as typed (any may match) instead of FTS5 syntax. Hits carry `draft`/`orphan`/`stale` and per-predicate edge counts.
+- `khub search <text> --format json` — BM25 full-text over titles, bodies, and fields; `--plain` takes words as typed (any may match) instead of FTS5 syntax. Hits carry `draft`/`orphan`/`stale` and per-predicate edge counts. Give an intent and an exact anchor as separate texts (`khub search "auth flow" '"ForbiddenError"'`) rather than ORing them, and quote a multi-word text or each word becomes its own text: each text is ranked on its own and the rankings are fused, so a rare exact term is not buried by common words; such hits carry `fused` (higher is better) and per-text `ranks` instead of `score`.
 
 ## Know when to write
 

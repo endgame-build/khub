@@ -483,3 +483,166 @@ func TestPlainSharesSpanRowidBatches(t *testing.T) {
 		}
 	}
 }
+
+// One group is today's search, field for field.
+func TestSearchGroupsOneGroupIsSearch(t *testing.T) {
+	ws := sws(t)
+	single, err := Search(ws, "modernization OR mainframe", Options{Limit: 20})
+	if err != nil {
+		t.Fatal(err)
+	}
+	grouped, err := SearchGroups(ws, []string{"modernization OR mainframe"}, Options{Limit: 20})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(single, grouped) {
+		t.Fatalf("one group differs from Search:\n%+v\n%+v", single, grouped)
+	}
+	for _, h := range grouped.Hits {
+		if h.Fused != 0 || h.Ranks != nil {
+			t.Fatalf("a single group carries fusion fields: %+v", h)
+		}
+	}
+}
+
+// Several groups merge by reciprocal rank fusion: a hit both groups found
+// outranks a hit only one found, Ranks follow the groups as given, and the
+// order of the groups never moves the result.
+func TestSearchGroupsFuseByReciprocalRank(t *testing.T) {
+	ws := freshWS(t)
+	seedRaw(t, ws, "clients/both.md",
+		"---\ntype: client\nname: Both\ncreated: 2026-06-01\n---\nThe auth flow raises ForbiddenError.\n")
+	seedRaw(t, ws, "clients/intent.md",
+		"---\ntype: client\nname: Intent\ncreated: 2026-06-01\n---\nauth auth auth flow flow.\n")
+	seedRaw(t, ws, "clients/anchor.md",
+		"---\ntype: client\nname: Anchor\ncreated: 2026-06-01\n---\nForbiddenError ForbiddenError.\n")
+	groups := []string{"auth flow", `"ForbiddenError"`}
+	res, err := SearchGroups(ws, groups, Options{Limit: 20})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := hitSlugs(res.Hits); !eq(got, []string{"both", "anchor", "intent"}) {
+		t.Fatalf("fused order: %v", got)
+	}
+	both := res.Hits[0]
+	if !reflect.DeepEqual(both.Ranks, []int{2, 2}) {
+		t.Fatalf("ranks of both: %v", both.Ranks)
+	}
+	if want := 2.0 / (FuseK + 2); both.Fused != want {
+		t.Fatalf("fused of both: %v, want %v", both.Fused, want)
+	}
+	if !reflect.DeepEqual(res.Hits[1].Ranks, []int{0, 1}) || !reflect.DeepEqual(res.Hits[2].Ranks, []int{1, 0}) {
+		t.Fatalf("single-group ranks: %v %v", res.Hits[1].Ranks, res.Hits[2].Ranks)
+	}
+	if res.Total != 3 {
+		t.Fatalf("total: %d", res.Total)
+	}
+
+	swapped, err := SearchGroups(ws, []string{groups[1], groups[0]}, Options{Limit: 20})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := range res.Hits {
+		a, b := res.Hits[i], swapped.Hits[i]
+		if a.Slug != b.Slug || a.Fused != b.Fused || a.Snippet != b.Snippet || a.Score != b.Score ||
+			a.Ranks[0] != b.Ranks[1] || a.Ranks[1] != b.Ranks[0] {
+			t.Fatalf("group order moved hit %d: %+v vs %+v", i, a, b)
+		}
+	}
+}
+
+// Equal fused scores break on type, then slug; the limit cuts the fused set
+// and Total counts every entity any group matched.
+func TestSearchGroupsTiesAndLimit(t *testing.T) {
+	ws := freshWS(t)
+	seedRaw(t, ws, "clients/zeta.md",
+		"---\ntype: client\nname: Zeta\ncreated: 2026-06-01\n---\nalpha word.\n")
+	seedRaw(t, ws, "clients/beta.md",
+		"---\ntype: client\nname: Beta\ncreated: 2026-06-01\n---\nomega word.\n")
+	// zeta is rank 1 for "alpha", beta rank 1 for "omega": equal fused scores
+	res, err := SearchGroups(ws, []string{"alpha", "omega"}, Options{Limit: 20})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := hitSlugs(res.Hits); !eq(got, []string{"beta", "zeta"}) {
+		t.Fatalf("tie order: %v", got)
+	}
+	cut, err := SearchGroups(ws, []string{"alpha", "omega"}, Options{Limit: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := hitSlugs(cut.Hits); !eq(got, []string{"beta"}) || cut.Total != 2 {
+		t.Fatalf("limit: %v total %d", got, cut.Total)
+	}
+	none, err := SearchGroups(ws, []string{"nothing", "nowhere"}, Options{Limit: 20})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(none.Hits) != 0 || none.Total != 0 || none.Hits == nil {
+		t.Fatalf("no match: %+v", none)
+	}
+}
+
+// --plain applies per group: punctuation stays literal in every group, a
+// group with no words is skipped, and a bad raw group is a located error
+// naming that group.
+func TestSearchGroupsPlainAndErrors(t *testing.T) {
+	ws := sws(t)
+	res, err := SearchGroups(ws, []string{"mainframe (((", "!!!"}, Options{Limit: 20, Plain: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := hitSlugs(res.Hits); !eq(got, []string{"acme"}) {
+		t.Fatalf("plain groups: %v", got)
+	}
+	if res.Hits[0].Match != 1 || !reflect.DeepEqual(res.Hits[0].Ranks, []int{1, 0}) {
+		t.Fatalf("plain fused hit: %+v", res.Hits[0])
+	}
+	_, err = SearchGroups(ws, []string{"mainframe", `mainframe AND "`}, Options{Limit: 20})
+	var located *errs.Located
+	if !errors.As(err, &located) || located.Code != "bad_search_query" ||
+		!strings.Contains(located.Error(), `mainframe AND "`) {
+		t.Fatalf("bad group: %v", err)
+	}
+}
+
+// Hits a group scores identically share a rank, so identical entities fuse
+// to identical scores and order by slug; a text given twice counts twice;
+// a plain text cut at the word cap is reported by its position.
+func TestSearchGroupsSharedRanksDuplicatesAndCaps(t *testing.T) {
+	ws := freshWS(t)
+	for _, slug := range []string{"zeta", "alpha"} {
+		seedRaw(t, ws, "clients/"+slug+".md",
+			"---\ntype: client\nname: Twin\ncreated: 2026-06-01\n---\nidentical twin prose.\n")
+	}
+	res, err := SearchGroups(ws, []string{"twin", "prose"}, Options{Limit: 20})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := hitSlugs(res.Hits); !eq(got, []string{"alpha", "zeta"}) {
+		t.Fatalf("order: %v", got)
+	}
+	for _, h := range res.Hits {
+		if !reflect.DeepEqual(h.Ranks, []int{1, 1}) || h.Fused != 2.0/(FuseK+1) {
+			t.Fatalf("tied hits must share rank 1: %+v", h)
+		}
+	}
+	dup, err := SearchGroups(ws, []string{"twin", "twin"}, Options{Limit: 20})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if dup.Hits[0].Fused != 2.0/(FuseK+1) {
+		t.Fatalf("a repeated text counts twice: %v", dup.Hits[0].Fused)
+	}
+	long := ""
+	for i := 0; i < MaxPlainTerms+1; i++ {
+		long += fmt.Sprintf("word%03d ", i)
+	}
+	capped, err := SearchGroups(ws, []string{"twin", long}, Options{Limit: 20, Plain: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(capped.CappedGroups, []int{2}) || capped.Capped {
+		t.Fatalf("capped groups: %v %v", capped.CappedGroups, capped.Capped)
+	}
+}

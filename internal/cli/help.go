@@ -837,8 +837,9 @@ var helpArguments = map[string][]helpArg{
 		{name: "ID", metavar: "<str>", help: "A bare slug, or type/slug on ambiguity."},
 	},
 	"khub search": {
-		{name: "text", metavar: "<str>", required: true,
-			help: `FTS5 MATCH text: terms, "phrases", OR, NEAR, prefix*. Plain words with --plain.`},
+		{name: "text...", metavar: "<str>", required: true,
+			help: `FTS5 MATCH text: terms, "phrases", OR, NEAR, prefix*. Plain words with --plain. ` +
+				`Several texts rank apart and merge by reciprocal rank fusion.`},
 	},
 	"khub neighbors": {
 		{name: "ID", metavar: "<str>", required: true, help: "A bare slug, or type/slug on ambiguity."},

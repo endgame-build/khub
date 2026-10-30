@@ -34,9 +34,12 @@ export function failingOf(check: Row): Array<{ bucket: string; items: unknown[] 
     .map(([bucket, items]) => ({ bucket, items }))
 }
 
+// A search text that is already one quoted phrase keeps its own quotes.
+const quoted = (text: string) => (/^"[^"]*"$/.test(text) ? text : `"${text}"`)
+
 function subjectOf(call: Simple): string {
   if (call.verb === 'query') return typeof call.flags.type === 'string' ? call.flags.type : ''
-  if (call.verb === 'search') return call.positional[0] === undefined ? '' : `"${call.positional[0]}"`
+  if (call.verb === 'search') return call.positional.map(quoted).join(' ')
   if (call.verb === 'schema') return call.sub === 'show' ? (call.positional[0] ?? '') : ''
 
   return SUBJECT_VERBS.has(call.verb) ? (call.positional[0] ?? '') : ''

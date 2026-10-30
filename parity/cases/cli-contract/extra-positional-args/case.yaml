@@ -1,8 +1,11 @@
-# Commands have fixed arity except batch get and dynamic field commands. A token past the declared arguments is a
-# Click usage error (exit 2), never a silently ignored extra — cobra's default
-# Args is ArbitraryArgs, which accepted all of these. add/edit/query are the
+# Commands have fixed arity except batch get, multi-group search and dynamic
+# field commands. A token past the declared arguments is a Click usage error
+# (exit 2), never a silently ignored extra — cobra's default Args is
+# ArbitraryArgs, which accepted all of these. add/edit/query are the
 # exception: their leftovers become fields, so a stray token is a field with no
 # value. get accepts both IDs and fails lookup atomically when either is missing.
+# search takes each text as its own group, so `search a b` is a search, with a
+# note that names the quoted form.
 steps:
 - argv: ["init", "build-hub", ".", "--no-wire"]
 - argv: ["status", "foo"]

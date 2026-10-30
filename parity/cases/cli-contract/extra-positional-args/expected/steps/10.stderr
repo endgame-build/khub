@@ -1,5 +1,1 @@
-Usage: khub search [OPTIONS] {text}
-Try 'khub search --help' for help.
-╭─ Error ──────────────────────────────────────────────────────────────────────╮
-│ Got unexpected extra argument(s) (b)                                         │
-╰──────────────────────────────────────────────────────────────────────────────╯
+note: searched 2 texts as separate groups and fused them; quote "a b" to search it as one text; no hits in 2 entities searched; for structure try `khub query --type <type>`, `khub neighbors <id>` or `khub get <id>`, or rerun with --plain

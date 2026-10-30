@@ -248,12 +248,12 @@ Options:
 
 ```console
 $ khub search --help
-Usage: khub search [OPTIONS] {text}
+Usage: khub search [OPTIONS] {text}...
 
 Full-text search: khub search modernization --type transcript --format json.
 
 Arguments:
-  text <str>  FTS5 MATCH text: terms, "phrases", OR, NEAR, prefix*. Plain words with --plain. [required]
+  text... <str>  FTS5 MATCH text: terms, "phrases", OR, NEAR, prefix*. Plain words with --plain. Several texts rank apart and merge by reciprocal rank fusion. [required]
 
 Options:
   --type <str>  Restrict to one entity type.

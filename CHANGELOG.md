@@ -2,6 +2,21 @@
 
 Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); khub is pre-release.
 
+## [Unreleased]
+
+### Added
+
+- **Fused search.** `khub search` takes several texts, each searched as its
+  own group and ranked by the weighted BM25, then merged by reciprocal rank
+  fusion (k = 60): `khub search "auth flow" '"ForbiddenError"'` keeps a rare
+  exact anchor from being buried by common intent words, as an OR would.
+  Fused records carry `fused` (higher is better) and per-group `ranks` in
+  place of `score`; ties break on type then slug, and group order never
+  changes the result. `--plain` applies per group, and the `note:` lines
+  report on the fused set; when every text is one bare word, a note says
+  the shell probably split an unquoted query and gives the quoted form.
+  One text is unchanged.
+
 ## [0.30.0] — 2026-10-28
 
 Storage can now follow a hub's existing nesting, relations can point to files

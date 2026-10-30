@@ -26,6 +26,7 @@ test('the head names the verb and what the call is about', () => {
   expect(head('khub query --type component --format json')).toBe('khub query component')
   expect(head('khub query --draft')).toBe('khub query')
   expect(head('khub search --plain "regex patterns"')).toBe('khub search "regex patterns"')
+  expect(head(`khub search 'auth flow' '"ForbiddenError"'`)).toBe('khub search "auth flow" "ForbiddenError"')
   expect(head('khub schema show adr --format json')).toBe('khub schema show adr')
   expect(head('khub schema')).toBe('khub schema')
   expect(head(`khub link ${ADR} affects cmp-search`)).toBe(`khub link ${ADR}`)

@@ -1,0 +1,23 @@
+# Several texts are searched as separate groups and merged by reciprocal rank
+# fusion (#83). An entity both groups find outranks one only a single group
+# finds; records carry `fused` and `ranks` in place of `score`; swapping the
+# groups swaps `ranks` and nothing else; --plain applies per group; the notes
+# report on the fused set; a malformed group is the located bad_search_query.
+# Bare words the shell split from an unquoted query still run as groups, but a
+# note names the quoted form; a --plain text cut at 64 words is named by its
+# position.
+steps:
+- argv: ["init", "build-hub", ".", "--no-wire"]
+- argv: ["add", "component", "--title", "Auth service", "--kind", "service", "--body", "Checks the token at each step of the login flow and raises ForbiddenError on a bad one."]
+- argv: ["add", "component", "--title", "Auth flow gateway", "--kind", "service", "--body", "Routes the auth flow."]
+- argv: ["add", "adr", "--title", "Map ForbiddenError to HTTP 403", "--status", "accepted"]
+- argv: ["add", "adr", "--title", "Use Redis for the login limiter", "--status", "accepted"]
+- argv: ["search", "auth flow", "\"ForbiddenError\""]
+- argv: ["search", "\"ForbiddenError\"", "auth flow"]
+- argv: ["search", "auth flow", "\"ForbiddenError\"", "--limit", "1"]
+- argv: ["search", "--plain", "auth flow", "forbidden-error login"]
+- argv: ["search", "--plain", "!!!", "nothing-matches-this"]
+- argv: ["search", "auth", "\"ForbiddenError\"", "--format", "ids"]
+- argv: ["search", "auth", "AND \""]
+- argv: ["search", "auth", "flow"]
+- argv: ["search", "--plain", "auth", "kiosk w000 w001 w002 w003 w004 w005 w006 w007 w008 w009 w010 w011 w012 w013 w014 w015 w016 w017 w018 w019 w020 w021 w022 w023 w024 w025 w026 w027 w028 w029 w030 w031 w032 w033 w034 w035 w036 w037 w038 w039 w040 w041 w042 w043 w044 w045 w046 w047 w048 w049 w050 w051 w052 w053 w054 w055 w056 w057 w058 w059 w060 w061 w062 w063 w064 w065 w066 w067 w068 w069", "--format", "ids"]

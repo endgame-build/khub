@@ -139,7 +139,7 @@ The CLI is a thin, schema-introspecting adapter over the core library's verbs: c
 | | `khub impact <id> [--predicate p]` | blast radius: transitive closure over an edge |
 | | `khub history <id>` | supersession chain and edit history |
 | | `khub path <from> <to>` | shortest path between two entities *(planned)* |
-| | `khub search <text>` | full-text search (FTS5, in-memory per invocation) |
+| | `khub search <text>...` | full-text search (FTS5, in-memory per invocation); several texts fuse by reciprocal rank |
 | Integrity | `khub validate [path]` | per-entity well-formedness and referential integrity (default: whole workspace) |
 | | `khub check` | graph-wide: relations resolve, required relations complete, no orphans, no stray files, no edge cycles |
 | | `khub stale [--days N]` | entities past an `updated` threshold; dates backfilled from `git log` |
