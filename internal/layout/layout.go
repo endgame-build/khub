@@ -23,6 +23,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"math"
 	"os"
 	"path"
 	"path/filepath"
@@ -74,8 +75,12 @@ type Options struct {
 // workspace-relative slash paths in entity order: files the plan writes that
 // do not exist, files it overwrites (an existing destination holding the
 // same bytes, or an empty collection file), and the entity files it removes.
-// StorageYAML reports that .khub/storage.yaml is rewritten (always, once a
-// plan exists; a plan that would change nothing is refused).
+// Rewritten lists the sources whose bytes a format change does not
+// reproduce on the way back — hand comments, quoting, block or flow style,
+// CRLF — so the operator decides before --execute. StaleReset counts the
+// undated entities whose git-derived date the move resets. StorageYAML
+// reports that .khub/storage.yaml is rewritten (always, once a plan exists;
+// a plan that would change nothing is refused).
 type Plan struct {
 	Type        string
 	From        Storage
@@ -84,6 +89,8 @@ type Plan struct {
 	Create      []string
 	Rewrite     []string
 	Remove      []string
+	Rewritten   []string
+	StaleReset  int
 	StorageYAML bool
 	Executed    bool
 
@@ -158,6 +165,9 @@ func plan(root, typeName string, target Target) (*Plan, error) {
 	if err != nil {
 		return nil, err
 	}
+	if err := refuseJournal(root); err != nil {
+		return nil, err
+	}
 	rtype, ok := resolved.Types.Get(typeName)
 	if !ok {
 		prov, perr := workspace.Provenance(root)
@@ -184,6 +194,17 @@ func plan(root, typeName string, target Target) (*Plan, error) {
 			"'%s' is already stored as %s/%s at %s; pass --layout, --to-format or --path for a different destination",
 			typeName, to.Layout, to.Format, to.Path))
 	}
+	if to.Layout != schema.LayoutCollection {
+		// A directory layout needs a directory: a file at --path is as much
+		// "already there" as a collection file would be.
+		if info, serr := fsio.Stat(root, filepath.Join(root, filepath.FromSlash(to.Path))); serr == nil && !info.IsDir() {
+			return nil, errs.New("migrate_target_exists", fmt.Sprintf(
+				"Refusing to migrate '%s': %s is a file, and a %s layout needs a directory there. "+
+					"Move it away, or choose another --path", typeName, to.Path, to.Layout))
+		} else if serr != nil && !errors.Is(serr, fs.ErrNotExist) {
+			return nil, serr
+		}
+	}
 	idx, err := index.Build(root, resolved)
 	if err != nil {
 		return nil, err
@@ -191,19 +212,24 @@ func plan(root, typeName string, target Target) (*Plan, error) {
 	if err := refuseUnclean(rtype, idx); err != nil {
 		return nil, err
 	}
-	p := &Plan{Type: typeName, From: from, To: to, Create: []string{}, Rewrite: []string{}, Remove: []string{}, StorageYAML: true}
+	p := &Plan{Type: typeName, From: from, To: to, Create: []string{}, Rewrite: []string{}, Remove: []string{}, Rewritten: []string{}, StorageYAML: true}
 	for _, node := range idx.Order {
 		if node.Type == typeName {
 			p.entities = append(p.entities, node)
 		}
 	}
 	p.Entities = len(p.entities)
+	perItem := from.Layout != schema.LayoutCollection
+	// A move that keeps the format copies each file's bytes: a hand comment
+	// survives and git pairs the rename.
+	verbatim := perItem && to.Layout != schema.LayoutCollection && from.Format == to.Format
 
 	// Every entity, read at the edit altitude (the round-trip load, so a
 	// value reaches the new file exactly as `edit` would have seen it), then
 	// rendered under the destination.
 	rows := omap.New() // the destination collection, in entity order
 	var creates []workspace.FileChange
+	var lossy []string
 	removed := map[string]bool{}
 	for _, node := range p.entities {
 		meta, body, before, rel, err := readSource(root, rtype, idx, node)
@@ -216,7 +242,36 @@ func plan(root, typeName string, target Target) (*Plan, error) {
 			p.changes = append(p.changes, workspace.FileChange{Path: filepath.FromSlash(rel), Before: before})
 			p.emptied = appendEmptied(p.emptied, rel, rtype)
 		}
-		meta, err = reshape(rtype, node.Slug, meta, body, from, to)
+		if perItem && absent(meta, "updated") {
+			p.StaleReset++
+		}
+		if to.Layout != schema.LayoutCollection && schema.ReservedDeviceName(node.Slug) {
+			return nil, errs.New("migrate_lossy", fmt.Sprintf(
+				"'%s/%s' cannot become a %s: '%s' is a reserved device name on Windows, so no file or folder may carry it",
+				typeName, node.Slug, to.Layout, node.Slug))
+		}
+		if verbatim {
+			change, err := destination(root, rtype, destRel(to, node.Slug), before.Data, to)
+			if err != nil {
+				return nil, err
+			}
+			creates = append(creates, change)
+			continue
+		}
+		if perItem {
+			// The graph, get, query and validate read this file at the scan
+			// altitude (YAML 1.1 for md); the migration re-emits what the edit
+			// altitude (1.2) read. A value the two disagree on would change
+			// silently on the way through — name it instead.
+			lossy = append(lossy, altitudeDiffs(node, idx.Meta[node], meta)...)
+			if rendered, rerr := canon.Render(meta, body, from.Format); rerr == nil && rendered != string(before.Data) {
+				p.Rewritten = append(p.Rewritten, rel)
+			}
+		}
+		if textual(to.Format) {
+			lossy = append(lossy, unrepresentable(node, meta, to.Format)...)
+		}
+		meta, err = reshape(rtype, node.Slug, meta, from, to, &lossy)
 		if err != nil {
 			return nil, err
 		}
@@ -227,12 +282,7 @@ func plan(root, typeName string, target Target) (*Plan, error) {
 			rows.Set(node.Slug, meta)
 			continue
 		}
-		if schema.ReservedDeviceName(node.Slug) {
-			return nil, errs.New("migrate_lossy", fmt.Sprintf(
-				"'%s/%s' cannot become a %s: '%s' is a reserved device name on Windows, so no file or folder may carry it",
-				typeName, node.Slug, to.Layout, node.Slug))
-		}
-		text, err := canon.Render(meta, mdNormalized(body, to.Format), to.Format)
+		text, err := canon.Render(meta, body, to.Format)
 		if err != nil {
 			return nil, err
 		}
@@ -241,6 +291,12 @@ func plan(root, typeName string, target Target) (*Plan, error) {
 			return nil, err
 		}
 		creates = append(creates, change)
+	}
+	if len(lossy) > 0 {
+		return nil, errs.New("migrate_lossy", fmt.Sprintf(
+			"Refusing to migrate '%s': %d value(s) would not survive the move — %s. "+
+				"Quote or rewrite each one first (`khub edit`), then migrate",
+			typeName, len(lossy), strings.Join(lossy, "; ")))
 	}
 	if to.Layout == schema.LayoutCollection {
 		text, err := canon.DumpCollection(rows, to.Format)
@@ -255,7 +311,8 @@ func plan(root, typeName string, target Target) (*Plan, error) {
 	}
 	// Destinations first, the schema next, the sources last: an interrupted
 	// run read under the old schema still sees every entity, and one read
-	// under the new schema sees the moved ones.
+	// under the new schema sees the moved ones (and, until the journal is
+	// dealt with, the sources that were not yet removed).
 	for _, c := range creates {
 		rel := filepath.ToSlash(c.Path)
 		if c.Before == nil {
@@ -276,6 +333,114 @@ func plan(root, typeName string, target Target) (*Plan, error) {
 		return nil, err
 	}
 	return p, nil
+}
+
+// refuseJournal refuses to plan while an earlier migration's journal holds
+// a manifest: that run published something before it stopped, and a plan
+// over its half-moved tree would read the leftovers as the type's state.
+func refuseJournal(root string) error {
+	journals, _ := filepath.Glob(filepath.Join(root, ".khub", "generated", Journal.Prefix+"*", "manifest.yaml"))
+	if len(journals) == 0 {
+		return nil
+	}
+	sort.Strings(journals)
+	dir, _ := filepath.Rel(root, filepath.Dir(journals[0]))
+	return errs.New("migrate_journal_present", fmt.Sprintf(
+		"Refusing to plan a migration: an earlier run left its journal at %s (manifest.yaml lists the originals and "+
+			"replacements it staged). Restore or finish that move by hand, then remove the directory", filepath.ToSlash(dir)))
+}
+
+// absent is `meta.get(key) is None`, as `stale` reads it.
+func absent(meta *omap.Map, key string) bool {
+	v, _ := meta.Get(key)
+	return v == nil
+}
+
+// altitudeDiffs names every field the scan (YAML 1.1 for md) and the editor
+// (1.2) read as different values: `010` is 8 to one and 10 to the other,
+// `yes` a bool and a string, `1e3` a string and a float, `1:30` a number
+// and a string.
+func altitudeDiffs(node index.Node, scan, edit *omap.Map) []string {
+	var out []string
+	seen := map[string]bool{}
+	for _, keys := range [][]string{edit.Keys(), scan.Keys()} {
+		for _, k := range keys {
+			if seen[k] {
+				continue
+			}
+			seen[k] = true
+			sv, _ := scan.Get(k)
+			ev, _ := edit.Get(k)
+			if !canon.Equal(sv, ev) {
+				out = append(out, fmt.Sprintf("%s: %s reads %s to the graph (YAML 1.1) but %s to the editor (YAML 1.2)",
+					node.ID(), k, repr(sv), repr(ev)))
+			}
+		}
+	}
+	return out
+}
+
+// unrepresentable names every value a json document cannot carry: an
+// infinite or NaN float, at any depth.
+func unrepresentable(node index.Node, meta *omap.Map, format string) []string {
+	var out []string
+	var walk func(at string, v any)
+	walk = func(at string, v any) {
+		switch x := v.(type) {
+		case float64:
+			if math.IsInf(x, 0) || math.IsNaN(x) {
+				out = append(out, fmt.Sprintf("%s: %s is %s, which %s cannot carry", node.ID(), at, repr(x), format))
+			}
+		case *omap.Map:
+			for _, k := range x.Keys() {
+				kv, _ := x.Get(k)
+				walk(at+"."+k, kv)
+			}
+		case []any:
+			for i, it := range x {
+				walk(fmt.Sprintf("%s[%d]", at, i), it)
+			}
+		}
+	}
+	for _, k := range meta.Keys() {
+		v, _ := meta.Get(k)
+		walk(k, v)
+	}
+	return out
+}
+
+// repr renders a value for a refusal: strings quoted so a string and the
+// number it spells stay apart, everything else as the CLI prints it.
+func repr(v any) string {
+	switch x := v.(type) {
+	case nil:
+		return "null"
+	case string:
+		return "'" + x + "'"
+	case bool:
+		if x {
+			return "true"
+		}
+		return "false"
+	case float64:
+		if math.IsInf(x, 1) {
+			return ".inf"
+		}
+		if math.IsInf(x, -1) {
+			return "-.inf"
+		}
+		if math.IsNaN(x) {
+			return ".nan"
+		}
+		return canon.PyFloatRepr(x)
+	case []any, *omap.Map:
+		doc, err := canon.EncodeCLI(x)
+		if err != nil {
+			return values.Str(x)
+		}
+		return doc
+	}
+	return values.Str(v)
 }
 
 // resolveTarget is the destination storage: the caller's values over the
@@ -436,10 +601,11 @@ func readSource(root string, rtype *schema.ResolvedType, idx *index.Index, node 
 
 // reshape is the entity's meta as the destination stores it: `type` opens a
 // file and leaves a row (the collection's binding supplies it); a row's
-// redundant `slug` goes; a value the destination cannot carry refuses; and a
-// declared date read back from json's strings becomes a date again on the
-// way to md or yaml, so a round trip reproduces the file it started from.
-func reshape(rtype *schema.ResolvedType, slug string, meta *omap.Map, body string, from, to Storage) (*omap.Map, error) {
+// redundant `slug` goes; a value the destination cannot carry is named in
+// lossy; and a declared date read back from json's strings becomes a date
+// again on the way to md or yaml, so a round trip reproduces the file it
+// started from.
+func reshape(rtype *schema.ResolvedType, slug string, meta *omap.Map, from, to Storage, lossy *[]string) (*omap.Map, error) {
 	out := omap.New()
 	if to.Layout != schema.LayoutCollection {
 		if _, has := meta.Get("type"); !has {
@@ -453,15 +619,13 @@ func reshape(rtype *schema.ResolvedType, slug string, meta *omap.Map, body strin
 			continue
 		case k == "slug" && to.Layout == schema.LayoutCollection:
 			if s, ok := v.(string); ok && s == slug {
-				continue
+				continue // redundant with the row key; dropped, never restored
 			}
-			return nil, errs.New("migrate_lossy", fmt.Sprintf(
-				"'%s/%s' carries a 'slug' field (%s) that disagrees with its slug; a collection row's slug is its identity. "+
-					"Drop the field first", rtype.Name, slug, values.Str(v)))
+			*lossy = append(*lossy, fmt.Sprintf(
+				"%s/%s: slug is %s, which disagrees with the slug a collection row is keyed by", rtype.Name, slug, repr(v)))
 		case k == "body" && to.Format != "md":
-			return nil, errs.New("migrate_lossy", fmt.Sprintf(
-				"'%s/%s' carries a 'body' frontmatter field, which is the prose channel of a %s entity. "+
-					"Rename the field first", rtype.Name, slug, to.Format))
+			*lossy = append(*lossy, fmt.Sprintf(
+				"%s/%s: body is a frontmatter field, and the prose channel of a %s entity", rtype.Name, slug, to.Format))
 		}
 		out.Set(k, v)
 	}
@@ -483,15 +647,6 @@ func reshape(rtype *schema.ResolvedType, slug string, meta *omap.Map, body strin
 
 // textual reports a format that carries dates as strings.
 func textual(format string) bool { return format == "json" || format == "jsonl" }
-
-// mdNormalized ends new md prose in a newline, as `add` does; every other
-// format stores the string verbatim.
-func mdNormalized(body, format string) string {
-	if format == "md" && body != "" && !strings.HasSuffix(body, "\n") {
-		return body + "\n"
-	}
-	return body
-}
 
 // destRel is the file one entity lands in under to.
 func destRel(to Storage, slug string) string {
@@ -590,10 +745,12 @@ func dropEmptied(root string, emptied []string) {
 }
 
 // storageEntry is the change that records the destination in storage.yaml:
-// the type's entry gains the new layout, path and — for a directory layout
-// off the md default — format, keeps its other keys, and the file keeps every
-// other byte through canon.SpliceEntry. A document the splice cannot address
-// is re-emitted whole behind its leading comment lines.
+// the type's entry opens with layout, format and path (format kept when the
+// entry declared one, written when the destination is off the md default),
+// keeps its other keys after them, and the file keeps every other byte
+// through canon.SpliceEntry. A CRLF file is spliced as LF and given its line
+// ending back. A document the splice cannot address is re-emitted whole
+// behind its leading comment lines.
 func storageEntry(root, typeName string, to Storage) (workspace.FileChange, error) {
 	rel := filepath.FromSlash(StorageYAML)
 	before, err := workspace.ReadFileState(root, rel)
@@ -604,6 +761,8 @@ func storageEntry(root, typeName string, to Storage) (workspace.FileChange, erro
 	if before != nil {
 		raw = string(before.Data)
 	}
+	crlf := strings.Contains(raw, "\r\n")
+	raw = canon.NormalizeNewlines(raw)
 	doc, nonMap, err := canon.LoadDocMap(raw, canon.Mode12)
 	if err != nil {
 		return workspace.FileChange{}, errs.New("schema_error", fmt.Sprintf("Cannot parse schema %s: %s", StorageYAML, err.Error()))
@@ -611,26 +770,31 @@ func storageEntry(root, typeName string, to Storage) (workspace.FileChange, erro
 	if nonMap != nil {
 		return workspace.FileChange{}, errs.New("schema_error", fmt.Sprintf("Cannot parse schema %s: the document is not a mapping", StorageYAML))
 	}
-	entry := omap.New()
+	var current *omap.Map
 	storage, _ := doc.Get("storage")
 	if sm, ok := storage.(*omap.Map); ok {
 		if ev, has := sm.Get(typeName); has {
-			if em, ok := ev.(*omap.Map); ok {
-				for _, k := range em.Keys() {
-					v, _ := em.Get(k)
-					entry.Set(k, v)
-				}
-			}
+			current, _ = ev.(*omap.Map)
 		}
 	}
+	entry := omap.New()
 	entry.Set("layout", to.Layout)
-	entry.Set("path", to.Path)
-	// A collection's path carries its format in its extension; a directory
-	// layout declares a non-default format.
-	if to.Layout != schema.LayoutCollection && to.Format != "md" {
+	declared := false
+	if current != nil {
+		_, declared = current.Get("format")
+	}
+	if declared || to.Format != "md" {
 		entry.Set("format", to.Format)
-	} else {
-		entry.Delete("format")
+	}
+	entry.Set("path", to.Path)
+	if current != nil {
+		for _, k := range current.Keys() {
+			if k == "layout" || k == "format" || k == "path" {
+				continue
+			}
+			v, _ := current.Get(k)
+			entry.Set(k, v)
+		}
 	}
 	out, err := canon.SpliceEntry([]byte(raw), []string{"storage", typeName}, entry, canon.Mode12)
 	if errors.Is(err, canon.ErrNoSplice) {
@@ -647,6 +811,9 @@ func storageEntry(root, typeName string, to Storage) (workspace.FileChange, erro
 		out = []byte(leadingComments(raw) + text)
 	} else if err != nil {
 		return workspace.FileChange{}, err
+	}
+	if crlf {
+		out = []byte(strings.ReplaceAll(string(out), "\n", "\r\n"))
 	}
 	after := &workspace.FileState{Data: out, Mode: 0o644}
 	if before != nil {
@@ -671,9 +838,10 @@ func leadingComments(text string) string {
 
 // validateCandidate applies the plan to a copy of the workspace and holds it
 // to the contract the live one meets: the schema resolves, every entity of
-// the type re-parses under the new storage as the same set of nodes, and
-// `validate` reports no error it did not already report. Resolver refusals
-// pass through as they are; the rest is migrate_invalid.
+// the type re-parses under the new storage as the same set of nodes,
+// `validate` reports no error it did not already report, and `check` gains
+// no finding in a bucket that fails it. Resolver refusals pass through as
+// they are; the rest is migrate_invalid, or migrate_check for a finding.
 func validateCandidate(root string, resolved *schema.ResolvedSchema, p *Plan) error {
 	cand, _, _, cleanup, err := workspace.Candidate(root, resolved)
 	if err != nil {
@@ -748,15 +916,91 @@ func validateCandidate(root string, resolved *schema.ResolvedSchema, p *Plan) er
 		}
 	}
 	if len(fresh) > 0 {
-		shown := fresh
-		more := ""
-		if len(shown) > 3 {
-			more = fmt.Sprintf(" (+%d more)", len(shown)-3)
-			shown = shown[:3]
+		return invalid(fmt.Sprintf("`khub validate` would report %d new error(s) — %s", len(fresh), joinShown(fresh)))
+	}
+	liveCheck, err := integrity.Check(root, false)
+	if err != nil {
+		return err
+	}
+	candCheck, err := integrity.Check(cand, false)
+	if err != nil {
+		return err
+	}
+	had := map[string]bool{}
+	for _, f := range checkFindings(liveCheck) {
+		had[f] = true
+	}
+	var gained []string
+	for _, f := range checkFindings(candCheck) {
+		if !had[f] {
+			gained = append(gained, f)
 		}
-		return invalid(fmt.Sprintf("`khub validate` would report %d new error(s) — %s%s", len(fresh), strings.Join(shown, "; "), more))
+	}
+	if len(gained) > 0 {
+		return errs.New("migrate_check", fmt.Sprintf(
+			"Refusing to migrate '%s': under the new storage `khub check` would report %d new finding(s) — %s. "+
+				"Fix the cause first; `khub check` explains each bucket", p.Type, len(gained), joinShown(gained)))
 	}
 	return nil
+}
+
+// checkFindings renders every gating finding of a check report as
+// "<bucket>: <item>", the buckets Passed consults, in its order. Orphans and
+// the informational buckets are left out: a move changes no edge.
+func checkFindings(r *integrity.CheckReport) []string {
+	var out []string
+	add := func(bucket, item string) { out = append(out, bucket+": "+item) }
+	for _, i := range r.Incomplete {
+		add("incomplete", i.ID())
+	}
+	for _, d := range r.Dangling {
+		add("dangling", d.ID()+" "+d.Predicate+" -> "+d.Target)
+	}
+	for _, s := range r.Strays {
+		add("strays", s)
+	}
+	for _, s := range r.StrayTemplates {
+		add("stray_templates", s)
+	}
+	for _, s := range r.MissingTemplates {
+		add("missing_templates", s)
+	}
+	for _, e := range r.TemplateInvalid {
+		add("template_invalid", e.ID())
+	}
+	for _, e := range r.BodyShape {
+		add("body_shape", e.ID())
+	}
+	for _, c := range r.Cycles {
+		add("cycles", strings.Join(c, " -> "))
+	}
+	for _, s := range r.Malformed {
+		add("malformed", s)
+	}
+	for _, s := range r.MissingSingletons {
+		add("missing_singletons", s)
+	}
+	for _, s := range r.DraftRequiredSingletons {
+		add("draft_required_singletons", s)
+	}
+	for _, m := range r.Misplaced {
+		add("misplaced", m.Path)
+	}
+	for _, a := range r.AliasConflicts {
+		add("alias_conflicts", a.Alias)
+	}
+	return out
+}
+
+// joinShown joins the first three items and counts the rest.
+func joinShown(items []string) string {
+	shown := items
+	more := ""
+	if len(shown) > 3 {
+		more = fmt.Sprintf(" (+%d more)", len(shown)-3)
+		shown = shown[:3]
+	}
+	return strings.Join(shown, "; ") + more
 }
 
 func contains(ss []string, s string) bool {

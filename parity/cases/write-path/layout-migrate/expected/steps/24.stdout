@@ -1,1 +1,1 @@
-{"type": "note", "from": {"layout": "collection", "format": "jsonl", "path": "notes.jsonl"}, "to": {"layout": "file", "format": "md", "path": "notes"}, "entities": 2, "create": ["notes/alpha.md", "notes/beta.md"], "rewrite": [], "remove": ["notes.jsonl"], "storage_yaml": true, "dry_run": false, "index": "updated"}
+{"counts": {"note": 3, "card": 1, "sheet": 0, "dossier": 0, "charter": 0, "repo": 0, "vendor": 0, "account": 0}, "total": 4, "draft": 0, "active": 4, "orphan": 4, "stale": 0, "okf_conformant": true, "stray": 0, "malformed": 0}

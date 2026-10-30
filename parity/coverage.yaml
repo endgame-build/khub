@@ -277,7 +277,9 @@ error_codes:
 - lookup_error
 - malformed_entity
 - malformed_projection
+- migrate_check
 - migrate_invalid
+- migrate_journal_present
 - migrate_lossy
 - migrate_singleton
 - migrate_target

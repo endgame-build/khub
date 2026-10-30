@@ -29,7 +29,9 @@ func TestMigrateRunsTailsUnderTheWorkspaceLock(t *testing.T) {
 		t.Fatal(err)
 	}
 	calls := 0
-	_, err := layout.Migrate(root, "repo", layout.Target{Layout: "collection", Format: "jsonl"}, layout.Options{
+	// A move that keeps md: build-hub binds repo.yaml to the type by its stem,
+	// so leaving md would be refused for the stray template it leaves.
+	_, err := layout.Migrate(root, "repo", layout.Target{Layout: "folder"}, layout.Options{
 		Execute: true,
 		Tails: func(got string) {
 			calls++
@@ -39,8 +41,8 @@ func TestMigrateRunsTailsUnderTheWorkspaceLock(t *testing.T) {
 			if !workspace.LockHeld(t, root) {
 				t.Fatal("tails ran without the workspace lock")
 			}
-			if _, err := os.Stat(filepath.Join(root, "knowledge", "repos.jsonl")); err != nil {
-				t.Fatalf("tails ran before the collection was published: %v", err)
+			if _, err := os.Stat(filepath.Join(root, "knowledge", "repos", "rp-api", "_index.md")); err != nil {
+				t.Fatalf("tails ran before the folder was published: %v", err)
 			}
 		},
 	})
@@ -54,7 +56,7 @@ func TestMigrateRunsTailsUnderTheWorkspaceLock(t *testing.T) {
 		t.Fatal("lock still held after Migrate returned")
 	}
 	// A dry run holds no lock and runs no tails.
-	if _, err := layout.Migrate(root, "repo", layout.Target{Layout: "file", Format: "md"}, layout.Options{Tails: func(string) {
+	if _, err := layout.Migrate(root, "repo", layout.Target{Layout: "file"}, layout.Options{Tails: func(string) {
 		t.Fatal("Tails ran on a dry run")
 	}}); err != nil {
 		t.Fatal(err)

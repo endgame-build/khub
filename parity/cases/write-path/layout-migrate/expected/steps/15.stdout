@@ -1,1 +1,1 @@
-{"error": {"code": "migrate_invalid", "message": "Refusing to migrate 'card': under the new storage `khub validate` would report 1 new error(s) \u2014 note/alpha: references: no any 'cards/gamma.json' to satisfy relation 'references'"}}
+{"id": "note/scalars", "type": "note", "slug": "scalars", "removed": true}

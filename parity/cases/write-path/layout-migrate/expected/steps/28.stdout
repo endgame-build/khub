@@ -1,1 +1,1 @@
-{"type": "card", "from": {"layout": "file", "format": "json", "path": "cards"}, "to": {"layout": "folder", "format": "json", "path": "data/cards"}, "entities": 1, "create": ["data/cards/gamma/_index.json"], "rewrite": [], "remove": ["cards/gamma.json"], "storage_yaml": true, "dry_run": false, "index": "updated"}
+{"count": 4, "errors": [], "gaps": [], "body": null, "lenses": []}

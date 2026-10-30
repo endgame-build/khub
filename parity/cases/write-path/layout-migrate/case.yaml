@@ -2,11 +2,16 @@
 # plan is a dry run by default and refuses what it cannot do: nothing to
 # change, a singleton, a layout the schema has no word for, an unknown type,
 # a destination already there, a storage tree holding what is not the type's
-# entities, a value the destination cannot carry, and a move that would leave
-# a path reference dangling. --execute moves file/md notes into a jsonl
+# entities, a value the destination cannot carry (a slug field, the scalars
+# the scan's YAML 1.1 and the editor's 1.2 read differently, a float json
+# cannot hold), a move that would leave a path reference dangling, and one
+# that would leave a stem-bound template stray. A same-format move copies a
+# commented file byte for byte and the plan names it as `rewritten` once a
+# format change would re-emit it. --execute moves file/md notes into a jsonl
 # collection, back, then into json files, and a json file type into folders
 # under a --path; get, query, validate and check read the same entities at
-# every step, and `khub layout` shows where each type landed.
+# every step, `khub layout` shows where each type landed, and a leftover
+# journal refuses the next plan.
 steps:
 - argv: ["init", "preset-cells", ".", "--no-wire", "--preset-source", "PRESETSRC"]
 - argv: ["add", "note", "--title", "Alpha", "--format", "json"]
@@ -24,6 +29,15 @@ steps:
 - sh: "printf -- '---\\ntype: note\\ntitle: Stray\\ncreated: 2026-01-15\\nslug: other\\n---\\n' > notes/stray.md"
 - argv: ["layout", "migrate", "note", "--layout", "collection", "--to-format", "jsonl", "--format", "json"]
 - argv: ["remove", "note/stray", "--format", "json"]
+- sh: "printf -- '---\\ntype: note\\ntitle: Scalars\\ncreated: 2026-01-15\\noct: 010\\nexp: 1e3\\nsexa: 1:30\\ny: yes\\ntilde: ~\\ninf: .inf\\n---\\n' > notes/scalars.md"
+- argv: ["layout", "migrate", "note", "--to-format", "json", "--format", "json"]
+- argv: ["remove", "note/scalars", "--format", "json"]
+- sh: "mkdir -p .khub/templates && printf 'title: Dossier\\nsections: []\\n' > .khub/templates/dossier.yaml"
+- argv: ["layout", "migrate", "dossier", "--to-format", "json", "--format", "json"]
+- sh: "printf -- '---\\n# kept by a same-format move\\ntype: note\\ntitle: '\\''Quoted title'\\''\\ncreated: 2026-01-15\\ntags: [alpha, beta]   # inline\\n---\\nBody.\\n' > notes/commented.md"
+- argv: ["layout", "migrate", "note", "--path", "notes2", "--execute", "--format", "json"]
+- argv: ["get", "note/commented", "--format", "raw"]
+- argv: ["layout", "migrate", "note", "--path", "notes", "--execute", "--format", "json"]
 - sh: "printf 'policy:\\n  charter: { orphan: true }\\n  note: { path_refs: true }\\n' > .khub/policy.yaml"
 - argv: ["edit", "note/alpha", "--references", "cards/gamma.json", "--format", "json"]
 - argv: ["layout", "migrate", "card", "--to-format", "yaml", "--format", "json"]
@@ -43,3 +57,5 @@ steps:
 - argv: ["validate", "--format", "json"]
 - argv: ["check", "--format", "json"]
 - argv: ["layout", "--format", "json"]
+- sh: "mkdir -p .khub/generated/migrate-left && printf 'files: []\\n' > .khub/generated/migrate-left/manifest.yaml"
+- argv: ["layout", "migrate", "note", "--to-format", "yaml", "--format", "json"]

@@ -14,12 +14,18 @@ Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelo
   run by default; `--execute` performs it under the workspace lock, staged and
   journaled like `upgrade`, then regenerates `index.md`. The whole set is
   validated on a copy of the workspace first — the schema must resolve, the
-  scan must find the same entities, `validate` must gain no error — and the
-  plan refuses a destination that exists, a storage tree holding what is not
-  the type's entities, a singleton, a path template, and a value the
-  destination cannot carry. A round trip reproduces the files khub wrote
-  byte for byte. `storage.yaml` keeps every other byte: the type's entry is
-  spliced in place. `khub layout` lists where every type lands.
+  scan must find the same entities, `validate` must gain no error, `check`
+  no finding — and the plan refuses a destination that exists, a storage
+  tree holding what is not the type's entities, a singleton, a path
+  template, a leftover journal, and every value that would not survive the
+  move (a scalar the scan and the editor read differently, a float json
+  cannot hold), named field by field. A same-format move copies bytes, so
+  hand comments survive and git pairs the rename; a round trip through
+  another format reproduces the per-item files khub wrote byte for byte,
+  and the plan lists the files it would not (`rewritten`) and the undated
+  entities whose git date it resets (`stale_reset`). `storage.yaml` keeps
+  every other byte: the type's entry is spliced in place, CRLF included.
+  `khub layout` lists where every type lands.
 - The Claude Code plugin (0.1.11) reads `khub layout migrate --execute` as a
   write, so the band refreshes after a migration.
 - **`query --under <id> --via <predicate>`.** Scopes a query to everything

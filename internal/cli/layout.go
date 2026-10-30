@@ -100,6 +100,8 @@ func layoutMigrate(typeName string, target layout.Target, execute bool, format s
 	payload.Set("create", strList(plan.Create))
 	payload.Set("rewrite", strList(plan.Rewrite))
 	payload.Set("remove", strList(plan.Remove))
+	payload.Set("rewritten", strList(plan.Rewritten))
+	payload.Set("stale_reset", plan.StaleReset)
 	payload.Set("storage_yaml", plan.StorageYAML)
 	payload.Set("dry_run", !plan.Executed)
 	indexStep.set(payload, "index", func(action *string) any { return *action }, true)
@@ -117,6 +119,12 @@ func layoutMigrate(typeName string, target layout.Target, execute bool, format s
 			fmt.Printf("remove %s\n", p)
 		}
 		fmt.Printf("rewrite %s (storage.%s)\n", layout.StorageYAML, plan.Type)
+		for _, p := range plan.Rewritten {
+			fmt.Printf("rewritten %s (comments, quoting or layout in this file will not round-trip)\n", p)
+		}
+		if plan.StaleReset > 0 {
+			fmt.Printf("stale: %d undated entities will take the migration commit's date\n", plan.StaleReset)
+		}
 		if !plan.Executed {
 			fmt.Println("dry run — nothing written; pass --execute to migrate")
 			return

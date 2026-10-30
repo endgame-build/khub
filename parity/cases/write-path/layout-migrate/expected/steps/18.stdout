@@ -1,1 +1,8 @@
-{"counts": {"note": 2, "card": 1, "sheet": 0, "dossier": 0, "charter": 0, "repo": 0, "vendor": 0, "account": 0}, "total": 3, "draft": 0, "active": 3, "orphan": 3, "stale": 0, "okf_conformant": true, "stray": 0, "malformed": 0}
+---
+# kept by a same-format move
+type: note
+title: 'Quoted title'
+created: 2026-01-15
+tags: [alpha, beta]   # inline
+---
+Body.

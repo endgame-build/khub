@@ -121,6 +121,13 @@ func seedWS() (string, error) {
 		}); err != nil {
 			return "", err
 		}
+		// A body with no trailing newline: md gets one from `add`, every
+		// other format stores it bare, and a round trip must give it back bare.
+		if _, err := entity.Create(root, name, entity.CreateOpts{
+			Fields: fields("title", "Bare "+name), Body: "No newline.", ID: "bare-" + name,
+		}); err != nil {
+			return "", err
+		}
 	}
 	return root, nil
 }
@@ -263,7 +270,7 @@ func TestEveryCellRoundTrips(t *testing.T) {
 				_, _, origPath := storageOf(t, root, name)
 
 				p := migrate(t, root, name, layout.Target{Layout: to.layout, Format: to.format})
-				if p.Entities != 2 || !p.Executed || !p.StorageYAML {
+				if p.Entities != 3 || !p.Executed || !p.StorageYAML || len(p.Rewritten) != 0 {
 					t.Fatalf("plan: %+v", p)
 				}
 				if l, f, _ := storageOf(t, root, name); l != to.layout || f != to.format {
@@ -292,9 +299,12 @@ func TestEveryCellRoundTrips(t *testing.T) {
 				if l, f, p := storageOf(t, root, name); l != from.layout || f != from.format || p != origPath {
 					t.Fatalf("storage after return = %s/%s at %s, want %s at %s", l, f, p, from, origPath)
 				}
+				// A collection comes back with its rows in slug order (a
+				// directory lists sorted); the values are compared above and
+				// below, the bytes only for per-item sources.
 				back := tree(t, root)
 				for rel, data := range before {
-					if rel == ".khub/storage.yaml" || rel == "index.md" {
+					if rel == ".khub/storage.yaml" || rel == "index.md" || (from.layout == "collection" && rel == origPath) {
 						continue
 					}
 					if back[rel] != data {
@@ -334,7 +344,7 @@ func TestDryRunWritesNothing(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if p.Executed || p.Entities != 2 || p.To.Path != "notes.yaml" || len(p.Create) != 1 || len(p.Remove) != 2 {
+	if p.Executed || p.Entities != 3 || p.To.Path != "notes.yaml" || len(p.Create) != 1 || len(p.Remove) != 3 || p.StaleReset != 0 {
 		t.Fatalf("plan: %+v", p)
 	}
 	if got := tree(t, root); !equalViews(got, before) {
@@ -375,8 +385,8 @@ func TestDerivedAndExplicitPaths(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(text), "  vendor:\n    layout: collection\n    path: data/vendors.yaml\n  account:") {
-		t.Fatalf("storage.yaml: a collection's path carries its format:\n%s", text)
+	if !strings.Contains(string(text), "  vendor:\n    layout: collection\n    format: yaml\n    path: data/vendors.yaml\n  account:") {
+		t.Fatalf("storage.yaml: layout, format, path, in that order:\n%s", text)
 	}
 	if _, err := os.Stat(filepath.Join(root, "data", "vendors.yaml")); err != nil {
 		t.Fatal(err)
@@ -406,7 +416,7 @@ func TestStorageYAMLKeepsEveryOtherByte(t *testing.T) {
 	got, _ := os.ReadFile(storagePath)
 	want := strings.Replace(authored,
 		"  card:    { layout: file, format: json, path: cards }\n",
-		"  card: { layout: collection, path: cards.yaml }\n", 1)
+		"  card: { layout: collection, format: yaml, path: cards.yaml }\n", 1)
 	if string(got) != want {
 		t.Fatalf("storage.yaml:\n%s\nwant:\n%s", got, want)
 	}
@@ -428,7 +438,7 @@ func TestStorageYAMLKeepsEveryOtherByte(t *testing.T) {
 	}
 	migrate(t, root, "note", layout.Target{Layout: "collection", Format: "jsonl"})
 	got, _ = os.ReadFile(storagePath)
-	if string(got) != "# header\nstorage:\n  charter: { layout: singleton, path: charter.md }\n  note:\n    layout: collection\n    path: note.jsonl\n" {
+	if string(got) != "# header\nstorage:\n  charter: { layout: singleton, path: charter.md }\n  note:\n    layout: collection\n    format: jsonl\n    path: note.jsonl\n" {
 		t.Fatalf("storage.yaml:\n%s", got)
 	}
 }
@@ -450,6 +460,10 @@ func TestRefusals(t *testing.T) {
 	refuses(t, try("note", layout.Target{Layout: "collection", Format: "json", Path: "work/{slug}.json"}), "migrate_target")
 	refuses(t, try("note", layout.Target{Layout: "collection", Format: "json", Path: "../escape.json"}), "migrate_target")
 	refuses(t, try("note", layout.Target{Path: "cards"}), "invalid_schema") // overlaps card's storage
+	if err := os.WriteFile(filepath.Join(root, "data.txt"), []byte("x\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	refuses(t, try("note", layout.Target{Format: "json", Path: "data.txt"}), "migrate_target_exists")
 
 	// An existing destination that the plan does not produce.
 	if err := os.WriteFile(filepath.Join(root, "notes.jsonl"), []byte(`{"slug": "other", "title": "x"}`+"\n"), 0o644); err != nil {
@@ -539,7 +553,7 @@ func TestTemplatedSource(t *testing.T) {
 	if err := os.WriteFile(storagePath, []byte(authored), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	for _, slug := range []string{"plain-note", "rich-note"} {
+	for _, slug := range []string{"plain-note", "rich-note", "bare-note"} {
 		data, _ := os.ReadFile(filepath.Join(root, "notes", slug+".md"))
 		if err := os.MkdirAll(filepath.Join(root, "work", slug), 0o777); err != nil {
 			t.Fatal(err)
@@ -608,5 +622,179 @@ func TestShowListsEveryType(t *testing.T) {
 	}
 	if _, err := schema.ParseTemplate("work/{slug}.md", "md"); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// The scan reads md at YAML 1.1 and the editor at 1.2; a value the two
+// disagree on, or one json cannot carry, refuses the whole migration naming
+// every field, so nothing changes value on the way through.
+func TestAltitudeDivergenceRefuses(t *testing.T) {
+	root := newWS(t)
+	scalars := filepath.Join(root, "notes", "scalars.md")
+	if err := os.WriteFile(scalars, []byte("---\ntype: note\ncreated: 2026-01-15\ntitle: Scalars\n"+
+		"y: yes\ndraft: yes\noct: 010\nsexa: 1:30\ntilde: ~\nexp: 1e3\ninf: .inf\nnested:\n  deep: .nan\n---\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	err := layoutErr(root, "note", layout.Target{Format: "json"})
+	refuses(t, err, "migrate_lossy")
+	for _, want := range []string{
+		"note/scalars: y reads true to the graph (YAML 1.1) but 'yes' to the editor (YAML 1.2)",
+		"note/scalars: draft reads true to the graph",
+		"note/scalars: oct reads 8 to the graph (YAML 1.1) but 10 to the editor",
+		"note/scalars: sexa reads 90 to the graph (YAML 1.1) but '1:30' to the editor",
+		"note/scalars: exp reads '1e3' to the graph (YAML 1.1) but 1000.0 to the editor",
+		"note/scalars: inf is .inf, which json cannot carry",
+		"note/scalars: nested.deep is .nan, which json cannot carry",
+		"7 value(s)",
+	} {
+		if !strings.Contains(err.Error(), want) {
+			t.Fatalf("message lacks %q:\n%s", want, err)
+		}
+	}
+	if strings.Contains(err.Error(), "tilde") {
+		t.Fatalf("a null is not a divergence:\n%s", err)
+	}
+	// Into a yaml collection the floats are fine; the altitude split is not.
+	err = layoutErr(root, "note", layout.Target{Layout: "collection", Format: "yaml"})
+	refuses(t, err, "migrate_lossy")
+	if strings.Contains(err.Error(), "inf") || !strings.Contains(err.Error(), "5 value(s)") {
+		t.Fatalf("yaml destination:\n%s", err)
+	}
+	// A same-format move copies bytes, so nothing is read at all.
+	migrate(t, root, "note", layout.Target{Path: "notes2"})
+	data, _ := os.ReadFile(filepath.Join(root, "notes2", "scalars.md"))
+	if !strings.Contains(string(data), "oct: 010\n") {
+		t.Fatalf("same-format move rewrote the file:\n%s", data)
+	}
+}
+
+// A move that keeps the format copies each file's bytes: a hand comment and
+// the author's quoting survive, and nothing is listed as rewritten. A format
+// change lists every source whose bytes it will not reproduce.
+func TestSameFormatMoveCopiesBytes(t *testing.T) {
+	root := newWS(t)
+	hand := "---\n# kept\ntype: note\ntitle: 'Quoted title'\ncreated: 2026-01-15\ntags: [alpha, beta]   # inline\n---\nBody.\n"
+	if err := os.WriteFile(filepath.Join(root, "notes", "hand.md"), []byte(hand), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	p := migrate(t, root, "note", layout.Target{Path: "notes2"})
+	if len(p.Rewritten) != 0 || p.StaleReset != 1 {
+		t.Fatalf("plan: %+v", p)
+	}
+	moved, err := os.ReadFile(filepath.Join(root, "notes2", "hand.md"))
+	if err != nil || string(moved) != hand {
+		t.Fatalf("moved bytes:\n%s\n%v", moved, err)
+	}
+	p = migrate(t, root, "note", layout.Target{Layout: "folder"})
+	if len(p.Rewritten) != 0 {
+		t.Fatalf("file -> folder rewrote: %v", p.Rewritten)
+	}
+	moved, _ = os.ReadFile(filepath.Join(root, "notes2", "hand", "_index.md"))
+	if string(moved) != hand {
+		t.Fatalf("folder bytes:\n%s", moved)
+	}
+	dry, err := layout.Migrate(root, "note", layout.Target{Layout: "collection", Format: "jsonl"}, layout.Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Join(dry.Rewritten, " ") != "notes2/hand/_index.md" {
+		t.Fatalf("rewritten = %v", dry.Rewritten)
+	}
+}
+
+// A finding `check` would gain refuses: a template bound to an md type by
+// its stem is stray once the type leaves md, and the resolver cannot see it.
+func TestCheckRegressionRefuses(t *testing.T) {
+	root := newWS(t)
+	if err := os.MkdirAll(filepath.Join(root, ".khub", "templates"), 0o777); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, ".khub", "templates", "note.yaml"), []byte("title: Note\nsections: []\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	err := layoutErr(root, "note", layout.Target{Format: "json"})
+	refuses(t, err, "migrate_check")
+	if !strings.Contains(err.Error(), "stray_templates: .khub/templates/note.yaml") {
+		t.Fatalf("message: %v", err)
+	}
+	// Staying md is fine.
+	migrate(t, root, "note", layout.Target{Layout: "folder"})
+}
+
+// A journal with a manifest means an earlier run published something before
+// it stopped; no plan is made over that tree.
+func TestJournalPresentRefuses(t *testing.T) {
+	root := newWS(t)
+	dir := filepath.Join(root, ".khub", "generated", "migrate-left")
+	if err := os.MkdirAll(dir, 0o777); err != nil {
+		t.Fatal(err)
+	}
+	// Blobs without a manifest: nothing was published; the plan proceeds.
+	if err := os.WriteFile(filepath.Join(dir, "0.original"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := layout.Migrate(root, "note", layout.Target{Format: "json"}, layout.Options{}); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "manifest.yaml"), []byte("files: []\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	err := layoutErr(root, "note", layout.Target{Format: "json"})
+	refuses(t, err, "migrate_journal_present")
+	if !strings.Contains(err.Error(), ".khub/generated/migrate-left") {
+		t.Fatalf("message: %v", err)
+	}
+}
+
+// A CRLF storage.yaml is spliced as LF and given its line ending back; its
+// comments and the other entries' style survive.
+func TestCRLFStorageYAML(t *testing.T) {
+	root := newWS(t)
+	storagePath := filepath.Join(root, ".khub", "storage.yaml")
+	lf := "# khub-preset: preset-cells@0.1.0\n" +
+		"storage:\n" +
+		"  # comment above note\n" +
+		"  note:\n" +
+		"    layout: file   # inline on layout\n" +
+		"    # comment inside the entry\n" +
+		"    path: notes\n" +
+		"  card:    { layout: file, format: json, path: cards }   # trailing on card\n" +
+		"  sheet:   { layout: file, format: yaml, path: sheets }\n" +
+		"  dossier: { layout: folder, path: dossiers }\n" +
+		"  charter: { layout: singleton, path: charter.md }\n" +
+		"  repo:    { layout: collection, format: jsonl, path: repos.jsonl }\n" +
+		"  vendor:  { layout: collection, format: yaml, path: vendors.yaml }\n" +
+		"  account: { layout: collection, format: json, path: accounts.json }\n"
+	if err := os.WriteFile(storagePath, []byte(strings.ReplaceAll(lf, "\n", "\r\n")), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	migrate(t, root, "card", layout.Target{Layout: "collection", Format: "yaml"})
+	got, _ := os.ReadFile(storagePath)
+	want := strings.ReplaceAll(strings.Replace(lf,
+		"  card:    { layout: file, format: json, path: cards }   # trailing on card\n",
+		"  card: { layout: collection, format: yaml, path: cards.yaml }\n", 1), "\n", "\r\n")
+	if string(got) != want {
+		t.Fatalf("storage.yaml:\n%q\nwant:\n%q", got, want)
+	}
+}
+
+// An entry's keys open with layout, format, path in that order; an explicit
+// `format: md` is kept.
+func TestStorageEntryKeyOrder(t *testing.T) {
+	root := newWS(t)
+	storagePath := filepath.Join(root, ".khub", "storage.yaml")
+	text, _ := os.ReadFile(storagePath)
+	authored := strings.Replace(string(text), "  note:\n    layout: file\n    path: notes\n",
+		"  note:\n    path: notes\n    id_prefix: nt\n    format: md\n    layout: file\n", 1)
+	if authored == string(text) {
+		t.Fatalf("storage.yaml shape:\n%s", text)
+	}
+	if err := os.WriteFile(storagePath, []byte(authored), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	migrate(t, root, "note", layout.Target{Layout: "folder"})
+	got, _ := os.ReadFile(storagePath)
+	if !strings.Contains(string(got), "  note:\n    layout: folder\n    format: md\n    path: notes\n    id_prefix: nt\n  card:") {
+		t.Fatalf("storage.yaml:\n%s", got)
 	}
 }
