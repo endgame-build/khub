@@ -1,6 +1,7 @@
 // search.go ports cli/search_cmd.py: full-text over title and body. Raw FTS5
 // MATCH syntax passes through ("quoted phrases", OR, NEAR, prefix*); --plain
-// takes plain words instead.
+// takes plain words instead. Each --also adds a query group of its own; the
+// groups' rankings are merged by reciprocal rank fusion (search.SearchGroups).
 
 package cli
 
@@ -18,6 +19,7 @@ func registerSearch(root *cobra.Command) {
 	var typeName, format string
 	var limit int
 	var plain bool
+	var also []string
 	cmd := newCmd("search {text}", "Full-text search: khub search modernization --type transcript --format json.",
 		"{text}", func(cmd *cobra.Command, args []string) error {
 			if len(args) == 0 {
@@ -28,11 +30,13 @@ func registerSearch(root *cobra.Command) {
 				if err != nil {
 					return err
 				}
-				res, err := search.Search(ws, args[0], search.Options{
+				groups := append([]string{args[0]}, also...)
+				res, err := search.SearchGroups(ws, groups, search.Options{
 					Type: optString(cmd, "type", typeName), Limit: limit, Plain: plain, Now: today()})
 				if err != nil {
 					return err
 				}
+				fused := res.Groups > 1 // one distinct group is a plain search, with its bytes
 				if note := searchNote(res, plain); note != "" {
 					Note(note)
 				}
@@ -55,6 +59,10 @@ func registerSearch(root *cobra.Command) {
 					record.Set("orphan", h.Orphan)
 					record.Set("stale", h.Stale)
 					record.Set("score", h.Score)
+					if fused && h.Groups > 0 {
+						record.Set("fused", h.Fused)
+						record.Set("groups", h.Groups)
+					}
 					if plain {
 						record.Set("match", h.Match)
 						record.Set("title_match", h.TitleMatch)
@@ -84,6 +92,7 @@ func registerSearch(root *cobra.Command) {
 	cmd.Flags().StringVar(&typeName, "type", "", "Restrict to one entity type.")
 	cmd.Flags().IntVar(&limit, "limit", 20, "Cap the returned set.")
 	cmd.Flags().BoolVar(&plain, "plain", false, "Treat text as plain words: any may match, prefix-matched, punctuation literal.")
+	cmd.Flags().StringArrayVar(&also, "also", nil, "Another query group, ranked on its own and fused with the rest by reciprocal rank (repeatable).")
 	cmd.Flags().StringVar(&format, "format", "text", "text (Rich table on a TTY), json, or ids.")
 	root.AddCommand(cmd)
 }

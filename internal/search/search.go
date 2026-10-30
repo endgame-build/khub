@@ -86,7 +86,15 @@ type Hit struct {
 	Match      float64
 	TitleMatch float64
 
+	// Fused and Groups are set by SearchGroups for more than one group: the
+	// reciprocal rank fusion sum over the groups that hit the entity (higher
+	// is better), and how many groups hit it.
+	Fused  float64
+	Groups int
+
 	rowid int64
+	group int // the ranking a fused hit's record comes from (fuse)
+	rank  int // the hit's rank in that ranking, from 1 (fuse)
 }
 
 // Result is one search's hits plus what a caller needs to judge them.
@@ -96,6 +104,7 @@ type Result struct {
 	Searched  int  // entities indexed, after the type filter
 	Malformed int  // files in the workspace the scan could not parse
 	Capped    bool // a plain query held more than MaxPlainTerms words
+	Groups    int  // SearchGroups: the distinct groups that ranked (0 from Search)
 }
 
 // EdgeCount is how many edges one predicate carries at a hit. Only non-zero
@@ -120,27 +129,7 @@ type Options struct {
 // success, not an error (QRY-002).
 func Search(root, text string, opts Options) (Result, error) {
 	type_ := opts.Type
-	resolved, err := introspect.LoadSchema(root)
-	if err != nil {
-		return Result{}, err
-	}
-	if type_ != nil && !resolved.Types.Has(*type_) { // before the corpus scan
-		preset := "the"
-		if prov, perr := workspace.Provenance(root); perr == nil {
-			if p, _ := prov.Get("preset"); p != nil && p != "" {
-				preset, _ = p.(string)
-			}
-		}
-		known := append([]string{}, resolved.Types.Keys()...)
-		sort.Strings(known)
-		return Result{}, errs.UnknownType(*type_, preset, known)
-	}
-	scanned, err := index.BuildWithBodies(root, resolved)
-	if err != nil {
-		return Result{}, err
-	}
-	idx := index.Filter(scanned, index.StrayNodes(scanned)) // strays are not entities
-	staleDays, err := workspace.StaleDays(root)
+	resolved, idx, staleDays, err := prepare(root, type_)
 	if err != nil {
 		return Result{}, err
 	}
@@ -177,12 +166,7 @@ func Search(root, text string, opts Options) (Result, error) {
 			return Result{}, err
 		}
 	}
-	for i := range hits {
-		rtype, ok := resolved.Types.Get(hits[i].Type)
-		if ok && rtype.Storage.Layout == schema.LayoutCollection {
-			hits[i].Locator = hits[i].Path + "#" + hits[i].Slug
-		}
-	}
+	locate(hits, resolved)
 	if len(hits) > 0 {
 		annotate(hits, idx, opts.Now, staleDays)
 	}
@@ -192,6 +176,235 @@ func Search(root, text string, opts Options) (Result, error) {
 		}
 	}
 	return res, nil
+}
+
+// locate sets each hit's Locator: "path#slug" for a collection row, whose
+// Path is the shared inventory file; "" otherwise.
+func locate(hits []Hit, resolved *schema.ResolvedSchema) {
+	for i := range hits {
+		rtype, ok := resolved.Types.Get(hits[i].Type)
+		if ok && rtype.Storage.Layout == schema.LayoutCollection {
+			hits[i].Locator = hits[i].Path + "#" + hits[i].Slug
+		}
+	}
+}
+
+// prepare loads the schema, checks the type filter and scans the corpus:
+// everything a search needs before its FTS table.
+//
+// An unknown type_ is a located error, same as query, raised before the
+// corpus scan.
+func prepare(root string, type_ *string) (*schema.ResolvedSchema, *index.Index, int, error) {
+	resolved, err := introspect.LoadSchema(root)
+	if err != nil {
+		return nil, nil, 0, err
+	}
+	if type_ != nil && !resolved.Types.Has(*type_) {
+		preset := "the"
+		if prov, perr := workspace.Provenance(root); perr == nil {
+			if p, _ := prov.Get("preset"); p != nil && p != "" {
+				preset, _ = p.(string)
+			}
+		}
+		known := append([]string{}, resolved.Types.Keys()...)
+		sort.Strings(known)
+		return nil, nil, 0, errs.UnknownType(*type_, preset, known)
+	}
+	scanned, err := index.BuildWithBodies(root, resolved)
+	if err != nil {
+		return nil, nil, 0, err
+	}
+	idx := index.Filter(scanned, index.StrayNodes(scanned)) // strays are not entities
+	staleDays, err := workspace.StaleDays(root)
+	if err != nil {
+		return nil, nil, 0, err
+	}
+	return resolved, idx, staleDays, nil
+}
+
+// rrfK is the k of reciprocal rank fusion: a hit at rank r (from 1) in one
+// group adds 1/(rrfK + r) to its fused score. 60 is the usual choice: it
+// flattens the top ranks enough that a hit several groups rank moderately
+// outscores one a single group ranks first.
+const rrfK = 60
+
+// SearchGroups ranks each text as its own group, exactly as Search ranks
+// one, and merges the rankings by reciprocal rank fusion (fuse). Every
+// match of every group takes part, so the fusion is never truncated by a
+// per-group depth; opts.Limit cuts the fused list, and Total counts it.
+// Capped reports a plain group cut at MaxPlainTerms; Groups counts the
+// distinct groups that ranked.
+//
+// A repeated group counts once (groupKey says when two texts are one
+// group), and the groups are processed in sorted order, so the order given
+// never shapes the result: not the fused scores, not a tie, not which
+// group's record a hit carries, and not which malformed group is refused.
+// A single distinct group — or, under Plain, a single group with any words
+// — is Search, with Groups set to one.
+func SearchGroups(root string, texts []string, opts Options) (Result, error) {
+	groups := distinctGroups(texts, opts.Plain)
+	if len(groups) <= 1 {
+		text := ""
+		if len(groups) == 1 {
+			text = groups[0]
+		}
+		res, err := Search(root, text, opts)
+		if err == nil {
+			res.Groups = len(groups)
+		}
+		return res, err
+	}
+	type_ := opts.Type
+	resolved, idx, staleDays, err := prepare(root, type_)
+	if err != nil {
+		return Result{}, err
+	}
+
+	conn, err := sqlite3.Open(":memory:")
+	if err != nil {
+		return Result{}, err
+	}
+	defer func() { _ = conn.Close() }()
+
+	res := Result{Hits: []Hit{}, Malformed: len(idx.Malformed)}
+	if res.Searched, err = buildFTS(conn, root, idx, type_); err != nil {
+		return Result{}, err
+	}
+	res.Groups = len(groups)
+	rankings := make([][]Hit, len(groups))
+	terms := make([][]string, len(groups))
+	for g, text := range groups {
+		if opts.Plain {
+			var capped bool
+			terms[g], capped = plainTerms(text) // never empty: distinctGroups dropped the wordless
+			res.Capped = res.Capped || capped
+			text = strings.Join(terms[g], " OR ")
+		}
+		if rankings[g], err = match(conn, text, -1); err != nil { // -1: every match
+			return Result{}, err
+		}
+	}
+	fused := fuse(rankings)
+	res.Total = len(fused)
+	if opts.Limit > 0 {
+		res.Hits = fused[:min(opts.Limit, len(fused))]
+	}
+	hits := res.Hits
+	locate(hits, resolved)
+	if len(hits) > 0 {
+		annotate(hits, idx, opts.Now, staleDays)
+	}
+	if opts.Plain && len(hits) > 0 {
+		// Match and TitleMatch judge a hit against the group its record
+		// comes from, so each group's hits are scored with that group's
+		// words.
+		for g := range groups {
+			var at []int
+			var sub []Hit
+			for i, h := range hits {
+				if h.group == g {
+					at, sub = append(at, i), append(sub, h)
+				}
+			}
+			if len(sub) == 0 {
+				continue
+			}
+			if err := matchShares(conn, sub, terms[g], res.Searched); err != nil {
+				return Result{}, err
+			}
+			for j, i := range at {
+				hits[i].Match, hits[i].TitleMatch = sub[j].Match, sub[j].TitleMatch
+			}
+		}
+	}
+	return res, nil
+}
+
+// distinctGroups is the texts that stand for distinct groups (groupKey),
+// in sorted order; of two texts with one key the sorted-first is kept.
+// Under plain, a text with no words is no group at all.
+func distinctGroups(texts []string, plain bool) []string {
+	sorted := append([]string(nil), texts...)
+	sort.Strings(sorted)
+	seen := map[string]bool{}
+	out := make([]string, 0, len(sorted))
+	for _, t := range sorted {
+		key := groupKey(t, plain)
+		if key == "" || seen[key] {
+			continue
+		}
+		seen[key] = true
+		out = append(out, t)
+	}
+	return out
+}
+
+// groupKey says when two texts are one group, which FTS5 would rank
+// identically. A raw text is its words joined by one space, so only the
+// whitespace between them may differ; a plain text is its distinct words
+// lowercased, in order, as plainTerms keeps them, and "" when it has none.
+func groupKey(text string, plain bool) string {
+	if !plain {
+		return strings.Join(strings.Fields(text), " ")
+	}
+	seen := map[string]bool{}
+	var keys []string
+	for _, word := range strings.FieldsFunc(text, notWordRune) {
+		key := strings.ToLower(word)
+		if seen[key] {
+			continue
+		}
+		if len(keys) == MaxPlainTerms {
+			break
+		}
+		seen[key] = true
+		keys = append(keys, key)
+	}
+	return strings.Join(keys, " ")
+}
+
+// fuse merges rankings (each best first) by reciprocal rank fusion: an
+// entity's Fused is the exact sum of 1/(rrfK + rank) over the rankings that
+// hold it, and Groups counts those rankings. The hit returned for an entity
+// is its record from the ranking where it ranks best (the earlier ranking
+// on a tie) — the group that put most into Fused — so Score, Snippet and
+// the rowid are that ranking's, and BM25 values from different queries are
+// never compared. The result is best Fused first; equal Fused breaks on
+// type, then slug.
+func fuse(rankings [][]Hit) []Hit {
+	type key struct{ Type, Slug string }
+	at := map[key]int{}
+	var out []Hit
+	for g, ranking := range rankings {
+		for i, h := range ranking {
+			k := key{h.Type, h.Slug}
+			at_, seen := at[k]
+			h.group, h.rank = g, i+1
+			if !seen {
+				at_ = len(out)
+				at[k] = at_
+				out = append(out, h)
+			} else if h.rank < out[at_].rank {
+				h.Fused, h.Groups = out[at_].Fused, out[at_].Groups
+				out[at_] = h
+			}
+			out[at_].Fused += 1 / float64(rrfK+h.rank)
+			out[at_].Groups++
+		}
+	}
+	sort.SliceStable(out, func(a, b int) bool {
+		if out[a].Fused != out[b].Fused {
+			return out[a].Fused > out[b].Fused
+		}
+		if out[a].Type != out[b].Type {
+			return out[a].Type < out[b].Type
+		}
+		return out[a].Slug < out[b].Slug
+	})
+	if out == nil {
+		out = []Hit{}
+	}
+	return out
 }
 
 // matchShares sets each hit's Match and TitleMatch. A word weighs

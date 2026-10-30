@@ -2,6 +2,22 @@
 
 Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); khub is pre-release.
 
+## [Unreleased]
+
+### Added
+
+- **Fused search.** `khub search <text> --also <text>` ranks each text as
+  its own query group and merges the rankings by reciprocal rank fusion
+  (`1 / (60 + rank)` summed over the groups that hit an entity), so an
+  intent and an exact anchor can go in one call, and an entity both reach
+  usually outranks one only a single group ranks first, where one `OR`
+  query lets the common words bury the rare one. `--also` repeats;
+  `--plain` applies per group; `--limit` and the `note:` lines apply to the
+  fused list. A fused record carries `fused` (higher = better; compare rows
+  on it) and `groups` after `score`; `score` and `snippet` there come from
+  the group where the hit ranks best. A repeated group counts once, and a
+  single group is the search it always was, byte for byte.
+
 ## [0.30.0] — 2026-10-28
 
 Storage can now follow a hub's existing nesting, relations can point to files

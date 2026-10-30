@@ -82,6 +82,7 @@ commands:
   - '--type'
   - '--limit'
   - '--plain'
+  - '--also'
   - '--format'
 - name: 'neighbors'
   params:

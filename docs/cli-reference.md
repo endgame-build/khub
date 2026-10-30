@@ -259,6 +259,7 @@ Options:
   --type <str>  Restrict to one entity type.
   --limit <int>  Cap the returned set. [default: 20]
   --plain  Treat text as plain words: any may match, prefix-matched, punctuation literal.
+  --also <str>  Another query group, ranked on its own and fused with the rest by reciprocal rank (repeatable).
   --format <str>  text (Rich table on a TTY), json, or ids. [default: text]
   --help  Show this message and exit.
 
