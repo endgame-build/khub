@@ -49,7 +49,8 @@ func (e FieldError) ID() string { return e.Type + "/" + e.Slug }
 type ValidateReport struct {
 	Count  int // typed entities validated (reference markdown is never scanned)
 	Errors []FieldError
-	// Body-rule findings (`'## <heading>' <complaint>`): the document is what
+	// Body-rule findings (`'## <heading>' <complaint>`), then dead relative
+	// links (`dead link '<dest>' (no such file)`): the document is what
 	// it claims to be, unfinished. Reported, never gating — every member of
 	// Errors used to be the only kind, and collapsing the two would make an
 	// unfinished body fail a gate documented as "1 means broken".
@@ -152,8 +153,11 @@ func Validate(root string, target *string, strict bool) (*ValidateReport, error)
 			}
 		}
 	}
+	// Dead relative links: a gap on every md body, templated or not — after
+	// the section-rule gaps, so a template's findings read first.
+	gaps := append(body.gaps, deadLinkGaps(root, resolved, valid, target, body.bodies)...)
 	return &ValidateReport{
-		Count: count, Errors: errors, Gaps: body.gaps, Body: metrics, Lenses: lenses,
+		Count: count, Errors: errors, Gaps: gaps, Body: metrics, Lenses: lenses,
 	}, nil
 }
 

@@ -1,0 +1,14 @@
+# Dead relative links in bodies are validate gaps (field `body`, reason
+# `dead link '<dest>' (no such file)`), never errors: exit stays 0. Live links
+# (the prd singleton, a reference definition to index.md), external URLs,
+# in-page anchors, root-relative paths, code spans, fenced blocks, comments and
+# footnotes are not findings; `../ARC42.md` differs from the real file only in
+# case and is dead on every platform; one dead file linked twice is one gap.
+# check does not read links: `thin` stays empty and the gate passes.
+steps:
+- argv: ["init", "build-hub", ".", "--no-wire"]
+- argv: ["add", "adr", "--title", "Use JWT", "--status", "accepted", "--body-file", "-"]
+  stdin: "## Context\n\nSessions live in a server-side store that every API node must reach, as the [PRD](../prd.md) and the [old decision](../decisions/ad-2026-01-01-renamed.md#context) describe; the [arc42 view](../ARC42.md) has the picture.\n\n![flow](img/flow.png)\n\n## Decision\n\nWe issue signed JWTs with a short expiry and keep a denylist for revocation, following [the RFC](https://www.rfc-editor.org/rfc/rfc7519) and [our notes](<../my notes.md>), see [above](#context) and [the root copy](/knowledge/prd.md).\n\nExamples stay examples: `[code](nope.md)` and the [old decision](../decisions/ad-2026-01-01-renamed.md) again.\n\n```markdown\n[fenced](fenced.md)\n```\n\n<!-- [hidden](comment.md) -->\n\n## Consequences\n\nTokens are stateless, so sessions need no store; revocation gets harder and needs a denylist or short expiry on every token.[^1]\n\n[index]: ../../index.md\n[legacy]: ./missing.md \"Legacy notes\"\n[^1]: See the denylist design.\n"
+- argv: ["validate", "adr/ad-2026-01-15-use-jwt", "--format", "json"]
+- argv: ["validate"]
+- argv: ["check", "--format", "json"]

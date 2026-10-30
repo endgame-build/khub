@@ -30,6 +30,8 @@ type bodyReport struct {
 	shape           []FieldError
 	gaps            []FieldError
 	templates       map[string]*template.BodyTemplate
+	// Every body this pass read, so validate's dead-link pass reads none twice.
+	bodies map[index.Node]string
 }
 
 // bodyFindings is the body pass of kb `check`: per md type that reads a
@@ -52,6 +54,7 @@ func bodyFindings(
 		shape:           []FieldError{},
 		gaps:            []FieldError{},
 		templates:       map[string]*template.BodyTemplate{},
+		bodies:          map[index.Node]string{},
 	}
 	for _, tname := range resolved.Types.Keys() {
 		rtype, _ := resolved.Types.Get(tname)
@@ -91,6 +94,7 @@ func bodyFindings(
 				})
 				continue
 			}
+			report.bodies[node] = body
 			if missing, found := template.MissingHeading(tpl, body); found {
 				report.shape = append(report.shape, FieldError{
 					Type: tname, Slug: node.Slug, Field: "body",

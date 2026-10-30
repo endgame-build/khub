@@ -96,8 +96,11 @@ edge.
   (`body_shape`), or a template that does not parse (`field: template`). Fix before you
   finish.
 - **`gaps`** with `field: body` — `body_rule`. A section rule is unmet: thin prose, a
-  forbidden phrase, a missing code block. Legal, and it fails no gate. Fix the ones your
-  change caused; leave the ones that were already there.
+  forbidden phrase, a missing code block. Or `dead link '<dest>' (no such file)`: a
+  relative link in any Markdown body whose file is not there, checked from the entity's
+  own directory and case-exact; a link that leaves the workspace is not checked. Legal,
+  and it fails no gate. Fix the ones your change caused; leave the ones that were already
+  there.
 - **`body` and `lenses`** — no finding at all. Word counts per section, and the review
   questions the type declares, filtered to this entity's frontmatter (a lens may apply only
   to one `kind` or `status`). khub computes and asks; the judgement is yours.
