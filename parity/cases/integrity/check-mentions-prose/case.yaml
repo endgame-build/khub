@@ -1,0 +1,17 @@
+# `check --mentions` reads prose only. A fresh build-hub workspace suggests
+# nothing: the template's hint comments and its `##` headings (`## Goals`,
+# arc42's `Introduction and Goals`) are scaffolding, and a name inside fenced
+# code or an HTML comment is not a mention. A name in underscore emphasis
+# (`_User_`) and one wrapped across a line (`Support\nAgent`) are, and the
+# row's `text` carries the wrapped name with its whitespace collapsed.
+steps:
+- argv: ["init", "build-hub", ".", "--no-wire"]
+- argv: ["add", "capability", "--title", "Goals"]
+- argv: ["add", "actor", "--title", "User"]
+- argv: ["add", "actor", "--title", "Support Agent"]
+- argv: ["add", "use-case", "--title", "Find a document"]
+- argv: ["check", "--mentions", "--format", "json"]
+- sh: "printf '\\n```\\nUser Goals\\n```\\n\\n<!-- the User sets Goals -->\\n' >> knowledge/use-cases/uc-find-a-document.md"
+- argv: ["check", "--mentions", "--format", "json"]
+- sh: "printf '\\nAsked by the _User_ and the Support\\nAgent.\\n' >> knowledge/use-cases/uc-find-a-document.md"
+- argv: ["check", "--mentions", "--format", "json"]

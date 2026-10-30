@@ -1,0 +1,19 @@
+# `check --mentions` suggests an edge for each entity a body names with no
+# edge between the two, in either direction: by title or name, alias or slug,
+# case-insensitively and on word boundaries; of overlapping names the
+# leftmost wins, then the longest at that word. Self-mentions and already-linked targets are skipped, and a filled
+# single-valued relation is not offered. The suggestions never move `passed`
+# or the exit code, and without the flag the payload has no `mentions` key.
+mode: human
+steps:
+- argv: ["init", "firm-ops", ".", "--no-wire"]
+- argv: ["add", "client", "--name", "Initech Corp", "--aliases", "Initech"]
+- argv: ["add", "person", "--name", "Dana Lee", "--role", "engineer"]
+- argv: ["add", "person", "--name", "Sam Roe", "--role", "partner"]
+- argv: ["add", "opportunity", "--name", "Initech POV", "--stage", "prospect", "--client", "initech-corp", "--owner", "sam-roe", "--body", "The initech pov: Sam Roe owns it and DANA LEE reviews it ([[dana-lee]]). Initech-wide rollout later; Initech pays."]
+- argv: ["check", "--format", "json"]
+- argv: ["check", "--mentions", "--format", "json"]
+- argv: ["check", "--mentions"]
+- argv: ["check", "--mentions", "--strict"]
+- argv: ["link", "opportunity/initech-pov", "related", "dana-lee"]
+- argv: ["check", "--mentions", "--format", "json"]

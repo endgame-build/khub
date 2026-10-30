@@ -44,7 +44,7 @@ export function refusal(json: unknown): Refusal | undefined {
 }
 
 // These `khub check` buckets never fail the gate. Orphans fail it under `--strict`.
-export const INFORMATIONAL = new Set(['draft_singletons', 'orphans', 'thin'])
+export const INFORMATIONAL = new Set(['draft_singletons', 'mentions', 'orphans', 'thin'])
 
 export const isRow = (value: unknown): value is Row =>
   typeof value === 'object' && value !== null && !Array.isArray(value)

@@ -2,6 +2,18 @@
 
 Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); khub is pre-release.
 
+## [Unreleased]
+
+### Added
+
+- **`check --mentions`.** An opt-in audit: an entity whose body prose names
+  another entity (by title, name, alias or slug; fenced code, HTML comments and
+  template headings are skipped) with no edge between the two is
+  listed under a new last key, `mentions`, with the predicates that could link
+  it. Suggestions only — nothing is written, `passed` and the exit code never
+  move, and without the flag the payload is unchanged. Plugin 0.1.5 counts
+  `mentions` as informational.
+
 ## [0.30.0] — 2026-10-28
 
 Storage can now follow a hub's existing nesting, relations can point to files

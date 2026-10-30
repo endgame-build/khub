@@ -167,6 +167,10 @@ test('status, validate and check report their counts', () => {
   expect(sayOf('khub check --strict', { passed: false, strict: true, orphans: ['x/a', 'x/b'], thin: [{}] }).line).toBe(
     'failed · orphans 2',
   )
+  // `--mentions` suggestions never fail the gate, so a failed check does not count them.
+  expect(
+    sayOf('khub check --mentions', { passed: false, strict: false, strays: ['a.md'], mentions: [{ id: 'x/a' }] }).line,
+  ).toBe('failed · strays 1')
 })
 
 test('schema views say how much they hold', () => {

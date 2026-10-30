@@ -50,7 +50,7 @@ func registerValidate(root *cobra.Command) {
 
 func registerCheck(root *cobra.Command) {
 	var format string
-	var strict bool
+	var strict, mentions bool
 	cmd := newCmd("check", "Check the active graph: completeness, orphans, dangling edges, strays, cycles, bodies.",
 		"", func(cmd *cobra.Command, args []string) error {
 			return Guard(format, func() error {
@@ -58,7 +58,7 @@ func registerCheck(root *cobra.Command) {
 				if err != nil {
 					return err
 				}
-				report, err := integrity.Check(ws, strict)
+				report, err := integrity.CheckWith(ws, integrity.CheckOptions{Strict: strict, Mentions: mentions})
 				if err != nil {
 					return err
 				}
@@ -73,6 +73,8 @@ func registerCheck(root *cobra.Command) {
 		})
 	cmd.Args = clickArity(0)
 	cmd.Flags().BoolVar(&strict, "strict", false, "Fail the gate on orphans too (default: informational).")
+	cmd.Flags().BoolVar(&mentions, "mentions", false,
+		"Also suggest edges for entities a body names but no relation links (informational; never written).")
 	cmd.Flags().StringVar(&format, "format", "text", "text (Rich on a TTY) or json.")
 	root.AddCommand(cmd)
 }
@@ -252,6 +254,22 @@ func checkPayload(report *integrity.CheckReport) *omap.Map {
 	// Last, after `strict`: the one bucket that never affects `passed`. A body
 	// whose prose does not satisfy a section rule is that document, unfinished.
 	payload.Set("thin", findingRecords(report.Thin, false))
+	// Only when asked for: suggestions, not findings, so they never affect
+	// `passed` and stay out of the default payload.
+	if report.MentionsRun {
+		mentions := make([]any, 0, len(report.Mentions))
+		for _, m := range report.Mentions {
+			record := omap.New()
+			record.Set("id", m.ID())
+			record.Set("type", m.Type)
+			record.Set("slug", m.Slug)
+			record.Set("target", m.Target)
+			record.Set("text", m.Text)
+			record.Set("predicates", strList(m.Predicates))
+			mentions = append(mentions, record)
+		}
+		payload.Set("mentions", mentions)
+	}
 	return payload
 }
 
@@ -268,6 +286,9 @@ func checkHuman(report *integrity.CheckReport) {
 		// Informational is not the same as invisible.
 		for _, th := range report.Thin {
 			fmt.Printf("thin %s: %s (informational)\n", th.ID(), th.Reason)
+		}
+		for _, m := range report.Mentions {
+			fmt.Printf("%s (informational)\n", mentionLine(m))
 		}
 		fmt.Println("Graph check passed")
 		return
@@ -333,4 +354,14 @@ func checkHuman(report *integrity.CheckReport) {
 	for _, th := range report.Thin {
 		fmt.Printf("thin %s: %s\n", th.ID(), th.Reason)
 	}
+	for _, m := range report.Mentions {
+		fmt.Println(mentionLine(m))
+	}
+}
+
+// mentionLine is one mention suggestion as text: what the body says, the
+// entity it names, and the predicates that could link it.
+func mentionLine(m integrity.Mention) string {
+	return fmt.Sprintf("mention %s: '%s' names %s with no edge (link as %s)",
+		m.ID(), m.Text, m.Target, strings.Join(m.Predicates, ", "))
 }

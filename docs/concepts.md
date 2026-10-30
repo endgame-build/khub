@@ -18,7 +18,7 @@ The schema declares the entity types, their attributes, and the legal relations.
 
 ## Relations are single-sided; inverses are derived
 
-A relation is a role-named field the schema marks as an edge. The field name is the predicate; the value is the target: `owner: dana-lee` is one edge, `owner`, pointing at `dana-lee`. Resolution compares the target's `(type, slug)` identity, while preserving the spelling stored in the source. A derived inverse is identified by source type and predicate, computed at read time, and never written. Inline body links are navigational only.
+A relation is a role-named field the schema marks as an edge. The field name is the predicate; the value is the target: `owner: dana-lee` is one edge, `owner`, pointing at `dana-lee`. Resolution compares the target's `(type, slug)` identity, while preserving the spelling stored in the source. A derived inverse is identified by source type and predicate, computed at read time, and never written. Inline body links are navigational only; `check --mentions` suggests the edges a body names but no relation carries, and writes none.
 
 ## validate vs check
 

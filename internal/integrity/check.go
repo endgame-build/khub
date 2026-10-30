@@ -138,6 +138,19 @@ type CheckReport struct {
 	Misplaced []Misplaced
 	// Aliases that name more than one entity. Fails the gate.
 	AliasConflicts []AliasConflict
+	// Body mentions with no edge behind them, filled only when the audit was
+	// asked for (MentionsRun). Suggestions, never findings: never consulted
+	// by Passed, `--strict` included.
+	Mentions    []Mention
+	MentionsRun bool
+}
+
+// CheckOptions selects check's opt-in passes.
+type CheckOptions struct {
+	// Strict fails the gate on orphans too.
+	Strict bool
+	// Mentions runs the body-mention audit (see mentions.go).
+	Mentions bool
 }
 
 // Passed is CheckReport.passed.
@@ -169,11 +182,21 @@ func (r *CheckReport) Passed() bool {
 // A file that could not be parsed is a malformed entry, not a node, and fails
 // the check.
 func Check(root string, strict bool) (*CheckReport, error) {
+	return CheckWith(root, CheckOptions{Strict: strict})
+}
+
+// CheckWith is Check with the opt-in passes selectable.
+func CheckWith(root string, opts CheckOptions) (*CheckReport, error) {
+	strict := opts.Strict
 	resolved, err := introspect.LoadSchema(root)
 	if err != nil {
 		return nil, err
 	}
-	scanned, err := index.Build(root, resolved)
+	build := index.Build
+	if opts.Mentions {
+		build = index.BuildWithBodies
+	}
+	scanned, err := build(root, resolved)
 	if err != nil {
 		return nil, err
 	}
@@ -290,7 +313,13 @@ func Check(root string, strict bool) (*CheckReport, error) {
 	// Bodies, over every valid node of every templated type — the same pass
 	// validate runs, whole-workspace.
 	body := bodyFindings(root, resolved, valid, nil)
+	var mentions []Mention
+	if opts.Mentions {
+		mentions = mentionSuggestions(resolved, valid, g, entityNodes, body.templates)
+	}
 	return &CheckReport{
+		Mentions:                mentions,
+		MentionsRun:             opts.Mentions,
 		TemplateInvalid:         body.templateInvalid,
 		BodyShape:               body.shape,
 		Thin:                    body.gaps,

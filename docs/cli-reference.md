@@ -351,6 +351,7 @@ Check the active graph: completeness, orphans, dangling edges, strays, cycles, b
 
 Options:
   --strict  Fail the gate on orphans too (default: informational).
+  --mentions  Also suggest edges for entities a body names but no relation links (informational; never written).
   --format <str>  text (Rich on a TTY) or json. [default: text]
   --help  Show this message and exit.
 

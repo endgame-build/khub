@@ -111,6 +111,7 @@ commands:
 - name: 'check'
   params:
   - '--strict'
+  - '--mentions'
   - '--format'
 - name: 'stale'
   params:
