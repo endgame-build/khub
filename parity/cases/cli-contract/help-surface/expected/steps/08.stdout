@@ -8,6 +8,7 @@ Arguments:
   TARGET <str>
 
 Options:
+  --dry-run  Run every check the write runs and print what it would emit; write nothing.
   --format <str>  text or json (emits the edge record). [default: text]
   --help  Show this message and exit.
 

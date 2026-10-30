@@ -31,7 +31,7 @@ func TestScalarManyLinkNoCharSplit(t *testing.T) {
 	seed(t, ws, "fragments/note.md",
 		kv("type", "fragment", "stage", "raw", "owner", "ann", "related", "ann"))
 
-	res, err := Link(ws, "note", "related", "bob")
+	res, err := Link(ws, "note", "related", "bob", false)
 	requireNoError(t, err)
 	if !res.Changed {
 		t.Fatal("link reported no change")
@@ -51,7 +51,7 @@ func TestScalarManyUnlinkClean(t *testing.T) {
 	seed(t, ws, "fragments/note.md",
 		kv("type", "fragment", "stage", "raw", "owner", "ann", "related", "ann"))
 
-	res, err := Unlink(ws, "note", "related", "ann")
+	res, err := Unlink(ws, "note", "related", "ann", false)
 	requireNoError(t, err)
 	if !res.Changed {
 		t.Fatal("unlink reported no change")
@@ -232,7 +232,7 @@ func TestSlugFromTitleElseRefuses(t *testing.T) {
 func TestSelfLinkRejected(t *testing.T) {
 	ws := newWS(t, "firm-ops")
 	people(t, ws)
-	_, err := Link(ws, "ann", "related", "ann")
+	_, err := Link(ws, "ann", "related", "ann", false)
 	e := requireCode(t, err, "self_link")
 	requireMessageContains(t, e, "Cannot link 'ann' to itself via 'related'")
 }
@@ -245,12 +245,12 @@ func TestAmbiguousBareTargetRaises(t *testing.T) {
 	seed(t, ws, "partnerships/acme/_index.md", kv("type", "partnership", "partner", "Acme"))
 	seed(t, ws, "identity/team/pat.md", kv("type", "person", "name", "Pat", "role", "partner"))
 
-	_, err := Link(ws, "pat", "related", "acme")
+	_, err := Link(ws, "pat", "related", "acme", false)
 	e := requireCode(t, err, "ambiguity_error")
 	requireMessageContains(t, e,
 		"Slug 'acme' is ambiguous: client/acme, partnership/acme. Qualify as type/slug")
 
-	res, err := Link(ws, "pat", "related", "client/acme")
+	res, err := Link(ws, "pat", "related", "client/acme", false)
 	requireNoError(t, err)
 	if !res.Changed {
 		t.Fatal("the qualified link reported no change")
@@ -285,25 +285,25 @@ func TestLinkChangedFlagAndNoSpuriousRewrite(t *testing.T) {
 		kv("type", "partnership", "partner", "Northwind", "owner", "noor"))
 	path := project(t, ws)
 
-	first, err := Link(ws, "initech-pov", "partner", "northwind")
+	first, err := Link(ws, "initech-pov", "partner", "northwind", false)
 	requireNoError(t, err)
 	if !first.Changed {
 		t.Fatal("the first link reported no change")
 	}
 	afterLink := readFile(t, path)
-	again, err := Link(ws, "initech-pov", "partner", "northwind")
+	again, err := Link(ws, "initech-pov", "partner", "northwind", false)
 	requireNoError(t, err)
 	if again.Changed || readFile(t, path) != afterLink {
 		t.Fatal("a repeat link rewrote the file")
 	}
 
-	removed, err := Unlink(ws, "initech-pov", "partner", "northwind")
+	removed, err := Unlink(ws, "initech-pov", "partner", "northwind", false)
 	requireNoError(t, err)
 	if !removed.Changed {
 		t.Fatal("unlink reported no change")
 	}
 	afterUnlink := readFile(t, path)
-	noop, err := Unlink(ws, "initech-pov", "partner", "northwind")
+	noop, err := Unlink(ws, "initech-pov", "partner", "northwind", false)
 	requireNoError(t, err)
 	if noop.Changed || readFile(t, path) != afterUnlink {
 		t.Fatal("a repeat unlink rewrote the file")

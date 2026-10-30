@@ -7,6 +7,7 @@ Arguments:
 
 Options:
   --force  Delete despite inbound edges (leaves them dangling).
+  --dry-run  Run every check the write runs and print what it would emit; write nothing.
   --format <str>  text or json (emits the removed record). [default: text]
   --help  Show this message and exit.
 

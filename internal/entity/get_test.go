@@ -82,7 +82,7 @@ func TestGetEdgesIncludesDerivedInverses(t *testing.T) {
 	newer, err := Create(ws, "adr", CreateOpts{
 		Fields: fields("title", "New choice", "status", "accepted"), UseTemplate: true})
 	requireNoError(t, err)
-	_, err = Link(ws, newer.Slug, "supersedes", older.Slug)
+	_, err = Link(ws, newer.Slug, "supersedes", older.Slug, false)
 	requireNoError(t, err)
 
 	forward, err := Get(ws, newer.Slug, true)

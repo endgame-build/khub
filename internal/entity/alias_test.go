@@ -19,7 +19,7 @@ func TestAliasTargetQualifiesAnAmbiguousSlug(t *testing.T) {
 	_, err = Create(ws, "client", CreateOpts{ID: "globex", Fields: fields("name", "Globex")})
 	requireNoError(t, err)
 
-	res, err := Link(ws, "globex", "related", "acme corp")
+	res, err := Link(ws, "globex", "related", "acme corp", false)
 	requireNoError(t, err)
 	if res.Target != "client/acme" {
 		t.Fatalf("stored target = %q, want client/acme", res.Target)

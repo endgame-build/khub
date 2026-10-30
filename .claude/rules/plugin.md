@@ -79,7 +79,7 @@ below under "Engine rules" was observed on Claude Code 2.1.288 and 2.1.291.
 - The first refresh of a session fixes the baseline. `+n` and `−n` are the ids
   that joined and left it, so they include changes made outside Claude.
 - `~n` counts baseline entities the session edited through its tools: a khub
-  `edit`, `link` or `unlink` that changed something, and an Edit or Write on a
+  `edit`, `link` or `unlink` that changed something (never a `--dry-run`), and an Edit or Write on a
   file that holds one entity. A change made outside those tools does not raise it.
 - A cut document, or a call that did not answer, keeps what the band shows.
 
@@ -184,7 +184,7 @@ test. It gives a workspace at a fixed root and khub answering from the fixtures.
 | `schema` | `provenance.{preset, version}`, `types[].{name, layout, format, path}` |
 | `check` | `passed`, `strict`, every array-valued bucket, and `id`, `path` or `alias` of a finding |
 | `query`, `stale` | per row `id`, `title`, `draft`, `orphan`, `stale` |
-| `add`, `edit`, `remove` | `id`, `draft` |
+| `add`, `edit`, `remove` | `id`, `draft`, and an `edit` dry run's `changed` |
 | `link`, `unlink` | `id`, `slug`, `predicate`, `target`, `changed` |
 | `get` | `id`, `title` or `name` at the top or in `frontmatter`, `edges` |
 | `search` | per row `id`, `title`, the flags, and the stderr `note:` line |

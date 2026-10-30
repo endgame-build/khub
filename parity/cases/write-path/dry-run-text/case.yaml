@@ -1,0 +1,18 @@
+# The text a dry run prints: "Would …" where the write prints what it did, and
+# the write's own no-op lines where nothing would change.
+mode: human
+steps:
+- argv: ["init", "build-hub", ".", "--no-wire", "--format", "json"]
+- argv: ["add", "requirement", "--title", "T", "--kind", "functional", "--format", "json"]
+- argv: ["add", "component", "--title", "C", "--kind", "service", "--format", "json"]
+- argv: ["link", "req-t", "realized_in", "cmp-c", "--format", "json"]
+- sh: "rm -rf .khub/generated"
+- argv: ["add", "requirement", "--title", "U", "--kind", "functional", "--dry-run"]
+- argv: ["edit", "req-t", "kind", "constraint", "--dry-run"]
+- argv: ["edit", "req-t", "--dry-run"]
+- argv: ["link", "cmp-c", "related", "req-t", "--dry-run"]
+- argv: ["unlink", "req-t", "realized_in", "cmp-c", "--dry-run"]
+- argv: ["unlink", "cmp-c", "related", "req-t", "--dry-run"]
+- argv: ["remove", "req-t", "--dry-run"]
+- argv: ["remove", "cmp-c", "--force", "--dry-run"]
+- sh: "test ! -e .khub/generated"

@@ -1,0 +1,24 @@
+# --dry-run on the five write verbs: the write's own refusals on the same exit
+# codes, one preview shape (the record plus `changed` and `dry_run`), and no
+# byte written — no entity file, no lock (.khub/generated stays absent), and a
+# final tree equal to the one before the first dry run.
+steps:
+- argv: ["init", "build-hub", ".", "--no-wire"]
+- argv: ["add", "requirement", "--title", "T", "--kind", "functional"]
+- argv: ["add", "component", "--title", "C", "--kind", "service"]
+- argv: ["link", "req-t", "realized_in", "cmp-c"]
+- sh: "rm -rf .khub/generated"
+- argv: ["add", "requirement", "--title", "U", "--kind", "functional", "--dry-run", "--format", "json"]
+- argv: ["add", "requirement", "--title", "T", "--kind", "functional", "--dry-run"]
+- argv: ["add", "requirement", "--title", "V", "--kind", "bogus", "--dry-run"]
+- argv: ["add", "requirement", "--title", "W", "--realized-in", "ghost", "--dry-run"]
+- argv: ["edit", "req-t", "kind", "non-functional", "--dry-run", "--format", "json"]
+- argv: ["edit", "req-t", "--dry-run", "--format", "json"]
+- argv: ["link", "req-t", "realized_in", "cmp-c", "--dry-run", "--format", "json"]
+- argv: ["link", "req-t", "related", "req-t", "--dry-run"]
+- argv: ["unlink", "req-t", "realized_in", "cmp-c", "--dry-run", "--format", "json"]
+- argv: ["remove", "cmp-c", "--dry-run"]
+- argv: ["remove", "cmp-c", "--force", "--dry-run", "--format", "json"]
+- argv: ["remove", "req-t", "--dry-run", "--format", "json"]
+- sh: "test ! -e .khub/generated"
+- argv: ["get", "req-t", "--edges", "--format", "json"]

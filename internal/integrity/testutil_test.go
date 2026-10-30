@@ -77,7 +77,7 @@ func mustCreate(t *testing.T, root, typeName, id string, draft bool, pairs ...st
 
 func link(t *testing.T, root, id, predicate, target string) {
 	t.Helper()
-	if _, err := entity.Link(root, id, predicate, target); err != nil {
+	if _, err := entity.Link(root, id, predicate, target, false); err != nil {
 		t.Fatalf("link %s %s %s: %v", id, predicate, target, err)
 	}
 }

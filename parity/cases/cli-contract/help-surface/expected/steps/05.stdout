@@ -14,6 +14,7 @@ Options:
   --body <str>  Body prose as a string.
   --body-file <str>  Read the body from a file ('-' for stdin).
   --no-template  Start with an empty body. Refused on a type whose template has a required heading, since the result would fail validate; use --body to supply your own sections.
+  --dry-run  Run every check the write runs and print what it would emit; write nothing.
   --format <str>  text or json (emits the written record). [default: text]
   --help  Show this message and exit.
 

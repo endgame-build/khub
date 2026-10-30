@@ -77,6 +77,8 @@ test('a call that changed no entity in place names none', () => {
   expect(editedBy(call('khub remove act-temp'), doc(F.remove_actor))).toEqual([])
   expect(editedBy(call('khub edit nope kind x'), doc(F.get_missing))).toEqual([])
   expect(editedBy(call('khub edit cmp-search kind x'), undefined)).toEqual([])
+  expect(editedBy(call('khub unlink cmp-search depends_on cmp-storage --dry-run'), doc(F.unlink_dry))).toEqual([])
+  expect(editedBy(call('khub edit cmp-search lifecycle deprecated --dry-run'), doc(F.edit_component))).toEqual([])
 })
 
 test('the band names the preset, the count, the changes, the drafts and the gate', () => {

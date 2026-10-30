@@ -36,7 +36,7 @@ func TestPredicateLegality(t *testing.T) {
 	ws := newWS(t, "firm-ops")
 	linkPrereqs(t, ws)
 	project(t, ws)
-	_, err := Link(ws, "initech-pov", "engagement", "anything")
+	_, err := Link(ws, "initech-pov", "engagement", "anything", false)
 	e := requireCode(t, err, "illegal_predicate")
 	requireMessageContains(t, e, "Predicate 'engagement' is not legal for type 'project'")
 }
@@ -46,7 +46,7 @@ func TestCardinalityEnforced(t *testing.T) {
 	ws := newWS(t, "firm-ops")
 	linkPrereqs(t, ws)
 	project(t, ws) // owner already noor
-	_, err := Link(ws, "initech-pov", "owner", "dana")
+	_, err := Link(ws, "initech-pov", "owner", "dana", false)
 	e := requireCode(t, err, "cardinality_violation")
 	requireMessageContains(t, e, "Predicate 'owner' is single-valued")
 	requireMessageContains(t, e, "`khub edit <id> owner <target>` replaces the current value")
@@ -60,7 +60,7 @@ func TestSingleSidedStorage(t *testing.T) {
 	target := filepath.Join(ws, "partnerships", "northwind", "_index.md")
 	beforeTarget := readFile(t, target)
 
-	_, err := Link(ws, "initech-pov", "partner", "northwind")
+	_, err := Link(ws, "initech-pov", "partner", "northwind", false)
 	requireNoError(t, err)
 	if got := metaValue(t, source, "partner"); got != "northwind" {
 		t.Fatalf("partner = %#v", got)
@@ -75,10 +75,10 @@ func TestTargetResolver(t *testing.T) {
 	ws := newWS(t, "firm-ops")
 	linkPrereqs(t, ws)
 	project(t, ws)
-	_, err := Link(ws, "initech-pov", "partner", "ghost")
+	_, err := Link(ws, "initech-pov", "partner", "ghost", false)
 	_ = requireCode(t, err, "referential_integrity")
 
-	_, err = Link(ws, "initech-pov", "owner", "ghost")
+	_, err = Link(ws, "initech-pov", "owner", "ghost", false)
 	e := requireCode(t, err, "referential_integrity")
 	requireMessageContains(t, e, "No person 'ghost' to satisfy predicate 'owner'")
 }
@@ -88,7 +88,7 @@ func TestUnlinkRemovesForwardEdge(t *testing.T) {
 	ws := newWS(t, "firm-ops")
 	linkPrereqs(t, ws)
 	source := project(t, ws, "partner", "northwind")
-	res, err := Unlink(ws, "initech-pov", "partner", "northwind")
+	res, err := Unlink(ws, "initech-pov", "partner", "northwind", false)
 	requireNoError(t, err)
 	if !res.Changed {
 		t.Fatal("unlink reported no change")
@@ -105,7 +105,7 @@ func TestLinkStoresTheCanonicalSpelling(t *testing.T) {
 	linkPrereqs(t, ws)
 	source := project(t, ws)
 
-	res, err := Link(ws, "initech-pov", "partner", "NORTHWIND")
+	res, err := Link(ws, "initech-pov", "partner", "NORTHWIND", false)
 	requireNoError(t, err)
 	if res.Target != "northwind" {
 		t.Fatalf("stored target = %q, want the canonical slug", res.Target)
@@ -114,7 +114,7 @@ func TestLinkStoresTheCanonicalSpelling(t *testing.T) {
 		t.Fatalf("partner = %#v", got)
 	}
 
-	qualified, err := Link(ws, "initech-pov", "related", "Partnership/Northwind")
+	qualified, err := Link(ws, "initech-pov", "related", "Partnership/Northwind", false)
 	requireNoError(t, err)
 	if qualified.Target != "partnership/northwind" {
 		t.Fatalf("qualified target = %q", qualified.Target)
@@ -128,7 +128,7 @@ func TestLinkOnEmptyScalarManyValueDropsTheEmptyString(t *testing.T) {
 	linkPrereqs(t, ws)
 	source := project(t, ws, "related", "")
 
-	res, err := Link(ws, "initech-pov", "related", "northwind")
+	res, err := Link(ws, "initech-pov", "related", "northwind", false)
 	requireNoError(t, err)
 	if !res.Changed {
 		t.Fatal("link over an empty value reported no change")

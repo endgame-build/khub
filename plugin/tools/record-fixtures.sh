@@ -80,6 +80,9 @@ rec search_empty search --plain zzzz --format json
 rec get_missing get nope --format json
 rec remove_refused remove cmp-search --format json
 rec reindex_dry reindex --dry-run
+rec add_dry add adr --title "Use RE2 patterns" --status accepted --dry-run --format json
+rec edit_dry edit cmp-search lifecycle production --dry-run --format json
+rec unlink_dry unlink cmp-search depends_on cmp-storage --dry-run --format json
 
 # A decision, linked.
 rec add_adr add adr --title "Use RE2 patterns" --status accepted --format json

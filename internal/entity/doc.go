@@ -70,6 +70,51 @@ func locator(rtype *schema.ResolvedType, slug string) string {
 	return rtype.CollectionRelpath() + "#" + slug
 }
 
+// sink is where a write verb's publication goes. The real one writes through
+// fsio. A dry one runs fsio's checks — workspace confinement, the symlink and
+// reparse-point refusals, an existing file where a new one must go — and
+// writes nothing, so a dry run refuses where the write would and leaves the
+// tree as it found it.
+type sink struct{ dry bool }
+
+func (s sink) mkdirAll(root, dir string) error {
+	if s.dry {
+		return fsio.CheckMkdirAll(root, dir)
+	}
+	return fsio.MkdirAll(root, dir)
+}
+
+func (s sink) publish(root, path string, data []byte, exclusive bool) error {
+	switch {
+	case s.dry:
+		return fsio.CheckPublish(root, path, exclusive)
+	case exclusive:
+		return fsio.WriteNewIn(root, path, data)
+	}
+	return fsio.AtomicWriteIn(root, path, data)
+}
+
+func (s sink) remove(root, path string, recursive bool) error {
+	if s.dry {
+		return fsio.CheckRemove(root, path)
+	}
+	return fsio.Remove(root, path, recursive)
+}
+
+// locked runs fn under the workspace lock. A dry run takes no lock — it is a
+// read, and reads create none — but first runs the lock path's checks, so a
+// lock directory the write could not make refuses the dry run too.
+func locked[T any](root string, out sink, fn func() (T, error)) (T, error) {
+	if out.dry {
+		if err := fsio.CheckLock(root); err != nil {
+			var zero T
+			return zero, err
+		}
+		return fn()
+	}
+	return fsio.Locked(root, fn)
+}
+
 // mutateCollection is the one write path for every collection mutation.
 //
 // Caller holds the workspace lock: fresh in-lock read (the O_EXCL replacement;
@@ -77,11 +122,15 @@ func locator(rtype *schema.ResolvedType, slug string) string {
 // — a crash never leaves a torn file. mutate reports whether to write: false
 // skips the rewrite (idempotent no-op). A malformed collection refuses the
 // write: khub never rewrites a file it cannot fully round-trip.
+//
+// The bool reports whether the file's bytes change. A dry run (out.dry) runs
+// all of it but the publication.
 func mutateCollection(
-	root string, rtype *schema.ResolvedType, mutate func(rows *omap.Map) (bool, error),
-) error {
+	root string, rtype *schema.ResolvedType, out sink, mutate func(rows *omap.Map) (bool, error),
+) (bool, error) {
 	path := collectionFile(root, rtype)
-	return func() error {
+	changed := false
+	err := func() error {
 		text, readErr := canon.ReadTextIn(root, path)
 		switch {
 		case readErr == nil:
@@ -108,28 +157,30 @@ func mutateCollection(
 		// across an edit (docs/collections-design.md). canon.ErrNoSplice means
 		// this particular change is not expressible in place — re-emit the whole
 		// file, which is byte-correct but drops the comments.
-		out, dumpErr := canon.SpliceCollection(text, rows, rtype.Storage.Fmt)
+		dumped, dumpErr := canon.SpliceCollection(text, rows, rtype.Storage.Fmt)
 		if errors.Is(dumpErr, canon.ErrNoSplice) {
-			out, dumpErr = canon.DumpCollection(rows, rtype.Storage.Fmt)
+			dumped, dumpErr = canon.DumpCollection(rows, rtype.Storage.Fmt)
 		}
 		if dumpErr != nil {
 			return dumpErr
 		}
-		if err := fsio.MkdirAll(root, filepath.Dir(path)); err != nil {
+		changed = dumped != text
+		if err := out.mkdirAll(root, filepath.Dir(path)); err != nil {
 			return err
 		}
-		return fsio.AtomicWriteIn(root, path, []byte(out))
+		return out.publish(root, path, []byte(dumped), false)
 	}()
+	return changed, err
 }
 
 // writeNew writes a brand-new entity file exclusively (O_EXCL): fs.ErrExist if
 // the slug is taken.
-func writeNew(root, path string, meta *omap.Map, body string) error {
+func writeNew(root, path string, out sink, meta *omap.Map, body string) error {
 	text, err := canon.Render(meta, body, canon.FmtOf(path))
 	if err != nil {
 		return err
 	}
-	return fsio.WriteNewIn(root, path, []byte(text))
+	return out.publish(root, path, []byte(text), true)
 }
 
 // readDoc is the edit-altitude round-trip load: (meta, body) with formatting
@@ -170,21 +221,21 @@ func readDoc(root, path string) (*omap.Map, string, error) {
 // destroy: canon.SpliceDoc rewrites just the values that moved and leaves every
 // other byte — comments included — alone. canon.ErrNoSplice means the change
 // cannot be expressed in place; the whole-document emitter takes over, exactly
-// as before.
-func writeDoc(root, path string, meta *omap.Map, body string) error {
+// as before. The bool reports whether the file's bytes change.
+func writeDoc(root, path string, out sink, meta *omap.Map, body string) (bool, error) {
 	fmtName := canon.FmtOf(path)
 	old, readErr := canon.ReadTextIn(root, path)
 	if readErr != nil {
-		return readErr
+		return false, readErr
 	}
 	text, err := canon.SpliceDoc(old, meta, body, fmtName, canon.Mode12)
 	if errors.Is(err, canon.ErrNoSplice) {
 		text, err = canon.Render(meta, body, fmtName)
 	}
 	if err != nil {
-		return err
+		return false, err
 	}
-	return fsio.AtomicWriteIn(root, path, []byte(text))
+	return text != old, out.publish(root, path, []byte(text), false)
 }
 
 // mdNormalized ends newly supplied md prose in a newline (file-format nicety).

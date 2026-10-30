@@ -27,7 +27,6 @@ import (
 
 	"github.com/endgame-build/khub/internal/canon"
 	"github.com/endgame-build/khub/internal/errs"
-	"github.com/endgame-build/khub/internal/fsio"
 	"github.com/endgame-build/khub/internal/index"
 	"github.com/endgame-build/khub/internal/introspect"
 	"github.com/endgame-build/khub/internal/omap"
@@ -46,11 +45,15 @@ import (
 // does not resolve. Draft is the manual publish flag (default false); a missing
 // required field never blocks capture — check surfaces the gap as
 // active-but-incomplete.
+//
+// DryRun runs all of it — every refusal the write would raise, in the same
+// order — and writes nothing.
 func Create(root, typeName string, opts CreateOpts) (*CreateResult, error) {
-	return fsio.Locked(root, func() (*CreateResult, error) { return create(root, typeName, opts) })
+	out := sink{dry: opts.DryRun}
+	return locked(root, out, func() (*CreateResult, error) { return create(root, typeName, out, opts) })
 }
 
-func create(root, typeName string, opts CreateOpts) (*CreateResult, error) {
+func create(root, typeName string, out sink, opts CreateOpts) (*CreateResult, error) {
 	resolved, err := introspect.LoadSchema(root)
 	if err != nil {
 		return nil, err
@@ -180,10 +183,10 @@ func create(root, typeName string, opts CreateOpts) (*CreateResult, error) {
 		if err := refuseIgnored(root, path, resolved.Ignore, typeName); err != nil {
 			return nil, err
 		}
-		if err := fsio.MkdirAll(root, filepath.Dir(path)); err != nil {
+		if err := out.mkdirAll(root, filepath.Dir(path)); err != nil {
 			return nil, err
 		}
-		if err := writeNew(root, path, meta, body); err != nil {
+		if err := writeNew(root, path, out, meta, body); err != nil {
 			if errors.Is(err, fs.ErrExist) {
 				return nil, errs.New("singleton_exists", fmt.Sprintf(
 					"Singleton '%s' already exists at %s; edit it instead of adding another",
@@ -204,7 +207,7 @@ func create(root, typeName string, opts CreateOpts) (*CreateResult, error) {
 		if err := aliasTaken(idx, slug, opts.ID == ""); err != nil {
 			return nil, err
 		}
-		if err := createRow(root, rtype, typeName, meta, body, slug, opts.ID != ""); err != nil {
+		if err := createRow(root, rtype, out, typeName, meta, body, slug, opts.ID != ""); err != nil {
 			return nil, err
 		}
 		return &CreateResult{
@@ -250,10 +253,10 @@ func create(root, typeName string, opts CreateOpts) (*CreateResult, error) {
 	if err := refuseIgnored(root, path, resolved.Ignore, typeName); err != nil {
 		return nil, err
 	}
-	if err := fsio.MkdirAll(root, filepath.Dir(path)); err != nil {
+	if err := out.mkdirAll(root, filepath.Dir(path)); err != nil {
 		return nil, err
 	}
-	if err := writeNew(root, path, meta, body); err != nil {
+	if err := writeNew(root, path, out, meta, body); err != nil {
 		if errors.Is(err, fs.ErrExist) {
 			return nil, errs.SlugTaken(slug, typeName, !explicit)
 		}
@@ -278,7 +281,7 @@ func aliasTaken(idx *index.Index, slug string, minted bool) error {
 // collection's schema binding supplies it at scan) and carries prose in the
 // reserved `body` key.
 func createRow(
-	root string, rtype *schema.ResolvedType, typeName string,
+	root string, rtype *schema.ResolvedType, out sink, typeName string,
 	meta *omap.Map, body, slug string, explicit bool,
 ) error {
 	row := omap.New()
@@ -292,13 +295,14 @@ func createRow(
 	if body != "" {
 		row.Set("body", body)
 	}
-	return mutateCollection(root, rtype, func(rows *omap.Map) (bool, error) {
+	_, err := mutateCollection(root, rtype, out, func(rows *omap.Map) (bool, error) {
 		if _, taken := rows.Get(slug); taken {
 			return false, errs.SlugTaken(slug, typeName, !explicit)
 		}
 		rows.Set(slug, row)
 		return true, nil
 	})
+	return err
 }
 
 // partitioned splits raw fields into validated attributes, relation value-lists,
@@ -511,11 +515,15 @@ func getView(root string, idx *index.Index, node index.Node) (*EntityView, error
 // Update edits id's fields: re-validate, bump `updated`, write a minimal diff.
 // `draft` moves only when the user edits it (`edit <id> draft true|false`); no
 // completeness recompute, no auto-promote.
+//
+// DryRun runs every check and writes nothing; Changed still reports whether
+// the write would move the stored bytes.
 func Update(root, id string, opts UpdateOpts) (*UpdateResult, error) {
-	return fsio.Locked(root, func() (*UpdateResult, error) { return update(root, id, opts) })
+	out := sink{dry: opts.DryRun}
+	return locked(root, out, func() (*UpdateResult, error) { return update(root, id, out, opts) })
 }
 
-func update(root, id string, opts UpdateOpts) (*UpdateResult, error) {
+func update(root, id string, out sink, opts UpdateOpts) (*UpdateResult, error) {
 	resolved, err := introspect.LoadSchema(root)
 	if err != nil {
 		return nil, err
@@ -602,7 +610,7 @@ func update(root, id string, opts UpdateOpts) (*UpdateResult, error) {
 
 	if rtype.Storage.Layout == schema.LayoutCollection {
 		newDraft := false
-		err := mutateCollection(root, rtype, func(rows *omap.Map) (bool, error) {
+		changed, err := mutateCollection(root, rtype, out, func(rows *omap.Map) (bool, error) {
 			rowAny, has := rows.Get(node.Slug)
 			if !has {
 				return false, errs.LookupError(id)
@@ -625,7 +633,7 @@ func update(root, id string, opts UpdateOpts) (*UpdateResult, error) {
 		}
 		return &UpdateResult{
 			Type: node.Type, Slug: node.Slug, Path: path, Draft: newDraft,
-			Locator: locator(rtype, node.Slug),
+			Locator: locator(rtype, node.Slug), Changed: changed,
 		}, nil
 	}
 
@@ -637,7 +645,8 @@ func update(root, id string, opts UpdateOpts) (*UpdateResult, error) {
 	if opts.Body != nil {
 		bodyText = mdNormalized(*opts.Body, rtype)
 	}
-	if err := writeDoc(root, path, meta, bodyText); err != nil {
+	changed, err := writeDoc(root, path, out, meta, bodyText)
+	if err != nil {
 		return nil, err
 	}
 	// AsBool, not truthiness: a hand-authored draft: "false" must report active,
@@ -645,6 +654,7 @@ func update(root, id string, opts UpdateOpts) (*UpdateResult, error) {
 	draftAny, _ := meta.Get("draft")
 	return &UpdateResult{
 		Type: node.Type, Slug: node.Slug, Path: path, Draft: values.AsBool(draftAny),
+		Changed: changed,
 	}, nil
 }
 
@@ -652,12 +662,14 @@ func update(root, id string, opts UpdateOpts) (*UpdateResult, error) {
 
 // Link adds a schema-checked edge predicate → target on the source entity. A
 // no-op link (the edge already exists) leaves the file untouched and returns
-// Changed=false.
-func Link(root, id, predicate, target string) (*LinkResult, error) {
-	return fsio.Locked(root, func() (*LinkResult, error) { return link(root, id, predicate, target) })
+// Changed=false. dryRun runs every check and writes nothing; Changed still
+// says whether the edge would be added.
+func Link(root, id, predicate, target string, dryRun bool) (*LinkResult, error) {
+	out := sink{dry: dryRun}
+	return locked(root, out, func() (*LinkResult, error) { return link(root, id, predicate, target, out) })
 }
 
-func link(root, id, predicate, target string) (*LinkResult, error) {
+func link(root, id, predicate, target string, out sink) (*LinkResult, error) {
 	_, idx, node, rel, err := edgeContext(root, id, predicate)
 	if err != nil {
 		return nil, err
@@ -706,7 +718,7 @@ func link(root, id, predicate, target string) (*LinkResult, error) {
 		return changed, nil
 	}
 
-	changed, err := applyEdgeMutation(root, idx, node, id, apply)
+	changed, err := applyEdgeMutation(root, idx, node, id, out, apply)
 	if err != nil {
 		return nil, err
 	}
@@ -726,12 +738,14 @@ func containsTarget(idx *index.Index, rel *schema.ResolvedRelation, list []any, 
 
 // Unlink removes the edge predicate → target from the source; inverses
 // recompute. A no-op unlink (no such edge) leaves the file untouched and returns
-// Changed=false.
-func Unlink(root, id, predicate, target string) (*LinkResult, error) {
-	return fsio.Locked(root, func() (*LinkResult, error) { return unlink(root, id, predicate, target) })
+// Changed=false. dryRun runs every check and writes nothing; Changed still
+// says whether the edge would be removed.
+func Unlink(root, id, predicate, target string, dryRun bool) (*LinkResult, error) {
+	out := sink{dry: dryRun}
+	return locked(root, out, func() (*LinkResult, error) { return unlink(root, id, predicate, target, out) })
 }
 
-func unlink(root, id, predicate, target string) (*LinkResult, error) {
+func unlink(root, id, predicate, target string, out sink) (*LinkResult, error) {
 	_, idx, node, rel, err := edgeContext(root, id, predicate)
 	if err != nil {
 		return nil, err
@@ -775,7 +789,7 @@ func unlink(root, id, predicate, target string) (*LinkResult, error) {
 		}
 		return false, nil
 	}
-	changed, err := applyEdgeMutation(root, idx, node, id, apply)
+	changed, err := applyEdgeMutation(root, idx, node, id, out, apply)
 	if err != nil {
 		return nil, err
 	}
@@ -814,12 +828,12 @@ func edgeContext(root, id, predicate string) (
 // spurious rewrite). Collection: the same mutation on the row inside the locked
 // read-modify-write; an unchanged row skips the file write the same way.
 func applyEdgeMutation(
-	root string, idx *index.Index, node index.Node, id string, apply func(*omap.Map) (bool, error),
+	root string, idx *index.Index, node index.Node, id string, out sink, apply func(*omap.Map) (bool, error),
 ) (bool, error) {
 	rtype, _ := idx.Resolved.Types.Get(node.Type)
 	if rtype.Storage.Layout == schema.LayoutCollection {
 		changed := false
-		err := mutateCollection(root, rtype, func(rows *omap.Map) (bool, error) {
+		_, err := mutateCollection(root, rtype, out, func(rows *omap.Map) (bool, error) {
 			rowAny, has := rows.Get(node.Slug)
 			if !has {
 				return false, errs.LookupError(id)
@@ -843,7 +857,7 @@ func applyEdgeMutation(
 		return false, err
 	}
 	if changed {
-		if werr := writeDoc(root, path, meta, body); werr != nil {
+		if _, werr := writeDoc(root, path, out, meta, body); werr != nil {
 			return false, werr
 		}
 	}
@@ -855,11 +869,13 @@ func applyEdgeMutation(
 // Delete removes an entity, refusing while inbound edges resolve unless force.
 // A forced removal deletes the entity and leaves the now-dangling inbound edges
 // in place — khub check surfaces the breakage; khub never repairs it.
-func Delete(root, id string, force bool) (*DeleteResult, error) {
-	return fsio.Locked(root, func() (*DeleteResult, error) { return delete(root, id, force) })
+// dryRun runs the same guard and checks and removes nothing.
+func Delete(root, id string, force, dryRun bool) (*DeleteResult, error) {
+	out := sink{dry: dryRun}
+	return locked(root, out, func() (*DeleteResult, error) { return delete(root, id, force, out) })
 }
 
-func delete(root, id string, force bool) (*DeleteResult, error) {
+func delete(root, id string, force bool, out sink) (*DeleteResult, error) {
 	resolved, err := introspect.LoadSchema(root)
 	if err != nil {
 		return nil, err
@@ -880,7 +896,7 @@ func delete(root, id string, force bool) (*DeleteResult, error) {
 	}
 
 	if rtype.Storage.Layout == schema.LayoutCollection {
-		err := mutateCollection(root, rtype, func(rows *omap.Map) (bool, error) {
+		_, err := mutateCollection(root, rtype, out, func(rows *omap.Map) (bool, error) {
 			if _, has := rows.Get(node.Slug); !has {
 				return false, errs.LookupError(id)
 			}
@@ -897,10 +913,10 @@ func delete(root, id string, force bool) (*DeleteResult, error) {
 	path := entityPath(root, idx, node)
 	if rtype.Storage.Layout == schema.LayoutFolder {
 		// The entity is the folder, not just its _index.
-		if err := fsio.Remove(root, filepath.Dir(path), true); err != nil {
+		if err := out.remove(root, filepath.Dir(path), true); err != nil {
 			return nil, err
 		}
-	} else if err := fsio.Remove(root, path, false); err != nil {
+	} else if err := out.remove(root, path, false); err != nil {
 		return nil, err
 	}
 	return &DeleteResult{Type: node.Type, Slug: node.Slug, Removed: true, Inbound: inbound}, nil

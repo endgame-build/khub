@@ -11,6 +11,7 @@ Options:
   --strict  Reject fields the schema does not declare.
   --body <str>  Replace the body with this string ('' clears it).
   --body-file <str>  Replace the body from a file ('-' for stdin).
+  --dry-run  Run every check the write runs and print what it would emit; write nothing.
   --format <str>  text or json (emits the updated record). [default: text]
   --help  Show this message and exit.
 

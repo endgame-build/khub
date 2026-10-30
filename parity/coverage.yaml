@@ -34,6 +34,7 @@ commands:
   - '--body'
   - '--body-file'
   - '--no-template'
+  - '--dry-run'
   - '--format'
 - name: 'get'
   params:
@@ -46,23 +47,27 @@ commands:
   - '--strict'
   - '--body'
   - '--body-file'
+  - '--dry-run'
   - '--format'
 - name: 'link'
   params:
   - 'arg:id_'
   - 'arg:predicate'
   - 'arg:target'
+  - '--dry-run'
   - '--format'
 - name: 'unlink'
   params:
   - 'arg:id_'
   - 'arg:predicate'
   - 'arg:target'
+  - '--dry-run'
   - '--format'
 - name: 'remove'
   params:
   - 'arg:id_'
   - '--force'
+  - '--dry-run'
   - '--format'
 - name: 'query'
   params:

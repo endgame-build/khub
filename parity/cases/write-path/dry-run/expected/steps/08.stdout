@@ -1,0 +1,1 @@
+{"error": {"code": "referential_integrity", "message": "No component 'ghost' to satisfy relation 'realized_in'"}}

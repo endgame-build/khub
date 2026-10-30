@@ -170,9 +170,13 @@ test('a call that changes the workspace is told from a read', () => {
   expect(mutates(simple('khub reindex --dry-run=true'))).toBe(false)
   expect(mutates(simple('khub schema snapshot'))).toBe(true)
   expect(mutates(simple('khub get x'))).toBe(false)
+  for (const write of ['add adr --title x', 'edit x kind y', 'link x p y', 'unlink x p y', 'remove x --force']) {
+    expect(mutates(simple(`khub ${write} --dry-run`))).toBe(false)
+  }
 })
 
 test('an edit names the fields it changed, and a body by name alone', () => {
+  expect(edited(simple('khub edit cmp-search lifecycle deprecated --dry-run'))).toBe('lifecycle deprecated')
   expect(edited(simple('khub edit cmp-search lifecycle deprecated'))).toBe('lifecycle deprecated')
   expect(edited(simple('khub edit cmp-search --lifecycle deprecated --format json'))).toBe('lifecycle deprecated')
   expect(edited(simple('khub edit cmp-search --lifecycle deprecated --tier tier-2 --strict'))).toBe(

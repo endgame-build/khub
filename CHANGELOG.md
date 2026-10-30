@@ -2,6 +2,33 @@
 
 Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); khub is pre-release.
 
+## [Unreleased]
+
+### Added
+
+- **`--dry-run` on `add`, `edit`, `link`, `unlink` and `remove`.** A dry run
+  runs every check the write runs — schema, referential integrity, slug and
+  alias gates, the inbound-edge guard, the collection re-render and the
+  storage path and lock path refusals — and refuses where the write would, on
+  the same exit code. A filesystem failure the OS reports only when the write
+  publishes (permissions, a full disk, a concurrent writer) can still differ:
+  a dry run that exits 0 does not promise the write will. It takes no lock and
+  writes nothing. On success it prints the record the write would print, plus
+  `changed` (whether the write would move a byte on disk; `link` and `unlink`
+  already carry it) and `"dry_run": true`, one shape across the five verbs.
+  `remove --dry-run` also lists `inbound`, the edges a `--force` would leave
+  dangling. Text output reads `Would create …`, `Would update …`,
+  `Would link …`, `Would unlink …`, `Would remove …`, or the write's own no-op
+  line.
+
+### Changed
+
+- **`--dry-run` is now an option of `add` and `edit`,** so it wins over a
+  schema field named `dry_run`, as `--draft`, `--strict` and `--format`
+  already win over theirs: `--dry-run yes` used to set that field and is now a
+  usage error (exit 2). Set such a field with `--dry_run <value>` or
+  positionally (`edit <id> dry_run <value>`).
+
 ## [0.30.0] — 2026-10-28
 
 Storage can now follow a hub's existing nesting, relations can point to files

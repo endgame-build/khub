@@ -92,7 +92,7 @@ func gapsWS(t *testing.T) string {
 	t.Helper()
 	root := cleanWS(t)
 	create(t, root, "person", "orphan-person", "name", "Orphan", "role", "consultant")
-	if _, err := entity.Delete(root, "client/initech", true); err != nil {
+	if _, err := entity.Delete(root, "client/initech", true, false); err != nil {
 		t.Fatalf("delete: %v", err)
 	}
 	writeRaw(t, root, "clients/notes.md", "loose notes, not an entity\n")
@@ -413,7 +413,7 @@ func TestDraftRequiredSingletonFailsAndIsNotMissing(t *testing.T) {
 	}
 
 	update(t, root, "prd", "draft", "false")
-	if _, err := entity.Delete(root, "prd", false); err != nil {
+	if _, err := entity.Delete(root, "prd", false, false); err != nil {
 		t.Fatalf("delete prd: %v", err)
 	}
 	absent := mustCheck(t, root, false)

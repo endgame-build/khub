@@ -2,6 +2,7 @@
 
 import type { KhubSession, KhubSummary, KhubTone } from '../types'
 import { count, isRow, refusal, rowsOf, text } from './cli'
+import { isDryRun } from './parse'
 import type { Simple } from './parse'
 import { failingOf } from './summarize'
 
@@ -24,10 +25,10 @@ export function summaryOf(check: unknown, query: unknown): { summary: KhubSummar
   }
 }
 
-// Returns the entity a khub call changed in place, by qualified id. A refusal and an edge
-// call that changed nothing name none.
+// Returns the entity a khub call changed in place, by qualified id. A refusal, a dry run
+// and an edge call that changed nothing name none.
 export function editedBy(call: Simple, json: unknown): string[] {
-  if (!EDITS.has(call.verb) || !isRow(json) || refusal(json) || json.changed === false) return []
+  if (!EDITS.has(call.verb) || isDryRun(call) || !isRow(json) || refusal(json) || json.changed === false) return []
 
   const id = text(json.id)
 

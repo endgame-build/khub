@@ -39,7 +39,7 @@ const OPERATORS = new Set(['backfill', 'init', 'reindex', 'upgrade', 'wire'])
 const SCHEMA_VIEWS = new Set(['base', 'diff', 'edges', 'show', 'snapshot', 'types'])
 
 // These flags of `khub edit` name no field.
-const EDIT_OPTIONS = new Set(['format', 'strict'])
+const EDIT_OPTIONS = new Set(['dry-run', 'format', 'strict'])
 
 const isWord = (token: Token): token is Word => 'text' in token
 const isOn = (flag: string | true | undefined) => flag !== undefined && flag !== 'false'
@@ -368,10 +368,12 @@ export const callsOf = (parsed: Parsed): Simple[] =>
 
 export const isWrite = (found: Simple) => WRITES.has(found.verb)
 
+// Tells whether a call asked for a preview. A dry run of any verb writes nothing.
+export const isDryRun = (found: Simple) => isOn(found.flags['dry-run'])
+
 // Tells whether a call changes entities, the schema, the index or the agent files.
 export const mutates = (found: Simple) =>
-  isWrite(found) ||
-  (OPERATORS.has(found.verb) && !isOn(found.flags['dry-run'])) ||
+  ((isWrite(found) || OPERATORS.has(found.verb)) && !isDryRun(found)) ||
   (found.verb === 'schema' && found.sub === 'snapshot')
 
 // Returns what a `khub edit` call changed, as `<field> <value>` pairs. A body is named,

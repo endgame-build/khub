@@ -24,8 +24,8 @@ import (
 
 func registerAdd(root *cobra.Command) {
 	var (
-		id, bodyText, bodyFile, format string
-		draft, strict, noTemplate      bool
+		id, bodyText, bodyFile, format    string
+		draft, strict, noTemplate, dryRun bool
 	)
 	cmd := newCmd("add [TYPE]",
 		"Create an entity: khub add opportunity --client initech --owner noor --stage prospect.",
@@ -41,6 +41,7 @@ func registerAdd(root *cobra.Command) {
 	cmd.Flags().BoolVar(&noTemplate, "no-template", false,
 		"Start with an empty body. Refused on a type whose template has a required heading, "+
 			"since the result would fail validate; use --body to supply your own sections.")
+	cmd.Flags().BoolVar(&dryRun, "dry-run", false, dryRunHelp)
 	cmd.Flags().StringVar(&format, "format", "text", "text or json (emits the written record).")
 	cmd.RunE = func(cmd *cobra.Command, args []string) error {
 		positional, extra, err := splitDynamic(cmd, args, 1)
@@ -77,20 +78,27 @@ func registerAdd(root *cobra.Command) {
 			}
 			result, cerr := entity.Create(ws, typeName, entity.CreateOpts{
 				Fields: fields, ID: explicitID(cmd, id), Draft: draft, Body: text,
-				Strict: strict, UseTemplate: !noTemplate,
+				Strict: strict, UseTemplate: !noTemplate, DryRun: dryRun,
 			})
 			if cerr != nil {
 				return emptyIDError(cmd, id, cerr)
 			}
-			return Emit(refRecord(ws, result.Type, result.Slug, result.Path, result.Draft, result.Locator),
-				format, func() {
-					fmt.Println(relPath(ws, result.Path))
-					state := "active"
-					if result.Draft {
-						state = "draft"
-					}
-					fmt.Printf("Created %s '%s' (%s)\n", result.Type, result.Slug, state)
-				})
+			record := refRecord(ws, result.Type, result.Slug, result.Path, result.Draft, result.Locator)
+			if dryRun {
+				record = preview(record, true) // a create always writes
+			}
+			return Emit(record, format, func() {
+				fmt.Println(relPath(ws, result.Path))
+				state := "active"
+				if result.Draft {
+					state = "draft"
+				}
+				verb := "Created"
+				if dryRun {
+					verb = "Would create"
+				}
+				fmt.Printf("%s %s '%s' (%s)\n", verb, result.Type, result.Slug, state)
+			})
 		})
 	}
 	root.AddCommand(cmd)
@@ -143,7 +151,7 @@ func registerGet(root *cobra.Command) {
 
 func registerEdit(root *cobra.Command) {
 	var bodyText, bodyFile, format string
-	var strict bool
+	var strict, dryRun bool
 	cmd := newCmd("edit [ID]",
 		"Edit an entity: khub edit initech-deal stage proposal-sent  (or --field value).",
 		"[ID]", nil)
@@ -152,6 +160,7 @@ func registerEdit(root *cobra.Command) {
 	cmd.Flags().BoolVar(&strict, "strict", false, "Reject fields the schema does not declare.")
 	cmd.Flags().StringVar(&bodyText, "body", "", "Replace the body with this string ('' clears it).")
 	cmd.Flags().StringVar(&bodyFile, "body-file", "", "Replace the body from a file ('-' for stdin).")
+	cmd.Flags().BoolVar(&dryRun, "dry-run", false, dryRunHelp)
 	cmd.Flags().StringVar(&format, "format", "text", "text or json (emits the updated record).")
 	cmd.RunE = func(cmd *cobra.Command, args []string) error {
 		positional, extra, err := splitDynamic(cmd, args, 1)
@@ -183,13 +192,22 @@ func registerEdit(root *cobra.Command) {
 				return &ExitError{Code: 2}
 			}
 			result, uerr := entity.Update(ws, id, entity.UpdateOpts{
-				Fields: fields, Body: body, Strict: strict,
+				Fields: fields, Body: body, Strict: strict, DryRun: dryRun,
 			})
 			if uerr != nil {
 				return uerr
 			}
-			return Emit(refRecord(ws, result.Type, result.Slug, result.Path, result.Draft, result.Locator),
-				format, func() { fmt.Printf("Updated %s '%s'\n", result.Type, result.Slug) })
+			record := refRecord(ws, result.Type, result.Slug, result.Path, result.Draft, result.Locator)
+			if !dryRun {
+				return Emit(record, format, func() { fmt.Printf("Updated %s '%s'\n", result.Type, result.Slug) })
+			}
+			return Emit(preview(record, result.Changed), format, func() {
+				if !result.Changed {
+					fmt.Printf("No change to %s '%s'\n", result.Type, result.Slug)
+					return
+				}
+				fmt.Printf("Would update %s '%s'\n", result.Type, result.Slug)
+			})
 		})
 	}
 	root.AddCommand(cmd)
@@ -197,6 +215,7 @@ func registerEdit(root *cobra.Command) {
 
 func registerLink(root *cobra.Command) {
 	var format string
+	var dryRun bool
 	cmd := newCmd("link [ID] [PREDICATE] [TARGET]", "Add a relation: khub link initech-pov partner northwind.",
 		"[ID] [PREDICATE] [TARGET]", func(cmd *cobra.Command, args []string) error {
 			return Guard(format, func() error {
@@ -208,27 +227,33 @@ func registerLink(root *cobra.Command) {
 					fmt.Fprintln(os.Stderr, "Provide ID PREDICATE TARGET.")
 					return &ExitError{Code: 2}
 				}
-				result, err := entity.Link(ws, args[0], args[1], args[2])
+				result, err := entity.Link(ws, args[0], args[1], args[2], dryRun)
 				if err != nil {
 					return err
 				}
-				return Emit(edgeRecord(result), format, func() {
+				return Emit(edgeOutput(result, dryRun), format, func() {
 					// An unchanged edge already existed — idempotent success (exit 0).
 					if !result.Changed {
 						fmt.Println("Edge already present")
 						return
 					}
-					fmt.Printf("Linked %s --%s--> %s\n", result.Slug, result.Predicate, result.Target)
+					verb := "Linked"
+					if dryRun {
+						verb = "Would link"
+					}
+					fmt.Printf("%s %s --%s--> %s\n", verb, result.Slug, result.Predicate, result.Target)
 				})
 			})
 		})
 	cmd.Args = clickArity(3)
+	cmd.Flags().BoolVar(&dryRun, "dry-run", false, dryRunHelp)
 	cmd.Flags().StringVar(&format, "format", "text", "text or json (emits the edge record).")
 	root.AddCommand(cmd)
 }
 
 func registerUnlink(root *cobra.Command) {
 	var format string
+	var dryRun bool
 	cmd := newCmd("unlink [ID] [PREDICATE] [TARGET]", "Remove a relation: khub unlink initech-pov partner northwind.",
 		"[ID] [PREDICATE] [TARGET]", func(cmd *cobra.Command, args []string) error {
 			return Guard(format, func() error {
@@ -240,28 +265,33 @@ func registerUnlink(root *cobra.Command) {
 					fmt.Fprintln(os.Stderr, "Provide ID PREDICATE TARGET.")
 					return &ExitError{Code: 2}
 				}
-				result, err := entity.Unlink(ws, args[0], args[1], args[2])
+				result, err := entity.Unlink(ws, args[0], args[1], args[2], dryRun)
 				if err != nil {
 					return err
 				}
-				return Emit(edgeRecord(result), format, func() {
+				return Emit(edgeOutput(result, dryRun), format, func() {
 					// No such edge — idempotent no-op success (exit 0).
 					if !result.Changed {
 						fmt.Printf("No edge %s -> %s on %s\n", result.Predicate, result.Target, result.Slug)
 						return
 					}
-					fmt.Printf("Unlinked %s --%s--> %s\n", result.Slug, result.Predicate, result.Target)
+					verb := "Unlinked"
+					if dryRun {
+						verb = "Would unlink"
+					}
+					fmt.Printf("%s %s --%s--> %s\n", verb, result.Slug, result.Predicate, result.Target)
 				})
 			})
 		})
 	cmd.Args = clickArity(3)
+	cmd.Flags().BoolVar(&dryRun, "dry-run", false, dryRunHelp)
 	cmd.Flags().StringVar(&format, "format", "text", "text or json (emits the edge record).")
 	root.AddCommand(cmd)
 }
 
 func registerRemove(root *cobra.Command) {
 	var format string
-	var force bool
+	var force, dryRun bool
 	cmd := newCmd("remove [ID]", "Remove an entity, guarded by inbound edges: khub remove old-fragment [--force].",
 		"[ID]", func(cmd *cobra.Command, args []string) error {
 			return Guard(format, func() error {
@@ -273,7 +303,7 @@ func registerRemove(root *cobra.Command) {
 					fmt.Fprintln(os.Stderr, "Missing argument 'ID'.")
 					return &ExitError{Code: 2}
 				}
-				result, err := entity.Delete(ws, args[0], force)
+				result, err := entity.Delete(ws, args[0], force, dryRun)
 				if err != nil {
 					return err
 				}
@@ -283,8 +313,34 @@ func registerRemove(root *cobra.Command) {
 					record.Set("type", result.Type)
 					record.Set("slug", result.Slug)
 					record.Set("removed", true)
-					return Emit(record, format, func() {
-						fmt.Printf("Removed %s '%s'\n", result.Type, result.Slug)
+					if !dryRun {
+						return Emit(record, format, func() {
+							fmt.Printf("Removed %s '%s'\n", result.Type, result.Slug)
+						})
+					}
+					// What --force would leave dangling: the edges the guard
+					// would have refused on, empty without them.
+					inbound := make([]any, 0, len(result.Inbound))
+					for _, edge := range result.Inbound {
+						row := omap.New()
+						row.Set("id", edge.SourceType+"/"+edge.SourceSlug)
+						row.Set("predicate", edge.Predicate)
+						inbound = append(inbound, row)
+					}
+					record.Set("inbound", inbound)
+					return Emit(preview(record, true), format, func() {
+						fmt.Printf("Would remove %s '%s'\n", result.Type, result.Slug)
+						if len(result.Inbound) == 0 {
+							return
+						}
+						edges := "edges"
+						if len(result.Inbound) == 1 {
+							edges = "edge"
+						}
+						fmt.Printf("Would leave %d inbound %s dangling:\n", len(result.Inbound), edges)
+						for _, edge := range result.Inbound {
+							fmt.Printf("  %s/%s --%s-->\n", edge.SourceType, edge.SourceSlug, edge.Predicate)
+						}
 					})
 				}
 				refusal := errs.InboundEdgeRefusal(result.Type, result.Slug, len(result.Inbound))
@@ -303,6 +359,7 @@ func registerRemove(root *cobra.Command) {
 		})
 	cmd.Args = clickArity(1)
 	cmd.Flags().BoolVar(&force, "force", false, "Delete despite inbound edges (leaves them dangling).")
+	cmd.Flags().BoolVar(&dryRun, "dry-run", false, dryRunHelp)
 	cmd.Flags().StringVar(&format, "format", "text", "text or json (emits the removed record).")
 	root.AddCommand(cmd)
 }
@@ -352,6 +409,30 @@ func refRecord(ws, typeName, slug, path string, draft bool, locator string) *oma
 	record.Set("draft", draft)
 	if locator != "" {
 		record.Set("locator", locator)
+	}
+	return record
+}
+
+// dryRunHelp is the one --dry-run line the five write verbs share.
+const dryRunHelp = "Run every check the write runs and print what it would emit; write nothing."
+
+// preview is the one shape every write verb's --dry-run prints: the record the
+// write would emit, then `changed` (whether the write would move a byte on
+// disk; link and unlink already carry it in place) and `dry_run: true`. The
+// refusals are the write's own, on the same exit codes.
+func preview(record *omap.Map, changed bool) *omap.Map {
+	if _, has := record.Get("changed"); !has {
+		record.Set("changed", changed)
+	}
+	record.Set("dry_run", true)
+	return record
+}
+
+// edgeOutput is link's and unlink's record, as a preview on a dry run.
+func edgeOutput(result *entity.LinkResult, dryRun bool) *omap.Map {
+	record := edgeRecord(result)
+	if dryRun {
+		return preview(record, result.Changed)
 	}
 	return record
 }
