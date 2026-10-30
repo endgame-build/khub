@@ -2,6 +2,19 @@
 
 Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); khub is pre-release.
 
+## [Unreleased]
+
+### Added
+
+- `docs/ingestion-alignment.md`, the alignment ladder for the planned
+  ingestion path, companion to `docs/ingestion-conflicts.md`: a reference in a
+  source record resolves by exact source id or khub id, an unknown source id
+  gets a draft stub carrying it as an alias, and look-alikes are proposed with
+  stable evidence codes (`title_equal`, `alias_equal`, `title_match`,
+  `text_match`) but never linked. Also sets out the `exact` and `full`
+  alignment modes and the linker numbers the ingestion goldens will measure.
+  A design only; no command changes.
+
 ## [0.30.0] — 2026-10-28
 
 Storage can now follow a hub's existing nesting, relations can point to files
