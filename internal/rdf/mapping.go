@@ -8,8 +8,11 @@
 package rdf
 
 import (
+	"fmt"
+	"regexp"
 	"strings"
 
+	"github.com/endgame-build/khub/internal/errs"
 	"github.com/endgame-build/khub/internal/schema"
 )
 
@@ -77,7 +80,6 @@ func pn(prefix, local string) IRI { return IRI{Prefixed: prefix + ":" + local} }
 var (
 	rdfType          = pn("rdf", "type")
 	rdfProperty      = pn("rdf", "Property")
-	rdfJSON          = pn("rdf", "JSON")
 	rdfsClass        = pn("rdfs", "Class")
 	rdfsSubClassOf   = pn("rdfs", "subClassOf")
 	rdfsLabel        = pn("rdfs", "label")
@@ -106,6 +108,7 @@ var (
 	xsdDate          = pn("xsd", "date")
 	xsdDateTime      = pn("xsd", "dateTime")
 	khubEntity       = pn("khub", "Entity")
+	khubFile         = pn("khub", "File")
 	khubPreset       = pn("khub", "preset")
 	khubPresetVer    = pn("khub", "presetVersion")
 	khubWorkspace    = pn("khub", "workspace")
@@ -136,13 +139,14 @@ var vocabulary = []struct {
 	comment string
 }{
 	{khubEntity, true, "Every khub entity. Each type is a subclass."},
+	{khubFile, true, "A workspace file a path reference names; not an entity."},
 	{khubPreset, false, "On the ontology: the preset the workspace was initialized from."},
 	{khubPresetVer, false, "On the ontology: that preset's version."},
 	{khubWorkspace, false, "On the ontology: the workspace this export was rendered from."},
 	{khubRequiredScop, false, "On the ontology: sh:minCount is khub's required gate, enforced on this subset of entities (drafts are exempt)."},
 	{khubLayout, false, "Storage: file, folder, collection or singleton."},
 	{khubFormat, false, "Storage: md, json, yaml or jsonl."},
-	{khubPath, false, "Storage: where the type's entities live, one value per path template."},
+	{khubPath, false, "Storage: where the type's entities live, one value per path template; on a khub:File, its workspace-relative path."},
 	{khubIDShape, false, "Storage: the id a new entity is minted with."},
 	{khubTemplate, false, "Storage: the body template stem the type declares."},
 	{khubReqSingleton, false, "Policy: a singleton `check` requires to exist."},
@@ -378,7 +382,14 @@ func (m *mapper) attributeShape(a *schema.ResolvedAttribute, order int) Blank {
 	add(shPath, m.fieldIRI(a.Name))
 	add(shName, Str(a.Name))
 	add(shOrder, Int(order))
-	if dt, ok := datatypes[a.BaseType]; ok {
+	if a.BaseType == "date" {
+		// khub accepts a datetime in a date field (validate's gate is the one
+		// ISO parse for both kinds), so the shape admits both.
+		add(shOr, List{Items: []Term{
+			Blank{Pairs: []Pair{{Pred: shDatatype, Obj: xsdDate}}},
+			Blank{Pairs: []Pair{{Pred: shDatatype, Obj: xsdDateTime}}},
+		}})
+	} else if dt, ok := datatypes[a.BaseType]; ok {
 		add(shDatatype, dt)
 	}
 	if a.Required {
@@ -395,8 +406,8 @@ func (m *mapper) attributeShape(a *schema.ResolvedAttribute, order int) Blank {
 		add(shIn, List{Items: items})
 	}
 	if a.Pattern != nil {
-		if Portable(*a.Pattern) {
-			add(shPattern, Str(Anchored(*a.Pattern)))
+		if portable, ok := PortablePattern(*a.Pattern); ok {
+			add(shPattern, Str(Anchored(portable)))
 		}
 		add(khubPattern, Str(*a.Pattern))
 	}
@@ -414,15 +425,22 @@ func (m *mapper) relationShape(r *schema.ResolvedRelation, order int) Blank {
 	add(shName, Str(r.Predicate))
 	add(shOrder, Int(order))
 	add(shNodeKind, shIRI)
-	switch r.Kind {
-	case schema.KindTyped:
+	switch {
+	case r.Kind == schema.KindTyped:
 		add(shClass, m.typeIRI(r.Targets[0]))
-	case schema.KindUnion:
+	case r.Kind == schema.KindUnion:
 		items := make([]Term, len(r.Targets))
 		for i, target := range r.Targets {
 			items[i] = Blank{Pairs: []Pair{{Pred: shClass, Obj: m.typeIRI(target)}}}
 		}
 		add(shOr, List{Items: items})
+	case r.ByPath:
+		// Under path_refs an existing file satisfies an `any` relation; the
+		// ABox emits it as a khub:File, so the shape admits one.
+		add(shOr, List{Items: []Term{
+			Blank{Pairs: []Pair{{Pred: shClass, Obj: khubEntity}}},
+			Blank{Pairs: []Pair{{Pred: shClass, Obj: khubFile}}},
+		}})
 	default:
 		add(shClass, khubEntity)
 	}
@@ -445,37 +463,108 @@ func (m *mapper) relationShape(r *schema.ResolvedRelation, order int) Blank {
 	return b
 }
 
-// Portable reports whether an RE2 pattern reads the same as an XPath/SPARQL
-// regex, which is what sh:pattern is matched with. The test is a conservative
-// syntactic one — it refuses every RE2 construct XPath lacks or reads
-// differently — so a pattern it passes means the same thing on both sides,
-// and a pattern it refuses is still carried as khub:pattern.
-func Portable(p string) bool {
+// xpathCategories are the Unicode general categories an XPath regex knows
+// under \p{…}; RE2 also knows scripts (\p{Greek}), which XPath does not.
+var xpathCategories = map[string]bool{
+	"L": true, "Lu": true, "Ll": true, "Lt": true, "Lm": true, "Lo": true,
+	"M": true, "Mn": true, "Mc": true, "Me": true,
+	"N": true, "Nd": true, "Nl": true, "No": true,
+	"P": true, "Pc": true, "Pd": true, "Ps": true, "Pe": true, "Pi": true, "Pf": true, "Po": true,
+	"Z": true, "Zs": true, "Zl": true, "Zp": true,
+	"S": true, "Sm": true, "Sc": true, "Sk": true, "So": true,
+	"C": true, "Cc": true, "Cf": true, "Co": true, "Cn": true,
+}
+
+// xpathSingleCharEsc is the XSD/XPath SingleCharEsc set: the only
+// punctuation a backslash may precede there. RE2 lets `\` escape any
+// punctuation, so `\/` is fine for khub and a FORX0002 error for an XPath
+// engine.
+const xpathSingleCharEsc = `nrt\|.?*+(){}$-[]^`
+
+// PortablePattern renders an RE2 pattern as the XPath/SPARQL regex that
+// matches the same strings, which is what sh:pattern is matched with, or
+// reports that none exists. It refuses every RE2 construct XPath lacks
+// (groups with `(?`, `\A \z \b`, `\x`, `\Q…\E`, POSIX classes, scripts under
+// \p, a backslash before punctuation outside the SingleCharEsc set) and
+// rewrites the three shorthands whose meaning differs: RE2's `\d`, `\w` and
+// `\s` are ASCII (`[0-9]`, `[A-Za-z0-9_]`, `[\t\n\f\r ]`), XPath's are
+// Unicode, so the ASCII classes go out in their place. A pattern it refuses
+// is still carried as khub:pattern.
+func PortablePattern(p string) (string, bool) {
 	if strings.Contains(p, "(?") || strings.Contains(p, "[:") || strings.Contains(p, "-[") {
-		return false
+		return "", false
 	}
+	var b strings.Builder
+	inClass := false
 	for i := 0; i < len(p); i++ {
-		if p[i] != '\\' {
+		c := p[i]
+		if c != '\\' {
+			b.WriteByte(c)
+			switch c {
+			case '[':
+				inClass = true
+			case ']':
+				inClass = false
+			}
 			continue
 		}
 		if i+1 >= len(p) {
-			return false
-		}
-		next := p[i+1]
-		switch {
-		case strings.IndexByte("afveAzZQECbBhHxX", next) >= 0:
-			return false
-		case next >= '0' && next <= '9':
-			return false
-		case next == 'p' || next == 'P':
-			if i+2 >= len(p) || p[i+2] != '{' {
-				return false
-			}
+			return "", false
 		}
 		i++
+		n := p[i]
+		switch {
+		case strings.IndexByte(xpathSingleCharEsc, n) >= 0:
+			b.WriteByte('\\')
+			b.WriteByte(n)
+		case n == 'd' || n == 'w' || n == 's':
+			body := map[byte]string{'d': "0-9", 'w': "A-Za-z0-9_", 's': "\\t\\n\\r\f "}[n]
+			if inClass {
+				b.WriteString(body)
+			} else {
+				b.WriteString("[" + body + "]")
+			}
+		case n == 'D' || n == 'W' || n == 'S':
+			if inClass {
+				return "", false // no negated shorthand inside a class
+			}
+			body := map[byte]string{'D': "0-9", 'W': "A-Za-z0-9_", 'S': "\\t\\n\\r\f "}[n]
+			b.WriteString("[^" + body + "]")
+		case n == 'p' || n == 'P':
+			end := strings.IndexByte(p[i:], '}')
+			if i+1 >= len(p) || p[i+1] != '{' || end < 0 || !xpathCategories[p[i+2:i+end]] {
+				return "", false
+			}
+			b.WriteByte('\\')
+			b.WriteString(p[i : i+end+1])
+			i += end
+		default:
+			return "", false
+		}
 	}
-	return true
+	return b.String(), true
 }
+
+// ValidateBase refuses a --base that would not mint absolute IRIs: it must
+// carry a scheme, end in `/`, `#` or `:` so the layout appends cleanly, and
+// hold no character an IRI may not.
+func ValidateBase(base string) error {
+	bad := func(why string) error {
+		return errs.New("invalid_base", fmt.Sprintf("Base IRI '%s' %s", base, why))
+	}
+	if !iriSchemeRE.MatchString(base) {
+		return bad("must be absolute: start with a scheme, such as urn:khub: or https://example.org/kb/")
+	}
+	if strings.ContainsAny(base, " <>\"{}|^`\\") || strings.ContainsFunc(base, func(r rune) bool { return r < 0x20 || r == 0x7f }) {
+		return bad("holds a character an IRI may not")
+	}
+	if last := base[len(base)-1]; last != '/' && last != '#' && last != ':' {
+		return bad("must end in '/', '#' or ':' so the minted IRIs append to it")
+	}
+	return nil
+}
+
+var iriSchemeRE = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9+.-]*:`)
 
 // Anchored renders a pattern for sh:pattern, which a validator searches
 // rather than full-matches as khub does. A pattern that already anchors

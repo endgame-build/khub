@@ -1,0 +1,1 @@
+{"error": {"code": "invalid_base", "message": "Base IRI 'rel/path' must be absolute: start with a scheme, such as urn:khub: or https://example.org/kb/"}}

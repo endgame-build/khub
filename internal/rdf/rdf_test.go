@@ -166,6 +166,116 @@ func TestInstancesRefuseAMalformedScan(t *testing.T) {
 	}
 }
 
+// The declared kind types the literal, so a validate-clean workspace conforms
+// to its own shapes: a date in a datetime field, a datetime in a date field,
+// a text field YAML reads back as a boolean, and a text field holding a
+// mapping all go out under the shape's datatype.
+func TestLiteralsFollowTheDeclaredKind(t *testing.T) {
+	root := firmOpsWS(t)
+	create(t, root, "meeting", "dateonly", "title", "Date only", "date", "2026-01-15",
+		"call_type", "internal", "source", "manual", "engagement", "initech-deal")
+	create(t, root, "client", "stamped", "name", "Stamped", "created", "2026-01-15 10:00:00")
+	nested := "---\ntype: client\nname: Nested\ncreated: 2026-01-15\nindustry: yes\nwebsite: {nested: {deep: true}}\naliases: [1, true, {k: v}]\n---\n"
+	if err := os.WriteFile(filepath.Join(root, "clients", "nested.md"), []byte(nested), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	res, err := Project(root, Options{Out: Stdout, Instances: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		`field:date "2026-01-15T00:00:00"^^xsd:dateTime`,
+		`khub:created "2026-01-15T10:00:00"^^xsd:dateTime`,
+		`field:industry "true" ;`,
+		`field:website "{\"nested\": {\"deep\": true}}"`,
+		`khub:aliases "1"^^xsd:decimal, true, "{\"k\": \"v\"}"`,
+	} {
+		if !strings.Contains(res.Content, want) {
+			t.Errorf("ABox lacks %q", want)
+		}
+	}
+	if strings.Contains(res.Content, "rdf:JSON") {
+		t.Error("no literal is typed rdf:JSON")
+	}
+	for in, want := range map[string]string{
+		"text-true": Str("true").String(), "number": `"3"^^xsd:decimal`, "bool-yes": "true",
+		"bool-bad": `"maybe"^^xsd:boolean`, "date-dt": `"2026-01-15T10:00:00"^^xsd:dateTime`,
+		"dt-date": `"2026-01-15T00:00:00"^^xsd:dateTime`, "list-float": `"1.5"^^xsd:decimal`,
+	} {
+		var got Term
+		switch in {
+		case "text-true":
+			got = literal(true, "text")
+		case "number":
+			got = literal("3", "number")
+		case "bool-yes":
+			got = literal("yes", "bool")
+		case "bool-bad":
+			got = literal("maybe", "bool")
+		case "date-dt":
+			got = literal("2026-01-15 10:00:00", "date")
+		case "dt-date":
+			got = literal("2026-01-15", "datetime")
+		case "list-float":
+			got = literal(1.5, "list")
+		}
+		if s := got.(Literal).String(); s != want {
+			t.Errorf("literal %s = %s, want %s", in, s, want)
+		}
+	}
+}
+
+// A path reference to a plain file satisfies a `to: any` relation under
+// path_refs without an edge in the graph; the ABox emits the file as a
+// khub:File node so the shape's minCount holds.
+func TestPathReferenceEmitsAFileNode(t *testing.T) {
+	root := firmOpsWS(t)
+	policy := filepath.Join(root, ".khub", "policy.yaml")
+	if err := os.WriteFile(policy, []byte("policy:\n  client: { path_refs: true }\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "guide.md"), []byte("# Guide\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	create(t, root, "client", "reader", "name", "Reader", "related", "guide.md,initech")
+	res, err := Project(root, Options{Out: Stdout, Instances: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		"khub:related <urn:khub:workspace/ws/client/initech>, <urn:khub:workspace/ws/file/guide.md> .",
+		"<urn:khub:workspace/ws/file/guide.md> a khub:File ;\n    khub:path \"guide.md\" .",
+		"[ sh:class khub:Entity ]\n            [ sh:class khub:File ]",
+	} {
+		if !strings.Contains(res.Content, want) {
+			t.Errorf("render lacks %q\n%s", want, block(res.Content, "<urn:khub:workspace/ws/client/reader>"))
+		}
+	}
+}
+
+func TestOutAndBaseRefusals(t *testing.T) {
+	root := firmOpsWS(t)
+	for _, c := range []struct {
+		opt  Options
+		code string
+	}{
+		{Options{Out: "../escape.ttl"}, "unsafe_path"},
+		{Options{Out: "."}, "invalid_out"},
+		{Options{Out: "clients"}, "invalid_out"},
+		{Options{Out: Stdout, Base: "http://x"}, "invalid_base"},
+		{Options{DryRun: true, Base: "rel/path"}, "invalid_base"},
+	} {
+		_, err := Project(root, c.opt)
+		var located *errs.Located
+		if !errors.As(err, &located) || located.Code != c.code {
+			t.Errorf("%+v: err = %v, want %s", c.opt, err, c.code)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(root, "..", "escape.ttl")); err == nil {
+		t.Error("a relative --out climbed out of the workspace")
+	}
+}
+
 func TestOutRefusesASymlink(t *testing.T) {
 	root := firmOpsWS(t)
 	gen := filepath.Join(root, ".khub", "generated")

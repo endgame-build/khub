@@ -6,7 +6,7 @@ contract for that file: the vocabulary it uses, how every IRI is minted, what
 each khub construct becomes, what survives the trip losslessly and what rides
 along as an annotation, and the serialization rules that make the bytes a
 function of the schema alone. The firm-ops render the parity runner records
-(`parity/cases/projection/schema-rdf/expected/steps/08.stdout`) is the golden
+(`parity/cases/projection/schema-rdf/expected/steps/12.stdout`) is the golden
 fixture: a change to this page is a change to those bytes, and the other way
 round.
 
@@ -75,14 +75,25 @@ consumer reads `khub:acyclic` the same way from every export.
 | base predicate | `urn:khub:vocab/<name>` | `urn:khub:vocab/title` |
 | node shape | `<base>ontology/<key>/shape/<type>` | `urn:khub:ontology/firm-ops/shape/client` |
 | entity | `<base>workspace/<name>/<type>/<slug>` | `urn:khub:workspace/ws/client/initech` |
+| referenced file | `<base>workspace/<name>/file/<path>` | `urn:khub:workspace/ws/file/docs/guide.md` |
+
+`--base` must be absolute (it starts with a scheme) and end in `/`, `#` or
+`:`, so the layout appends to it cleanly; anything else is refused
+(`invalid_base`, exit 2) rather than minted into a relative or corrupted IRI.
 
 `<key>` is the preset name recorded in `.khub/config.yaml`, falling back to
 the workspace name when no preset is recorded. Keying the vocabulary by preset
 rather than by workspace is deliberate: two workspaces initialized from
 firm-ops mint the same class and predicate IRIs, so a federated consumer joins
 them without a mapping table, and an entity IRI stays unique because it carries
-the workspace name. A workspace whose schema has drifted far from its preset
-can pass its own `--base`. `<name>` is the workspace name from the same file.
+the workspace name. The cost is real when two such workspaces' schemas differ
+(one overrides `created` to optional, one adds a type): their exports mint the
+same `shape:client`, and a consumer loading both merges the two node shapes,
+so every property shape of either applies and the stricter wins — constraints
+neither workspace declared on its own. A workspace whose schema has drifted
+from its preset should pass its own `--base`; nothing warns about the drift
+(`schema diff` compares to a snapshot, not to the preset). `<name>` is the
+workspace name from the same file.
 
 A predicate mints **one IRI per name, shared by every type that declares it**
 — `field:owner` is the same property on `opportunity`, `project` and
@@ -115,9 +126,10 @@ ignores a term it does not know reads every later export correctly.
 | Term | On | Meaning |
 |---|---|---|
 | `khub:Entity` | — | `rdfs:Class`; every type is `rdfs:subClassOf` it, and a `to: any` relation targets it |
+| `khub:File` | — | `rdfs:Class`; a workspace file a path reference names, emitted under `--instances` with its `khub:path` |
 | `khub:preset`, `khub:presetVersion`, `khub:workspace` | the ontology | provenance from `.khub/config.yaml` |
 | `khub:requiredScope` | the ontology | always `"active"`: `sh:minCount` is khub's required gate, which `check` enforces on active entities (`draft: false`) only. A validator that wants khub's exact gate restricts its focus nodes to those without `khub:draft true` |
-| `khub:layout`, `khub:format`, `khub:path` | a class | storage: `file`/`folder`/`collection`/`singleton`; `md`/`json`/`yaml`/`jsonl`; the storage path, one value per path template on a templated type |
+| `khub:layout`, `khub:format`, `khub:path` | a class | storage: `file`/`folder`/`collection`/`singleton`; `md`/`json`/`yaml`/`jsonl`; the storage path, one value per path template on a templated type. On a `khub:File`, `khub:path` is its workspace-relative path |
 | `khub:idShape` | a class | the id a new entity is minted with (`ad-YYYY-MM-DD-slug`); absent on a singleton |
 | `khub:template` | a class | the declared body-template stem |
 | `khub:requiredSingleton`, `khub:orphanExempt` | a class | policy: `required: true` on a singleton; `orphan: true` |
@@ -171,10 +183,10 @@ sh:property [
 
 | khub | SHACL | Notes |
 |---|---|---|
-| `type: text` | `sh:datatype xsd:string` | the default kind; an enum without `type` is text |
+| `type: text` | `sh:datatype xsd:string` | the default kind; an enum without `type` is text. An instance literal is always the value's string form, whatever YAML read it as |
 | `type: number` | `sh:datatype xsd:decimal` | khub does not split integers from floats; instances are typed `xsd:decimal` to match |
-| `type: date` | `sh:datatype xsd:date` | |
-| `type: datetime` | `sh:datatype xsd:dateTime` | khub writes `2026-01-15 10:00:00`; the literal takes XSD's `T` |
+| `type: date` | `sh:or ( [sh:datatype xsd:date] [sh:datatype xsd:dateTime] )` | `validate` passes a datetime in a date field (one ISO parse gates both kinds), so the shape admits both and an instance keeps its time |
+| `type: datetime` | `sh:datatype xsd:dateTime` | khub writes `2026-01-15 10:00:00`; the literal takes XSD's `T`. A bare date, which `validate` also passes, becomes `T00:00:00` |
 | `type: bool` | `sh:datatype xsd:boolean` | |
 | `type: list` | no `sh:datatype`, no `sh:maxCount` | items are whatever the author wrote; `khub:type "list"` says so |
 | `required: true` | `sh:minCount 1` | khub's gate for active entities; see `khub:requiredScope` |
@@ -185,13 +197,20 @@ sh:property [
 
 **Patterns.** khub matches a `pattern` with RE2 over the whole value.
 `sh:pattern` is matched with an XPath/SPARQL regex and is a search, not a full
-match. So the export writes `sh:pattern` only when the pattern passes a
-conservative portability test (no `(?…)` groups or flags, no `\A \z \Z \b \B`,
-no `\x` or octal escapes, no `\Q…\E`, no POSIX `[:class:]`, no one-letter `\pL`,
-no `-[` class subtraction, no `\a \f \v \e \h`), and anchors it: a pattern that
-already reads `^…$` with no top-level alternation goes out as written, any
-other is wrapped as `^(…)$`. `khub:pattern` always carries the RE2 text and is
-authoritative.
+match. So the export writes `sh:pattern` only when it can render the RE2
+pattern as an XPath regex that matches the same strings, and anchors it: a
+pattern that already reads `^…$` with no top-level alternation goes out as
+written, any other is wrapped as `^(…)$`. The rendering refuses every RE2
+construct XPath lacks — `(?…)` groups and flags, `\A \z \Z \b \B`, `\x` and
+octal escapes, `\Q…\E`, POSIX `[:class:]`, one-letter `\pL`, scripts such as
+`\p{Greek}` (XPath knows general categories only), `-[` class subtraction, and
+a backslash before any character outside XPath's `SingleCharEsc` set
+(`\n \r \t \\ \| \. \? \* \+ \( \) \{ \} \$ \- \[ \] \^`), so `\/` and `\#`
+are refused — and rewrites the three shorthands whose meaning differs: RE2's
+`\d`, `\w` and `\s` are ASCII where XPath's are Unicode, so `[0-9]`,
+`[A-Za-z0-9_]` and `[\t\n\f\r ]` go out in their place (`\D \W \S` likewise at
+the top level; inside a class they are refused). A refused pattern has no
+`sh:pattern`; `khub:pattern` always carries the RE2 text and is authoritative.
 
 ### Relations
 
@@ -216,7 +235,7 @@ sh:property [
 |---|---|---|
 | `to: <type>` | `sh:class type:<type>` | `khub:kind "typed"` |
 | `to: [a, b]` | `sh:or ( [sh:class type:a] [sh:class type:b] )` | `khub:kind "union"`. `sh:or`, not `owl:unionOf`: a union class expression has no instances to type, and SHACL is the layer that constrains |
-| `to: any` | `sh:class khub:Entity` | `khub:kind "any"` |
+| `to: any` | `sh:class khub:Entity` | `khub:kind "any"`. On a type with policy `path_refs`, `sh:or ( [sh:class khub:Entity] [sh:class khub:File] )` instead: an existing file satisfies the relation, and the ABox emits it as a `khub:File` |
 | `required: true` | `sh:minCount 1` | the same gate as an attribute's |
 | `many: true` | no `sh:maxCount` | otherwise `sh:maxCount 1` |
 | `acyclic: true` | `khub:acyclic true` | annotation; SHACL core cannot express acyclicity |
@@ -246,18 +265,28 @@ One subject per entity, in scan order (schema declaration order, sorted within
 a type) — the order every projection walks. Then:
 
 - `a type:<T>` from the type binding.
-- Each **present** declared attribute, in declaration order, as a literal typed
-  by the attribute's kind: `xsd:string` (plain), `xsd:decimal`, `xsd:date`,
-  `xsd:dateTime`, `xsd:boolean` (shorthand). A list emits one triple per item.
-  An absent or null attribute emits nothing; what it reads as is the shape's
-  `khub:default`. A structured value where a scalar was expected — a mapping,
-  a nested list, a list item that is itself a mapping (`attendees`) — is one
-  `rdf:JSON` literal holding its JSON, which loses nothing.
+- Each **present** declared attribute, in declaration order, as a literal
+  typed by the attribute's **declared kind**, never by the YAML shape of the
+  value — the shape's `sh:datatype` comes from the kind, so a literal typed any
+  other way would fail the file's own shapes where `validate` passes the
+  entity. `text` is always the value's string form (`"true"` for a text field
+  YAML read back as a boolean; the JSON text of a mapping or list a text field
+  holds); `number` is `xsd:decimal`; `bool` is the shorthand; `date` keeps a
+  time of day when the value carries one (the shape admits both); `datetime`
+  gives a bare date midnight. A list emits one triple per item, each typed by
+  its own value (a structured item as its JSON text, an `xsd:string`). An
+  absent or null attribute emits nothing; what it reads as is the shape's
+  `khub:default`.
 - Each **stored forward edge** the graph resolves, in relation declaration
-  order, as an object property to the target's IRI. A value naming no entity
-  (dangling, or a path reference to a plain file) emits no triple; `check`
-  reports it. **Derived inverses are not emitted**: the graph is derived, and a
-  consumer with the forward edges derives them the same way khub does.
+  order, as an object property to the target's IRI. Then, on a type with
+  policy `path_refs`, each value of a `to: any` relation that names no entity
+  but an existing workspace file, as an object property to that file's IRI;
+  the file is emitted once, after the entities, as `a khub:File` with its
+  `khub:path`. `check` accepts such a value, so the ABox carries it. A value
+  naming nothing — dangling — emits no triple, and `check` reports it. A
+  self-reference (`related: [self]`) is not an edge of the derived graph and
+  emits nothing. **Derived inverses are not emitted**: the graph is derived,
+  and a consumer with the forward edges derives them the same way khub does.
 - Nothing else: undeclared extension keys, the body, and the slug (the IRI
   carries it) stay out.
 
@@ -278,8 +307,15 @@ that for every name.
 **SHACL-expressible, and so checkable by any validator:** datatypes, enums,
 portable patterns, required (modulo the draft scope), single-valuedness, target
 classes and unions. A SHACL validator run over `--instances` output checks
-every one of these against the same file; the firm-ops render was checked this
-way with pySHACL and conforms.
+every one of these against the same file. A workspace `validate` and `check`
+pass conforms, with two documented exceptions: a draft missing a required
+field (`khub:requiredScope`), and a hand-written value `validate`'s lenient
+parse accepts but XSD's lexical space does not (`1_000` in a number field, an
+ISO week date in a date field), which SHACL reports and khub does not. The
+recorded firm-ops and build-hub renders — a date in a datetime field, a
+datetime in a date field, a text field read back as a boolean, a mapping in a
+text field, a path reference to a plain file — were checked with pySHACL and
+conform.
 
 **Annotation only, khub remaining authoritative:** `acyclic`, `inverse`,
 unportable patterns, defaults, the draft scope of `required`, path references,
@@ -298,7 +334,8 @@ The bytes are a function of the schema, the entities and the flags:
 
 - The prefix block is fixed and in the order shown above; every IRI is a
   prefixed name over a declared prefix or an absolute `<…>` reference.
-  There are no relative IRIs and no `@base`.
+  There are no relative IRIs and no `@base`: `--base` is refused unless it is
+  absolute, so nothing in the file resolves against where the file sits.
 - Subjects, pairs, list items and `sh:property` blocks are emitted in
   declaration or scan order. No map is iterated on the way out.
 - One pinned layout: a subject block ends with `.`, every pair is on its own
@@ -361,7 +398,10 @@ shape:meeting a sh:NodeShape ;
         sh:path khub:created ;
         sh:name "created" ;
         sh:order 2 ;
-        sh:datatype xsd:date ;
+        sh:or (
+            [ sh:datatype xsd:date ]
+            [ sh:datatype xsd:dateTime ]
+        ) ;
         sh:maxCount 1 ;
         khub:type "date"
     ] ;
@@ -410,6 +450,9 @@ its property is untyped and its two shapes disagree, legitimately.
 
 Point any RDF tool at `.khub/generated/schema.ttl`; regenerate it after a
 schema change (it is gitignored, and nothing regenerates it automatically).
+`--out` moves it: a relative path is against the workspace root and must stay
+inside it (`unsafe_path` otherwise), an absolute path may leave it, and a
+path naming a directory is refused (`invalid_out`).
 Validate entities with the same file as data and shapes graph:
 `pyshacl -s schema.ttl schema.ttl` after `khub schema rdf --instances`.
 Join two workspaces of one preset by loading both `--instances` exports: the

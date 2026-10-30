@@ -6,7 +6,6 @@ package cli
 
 import (
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -99,13 +98,13 @@ func registerSchema(root *cobra.Command) {
 		})
 	rdfCmd.Args = clickArity(0)
 	rdfCmd.Flags().StringVar(&rdfOut, "out", rdf.DefaultOut,
-		"Output path, relative to the workspace root; '-' prints the Turtle to stdout.")
+		"Output path: relative to the workspace root and inside it, or absolute (may leave it); '-' prints the Turtle to stdout.")
 	rdfCmd.Flags().BoolVar(&rdfInstances, "instances", false,
 		"Also emit every entity as an individual (the ABox).")
 	rdfCmd.Flags().BoolVar(&rdfDryRun, "dry-run", false, "Render and report, write nothing.")
 	rdfCmd.Flags().StringVar(&rdfBase, "base", rdf.DefaultBase,
-		"Root of every minted IRI (the khub: vocabulary never moves).")
-	rdfCmd.Flags().StringVar(&rdfFormat, "format", "text", formatHelp)
+		"Root of every minted IRI, absolute and ending in '/', '#' or ':' (the khub: vocabulary never moves).")
+	rdfCmd.Flags().StringVar(&rdfFormat, "format", "text", "text (one line on a TTY) or json.")
 
 	schemaCmd.AddCommand(typesCmd, showCmd, edgesCmd, baseCmd, snapshotCmd, diffCmd, rdfCmd)
 	root.AddCommand(schemaCmd)
@@ -124,8 +123,7 @@ func schemaRDF(opt rdf.Options, format string) error {
 		return err
 	}
 	if opt.Out == rdf.Stdout {
-		_, werr := fmt.Fprint(os.Stdout, res.Content)
-		return werr
+		return EmitRaw(res.Content)
 	}
 	payload := omap.New()
 	payload.Set("path", res.Path)

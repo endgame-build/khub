@@ -7,9 +7,11 @@
 package rdf
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 
+	"github.com/endgame-build/khub/internal/errs"
 	"github.com/endgame-build/khub/internal/fsio"
 	"github.com/endgame-build/khub/internal/graph"
 	"github.com/endgame-build/khub/internal/index"
@@ -78,6 +80,11 @@ func Project(root string, opt Options) (*Result, error) {
 func Render(root string, opt Options) (*Result, error) { return render(root, opt) }
 
 func render(root string, opt Options) (*Result, error) {
+	if opt.Base != "" {
+		if err := ValidateBase(opt.Base); err != nil {
+			return nil, err
+		}
+	}
 	resolved, err := introspect.LoadSchema(root)
 	if err != nil {
 		return nil, err
@@ -134,24 +141,34 @@ func load(root string, resolved *schema.ResolvedSchema) (*index.Index, *graph.Gr
 	return idx, graph.BuildGraph(idx), nil
 }
 
-// write publishes the document. Inside the workspace the write is confined to
-// the root (symlinks and escapes refused, as for every entity write); an
-// absolute --out outside it is an explicit export, confined to its own
-// directory the way fsio.AtomicWrite confines one.
+// write publishes the document. A relative --out is against the workspace
+// root and must stay inside it (`unsafe_path` otherwise); the write is then
+// confined to the root, symlinks and escapes refused as for every entity
+// write. An absolute --out may leave the workspace — an explicit export,
+// confined to its own directory the way fsio.AtomicWrite confines one. A
+// path naming a directory refuses before anything is created.
 func write(root, out string, data []byte) error {
 	if out == "" {
 		out = DefaultOut
-	}
-	path := out
-	if !filepath.IsAbs(path) {
-		path = filepath.Join(root, filepath.FromSlash(out))
 	}
 	absRoot, err := filepath.Abs(root)
 	if err != nil {
 		return err
 	}
+	path := out
+	if !filepath.IsAbs(path) {
+		path = filepath.Join(absRoot, filepath.FromSlash(out))
+	}
 	rel, err := filepath.Rel(absRoot, path)
-	if err == nil && filepath.IsLocal(rel) {
+	inside := err == nil && filepath.IsLocal(rel)
+	if !inside && !filepath.IsAbs(out) {
+		return errs.New("unsafe_path", fmt.Sprintf("Path %s is outside workspace %s; a relative --out stays inside it, pass an absolute path to write elsewhere",
+			filepath.ToSlash(out), filepath.ToSlash(root)))
+	}
+	if info, serr := os.Lstat(path); serr == nil && info.IsDir() {
+		return errs.New("invalid_out", fmt.Sprintf("Output path %s is a directory; --out names the file to write", filepath.ToSlash(out)))
+	}
+	if inside {
 		if err := fsio.MkdirAll(root, filepath.Dir(path)); err != nil {
 			return err
 		}

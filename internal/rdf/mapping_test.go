@@ -1,15 +1,52 @@
 package rdf
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
 	"testing"
 
+	"github.com/endgame-build/khub/internal/errs"
 	"github.com/endgame-build/khub/internal/introspect"
 	"github.com/endgame-build/khub/internal/workspace"
 )
+
+func TestValidateBase(t *testing.T) {
+	for _, ok := range []string{"urn:khub:", "https://example.org/kb/", "http://x/", "urn:x:y#", "tag:a,2026:", "a+b.c-d:"} {
+		if err := ValidateBase(ok); err != nil {
+			t.Errorf("ValidateBase(%q) = %v, want nil", ok, err)
+		}
+	}
+	for _, bad := range []string{"", "http://x", "urn:foo", "rel/path", "a b:", "100%", "urn:x y/", "1urn:", "urn:a\tb/", "http://x/<y>/"} {
+		err := ValidateBase(bad)
+		var located *errs.Located
+		if !errors.As(err, &located) || located.Code != "invalid_base" {
+			t.Errorf("ValidateBase(%q) = %v, want invalid_base", bad, err)
+		}
+	}
+}
+
+// The base block mints into the khub: namespace beside the annotation
+// terms; a base attribute named like one would alias it silently.
+func TestVocabularyAndBaseNamesAreDisjoint(t *testing.T) {
+	resolved, err := introspect.LoadSchema(facetsWS(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, v := range vocabulary {
+		local := strings.TrimPrefix(v.term.Prefixed, "khub:")
+		// The discriminator maps to rdf:type and mints nothing, so khub:type
+		// (the scalar kind) is free to share its spelling.
+		if local == TypeKey {
+			continue
+		}
+		if resolved.BaseAttributes.Has(local) || resolved.BaseRelations.Has(local) {
+			t.Errorf("base block declares %q, which collides with the vocabulary term khub:%s", local, local)
+		}
+	}
+}
 
 func TestMintIRIs(t *testing.T) {
 	ns := Mint("", "firm-ops", "ws")
@@ -32,16 +69,33 @@ func TestMintIRIs(t *testing.T) {
 }
 
 func TestPortableAndAnchored(t *testing.T) {
-	portable := []string{`^[0-9]+$`, `^[a-z0-9-]+/[a-z0-9-]+$`, `a|b`, `\d{3}-\d{4}`, `\p{L}+`, `[^\s]+`, `x\.y`}
-	for _, p := range portable {
-		if !Portable(p) {
-			t.Errorf("Portable(%q) = false, want true", p)
+	portable := map[string]string{
+		`^[0-9]+$`:                `^[0-9]+$`,
+		`^[a-z0-9-]+/[a-z0-9-]+$`: `^[a-z0-9-]+/[a-z0-9-]+$`,
+		`a|b`:                     `a|b`,
+		`x\.y\-z\[\]`:             `x\.y\-z\[\]`,
+		`\p{L}+\P{Nd}`:            `\p{L}+\P{Nd}`,
+		`^"[^"]*"$`:               `^"[^"]*"$`,
+		`\n\t`:                    `\n\t`,
+		`^x\$`:                    `^x\$`,
+		// RE2's shorthands are ASCII; XPath's are Unicode, so the ASCII classes go out.
+		`\d{3}-\d{4}`: `[0-9]{3}-[0-9]{4}`,
+		`[^\s]+`:      "[^\\t\\n\\r\f ]+",
+		`\w+\W`:       `[A-Za-z0-9_]+[^A-Za-z0-9_]`,
+		`[\d\w]`:      `[0-9A-Za-z0-9_]`,
+		`\S\D`:        "[^\\t\\n\\r\f ][^0-9]",
+	}
+	for in, want := range portable {
+		got, ok := PortablePattern(in)
+		if !ok || got != want {
+			t.Errorf("PortablePattern(%q) = %q, %v; want %q, true", in, got, ok, want)
 		}
 	}
-	unportable := []string{`(?i)abc`, `\Aabc\z`, `\bword\b`, `\x41`, `[[:alpha:]]`, `[a-z-[aeiou]]`, `\pL`, `\Qlit\E`, `\1`, `tail\`}
+	unportable := []string{`(?i)abc`, `\Aabc\z`, `\bword\b`, `\x41`, `[[:alpha:]]`, `[a-z-[aeiou]]`, `\pL`,
+		`\p{Greek}`, `\Qlit\E`, `\1`, `tail\`, `^[a-z]+\/[a-z]+$`, `\#`, `\a`, `[\D]`, `[\S]`}
 	for _, p := range unportable {
-		if Portable(p) {
-			t.Errorf("Portable(%q) = true, want false", p)
+		if got, ok := PortablePattern(p); ok {
+			t.Errorf("PortablePattern(%q) = %q, true; want refused", p, got)
 		}
 	}
 	anchored := map[string]string{
@@ -81,9 +135,11 @@ ontology:
         ref:   { type: text, pattern: '(?i)ok' }
         items: { type: list }
         link:  { type: text }
+        when:  { type: date }
       relations:
         about: { to: [note, team.lead], required: true }
         follows: { to: note, acyclic: true, inverse: followed_by }
+        cites: { to: any, required: true }
     team.lead:
       attributes:
         name: { type: text, required: true }
@@ -150,6 +206,11 @@ func TestMappingFacets(t *testing.T) {
 		// Nine base slots (type skipped), title overriding in place, then kind, score, code, ref.
 		"sh:name \"items\" ;\n        sh:order 13 ;\n        khub:type \"list\"",
 		"khub:acyclic true ;\n        khub:inverse \"followed_by\"",
+		// A date admits a datetime, as validate does.
+		"sh:name \"when\" ;\n        sh:order 15 ;\n        sh:or (\n            [ sh:datatype xsd:date ]\n            [ sh:datatype xsd:dateTime ]\n        ) ;\n        sh:maxCount 1 ;\n        khub:type \"date\"",
+		// A `to: any` relation under path_refs admits a file node.
+		"sh:name \"cites\" ;\n        sh:order 22 ;\n        sh:nodeKind sh:IRI ;\n        sh:or (\n            [ sh:class khub:Entity ]\n            [ sh:class khub:File ]\n        ) ;\n        sh:minCount 1 ;\n        sh:maxCount 1 ;\n        khub:kind \"any\" ;\n        khub:pathRefs true",
+		"khub:File a rdfs:Class",
 		// The singleton's policy and storage.
 		"type:charter a rdfs:Class ;\n    rdfs:subClassOf khub:Entity ;\n    rdfs:label \"charter\" ;\n    khub:layout \"singleton\" ;\n    khub:format \"md\" ;\n    khub:path \"charter.md\" ;\n    khub:requiredSingleton true ;\n    khub:orphanExempt true .",
 		"khub:idShape \"nt-YYYY-MM-DD-slug\"",
