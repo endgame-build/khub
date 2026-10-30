@@ -2,6 +2,18 @@
 
 Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); khub is pre-release.
 
+## [Unreleased]
+
+### Added
+
+- `docs/ingestion-conflicts.md`, the conflict policy for the planned
+  ingestion path: a re-run never silently overwrites a value in a published
+  (`draft: false`) entity, reports each disagreement (entity, field, ours,
+  theirs, source) under a named strategy (`manual` by default), and proposes
+  identity matches with their evidence instead of merging. A design only; no
+  command changes. `docs/build-hub-preset.md` now records a facet id as an
+  `aliases` entry (`facet:FUNC-007`) instead of a tag.
+
 ## [0.30.0] — 2026-10-28
 
 Storage can now follow a hub's existing nesting, relations can point to files

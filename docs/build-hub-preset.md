@@ -133,7 +133,7 @@ facet-scan's functional view and knowledge graph, and facet-spec's capability sp
 | DATA entity · `DOM:*` | owner system; domain type | `entity`, `domain` on the ladder | nothing once they ship |
 | `ADR-*` · `RISK-*` · `SEC-*` · `DEPL-*` | decision, risk, control, node | `adr`; the rest are arc42 §11 and §7 or `resource` links | severity on risks and controls stays in facet's files |
 
-Where the facet id lives is not settled here. The design memo calls it `source_id` and wants it on every type, which is the base block, not this preset; until the first import is written a `facet:FUNC-007` tag is enough to find things.
+The facet id lives in `aliases`, as `facet:FUNC-007`: the `source_id` alias the design memo describes, which [ingestion-conflicts.md](ingestion-conflicts.md) makes the first rung of matching. Lookup already resolves it (`khub get facet:FUNC-007`), so record it there before any import exists. An entity tagged `facet:FUNC-007` by hand moves the value from `tags` to `aliases`; `khub edit <id> aliases <list>` replaces the list, so pass every alias it keeps.
 
 ## The ladder
 
@@ -224,7 +224,7 @@ event:
 | `external-system` | `component` with `kind: external`, the fold build-hub 0.3.0 made; a vendor has APIs, not components we can name |
 | `boundary`, `quality-attribute`, `domain`, `entity` | the ladder |
 | the nested `knowledge/{product,architecture}` layout | flat; a workspace moving from the old hub relocates files once |
-| `facet_id` | a tag until the first import decides `source_id` |
+| `facet_id` | an `aliases` entry, `facet:<id>` |
 
 ## Narrative roots and the orphan sweep
 
