@@ -32,7 +32,8 @@ func registerExtract(schemaCmd *cobra.Command) {
 		})
 	scaffoldCmd.Args = clickArity(0)
 	scaffoldCmd.Flags().StringArrayVar(&only, "type", nil, "Limit the contract to this type (repeatable).")
-	scaffoldCmd.Flags().StringVar(&scaffoldFormat, "format", "text", "text (a Markdown prompt) or json.")
+	scaffoldCmd.Flags().StringVar(&scaffoldFormat, "format", "text",
+		"text (the Markdown prompt on a TTY), markdown (the same prompt on any stream) or json.")
 
 	conformCmd := newCmd("conform",
 		"Score an extraction envelope against the schema and the workspace; writes nothing.",
@@ -60,6 +61,10 @@ func schemaScaffold(only []string, format string) error {
 	view, err := extract.Scaffold(root, resolved, prov, only)
 	if err != nil {
 		return err
+	}
+	if format == "markdown" { // the prompt for an agent on a pipe — independent of TTY detection, as query's ids
+		fmt.Print(scaffoldMarkdown(view))
+		return nil
 	}
 	return Emit(view, format, func() { fmt.Print(scaffoldMarkdown(view)) })
 }
@@ -119,7 +124,11 @@ func scaffoldMarkdown(view *omap.Map) string {
 			b.WriteString("| relation | to | many | required |\n|---|---|---|---|\n")
 			for _, r := range rels {
 				rv := r.(*omap.Map)
-				fmt.Fprintf(&b, "| %v | %s | %s | %s |\n", get(rv, "name"), joinAny(get(rv, "to")),
+				to := joinAny(get(rv, "to"))
+				if p, _ := get(rv, "path_refs").(bool); p {
+					to += ", or a workspace file path"
+				}
+				fmt.Fprintf(&b, "| %v | %s | %s | %s |\n", get(rv, "name"), to,
 					checkMark(get(rv, "many")), checkMark(get(rv, "required")))
 			}
 			b.WriteString("\n")
@@ -141,6 +150,9 @@ func scaffoldMarkdown(view *omap.Map) string {
 					}
 					if hint := get(sv, "hint"); hint != nil {
 						line += fmt.Sprintf(": %v", hint)
+					}
+					if rules := ruleWords(get(sv, "rules")); rules != "" {
+						line += " [" + rules + "]"
 					}
 					b.WriteString(line + "\n")
 				}
@@ -193,6 +205,7 @@ func conformPayload(report *extract.Report) *omap.Map {
 		record := omap.New()
 		record.Set("index", e.Index)
 		record.Set("type", e.Type)
+		record.Set("id", nullable(e.ID))
 		record.Set("ok", e.OK)
 		errs := make([]any, 0, len(e.Errors))
 		for _, fe := range e.Errors {
@@ -212,6 +225,7 @@ func conformPayload(report *extract.Report) *omap.Map {
 			unresolved = append(unresolved, row)
 		}
 		record.Set("unresolved", unresolved)
+		record.Set("confidence", e.Confidence)
 		entities = append(entities, record)
 	}
 	payload := omap.New()
@@ -240,6 +254,47 @@ func conformHuman(report *extract.Report) {
 	}
 	fmt.Printf("Conformed %d entities; %d conformant, score %s\n",
 		len(report.Entities), report.Conformant, report.ScoreText())
+}
+
+// ruleWords renders a section's rules in a phrase: "25 to 80 words; must
+// say 'x'; must not say /y/; 1 or more mermaid block(s)".
+func ruleWords(v any) string {
+	rules, ok := v.(*omap.Map)
+	if !ok {
+		return ""
+	}
+	var parts []string
+	if wc, ok := get(rules, "word_count").(*omap.Map); ok {
+		parts = append(parts, bounds(get(wc, "min"), get(wc, "max"), "words"))
+	}
+	for _, r := range listAt(rules, "required_text") {
+		parts = append(parts, fmt.Sprintf("must say %v", r))
+	}
+	for _, r := range listAt(rules, "forbidden_text") {
+		parts = append(parts, fmt.Sprintf("must not say %v", r))
+	}
+	for _, c := range listAt(rules, "code_blocks") {
+		cv := c.(*omap.Map)
+		subject := "code block(s)"
+		if lang := get(cv, "lang"); lang != nil {
+			subject = fmt.Sprintf("%v block(s)", lang)
+		}
+		parts = append(parts, bounds(get(cv, "min"), get(cv, "max"), subject))
+	}
+	return strings.Join(parts, "; ")
+}
+
+// bounds words a min/max pair: "25 to 80 words", "at least 25 words", "at
+// most 80 words".
+func bounds(low, high any, subject string) string {
+	switch {
+	case low != nil && high != nil:
+		return fmt.Sprintf("%v to %v %s", low, high, subject)
+	case low != nil:
+		return fmt.Sprintf("at least %v %s", low, subject)
+	default:
+		return fmt.Sprintf("at most %v %s", high, subject)
+	}
 }
 
 func get(m *omap.Map, key string) any {

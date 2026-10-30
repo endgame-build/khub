@@ -13,13 +13,13 @@
 package extract
 
 import (
+	"bytes"
 	"fmt"
 	"strings"
 
 	"github.com/endgame-build/khub/internal/canon"
 	"github.com/endgame-build/khub/internal/errs"
 	"github.com/endgame-build/khub/internal/omap"
-	"github.com/endgame-build/khub/internal/values"
 )
 
 // Envelope is the document an extractor returns: a list of extracted records.
@@ -30,7 +30,8 @@ type Envelope struct {
 // Extracted is one record of an envelope. Fields holds the attribute values
 // as JSON gave them (never nil); Relations maps predicate to targets as the
 // extractor spelled them (never nil); Body is nil when the record carries
-// none; Confidence is nil when absent, else the number as decoded.
+// none or only whitespace (create seeds the template for both); Confidence
+// is nil when absent, else a JSON number from 0 to 1 as decoded.
 type Extracted struct {
 	Type       string
 	Fields     *omap.Map
@@ -48,12 +49,15 @@ var entityKeys = []string{"type", "fields", "relations", "body", "source", "conf
 // extractor's output is the call, and a call that cannot be read is corrected,
 // not scored. Duplicate keys are refused as every khub JSON read refuses them.
 func ParseEnvelope(data []byte) (*Envelope, error) {
+	// A document copied through Windows tooling, or written by a model, may
+	// open with a byte-order mark; it is not content.
+	data = bytes.TrimPrefix(data, []byte("\xEF\xBB\xBF"))
 	if strings.TrimSpace(string(data)) == "" {
 		return nil, invalid("Envelope is empty; expected a JSON object with an 'entities' list")
 	}
 	doc, err := canon.DecodeOrderedJSONStrict(data)
 	if err != nil {
-		return nil, invalid("Envelope is not valid JSON: " + err.Error())
+		return nil, invalid(notJSON(err))
 	}
 	top, ok := doc.(*omap.Map)
 	if !ok {
@@ -73,6 +77,16 @@ func ParseEnvelope(data []byte) (*Envelope, error) {
 		env.Entities = append(env.Entities, ent)
 	}
 	return env, nil
+}
+
+// notJSON words a decode failure in khub's own text: the byte a syntax error
+// stopped at (a document that ends early is one, at its last byte), else
+// canon's own message (a duplicate key, trailing content, nesting too deep).
+func notJSON(err error) string {
+	if offset, ok := canon.JSONSyntaxOffset(err); ok {
+		return fmt.Sprintf("Envelope is not valid JSON at byte %d", offset)
+	}
+	return "Envelope is not valid JSON: " + err.Error()
 }
 
 func parseEntity(i int, item any) (Extracted, error) {
@@ -122,8 +136,10 @@ func parseEntity(i int, item any) (Extracted, error) {
 		if !isStr {
 			return Extracted{}, invalid(fmt.Sprintf("Entity #%d 'body' must be a string", i))
 		}
-		text := canon.NormalizeNewlines(s)
-		ent.Body = &text
+		// A blank body is no body: create seeds the template for either.
+		if text := canon.NormalizeNewlines(s); strings.TrimSpace(text) != "" {
+			ent.Body = &text
+		}
 	}
 	if v, has := obj.Get("source"); has && v != nil {
 		s, isStr := v.(string)
@@ -133,8 +149,11 @@ func parseEntity(i int, item any) (Extracted, error) {
 		ent.Source = s
 	}
 	if v, has := obj.Get("confidence"); has && v != nil {
-		if _, isBool := v.(bool); isBool || !values.IsNumber(v) {
-			return Extracted{}, invalid(fmt.Sprintf("Entity #%d 'confidence' must be a number", i))
+		// A JSON number, not a numeric string, and inside the range the
+		// contract states.
+		f, isNumber := jsonNumber(v)
+		if !isNumber || f < 0 || f > 1 {
+			return Extracted{}, invalid(fmt.Sprintf("Entity #%d 'confidence' must be a number from 0 to 1", i))
 		}
 		ent.Confidence = v
 	}
@@ -168,6 +187,18 @@ func nonBlank(items []any) []string {
 		}
 	}
 	return out
+}
+
+// jsonNumber is the value of a decoded JSON number; a string, a bool or an
+// integer past int64 is not one.
+func jsonNumber(v any) (float64, bool) {
+	switch x := v.(type) {
+	case int64:
+		return float64(x), true
+	case float64:
+		return x, true
+	}
+	return 0, false
 }
 
 func invalid(message string) *errs.Located {

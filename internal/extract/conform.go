@@ -39,14 +39,18 @@ type Unresolved struct {
 // EntityReport is the verdict on one envelope entry. OK is false when Errors
 // or Unresolved is non-empty — the two things the write path refuses. Gaps
 // are the required fields and relations the record would leave empty: reported,
-// never gating.
+// never gating. ID is the qualified id add would write the entry under, ""
+// when it cannot be minted (then Errors says why, under field `id`).
+// Confidence echoes the entry's own number, nil when it gave none.
 type EntityReport struct {
 	Index      int
 	Type       string
+	ID         string
 	OK         bool
 	Errors     []integrity.FieldError
 	Gaps       []string
 	Unresolved []Unresolved
+	Confidence any
 }
 
 // Report is the conformance report: every entity, how many conform, and the
@@ -96,9 +100,10 @@ func Conform(root string, env *Envelope) (*Report, error) {
 		supplied[name] = true
 	}
 	report := &Report{Entities: make([]EntityReport, 0, len(env.Entities))}
+	minted := &mintedIDs{first: map[index.Node]int{}}
 	for i, ent := range env.Entities {
 		rtype, _ := resolved.Types.Get(ent.Type)
-		er := conformEntity(i, ent, rtype, idx, templates, supplied)
+		er := conformEntity(i, ent, rtype, idx, templates, supplied, minted)
 		if er.OK {
 			report.Conformant++
 		}
@@ -122,19 +127,31 @@ func score(conformant, total int) float64 {
 	return rounded
 }
 
+// mintedIDs is the (type, slug) set the envelope mints as it is read, so a
+// second entry minting an id an earlier one already claimed is reported
+// against that entry — a property of the envelope alone, decided by the same
+// minting add runs — and an unresolved target that names an earlier entry's
+// would-be id can say so by index. ids is in entry order, a nil for an entry
+// that minted nothing.
+type mintedIDs struct {
+	first map[index.Node]int
+	ids   []*index.Node
+}
+
 func conformEntity(
 	i int, ent Extracted, rtype *schema.ResolvedType, idx *index.Index,
-	templates *templateCache, supplied map[string]bool,
+	templates *templateCache, supplied map[string]bool, minted *mintedIDs,
 ) EntityReport {
 	er := EntityReport{
 		Index: i, Type: ent.Type,
 		Errors: []integrity.FieldError{}, Gaps: []string{}, Unresolved: []Unresolved{},
+		Confidence: ent.Confidence,
 	}
 	fail := func(field, reason string) {
 		er.Errors = append(er.Errors, integrity.FieldError{Type: ent.Type, Field: field, Reason: reason})
 	}
 
-	// The record as add would assemble it: the discriminator first, then the
+	// The record as add would assemble it: the supplied head, then the
 	// attributes as given, then every relation with its resolved targets.
 	meta := omap.New()
 	meta.Set("type", ent.Type)
@@ -142,10 +159,11 @@ func conformEntity(
 	for _, key := range ent.Fields.Keys() {
 		value, _ := ent.Fields.Get(key)
 		switch {
-		case key == "type":
-			if values.Str(value) != ent.Type {
-				fail("type", fmt.Sprintf("'%s' disagrees with the entity's type '%s'", values.Str(value), ent.Type))
-			}
+		case supplied[key]:
+			// The contract lists these as khub's own; on add `draft` is a
+			// flag and `created` would date the id, so an extractor setting
+			// one is a contract fault, not a value to judge.
+			fail(key, fmt.Sprintf("'%s' is supplied by khub on write; leave it out of fields", key))
 		case key == "body" && rtype.Storage.Fmt != "md":
 			// The reserved prose key of a json/yaml entity (create refuses it
 			// as body_field_reserved); the envelope has its own body key.
@@ -162,6 +180,13 @@ func conformEntity(
 				}
 				relations.Set(key, append(listOf(relations, key), targets...))
 				continue
+			}
+			if _, isAttr := rtype.Attributes.Get(key); isAttr {
+				// partition stores a blank declared attribute as null — absent,
+				// so a required one is a gap — never as the '' validate rejects.
+				if s, isStr := value.(string); isStr && strings.TrimSpace(s) == "" {
+					value = nil
+				}
 			}
 			meta.Set(key, value)
 		}
@@ -180,7 +205,15 @@ func conformEntity(
 		for _, target := range listOf(relations, predicate) {
 			value, err := entity.ResolveWriteValue(idx, rel, predicate, target)
 			if err != nil {
-				er.Unresolved = append(er.Unresolved, Unresolved{predicate, target, reasonOf(err)})
+				reason := reasonOf(err)
+				// Targets resolve against the workspace only. One that names
+				// an earlier entry's would-be id is still unresolved — adding
+				// that entry first is what resolves it — and the reason says
+				// which entry, read off the same minting, never guessed.
+				if j, node, ok := minted.names(rel, target); ok {
+					reason = fmt.Sprintf("%s; envelope entry #%d mints %s, add it first", reason, j, node.ID())
+				}
+				er.Unresolved = append(er.Unresolved, Unresolved{predicate, target, reason})
 				continue
 			}
 			resolved = append(resolved, value)
@@ -198,6 +231,27 @@ func conformEntity(
 	}
 
 	er.Errors = append(er.Errors, integrity.FieldFindings(rtype, meta, idx, false)...)
+
+	// The id add would write under, with every refusal it raises before the
+	// write — the one place a missing required field does block capture (a
+	// type's slug source), so it is an error here, not a gap. Across the
+	// envelope one (type, slug) is minted once: the write path refuses the
+	// second as slug_taken, and here the finding names the entry that got
+	// there first.
+	var mintedNode *index.Node
+	if slug, err := entity.PlanSlug(rtype, meta, idx); err != nil {
+		fail("id", reasonOf(err))
+	} else {
+		node := index.Node{Type: ent.Type, Slug: slug}
+		er.ID = node.ID()
+		if j, dup := minted.first[node]; dup {
+			fail("id", fmt.Sprintf("envelope entry #%d mints %s as well; name one of them differently", j, node.ID()))
+		} else {
+			minted.first[node] = i
+			mintedNode = &node
+		}
+	}
+	minted.ids = append(minted.ids, mintedNode)
 
 	// The body against the type's template, as validate judges the written
 	// file. No body means add seeds the scaffold, which passes by construction.
@@ -230,6 +284,33 @@ func conformEntity(
 	}
 	er.OK = len(er.Errors) == 0 && len(er.Unresolved) == 0
 	return er
+}
+
+// names is the earliest entry whose would-be id the target spells — as a
+// bare slug or a qualified id, case-folded the way lookup folds — among the
+// types rel accepts. A later entry naming an earlier one is the only
+// self-reference that can resolve once the adds run in envelope order.
+func (m *mintedIDs) names(rel *schema.ResolvedRelation, target string) (int, index.Node, bool) {
+	typeName, slug := "", target
+	if before, after, qualified := strings.Cut(target, "/"); qualified {
+		typeName, slug = before, after
+	}
+	want := index.Casefold(slug)
+	for j, node := range m.ids {
+		if node == nil {
+			continue
+		}
+		if typeName != "" && index.Casefold(typeName) != index.Casefold(node.Type) {
+			continue
+		}
+		if rel.Kind != schema.KindAny && !contains(rel.Targets, node.Type) {
+			continue
+		}
+		if index.Casefold(node.Slug) == want {
+			return j, *node, true
+		}
+	}
+	return 0, index.Node{}, false
 }
 
 // templateCache loads each type's template once per conform run, keeping the

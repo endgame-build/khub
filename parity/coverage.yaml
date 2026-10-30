@@ -311,6 +311,7 @@ error_codes:
 format_specials:
 - json
 - ids
+- markdown
 - raw
 - tree
 modes:

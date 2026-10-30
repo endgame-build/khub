@@ -131,6 +131,9 @@ func typeContract(root string, rtype *schema.ResolvedType, supplied map[string]b
 		r.Set("to", toAnyList(rel.Targets))
 		r.Set("many", rel.Many)
 		r.Set("required", rel.Required)
+		// Policy path_refs: a value naming no entity may name a workspace
+		// file; an extractor that does not know this cannot cite a document.
+		r.Set("path_refs", rel.ByPath)
 		relations = append(relations, r)
 	}
 	t.Set("relations", relations)
@@ -157,15 +160,69 @@ func bodyContract(root string, rtype *schema.ResolvedType) any {
 		return nil
 	}
 	sections := []any{}
-	for _, s := range tpl.Sections {
+	for i := range tpl.Sections {
+		s := &tpl.Sections[i]
 		sec := omap.New()
 		sec.Set("heading", s.Heading)
 		sec.Set("optional", s.Optional)
 		sec.Set("hint", nullIfEmpty(s.Hint))
+		sec.Set("rules", sectionRules(s))
 		sections = append(sections, sec)
 	}
 	body.Set("sections", sections)
 	return body
+}
+
+// sectionRules renders a section's body-content rules — what validate
+// reports as a gap after the write, so the extractor can satisfy them before
+// it: `{word_count: {min, max}, required_text, forbidden_text, code_blocks:
+// [{lang, min, max}]}`, each key only when the section declares it; null
+// when it declares none.
+func sectionRules(s *template.Section) any {
+	if !s.HasRules() {
+		return nil
+	}
+	rules := omap.New()
+	if s.MinWords != nil || s.MaxWords != nil {
+		wc := omap.New()
+		wc.Set("min", intPtr(s.MinWords))
+		wc.Set("max", intPtr(s.MaxWords))
+		rules.Set("word_count", wc)
+	}
+	if len(s.RequiredText) > 0 {
+		rules.Set("required_text", textRules(s.RequiredText))
+	}
+	if len(s.ForbiddenText) > 0 {
+		rules.Set("forbidden_text", textRules(s.ForbiddenText))
+	}
+	if len(s.CodeBlocks) > 0 {
+		blocks := []any{}
+		for _, c := range s.CodeBlocks {
+			b := omap.New()
+			b.Set("lang", nullIfEmpty(c.Lang))
+			b.Set("min", intPtr(c.Min))
+			b.Set("max", intPtr(c.Max))
+			blocks = append(blocks, b)
+		}
+		rules.Set("code_blocks", blocks)
+	}
+	return rules
+}
+
+// textRules renders text rules as a complaint names them: 'literal' or /regex/.
+func textRules(rules []template.TextRule) []any {
+	out := []any{}
+	for _, r := range rules {
+		out = append(out, r.String())
+	}
+	return out
+}
+
+func intPtr(p *int) any {
+	if p == nil {
+		return nil
+	}
+	return int64(*p)
 }
 
 // workspaceProvenance is the preset and version the workspace records.

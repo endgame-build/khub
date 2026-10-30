@@ -1,1 +1,1 @@
-{"error": {"code": "invalid_envelope", "message": "Envelope is not valid JSON: invalid character 'o' in literal null (expecting 'u')"}}
+{"error": {"code": "invalid_envelope", "message": "Envelope is not valid JSON at byte 2"}}

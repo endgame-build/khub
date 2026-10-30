@@ -697,7 +697,7 @@ Emit the extraction contract: every type as an extractor fills it, and the envel
 
 Options:
   --type <str>  Limit the contract to this type (repeatable).
-  --format <str>  text (a Markdown prompt) or json. [default: text]
+  --format <str>  text (the Markdown prompt on a TTY), markdown (the same prompt on any stream) or json. [default: text]
   --help  Show this message and exit.
 
 ```

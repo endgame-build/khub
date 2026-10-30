@@ -7,6 +7,17 @@
 # blocked, so it never fails the gate), and an unresolved target (reported,
 # never guessed). The gate exits 1. An unknown type, an unreadable envelope
 # and an unknown --type are refusals (exit 2) in their own steps.
+#
+# The second envelope is the id half: conform mints the id add would write
+# with the write path's own code, so every refusal add raises before writing
+# is an `id` error here — no slug source (the one required field that blocks
+# capture), an over-long slug, a reserved device name, a slug the workspace
+# holds, another entity's alias, and a second entry minting an id an earlier
+# entry claimed. A target naming an earlier entry's would-be id stays
+# unresolved (targets resolve against the workspace) and the reason says
+# which entry. A blank attribute is null, so a required one is a gap; a
+# supplied key in fields is an error; confidence is echoed. `--format
+# markdown` prints the prompt on a pipe. A leading BOM is not content.
 steps:
 - argv: ["init", "firm-ops", ".", "--no-wire"]
 - argv: ["add", "client", "--name", "Initech", "--aliases", "INTC"]
@@ -34,3 +45,29 @@ steps:
 - argv: ["schema", "conform", "-"]
   stdin: "not json\n"
 - argv: ["schema", "conform"]
+- argv: ["schema", "scaffold", "--type", "client", "--format", "markdown"]
+- sh: |
+    cat > ids.json <<'JSON'
+    {"entities": [
+      {"type": "client", "fields": {"industry": "retail"}},
+      {"type": "client", "fields": {"name": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"}},
+      {"type": "client", "fields": {"name": "con"}},
+      {"type": "client", "fields": {"name": "Initech"}},
+      {"type": "client", "fields": {"name": "INTC"}},
+      {"type": "client", "fields": {"name": "Dup Two"}},
+      {"type": "client", "fields": {"name": "dup-two"}},
+      {"type": "client", "fields": {"name": "", "industry": "x"}},
+      {"type": "client", "fields": {"name": "Globex"}},
+      {"type": "project", "fields": {"title": "Globex rollout"}, "relations": {"client": "globex", "owner": "noor"}},
+      {"type": "project", "fields": {"title": "Supplied", "created": "1999-01-01", "draft": "yes"}, "relations": {"client": "initech", "owner": "noor"}, "confidence": 0.5}
+    ]}
+    JSON
+- argv: ["schema", "conform", "ids.json"]
+- argv: ["schema", "conform", "-"]
+  stdin: "\uFEFF{\"entities\": [{\"type\": \"client\", \"fields\": {\"name\": \"Bom\"}, \"confidence\": 1}]}"
+- argv: ["schema", "conform", "-"]
+  stdin: '{"entities": [{"type": "client", "fields": {"name": "x"}, "confidence": 7}]}'
+- argv: ["schema", "conform", "-"]
+  stdin: '{"entities": [{"type": "client", "fields": {"name": "x"}, "confidence": "0.5"}]}'
+- argv: ["schema", "conform", "-"]
+  stdin: '{"entities": ['

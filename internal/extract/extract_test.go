@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/endgame-build/khub/internal/entity"
 	"github.com/endgame-build/khub/internal/errs"
@@ -163,6 +164,9 @@ func TestScaffoldWalksTheResolvedSchema(t *testing.T) {
 	if got := strs(value(related, "to")); len(got) != 1 || got[0] != "any" {
 		t.Errorf("any relation to = %v", got)
 	}
+	if keys := related.Keys(); strings.Join(keys, ",") != "name,to,many,required,path_refs" || value(related, "path_refs") != false {
+		t.Errorf("relation row = %v path_refs=%v", keys, value(related, "path_refs"))
+	}
 	if value(project, "body") != nil {
 		t.Errorf("firm-ops declares no template; body = %v", value(project, "body"))
 	}
@@ -232,8 +236,19 @@ func TestScaffoldBodyAndIDShape(t *testing.T) {
 	if value(ctx, "heading") != "Context" || value(ctx, "optional") != false || value(ctx, "hint") == nil {
 		t.Errorf("first section = %v", ctx)
 	}
-	if alt := sections[1].(*omap.Map); value(alt, "heading") != "Alternatives" || value(alt, "optional") != true {
-		t.Errorf("optional section = %v", alt)
+	if wc := value(value(ctx, "rules").(*omap.Map), "word_count").(*omap.Map); value(wc, "min") != int64(25) || value(wc, "max") != nil {
+		t.Errorf("word_count rule = %v", wc)
+	}
+	alt := sections[1].(*omap.Map)
+	if value(alt, "heading") != "Alternatives" || value(alt, "optional") != true || value(alt, "rules") != nil {
+		t.Errorf("optional section without rules = %v", alt)
+	}
+	decision := value(sections[2].(*omap.Map), "rules").(*omap.Map)
+	if got := strs(value(decision, "forbidden_text")); len(got) != 1 || !strings.HasPrefix(got[0], "/\\b(tbd") {
+		t.Errorf("forbidden_text rule = %v", got)
+	}
+	if _, has := decision.Get("required_text"); has {
+		t.Errorf("a rule the section does not declare should be absent: %v", decision.Keys())
 	}
 	req := typeNamed(t, view, "requirement")
 	reqBody := value(req, "body").(*omap.Map)
@@ -281,7 +296,7 @@ func TestConformReportsEachVerdict(t *testing.T) {
 	  {"type": "project", "fields": {"title": "Thin"}},
 	  {"type": "project", "fields": {"title": "Lost"}, "relations": {"client": "nowhere", "owner": "noor"}},
 	  {"type": "project", "fields": {"title": "Two", "external_repo": "not a repo", "active": "banana"}, "relations": {"client": ["initech", "globex"], "owner": "noor", "sponsor": "noor"}},
-	  {"type": "project", "fields": {"title": "Typed", "type": "client"}, "relations": {"client": "initech", "owner": "noor"}}
+	  {"type": "project", "fields": {"title": "Typed", "type": "project", "created": "1999-01-01"}, "relations": {"client": "initech", "owner": "noor"}, "confidence": 0.5}
 	]}`)
 	if len(report.Entities) != 6 || report.Conformant != 2 || report.Score != 0.333 {
 		t.Fatalf("summary = %d entities, %d conformant, score %v", len(report.Entities), report.Conformant, report.Score)
@@ -290,7 +305,7 @@ func TestConformReportsEachVerdict(t *testing.T) {
 		t.Errorf("score text = %s", report.ScoreText())
 	}
 	e := report.Entities
-	if !e[0].OK || len(e[0].Gaps) != 0 || e[0].Index != 0 || e[0].Type != "project" {
+	if !e[0].OK || len(e[0].Gaps) != 0 || e[0].Index != 0 || e[0].Type != "project" || e[0].ID != "project/pov" || e[0].Confidence != 0.8 {
 		t.Errorf("alias-resolved entity should conform: %+v", e[0])
 	}
 	if e[1].OK || len(e[1].Errors) != 1 || e[1].Errors[0].Field != "source" ||
@@ -325,9 +340,97 @@ func TestConformReportsEachVerdict(t *testing.T) {
 	if fields["sponsor"] != "Predicate 'sponsor' is not legal for type 'project'" {
 		t.Errorf("undeclared predicate: %q", fields["sponsor"])
 	}
-	if e[5].OK || len(e[5].Errors) != 1 || e[5].Errors[0].Field != "type" ||
-		e[5].Errors[0].Reason != "'client' disagrees with the entity's type 'project'" {
-		t.Errorf("type disagreement: %+v", e[5])
+	if e[5].OK || len(e[5].Errors) != 2 || e[5].Errors[0].Field != "type" ||
+		e[5].Errors[0].Reason != "'type' is supplied by khub on write; leave it out of fields" ||
+		e[5].Errors[1].Field != "created" || e[5].Confidence != 0.5 || e[5].ID != "project/typed" {
+		t.Errorf("supplied keys in fields: %+v", e[5])
+	}
+}
+
+// The id add would write under is minted by the write path's own code, with
+// every refusal add raises before writing reported under `id`: no slug
+// source (the one required field that does block capture), an over-long
+// slug, a reserved device name, a slug the workspace holds, and — across the
+// envelope — a second entry minting an id an earlier one claimed. A blank
+// declared attribute reads as null, so a required one is a gap.
+func TestConformMintsTheID(t *testing.T) {
+	root := seeded(t)
+	long := strings.Repeat("x", 300)
+	report := conform(t, root, `{"entities": [
+	  {"type": "client", "fields": {"industry": "x"}},
+	  {"type": "client", "fields": {"name": "`+long+`"}},
+	  {"type": "client", "fields": {"name": "con"}},
+	  {"type": "client", "fields": {"name": "Initech"}},
+	  {"type": "client", "fields": {"name": "Dup Two"}},
+	  {"type": "client", "fields": {"name": "dup-two"}},
+	  {"type": "client", "fields": {"name": "  "}},
+	  {"type": "client", "fields": {"name": "INTC"}}
+	]}`)
+	e := report.Entities
+	wants := []struct {
+		id, reason string
+		gaps       string
+	}{
+		{"", "Type 'client' has no name or title to mint an id from; pass --name or --title, or name it with --id <slug>", "name"},
+		{"", "Slug '" + strings.Repeat("x", 40) + "…' exceeds 100 characters", ""},
+		{"", "Slug 'con' in client is a reserved device name on Windows; pass --id <slug> to name this one differently", ""},
+		{"", "Slug 'initech' already exists in client; pass --id <slug> to name this one differently", ""},
+		{"client/dup-two", "", ""},
+		{"client/dup-two", "envelope entry #4 mints client/dup-two as well; name one of them differently", ""},
+		{"", "Type 'client' has no name or title to mint an id from; pass --name or --title, or name it with --id <slug>", "name"},
+		{"", "'intc' is an alias of client/initech; pass --id <slug> to name this one differently", ""},
+	}
+	for i, w := range wants {
+		if e[i].ID != w.id || strings.Join(e[i].Gaps, ",") != w.gaps {
+			t.Errorf("#%d id=%q gaps=%v, want %q %q", i, e[i].ID, e[i].Gaps, w.id, w.gaps)
+		}
+		if w.reason == "" {
+			if !e[i].OK {
+				t.Errorf("#%d should conform: %+v", i, e[i])
+			}
+			continue
+		}
+		if e[i].OK || len(e[i].Errors) != 1 || e[i].Errors[0].Field != "id" || e[i].Errors[0].Reason != w.reason {
+			t.Errorf("#%d = %+v, want id error %q", i, e[i], w.reason)
+		}
+	}
+	if report.Conformant != 1 {
+		t.Errorf("conformant = %d", report.Conformant)
+	}
+
+	single := wsFor(t, "build-hub")
+	prd := conform(t, single, `{"entities": [{"type": "prd", "fields": {"title": "PRD"}}, {"type": "arc42", "fields": {"title": "A"}}, {"type": "arc42", "fields": {"title": "B"}}]}`)
+	if prd.Entities[0].OK || prd.Entities[0].Errors[0].Reason != "Singleton 'prd' already exists at knowledge/prd.md; edit it instead of adding another" {
+		t.Errorf("existing singleton: %+v", prd.Entities[0])
+	}
+	if prd.Entities[1].OK {
+		t.Errorf("build-hub scaffolds arc42 too: %+v", prd.Entities[1])
+	}
+}
+
+// A target that names an earlier entry's would-be id stays unresolved — the
+// workspace is what targets resolve against — and the reason names the entry,
+// read off the same minting, by bare slug or qualified id, case-folded.
+func TestConformNamesEarlierEntries(t *testing.T) {
+	root := seeded(t)
+	report := conform(t, root, `{"entities": [
+	  {"type": "client", "fields": {"name": "Globex Corp"}},
+	  {"type": "project", "fields": {"title": "T"}, "relations": {"client": "GLOBEX-CORP", "owner": "noor"}},
+	  {"type": "project", "fields": {"title": "U"}, "relations": {"client": "client/globex-corp", "owner": "globex-corp"}},
+	  {"type": "client", "fields": {"name": "Later"}},
+	  {"type": "project", "fields": {"title": "V"}, "relations": {"client": "later", "owner": "noor"}}
+	]}`)
+	e := report.Entities
+	suffix := "; envelope entry #0 mints client/globex-corp, add it first"
+	if e[1].OK || len(e[1].Unresolved) != 1 || e[1].Unresolved[0].Reason != "No client 'GLOBEX-CORP' to satisfy relation 'client'"+suffix {
+		t.Errorf("bare slug, case-folded: %+v", e[1])
+	}
+	if len(e[2].Unresolved) != 2 || !strings.HasSuffix(e[2].Unresolved[0].Reason, suffix) ||
+		strings.Contains(e[2].Unresolved[1].Reason, "envelope entry") {
+		t.Errorf("qualified id names; a wrong-typed one does not: %+v", e[2].Unresolved)
+	}
+	if !strings.HasSuffix(e[4].Unresolved[0].Reason, "#3 mints client/later, add it first") {
+		t.Errorf("later entry: %+v", e[4].Unresolved)
 	}
 }
 
@@ -354,8 +457,10 @@ func TestConformEdges(t *testing.T) {
 	if two.Score != 0.667 || two.OK() {
 		t.Errorf("score = %v ok=%v", two.Score, two.OK())
 	}
-	if r := two.Entities[2].Errors[0].Reason; r != "name is empty; omit the field or write null, not ''" {
-		t.Errorf("empty string: %q", r)
+	// A blank declared attribute is null, as partition stores it: here it is
+	// the slug source, so the id cannot be minted and that is the error.
+	if last := two.Entities[2]; last.Errors[0].Field != "id" || strings.Join(last.Gaps, ",") != "name" {
+		t.Errorf("blank name: %+v", last)
 	}
 }
 
@@ -367,9 +472,13 @@ func TestConformBodyShape(t *testing.T) {
 	report := conform(t, root, `{"entities": [
 	  {"type": "adr", "fields": {"title": "Use Postgres", "status": "accepted"}, "body": "## Context\n\nx\n\n## Consequences\n\ny\n"},
 	  {"type": "adr", "fields": {"title": "No body", "status": "accepted"}},
-	  {"type": "adr", "fields": {"title": "Full", "status": "accepted"}, "body": "## Context\n\nx\n\n## Decision\n\ny\n\n## Consequences\n\nz\n"}
+	  {"type": "adr", "fields": {"title": "Full", "status": "accepted"}, "body": "## Context\n\nx\n\n## Decision\n\ny\n\n## Consequences\n\nz\n"},
+	  {"type": "adr", "fields": {"title": "Blank", "status": "accepted"}, "body": "  \n"}
 	]}`)
 	e := report.Entities
+	if !e[3].OK || e[3].ID != "adr/ad-"+time.Now().UTC().Format("2006-01-02")+"-blank" {
+		t.Errorf("a blank body is no body, and a dated type dates today: %+v", e[3])
+	}
 	if e[0].OK || len(e[0].Errors) != 1 || e[0].Errors[0].Field != "body" ||
 		e[0].Errors[0].Reason != "missing or out-of-order section '## Decision' (template adr.yaml requires its headings in order)" {
 		t.Errorf("body shape: %+v", e[0])
