@@ -392,7 +392,7 @@ func chooseStyle(s string, a analysis, keyContext bool) string {
 	return "double"
 }
 
-// --- writers (verbatim ports) ------------------------------------------------
+// --- writers (ports; a departure from ruamel says "khub, not ruamel") ---------
 
 func (e *emitter) writePlain(s string, contIndent int, split bool) {
 	runes := []rune(s)
@@ -431,7 +431,10 @@ func (e *emitter) writePlain(s string, contIndent int, split bool) {
 		} else {
 			if !hasCh || ch == ' ' || isBreak(ch) {
 				data := runes[start:end]
-				if len(data)+e.col > e.width && e.col > contIndent {
+				// khub, not ruamel: ruamel breaks before a long word even where
+				// split is off, and a simple key broken across lines no longer
+				// parses. The other two terms are afterSpaceRun's.
+				if split && len(data)+e.col > e.width && e.col > contIndent && !afterSpaceRun(runes, start) {
 					e.writeIndent(contIndent)
 				}
 				e.write(string(data))
@@ -443,6 +446,15 @@ func (e *emitter) writePlain(s string, contIndent int, split bool) {
 			breaks = isBreak(ch)
 		}
 	}
+}
+
+// afterSpaceRun reports whether the word at start follows two or more
+// spaces. khub, not ruamel: a plain scalar drops the white space before a
+// line break and folds the break to one space, so a break there would lose
+// all but one of the spaces (#80). The word stays on the line instead; a
+// single space before it folds back exactly and keeps ruamel's bytes.
+func afterSpaceRun(runes []rune, start int) bool {
+	return start >= 2 && runes[start-1] == ' ' && runes[start-2] == ' '
 }
 
 func (e *emitter) writeSingle(s string, contIndent int, split bool) {
@@ -575,6 +587,13 @@ func (e *emitter) writeDouble(s string, contIndent int, split bool) {
 						}
 					}
 				}
+			}
+			// khub, not ruamel: a fold without the `\` escape reads back as one
+			// space, so it may only stand for the space it replaces. ruamel also
+			// drops the escape after an escape sequence such as `\\`, where the
+			// next character is not a space, and the value gained one (#80).
+			if fold := max(start, end); fold >= len(runes) || runes[fold] != ' ' {
+				needBackslash = true
 			}
 			data := pySlice(runes, start, end)
 			if needBackslash {

@@ -1,0 +1,19 @@
+---
+type: actor
+created: 2026-01-15
+updated: 2026-01-15
+draft: false
+title: Ops
+description: "`A` declares five raw `<Reference><HintPath>..\\..\\..\\..\\vendor\\\
+  Example\\...\\bin\\Debug\\netstandard2.0\\*.dll</HintPath>` items that duplicate
+  its package references and point at another repository's"
+---
+<!-- one line — who this role is, in the product's own words. Use cases point here through `actor`; "what can this role do" is that edge inverted. -->
+
+## Goals
+
+<!-- what this role is trying to get done, not what the product offers -->
+
+## Permissions
+
+<!-- what this role may and may not do, as the rules the product enforces -->
