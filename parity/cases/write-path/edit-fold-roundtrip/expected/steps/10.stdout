@@ -1,0 +1,22 @@
+---
+type: component
+created: 2026-01-15
+updated: 2026-01-15
+draft: false
+name: Alpha Widget
+description: "it's  C:\\one\\two\\three\\four\\five\\six\\seven\\eight\\nine\\ten\\\
+  eleven\\twelve\\thirteen\\fourteen\\fifteen\\sixteen\\file.txt"
+---
+<!-- one paragraph — what this is and where its boundary runs. `kind` says whether we can change it or only react to it; `depends_on` carries what breaks when it does. -->
+
+## Responsibilities
+
+<!-- what this owns, and — as sharply — what it deliberately does not -->
+
+## Interfaces
+
+<!-- how callers reach it; hang the machine spec (OpenAPI/AsyncAPI) off `resource` -->
+
+## Operational notes
+
+<!-- how it fails, how that shows up, and what to do about it -->

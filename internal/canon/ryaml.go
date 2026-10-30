@@ -366,6 +366,10 @@ func (e *emitter) writeScalarStr(s string, indent int, split, keyContext bool) {
 		split = false
 	}
 	style := chooseStyle(s, a, keyContext)
+	if style == "plain" && split && e.plainFoldSplitsSpaces(s, contIndent) {
+		a.allowBlockPlain = false
+		style = chooseStyle(s, a, keyContext)
+	}
 	switch style {
 	case "plain":
 		e.writePlain(s, contIndent, split)
@@ -374,6 +378,23 @@ func (e *emitter) writeScalarStr(s string, indent int, split, keyContext bool) {
 	default:
 		e.writeDouble(s, contIndent, split)
 	}
+}
+
+// plainFoldSplitsSpaces reports whether writing s plain from the current
+// column would break the line inside a run of two or more spaces. ruamel
+// writes the whole run and then folds before the next word, which leaves
+// trailing white space that the plain-scalar fold discards on read: `it's  C:\…`
+// came back as `it's C:\…` (issue #80). analyze_scalar already rules plain out
+// for a space before a break; a space run at a would-be fold is the same
+// hazard, so the style falls through to ruamel's next choice (single, or
+// double when a quote or a break needs it), and the bytes move only where
+// ruamel's own did not round-trip. A plain scalar has no leading or trailing
+// space and no break, so two spaces before a line break can only be such a
+// fold.
+func (e *emitter) plainFoldSplitsSpaces(s string, contIndent int) bool {
+	probe := &emitter{width: e.width, col: e.col, indention: e.indention}
+	probe.writePlain(s, contIndent, true)
+	return strings.Contains(probe.b.String(), "  \n")
 }
 
 func chooseStyle(s string, a analysis, keyContext bool) string {
@@ -574,6 +595,24 @@ func (e *emitter) writeDouble(s string, contIndent int, split bool) {
 							needBackslash = false
 						}
 					}
+				}
+			}
+			// ruamel drops the backslash whenever the lookahead finds a lone
+			// space ahead, including when the fold lands right after an
+			// escape (start > end) and the next character is not a space:
+			// `vendor\\` + break + `Example` reads back as `vendor\ Example`
+			// (issue #80; ruamel writes the same bytes). A fold without a
+			// backslash stands for exactly one space, so it is allowed only
+			// when the character the next line would otherwise open with is
+			// that space. Otherwise the break is escaped, as PyYAML always
+			// does, and the bytes move only where ruamel's did not round-trip.
+			if !needBackslash {
+				next := start
+				if start < end {
+					next = end
+				}
+				if next >= len(runes) || runes[next] != ' ' {
+					needBackslash = true
 				}
 			}
 			data := pySlice(runes, start, end)

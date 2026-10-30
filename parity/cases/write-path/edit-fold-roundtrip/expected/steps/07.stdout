@@ -1,0 +1,24 @@
+---
+type: component
+created: 2026-01-15
+updated: 2026-01-15
+draft: false
+name: Alpha Widget
+description: The default build target runs `dotnet test Example.Tests.csproj 
+  --filter "TestCategory = Smoke Tests"`, and any failure fails the build. The 
+  other UI fixtures and the whole API project are built but never run by the 
+  checked-in build.
+---
+<!-- one paragraph — what this is and where its boundary runs. `kind` says whether we can change it or only react to it; `depends_on` carries what breaks when it does. -->
+
+## Responsibilities
+
+<!-- what this owns, and — as sharply — what it deliberately does not -->
+
+## Interfaces
+
+<!-- how callers reach it; hang the machine spec (OpenAPI/AsyncAPI) off `resource` -->
+
+## Operational notes
+
+<!-- how it fails, how that shows up, and what to do about it -->

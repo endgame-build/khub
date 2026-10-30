@@ -208,7 +208,41 @@ func (r *resolver) scalar(n ast.Node) (any, error) {
 		return lit.Value.Value, nil
 	}
 	s := tok.Value
+	if tok.Type == token.StringType && strings.ContainsRune(strings.TrimSpace(tok.Origin), '\n') {
+		s = foldPlain(tok.Origin)
+	}
 	return ResolvePlainScalarMode(s, r.mode), nil
+}
+
+// foldPlain folds a multi-line plain scalar from its source bytes the way the
+// YAML spec, PyYAML and ruamel do: trailing white space on a line is excluded,
+// leading white space on a continuation line is indentation, a single break
+// between two content lines folds to one space, and each empty line between
+// them contributes one line feed. goccy keeps a continuation line's trailing
+// white space in the value (its scanner strips it from the first line only),
+// so `The \n  other` read back as `The  other` (issue #80) — the shape
+// ruamel's emitter, and khub's, writes for a long plain value.
+func foldPlain(origin string) string {
+	var b strings.Builder
+	pending := -1 // empty lines since the last content line; -1 before any
+	for _, ln := range strings.Split(origin, "\n") {
+		ln = strings.Trim(ln, " \t\r")
+		if ln == "" {
+			if pending >= 0 {
+				pending++
+			}
+			continue
+		}
+		switch {
+		case pending == 0:
+			b.WriteByte(' ')
+		case pending > 0:
+			b.WriteString(strings.Repeat("\n", pending))
+		}
+		b.WriteString(ln)
+		pending = 0
+	}
+	return b.String()
 }
 
 // firstNonPrintable reports the first character PyYAML's Reader would reject.

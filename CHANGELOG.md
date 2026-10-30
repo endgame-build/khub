@@ -2,6 +2,24 @@
 
 Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); khub is pre-release.
 
+## [Unreleased]
+
+### Fixed
+
+- A long frontmatter value folded across lines reads back unchanged
+  (issue #80). A double-quoted fold that landed right after an escaped
+  backslash was written without the `\` continuation, so `vendor\Example`
+  came back as `vendor\ Example`; the break is now escaped. A plain value
+  folded inside a run of two spaces lost one on read; such a value now takes
+  a quoted style. Both are departures from ruamel's own bytes, which do not
+  round-trip either, and only a value that did not round-trip moves. A plain
+  value whose continuation line ends in white space before a fold, the shape
+  every long plain value takes, read back with two spaces at that fold; the
+  loader now folds a plain scalar per the YAML spec, so a file khub 0.30.0
+  wrote in that shape reads intact. A 0.30.0 file carrying the other two
+  shapes reads as its bytes say: the space after `vendor\` stays, and the
+  lost space stays lost, until the value is written again.
+
 ## [0.30.0] — 2026-10-28
 
 Storage can now follow a hub's existing nesting, relations can point to files

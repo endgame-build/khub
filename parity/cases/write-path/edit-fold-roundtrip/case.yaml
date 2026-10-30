@@ -1,0 +1,23 @@
+# Issue #80: a long value folded across lines must read back unchanged. Three
+# hazards: a double-quoted fold right after an escaped backslash (now written
+# with the `\` continuation), a plain fold with trailing white space on a
+# continuation line (now folded per spec on read), and a plain fold inside a
+# run of two spaces (now a quoted style). `get --format raw` pins the bytes,
+# `--format json` the value. The planted files carry the bytes khub 0.30.0
+# wrote: the plain shape reads intact, the other two read as their bytes say.
+steps:
+- argv: ["init", "build-hub", ".", "--no-wire"]
+- argv: ["add", "component", "--name", "Alpha Widget", "--format", "json"]
+- argv: ["edit", "cmp-alpha-widget", "description", "`A` declares five raw `<Reference><HintPath>..\\..\\..\\..\\vendor\\Example\\...\\bin\\Debug\\netstandard2.0\\*.dll</HintPath>` items that duplicate its package references and point at another repository's", "--format", "json"]
+- argv: ["get", "cmp-alpha-widget", "--format", "raw"]
+- argv: ["get", "cmp-alpha-widget", "--format", "json"]
+- argv: ["edit", "cmp-alpha-widget", "description", "The default build target runs `dotnet test Example.Tests.csproj --filter \"TestCategory = Smoke Tests\"`, and any failure fails the build. The other UI fixtures and the whole API project are built but never run by the checked-in build.", "--format", "json"]
+- argv: ["get", "cmp-alpha-widget", "--format", "raw"]
+- argv: ["get", "cmp-alpha-widget", "--format", "json"]
+- argv: ["edit", "cmp-alpha-widget", "description", "it's  C:\\one\\two\\three\\four\\five\\six\\seven\\eight\\nine\\ten\\eleven\\twelve\\thirteen\\fourteen\\fifteen\\sixteen\\file.txt", "--format", "json"]
+- argv: ["get", "cmp-alpha-widget", "--format", "raw"]
+- argv: ["get", "cmp-alpha-widget", "--format", "json"]
+- sh: "cat > knowledge/components/cmp-legacy-double.md <<'EOF'\n---\ntype: component\ncreated: 2026-01-15\nupdated: 2026-01-15\ndraft: false\nname: Legacy double\ndescription: \"`A` declares five raw `<Reference><HintPath>..\\\\..\\\\..\\\\..\\\\vendor\\\\\n  Example\\\\...\\\\bin\\\\Debug\\\\netstandard2.0\\\\*.dll</HintPath>` items that duplicate\n  its package references and point at another repository's\"\n---\nBody.\nEOF\ncat > knowledge/components/cmp-legacy-plain.md <<'EOF'\n---\ntype: component\ncreated: 2026-01-15\nupdated: 2026-01-15\ndraft: false\nname: Legacy plain\ndescription: The default build target runs `dotnet test Example.Tests.csproj \n  --filter \"TestCategory = Smoke Tests\"`, and any failure fails the build. The \n  other UI fixtures and the whole API project are built but never run by the \n  checked-in build.\n---\nBody.\nEOF\ncat > knowledge/components/cmp-legacy-spaces.md <<'EOF'\n---\ntype: component\ncreated: 2026-01-15\nupdated: 2026-01-15\ndraft: false\nname: Legacy spaces\ndescription: it's  \n  C:\\one\\two\\three\\four\\five\\six\\seven\\eight\\nine\\ten\\eleven\\twelve\\thirteen\\fourteen\\fifteen\\sixteen\\file.txt\n---\nBody.\nEOF\n"
+- argv: ["get", "cmp-legacy-double", "--format", "json"]
+- argv: ["get", "cmp-legacy-plain", "--format", "json"]
+- argv: ["get", "cmp-legacy-spaces", "--format", "json"]

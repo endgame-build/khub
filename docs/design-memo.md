@@ -85,6 +85,9 @@ The concrete stack under the five layers. Each pick stays dependency-light and e
 | Tooling | **Go**, **gofmt**, **go vet**, **golangci-lint**, `go test` | a golden-corpus test runs khub against a firm-ops corpus snapshot and asserts it validates and checks cleanly (a functional cutover, judged on its own output) |
 
 Go, shipped as a single static binary. It was a Python console script through 0.18.0; the rewrite removed the interpreter from every install. Agent skills, thin `SKILL.md` files over the same commands, ship apart from the binary: in the Claude Code plugin under `plugin/`, and through `npx skills add` for other agents.
+
+The emitter is ruamel-identical only where ruamel's own bytes read back as the value written. Two of ruamel's folds do not — a double-quoted break placed right after an escaped character, written without the `\` continuation, and a plain break inside a run of two spaces, which leaves trailing white space the fold discards — and there khub writes the spec-correct shape instead (the escaped break; a quoted style). The decision is made at the fold, so every value that round-tripped keeps its bytes. The loader folds a multi-line plain scalar per the YAML spec regardless of what the parser hands back, so the writer and the reader agree with each other and with PyYAML and ruamel. The rule and the pinned bytes are in `.claude/rules/yaml.md`.
+
 ### Principles (Invariants)
 
 1. **Markdown is truth.** One entity equals one file in git. Audit, diff, PR review, and portability come for free.

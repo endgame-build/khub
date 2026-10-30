@@ -20,6 +20,33 @@ Two profiles, both pinned:
 | round-trip | 80 | entity frontmatter, collections — the human-edited surface |
 | safe | 4096 | `.khub/{ontology,policy,storage}.yaml` and friends, where long scalars stay on one line |
 
+## Where the emitter departs from ruamel
+
+Byte-identity holds wherever ruamel's bytes read back as the value written.
+Two of ruamel's folds do not, and there khub's emitter writes a different,
+spec-correct shape (issue #80, `TestIssue80Bytes` pins both):
+
+- **A double-quoted fold right after an escape.** ruamel's lookahead drops the
+  `\` continuation when a lone space lies ahead, even when the fold lands just
+  after an escaped character and the next line opens with a non-space, so the
+  break reads as an invented space. khub keeps the `\` unless the next line
+  would open with the one space the fold stands for.
+- **A plain fold inside a run of two or more spaces.** ruamel writes the run,
+  then breaks before the next word; the trailing white space is discarded on
+  read. khub treats a space run at a would-be fold the way `analyze_scalar`
+  treats a space before a break: plain is ruled out and the style falls through
+  to ruamel's next choice (single, or double when a quote or a break needs it).
+
+Both decisions are made where the fold would land, so a short value, or a long
+one that folds elsewhere, keeps ruamel's bytes; the T3 differential stays
+1089/1089. A trailing space before a plain fold (a line ending `word ` before the
+break) is ruamel's correct shape and stays: the spec strips it on read.
+
+On the read side, `yamlload.go` refolds every multi-line plain scalar from its
+token origin per the spec (trailing white space excluded, one break folds to a
+space, each empty line to a line feed), because goccy keeps a continuation
+line's trailing white space in the value.
+
 ## Why goccy is parser-only
 
 `goccy/go-yaml` is the parser and lexer. It is **never** the writer: its encoder
