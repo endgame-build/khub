@@ -465,6 +465,8 @@ Commands:
   base  Show the effective base block every type inherits.
   snapshot  Record the current resolved schema as the baseline in .khub/schema.applied.yaml.
   diff  List schema changes since the last `khub schema snapshot`.
+  scaffold  Emit the extraction contract: every type as an extractor fills it, and the envelope to return.
+  conform  Score an extraction envelope against the schema and the workspace; writes nothing.
 
 ```
 
@@ -551,6 +553,38 @@ List schema changes since the last `khub schema snapshot`.
 
 Options:
   --format <str>  text (Rich table on a TTY) or json. [default: text]
+  --help  Show this message and exit.
+
+```
+
+## khub schema scaffold
+
+```console
+$ khub schema scaffold --help
+Usage: khub schema scaffold [OPTIONS]
+
+Emit the extraction contract: every type as an extractor fills it, and the envelope to return.
+
+Options:
+  --type <str>  Limit the contract to this type (repeatable).
+  --format <str>  text (the Markdown prompt on a TTY), markdown (the same prompt on any stream) or json. [default: text]
+  --help  Show this message and exit.
+
+```
+
+## khub schema conform
+
+```console
+$ khub schema conform --help
+Usage: khub schema conform [OPTIONS] {file}
+
+Score an extraction envelope against the schema and the workspace; writes nothing.
+
+Arguments:
+  file <path>  The envelope JSON file, or - for stdin. [required]
+
+Options:
+  --format <str>  text (Rich on a TTY) or json. [default: text]
   --help  Show this message and exit.
 
 ```

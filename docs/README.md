@@ -19,6 +19,7 @@ khub's docs, organized by [Diátaxis](https://diataxis.fr): learning, tasks, ref
 - [firm-ops preset](firm-ops-preset.md) — the operating graph of a consulting and delivery firm: 9 entity types, 14 relation predicates, per-type attributes.
 - [build-hub preset](build-hub-preset.md) — the knowledge hub of a build project: eleven types, the edges and the walks they buy. `build-lite` is an alias that resolves to it.
 - [Collections](collections-design.md) — the single-file collection row model: identity, locking, malformed handling, git attribution.
+- [Ingestion](ingestion.md) — schema-constrained extraction: `schema scaffold` is the contract an extractor fills in, `schema conform` scores its output before anything is written.
 
 ## Explanation — understand the design
 

@@ -275,6 +275,27 @@ func validateEntity(
 	if reason, bad := idError(rtype, slug, meta); bad {
 		errors = append(errors, FieldError{tname, slug, "id", reason})
 	}
+	return append(errors, fieldFindings(rtype, tname, slug, meta, idx, strict)...)
+}
+
+// FieldFindings is the per-field half of validate — every present declared
+// field against its type, enum, pattern and cardinality, every relation
+// against the index, undeclared keys under strict — for a record that is not
+// on disk yet. `schema conform` runs an extraction envelope through it so the
+// verdict on a field is the same one validate gives the file add would write;
+// the id gate is left out because the record has no slug. Slug is "" on every
+// finding.
+func FieldFindings(
+	rtype *schema.ResolvedType, meta *omap.Map, idx *index.Index, strict bool,
+) []FieldError {
+	return fieldFindings(rtype, rtype.Name, "", meta, idx, strict)
+}
+
+// fieldFindings is validateEntity without the id gate.
+func fieldFindings(
+	rtype *schema.ResolvedType, tname, slug string, meta *omap.Map, idx *index.Index, strict bool,
+) []FieldError {
+	var errors []FieldError
 	for _, key := range meta.Keys() {
 		value, _ := meta.Get(key)
 		if attr, ok := rtype.Attributes.Get(key); ok {

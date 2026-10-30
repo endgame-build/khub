@@ -272,3 +272,25 @@ func TestFrontmatterKeyOrderIsTheSchemaCanon(t *testing.T) {
 		t.Fatalf("key order = %v, want %v", got, want)
 	}
 }
+
+// WriteSupplied names exactly the keys create writes before the caller's
+// fields, in that order: the extraction contract lists them as supplied and
+// conform never counts one as a gap, so the list and the write must agree.
+func TestCreateWritesSuppliedFirst(t *testing.T) {
+	root := newWS(t, "firm-ops")
+	res, err := Create(root, "client", CreateOpts{Fields: fields("name", "Initech"), UseTemplate: true})
+	requireNoError(t, err)
+	keys := readMeta(t, res.Path).Keys()
+	want := WriteSupplied()
+	if len(keys) < len(want) {
+		t.Fatalf("frontmatter keys = %v", keys)
+	}
+	for i, name := range want {
+		if keys[i] != name {
+			t.Fatalf("key %d = %s, want %s (keys %v)", i, keys[i], name, keys)
+		}
+	}
+	if keys[len(want)] != "name" {
+		t.Errorf("the caller's first field should follow the supplied keys, got %v", keys)
+	}
+}

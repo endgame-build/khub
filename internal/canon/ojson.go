@@ -9,6 +9,7 @@ package canon
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"strconv"
@@ -147,4 +148,16 @@ func decodeFrom(dec *json.Decoder, tok json.Token, strict bool) (any, error) {
 	default:
 		return tok, nil
 	}
+}
+
+// JSONSyntaxOffset reports where a JSON document stopped parsing: the byte
+// offset encoding/json's syntax error carries, for a caller that prints its
+// own message rather than the decoder's (error text is product; the decoder's
+// moves with the toolchain). ok is false for any other error.
+func JSONSyntaxOffset(err error) (offset int64, ok bool) {
+	var syntax *json.SyntaxError
+	if errors.As(err, &syntax) {
+		return syntax.Offset, true
+	}
+	return 0, false
 }

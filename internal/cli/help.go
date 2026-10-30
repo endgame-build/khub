@@ -855,6 +855,9 @@ var helpArguments = map[string][]helpArg{
 	"khub schema show": {
 		{name: "type", metavar: "<str>", required: true, help: "Type name."},
 	},
+	"khub schema conform": {
+		{name: "file", metavar: "<path>", required: true, help: "The envelope JSON file, or - for stdin."},
+	},
 }
 
 // Plain help reuses the same metadata and ordering without terminal chrome.

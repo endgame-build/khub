@@ -91,12 +91,9 @@ func bodyFindings(
 				})
 				continue
 			}
-			if missing, found := template.MissingHeading(tpl, body); found {
+			if reason, found := BodyShapeReason(tpl, stem, body); found {
 				report.shape = append(report.shape, FieldError{
-					Type: tname, Slug: node.Slug, Field: "body",
-					Reason: fmt.Sprintf(
-						"missing or out-of-order section '## %s' "+
-							"(template %s.yaml requires its headings in order)", missing, stem),
+					Type: tname, Slug: node.Slug, Field: "body", Reason: reason,
 				})
 			}
 			for _, c := range template.BodyRules(tpl, body) {
@@ -108,6 +105,19 @@ func bodyFindings(
 		}
 	}
 	return report
+}
+
+// BodyShapeReason is the `body_shape` finding for one body against its
+// template: the first non-optional heading missing or out of order, worded
+// the one way every gate words it. Shared with `schema conform`, which judges
+// a body that is not on disk yet.
+func BodyShapeReason(tpl *template.BodyTemplate, stem, body string) (string, bool) {
+	missing, found := template.MissingHeading(tpl, body)
+	if !found {
+		return "", false
+	}
+	return fmt.Sprintf("missing or out-of-order section '## %s' "+
+		"(template %s.yaml requires its headings in order)", missing, stem), true
 }
 
 // lensFront is kb `_lens_front`: the entity's frontmatter with schema defaults

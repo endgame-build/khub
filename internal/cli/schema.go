@@ -85,6 +85,7 @@ func registerSchema(root *cobra.Command) {
 	diffCmd.Flags().StringVar(&diffFormat, "format", "text", formatHelp)
 
 	schemaCmd.AddCommand(typesCmd, showCmd, edgesCmd, baseCmd, snapshotCmd, diffCmd)
+	registerExtract(schemaCmd)
 	root.AddCommand(schemaCmd)
 }
 

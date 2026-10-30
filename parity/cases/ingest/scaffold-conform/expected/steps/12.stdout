@@ -1,0 +1,48 @@
+# khub extraction contract: firm-ops@0.3.0
+
+Extract every record the source supports into the envelope below.
+
+- Return one JSON document in the envelope shape and nothing else.
+- Use only the types listed, spelled exactly; put each extracted record in entities with its type.
+- Fill a field only when the source states it. Leave a field out rather than guess: never invent a value, never write an empty string.
+- An enum field takes exactly one of its listed values; a pattern field must match its pattern; a many relation takes a list, a single one takes one target.
+- A relation target is the id or a known alias of an entity the workspace already holds, or the name the source uses. khub resolves it and reports what it cannot; never invent an id.
+- Never set the fields listed as supplied; khub writes them.
+- Quote the passage a record came from in source. Give confidence from 0 to 1 when a value is uncertain; an uncertain record is captured as a draft.
+- A type that lists body sections takes its prose as Markdown under those ## headings, in that order.
+
+Supplied by khub, never filled: type, created, updated, draft.
+
+## Envelope
+
+```json
+{"entities": [{"type": "<type>", "fields": {"<field>": "<value>"}, "relations": {"<predicate>": ["<target>"]}, "body": "<markdown>", "source": "<the passage this came from>", "confidence": 1.0}]}
+```
+
+## client
+
+When: an organisation is named that we work with, pitch to, or are introduced to
+
+Id: minted by khub as `slug`; never set it.
+
+| field | kind | required | allowed |
+|---|---|---|---|
+| author | text |  |  |
+| title | text |  |  |
+| description | text |  |  |
+| resource | text |  |  |
+| tags | list |  |  |
+| aliases | list |  |  |
+| name | text | ✓ |  |
+| industry | text |  |  |
+| crm_id | text |  | matches `^[0-9]+$` |
+| website | text |  |  |
+
+| relation | to | many | required |
+|---|---|---|---|
+| related | any | ✓ |  |
+| sources | any | ✓ |  |
+| references | any | ✓ |  |
+| depends_on | any | ✓ |  |
+| partner | partnership |  |  |
+

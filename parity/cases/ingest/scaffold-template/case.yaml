@@ -1,0 +1,21 @@
+# The contract over a preset with body templates and id schemes: a dated,
+# prefixed type lists its id shape and its sections with the optional flag and
+# hint; a type whose template declares `sections: []` lists none. Conform
+# judges a supplied body against the template exactly as validate judges the
+# written file (a missing required heading is an error), and an entry with no
+# body — or a blank one — conforms: add seeds the scaffold. A singleton the
+# init already scaffolded reports singleton_exists under `id`; a dated type's
+# id carries the pinned clock.
+steps:
+- argv: ["init", "build-hub", ".", "--no-wire"]
+- argv: ["schema", "scaffold", "--type", "adr", "--type", "requirement"]
+- argv: ["schema", "conform", "-"]
+  stdin: |
+    {"entities": [
+      {"type": "adr", "fields": {"title": "Use Postgres", "status": "accepted"},
+       "body": "## Context\n\nWe need a store.\n\n## Consequences\n\nOne more service.\n"},
+      {"type": "adr", "fields": {"title": "Keep SQLite", "status": "proposed"}},
+      {"type": "requirement", "fields": {"title": "Settle fast", "kind": "non-functional"}, "body": "Under 300 ms.", "confidence": 0.4},
+      {"type": "adr", "fields": {"title": "Blank body", "status": "accepted"}, "body": "  \n"},
+      {"type": "prd", "fields": {"title": "Product"}}
+    ]}

@@ -2,6 +2,30 @@
 
 Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); khub is pre-release.
 
+## [Unreleased]
+
+### Added
+
+- **Extraction scaffold and conformance.** `khub schema scaffold [--type <t>]`
+  emits the resolved schema as the contract an extractor outside khub fills
+  in — every type's fields with kind, enum, pattern and required flag, its
+  stored relations with targets, cardinality and `path_refs`, the body
+  sections its template expects with their rules, and the envelope to
+  return — as JSON, or as a Markdown prompt (`--format markdown` on any
+  stream, the default on a TTY). `khub schema conform <file|->` scores the
+  extractor's envelope against the schema and the live workspace without
+  writing: the same field verdicts `validate` gives, the id `add` would
+  mint with every refusal it raises before writing (no slug source, a
+  taken or reserved slug, an existing singleton, a duplicate inside the
+  envelope), relation targets resolved by slug then alias with the
+  unresolved ones reported rather than guessed (naming the envelope entry
+  that would mint one), the body against the template, and the required
+  fields the record would leave empty as gaps that never fail the gate.
+  Exit 1 when an entity does not conform, 2 for an unreadable envelope
+  (`invalid_envelope`) or an undeclared type.
+  The pipeline is in `docs/ingestion.md`; alignment and conflict policy stay
+  design notes (#62, #29).
+
 ## [0.30.0] — 2026-10-28
 
 Storage can now follow a hub's existing nesting, relations can point to files

@@ -1,0 +1,11 @@
+# The text forms: the scaffold as the Markdown prompt an agent pastes, and the
+# conform report in validate's line shape with the summary last.
+mode: human
+normalize:
+- tty-layout-free
+steps:
+- argv: ["init", "firm-ops", ".", "--no-wire"]
+- argv: ["add", "client", "--name", "Initech"]
+- argv: ["schema", "scaffold", "--type", "client", "--type", "project"]
+- argv: ["schema", "conform", "-"]
+  stdin: '{"entities": [{"type": "project", "fields": {"title": "PoV", "source": "pigeon"}, "relations": {"client": "initech", "owner": "nobody"}}, {"type": "client", "fields": {"name": "Globex"}}]}'

@@ -1,0 +1,5 @@
+Usage: khub schema conform [OPTIONS] {file}
+Try 'khub schema conform --help' for help.
+╭─ Error ──────────────────────────────────────────────────────────────────────╮
+│ Missing argument 'file'.                                                     │
+╰──────────────────────────────────────────────────────────────────────────────╯
