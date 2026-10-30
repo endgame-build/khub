@@ -1,0 +1,11 @@
+Usage: khub layout [OPTIONS] COMMAND [ARGS]...
+
+Show where each type's entities land: khub layout [migrate].
+
+Options:
+  --format <str>  text (Rich table on a TTY) or json. [default: text]
+  --help  Show this message and exit.
+
+Commands:
+  migrate  Move a type's entities to another layout, format or path: khub layout migrate repo --layout collection --to-format jsonl.
+

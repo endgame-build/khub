@@ -1,0 +1,1 @@
+{"error": {"code": "migrate_lossy", "message": "'note/stray' carries a 'slug' field (other) that disagrees with its slug; a collection row's slug is its identity. Drop the field first"}}

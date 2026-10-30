@@ -1,0 +1,1 @@
+{"type": "note", "from": {"layout": "collection", "format": "jsonl", "path": "notes.jsonl"}, "to": {"layout": "file", "format": "md", "path": "notes"}, "entities": 2, "create": ["notes/alpha.md", "notes/beta.md"], "rewrite": [], "remove": ["notes.jsonl"], "storage_yaml": true, "dry_run": false, "index": "updated"}

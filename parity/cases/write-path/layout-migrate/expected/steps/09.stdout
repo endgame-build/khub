@@ -1,0 +1,1 @@
+{"error": {"code": "unknown_type", "message": "No type 'nothing' in the preset-cells schema. Known types: account, card, charter, dossier, note, repo, sheet, vendor"}}
