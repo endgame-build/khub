@@ -1,0 +1,6 @@
+Usage: khub serve [OPTIONS]
+Try 'khub serve --help' for help.
+╭─ Error ──────────────────────────────────────────────────────────────────────╮
+│ Invalid value for '--aspect': 'nope' is not one of 'instances', 'schema',    │
+│ 'both'.                                                                      │
+╰──────────────────────────────────────────────────────────────────────────────╯

@@ -44,9 +44,9 @@
 │ reindex    Regenerate the OKF index.md from the graph: khub reindex          │
 │            [--dry-run].                                                      │
 │ viz        Render the typed graph to a self-contained Cytoscape HTML: khub   │
-│            viz [--out F] [--open] [--type T].                                │
+│            viz [--out F] [--open] [--type T] [--aspect A].                   │
 │ serve      Serve a read-only graph view on loopback: khub serve [--port      │
-│            7777].                                                            │
+│            7777] [--aspect A].                                               │
 │ backfill   Backfill missing dates and frontmatter: khub backfill [--type T]  │
 │            [--dry-run].                                                      │
 │ wire       Wire the workspace into agent context files (CLAUDE.md gets ``@`` │

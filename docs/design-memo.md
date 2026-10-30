@@ -145,7 +145,7 @@ The CLI is a thin, schema-introspecting adapter over the core library's verbs: c
 | | `khub stale [--days N]` | entities past an `updated` threshold; dates backfilled from `git log` |
 | Projection | `khub reindex` | regenerate the OKF `index.md` navigation from the graph |
 | | `khub backfill [--type T]` | add missing frontmatter and dates from `git log` |
-| | `khub viz` | self-contained Cytoscape HTML over the typed graph |
+| | `khub viz` | self-contained Cytoscape HTML over the typed graph, the schema, or both (`--aspect`) |
 | | `khub serve` | the same graph live over loopback HTTP, read-only, rebuilt per request |
 | | `khub build` | materialize the SQLite projection *(planned)* |
 | | `khub export --okf [path]` | render the workspace to a conformant OKF bundle *(planned)* |

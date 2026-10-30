@@ -2,6 +2,23 @@
 
 Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); khub is pre-release.
 
+## [Unreleased]
+
+### Added
+
+- **`viz --aspect instances|schema|both`.** `instances` is today's entity
+  graph and stays the default, byte for byte. `schema` draws the resolved
+  ontology from the schema alone: a box per declared type listing its
+  attributes with UML multiplicity, an `any` box for the base block, and an
+  edge per declared relation labelled with its multiplicity, solid when
+  required and dashed when optional. `both` draws the two together, the types
+  above the entities that realize them, joined by dotted instance-of edges.
+  `--type` narrows every aspect to the type's outbound frontier.
+- **`serve --aspect`** opens the page on the matching view through
+  `?aspect=` on the printed URL. The page gains a **Both** view: the graph
+  view's entities with their types boxed above them, under the same focus,
+  depth and predicate filters.
+
 ## [0.30.0] — 2026-10-28
 
 Storage can now follow a hub's existing nesting, relations can point to files

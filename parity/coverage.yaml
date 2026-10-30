@@ -124,12 +124,14 @@ commands:
   - '--out'
   - '--open'
   - '--type'
+  - '--aspect'
 # serve blocks until interrupted, so every fixture step is one of its refusals
 # (cli-contract/serve-refusals). --port is reached there; the port bind itself
 # is not, because the TTY gate fires before Listen — see TestListenRefusesBusyPort.
 - name: 'serve'
   params:
   - '--port'
+  - '--aspect'
 - name: 'backfill'
   params:
   - '--type'

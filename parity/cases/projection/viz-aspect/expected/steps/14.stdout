@@ -1,0 +1,1 @@
+{"error": {"code": "serve_needs_tty", "message": "khub serve runs until interrupted and is a human command; stdout is not a terminal. Set TTY_COMPATIBLE=1 to run it anyway (background it, or an agent call will block)"}}

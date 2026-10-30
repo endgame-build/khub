@@ -74,17 +74,20 @@ func registerReindex(root *cobra.Command) {
 }
 
 func registerViz(root *cobra.Command) {
-	var out, typeName string
+	var out, typeName, aspect string
 	var open bool
 	cmd := newCmd("viz",
-		"Render the typed graph to a self-contained Cytoscape HTML: khub viz [--out F] [--open] [--type T].",
+		"Render the typed graph to a self-contained Cytoscape HTML: khub viz [--out F] [--open] [--type T] [--aspect A].",
 		"", func(cmd *cobra.Command, args []string) error {
+			if err := checkAspect(cmd, aspect); err != nil {
+				return err
+			}
 			return Guard("text", func() error {
 				ws, err := resolveRoot()
 				if err != nil {
 					return err
 				}
-				result, err := viz.Viz(ws, out, optString(cmd, "type", typeName))
+				result, err := viz.VizAspect(ws, out, aspect, optString(cmd, "type", typeName))
 				if err != nil {
 					return err
 				}
@@ -101,7 +104,23 @@ func registerViz(root *cobra.Command) {
 	cmd.Flags().StringVar(&out, "out", viz.DefaultOut, "Output path for the HTML (default viz.html).")
 	cmd.Flags().BoolVar(&open, "open", false, "Open the written file in the default browser.")
 	cmd.Flags().StringVar(&typeName, "type", "", "Render only that type and its incident edges.")
+	cmd.Flags().StringVar(&aspect, "aspect", viz.AspectInstances,
+		"What to draw: instances (the entities), schema (the types and their relations), or both.")
 	root.AddCommand(cmd)
+}
+
+// checkAspect is Click's Choice check for --aspect: a value outside the set is
+// a usage error, exit 2, before anything reads the workspace.
+func checkAspect(cmd *cobra.Command, aspect string) error {
+	if viz.ValidAspect(aspect) {
+		return nil
+	}
+	quoted := make([]string, len(viz.Aspects))
+	for i, a := range viz.Aspects {
+		quoted[i] = "'" + a + "'"
+	}
+	return clickUsageErr(cmd.CommandPath(), cmd.Annotations[annotationArgSpec],
+		"Invalid value for '--aspect': '"+aspect+"' is not one of "+strings.Join(quoted, ", ")+".")
 }
 
 func fileURI(path string) string {

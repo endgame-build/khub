@@ -11,6 +11,7 @@
 package viz
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
@@ -68,6 +69,36 @@ type Elements struct {
 	Edges []*omap.Map
 }
 
+// Aspect names which half of the workspace a render draws: the entities, the
+// ontology that governs them, or both on one canvas. Separate aspects exist to
+// keep any one picture small — OntoGraph's argument for splitting an ontology
+// into per-aspect graphs is that fewer nodes and edges per graph is what keeps
+// its meaning in focus.
+const (
+	// AspectInstances is the entity graph: viz's behaviour before aspects, and
+	// still its default.
+	AspectInstances = "instances"
+	// AspectSchema is the resolved ontology: one node per declared type with
+	// its attributes, one edge per declared relation with its cardinality.
+	AspectSchema = "schema"
+	// AspectBoth is the UML-style combined view: the types above the entities
+	// that realize them, joined by instance-of edges.
+	AspectBoth = "both"
+)
+
+// Aspects lists the accepted --aspect values in the order help names them.
+var Aspects = []string{AspectInstances, AspectSchema, AspectBoth}
+
+// ValidAspect reports whether name is one of Aspects.
+func ValidAspect(name string) bool {
+	for _, a := range Aspects {
+		if a == name {
+			return true
+		}
+	}
+	return false
+}
+
 // Graph is the read path `viz` and `serve` share: resolve the schema, rebuild
 // the index and the graph from the live files, apply the type filter, and
 // return the Cytoscape elements plus the type names present (the palette's
@@ -77,6 +108,25 @@ type Elements struct {
 // request — so neither can serve a stale graph. That is the same property
 // search has for the same reason: khub persists no index.
 func Graph(root string, typeFilter *string) (*Elements, []string, error) {
+	return AspectGraph(root, AspectInstances, typeFilter)
+}
+
+// AspectGraph is Graph for any aspect. The instance half is exactly Graph's;
+// the schema half is drawn from the ResolvedSchema alone. The schema aspect
+// therefore never scans the entities: it draws what the workspace CAN hold,
+// so a malformed entity file does not stop it.
+//
+// The palette's domain is the type names that appear on the canvas, as
+// instance nodes or as type boxes, sorted — so a type keeps one colour across
+// the three aspects of one workspace only where the set of drawn types agrees.
+// For the instance aspect that set is unchanged from before aspects existed.
+func AspectGraph(root, aspect string, typeFilter *string) (*Elements, []string, error) {
+	if !ValidAspect(aspect) {
+		// The CLI refuses an unknown aspect as a usage error before it gets
+		// here; a library caller that skips that check must not get a render
+		// of some other aspect back.
+		return nil, nil, fmt.Errorf("unknown aspect %q: want one of %s", aspect, strings.Join(Aspects, ", "))
+	}
 	resolved, err := introspect.LoadSchema(root)
 	if err != nil {
 		return nil, nil, err
@@ -85,32 +135,86 @@ func Graph(root string, typeFilter *string) (*Elements, []string, error) {
 		// A misspelled --type must fail loudly, not render an empty graph as "success".
 		return nil, nil, unknownType(root, resolved, *typeFilter)
 	}
-	scanned, err := index.Build(root, resolved)
-	if err != nil {
-		return nil, nil, err
-	}
-	if err := index.RejectMalformed(scanned, "render the graph"); err != nil {
-		return nil, nil, err
-	}
-	idx := index.Filter(scanned, index.StrayNodes(scanned)) // strays are not entities
-	g := graph.BuildGraph(idx)
-
-	nodes, edges := Select(g, typeFilter)
+	els := &Elements{Nodes: []*omap.Map{}, Edges: []*omap.Map{}}
 	typeSet := map[string]bool{}
-	meta := make(map[index.Node]NodeMeta, len(nodes))
-	for _, n := range nodes {
-		typeSet[n.Type] = true
-		rtype, _ := resolved.Types.Get(n.Type)
-		draftRaw, _ := idx.Meta[n].Get("draft")
-		titleRaw, _ := idx.Meta[n].Get("title")
-		title, _ := titleRaw.(string)
-		meta[n] = NodeMeta{
-			Title:  title,
-			Draft:  values.AsBool(draftRaw),
-			Orphan: graph.IsOrphan(g, n, rtype),
+	var schemaTypes []string
+	if aspect == AspectSchema || aspect == AspectBoth {
+		schemaTypes = SchemaTypes(resolved, typeFilter)
+	}
+	var nodes []index.Node
+	if aspect != AspectSchema {
+		scanned, err := index.Build(root, resolved)
+		if err != nil {
+			return nil, nil, err
+		}
+		if err := index.RejectMalformed(scanned, "render the graph"); err != nil {
+			return nil, nil, err
+		}
+		idx := index.Filter(scanned, index.StrayNodes(scanned)) // strays are not entities
+		g := graph.BuildGraph(idx)
+
+		var edges []graph.Edge
+		nodes, edges = Select(g, typeFilter)
+		meta := make(map[index.Node]NodeMeta, len(nodes))
+		for _, n := range nodes {
+			typeSet[n.Type] = true
+			rtype, _ := resolved.Types.Get(n.Type)
+			draftRaw, _ := idx.Meta[n].Get("draft")
+			titleRaw, _ := idx.Meta[n].Get("title")
+			title, _ := titleRaw.(string)
+			meta[n] = NodeMeta{
+				Title:  title,
+				Draft:  values.AsBool(draftRaw),
+				Orphan: graph.IsOrphan(g, n, rtype),
+			}
+		}
+		els = ToCytoscape(nodes, edges, meta)
+	}
+	if aspect == AspectInstances {
+		return els, sortedKeys(typeSet), nil
+	}
+
+	if aspect == AspectBoth {
+		// Every drawn entity gets its type box, even one a --type filter
+		// pulled in only as an edge's endpoint: an instance-of edge with no
+		// type to land on would be a dangling element.
+		have := map[string]bool{}
+		for _, t := range schemaTypes {
+			have[t] = true
+		}
+		for _, n := range nodes {
+			if !have[n.Type] {
+				have[n.Type] = true
+				schemaTypes = append(schemaTypes, n.Type)
+			}
 		}
 	}
-	return ToCytoscape(nodes, edges, meta), sortedKeys(typeSet), nil
+	sch := SchemaElements(resolved, schemaTypes, typeFilter)
+	for _, t := range schemaTypes {
+		typeSet[t] = true
+	}
+	// Schema first: the ontology is the frame the entities are read against,
+	// and the type boxes are the layout's roots in the combined view.
+	out := &Elements{
+		Nodes: append(sch.Nodes, els.Nodes...),
+		Edges: append(sch.Edges, els.Edges...),
+	}
+	if aspect == AspectBoth {
+		for _, n := range nodes {
+			data := omap.New()
+			data.Set("source", n.ID())
+			data.Set("target", SchemaID(n.Type))
+			// Empty rather than "instance of" on every one of them: the dashed
+			// line is the notation, and a label per entity is the clutter the
+			// aspect split exists to avoid.
+			data.Set("label", "")
+			data.Set("aspect", "instance_of")
+			el := omap.New()
+			el.Set("data", data)
+			out.Edges = append(out.Edges, el)
+		}
+	}
+	return out, sortedKeys(typeSet), nil
 }
 
 // Viz is viz.viz: render the typed graph to a self-contained Cytoscape HTML at
@@ -120,11 +224,16 @@ func Graph(root string, typeFilter *string) (*Elements, []string, error) {
 // string is a type name no schema declares (which fails loudly), not an absent
 // filter.
 func Viz(root string, out string, typeFilter *string) (*Result, error) {
-	elements, types, err := Graph(root, typeFilter)
+	return VizAspect(root, out, AspectInstances, typeFilter)
+}
+
+// VizAspect is Viz for any aspect.
+func VizAspect(root, out, aspect string, typeFilter *string) (*Result, error) {
+	elements, types, err := AspectGraph(root, aspect, typeFilter)
 	if err != nil {
 		return nil, err
 	}
-	html, err := RenderHTML(elements, types)
+	html, err := renderAspect(elements, types, aspect)
 	if err != nil {
 		return nil, err
 	}
@@ -235,6 +344,10 @@ func ToCytoscape(nodes []index.Node, edges []graph.Edge, meta map[index.Node]Nod
 // RenderHTML is viz.render_html: the elements and the inlined Cytoscape library
 // wrapped into one standalone HTML file.
 func RenderHTML(elements *Elements, types []string) (string, error) {
+	return renderAspect(elements, types, AspectInstances)
+}
+
+func renderAspect(elements *Elements, types []string, aspect string) (string, error) {
 	combined := make([]any, 0, len(elements.Nodes)+len(elements.Edges))
 	for _, n := range elements.Nodes {
 		combined = append(combined, n)
@@ -247,11 +360,15 @@ func RenderHTML(elements *Elements, types []string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	style, err := canon.EncodeCLI(styleFor(types))
+	rules := styleFor(types)
+	if aspect != AspectInstances {
+		rules = append(rules, schemaStyle()...)
+	}
+	style, err := canon.EncodeCLI(rules)
 	if err != nil {
 		return "", err
 	}
-	return template(assets.CytoscapeJS, scriptSafe(payload), scriptSafe(style)), nil
+	return template(assets.CytoscapeJS, scriptSafe(payload), scriptSafe(style), layoutFor(aspect)), nil
 }
 
 // scriptSafe escapes a JSON document for embedding inside an HTML <script>
@@ -310,7 +427,7 @@ func rule(selector string, style *omap.Map) *omap.Map {
 }
 
 // template is viz._TEMPLATE with its three substitutions.
-func template(lib, elements, style string) string {
+func template(lib, elements, style, layout string) string {
 	return `<!doctype html>
 <html lang="en">
 <head>
@@ -328,7 +445,7 @@ cytoscape({
   container: document.getElementById('cy'),
   elements: elements,
   style: style,
-  layout: { name: 'cose' }
+  layout: ` + layout + `
 });
 </script>
 </body>

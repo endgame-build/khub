@@ -29,12 +29,12 @@ export function initial(baseRelations, derivedRelations) {
     // and the least informative. Hidden by default; the Filters panel says so.
     hiddenPredicates: new Set((baseRelations || []).concat(derivedRelations || [])),
     search: '',
-    // Three peers over one workspace: 'schema' is what CAN exist, 'graph' and
-    // 'list' are what does, as a picture or as rows. Graph is where you land,
-    // because you almost always arrive wanting the data; schema is there when
-    // you need the contract.
+    // Four peers over one workspace: 'schema' is what CAN exist, 'graph' and
+    // 'list' are what does, as a picture or as rows, and 'both' is the graph
+    // with each entity's type boxed above it. `khub serve --aspect` picks the
+    // landing view through the URL (model.aspectView).
     //
-    // Levels apply to the two instance views only — an ontology is flat.
+    // Levels apply to the instance views only — an ontology is flat.
     //
     // Schema lands, not graph. Graph used to open on a synthetic per-type
     // picture; that turned out to be the schema view with different semantics,
