@@ -1,0 +1,1 @@
+{"error": {"code": "invalid_schema", "message": "Invalid schema at policy.meeting.retention.days: Input should be greater than or equal to 1"}}

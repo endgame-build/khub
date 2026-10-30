@@ -88,6 +88,16 @@ type RelationDecl struct {
 	Acyclic bool
 }
 
+// RetentionDecl is a type's end-of-life rule, authored in policy as
+// `retention: { days: N, no_outbound: true }`. `check` reports an entity whose
+// effective date (`updated`, else `created`) is more than Days old, and, with
+// NoOutbound, only one that also has no outbound edge. A finding is reported,
+// never acted on: nothing in khub deletes an entity.
+type RetentionDecl struct {
+	Days       int
+	NoOutbound bool
+}
+
 // IDPrefixDecl is a prefix chosen by the value of another attribute (By), one
 // per enum member. Map iterates in authored order.
 type IDPrefixDecl struct {
@@ -122,6 +132,9 @@ type TypeDecl struct {
 	Required bool
 	// Opt out of the orphan sweep (see schema_model.TypeDecl.orphan).
 	Orphan bool
+	// Policy `retention`: the end-of-life rule `check` reports against. nil
+	// when undeclared.
+	Retention *RetentionDecl
 	// Prefixed ids: `add` mints `<prefix>-<slug>` instead of a bare slug.
 	IDPrefix *IDPrefixSpec
 	// Dated ids: the minted id carries the day it was minted on
@@ -345,6 +358,7 @@ const (
 	msgList      = "Input should be a valid list"
 	msgDict      = "Input should be a valid dictionary"
 	msgMissing   = "Field required"
+	msgInt       = "Input should be a valid integer"
 	msgExtra     = "Extra inputs are not permitted"
 )
 
@@ -499,7 +513,52 @@ func applyPolicyDecl(m *omap.Map, td *TypeDecl, loc []string, c *vocabCollector)
 	td.Required = takeBool(m, "required", loc, c)
 	td.Orphan = takeBool(m, "orphan", loc, c)
 	td.PathRefs = takeBool(m, "path_refs", loc, c)
-	addExtras(m, loc, c, "required", "orphan", "path_refs")
+	if rv, has := m.Get("retention"); has {
+		td.Retention = buildRetentionDecl(rv, at(loc, "retention"), c)
+	}
+	addExtras(m, loc, c, "required", "orphan", "path_refs", "retention")
+}
+
+// buildRetentionDecl validates `retention: { days, no_outbound }`. `days` is
+// required and at least 1: a zero-day rule would report every dated entity on
+// the day it was written.
+func buildRetentionDecl(v any, loc []string, c *vocabCollector) *RetentionDecl {
+	m, ok := v.(*omap.Map)
+	if !ok {
+		c.add("model_type", loc, msgModel("RetentionDecl"))
+		return nil
+	}
+	rd := &RetentionDecl{}
+	if dv, has := m.Get("days"); has {
+		switch n, isInt := intStrict(dv); {
+		case !isInt:
+			c.add("int_type", at(loc, "days"), msgInt)
+		case n < 1:
+			c.add("greater_than_equal", at(loc, "days"), "Input should be greater than or equal to 1")
+		default:
+			rd.Days = n
+		}
+	} else {
+		c.add("missing", at(loc, "days"), msgMissing)
+	}
+	// Lax like every other vocabulary boolean (`required`, `orphan`,
+	// `path_refs`, a relation's `many`): one reading of `yes`/`true` across
+	// the schema. `days` is strict because a string there is a typo.
+	rd.NoOutbound = takeBool(m, "no_outbound", loc, c)
+	addExtras(m, loc, c, "days", "no_outbound")
+	return rd
+}
+
+// intStrict reads a YAML integer. A bool, a float or a numeric string is not
+// one: `days: "30"` or `days: 1.5` is a typo worth refusing, not coercing.
+func intStrict(v any) (int, bool) {
+	switch x := v.(type) {
+	case int:
+		return x, true
+	case int64:
+		return int(x), true
+	}
+	return 0, false
 }
 
 // applyStorageDecl folds a type's STORAGE delta — where and how its bytes

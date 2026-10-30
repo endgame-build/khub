@@ -16,6 +16,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/endgame-build/khub/internal/canon"
 	"github.com/endgame-build/khub/internal/entity"
@@ -24,6 +25,7 @@ import (
 	"github.com/endgame-build/khub/internal/index"
 	"github.com/endgame-build/khub/internal/introspect"
 	"github.com/endgame-build/khub/internal/omap"
+	"github.com/endgame-build/khub/internal/project"
 	"github.com/endgame-build/khub/internal/schema"
 	"github.com/endgame-build/khub/internal/template"
 	"github.com/endgame-build/khub/internal/values"
@@ -65,6 +67,20 @@ type Misplaced struct {
 	Type     string
 	Expected string
 }
+
+// RetentionHit is one entity past its type's retention rule: its effective date
+// (`updated`, else `created`) is more than the rule's days old and, under
+// `no_outbound`, it has no outbound edge. A candidate for removal, reported and
+// never acted on.
+type RetentionHit struct {
+	Type    string
+	Slug    string
+	Date    string // the effective date, YYYY-MM-DD
+	AgeDays int
+}
+
+// ID is RetentionHit.id.
+func (e RetentionHit) ID() string { return e.Type + "/" + e.Slug }
 
 // AliasConflict is one alias that names more than one entity: two or more
 // entities declare it, or it is some other entity's slug. Either way an ID
@@ -138,6 +154,11 @@ type CheckReport struct {
 	Misplaced []Misplaced
 	// Aliases that name more than one entity. Fails the gate.
 	AliasConflicts []AliasConflict
+	// Entities past their type's policy `retention` rule. Informational —
+	// never consulted by Passed, `--strict` included: the clock alone moves an
+	// entity into this bucket, and a gate that turns red with no change to the
+	// workspace would fail every CI run on the day a meeting turns N days old.
+	Retention []RetentionHit
 }
 
 // Passed is CheckReport.passed.
@@ -168,7 +189,9 @@ func (r *CheckReport) Passed() bool {
 // that points at a stray dangles instead of silently resolving to a non-entity.
 // A file that could not be parsed is a malformed entry, not a node, and fails
 // the check.
-func Check(root string, strict bool) (*CheckReport, error) {
+//
+// now is the day retention ages are measured against (the CLI's clock seam).
+func Check(root string, strict bool, now time.Time) (*CheckReport, error) {
 	resolved, err := introspect.LoadSchema(root)
 	if err != nil {
 		return nil, err
@@ -309,7 +332,39 @@ func Check(root string, strict bool) (*CheckReport, error) {
 		StrayTemplates:          strayTemplates,
 		MissingTemplates:        missingTemplates,
 		AliasConflicts:          aliasConflicts(valid, entityNodes),
+		Retention:               retentionHits(resolved, valid, g, entityNodes, now),
 	}, nil
+}
+
+// retentionHits sweeps every type declaring a policy `retention` rule. Drafts
+// count, as they do for the orphan sweep: an abandoned draft is the likeliest
+// end-of-life candidate of all. The date is `updated`, else `created`, the
+// first that parses (project.Age); an entity with neither is never reported.
+//
+// What counts as outbound for `no_outbound` is the graph's out-degree: a
+// stored edge that resolves, to any entity, a draft included, or a path
+// reference to an entity's file. A derived inverse is not stored on this
+// entity and does not count; a self-loop is dropped from the graph; a dangling
+// value or a path reference to a non-entity file is no edge.
+func retentionHits(resolved *schema.ResolvedSchema, valid *index.Index, g *graph.Graph,
+	nodes []index.Node, now time.Time) []RetentionHit {
+	out := []RetentionHit{}
+	for _, n := range nodes {
+		rtype, _ := resolved.Types.Get(n.Type)
+		rule := rtype.Retention
+		if rule == nil {
+			continue
+		}
+		date, age, ok := project.Age(valid.Meta[n], now)
+		if !ok || age <= rule.Days {
+			continue
+		}
+		if rule.NoOutbound && g.OutDegree(n) > 0 {
+			continue
+		}
+		out = append(out, RetentionHit{Type: n.Type, Slug: n.Slug, Date: date.Format("2006-01-02"), AgeDays: age})
+	}
+	return out
 }
 
 // aliasConflicts groups every declared alias case-insensitively, the way ID

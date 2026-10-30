@@ -69,6 +69,31 @@ storage:
 				"Input should be a valid boolean, unable to interpret input",
 		},
 		{
+			name:     "retention needs days",
+			doc:      matrixBase + "  entities:\n    a: {}\npolicy:\n  a: { retention: { no_outbound: true } }\n",
+			wantCode: "invalid_schema",
+			wantMsg:  "Invalid schema at policy.a.retention.days: Field required",
+		},
+		{
+			name:     "retention days is an integer, never a string",
+			doc:      matrixBase + "  entities:\n    a: {}\npolicy:\n  a: { retention: { days: '30' } }\n",
+			wantCode: "invalid_schema",
+			wantMsg:  "Invalid schema at policy.a.retention.days: Input should be a valid integer",
+		},
+		{
+			name:     "retention days is at least one",
+			doc:      matrixBase + "  entities:\n    a: {}\npolicy:\n  a: { retention: { days: 0 } }\n",
+			wantCode: "invalid_schema",
+			wantMsg:  "Invalid schema at policy.a.retention.days: Input should be greater than or equal to 1",
+		},
+		{
+			name:     "retention is a mapping",
+			doc:      matrixBase + "  entities:\n    a: {}\npolicy:\n  a: { retention: 30 }\n",
+			wantCode: "invalid_schema",
+			wantMsg: "Invalid schema at policy.a.retention: " +
+				"Input should be a valid dictionary or instance of RetentionDecl",
+		},
+		{
 			name:     "enum must be a list",
 			doc:      matrixBase + "  entities:\n    a:\n      attributes:\n        f: { enum: x }\n",
 			wantCode: "invalid_schema",

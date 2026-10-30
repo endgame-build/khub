@@ -579,6 +579,7 @@ func resolveType(name string, decl *TypeDecl, base *BaseBlock, declared map[stri
 		Relations:   relations,
 		Required:    decl.Required,
 		Orphan:      decl.Orphan,
+		Retention:   decl.Retention,
 		IDPrefix:    idPrefixOf(decl.IDPrefix),
 		IDDate:      decl.IDDate,
 		IDOrdinal:   decl.IDOrdinal,

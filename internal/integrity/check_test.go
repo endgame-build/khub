@@ -589,3 +589,120 @@ func TestMisplacedExpectedUsesStorageRelpathForPathlessTypes(t *testing.T) {
 		t.Fatalf("misplaced = %+v, want %+v", got, want)
 	}
 }
+
+// Policy `retention`: an entity whose effective date (`updated`, else
+// `created`) is more than `days` old is a retention hit; under `no_outbound`
+// only one with no outbound edge. Undated entities, types with no rule and the exact
+// boundary day are never reported, and the bucket never fails the gate.
+func TestRetentionReportsHits(t *testing.T) {
+	root := cleanWS(t)
+	writeRaw(t, root, ".khub/policy.yaml",
+		"policy:\n  meeting: { retention: { days: 30, no_outbound: true } }\n")
+	seed(t, root, "meetings/lonely.md", kv{"type", "meeting"}, kv{"title", "Lonely"},
+		kv{"created", "2025-11-01"})
+	seed(t, root, "meetings/linked.md", kv{"type", "meeting"}, kv{"title", "Linked"},
+		kv{"created", "2025-11-01"}, kv{"engagement", "initech-pov"})
+	seed(t, root, "meetings/boundary.md", kv{"type", "meeting"}, kv{"title", "Boundary"},
+		kv{"created", "2025-12-16"})
+	seed(t, root, "meetings/touched.md", kv{"type", "meeting"}, kv{"title", "Touched"},
+		kv{"created", "2025-01-01"}, kv{"updated", "2026-01-10"})
+	seed(t, root, "meetings/undated.md", kv{"type", "meeting"}, kv{"title", "Undated"})
+	seed(t, root, "clients/ancient.md", kv{"type", "client"}, kv{"name", "Ancient"},
+		kv{"created", "2020-01-01"})
+
+	report := mustCheck(t, root, false)
+	want := []RetentionHit{{Type: "meeting", Slug: "lonely", Date: "2025-11-01", AgeDays: 75}}
+	if !reflect.DeepEqual(report.Retention, want) {
+		t.Fatalf("retention = %+v, want %+v", report.Retention, want)
+	}
+
+	// Without no_outbound, a linked meeting ages out too.
+	writeRaw(t, root, ".khub/policy.yaml", "policy:\n  meeting: { retention: { days: 30 } }\n")
+	var ids []string
+	for _, e := range mustCheck(t, root, false).Retention {
+		ids = append(ids, e.ID())
+	}
+	if !reflect.DeepEqual(ids, []string{"meeting/linked", "meeting/lonely"}) {
+		t.Errorf("retention = %v, want [meeting/linked meeting/lonely]", ids)
+	}
+}
+
+// Retention is informational under both gates: the clock alone moves an entity
+// into it, so it must never turn `check` red.
+func TestRetentionNeverGates(t *testing.T) {
+	for _, strict := range []bool{false, true} {
+		r := &CheckReport{Strict: strict, Retention: []RetentionHit{{Type: "meeting", Slug: "old"}}}
+		if !r.Passed() {
+			t.Errorf("strict=%v: a retention hit failed the gate", strict)
+		}
+	}
+}
+
+func retentionIDs(r *CheckReport) []string {
+	ids := []string{}
+	for _, e := range r.Retention {
+		ids = append(ids, e.ID())
+	}
+	return ids
+}
+
+// An `updated` that will not parse — date-shaped but impossible, or empty —
+// falls back to `created` rather than hiding the entity from retention.
+func TestRetentionFallsBackPastAnUnparseableUpdated(t *testing.T) {
+	root := cleanWS(t)
+	writeRaw(t, root, ".khub/policy.yaml", "policy:\n  meeting: { retention: { days: 30 } }\n")
+	writeRaw(t, root, "meetings/bad-stamp.md",
+		"---\ntype: meeting\ntitle: Bad\ncreated: 2025-11-01\nupdated: 2025-13-45\n---\n")
+	writeRaw(t, root, "meetings/empty-stamp.md",
+		"---\ntype: meeting\ntitle: Empty\ncreated: 2025-11-01\nupdated: ''\n---\n")
+	writeRaw(t, root, "meetings/no-fallback.md",
+		"---\ntype: meeting\ntitle: None\nupdated: 2025-13-45\n---\n")
+
+	report := mustCheck(t, root, false)
+	want := []RetentionHit{
+		{Type: "meeting", Slug: "bad-stamp", Date: "2025-11-01", AgeDays: 75},
+		{Type: "meeting", Slug: "empty-stamp", Date: "2025-11-01", AgeDays: 75},
+	}
+	if !reflect.DeepEqual(report.Retention, want) {
+		t.Fatalf("retention = %+v, want %+v", report.Retention, want)
+	}
+}
+
+// What `no_outbound` counts: an inbound edge (whose inverse is derived, never
+// stored here) is not outbound, and neither is a self-loop; an edge to a draft
+// is.
+func TestRetentionNoOutboundCountsStoredEdgesOnly(t *testing.T) {
+	root := cleanWS(t)
+	writeRaw(t, root, ".khub/policy.yaml",
+		"policy:\n  meeting: { retention: { days: 30, no_outbound: true } }\n")
+	seed(t, root, "meetings/inbound-only.md", kv{"type", "meeting"}, kv{"title", "In"},
+		kv{"created", "2025-11-01"})
+	seed(t, root, "clients/pointer.md", kv{"type", "client"}, kv{"name", "Pointer"},
+		kv{"created", "2026-01-01"}, kv{"related", []any{"meeting/inbound-only"}})
+	seed(t, root, "meetings/self-loop.md", kv{"type", "meeting"}, kv{"title", "Self"},
+		kv{"created", "2025-11-01"}, kv{"related", []any{"meeting/self-loop"}})
+	seed(t, root, "clients/pending.md", kv{"type", "client"}, kv{"name", "Pending"},
+		kv{"created", "2026-01-01"}, kv{"draft", true})
+	seed(t, root, "meetings/to-draft.md", kv{"type", "meeting"}, kv{"title", "To draft"},
+		kv{"created", "2025-11-01"}, kv{"related", []any{"client/pending"}})
+
+	got := retentionIDs(mustCheck(t, root, false))
+	want := []string{"meeting/inbound-only", "meeting/self-loop"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("retention = %v, want %v", got, want)
+	}
+}
+
+// A collection row ages like any entity: its own `created` dates it.
+func TestRetentionSweepsCollectionRows(t *testing.T) {
+	root := collectionWS(t)
+	writeRaw(t, root, ".khub/policy.yaml", "policy:\n  repo: { retention: { days: 30 } }\n")
+	writeRaw(t, root, "knowledge/architecture/repos.yaml",
+		"old-row:\n  repo: acme/old\n  status: archived\n  created: 2025-11-01\n"+
+			"new-row:\n  repo: acme/new\n  status: active\n  created: 2026-01-10\n")
+
+	got := retentionIDs(mustCheck(t, root, false))
+	if !reflect.DeepEqual(got, []string{"repo/old-row"}) {
+		t.Fatalf("retention = %v, want [repo/old-row]", got)
+	}
+}

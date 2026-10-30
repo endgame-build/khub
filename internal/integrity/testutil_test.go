@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"sort"
 	"testing"
+	"time"
 
 	"github.com/endgame-build/khub/internal/canon"
 	"github.com/endgame-build/khub/internal/entity"
@@ -181,7 +182,7 @@ func mustValidate(t *testing.T, root string, target *string, strict bool) *Valid
 
 func mustCheck(t *testing.T, root string, strict bool) *CheckReport {
 	t.Helper()
-	report, err := Check(root, strict)
+	report, err := Check(root, strict, testNow)
 	if err != nil {
 		t.Fatalf("check: %v", err)
 	}
@@ -277,3 +278,6 @@ func collectionWS(t *testing.T) string {
 	initFrom(t, root, "collections", src)
 	return root
 }
+
+// testNow is the day mustCheck measures retention ages against.
+var testNow = time.Date(2026, 1, 15, 0, 0, 0, 0, time.UTC)

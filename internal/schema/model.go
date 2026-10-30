@@ -166,6 +166,9 @@ type ResolvedType struct {
 	Required bool
 	// See TypeDecl.Orphan: this type's instances are exempt from the orphan sweep.
 	Orphan bool
+	// See TypeDecl.Retention: the end-of-life rule `check` reports against;
+	// nil when the type declares none.
+	Retention *RetentionDecl
 	// See TypeDecl.IDPrefix: `add` mints `<prefix>-<slug>` when this is set.
 	IDPrefix *IDPrefix
 	// See TypeDecl.IDDate: the minted id carries its mint date,

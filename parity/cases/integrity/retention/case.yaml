@@ -1,0 +1,25 @@
+# A policy `retention` rule: meetings more than 30 days old (by `updated`,
+# else `created`; the clock is pinned to 2026-01-15) that record no decision
+# are reported in the `retention` bucket. The old meeting that links a
+# decision, the fresh one (re-dated by `updated`) and the undated draft are
+# not; the old draft is. Decisions declare no rule, so an old decision is never
+# reported. The bucket is informational: `check` passes, `--strict` included,
+# and the human text marks each line. A failing gate still prints the bucket,
+# last; an edge that does not resolve is no outbound edge, so the meeting
+# carrying it is reported as well as dangling. `schema show --format json`
+# carries the rule, and a malformed rule refuses the schema.
+mode: human
+steps:
+- argv: ["init", "build-hub", ".", "--no-wire"]
+- sh: "rm -rf .khub/templates knowledge && printf 'ontology:\\n  entities:\\n    meeting:\\n      relations:\\n        decisions: { to: decision, many: true }\\n    decision: {}\\n' > .khub/ontology.yaml && printf 'policy:\\n  meeting: { orphan: true, retention: { days: 30, no_outbound: true } }\\n  decision: { orphan: true }\\n' > .khub/policy.yaml && printf 'storage:\\n  meeting: { layout: file, path: meetings }\\n  decision: { layout: file, path: decisions }\\n' > .khub/storage.yaml"
+- sh: "mkdir -p meetings decisions && printf -- '---\\ntype: decision\\ntitle: Ship it\\ncreated: 2025-06-01\\n---\\n' > decisions/ship-it.md && printf -- '---\\ntype: meeting\\ntitle: Kickoff\\ncreated: 2025-11-01\\n---\\n' > meetings/kickoff.md && printf -- '---\\ntype: meeting\\ntitle: Review\\ncreated: 2025-11-01\\ndecisions: [ship-it]\\n---\\n' > meetings/review.md && printf -- '---\\ntype: meeting\\ntitle: Sync\\ncreated: 2025-10-01\\nupdated: 2026-01-10\\n---\\n' > meetings/sync.md && printf -- '---\\ntype: meeting\\ntitle: Hallway\\ndraft: true\\n---\\n' > meetings/hallway.md && printf -- '---\\ntype: meeting\\ntitle: Abandoned\\ndraft: true\\ncreated: 2025-12-01\\n---\\n' > meetings/abandoned.md"
+- argv: ["check", "--format", "json"]
+- argv: ["check"]
+- argv: ["check", "--strict", "--format", "json"]
+- argv: ["schema", "show", "meeting", "--format", "json"]
+- sh: "printf -- '---\\ntype: meeting\\ntitle: Broken\\ncreated: 2025-11-01\\ndecisions: [nowhere]\\n---\\n' > meetings/broken.md"
+- argv: ["check"]
+- sh: "rm meetings/broken.md && printf 'policy:\\n  meeting: { retention: { days: 0 } }\\n' > .khub/policy.yaml"
+- argv: ["check", "--format", "json"]
+- sh: "printf 'policy:\\n  meeting: { retention: { no_outbound: true, keep: forever } }\\n' > .khub/policy.yaml"
+- argv: ["check", "--format", "json"]

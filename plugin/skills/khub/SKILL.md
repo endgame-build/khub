@@ -77,7 +77,8 @@ hand-edit is how a workspace acquires a field no default gate will report.
    `validate` again if you did.
 5. `khub check`. **Errors** mean the workspace is broken — fix them before you finish.
    **Gaps** (`incomplete`, orphans, `thin`) mean legal but unfinished; fix the ones your
-   change caused.
+   change caused. `retention` lists entities past their type's retention rule: candidates
+   for removal that a human decides on. Never delete one on your own.
 6. `khub reindex` if you added, removed or re-linked anything. `index.md` is generated, and
    a stale one sends the next reader to a file that moved.
 

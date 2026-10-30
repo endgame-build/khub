@@ -7,8 +7,8 @@ package introspect
 // and only the resolved form decides validity.
 //
 // Derived inverses are left out (they follow from a forward edge already in
-// the snapshot), and so are preset provenance and the `when` routing prose:
-// neither decides whether an entity is valid.
+// the snapshot), and so are preset provenance, the `when` routing prose and
+// a policy `retention` rule: none of them decides whether an entity is valid.
 
 import (
 	"reflect"

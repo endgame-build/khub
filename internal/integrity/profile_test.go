@@ -3,6 +3,7 @@ package integrity
 import (
 	"os"
 	"testing"
+	"time"
 )
 
 // PROF_WS=/tmp/bench10k/ws go test ./internal/integrity -bench=Check -cpuprofile=/tmp/check.out
@@ -13,7 +14,7 @@ func BenchmarkCheckLargeCorpus(b *testing.B) {
 	}
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		if _, err := Check(ws, false); err != nil {
+		if _, err := Check(ws, false, time.Now()); err != nil {
 			b.Fatal(err)
 		}
 	}
