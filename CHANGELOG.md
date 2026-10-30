@@ -2,6 +2,19 @@
 
 Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); khub is pre-release.
 
+## [Unreleased]
+
+### Changed
+
+- **Preset reference docs are generated.** The version, counts, base block,
+  relation vocabulary and per-type attribute tables in
+  `docs/firm-ops-preset.md` and `docs/build-hub-preset.md` now come from
+  `khub schema --format json` (`go run ./parity/tools/presetdocs`), and CI
+  fails when they drift from the preset. Regenerating corrected the firm-ops
+  page, which had missed the base `aliases` attribute, the required `name` on
+  `opportunity` and the required `title` on five types. A preset with no doc, or a
+  type with no generated section, fails the gate.
+
 ## [0.30.0] — 2026-10-28
 
 Storage can now follow a hub's existing nesting, relations can point to files

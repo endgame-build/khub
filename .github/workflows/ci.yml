@@ -204,6 +204,14 @@ jobs:
         run: |
           KHUB=./khub${{ matrix.exe }} bash parity/tools/gen_cli_reference.sh
           git diff --exit-code docs/cli-reference.md
+      # The same for the preset reference pages: the tables between GENERATED
+      # markers in docs/<preset>-preset.md come from `khub schema --format json`
+      # against a workspace seeded from each preset. A preset without a doc, or
+      # a type without a generated section, fails the tool itself.
+      - name: Preset reference docs are current
+        run: |
+          go run ./parity/tools/presetdocs -bin ./khub${{ matrix.exe }}
+          git diff --exit-code docs/
       # The M0 YAML gate is a standing regression, not a one-off: the emitter
       # must keep reproducing ruamel byte-for-byte, because that is khub's
       # on-disk format and not an artifact of the retired implementation.

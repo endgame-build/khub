@@ -4,174 +4,273 @@
 
 `khub init firm-ops ./my-hub` seeds a workspace from it. For a hands-on first run, start with [`getting-started.md`](getting-started.md); to author or extend the types yourself, see [`schema.md`](schema.md).
 
-Preset version **0.3.0**. Nine entity types. Fourteen relation predicates: ten declared here, four inherited from the core base. Ids are bare slugs of `name` (opportunity, person, client) or `title` (the rest) — no prefix, no date, no ordinal — and every type requires the one it mints from; a repeated one is refused (`pass --id <slug>`).
+The tables between `GENERATED` markers on this page are generated from `khub schema --format json` against a workspace seeded from the preset; regenerate them with `go run ./parity/tools/presetdocs` (it builds khub fresh from the checkout), and CI fails when they drift from `presets/firm-ops/`. The prose around them is written by hand.
 
-## What every entity carries
+<!-- BEGIN GENERATED summary -->
 
-The base block is embedded in the binary and merged into every type at resolve time (`khub schema base` prints it), so every firm-ops entity carries it on top of its own fields:
+Preset version **0.3.0**. 9 entity types, and 14 relation predicates: 10 declared by the preset and 4 from the base block.
 
-- **Base attributes** — `type`, `draft`, `author`, `created`, `updated`, `title`, `description`, `resource`, and `tags`.
-- **Four universal edges** — `related`, `sources`, `references`, `depends_on`, each `any → any` and many-valued.
+Every type also carries the base block, which is embedded in the binary (`khub schema base` prints it):
 
-The tables below list only what firm-ops adds or tightens. A `required` note on `updated`, `created`, or `title` marks a type overriding a base default; an `optional` note relaxes one.
+- **Base attributes**: `type`, `draft`, `author`, `created`, `updated`, `title`, `description`, `resource`, `tags`, `aliases`.
+- **Base edges**: `related` → any (many); `sources` → any (many); `references` → any (many); `depends_on` → any (many, acyclic).
+
+<!-- END GENERATED summary -->
+
+Ids are bare slugs of `name` (opportunity, person, client) or `title` (the rest) — no prefix, no date, no ordinal — and every type requires the one it mints from; a repeated one is refused (`pass --id <slug>`).
+
+The type sections below list only what firm-ops adds or tightens on top of the base block. An attribute marked *base, redeclared* is a type overriding a base default, such as a `required` `updated` or an optional `created`.
 
 ## Relation vocabulary
 
-Fourteen predicates. Ten are firm-ops relations declared on specific types; the last four are the universal edges from `core`, available everywhere.
+Firm-ops relations are declared on specific types; the base edges are available everywhere.
 
-| Predicate | From → To | Required |
-|---|---|---|
-| `client` | opportunity, project, case-study → client | yes |
-| `owner` | opportunity, project, meeting, partnership, fragment → person | yes (optional on meeting) |
-| `partner` | client, opportunity, project → partnership | no |
-| `team` | project → person (many) | no |
-| `origin_opportunity` | project → opportunity | no |
-| `engagement` | meeting → opportunity \| project \| partnership | yes |
-| `transcript` | meeting → transcript | no |
-| `source_project` | case-study → project | no |
-| `related_opportunities` | partnership → opportunity (many) | no |
-| `related_projects` | partnership → project (many) | no |
-| `related` | any → any (many) | no |
-| `sources` | any → any (many) | no |
-| `references` | any → any (many) | no |
-| `depends_on` | any → any (many) | no |
+<!-- BEGIN GENERATED relations -->
+
+| Predicate | From | To | Many | Required | Acyclic | Inverse |
+|---|---|---|---|---|---|---|
+| `client` | opportunity, project, case-study | client | no | yes | no |  |
+| `owner` | opportunity, project, fragment, partnership | person | no | yes | no |  |
+| `partner` | opportunity, project, client | partnership | no | no | no |  |
+| `team` | project | person | yes | no | no |  |
+| `origin_opportunity` | project | opportunity | no | no | no |  |
+| `engagement` | meeting | opportunity \| project \| partnership | no | yes | no |  |
+| `transcript` | meeting | transcript | no | no | no |  |
+| `owner` | meeting | person | no | no | no |  |
+| `source_project` | case-study | project | no | no | no |  |
+| `related_opportunities` | partnership | opportunity | yes | no | no |  |
+| `related_projects` | partnership | project | yes | no | no |  |
+| `related` | every type | any | yes | no | no |  |
+| `sources` | every type | any | yes | no | no |  |
+| `references` | every type | any | yes | no | no |  |
+| `depends_on` | every type | any | yes | no | yes |  |
+
+<!-- END GENERATED relations -->
 
 `engagement` is a union edge: a meeting attaches to exactly one opportunity, project, or partnership. `owner` is the accountability relation (the person answerable for an entity) and stays distinct from the base `author` attribute, which records who wrote the file.
 
-## The nine entities
+## The entities
 
 ### opportunity
 
-Layout: folder (`opportunities/{slug}/_index.md`). A pipeline deal; the pre-sale entity that converts into a project.
+A pipeline deal; the pre-sale entity that converts into a project.
 
-| Attribute | Type | Notes |
-|---|---|---|
-| `stage` | enum, required | `prospect`, `proposal-sent`, `won`, `signed`, `lost`: the deal pipeline of the sales system of record |
-| `source` | enum | `referral`, `outbound`, `inbound`, `partner`, `event`, `existing-client` |
-| `crm_id` | text | digits (`^[0-9]+$`), the deal id in the CRM |
-| `notes_folder` | text | |
-| `notes_folder_id` | text | |
-| `updated` | required | overrides the base default |
+<!-- BEGIN GENERATED type opportunity -->
 
-Relations: `client` → client (required), `owner` → person (required), `partner` → partnership.
+Layout `folder`, format `md`, stored at `opportunities/{slug}/_index.md`, ids `slug`.
+
+Record one when a possible piece of work with a named client is first mentioned — record it at 'we might', not at 'we won'.
+
+| Attribute | Type | Required | Values | Default |
+|---|---|---|---|---|
+| `updated` (base, redeclared) | date | yes |  |  |
+| `name` | text | yes |  |  |
+| `stage` | text | yes | `prospect`, `proposal-sent`, `won`, `signed`, `lost` |  |
+| `source` | text | no | `referral`, `outbound`, `inbound`, `partner`, `event`, `existing-client` |  |
+| `crm_id` | text | no | pattern `^[0-9]+$` |  |
+| `notes_folder` | text | no |  |  |
+| `notes_folder_id` | text | no |  |  |
+
+Relations: `client` → client (required); `owner` → person (required); `partner` → partnership.
+
+<!-- END GENERATED type opportunity -->
+
+`stage` follows the deal pipeline of the sales system of record, and `crm_id` is the deal's id in the CRM.
 
 ### project
 
-Layout: folder (`projects/{slug}/_index.md`). A delivery engagement; the post-sale consulting work.
+A delivery engagement; the post-sale consulting work.
 
-| Attribute | Type | Notes |
-|---|---|---|
-| `active` | bool | default `true` (is the engagement ongoing?) |
-| `source` | enum | `referral`, `outbound`, `inbound`, `partner`, `event`, `existing-client` |
-| `external_repo` | text | pattern `^[a-z0-9-]+/[a-z0-9-]+$`, the delivery repo as owner/name |
-| `crm_id` | text | digits |
-| `budget_id` | text | digits |
-| `notes_folder` | text | |
-| `notes_folder_id` | text | |
-| `updated` | required | overrides the base default |
+<!-- BEGIN GENERATED type project -->
 
-Relations: `client` → client (required), `owner` → person (required), `team` → person (many), `origin_opportunity` → opportunity, `partner` → partnership.
+Layout `folder`, format `md`, stored at `projects/{slug}/_index.md`, ids `slug`.
+
+Record one when work is agreed and has an owner; the opportunity that produced it becomes its origin.
+
+| Attribute | Type | Required | Values | Default |
+|---|---|---|---|---|
+| `updated` (base, redeclared) | date | yes |  |  |
+| `title` (base, redeclared) | text | yes |  |  |
+| `active` | bool | no |  | `true` |
+| `source` | text | no | `referral`, `outbound`, `inbound`, `partner`, `event`, `existing-client` |  |
+| `external_repo` | text | no | pattern `^[a-z0-9-]+/[a-z0-9-]+$` |  |
+| `crm_id` | text | no | pattern `^[0-9]+$` |  |
+| `budget_id` | text | no | pattern `^[0-9]+$` |  |
+| `notes_folder` | text | no |  |  |
+| `notes_folder_id` | text | no |  |  |
+
+Relations: `client` → client (required); `owner` → person (required); `team` → person (many); `origin_opportunity` → opportunity; `partner` → partnership.
+
+<!-- END GENERATED type project -->
+
+`active` says whether the engagement is ongoing. `external_repo` names the delivery repo as `owner/name`.
 
 ### meeting
 
-Layout: file (`meetings/{slug}.md`). An engagement touchpoint; a processed note tied to what it is about.
+An engagement touchpoint; a processed note tied to what it is about.
 
-| Attribute | Type | Notes |
-|---|---|---|
-| `created` | optional | relaxes the base default: source meetings carry none |
-| `date` | datetime, required | |
-| `call_type` | enum, required | `client`, `sales`, `partner`, `internal` |
-| `source` | enum, required | `recording`, `manual` |
-| `note_id` | text | |
-| `attendees` | list | |
+<!-- BEGIN GENERATED type meeting -->
 
-Relations: `engagement` → opportunity \| project \| partnership (required, union), `transcript` → transcript, `owner` → person.
+Layout `file`, format `md`, stored at `meetings/{slug}.md`, ids `slug`.
+
+Record one when a call happens that produced a decision, a commitment, or a next step.
+
+| Attribute | Type | Required | Values | Default |
+|---|---|---|---|---|
+| `created` (base, redeclared) | date | no |  |  |
+| `title` (base, redeclared) | text | yes |  |  |
+| `date` | datetime | yes |  |  |
+| `call_type` | text | yes | `client`, `sales`, `partner`, `internal` |  |
+| `source` | text | yes | `recording`, `manual` |  |
+| `note_id` | text | no |  |  |
+| `attendees` | list | no |  |  |
+
+Relations: `engagement` → opportunity | project | partnership (required); `transcript` → transcript; `owner` → person.
+
+<!-- END GENERATED type meeting -->
+
+`created` is optional because source meetings carry none; `date` is when the call happened.
 
 ### transcript
 
-Layout: file (`transcripts/{slug}.md`). Raw meeting capture; the unprocessed export from the recording tool.
+Raw meeting capture; the unprocessed export from the recording tool.
 
-| Attribute | Type | Notes |
-|---|---|---|
-| `created` | optional | relaxes the base default |
-| `source` | enum, required | `recording` |
-| `note_id` | text, required | |
-| `date` | datetime, required | |
-| `title` | required | overrides the base default |
-| `creator` | text, required | |
-| `creator_email` | text, required | |
-| `notes_folder` | text, required | |
-| `notes_folder_id` | text | |
-| `calendar_event_id` | text | |
-| `attendees` | list | |
+<!-- BEGIN GENERATED type transcript -->
 
-Relations: none beyond the universal edges.
+Layout `file`, format `md`, stored at `transcripts/{slug}.md`, ids `slug`.
+
+Record one when a recording or written record of a call exists and needs to be findable later.
+
+| Attribute | Type | Required | Values | Default |
+|---|---|---|---|---|
+| `created` (base, redeclared) | date | no |  |  |
+| `title` (base, redeclared) | text | yes |  |  |
+| `source` | text | yes | `recording` |  |
+| `note_id` | text | yes |  |  |
+| `date` | datetime | yes |  |  |
+| `creator` | text | yes |  |  |
+| `creator_email` | text | yes |  |  |
+| `notes_folder` | text | yes |  |  |
+| `notes_folder_id` | text | no |  |  |
+| `calendar_event_id` | text | no |  |  |
+| `attendees` | list | no |  |  |
+
+Relations: only the base edges.
+
+<!-- END GENERATED type transcript -->
 
 ### fragment
 
-Layout: file (`fragments/{slug}.md`). An atomic thought or note that matures through stages.
+An atomic thought or note that matures through stages.
 
-| Attribute | Type | Notes |
-|---|---|---|
-| `stage` | enum, required | `raw`, `mature`, `synthesis`, `promoted` |
-| `promoted_to` | text | a plain-text `resource` link-out to a reference area |
-| `confidence` | number | |
+<!-- BEGIN GENERATED type fragment -->
 
-Relations: `owner` → person (required). The writer, keyed on `owner` rather than `author`.
+Layout `file`, format `md`, stored at `fragments/{slug}.md`, ids `slug`.
+
+Record one when something worth keeping is said that fits no other type yet — a signal, a quote, an observation.
+
+| Attribute | Type | Required | Values | Default |
+|---|---|---|---|---|
+| `title` (base, redeclared) | text | yes |  |  |
+| `stage` | text | yes | `raw`, `mature`, `synthesis`, `promoted` |  |
+| `promoted_to` | text | no |  |  |
+| `confidence` | number | no |  |  |
+
+Relations: `owner` → person (required).
+
+<!-- END GENERATED type fragment -->
+
+`owner` is the fragment's writer, keyed on `owner` rather than `author`. `promoted_to` is a plain-text link-out to the reference area the fragment was promoted into, like the base `resource`.
 
 ### case-study
 
-Layout: file (`case-studies/{slug}.md`). A proven outcome drawn from a delivered engagement.
+A proven outcome drawn from a delivered engagement.
 
-| Attribute | Type | Notes |
-|---|---|---|
-| `published` | bool, required | |
-| `industry` | text | |
-| `phase` | enum | `diagnose`, `prove`, `scale`, `full-cycle` |
-| `updated` | required | overrides the base default |
+<!-- BEGIN GENERATED type case-study -->
 
-Relations: `client` → client (required), `source_project` → project.
+Layout `file`, format `md`, stored at `case-studies/{slug}.md`, ids `slug`.
+
+Record one when delivered work becomes a story worth telling outside the firm.
+
+| Attribute | Type | Required | Values | Default |
+|---|---|---|---|---|
+| `updated` (base, redeclared) | date | yes |  |  |
+| `title` (base, redeclared) | text | yes |  |  |
+| `published` | bool | yes |  |  |
+| `industry` | text | no |  |  |
+| `phase` | text | no | `diagnose`, `prove`, `scale`, `full-cycle` |  |
+
+Relations: `client` → client (required); `source_project` → project.
+
+<!-- END GENERATED type case-study -->
 
 ### partnership
 
-Layout: folder (`partnerships/{slug}/_index.md`). A business-development relationship that feeds opportunities and projects.
+A business-development relationship that feeds opportunities and projects.
 
-| Attribute | Type | Notes |
-|---|---|---|
-| `partner` | text, required | the partner name, source of the slug |
-| `active` | bool | default `true` |
-| `primary_contact` | text | |
-| `notes_folder` | text | |
-| `notes_folder_id` | text | |
-| `updated` | required | overrides the base default |
+<!-- BEGIN GENERATED type partnership -->
 
-Relations: `owner` → person (required), `related_opportunities` → opportunity (many), `related_projects` → project (many).
+Layout `folder`, format `md`, stored at `partnerships/{slug}/_index.md`, ids `slug`.
+
+Record one when a standing relationship with another firm is established or changes.
+
+| Attribute | Type | Required | Values | Default |
+|---|---|---|---|---|
+| `updated` (base, redeclared) | date | yes |  |  |
+| `title` (base, redeclared) | text | yes |  |  |
+| `partner` | text | yes |  |  |
+| `active` | bool | no |  | `true` |
+| `primary_contact` | text | no |  |  |
+| `notes_folder` | text | no |  |  |
+| `notes_folder_id` | text | no |  |  |
+
+Relations: `owner` → person (required); `related_opportunities` → opportunity (many); `related_projects` → project (many).
+
+<!-- END GENERATED type partnership -->
+
+`partner` holds the partner's name.
 
 ### person
 
-Layout: file (`identity/team/{slug}.md`). A team member; the target of `owner` and `team` edges across the graph.
+A team member; the target of `owner` and `team` edges across the graph.
 
-| Attribute | Type | Notes |
-|---|---|---|
-| `name` | text, required | |
-| `role` | enum, required | `consultant`, `engineer`, `manager`, `partner` |
-| `department` | enum | `engineering`, `consulting`, `delivery-management`, `people`, `sales` |
+<!-- BEGIN GENERATED type person -->
 
-Relations: none beyond the universal edges.
+Layout `file`, format `md`, stored at `identity/team/{slug}.md`, ids `slug`.
+
+Record one when a human is named who we will refer to again — ours, a client's, or a partner's.
+
+| Attribute | Type | Required | Values | Default |
+|---|---|---|---|---|
+| `name` | text | yes |  |  |
+| `role` | text | yes | `consultant`, `engineer`, `manager`, `partner` |  |
+| `department` | text | no | `engineering`, `consulting`, `delivery-management`, `people`, `sales` |  |
+
+Relations: only the base edges.
+
+<!-- END GENERATED type person -->
 
 ### client
 
-Layout: file (`clients/{slug}.md`). A client organization; the party behind opportunities, projects, and case studies.
+A client organization; the party behind opportunities, projects, and case studies.
 
-| Attribute | Type | Notes |
-|---|---|---|
-| `name` | text, required | |
-| `industry` | text | |
-| `crm_id` | text | digits |
-| `website` | text | |
-| `updated` | required | overrides the base default |
+<!-- BEGIN GENERATED type client -->
+
+Layout `file`, format `md`, stored at `clients/{slug}.md`, ids `slug`.
+
+Record one when an organisation is named that we work with, pitch to, or are introduced to.
+
+| Attribute | Type | Required | Values | Default |
+|---|---|---|---|---|
+| `updated` (base, redeclared) | date | yes |  |  |
+| `name` | text | yes |  |  |
+| `industry` | text | no |  |  |
+| `crm_id` | text | no | pattern `^[0-9]+$` |  |
+| `website` | text | no |  |  |
 
 Relations: `partner` → partnership.
+
+<!-- END GENERATED type client -->
 
 ## Design note: three types the original capture had
 

@@ -17,6 +17,7 @@ environment is the easiest way to get it, e.g.
 | `concurrency.py` | N processes writing one collection at once — exercises the flock path a byte-diff cannot see | takes the binary path as an argument |
 | `seed_adversarial.py` | Plants hostile fixtures (exotic scalars, CRLF, comments) into a workspace for fuzz runs | takes a workspace path |
 | `gen_cli_reference.sh` | Regenerates `docs/cli-reference.md` from the built binary | `KHUB=./khub` |
+| `presetdocs/` | Regenerates the `GENERATED` regions of `docs/<preset>-preset.md` from `khub schema --format json`; fails on a preset with no doc or a type with no generated section | `go run ./parity/tools/presetdocs` builds khub fresh from the checkout (`-bin` uses a given binary, which must be built from this checkout; `-check` writes nothing) |
 
 The scale fixture is not here: `parity/scale/` is Go (generator, timed smoke,
 growth bench over a ~550-entity corpus) and needs only the toolchain — see its

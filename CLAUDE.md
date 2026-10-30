@@ -40,6 +40,7 @@ go build -o parity-run ./parity/runner
 ./parity-run -bin "$PWD/khub" -record -only <family>/<case>      # re-record one case
 bash smoke.sh                                                    # end-to-end, both build presets
 bash parity/tools/gen_cli_reference.sh                           # regenerate docs/cli-reference.md
+go run ./parity/tools/presetdocs                                 # regenerate docs/<preset>-preset.md tables (fresh build)
 ```
 
 The Claude Code plugin lives under `plugin/` (the two agent skills and the mod),
@@ -159,5 +160,8 @@ layer files into an engagement's `.khub/` and the templates to
 module root (a `//go:embed` pattern cannot contain `..`, so the embed cannot live
 under `internal/`).
 
-The preset is the source of truth for its schema; planning specs may drift from
-it (see `docs/firm-ops-preset.md`, `docs/build-hub-preset.md`).
+The preset is the source of truth for its schema. The tables in
+`docs/<preset>-preset.md` between `GENERATED` markers are generated from
+`khub schema --format json` (`go run ./parity/tools/presetdocs`, which builds
+khub fresh from the checkout) and CI fails when they drift; the prose around them is hand-written. Every
+preset needs such a doc, and every type a generated section.

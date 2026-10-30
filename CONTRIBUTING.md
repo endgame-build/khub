@@ -47,6 +47,7 @@ Two more that only matter when you touch what they cover:
 ```bash
 go run ./parity/yamlgate parity/corpus   # if you touch internal/canon
 bash parity/tools/gen_cli_reference.sh   # if you add or change a flag
+go run ./parity/tools/presetdocs         # if you touch presets/ or the schema JSON (builds khub fresh)
 ```
 
 ## The fixtures are the spec
