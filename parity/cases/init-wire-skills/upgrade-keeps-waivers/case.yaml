@@ -1,0 +1,14 @@
+# upgrade replaces the layer files whole, but carries each type's policy
+# `waive` block into the new policy.yaml: a waiver records a decision this
+# workspace made, not a preset override. Every other edit (here, a comment) is
+# replaced as before, and the edited file collects a .bak.
+# After the upgrade the waiver still applies, and a second run has nothing to
+# do.
+steps:
+- argv: ["init", "build-hub", ".", "--no-wire"]
+- argv: ["add", "component", "--title", "Island", "--kind", "external"]
+- sh: "printf '  # accepted findings\\n  component:\\n    waive:\\n      cmp-island:\\n        orphans: External system we only consume.\\n' >> .khub/policy.yaml"
+- argv: ["check", "--strict", "--format", "json"]
+- argv: ["upgrade", "--no-wire", "--format", "json"]
+- argv: ["check", "--strict", "--format", "json"]
+- argv: ["upgrade", "--no-wire", "--format", "json"]

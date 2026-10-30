@@ -178,26 +178,14 @@ func checkPayload(report *integrity.CheckReport) *omap.Map {
 
 	incomplete := make([]any, 0, len(report.Incomplete))
 	for _, i := range report.Incomplete {
-		record := omap.New()
-		record.Set("id", i.ID())
-		record.Set("type", i.Type)
-		record.Set("slug", i.Slug)
-		record.Set("missing_fields", strList(i.MissingFields))
-		record.Set("missing_relations", strList(i.MissingRelations))
-		incomplete = append(incomplete, record)
+		incomplete = append(incomplete, incompleteRecord(i))
 	}
 	payload.Set("incomplete", incomplete)
 	payload.Set("orphans", strList(report.Orphans))
 
 	dangling := make([]any, 0, len(report.Dangling))
 	for _, d := range report.Dangling {
-		record := omap.New()
-		record.Set("id", d.ID())
-		record.Set("type", d.Type)
-		record.Set("slug", d.Slug)
-		record.Set("predicate", d.Predicate)
-		record.Set("target", d.Target)
-		dangling = append(dangling, record)
+		dangling = append(dangling, danglingRecord(d))
 	}
 	payload.Set("dangling", dangling)
 	payload.Set("strays", strList(report.Strays))
@@ -247,12 +235,89 @@ func checkPayload(report *integrity.CheckReport) *omap.Map {
 		conflicts = append(conflicts, record)
 	}
 	payload.Set("alias_conflicts", conflicts)
+	// Policy waivers that matched no finding: they fail the gate, so a waiver
+	// cannot outlive the finding it was written for.
+	stale := make([]any, 0, len(report.StaleWaivers))
+	for _, w := range report.StaleWaivers {
+		record := omap.New()
+		record.Set("id", w.ID())
+		record.Set("type", w.Type)
+		record.Set("slug", w.Slug)
+		record.Set("finding", w.Finding)
+		record.Set("reason", w.Reason)
+		record.Set("cause", w.Cause)
+		stale = append(stale, record)
+	}
+	payload.Set("stale_waivers", stale)
 	// Say which gate ran: `orphans` populated with passed=true means default mode.
 	payload.Set("strict", report.Strict)
-	// Last, after `strict`: the one bucket that never affects `passed`. A body
-	// whose prose does not satisfy a section rule is that document, unfinished.
+	// After `strict`: the buckets that never affect `passed`. A body whose
+	// prose does not satisfy a section rule is that document, unfinished.
 	payload.Set("thin", findingRecords(report.Thin, false))
+	// Findings a policy waiver accepts, each with the bucket it left, the
+	// waiver's reason, and the finding as that bucket would have held it.
+	waived := make([]any, 0, len(report.Waived))
+	for _, w := range report.Waived {
+		record := omap.New()
+		record.Set("id", w.ID())
+		record.Set("type", w.Type)
+		record.Set("slug", w.Slug)
+		record.Set("finding", w.Finding)
+		record.Set("reason", w.Reason)
+		record.Set("record", waivedDetail(w.Detail))
+		waived = append(waived, record)
+	}
+	payload.Set("waived", waived)
 	return payload
+}
+
+func incompleteRecord(i integrity.Incomplete) *omap.Map {
+	record := omap.New()
+	record.Set("id", i.ID())
+	record.Set("type", i.Type)
+	record.Set("slug", i.Slug)
+	record.Set("missing_fields", strList(i.MissingFields))
+	record.Set("missing_relations", strList(i.MissingRelations))
+	return record
+}
+
+func danglingRecord(d integrity.Dangling) *omap.Map {
+	record := omap.New()
+	record.Set("id", d.ID())
+	record.Set("type", d.Type)
+	record.Set("slug", d.Slug)
+	record.Set("predicate", d.Predicate)
+	record.Set("target", d.Target)
+	return record
+}
+
+// waivedDetail renders a waived finding exactly as its own bucket would.
+func waivedDetail(detail any) any {
+	switch d := detail.(type) {
+	case integrity.Incomplete:
+		return incompleteRecord(d)
+	case integrity.Dangling:
+		return danglingRecord(d)
+	case integrity.FieldError:
+		return findingRecords([]integrity.FieldError{d}, false)[0]
+	default:
+		return detail // an orphan: its qualified id
+	}
+}
+
+// waivedLine is a waived finding's text line: the bucket, what it says, and
+// the waiver's reason.
+func waivedLine(w integrity.Waived) string {
+	what := ""
+	switch d := w.Detail.(type) {
+	case integrity.Incomplete:
+		what = ": missing " + strings.Join(append(append([]string{}, d.MissingFields...), d.MissingRelations...), ", ")
+	case integrity.Dangling:
+		what = fmt.Sprintf(": %s -> '%s'", d.Predicate, d.Target)
+	case integrity.FieldError:
+		what = ": " + d.Reason
+	}
+	return fmt.Sprintf("waived %s %s%s (reason: %s)", w.Finding, w.ID(), what, w.Reason)
 }
 
 func checkHuman(report *integrity.CheckReport) {
@@ -268,6 +333,9 @@ func checkHuman(report *integrity.CheckReport) {
 		// Informational is not the same as invisible.
 		for _, th := range report.Thin {
 			fmt.Printf("thin %s: %s (informational)\n", th.ID(), th.Reason)
+		}
+		for _, w := range report.Waived {
+			fmt.Println(waivedLine(w))
 		}
 		fmt.Println("Graph check passed")
 		return
@@ -317,6 +385,13 @@ func checkHuman(report *integrity.CheckReport) {
 	for _, c := range report.AliasConflicts {
 		fmt.Printf("alias '%s' names more than one entity: %s\n", c.Alias, strings.Join(c.Claimants, ", "))
 	}
+	for _, w := range report.StaleWaivers {
+		why := "matches no finding"
+		if w.Cause == integrity.StaleOrphanExempt {
+			why = fmt.Sprintf("type '%s' declares orphan: true, so it never has an orphan", w.Type)
+		}
+		fmt.Printf("stale waiver %s %s: %s — remove it from policy.yaml\n", w.Finding, w.ID(), why)
+	}
 	required := map[string]bool{}
 	for _, name := range report.DraftRequiredSingletons {
 		required[name] = true
@@ -332,5 +407,8 @@ func checkHuman(report *integrity.CheckReport) {
 	// Last: the gate did not fail because of these.
 	for _, th := range report.Thin {
 		fmt.Printf("thin %s: %s\n", th.ID(), th.Reason)
+	}
+	for _, w := range report.Waived {
+		fmt.Println(waivedLine(w))
 	}
 }

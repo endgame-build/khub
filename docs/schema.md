@@ -7,7 +7,7 @@ A schema is authored in khub's own YAML vocabulary, split across three layer fil
 | File | Layer | Carries |
 |---|---|---|
 | `ontology.yaml` | the domain | per-type `attributes`, `relations`, `when` |
-| `policy.yaml` | this workspace's gates | `required`, `orphan`, `path_refs` |
+| `policy.yaml` | this workspace's gates | `required`, `orphan`, `path_refs`, `waive` |
 | `storage.yaml` | where bytes land | `layout`, `path`, `format`, `id_prefix`, `id_date`, `id_ordinal`, `template` |
 
 `khub init` copies a preset's three files into `.khub/`; you edit them directly, and they carry no runtime tie to the hub. The three reunite at load time into one resolved contract every command reads — the layers merge on their **top-level keys** (`ontology:` / `policy:` / `storage:`), never on filenames, so one file carrying all three blocks resolves identically (useful for fixtures; three files is the canonical layout). Ontology declares which types exist; policy and storage only annotate them, and an entry for a type ontology never declared is a resolve error. See [`concepts.md`](concepts.md) for why the schema is the contract.
@@ -117,6 +117,18 @@ Per type, keyed by the type's name — what `check` demands of it in *this* work
 - `required` — singleton-only: `check` reports a missing required singleton (e.g. a workspace without its `prd.md`).
 - `orphan` — `orphan: true` declares that edge-less is this type's *expected* state, so `check` stops reporting its entities as orphans, `--strict` stops failing on them, `query --orphan` stops flagging them and the `status` count stops including them. Default `false`. Use it for a narrative root nothing points at by design: build-hub declares it on its two narrative singletons (`prd`, `arc42`), because every stored edge in that preset points *up* the durability ladder and the documents sit above its top — so orphan-ness there is a finding no authoring could ever close, and without the flag `check --strict` could not go green on a correct workspace. Unlike `required` this is **not** singleton-only: any type whose members are legitimately unwired may declare it, and a singleton that *does* carry relations is still swept. It removes no signal — a missing required edge is still reported by required-completeness, which names the field.
 - `path_refs` — `path_refs: true` lets this type's relation values name a workspace file by its path (`sources: [system/prd.md]`), for a corpus whose documents cite each other by path. A value that resolves as an id still does; one that does not is read as a workspace-relative path, an `#anchor` and a leading `./` dropped. If it is an entity's file, it is an edge to that entity, subject to the relation's targets. Otherwise, on a `to: any` relation, any existing file or directory satisfies it without an edge (`manifest.yaml`, `docs/guide.md`). A path to nothing dangles, and a write naming one is refused, as for an id.
+- `waive` — per-entity exemptions from `check`, each with the reason it is accepted. Keyed by the entity's slug, then by the `check` bucket it waives: `incomplete`, `orphans`, `dangling`, `body_shape` or `thin` — the findings that belong to one entity. A reason is required and may not be blank; any other bucket, a reason that is not a string, an entity naming no bucket (`x: {}` or `x:`), or an empty key (a plain `null:` or `~:`) is an `invalid_schema` refusal. Quote a slug YAML would read as something else — `'2024':`, `'0x10':`, `'true':` — or it is read as a number or boolean and turned back into text (`0x10:` is the slug `16`), and the waiver comes back stale.
+
+  ```yaml
+  policy:
+    component:
+      waive:
+        cmp-legacy-billing:
+          orphans: Retired; kept as the audit trail of the 2025 migration.
+          dangling: Its owner team was dissolved; the edge is history.
+  ```
+
+  A waived finding is never hidden: it leaves its bucket, stops counting against `passed` (`--strict` included), and is listed under `waived` with the reason and the finding itself. A waiver covers its whole bucket for that entity — every dangling edge it holds, every body finding — so name the narrowest bucket that fits. A waiver that matches no finding is listed under `stale_waivers` — in ontology declaration order, then the order the waivers are written — and **fails** the gate: fix the finding and the waiver must go too, so an exemption cannot outlive what it was written for, and the file stays the list of what is deliberately accepted. Its `cause` is `no_match`, or `orphan_exempt` for an `orphans` waiver on a type declaring `orphan: true`. One exception keeps a draft toggle from moving the gate: an `incomplete` waiver on an entity that is present but `draft: true` is dormant — neither waived nor stale — since drafts are exempt from completeness; it applies again when the entity is published. `khub upgrade` carries every `waive` block into the new `policy.yaml` for each type the new ontology still declares. `waive` is `orphan: true` at entity granularity, and it changes `check` only — `query --orphan`, `status` and `validate` still report what they see. Findings with no single owning entity (strays, misplaced files, cycles, alias conflicts, the template and singleton buckets) cannot be waived.
 
 ## Capture cues (`when`)
 

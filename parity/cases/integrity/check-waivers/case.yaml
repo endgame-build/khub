@@ -1,0 +1,34 @@
+# Policy `waive` accepts one check finding on one entity, with a reason. A
+# waived finding leaves its bucket and stops counting against `passed`, but it
+# stays visible: JSON lists it under `waived` with the bucket it left, the
+# reason, and the finding as that bucket held it; text prints a `waived` line.
+# A waiver no finding matches is `stale_waivers` and fails the gate, so a
+# waiver cannot outlive what it was written for. A waiver must name a waivable
+# bucket and carry a non-blank reason, or the schema refuses to resolve. A
+# stale row carries `cause` (`no_match`, or `orphan_exempt` for an orphans
+# waiver on an `orphan: true` type).
+mode: human
+normalize:
+- tty-layout-free
+steps:
+- argv: ["init", "build-hub", ".", "--no-wire"]
+- argv: ["add", "component", "--title", "Island", "--kind", "external"]
+- argv: ["add", "adr", "--title", "No status"]
+# Unwaived: the adr is incomplete, so the gate fails.
+- argv: ["check", "--strict", "--format", "json"]
+- sh: "printf '  component:\\n    waive:\\n      cmp-island:\\n        orphans: External system we only consume.\\n      cmp-gone:\\n        orphans: Retired last quarter.\\n  adr:\\n    waive:\\n      ad-2026-01-15-no-status:\\n        incomplete: Status waits on the review board.\\n        orphans: Wired once the review board decides.\\n' >> .khub/policy.yaml"
+# Waived findings move to `waived`; the waiver for the removed cmp-gone is stale.
+- argv: ["check", "--strict", "--format", "json"]
+- argv: ["check", "--strict"]
+# Without the stale waiver, every finding is waived and --strict passes.
+- sh: "perl -0pi -e 's/      cmp-gone:\\n        orphans: Retired last quarter.\\n//' .khub/policy.yaml"
+- argv: ["check", "--strict"]
+- argv: ["check", "--strict", "--format", "json"]
+# Drafting a waived entity does not move the gate: drafts are exempt from
+# completeness, so its `incomplete` waiver is dormant (neither waived nor
+# stale) while the orphans waiver still matches.
+- argv: ["edit", "ad-2026-01-15-no-status", "draft", "true", "--format", "json"]
+- argv: ["check", "--strict", "--format", "json"]
+# A waiver must name a bucket check can waive on one entity.
+- sh: "perl -pi -e 's/^        orphans: External/        strays: External/' .khub/policy.yaml"
+- argv: ["check", "--format", "json"]

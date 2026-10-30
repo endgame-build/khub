@@ -118,6 +118,7 @@ func upgradeCandidate(root string, opt UpgradeOptions, sourceDir string) (*Upgra
 	config := []ConfigChange{}
 	versionTo := versionFrom
 	if !opt.NoSchema {
+		carryWaivers(osPath(target), merged)
 		config, err = replaceConfig(target, khubDir, preset, merged, source)
 		if err != nil {
 			return nil, err
@@ -162,6 +163,88 @@ func upgradeCandidate(root string, opt UpgradeOptions, sourceDir string) (*Upgra
 		SingletonsCreated: created,
 		SchemaDrift:       drift,
 	}, nil
+}
+
+// carryWaivers copies each type's policy `waive` block from the workspace's
+// layer files into the incoming policy layer, before replaceConfig writes it.
+//
+// Upgrade replaces the layer files whole, and a waiver is not a preset
+// override but a record of what this workspace deliberately accepts — the
+// reason a person wrote down. Losing every one of them to a version bump, with
+// only a .bak to dig them out of, would turn check red on findings that were
+// already decided. So the one per-entity block is carried; every other edit
+// is still replaced with its .bak, as before.
+//
+// The workspace layers are read the way the resolver reads them (every layer
+// file, a later `policy.<type>` replacing an earlier one). A waive block for a
+// type the incoming ontology no longer declares is dropped — the policy entry
+// would name an unknown type and stop every command — and survives in the
+// .bak. A layer that does not parse carries nothing: upgrade replaces it
+// anyway, and the .bak keeps it.
+func carryWaivers(root string, merged *flattened) {
+	layers, err := introspect.LayerFiles(root)
+	if err != nil {
+		return
+	}
+	waives := omap.New()
+	for _, rel := range layers {
+		raw, rerr := fsio.ReadFile(root, filepath.Join(root, filepath.FromSlash(rel)))
+		if rerr != nil {
+			continue
+		}
+		doc, perr := schema.ParseDoc(rel, string(raw))
+		if perr != nil {
+			continue
+		}
+		policy, merr := mappingOrNil(doc, "policy")
+		if merr != nil || policy == nil {
+			continue
+		}
+		for _, tname := range policy.Keys() {
+			entry, _ := policy.Get(tname)
+			em, isMap := entry.(*omap.Map)
+			if !isMap {
+				continue
+			}
+			if w, has := em.Get("waive"); has && w != nil {
+				waives.Set(tname, w)
+			} else {
+				waives.Delete(tname)
+			}
+		}
+	}
+	if waives.Len() == 0 {
+		return
+	}
+	declared := map[string]bool{}
+	if ont, err := mappingOrNil(merged.Ontology, "ontology"); err == nil && ont != nil {
+		if ents, err := mappingOrNil(ont, "entities"); err == nil && ents != nil {
+			for _, name := range ents.Keys() {
+				declared[name] = true
+			}
+		}
+	}
+	policy, err := mappingOrNil(merged.Policy, "policy")
+	if err != nil {
+		return
+	}
+	if policy == nil {
+		policy = omap.New()
+		merged.Policy.Set("policy", policy)
+	}
+	for _, tname := range waives.Keys() {
+		if !declared[tname] {
+			continue
+		}
+		w, _ := waives.Get(tname)
+		entry, _ := policy.Get(tname)
+		em, isMap := entry.(*omap.Map)
+		if !isMap {
+			em = omap.New()
+			policy.Set(tname, em)
+		}
+		em.Set("waive", w)
+	}
 }
 
 // replaceConfig puts every shipped file back over the workspace copy: the

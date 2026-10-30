@@ -167,6 +167,9 @@ test('status, validate and check report their counts', () => {
   expect(sayOf('khub check --strict', { passed: false, strict: true, orphans: ['x/a', 'x/b'], thin: [{}] }).line).toBe(
     'failed · orphans 2',
   )
+  expect(
+    sayOf('khub check', { passed: false, stale_waivers: [{ id: 'x/gone' }], waived: [{ id: 'x/a' }, { id: 'x/b' }] }).line,
+  ).toBe('failed · stale_waivers 1')
 })
 
 test('schema views say how much they hold', () => {

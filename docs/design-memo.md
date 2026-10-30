@@ -42,7 +42,7 @@ becoming frustrated and losing interest entirely" (Westerinen & Tauber, *Ontolog
 Development by Domain Experts (Without Using the "O" Word)*, Applied Ontology, IOS
 Press). khub's schema is the
 rendering that fits how the expert works; any RDF/OWL projection is derived from it
-and never the authoring surface. The schema is split into three layer files — `ontology.yaml` (the domain: per-type `attributes`, `relations`, `when`), `policy.yaml` (this workspace's gates: `required`, `orphan`) and `storage.yaml` (`layout`/`format`/`path`/`id_prefix`/`template`) — merging at load time into one resolved contract. The `base` block (`type`, `draft`, `author`, `created`/`updated`, `tags`, the OKF fields, the `any → any` edges) is khub's own plumbing and ships EMBEDDED in the binary, supplied to every resolve and never copied into a workspace; an authored `ontology.base` is rejected outright — the base is not an authoring surface. A type declares only its domain delta and overrides a base attribute by redeclaring it. The split is what makes the ontology projectable: `ontology.yaml` carries purely the domain, which is what an RDF/SHACL export reads.
+and never the authoring surface. The schema is split into three layer files — `ontology.yaml` (the domain: per-type `attributes`, `relations`, `when`), `policy.yaml` (this workspace's gates: `required`, `orphan`, `waive` — per-entity `check` waivers with reasons) and `storage.yaml` (`layout`/`format`/`path`/`id_prefix`/`template`) — merging at load time into one resolved contract. The `base` block (`type`, `draft`, `author`, `created`/`updated`, `tags`, the OKF fields, the `any → any` edges) is khub's own plumbing and ships EMBEDDED in the binary, supplied to every resolve and never copied into a workspace; an authored `ontology.base` is rejected outright — the base is not an authoring surface. A type declares only its domain delta and overrides a base attribute by redeclaring it. The split is what makes the ontology projectable: `ontology.yaml` carries purely the domain, which is what an RDF/SHACL export reads.
 
 ```yaml
 # core/ontology.yaml  (embedded in the binary — supplied to every resolve, never copied)
@@ -165,7 +165,7 @@ engagement-repo/
   .khub/
     config.yaml        # workspace config: preset provenance + version, source, command defaults (format, stale_days)
     ontology.yaml      # the domain: types, attributes, relations, capture cues
-    policy.yaml        # workspace gates: required singletons, orphan exemptions
+    policy.yaml        # workspace gates: required singletons, orphan exemptions, waivers
     storage.yaml       # layouts, inventory paths, id prefixes, template links
     generated/         # stable workspace lock and upgrade recovery journals, gitignored
   clients/             # entity type folders live at the workspace root, one per type,

@@ -179,6 +179,26 @@ type ResolvedType struct {
 	TemplateOff bool
 	// See TypeDecl.When: the moment to capture this type, in domain language.
 	When *string
+	// See TypeDecl.Waivers: per-entity check-finding waivers, authored order.
+	Waivers []Waiver
+}
+
+// WaivableFindings is the `check` buckets a policy `waive` entry may name, in
+// the order `check` emits them. Each is a finding about one entity, so a
+// waiver names it by slug under the entity's own type. Path-addressed and
+// multi-entity findings (strays, misplaced, cycles, alias conflicts, the
+// template and singleton buckets) have no single owner to waive them on.
+var WaivableFindings = []string{"incomplete", "orphans", "dangling", "body_shape", "thin"}
+
+// Waiver is one policy `waive` entry: the `check` finding Finding on the
+// entity Slug (of the type that declares it) is accepted, for Reason. A waived
+// finding is still reported — under `waived`, with the reason — and stops
+// counting against `passed`; a waiver no finding matches is reported as stale
+// and fails the gate, so a waiver cannot outlive what it was written for.
+type Waiver struct {
+	Slug    string
+	Finding string
+	Reason  string
 }
 
 // Templated reports whether the type stores its entities by path template.

@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -137,6 +138,9 @@ type TypeDecl struct {
 	// workspace file by its path. One that is an entity's file is an edge to
 	// it; any other existing file satisfies an `any` relation without an edge.
 	PathRefs bool
+	// Policy `waive`: per-entity check-finding waivers, each with its reason,
+	// in authored order. See Waiver.
+	Waivers []Waiver
 	// The declared template stem (.khub/templates/<name>.yaml). nil = the
 	// standing convention (the type's own name); see TemplateOff for the
 	// explicit opt-out. A NAME, never a path: templates live in one directory,
@@ -346,6 +350,13 @@ const (
 	msgDict      = "Input should be a valid dictionary"
 	msgMissing   = "Field required"
 	msgExtra     = "Extra inputs are not permitted"
+	msgTooShort  = "String should have at least 1 character"
+)
+
+// The waive-specific messages (khub's own, not pydantic's catalog).
+const (
+	msgWaiveSlug  = "Value error, a waiver names an entity by its slug, and a key here is empty; quote a key YAML reads as null, a number or a boolean"
+	msgWaiveEmpty = "Dictionary should have at least 1 item after validation, not 0"
 )
 
 func msgModel(name string) string {
@@ -499,7 +510,72 @@ func applyPolicyDecl(m *omap.Map, td *TypeDecl, loc []string, c *vocabCollector)
 	td.Required = takeBool(m, "required", loc, c)
 	td.Orphan = takeBool(m, "orphan", loc, c)
 	td.PathRefs = takeBool(m, "path_refs", loc, c)
-	addExtras(m, loc, c, "required", "orphan", "path_refs")
+	td.Waivers = takeWaivers(m, loc, c)
+	addExtras(m, loc, c, "required", "orphan", "path_refs", "waive")
+}
+
+// takeWaivers reads policy `waive`: a mapping of slug to a mapping of check
+// bucket to the reason the finding is accepted.
+//
+//	waive:
+//	  legacy-billing:
+//	    orphans: Retired; kept as the audit trail of the 2025 migration.
+//
+// A reason is mandatory and non-blank — a waiver nobody can explain is the
+// thing the feature exists to prevent. Whether the slug names an entity is not
+// asked here: the schema resolves before the scan, and capture is never
+// blocked, so a waiver matching nothing is `check`'s finding (stale_waivers).
+func takeWaivers(m *omap.Map, loc []string, c *vocabCollector) []Waiver {
+	v, has := m.Get("waive")
+	if !has || v == nil {
+		return nil
+	}
+	wl := at(loc, "waive")
+	wm, isMap := v.(*omap.Map)
+	if !isMap {
+		c.add("dict_type", wl, msgDict)
+		return nil
+	}
+	var out []Waiver
+	for _, slug := range wm.Keys() {
+		ev, _ := wm.Get(slug)
+		el := at(wl, slug)
+		// A plain `null:` or `~:` key loads as "" — no entity has that slug.
+		// The YAML resolver has already turned other non-string keys into
+		// text by now (`0x10:` is "16"); those surface as stale waivers.
+		if strings.TrimSpace(slug) == "" {
+			c.add("value_error", wl, msgWaiveSlug)
+			continue
+		}
+		em, isEntryMap := ev.(*omap.Map)
+		if !isEntryMap {
+			c.add("dict_type", el, msgDict)
+			continue
+		}
+		if em.Len() == 0 {
+			c.add("too_short", el, msgWaiveEmpty)
+			continue
+		}
+		for _, finding := range em.Keys() {
+			rv, _ := em.Get(finding)
+			fl := at(el, finding)
+			if !slices.Contains(WaivableFindings, finding) {
+				c.add("literal_error", fl, msgLiteral(WaivableFindings))
+				continue
+			}
+			reason, isStr := rv.(string)
+			if !isStr {
+				c.add("string_type", fl, msgString)
+				continue
+			}
+			if strings.TrimSpace(reason) == "" {
+				c.add("string_too_short", fl, msgTooShort)
+				continue
+			}
+			out = append(out, Waiver{Slug: slug, Finding: finding, Reason: reason})
+		}
+	}
+	return out
 }
 
 // applyStorageDecl folds a type's STORAGE delta — where and how its bytes

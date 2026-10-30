@@ -78,6 +78,9 @@ hand-edit is how a workspace acquires a field no default gate will report.
 5. `khub check`. **Errors** mean the workspace is broken — fix them before you finish.
    **Gaps** (`incomplete`, orphans, `thin`) mean legal but unfinished; fix the ones your
    change caused.
+   `waived` lists findings a person accepted in `.khub/policy.yaml`, each with its reason;
+   leave them be. A `stale_waivers` row is a waiver that no longer matches anything — say
+   so. Never add a waiver to turn `check` green: a waiver is a person's decision.
 6. `khub reindex` if you added, removed or re-linked anything. `index.md` is generated, and
    a stale one sends the next reader to a file that moved.
 

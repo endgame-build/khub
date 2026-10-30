@@ -1,0 +1,4 @@
+stale waiver orphans component/cmp-gone: matches no finding — remove it from policy.yaml
+waived incomplete adr/ad-2026-01-15-no-status: missing status (reason: Status waits on the review board.)
+waived orphans adr/ad-2026-01-15-no-status (reason: Wired once the review board decides.)
+waived orphans component/cmp-island (reason: External system we only consume.)

@@ -9,7 +9,10 @@ package schema
 // in Python, so the locs below are khub's OWN contract now; the catalog is
 // inherited, the parity framing is over.
 
-import "testing"
+import (
+	"reflect"
+	"testing"
+)
 
 func TestVocabErrorParity(t *testing.T) {
 	cases := []struct {
@@ -137,6 +140,50 @@ storage:
 				"at ontology.entities.z.attributes.n.range",
 		},
 		{
+			name:     "waive must be a mapping",
+			doc:      matrixBase + "  entities:\n    a: {}\npolicy:\n  a: { waive: [x] }\n",
+			wantCode: "invalid_schema",
+			wantMsg:  "Invalid schema at policy.a.waive: Input should be a valid dictionary",
+		},
+		{
+			name:     "a waived entity maps findings to reasons",
+			doc:      matrixBase + "  entities:\n    a: {}\npolicy:\n  a: { waive: { x: orphans } }\n",
+			wantCode: "invalid_schema",
+			wantMsg:  "Invalid schema at policy.a.waive.x: Input should be a valid dictionary",
+		},
+		{
+			name:     "a waiver names a waivable check bucket",
+			doc:      matrixBase + "  entities:\n    a: {}\npolicy:\n  a: { waive: { x: { strays: r } } }\n",
+			wantCode: "invalid_schema",
+			wantMsg: "Invalid schema at policy.a.waive.x.strays: " +
+				"Input should be 'incomplete', 'orphans', 'dangling', 'body_shape' or 'thin'",
+		},
+		{
+			name:     "a waiver's reason is a string",
+			doc:      matrixBase + "  entities:\n    a: {}\npolicy:\n  a: { waive: { x: { orphans: true } } }\n",
+			wantCode: "invalid_schema",
+			wantMsg:  "Invalid schema at policy.a.waive.x.orphans: Input should be a valid string",
+		},
+		{
+			name:     "a waiver's reason is not blank",
+			doc:      matrixBase + "  entities:\n    a: {}\npolicy:\n  a: { waive: { x: { orphans: '  ' } } }\n",
+			wantCode: "invalid_schema",
+			wantMsg:  "Invalid schema at policy.a.waive.x.orphans: String should have at least 1 character",
+		},
+		{
+			name:     "a null waiver key is refused, not read as an empty slug",
+			doc:      matrixBase + "  entities:\n    a: {}\npolicy:\n  a: { waive: { null: { orphans: r } } }\n",
+			wantCode: "invalid_schema",
+			wantMsg: "Invalid schema at policy.a.waive: Value error, a waiver names an entity by its slug, " +
+				"and a key here is empty; quote a key YAML reads as null, a number or a boolean",
+		},
+		{
+			name:     "a waived entity names at least one finding",
+			doc:      matrixBase + "  entities:\n    a: {}\npolicy:\n  a: { waive: { x: {} } }\n",
+			wantCode: "invalid_schema",
+			wantMsg:  "Invalid schema at policy.a.waive.x: Dictionary should have at least 1 item after validation, not 0",
+		},
+		{
 			name: "an ontology error beats a later storage error",
 			doc: matrixBase + `  entities:
     a: { when: 42 }
@@ -172,6 +219,21 @@ func TestVocabLaxCoercionsParity(t *testing.T) {
 	}
 	if !typeOf(t, schema, "b").Orphan {
 		t.Error("orphan: 'true' should lax-coerce to true")
+	}
+}
+
+func TestWaiversResolveInAuthoredOrder(t *testing.T) {
+	schema := resolveDocs(t, matrixBase+
+		"  entities:\n    a: {}\n"+
+		"policy:\n  a:\n    waive:\n      y: { orphans: Second thoughts., incomplete: Pending. }\n      x: { dangling: Re-import. }\n")
+	got := typeOf(t, schema, "a").Waivers
+	want := []Waiver{
+		{Slug: "y", Finding: "orphans", Reason: "Second thoughts."},
+		{Slug: "y", Finding: "incomplete", Reason: "Pending."},
+		{Slug: "x", Finding: "dangling", Reason: "Re-import."},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("waivers = %+v, want %+v", got, want)
 	}
 }
 

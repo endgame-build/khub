@@ -585,6 +585,7 @@ func resolveType(name string, decl *TypeDecl, base *BaseBlock, declared map[stri
 		Template:    decl.Template,
 		TemplateOff: decl.TemplateOff,
 		When:        decl.When,
+		Waivers:     decl.Waivers,
 	}, nil
 }
 
