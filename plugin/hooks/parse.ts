@@ -32,7 +32,7 @@ type Segment = { words: string[]; ops: string[] }
 const NONE: Parsed = { kind: 'none' }
 const BOOLEAN_FLAGS = new Set([
   'active', 'draft', 'dry-run', 'edges', 'force', 'help', 'in', 'no-schema',
-  'no-template', 'no-wire', 'open', 'orphan', 'out', 'plain', 'reverse', 'stale', 'strict',
+  'no-template', 'no-wire', 'open', 'orphan', 'out', 'plain', 'replace', 'reverse', 'stale', 'strict',
 ])
 const WRITES = new Set(['add', 'edit', 'link', 'unlink', 'remove'])
 const OPERATORS = new Set(['backfill', 'init', 'reindex', 'upgrade', 'wire'])

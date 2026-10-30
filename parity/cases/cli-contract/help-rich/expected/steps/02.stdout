@@ -28,6 +28,7 @@
 │            old-fragment [--force].                                           │
 │ query      Filter entities: khub query --type opportunity --stage prospect   │
 │            --format json.                                                    │
+│ run        Run a saved query: khub run open-prospects --format json.         │
 │ search     Full-text search: khub search modernization --type transcript     │
 │            --format json.                                                    │
 │ neighbors  Walk one-hop neighbors: khub neighbors initech-pov [--predicate   │

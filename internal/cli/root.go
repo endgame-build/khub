@@ -226,6 +226,7 @@ func newRoot() *cobra.Command {
 	registerUnlink(root)
 	registerRemove(root)
 	registerQuery(root)
+	registerRun(root)
 	registerSearch(root)
 	registerNeighbors(root)
 	registerImpact(root)

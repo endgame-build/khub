@@ -8,10 +8,10 @@ export type Summary = { head: string; line: string; tone: KhubTone }
 
 type Result = { line: string; tone: KhubTone }
 
-// The first positional of these verbs names what the call is about, a type for add and an
-// id for the rest.
+// The first positional of these verbs names what the call is about: a type for add, a saved
+// query's name for run, and an id for the rest.
 const SUBJECT_VERBS = new Set([
-  'add', 'edit', 'get', 'history', 'impact', 'link', 'neighbors', 'remove', 'unlink', 'validate',
+  'add', 'edit', 'get', 'history', 'impact', 'link', 'neighbors', 'remove', 'run', 'unlink', 'validate',
 ])
 
 const NOTHING: Result = { line: '', tone: 'plain' }
@@ -142,6 +142,7 @@ function resultOf(call: Simple, json: unknown, note: string): Result {
     }
 
     case 'query':
+    case 'run':
     case 'stale':
       return entities
 
@@ -230,6 +231,7 @@ function listOf(call: Simple, json: unknown): KhubRow[] {
   switch (call.verb) {
     case 'get':
     case 'query':
+    case 'run':
     case 'search':
     case 'stale':
       return rows.map(entityRow)

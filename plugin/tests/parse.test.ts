@@ -238,3 +238,11 @@ test('unix reads khub.exe and a backslash path as some other program', () => {
   expect(classify('C:\\\\tools\\\\khub status', UNIX).kind).toBe('none')
   expect(classify('(khub.exe add adr --title x)', UNIX).kind).toBe('none')
 })
+
+test('--replace takes no value, so the word after it is not read as one', () => {
+  const call = simple('khub query --save-as mine --replace kind service')
+
+  expect(call.flags).toEqual({ 'save-as': 'mine', replace: true })
+  expect(call.positional).toEqual(['kind', 'service'])
+  expect(simple('khub run open-prospects --format json').positional).toEqual(['open-prospects'])
+})

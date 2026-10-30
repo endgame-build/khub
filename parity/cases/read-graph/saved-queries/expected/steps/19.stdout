@@ -1,0 +1,1 @@
+{"error": {"code": "unknown_type", "message": "Saved query 'gone' no longer fits the schema: No type 'retired' in the build-hub schema. Known types: actor, adr, api, arc42, capability, component, prd, repo, requirement, system, use-case. Save it again with `khub query \u2026 --save-as gone --replace`, or edit .khub/queries.yaml"}}

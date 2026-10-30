@@ -482,3 +482,141 @@ func oneKey(k string, v any) *omap.Map {
 	m.Set(k, v)
 	return m
 }
+
+// --- whole-entry replacement -------------------------------------------------
+
+// ReplaceEntry rewrites the text src so its mapping reads back as want, where
+// want differs from what src holds only in the value under the top-level key.
+// It re-emits that one entry through the round-trip profile, in place, and
+// keeps every other byte: the other entries, their comments, and the blank and
+// comment lines trailing the replaced entry. Comments inside the replaced
+// entry go with it. It is SpliceMapping's fallback for a store whose entries
+// are whole units (saved queries), where re-emitting the whole document would
+// drop comments on entries the caller never touched.
+//
+// ErrNoSplice means the replacement cannot be made safely: the key is absent,
+// another entry moved, the root is not a block mapping of column-1 keys, or
+// the result would not read back as want (an anchor in the replaced entry
+// that another entry aliases).
+func ReplaceEntry(src []byte, want *omap.Map, key string, mode ResolveMode) ([]byte, error) {
+	text := string(src)
+	toks := lexer.Tokenize(text)
+	if reconcat(toks, text) != text {
+		return nil, ErrNoSplice
+	}
+	for _, tk := range toks {
+		if tk.Type == token.MappingKeyType {
+			return nil, ErrNoSplice
+		}
+	}
+	have, nonMap, err := LoadDocMap(text, mode)
+	if err != nil || nonMap != nil {
+		return nil, ErrNoSplice
+	}
+	keys := have.Keys()
+	if !equalStrings(keys, want.Keys()) {
+		return nil, ErrNoSplice
+	}
+	idx := -1
+	for i, k := range keys {
+		if k == key {
+			idx = i
+		}
+	}
+	value, ok := want.Get(key)
+	if idx < 0 || !ok {
+		return nil, ErrNoSplice
+	}
+	lines, ok := topLevelKeyLines(src)
+	if !ok || len(lines) != len(keys) {
+		return nil, ErrNoSplice
+	}
+	entry, derr := DumpRT(oneKey(key, value))
+	if derr != nil {
+		return nil, ErrNoSplice
+	}
+	all := strings.SplitAfter(text, "\n")
+	if all[len(all)-1] == "" {
+		all = all[:len(all)-1]
+	}
+	start := lines[idx] - 1
+	end := len(all)
+	if idx+1 < len(lines) {
+		end = lines[idx+1] - 1
+	}
+	if start < 0 || start >= end || end > len(all) {
+		return nil, ErrNoSplice
+	}
+	// Blank and comment lines closing the span sit between entries; they stay.
+	keep := end
+	for keep > start+1 && keptBetween(all[keep-1]) {
+		keep--
+	}
+	var b strings.Builder
+	for _, l := range all[:start] {
+		b.WriteString(l)
+	}
+	b.WriteString(entry) // DumpRT ends every document with a newline
+	for _, l := range all[keep:] {
+		b.WriteString(l)
+	}
+	out := b.String()
+	check, checkNonMap, cerr := LoadDocMap(out, mode)
+	if cerr != nil || checkNonMap != nil || !equalValue(check, want) {
+		return nil, ErrNoSplice
+	}
+	return []byte(out), nil
+}
+
+// topLevelKeyLines returns the 1-based line of each root mapping key, in
+// order. ok is false unless the single document's root is a block mapping
+// whose keys all start at column 1.
+func topLevelKeyLines(src []byte) ([]int, bool) {
+	f, err := parser.ParseBytes(src, 0)
+	if err != nil || len(f.Docs) != 1 || f.Docs[0].Body == nil {
+		return nil, false
+	}
+	var pairs []*ast.MappingValueNode
+	switch x := f.Docs[0].Body.(type) {
+	case *ast.MappingNode:
+		if x.IsFlowStyle {
+			return nil, false
+		}
+		pairs = x.Values
+	case *ast.MappingValueNode:
+		pairs = []*ast.MappingValueNode{x}
+	default:
+		return nil, false
+	}
+	out := make([]int, 0, len(pairs))
+	for _, mv := range pairs {
+		if mv.Key == nil {
+			return nil, false
+		}
+		tk := mv.Key.GetToken()
+		if tk == nil || tk.Position == nil || tk.Position.Column != 1 {
+			return nil, false
+		}
+		out = append(out, tk.Position.Line)
+	}
+	return out, true
+}
+
+// keptBetween reports a line that belongs to no entry: blank, a comment, or a
+// document marker.
+func keptBetween(line string) bool {
+	t := strings.TrimSpace(line)
+	return t == "" || strings.HasPrefix(t, "#") || t == "..." || t == "---"
+}
+
+func equalStrings(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}

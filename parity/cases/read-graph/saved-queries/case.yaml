@@ -1,0 +1,38 @@
+# `query --save-as <name>` saves the query's filters to .khub/queries.yaml
+# (tracked, so they travel with the corpus) and prints the query's rows, with
+# one stderr note saying what the save did; `khub run <name>` replays them
+# with the same rows. The query runs first, so a filter set it refuses
+# (unknown type) is never saved. A repeated save of the same definition is a
+# no-op; a different definition under a taken name refuses until --replace.
+# A name is lowercase, starting with a letter, and not a word YAML reads as a
+# boolean or null. --replace without --save-as
+# is a usage error, as is `run` with no name; an unknown name lists the saved
+# ones, and a hand-edited definition of the wrong kind refuses by key. A saved
+# query whose type the schema no longer declares refuses naming itself and the
+# fix. A save appended to a hand-edited file keeps its comment, and a replace
+# re-emits only its own entry (tree manifest); a replace that would break an
+# alias elsewhere refuses and writes nothing.
+steps:
+- argv: ["init", "build-hub", ".", "--no-wire"]
+- argv: ["add", "component", "--title", "Island", "--kind", "external", "--tags", "infra, vendor"]
+- argv: ["add", "component", "--title", "Used", "--kind", "service", "--draft"]
+- argv: ["query", "--type", "component", "--kind", "external", "--save-as", "external"]
+- argv: ["run", "external"]
+- argv: ["query", "--type", "component", "--kind", "external", "--save-as", "external"]
+- argv: ["query", "--type", "component", "--kind", "service", "--save-as", "external"]
+- argv: ["query", "--type", "component", "--kind", "service", "--draft", "--limit", "5", "--save-as", "external", "--replace"]
+- argv: ["run", "external", "--format", "ids"]
+- argv: ["query", "--type", "nope", "--save-as", "nope"]
+- argv: ["query", "--tag", "infra", "--save-as", "Infra"]
+- argv: ["query", "--replace"]
+- argv: ["run"]
+- argv: ["run", "nope"]
+- sh: 'printf "# kept by hand\nbroken:\n  limit: many\n" >> .khub/queries.yaml'
+- argv: ["run", "broken"]
+- argv: ["query", "--tag", "infra", "--active", "--save-as", "infra"]
+- argv: ["run", "infra", "--format", "json"]
+- argv: ["query", "--tag", "infra", "--save-as", "null"]
+- sh: 'printf "gone:\n  type: retired\naliased: &shared\n  tag: infra\nalias-of: *shared\n" >> .khub/queries.yaml'
+- argv: ["run", "gone"]
+- argv: ["query", "--tag", "vendor", "--save-as", "aliased", "--replace"]
+- argv: ["query", "--tag", "vendor", "--save-as", "infra", "--replace"]

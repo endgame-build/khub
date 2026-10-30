@@ -76,6 +76,12 @@ commands:
   - '--active'
   - '--limit'
   - '--format'
+  - '--save-as'
+  - '--replace'
+- name: 'run'
+  params:
+  - 'arg:name'
+  - '--format'
 - name: 'search'
   params:
   - 'arg:text'
@@ -180,6 +186,8 @@ error_codes:
 - illegal_predicate
 - internal_path_error
 - inbound_edge_refusal
+- invalid_query_name
+- invalid_saved_query
 - invalid_schema
 - invalid_snapshot
 - invalid_slug
@@ -199,6 +207,8 @@ error_codes:
 - preset_mismatch
 - raw_linkml_smuggled
 - referential_integrity
+- saved_query_exists
+- saved_query_unspliceable
 - schema_error
 - self_link
 - singleton_exists
@@ -212,6 +222,7 @@ error_codes:
 - unknown_predicate
 - unknown_preset
 - unknown_relation_target
+- unknown_saved_query
 - unknown_type
 format_specials:
 - json

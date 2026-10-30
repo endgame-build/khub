@@ -2,6 +2,19 @@
 
 Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); khub is pre-release.
 
+## [Unreleased]
+
+### Added
+
+- **Saved queries.** `khub query … --save-as <name>` saves the query's filters
+  to `.khub/queries.yaml` (tracked in git, hand-editable) and `khub run <name>`
+  replays them with the same rows. A different definition under a taken name
+  refuses (`saved_query_exists`) until `--replace`; saving the same one again
+  is a no-op. A save rewrites only its own entry, so comments on the rest of
+  the file survive; one that cannot refuses (`saved_query_unspliceable`). New
+  refusal codes: `invalid_query_name`, `saved_query_exists`,
+  `saved_query_unspliceable`, `unknown_saved_query`, `invalid_saved_query`.
+
 ## [0.30.0] — 2026-10-28
 
 Storage can now follow a hub's existing nesting, relations can point to files

@@ -13,5 +13,7 @@ Options:
   --active  Exclude drafts.
   --limit <int>  Cap the returned set.
   --format <str>  text (Rich table on a TTY), json, or ids. [default: text]
+  --save-as <str>  Also save these filters under a name for `khub run <name>`.
+  --replace  Let --save-as overwrite a different saved query of that name.
   --help  Show this message and exit.
 

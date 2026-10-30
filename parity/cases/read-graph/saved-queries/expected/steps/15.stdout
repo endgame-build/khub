@@ -1,0 +1,1 @@
+{"error": {"code": "invalid_saved_query", "message": "Saved query 'broken' in .khub/queries.yaml: 'limit' must be an integer"}}

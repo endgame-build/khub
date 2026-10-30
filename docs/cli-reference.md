@@ -25,6 +25,7 @@ Commands:
   unlink  Remove a relation: khub unlink initech-pov partner northwind.
   remove  Remove an entity, guarded by inbound edges: khub remove old-fragment [--force].
   query  Filter entities: khub query --type opportunity --stage prospect --format json.
+  run  Run a saved query: khub run open-prospects --format json.
   search  Full-text search: khub search modernization --type transcript --format json.
   neighbors  Walk one-hop neighbors: khub neighbors initech-pov [--predicate client --in].
   impact  Compute blast radius: khub impact node-a [--reverse] [--predicate <p>].
@@ -239,6 +240,25 @@ Options:
   --draft  Isolate drafts.
   --active  Exclude drafts.
   --limit <int>  Cap the returned set.
+  --format <str>  text (Rich table on a TTY), json, or ids. [default: text]
+  --save-as <str>  Also save these filters under a name for `khub run <name>`.
+  --replace  Let --save-as overwrite a different saved query of that name.
+  --help  Show this message and exit.
+
+```
+
+## khub run
+
+```console
+$ khub run --help
+Usage: khub run [OPTIONS] {name}
+
+Run a saved query: khub run open-prospects --format json.
+
+Arguments:
+  name <str>  A name saved with khub query --save-as. [required]
+
+Options:
   --format <str>  text (Rich table on a TTY), json, or ids. [default: text]
   --help  Show this message and exit.
 

@@ -276,3 +276,20 @@ test('control characters in entity text never reach a row or a line', () => {
     '✗ lookup_error: No [1m entity',
   )
 })
+
+test('run is a query by name: the head names the saved query, the rows are its entities', () => {
+  expect(say('khub run components --format json', F.run_components)).toEqual({
+    head: 'khub run components',
+    line: '2 entities',
+    tone: 'plain',
+  })
+  expect(list('khub run components --format json', F.run_components)).toEqual(
+    list('khub query --type component --format json', F.query_components),
+  )
+  expect(say('khub query --type component --save-as components --format json', F.query_saved).line).toBe('2 entities')
+  expect(say('khub run nope --format json', F.run_missing)).toEqual({
+    head: 'khub run nope',
+    line: "✗ unknown_saved_query: No saved query 'nope' in .khub/queries.yaml. Saved queries: components",
+    tone: 'bad',
+  })
+})

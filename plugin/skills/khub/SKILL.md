@@ -24,6 +24,7 @@ The schema lives at `.khub/ontology.yaml` (the domain model) with `.khub/policy.
 ## Retrieve
 
 - `khub query --type <t> [--<field> <v>] [--tag <t>] [--has <pred>] [--missing <pred>] --format json` — filter by frontmatter; `--missing` surfaces gaps.
+- `khub run <name> --format json` — replay a saved query (same rows as `query`). Save one with `khub query … --save-as <name>`; a name already holding a different definition refuses until `--replace`. They live in `.khub/queries.yaml`, tracked in git; an unknown name lists the saved ones.
 - `khub get <id>... --edges --format json` — one ID returns one object; multiple IDs return an all-or-nothing array in argument order, duplicates included. Raw output accepts one ID only.
 - `khub neighbors <id> --format json` — one-hop adjacency.
 - `khub impact <id> --format json` — transitive closure over a predicate (blast radius).

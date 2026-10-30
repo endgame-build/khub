@@ -183,7 +183,7 @@ test. It gives a workspace at a fixed root and khub answering from the fixtures.
 | `--version` | the version number in the printed text |
 | `schema` | `provenance.{preset, version}`, `types[].{name, layout, format, path}` |
 | `check` | `passed`, `strict`, every array-valued bucket, and `id`, `path` or `alias` of a finding |
-| `query`, `stale` | per row `id`, `title`, `draft`, `orphan`, `stale` |
+| `query`, `run`, `stale` | per row `id`, `title`, `draft`, `orphan`, `stale` |
 | `add`, `edit`, `remove` | `id`, `draft` |
 | `link`, `unlink` | `id`, `slug`, `predicate`, `target`, `changed` |
 | `get` | `id`, `title` or `name` at the top or in `frontmatter`, `edges` |
