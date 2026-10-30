@@ -2,6 +2,20 @@
 
 Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); khub is pre-release.
 
+## [Unreleased]
+
+### Changed
+
+- The `khub` agent skill (plugin 0.1.5) is decision guidance, not a fixed
+  pipeline: a table of which verb answers which question and what to call
+  next from its answer; retrieval exact first (`get`, `query`), then the graph
+  (`neighbors`, `impact`, `history`), then `search`, then the body, stepping
+  only on a named gap; a write convention (search before `add`, `edit` over a
+  second entity, inferred facts as `--draft`, never overwrite a human's value,
+  claim a write only on exit 0); and the write loop as generate, validate,
+  iterate. Reinstall or update the plugin, or rerun `npx skills add
+  endgame-build/khub`, to pick it up.
+
 ## [0.30.0] — 2026-10-28
 
 Storage can now follow a hub's existing nesting, relations can point to files
