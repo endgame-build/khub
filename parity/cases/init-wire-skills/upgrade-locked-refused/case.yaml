@@ -1,0 +1,7 @@
+# A refused upgrade changes nothing in the workspace: the tree manifest is
+# taken right after a real run that locked_removed refused. Twin case:
+# init-wire-skills/upgrade-locked walks the unlock path.
+steps:
+- argv: ["init", "build-hub", ".", "--no-wire"]
+- sh: "printf '    ritual:\\n      when: a team ritual is set up\\n' >> .khub/ontology.yaml && printf '  ritual: { locked: true }\\n' >> .khub/policy.yaml"
+- argv: ["upgrade", "--format", "json"]

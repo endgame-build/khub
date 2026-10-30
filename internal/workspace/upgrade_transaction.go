@@ -54,6 +54,14 @@ func prepareUpgrade(root string, opt UpgradeOptions) (*UpgradeResult, error) {
 	// Replacement upgrades can repair invalid current schemas. --no-schema
 	// still validates the preserved schema when preparing the candidate below.
 	old, _ := introspect.LoadSchema(root)
+	// A current schema that does not resolve still holds its locks: read them
+	// from the raw layer files, so one error cannot switch every lock off.
+	locks := old
+	if locks == nil && !opt.NoSchema {
+		if locks, err = rawLocks(root); err != nil {
+			return nil, err
+		}
+	}
 	candidate, err := os.MkdirTemp("", "khub-upgrade-")
 	if err != nil {
 		return nil, err
@@ -91,6 +99,13 @@ func prepareUpgrade(root string, opt UpgradeOptions) (*UpgradeResult, error) {
 			if _, ok := resolved.Types.Get(name); !ok {
 				result.RemovedTypes = append(result.RemovedTypes, name)
 			}
+		}
+	}
+	// Refused before anything is published, and on a dry run too: the
+	// preview answers what the real run would.
+	if locks != nil {
+		if blocked, all := lockedRemovals(locks, resolved, opt.Unlock); len(blocked) > 0 {
+			return nil, errs.LockedRemoved(blocked, all)
 		}
 	}
 	writes, newDirs, err := upgradeDiff(candidate, before, dirs)

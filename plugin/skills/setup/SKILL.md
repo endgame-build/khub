@@ -88,7 +88,10 @@ publication is transactional and writes the version last; wire and index
 failures are reported after it. `khub upgrade --no-schema`
 keeps the workspace's own schema and reports what the shipped one has that it
 does not. An `upgrade_recovery_failed` error names a retained journal under
-`.khub/generated/`; inspect it manually because khub does not auto-recover after a crash.
+`.khub/generated/`; inspect it manually because khub does not auto-recover after a crash. A
+`locked_removed` refusal means the new preset drops a type or predicate the
+schema locks; nothing was written. Ask the workspace owner before rerunning
+with the `--unlock` flags it names.
 
 **opencode** asks before every shell command unless told otherwise. Allow khub
 outright — the catch-all goes FIRST, opencode takes the last match:

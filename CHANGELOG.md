@@ -2,6 +2,21 @@
 
 Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); khub is pre-release.
 
+## [Unreleased]
+
+### Added
+
+- **Locked types and predicates.** Policy `locked: true` and
+  `locked_relations: [<predicate>, …]` mark load-bearing schema elements.
+  `khub upgrade` refuses a schema that removes one (`locked_removed`, exit 2,
+  dry run included, nothing written) unless the run passes
+  `--unlock <type>` or `--unlock <type>.<predicate>` for each. A current
+  schema that does not resolve keeps its locks; one too broken to read them
+  from is `locks_unreadable`. Upgrade replaces `policy.yaml`, so a lock the
+  workspace added lasts until the next successful upgrade.
+- The khub skill (plugin 0.1.5) tells an agent that `--unlock` is the
+  workspace owner's decision, to ask for rather than pass on its own.
+
 ## [0.30.0] — 2026-10-28
 
 Storage can now follow a hub's existing nesting, relations can point to files

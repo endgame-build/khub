@@ -1,0 +1,1 @@
+{"error": {"code": "locked_removed", "message": "Upgrade would remove locked schema elements: repo.mirrors. The upgrade was not applied; rerun it with --unlock repo.mirrors --unlock ritual to allow the removal"}}

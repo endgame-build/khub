@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -137,6 +138,12 @@ type TypeDecl struct {
 	// workspace file by its path. One that is an entity's file is an edge to
 	// it; any other existing file satisfies an `any` relation without an edge.
 	PathRefs bool
+	// Policy `locked: true`: the type is load-bearing, and `khub upgrade`
+	// refuses a schema that drops it unless the run names it in --unlock.
+	Locked bool
+	// Policy `locked_relations`: the type's own predicates held the same way,
+	// in authored order. Resolve refuses a name the type does not declare.
+	LockedRelations []string
 	// The declared template stem (.khub/templates/<name>.yaml). nil = the
 	// standing convention (the type's own name); see TemplateOff for the
 	// explicit opt-out. A NAME, never a path: templates live in one directory,
@@ -499,7 +506,15 @@ func applyPolicyDecl(m *omap.Map, td *TypeDecl, loc []string, c *vocabCollector)
 	td.Required = takeBool(m, "required", loc, c)
 	td.Orphan = takeBool(m, "orphan", loc, c)
 	td.PathRefs = takeBool(m, "path_refs", loc, c)
-	addExtras(m, loc, c, "required", "orphan", "path_refs")
+	td.Locked = takeBool(m, "locked", loc, c)
+	if lv, has := m.Get("locked_relations"); has && lv != nil {
+		for _, rn := range takeStrList(lv, at(loc, "locked_relations"), c) {
+			if !slices.Contains(td.LockedRelations, rn) {
+				td.LockedRelations = append(td.LockedRelations, rn)
+			}
+		}
+	}
+	addExtras(m, loc, c, "required", "orphan", "path_refs", "locked", "locked_relations")
 }
 
 // applyStorageDecl folds a type's STORAGE delta — where and how its bytes

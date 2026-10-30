@@ -3,7 +3,10 @@ package schema
 // Ports tests/test_resolve_vocab.py — STORY-SCH-001: declare a type in khub
 // vocabulary (vocabulary parsing). TS-SCH-001-01/02, U01–U04.
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestWellFormedTypeResolves(t *testing.T) {
 	// TS-SCH-001-01 / U01 / U02: attributes, enums, typed relations, storage
@@ -159,5 +162,34 @@ storage:
 	}
 	if typeOf(t, schema, "client").Orphan {
 		t.Error("client.Orphan = true, want false (default: swept like anything else)")
+	}
+}
+
+// Policy `locked` and `locked_relations` resolve onto the type, a repeated
+// predicate once; a
+// locked_relations name the type does not declare itself — a base edge
+// included — is a schema_error, never a silently inert lock.
+func TestPolicyLocksResolve(t *testing.T) {
+	ontology := `
+ontology:
+  entities:
+    note:
+      relations:
+        cites: { to: note, many: true }
+`
+	schema := resolveWithCore(t, ontology, "policy:\n  note: { locked: true, locked_relations: [cites, cites] }\n")
+	note := typeOf(t, schema, "note")
+	if !note.Locked || !eqStrings(note.LockedRelations, []string{"cites"}) {
+		t.Fatalf("locked = %v, relations = %v", note.Locked, note.LockedRelations)
+	}
+	if plain := typeOf(t, resolveWithCore(t, ontology), "note"); plain.Locked || plain.LockedRelations != nil {
+		t.Fatalf("unlocked type resolved as locked: %+v", plain)
+	}
+	for _, name := range []string{"nope", "related"} {
+		_, err := ResolveWith(loadYAMLDoc(t, coreBase), writeSchemaFiles(t, ontology,
+			"policy:\n  note: { locked_relations: ["+name+"] }\n"))
+		if err == nil || !strings.Contains(err.Error(), "note.locked_relations names '"+name+"'") {
+			t.Fatalf("%s: err = %v", name, err)
+		}
 	}
 }

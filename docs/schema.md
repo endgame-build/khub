@@ -7,7 +7,7 @@ A schema is authored in khub's own YAML vocabulary, split across three layer fil
 | File | Layer | Carries |
 |---|---|---|
 | `ontology.yaml` | the domain | per-type `attributes`, `relations`, `when` |
-| `policy.yaml` | this workspace's gates | `required`, `orphan`, `path_refs` |
+| `policy.yaml` | this workspace's gates | `required`, `orphan`, `path_refs`, `locked`, `locked_relations` |
 | `storage.yaml` | where bytes land | `layout`, `path`, `format`, `id_prefix`, `id_date`, `id_ordinal`, `template` |
 
 `khub init` copies a preset's three files into `.khub/`; you edit them directly, and they carry no runtime tie to the hub. The three reunite at load time into one resolved contract every command reads — the layers merge on their **top-level keys** (`ontology:` / `policy:` / `storage:`), never on filenames, so one file carrying all three blocks resolves identically (useful for fixtures; three files is the canonical layout). Ontology declares which types exist; policy and storage only annotate them, and an entry for a type ontology never declared is a resolve error. See [`concepts.md`](concepts.md) for why the schema is the contract.
@@ -112,11 +112,12 @@ A trailing `/` matches directories only, and a matched directory excludes everyt
 
 ## Workspace gates (`policy.yaml`)
 
-Per type, keyed by the type's name — what `check` demands of it in *this* workspace.
+Per type, keyed by the type's name — what `check` demands of it in *this* workspace, and what `upgrade` may not take away.
 
 - `required` — singleton-only: `check` reports a missing required singleton (e.g. a workspace without its `prd.md`).
 - `orphan` — `orphan: true` declares that edge-less is this type's *expected* state, so `check` stops reporting its entities as orphans, `--strict` stops failing on them, `query --orphan` stops flagging them and the `status` count stops including them. Default `false`. Use it for a narrative root nothing points at by design: build-hub declares it on its two narrative singletons (`prd`, `arc42`), because every stored edge in that preset points *up* the durability ladder and the documents sit above its top — so orphan-ness there is a finding no authoring could ever close, and without the flag `check --strict` could not go green on a correct workspace. Unlike `required` this is **not** singleton-only: any type whose members are legitimately unwired may declare it, and a singleton that *does* carry relations is still swept. It removes no signal — a missing required edge is still reported by required-completeness, which names the field.
 - `path_refs` — `path_refs: true` lets this type's relation values name a workspace file by its path (`sources: [system/prd.md]`), for a corpus whose documents cite each other by path. A value that resolves as an id still does; one that does not is read as a workspace-relative path, an `#anchor` and a leading `./` dropped. If it is an entity's file, it is an edge to that entity, subject to the relation's targets. Otherwise, on a `to: any` relation, any existing file or directory satisfies it without an edge (`manifest.yaml`, `docs/guide.md`). A path to nothing dangles, and a write naming one is refused, as for an id.
+- `locked` / `locked_relations` — load-bearing schema elements. `locked: true` holds the type; `locked_relations: [<predicate>, …]` holds predicates the type itself declares (a name it does not declare, a base edge included, is a `schema_error`). `khub upgrade` refuses a new schema that removes a locked element (`locked_removed`, exit 2, nothing written) unless the run names it: `--unlock <type>` or `--unlock <type>.<predicate>`. A removed type's locked predicates need their own unlock, so every locked element a migration drops is named. Only removal is held — a kept element whose facets change, or which the new release no longer locks, passes. An `--unlock` name that matches nothing is ignored. The lock reads the schema being replaced, so a preset marks what it ships as locked and a workspace may lock its own additions — but upgrade replaces `policy.yaml` with the preset's, so a workspace-authored lock holds for the next upgrade only, and is gone after it (kept in `policy.yaml.bak`) unless the preset ships it too or the upgrade runs with `--no-schema`. A current schema that does not resolve keeps its locks: they are read leniently from the raw layer files, and a file too broken to parse that mentions `locked` refuses the upgrade (`locks_unreadable`). A hand edit of the layer files is not a migration and is never refused.
 
 ## Capture cues (`when`)
 

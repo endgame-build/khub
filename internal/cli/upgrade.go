@@ -23,6 +23,7 @@ import (
 func registerUpgrade(root *cobra.Command) {
 	var noSchema, noWire, dryRun bool
 	var format string
+	var unlock []string
 	cmd := newCmd("upgrade",
 		"Refresh an existing workspace: the shipped schema and templates, new scaffolds, the wire block.",
 		"", func(cmd *cobra.Command, args []string) error {
@@ -71,7 +72,7 @@ func registerUpgrade(root *cobra.Command) {
 						}
 					}
 				}
-				opt := workspace.UpgradeOptions{NoSchema: noSchema, DryRun: dryRun}
+				opt := workspace.UpgradeOptions{NoSchema: noSchema, DryRun: dryRun, Unlock: unlock}
 				if dryRun {
 					opt.Preview = func(candidate string) error { runTails(candidate, false); return nil }
 				} else {
@@ -152,6 +153,8 @@ func registerUpgrade(root *cobra.Command) {
 		"Keep this workspace's .khub/ files — schema and templates — as they are; "+
 			"report what the shipped ontology has that they do not.")
 	cmd.Flags().BoolVar(&noWire, "no-wire", false, "Skip re-wiring CLAUDE.md and AGENTS.md.")
+	cmd.Flags().StringArrayVar(&unlock, "unlock", nil,
+		"Let the upgrade remove a locked type, or a locked predicate as type.predicate; repeatable.")
 	cmd.Flags().StringVar(&format, "format", "text",
 		"text confirmation (default); json emits every step's outcome.")
 	root.AddCommand(cmd)

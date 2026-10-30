@@ -179,6 +179,10 @@ type ResolvedType struct {
 	TemplateOff bool
 	// See TypeDecl.When: the moment to capture this type, in domain language.
 	When *string
+	// See TypeDecl.Locked / LockedRelations: what `khub upgrade` refuses to
+	// drop unless unlocked.
+	Locked          bool
+	LockedRelations []string
 }
 
 // Templated reports whether the type stores its entities by path template.

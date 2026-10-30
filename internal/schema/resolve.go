@@ -571,20 +571,29 @@ func resolveType(name string, decl *TypeDecl, base *BaseBlock, declared map[stri
 		rr, _ := relations.Get(rn)
 		rr.ByPath = decl.PathRefs
 	}
+	for _, rn := range decl.LockedRelations {
+		if !decl.Relations.Has(rn) {
+			return nil, errs.New("schema_error", fmt.Sprintf(
+				"%s.locked_relations names '%s', which is not a relation %s declares",
+				name, rn, name))
+		}
+	}
 	storage := StorageConfig{Layout: decl.Layout, Path: decl.Path, Fmt: decl.Format, Templates: decl.Templates}
 	return &ResolvedType{
-		Name:        name,
-		Storage:     storage,
-		Attributes:  attributes,
-		Relations:   relations,
-		Required:    decl.Required,
-		Orphan:      decl.Orphan,
-		IDPrefix:    idPrefixOf(decl.IDPrefix),
-		IDDate:      decl.IDDate,
-		IDOrdinal:   decl.IDOrdinal,
-		Template:    decl.Template,
-		TemplateOff: decl.TemplateOff,
-		When:        decl.When,
+		Name:            name,
+		Storage:         storage,
+		Attributes:      attributes,
+		Relations:       relations,
+		Required:        decl.Required,
+		Orphan:          decl.Orphan,
+		IDPrefix:        idPrefixOf(decl.IDPrefix),
+		IDDate:          decl.IDDate,
+		IDOrdinal:       decl.IDOrdinal,
+		Template:        decl.Template,
+		TemplateOff:     decl.TemplateOff,
+		When:            decl.When,
+		Locked:          decl.Locked,
+		LockedRelations: decl.LockedRelations,
 	}, nil
 }
 

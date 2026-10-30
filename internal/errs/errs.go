@@ -132,6 +132,39 @@ func NoWorkspace() *Located {
 	return &Located{Code: "no_workspace", Message: "No .khub workspace found. Run khub init <preset>"}
 }
 
+// LockedRemoved is `locked_removed`: an upgrade whose new schema drops a type
+// or predicate the current schema locks. blocked are the elements still locked
+// after --unlock, `type` or `type.predicate`; all is every locked element the
+// upgrade removes, so the flags the message spells are the whole run's, not
+// only the ones still missing.
+func LockedRemoved(blocked, all []string) *Located {
+	flags := make([]string, len(all))
+	for i, n := range all {
+		flags[i] = "--unlock " + n
+	}
+	return &Located{
+		Code: "locked_removed",
+		Message: fmt.Sprintf("Upgrade would remove locked schema elements: %s. The upgrade was not applied; "+
+			"rerun it with %s to allow the removal", strings.Join(blocked, ", "), strings.Join(flags, " ")),
+		Target: blocked[0],
+	}
+}
+
+// LocksUnreadable is `locks_unreadable`: the current schema does not parse
+// and the file that failed mentions a lock, so upgrade cannot tell what the
+// new schema would remove. Replacing the file would drop exactly what the
+// lock protects, so the call is refused until the file parses. cause is the
+// parse error, which already names the file.
+func LocksUnreadable(path, cause string) *Located {
+	path = filepath.ToSlash(path) // printed: khub shows every path with '/'
+	return &Located{
+		Code: "locks_unreadable",
+		Message: fmt.Sprintf("Cannot read the schema locks in %s, so the upgrade was not applied; "+
+			"fix the file so upgrade can tell which locked elements it would remove. %s", path, cause),
+		Target: path,
+	}
+}
+
 // NoPreset is the upgrade guard: a workspace whose config.yaml records no
 // preset has nothing to refresh from. Without it an upgrade would have to
 // guess which shipped preset to lay over the workspace's own schema.
