@@ -922,3 +922,84 @@ func TestIsEmptyDirRefusesAFile(t *testing.T) {
 		t.Fatalf("isEmptyDir(file) = %v, %v; want open/not-a-directory", empty, err)
 	}
 }
+
+// --- init --sample -------------------------------------------------------------
+
+func TestSampleCopiedVerbatimAndListed(t *testing.T) {
+	src := presetSource(t)
+	writeFile(t, filepath.Join(src, "note", "sample", "notes", "b.md"), "---\ntype: note\n---\nB\n")
+	writeFile(t, filepath.Join(src, "note", "sample", "notes", "a.md"), "---\ntype: note\n---\nA\n")
+	ws := filepath.Join(t.TempDir(), "ws")
+	res := mustInit(t, "note", ws, InitOptions{PresetSource: src, Sample: true})
+	if want := []string{"notes/a.md", "notes/b.md"}; !reflect.DeepEqual(res.SampleCreated, want) {
+		t.Fatalf("SampleCreated = %v, want %v", res.SampleCreated, want)
+	}
+	if got := readFile(t, filepath.Join(ws, "notes", "a.md")); got != "---\ntype: note\n---\nA\n" {
+		t.Fatalf("a.md = %q", got)
+	}
+}
+
+func TestSampleNeedsEmptyTarget(t *testing.T) {
+	// --force does not lift it: the sample is never mixed into existing files,
+	// a real corpus or a workspace whose own storage would scatter it.
+	src := presetSource(t)
+	writeFile(t, filepath.Join(src, "note", "sample", "notes", "a.md"), "---\ntype: note\n---\nsample\n")
+	ws := filepath.Join(t.TempDir(), "ws")
+	mustInit(t, "note", ws, InitOptions{PresetSource: src})
+	_, err := Init("note", ws, InitOptions{PresetSource: src, Sample: true, Force: true})
+	if l := located(t, err); l.Code != "sample_needs_empty_target" {
+		t.Fatalf("code = %s", l.Code)
+	}
+	if exists(filepath.Join(ws, "notes", "a.md")) {
+		t.Fatal("a refused --sample wrote a sample file")
+	}
+}
+
+func TestSampleRefusesPathsOutsideEntityTrees(t *testing.T) {
+	for _, tc := range []struct{ rel, why string }{
+		{".claude/settings.json", "a dot-prefixed path"},
+		{"notes/.git/config", "a dot-prefixed path"},
+		{"CLAUDE.md", "a file at the workspace root"},
+		{"elsewhere/x.md", "a path no type's storage declares"},
+	} {
+		t.Run(tc.rel, func(t *testing.T) {
+			src := presetSource(t)
+			writeFile(t, filepath.Join(src, "note", "sample", "notes", "a.md"), "---\ntype: note\n---\nA\n")
+			writeFile(t, filepath.Join(src, "note", "sample", filepath.FromSlash(tc.rel)), "planted\n")
+			ws := filepath.Join(t.TempDir(), "ws")
+			_, err := Init("note", ws, InitOptions{PresetSource: src, Sample: true})
+			l := located(t, err)
+			if l.Code != "unsafe_sample_path" || !strings.Contains(l.Message, tc.rel+" is "+tc.why) {
+				t.Fatalf("got %s: %s", l.Code, l.Message)
+			}
+			if exists(ws) {
+				t.Fatal("a refused sample wrote the target")
+			}
+		})
+	}
+}
+
+func TestNoSampleWithoutTheFlag(t *testing.T) {
+	src := presetSource(t)
+	writeFile(t, filepath.Join(src, "note", "sample", "notes", "a.md"), "---\ntype: note\n---\nA\n")
+	ws := filepath.Join(t.TempDir(), "ws")
+	res := mustInit(t, "note", ws, InitOptions{PresetSource: src})
+	if res.SampleCreated != nil || exists(filepath.Join(ws, "notes", "a.md")) {
+		t.Fatal("the sample was copied without --sample")
+	}
+}
+
+func TestSampleRefusedForPresetWithoutOne(t *testing.T) {
+	ws := filepath.Join(t.TempDir(), "ws")
+	_, err := Init("build-hub", ws, InitOptions{Sample: true})
+	l := located(t, err)
+	if l.Code != "no_sample" {
+		t.Fatalf("code = %s", l.Code)
+	}
+	if want := "Preset 'build-hub' ships no sample workspace. Presets with a sample: firm-ops"; l.Message != want {
+		t.Fatalf("message = %q", l.Message)
+	}
+	if exists(ws) {
+		t.Fatal("a refused --sample wrote the target")
+	}
+}

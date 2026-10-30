@@ -14,6 +14,7 @@ Options:
   --name <str>  Workspace name (default: the target dir name).
   --force  Scaffold into a non-empty target.
   --no-wire  Skip wiring the schema into the agent files.
+  --sample  Also copy in the preset's sample entities, seeded with one check finding per bucket.
   --format <str>  text confirmation (default); json emits resolved provenance. [default: text]
   --help  Show this message and exit.
 

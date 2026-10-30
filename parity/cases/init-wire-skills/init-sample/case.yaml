@@ -1,0 +1,16 @@
+# The firm-ops sample is seeded with exactly one finding per `check` bucket
+# (incomplete, orphans, dangling, strays, cycles) and nothing else. This case
+# pins that: if the sample drifts clean, or gains a second finding, the check
+# bytes move. The reads after it pin what the sample shows a new user.
+normalize:
+- cycles-canonical
+steps:
+- argv: ["init", "firm-ops", ".", "--sample", "--no-wire", "--format", "json"]
+- argv: ["check", "--format", "json"]
+- argv: ["query", "--format", "json"]
+- argv: ["neighbors", "acme-platform", "--format", "json"]
+- argv: ["impact", "acme-data-pipeline", "--format", "json"]
+- argv: ["impact", "acme", "--predicate", "client", "--reverse", "--format", "json"]
+# A re-run is refused even with --force: the sample only scaffolds into an
+# empty target, so it is never mixed into existing files.
+- argv: ["init", "firm-ops", ".", "--sample", "--force", "--no-wire", "--format", "json"]

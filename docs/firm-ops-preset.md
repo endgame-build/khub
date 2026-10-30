@@ -2,7 +2,7 @@
 
 **The operating graph of a consulting and delivery firm.** `firm-ops` models a firm as it runs: pipeline deals become delivery engagements, engagements generate meetings and transcripts, delivery yields case studies; and behind all of it sit the people, clients, and partnerships that carry the work.
 
-`khub init firm-ops ./my-hub` seeds a workspace from it. For a hands-on first run, start with [`getting-started.md`](getting-started.md); to author or extend the types yourself, see [`schema.md`](schema.md).
+`khub init firm-ops ./my-hub` seeds a workspace from it; add `--sample` for a populated one, fourteen entities seeded with one `check` finding in each bucket (see [See every finding at once](getting-started.md#see-every-finding-at-once)). For a hands-on first run, start with [`getting-started.md`](getting-started.md); to author or extend the types yourself, see [`schema.md`](schema.md).
 
 Preset version **0.3.0**. Nine entity types. Fourteen relation predicates: ten declared here, four inherited from the core base. Ids are bare slugs of `name` (opportunity, person, client) or `title` (the rest) — no prefix, no date, no ordinal — and every type requires the one it mints from; a repeated one is refused (`pass --id <slug>`).
 

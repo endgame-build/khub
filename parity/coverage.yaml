@@ -15,6 +15,7 @@ commands:
   - '--name'
   - '--force'
   - '--no-wire'
+  - '--sample'
   - '--format'
 - name: 'upgrade'
   params:
@@ -190,6 +191,7 @@ error_codes:
 # split — LoadSchema always supplies the embedded base as the layered fallback,
 # and the legacy shape that could still trip it is deleted with legacy.go.
 - no_preset
+- no_sample
 - no_schema_snapshot
 - no_slug_source
 - no_workspace
@@ -199,6 +201,7 @@ error_codes:
 - preset_mismatch
 - raw_linkml_smuggled
 - referential_integrity
+- sample_needs_empty_target
 - schema_error
 - self_link
 - singleton_exists
@@ -212,6 +215,7 @@ error_codes:
 - unknown_predicate
 - unknown_preset
 - unknown_relation_target
+- unsafe_sample_path
 - unknown_type
 format_specials:
 - json

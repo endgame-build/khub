@@ -117,6 +117,44 @@ func TargetNotEmpty(path string) *Located {
 	}
 }
 
+// NoSample is `no_sample`: `init --sample` for a preset that ships no sample
+// workspace; the message lists the presets that do.
+func NoSample(name string, withSample []string) *Located {
+	offer := "No preset ships one"
+	if len(withSample) > 0 {
+		offer = "Presets with a sample: " + strings.Join(withSample, ", ")
+	}
+	return &Located{
+		Code:    "no_sample",
+		Message: fmt.Sprintf("Preset '%s' ships no sample workspace. %s", name, offer),
+		Target:  name,
+	}
+}
+
+// SampleNeedsEmptyTarget is `sample_needs_empty_target`: `init --sample` into
+// a directory that already holds files. --force does not lift it: the sample
+// plants check findings and is never mixed into existing data.
+func SampleNeedsEmptyTarget(path, preset string) *Located {
+	path = filepath.ToSlash(path)
+	return &Located{
+		Code: "sample_needs_empty_target",
+		Message: fmt.Sprintf("Target %s is not empty. --sample plants check findings, so it only "+
+			"scaffolds into a new or empty directory: khub init %s <new-dir> --sample", path, preset),
+		Target: path,
+	}
+}
+
+// UnsafeSamplePath is `unsafe_sample_path`: a preset's sample holds a file
+// that would land outside the entity trees; nothing is written.
+func UnsafeSamplePath(preset, rel, why string) *Located {
+	return &Located{
+		Code: "unsafe_sample_path",
+		Message: fmt.Sprintf("Preset '%s' sample file %s is %s. A sample may only hold files "+
+			"inside the storage paths its schema declares; nothing was written", preset, rel, why),
+		Target: rel,
+	}
+}
+
 // UnknownType is `unknown_type`: a type the resolved schema does not declare.
 func UnknownType(name, preset string, known []string) *Located {
 	return &Located{

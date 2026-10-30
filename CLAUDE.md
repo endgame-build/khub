@@ -153,7 +153,8 @@ See `.claude/rules/yaml.md`.
 `presets/core/ontology.yaml` (the `base` block — embedded, supplied to every
 resolve, never copied into a workspace) + one preset DIRECTORY per domain
 (`<preset>/{ontology,policy,storage}.yaml` + optional
-`<preset>/templates/*.yaml` body templates). `khub init` copies a preset's three
+`<preset>/templates/*.yaml` body templates + an optional `<preset>/sample/`
+workspace that `khub init --sample` copies in). `khub init` copies a preset's three
 layer files into an engagement's `.khub/` and the templates to
 `.khub/templates/`. The tree is embedded into the binary by `embed.go` at the
 module root (a `//go:embed` pattern cannot contain `..`, so the embed cannot live

@@ -1,0 +1,5 @@
+active-but-incomplete opportunity/globex-data-audit: missing owner
+dangling edge project/acme-data-pipeline: team -> 'dana-cruz' does not resolve
+orphan person/chen-li
+stray file meetings/agenda-draft.md
+cycle project/acme-data-pipeline -> project/acme-platform

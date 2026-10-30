@@ -1,0 +1,1 @@
+[{"id": "client/acme", "type": "client", "slug": "acme", "depth": 0}, {"id": "opportunity/acme-platform-rebuild", "type": "opportunity", "slug": "acme-platform-rebuild", "depth": 1}, {"id": "project/acme-data-pipeline", "type": "project", "slug": "acme-data-pipeline", "depth": 1}, {"id": "project/acme-platform", "type": "project", "slug": "acme-platform", "depth": 1}]

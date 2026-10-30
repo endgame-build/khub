@@ -305,6 +305,28 @@ Graph check passed
 
 That is the division of labor. `validate` judges one entity's well-formedness; `check` judges the whole graph: relations resolve, required fields are filled across the active set, no strays, no cycles. Run `validate` as you write and `check` before you commit.
 
+## See every finding at once
+
+A young workspace rarely has problems, so `check` can look like it does nothing. The `firm-ops` preset ships a sample to show what it catches: fourteen entities around Acme, Globex and Initech, each finding planted on purpose.
+
+```bash
+khub init firm-ops ./sample-hub --sample
+cd sample-hub
+khub check
+```
+
+```text
+active-but-incomplete opportunity/globex-data-audit: missing owner
+dangling edge project/acme-data-pipeline: team -> 'dana-cruz' does not resolve
+orphan person/chen-li
+stray file meetings/agenda-draft.md
+cycle project/acme-data-pipeline -> project/acme-platform
+```
+
+One finding per bucket: a published deal nobody owns, a team member whose person file is gone, a new hire on no engagement, a scratch file among the meetings, and two projects that each wait on the other. The body of each file involved says why it is there. The clean entities around them give `khub query`, `khub neighbors acme-platform` and `khub impact acme-data-pipeline` something to read. Fix the findings one at a time and watch `check` pass.
+
+The sample's dates are fixed, so after the workspace's `stale_days` its entities read as stale too. `--sample` only scaffolds into a new or empty directory, so its planted findings never land in a workspace you already use. A preset without a sample (`build-hub`, today) refuses `--sample` with `no_sample`.
+
 ## Next steps
 
 - [`cli.md`](cli.md) — the full command reference and JSON contracts.

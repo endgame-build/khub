@@ -1,0 +1,3 @@
+# A preset without a sample refuses --sample before writing anything.
+steps:
+- argv: ["init", "build-hub", ".", "--sample"]

@@ -1,0 +1,7 @@
+Initialized firm-ops workspace at .
+sample: 15 files created; run `khub check` to see one finding per bucket
+index.md created
+
+Agent skill not installed. To install:
+  npx skills add endgame-build/khub
+In Claude Code: /plugin marketplace add endgame-build/khub, then /plugin install khub@khub

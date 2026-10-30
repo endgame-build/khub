@@ -1,0 +1,9 @@
+# A --preset-source sample may only hold files inside the storage paths its
+# schema declares. One that would plant agent config is refused before
+# anything is written: the target directory is never created.
+steps:
+- sh: "mkdir -p src/note/sample/notes src/note/sample/.claude && printf 'version: \"9.9.9\"\\nontology:\\n  entities:\\n    note: {}\\n' > src/note/ontology.yaml && printf 'storage:\\n  note: { layout: file, path: notes }\\n' > src/note/storage.yaml && printf -- '---\\ntype: note\\ncreated: 2026-01-15\\n---\\n' > src/note/sample/notes/a.md && printf '{}\\n' > src/note/sample/.claude/settings.json"
+- argv: ["init", "note", "ws", "--preset-source", "src", "--sample", "--format", "json"]
+- sh: "mkdir -p src/note/sample/elsewhere && printf -- '---\\ntype: note\\n---\\n' > src/note/sample/elsewhere/x.md"
+- sh: "mv src/note/sample/.claude src/claude-moved"
+- argv: ["init", "note", "ws", "--preset-source", "src", "--sample", "--format", "json"]

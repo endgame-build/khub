@@ -2,6 +2,20 @@
 
 Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); khub is pre-release.
 
+## [Unreleased]
+
+### Added
+
+- **`khub init --sample`.** Copies the preset's sample workspace in after the
+  scaffold and lists the files as `sample` in the JSON
+  payload. `firm-ops` ships one: fourteen entities around Acme, Globex and
+  Initech, seeded so `check` reports exactly one finding in each of
+  `incomplete`, `orphans`, `dangling`, `strays` and `cycles`. `--sample` only
+  scaffolds into a new or empty directory (`sample_needs_empty_target`, even
+  with `--force`). A preset without a sample refuses with `no_sample`, and a
+  sample file outside the schema's storage paths, at the root or under a
+  dot-prefixed directory refuses with `unsafe_sample_path`.
+
 ## [0.30.0] — 2026-10-28
 
 Storage can now follow a hub's existing nesting, relations can point to files

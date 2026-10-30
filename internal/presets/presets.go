@@ -5,7 +5,8 @@
 //
 // A preset is a DIRECTORY: <name>/ontology.yaml (the domain model, which also
 // declares the preset), optional <name>/policy.yaml and <name>/storage.yaml,
-// and an optional <name>/templates/*.yaml. core/ (the base block) is never
+// an optional <name>/templates/*.yaml, and an optional <name>/sample/ tree of
+// entity files that `init --sample` copies in. core/ (the base block) is never
 // taken from a --preset-source and is never an installable preset; it always
 // comes from the packaged tree, supplied to every resolve by LoadSchema.
 package presets
@@ -156,4 +157,49 @@ func Templates(name string, source fs.FS) []string {
 	}
 	sort.Strings(matches)
 	return matches
+}
+
+// SampleDir is the per-preset sample workspace, relative to the preset dir:
+// entity files at the paths the preset's storage layer puts them, which
+// `init --sample` copies into the new workspace.
+const SampleDir = "sample"
+
+// HasSample reports whether the preset ships a sample/ directory.
+func HasSample(name string, source fs.FS) bool {
+	fi, err := fs.Stat(source, path.Join(name, SampleDir))
+	return err == nil && fi.IsDir()
+}
+
+// WithSample lists the presets in source that ship a sample, sorted — what a
+// refused `init --sample` offers instead.
+func WithSample(source fs.FS) []string {
+	out := []string{}
+	for _, name := range Known(source) {
+		if HasSample(name, source) {
+			out = append(out, name)
+		}
+	}
+	return out
+}
+
+// SampleFiles lists a preset's sample files as paths relative to its sample/
+// directory, in lexical walk order. Only regular files are listed: a symlink
+// or other special entry in a --preset-source sample is skipped, never
+// followed.
+func SampleFiles(name string, source fs.FS) ([]string, error) {
+	root := path.Join(name, SampleDir)
+	out := []string{}
+	err := fs.WalkDir(source, root, func(p string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.Type().IsRegular() {
+			out = append(out, p[len(root)+1:])
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
 }

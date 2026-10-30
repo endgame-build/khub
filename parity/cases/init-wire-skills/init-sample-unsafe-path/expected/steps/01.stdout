@@ -1,0 +1,1 @@
+{"error": {"code": "unsafe_sample_path", "message": "Preset 'note' sample file .claude/settings.json is a dot-prefixed path. A sample may only hold files inside the storage paths its schema declares; nothing was written"}}

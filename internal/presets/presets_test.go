@@ -9,6 +9,7 @@ import (
 	"errors"
 	"io/fs"
 	"os"
+	"path"
 	"path/filepath"
 	"reflect"
 	"sort"
@@ -625,5 +626,51 @@ func TestAliasDoesNotShadowAUserDirectory(t *testing.T) {
 	}
 	if k := Known(src); !reflect.DeepEqual(k, []string{"build-lite"}) {
 		t.Errorf("Known = %v", k)
+	}
+}
+
+// TestEmbeddedSampleMatchesTree guards the explicit sample patterns in
+// embed.go: every file under presets/<name>/sample/ on disk must reach the
+// binary byte for byte, so a sample file nested deeper than the patterns
+// reach, or of another suffix, fails here instead of vanishing silently.
+func TestEmbeddedSampleMatchesTree(t *testing.T) {
+	disk := os.DirFS(filepath.Join("..", "..", "presets"))
+	for _, name := range Known(disk) {
+		if HasSample(name, disk) != HasSample(name, Embedded()) {
+			t.Fatalf("%s: sample shipped on disk and embedded differ", name)
+		}
+		if !HasSample(name, disk) {
+			continue
+		}
+		all, err := SampleFiles(name, disk)
+		if err != nil {
+			t.Fatal(err)
+		}
+		// A dot file (a Finder .DS_Store) is never tracked or embedded, and
+		// init refuses a sample path with a dot component anyway.
+		want := []string{}
+		for _, rel := range all {
+			if !strings.HasPrefix(path.Base(rel), ".") {
+				want = append(want, rel)
+			}
+		}
+		got, err := SampleFiles(name, Embedded())
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !reflect.DeepEqual(got, want) {
+			t.Fatalf("%s embedded sample = %v, want %v", name, got, want)
+		}
+		for _, rel := range want {
+			p := name + "/" + SampleDir + "/" + rel
+			a, _ := fs.ReadFile(disk, p)
+			b, _ := fs.ReadFile(Embedded(), p)
+			if string(a) != string(b) {
+				t.Errorf("%s differs from its embedded copy", p)
+			}
+		}
+	}
+	if got := WithSample(Embedded()); !reflect.DeepEqual(got, []string{"firm-ops"}) {
+		t.Fatalf("WithSample = %v", got)
 	}
 }

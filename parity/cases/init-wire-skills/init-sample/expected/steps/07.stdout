@@ -1,0 +1,1 @@
+{"error": {"code": "sample_needs_empty_target", "message": "Target . is not empty. --sample plants check findings, so it only scaffolds into a new or empty directory: khub init firm-ops <new-dir> --sample"}}

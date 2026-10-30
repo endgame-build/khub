@@ -1,0 +1,9 @@
+# What a person sees first from `init --sample`: the count line, then
+# `check` naming one finding in each bucket.
+mode: human
+normalize:
+- tty-layout-free
+- cycles-canonical
+steps:
+- argv: ["init", "firm-ops", ".", "--sample", "--no-wire"]
+- argv: ["check"]

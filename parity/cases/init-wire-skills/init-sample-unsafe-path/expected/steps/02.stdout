@@ -1,0 +1,1 @@
+{"error": {"code": "unsafe_sample_path", "message": "Preset 'note' sample file elsewhere/x.md is a path no type's storage declares. A sample may only hold files inside the storage paths its schema declares; nothing was written"}}

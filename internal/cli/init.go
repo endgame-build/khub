@@ -72,7 +72,7 @@ func resolvePath(path string) string {
 
 func registerInit(root *cobra.Command) {
 	var presetSource, name, format string
-	var force, noWire bool
+	var force, noWire, sample bool
 	cmd := newCmd("init [preset] [path]",
 		"Scaffold a workspace from a preset and wire it into the agent context files.",
 		"[preset] [path]", func(cmd *cobra.Command, args []string) error {
@@ -91,7 +91,7 @@ func registerInit(root *cobra.Command) {
 				var wireStep tail[wire.Result]
 				var indexStep tail[string]
 				result, err := workspace.Init(args[0], target, workspace.InitOptions{
-					PresetSource: presetSource, Name: name, Force: force,
+					PresetSource: presetSource, Name: name, Force: force, Sample: sample,
 					Tails: func(root string) {
 						if !noWire { // no selection to make without a wizard: seed both files
 							wireStep = tailOf(wire.WireHeld(root, wire.Options{Claude: true, Agents: true}))
@@ -129,6 +129,9 @@ func registerInit(root *cobra.Command) {
 						fmt.Printf("preserved %d workspace-owned file(s): %s%s\n",
 							len(result.Preserved), strings.Join(head, ", "), more)
 					}
+					if n := len(result.SampleCreated); n > 0 {
+						fmt.Printf("sample: %d files created; run `khub check` to see one finding per bucket\n", n)
+					}
 					if wireStep.Result != nil {
 						for _, outcome := range wireStep.Result.Outcomes {
 							fmt.Printf("%s %s\n", outcome.Action, filepath.Base(outcome.Path))
@@ -154,6 +157,8 @@ func registerInit(root *cobra.Command) {
 	cmd.Flags().StringVar(&name, "name", "", "Workspace name (default: the target dir name).")
 	cmd.Flags().BoolVar(&force, "force", false, "Scaffold into a non-empty target.")
 	cmd.Flags().BoolVar(&noWire, "no-wire", false, "Skip wiring the schema into the agent files.")
+	cmd.Flags().BoolVar(&sample, "sample", false,
+		"Also copy in the preset's sample entities, seeded with one check finding per bucket.")
 	cmd.Flags().StringVar(&format, "format", "text",
 		"text confirmation (default); json emits resolved provenance.")
 	root.AddCommand(cmd)
@@ -162,7 +167,8 @@ func registerInit(root *cobra.Command) {
 // initPayload is dataclasses.asdict(result) in declaration order, then the
 // tails — `wire` only when it ran (a --no-wire run carries no wire key at
 // all), `index` always, each with its *_error right after it on failure —
-// and the skill hint.
+// and the skill hint. A --sample run adds `sample`, the files it copied in,
+// after `preserved`.
 func initPayload(result *workspace.InitResult, wired tail[wire.Result], indexed tail[string]) *omap.Map {
 	payload := omap.New()
 	payload.Set("path", result.Path)
@@ -174,6 +180,9 @@ func initPayload(result *workspace.InitResult, wired tail[wire.Result], indexed 
 	payload.Set("seeded_over_corpus", result.SeededOverCorpus)
 	payload.Set("singletons_created", strList(result.SingletonsCreated))
 	payload.Set("preserved", strList(result.Preserved))
+	if result.SampleCreated != nil { // only a --sample run carries the key
+		payload.Set("sample", strList(result.SampleCreated))
+	}
 	wired.set(payload, "wire", func(r *wire.Result) any { return wireOutcomes(r) }, false)
 	indexed.set(payload, "index", func(action *string) any { return *action }, true)
 	payload.Set("skill_hint", skillHintFor(result.Path))
