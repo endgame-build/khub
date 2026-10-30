@@ -595,6 +595,7 @@ Commands:
   base  Show the effective base block every type inherits.
   snapshot  Record the current resolved schema as the baseline in .khub/schema.applied.yaml.
   diff  List schema changes since the last `khub schema snapshot`.
+  rdf  Project the resolved schema to RDFS + SHACL Turtle: khub schema rdf [--out F] [--instances] [--dry-run] [--base IRI].
 
 ```
 
@@ -680,6 +681,24 @@ Usage: khub schema diff [OPTIONS]
 List schema changes since the last `khub schema snapshot`.
 
 Options:
+  --format <str>  text (Rich table on a TTY) or json. [default: text]
+  --help  Show this message and exit.
+
+```
+
+## khub schema rdf
+
+```console
+$ khub schema rdf --help
+Usage: khub schema rdf [OPTIONS]
+
+Project the resolved schema to RDFS + SHACL Turtle: khub schema rdf [--out F] [--instances] [--dry-run] [--base IRI].
+
+Options:
+  --out <str>  Output path, relative to the workspace root; '-' prints the Turtle to stdout. [default: .khub/generated/schema.ttl]
+  --instances  Also emit every entity as an individual (the ABox).
+  --dry-run  Render and report, write nothing.
+  --base <str>  Root of every minted IRI (the khub: vocabulary never moves). [default: urn:khub:]
   --format <str>  text (Rich table on a TTY) or json. [default: text]
   --help  Show this message and exit.
 

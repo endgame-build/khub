@@ -146,6 +146,15 @@ Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelo
   is carried across upgrades like any other per-type policy key. The khub and
   setup skills tell an agent that `--unlock` is the workspace owner's
   decision, to ask for rather than pass on its own. Closes #13.
+- **RDF projection.** `khub schema rdf` writes the resolved schema as RDFS +
+  SHACL Turtle to `.khub/generated/schema.ttl` (`--out` elsewhere, `-` for
+  stdout; `--dry-run` reports): a class and a node shape per type, a shared
+  property per predicate, SHACL constraints for the ontology layer and
+  `khub:` annotations for storage, policy, `acyclic` and `inverse`.
+  `--instances` adds every entity as a typed individual with its attributes
+  and forward edges. `--base` moves the minted IRIs. `docs/rdf-mapping.md`
+  is the normative mapping; the firm-ops render is its golden fixture.
+  Closes #47, #48.
 
 ### Changed
 

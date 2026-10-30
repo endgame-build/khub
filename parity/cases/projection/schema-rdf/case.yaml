@@ -1,0 +1,21 @@
+# `schema rdf` projects the resolved schema to RDFS + SHACL Turtle. The
+# firm-ops render on stdout (`--out -`) is the golden fixture docs/rdf-mapping.md
+# points at. The default write lands in .khub/generated/, which the tree
+# manifest ignores, so the sh step proves it exists; `--out schema.ttl`
+# writes inside the tree and the manifest pins those bytes. `--instances`
+# adds the ABox: typed individuals, present attributes as literals, forward
+# edges as object properties, no derived inverse. `--base` moves every minted
+# IRI but the khub: vocabulary. A dry run writes nothing and reports.
+steps:
+- argv: ["init", "firm-ops", ".", "--no-wire"]
+- argv: ["add", "person", "--name", "Noor", "--role", "partner"]
+- argv: ["add", "client", "--name", "Initech", "--industry", "Software", "--crm_id", "42"]
+- argv: ["add", "opportunity", "--name", "Initech POV", "--stage", "prospect", "--client", "initech", "--owner", "noor", "--tags", "pov,q1"]
+- argv: ["add", "meeting", "--title", "Kickoff \"call\"", "--date", "2026-01-15T10:00:00", "--call_type", "client", "--source", "manual", "--engagement", "initech-pov", "--owner", "noor"]
+- argv: ["schema", "rdf", "--dry-run"]
+- sh: "test ! -e .khub/generated/schema.ttl"
+- argv: ["schema", "rdf"]
+- sh: "test -s .khub/generated/schema.ttl"
+- argv: ["schema", "rdf", "--out", "-"]
+- argv: ["schema", "rdf", "--out", "schema.ttl", "--instances", "--format", "json"]
+- argv: ["schema", "rdf", "--out", "-", "--instances", "--base", "https://example.org/kb/"]
