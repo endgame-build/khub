@@ -146,6 +146,20 @@ Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelo
   is carried across upgrades like any other per-type policy key. The khub and
   setup skills tell an agent that `--unlock` is the workspace owner's
   decision, to ask for rather than pass on its own. Closes #13.
+- **Extraction scaffold and conformance.** `khub schema scaffold [--type <t>]`
+  emits the resolved schema as the contract an extractor outside khub fills
+  in — every type's fields with kind, enum, pattern and required flag, its
+  stored relations with targets and cardinality, the body sections its
+  template expects, and the envelope to return — as JSON, or as a Markdown
+  prompt on a TTY. `khub schema conform <file|->` scores the extractor's
+  envelope against the schema and the live workspace without writing: the
+  same field verdicts `validate` gives, relation targets resolved by slug then
+  alias with the unresolved ones reported rather than guessed, the body
+  against the template, and the required fields the record would leave empty
+  as gaps that never fail the gate. Exit 1 when an entity does not conform,
+  2 for an unreadable envelope (`invalid_envelope`) or an undeclared type.
+  The pipeline is in `docs/ingestion.md`; alignment and conflict policy stay
+  design notes (#62, #29).
 
 ### Changed
 

@@ -1,0 +1,36 @@
+# The ingestion half of schema-constrained extraction (#30). `schema scaffold`
+# is the contract an extractor outside khub fills in; `schema conform` scores
+# the extractor's envelope against the schema and the live workspace before
+# anything is written. One envelope entry per verdict: conformant (its client
+# named by an alias, resolved the way every write resolves it), an enum
+# violation (an error), a missing required relation (a gap — capture is never
+# blocked, so it never fails the gate), and an unresolved target (reported,
+# never guessed). The gate exits 1. An unknown type, an unreadable envelope
+# and an unknown --type are refusals (exit 2) in their own steps.
+steps:
+- argv: ["init", "firm-ops", ".", "--no-wire"]
+- argv: ["add", "client", "--name", "Initech", "--aliases", "INTC"]
+- argv: ["add", "person", "--name", "Noor", "--role", "partner"]
+- argv: ["schema", "scaffold"]
+- argv: ["schema", "scaffold", "--type", "client", "--type", "person", "--format", "json"]
+- argv: ["schema", "scaffold", "--type", "widget"]
+- sh: |
+    cat > envelope.json <<'JSON'
+    {"entities": [
+      {"type": "project", "fields": {"title": "Initech PoV", "active": true},
+       "relations": {"client": ["INTC"], "owner": "noor"},
+       "source": "Agreed on the kickoff call", "confidence": 0.9},
+      {"type": "project", "fields": {"title": "Bad source", "source": "carrier-pigeon"},
+       "relations": {"client": ["initech"], "owner": ["noor"]}},
+      {"type": "project", "fields": {"title": "Missing owner"}, "relations": {"client": "initech"}},
+      {"type": "project", "fields": {"title": "Nowhere"}, "relations": {"client": ["nowhere"], "owner": ["noor"]}}
+    ]}
+    JSON
+- argv: ["schema", "conform", "envelope.json"]
+- argv: ["schema", "conform", "-", "--format", "json"]
+  stdin: '{"entities": [{"type": "widget", "fields": {"name": "x"}}]}'
+- argv: ["schema", "conform", "-"]
+  stdin: '{"entities": [{"type": "client", "fieldz": {}}]}'
+- argv: ["schema", "conform", "-"]
+  stdin: "not json\n"
+- argv: ["schema", "conform"]

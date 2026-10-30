@@ -49,6 +49,7 @@ Never hardcode a type or a field: the first four rows read the live schema.
 | connect or disconnect two entities | `khub link` / `khub unlink <id> <predicate> <target> --format json` | `changed: false` was a no-op |
 | delete an entity | `khub remove <id> --format json` | refused while something points at it: `neighbors <id> --in` |
 | read in an external OKF bundle | `khub import --okf <bundle> [--type-map <file>] --format json` | read `skipped` and `unresolved` |
+| turn a document, a transcript or a page into entities | `khub schema scaffold --type <t> --format markdown`, then `khub schema conform <file> --format json` | you are the extractor: fill the contract's envelope from the source only, never inventing a value or an id, quoting the passage in `source`. Fix every `errors` row (an `id` error means `add` would refuse: name it, or drop the duplicate) and every `unresolved` target (search for it; when the reason names an earlier envelope entry, add that one first), then `add` each conformant entry in envelope order, `--draft` on gaps or low confidence, `--author` naming the source, the `source` passage quoted at the top of the body |
 | record that someone reviewed an entity | `khub verify <id> --by <actor> --format json` | see **Write** for who may be named |
 | check one entity you wrote | `khub validate <type>/<slug> --format json` | fix what `errors` names, then `validate` again |
 | check the whole graph before you finish | `khub check --format json` | fix the findings your change caused |
