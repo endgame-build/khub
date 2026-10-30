@@ -60,6 +60,13 @@ func registerSearch(root *cobra.Command) {
 						record.Set("title_match", h.TitleMatch)
 					}
 					record.Set("snippet", h.Snippet)
+					if h.Section != nil {
+						section := make([]any, len(h.Section))
+						for i, title := range h.Section {
+							section[i] = title
+						}
+						record.Set("section", section)
+					}
 					record.Set("path", h.Path)
 					if h.Locator != "" {
 						record.Set("locator", h.Locator)

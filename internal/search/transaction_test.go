@@ -31,13 +31,13 @@ func TestBuildFTSRollsBackAFailedInsert(t *testing.T) {
 	}
 	defer func() { _ = conn.Close() }()
 	conn.Limit(sqlite3.LIMIT_LENGTH, 1000)
-	if _, err := buildFTS(conn, root, idx, nil); err == nil {
+	if _, _, err := buildFTS(conn, root, idx, nil); err == nil {
 		t.Fatal("an insert over the length limit succeeded")
 	}
 	if !conn.GetAutocommit() {
 		t.Fatal("transaction left open")
 	}
-	hits, err := match(conn, "Token", 20)
+	hits, err := match(conn, "Token", 20, marks{})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -28,7 +28,7 @@ The schema lives at `.khub/ontology.yaml` (the domain model) with `.khub/policy.
 - `khub neighbors <id> --format json` — one-hop adjacency.
 - `khub impact <id> --format json` — transitive closure over a predicate (blast radius).
 - `khub history <id> --format json` — a supersession chain.
-- `khub search <text> --format json` — BM25 full-text over titles, bodies, and fields; `--plain` takes words as typed (any may match) instead of FTS5 syntax. Hits carry `draft`/`orphan`/`stale` and per-predicate edge counts.
+- `khub search <text> --format json` — BM25 full-text over titles, bodies, and fields; `--plain` takes words as typed (any may match) instead of FTS5 syntax. Hits carry `draft`/`orphan`/`stale`, per-predicate edge counts, and, for a body match under a Markdown heading, `section`: the heading path to the matched text, so you can read that part of the body.
 
 ## Know when to write
 

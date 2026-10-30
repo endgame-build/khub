@@ -2,6 +2,16 @@
 
 Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); khub is pre-release.
 
+## [Unreleased]
+
+### Added
+
+- **Search hits name their section.** A `khub search` JSON hit whose snippet
+  excerpts the body under a Markdown heading carries `section`, the heading
+  path to the snippet's first match (`["Design", "Write path", "Locking"]`).
+  It is absent for a title or frontmatter match and for a body with no
+  heading above the match. Ranking, `score` and `snippet` are unchanged.
+
 ## [0.30.0] — 2026-10-28
 
 Storage can now follow a hub's existing nesting, relations can point to files
