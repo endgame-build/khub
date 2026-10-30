@@ -1,0 +1,42 @@
+# `khub completion SHELL` prints cobra's completion script for one shell; the
+# script calls back into the binary as `khub __complete <words…>` at TAB time.
+# This replaces completion-command-absent, which pinned `completion` as a usage
+# error for Typer parity (add_completion=False). --install-completion stays
+# absent: completion-absent still pins it.
+#
+# The scripts themselves are cobra's bytes and are NOT pinned here, so a cobra
+# bump does not turn parity red; TestCompletionScripts in internal/cli holds
+# their first line and the __complete callback. What is pinned is the usage
+# errors and the __complete protocol: candidates (with descriptions), then
+# `:<directive>` on stdout, cobra's directive note on stderr. Directive 4 is
+# "no files", 16 "directories only", 0 the shell's own file completion.
+steps:
+- argv: ["completion"]
+- argv: ["completion", "tcsh"]
+- argv: ["completion", "bash", "zsh"]
+# Root: every command, no empty candidate for the nameless help command, and
+# wire's two-line help joined rather than cut.
+- argv: ["__complete", ""]
+- argv: ["__complete", "completion", ""]
+- argv: ["__complete", "schema", "sh"]
+# -C completes directories, attached or not, and binds before the command.
+- argv: ["__complete", "-C", ""]
+- argv: ["__complete", "-C."]
+- argv: ["__complete", "-C.", "st"]
+- argv: ["-C", ".", "__complete", "st"]
+# Closed value sets the binary fixes.
+- argv: ["__complete", "status", "--format", ""]
+- argv: ["__complete", "query", "--format", ""]
+- argv: ["__complete", "get", "--format=t"]
+- argv: ["__complete", "impact", "x", "--format", ""]
+- argv: ["__complete", "wire", "--target", ""]
+- argv: ["__complete", "init", ""]
+# Workspace-defined values offer nothing and no files.
+- argv: ["__complete", "get", ""]
+- argv: ["__complete", "schema", "show", ""]
+- argv: ["__complete", "query", "--type", ""]
+- argv: ["__complete", "add", "note", "--title", ""]
+# Paths complete as paths.
+- argv: ["__complete", "add", "note", "--body-file", ""]
+- argv: ["__complete", "init", "firm-ops", ""]
+- argv: ["__complete", "init", "--preset-source", ""]

@@ -1,5 +1,5 @@
-Usage: khub [OPTIONS] COMMAND [ARGS]...
-Try 'khub --help' for help.
+Usage: khub completion [OPTIONS] SHELL
+Try 'khub completion --help' for help.
 ╭─ Error ──────────────────────────────────────────────────────────────────────╮
-│ No such command 'completion'.                                                │
+│ Missing argument 'SHELL'.                                                    │
 ╰──────────────────────────────────────────────────────────────────────────────╯

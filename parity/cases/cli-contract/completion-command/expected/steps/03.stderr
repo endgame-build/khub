@@ -1,0 +1,5 @@
+Usage: khub completion [OPTIONS] SHELL
+Try 'khub completion --help' for help.
+╭─ Error ──────────────────────────────────────────────────────────────────────╮
+│ Got unexpected extra argument(s) (zsh)                                       │
+╰──────────────────────────────────────────────────────────────────────────────╯

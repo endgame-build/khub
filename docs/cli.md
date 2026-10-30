@@ -9,7 +9,7 @@ The CLI is a thin, schema-introspecting adapter over the core library's verbs (c
 | Option | Meaning |
 |---|---|
 | `-C, --workspace <path>` | Operate on this workspace instead of the working directory. Default: the nearest `.khub/` above the working directory. Given a path, khub resolves the nearest `.khub/` at or above it. |
-| `--format <json\|table>` | Output shape. Default: table on a TTY, json otherwise — for **reads and writes alike**. Some commands add `ids`, `raw`, or `tree`. The operator commands (`reindex`, `viz`, `serve`, `backfill`, `wire`) print prose and take no `--format`. |
+| `--format <json\|table>` | Output shape. Default: table on a TTY, json otherwise — for **reads and writes alike**. Some commands add `ids`, `raw`, or `tree`. The operator commands (`reindex`, `viz`, `serve`, `backfill`, `wire`, `completion`) print prose or a script and take no `--format`. |
 | `--version` | Print the khub version and exit. |
 | `--help` | Show help. |
 
@@ -260,5 +260,39 @@ Every finding carries a stable location — the `field` on a `validate` row, the
 | `khub wire` | `--target <claude\|agents\|both>`, `--dry-run` | inject a managed khub block into the workspace's agent files. Bare `wire` writes both `CLAUDE.md` and `AGENTS.md`, creating either that is missing; `--target` creates a specific file. `CLAUDE.md` gets `@.khub/{ontology,policy,storage}.yaml` imports; `AGENTS.md` (no import directive) gets schema pointers. Both carry the command surface, so an agent reasons in the workspace ontology even without running khub. Both end with an install hint: the khub plugin for Claude Code in `CLAUDE.md`, and `npx skills add endgame-build/khub` in `AGENTS.md`. Idempotent, minimal-diff |
 
 `khub init` and `khub upgrade` both run `wire` and the index write as tails. khub installs no skills. They ship in the Claude Code plugin and through `npx skills add endgame-build/khub` (see [Agent skills](../README.md#agent-skills)). khub also leaves alone the skill copies that khub 0.27.0 and earlier wrote under `.claude/skills/`, `.agents/skills/` and `.opencode/skills/`; delete those folders and their `.gitignore` lines by hand.
+
+## Shell completion
+
+`khub completion <bash|zsh|fish|powershell>` prints a completion script for that shell on stdout. It reads no workspace.
+
+```bash
+# bash 4.1+ with bash-completion v2 (macOS: brew install bash bash-completion@2)
+d="${BASH_COMPLETION_USER_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}/bash-completion}/completions"
+mkdir -p "$d" && khub completion bash > "$d/khub"    # loaded on demand by every new bash
+eval "$(khub completion bash)"                       # or: this session only (~/.bashrc for every one)
+
+khub completion zsh > "${fpath[1]}/_khub"            # zsh, with compinit enabled
+khub completion fish > ~/.config/fish/completions/khub.fish
+khub completion powershell | Out-String | Invoke-Expression   # add to $PROFILE to keep it
+```
+
+**bash 3.2.** The script needs bash-completion, which macOS's stock `/bin/bash` 3.2 does not ship. There, `source <(khub completion bash)` silently loads nothing (bash 3.2 cannot source a process substitution), and even the `eval` form fails at the first TAB without bash-completion. Use a Homebrew bash 4.1+ as above.
+
+The script holds no list of commands: at TAB time it runs `khub __complete <words…>`, so what it offers is always what the installed binary accepts. Nothing it offers is read from a workspace.
+
+| TAB after | Offers |
+|---|---|
+| `khub`, a group (`schema`) | command and subcommand names, with their one-line help |
+| `-` | the command's options |
+| `-C`, `--workspace`, `-C<dir>` | directories |
+| `--format` | the command's closed set: `text`/`json`, plus `ids` (`query`, `search`), `table`/`raw` (`get`); `tree`/`json` for `impact` |
+| `wire --target` | `claude`, `agents`, `both` |
+| `init` | the packaged presets, then a directory for PATH |
+| `completion` | `bash`, `zsh`, `fish`, `powershell` |
+| `--body-file`, `viz --out` | files |
+| `init --preset-source` | directories |
+| anything else: types, ids, predicates, field values, numbers | nothing, and no file names |
+
+Workspace-defined values (type names, ids, predicates) are not completed: that would read the workspace on every TAB. Candidates carry each command's one-line help; `KHUB_COMPLETION_DESCRIPTIONS=false` (or cobra's global `COBRA_COMPLETION_DESCRIPTIONS=false`) drops them. khub emits no cobra "active help", so `KHUB_ACTIVE_HELP` has nothing to turn off. `__complete` is hidden plumbing for the scripts, not a command to call: its output is cobra's line protocol (candidates, then `:<directive>`), it takes no `--format`, and it reads no workspace. `--install-completion`, which Typer apps carry, stays a usage error.
 
 *Planned verbs (not yet shipped): `path`, `build`, `export --okf`, `diff-preset`, `rename`. See the repo for status.*

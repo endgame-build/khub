@@ -39,6 +39,7 @@ Commands:
   wire  Wire the workspace into agent context files (CLAUDE.md gets ``@`` imports of the
 schema layer files; AGENTS.md gets a schema pointer). Bare ``wire`` updates whichever already exist.
   schema  Introspect the active schema.
+  completion  Print a shell completion script: khub completion bash|zsh|fish|powershell.
 
 ```
 
@@ -551,6 +552,24 @@ List schema changes since the last `khub schema snapshot`.
 
 Options:
   --format <str>  text (Rich table on a TTY) or json. [default: text]
+  --help  Show this message and exit.
+
+```
+
+## khub completion
+
+```console
+$ khub completion --help
+Usage: khub completion [OPTIONS] SHELL
+
+Print a shell completion script: khub completion bash|zsh|fish|powershell.
+
+Load it for this session with `source <(khub completion zsh)`, or write it to the shell's completion directory to keep it. Candidates come from the binary at TAB time.
+
+Arguments:
+  SHELL <str>  bash, zsh, fish, or powershell. [required]
+
+Options:
   --help  Show this message and exit.
 
 ```
