@@ -2,7 +2,7 @@ ec9b399104e5dd366e2ba41a1de03d49eae7a1c26ce2dd22d000dc6e0e36c637 - .gitignore
 17aafe9aae9c3d00eeced1aabaf60478704e39525ca009666033c27710bbc30a - .khub/config.yaml
 e045fcfab34e3f72bd30704cb03f19e216d5f310745b073ff7b5187118509da3 - .khub/ontology.yaml
 c85d81337b4afe5c2413d87dea8770a34489cb2932a0d272476e594d44664636 - .khub/policy.yaml
-964046cf3bdde9116686d5dcffac34f2a57abc109e5dd60fb5431433f5649535 - .khub/schema.applied.yaml
+24588d0cf7dec744ba6f2d102ea78e548b45f7beb522447cbf7973de3890d81a - .khub/schema.applied.yaml
 7fb7c4e0be4e22a2660549a02a1ab13d4df1492d939e6a71d5d03ce44ff1fa60 - .khub/storage.yaml
 13302f518dd54c2b269538bc49d9a3ac7f73c88d51b5f6b765d8d86aee55222f - .khub/templates/actor.yaml
 c8d38dc8d18728160b2e4d11ad0e947abbf1ca8699be2633657d0c072d41e19a - .khub/templates/adr.yaml

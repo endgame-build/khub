@@ -31,7 +31,7 @@ Commands:
   history  Trace supersession lineage: khub history decision-0012 [--limit 3].
   validate  Validate entities: khub validate [TARGET] [--strict].
   check  Check the active graph: completeness, orphans, dangling edges, strays, cycles, bodies.
-  stale  List entities past the `updated` threshold, oldest first: khub stale [--days N].
+  stale  List entities past the `updated` threshold or their `stale_after`, oldest first: khub stale [--days N].
   reindex  Regenerate the OKF index.md from the graph: khub reindex [--dry-run].
   viz  Render the typed graph to a self-contained Cytoscape HTML: khub viz [--out F] [--open] [--type T].
   serve  Serve a read-only graph view on loopback: khub serve [--port 7777].
@@ -351,6 +351,7 @@ Check the active graph: completeness, orphans, dangling edges, strays, cycles, b
 
 Options:
   --strict  Fail the gate on orphans too (default: informational).
+  --stale  Fail the gate on active entities past their stale_after too.
   --format <str>  text (Rich on a TTY) or json. [default: text]
   --help  Show this message and exit.
 
@@ -362,7 +363,7 @@ Options:
 $ khub stale --help
 Usage: khub stale [OPTIONS]
 
-List entities past the `updated` threshold, oldest first: khub stale [--days N].
+List entities past the `updated` threshold or their `stale_after`, oldest first: khub stale [--days N].
 
 Options:
   --days <int>  Staleness threshold in days; default: the workspace's stale_days.

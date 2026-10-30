@@ -162,7 +162,7 @@ func TestTypeScaffolding(t *testing.T) {
 	if !report2.OK() {
 		t.Fatalf("scaffolding broke validate: %v", report2.Errors)
 	}
-	check, err := integrity.Check(root, false)
+	check, err := integrity.Check(root, false, nil)
 	if err != nil {
 		t.Fatalf("check: %v", err)
 	}

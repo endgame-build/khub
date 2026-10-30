@@ -9,6 +9,9 @@ package project
 import (
 	"testing"
 	"time"
+
+	"github.com/endgame-build/khub/internal/canon"
+	"github.com/endgame-build/khub/internal/omap"
 )
 
 var now = time.Date(2026, 6, 24, 0, 0, 0, 0, time.UTC)
@@ -298,25 +301,94 @@ func TestEffectiveDateParsesDatetimeAndBasicForms(t *testing.T) {
 
 func TestIsStale(t *testing.T) {
 	// no timestamp to judge against
-	if IsStale(meta(kv{"title", "x"}), now, 90, nil) {
+	if IsStale(nil, meta(kv{"title", "x"}), now, 90, nil) {
 		t.Fatal("source==none is never stale")
 	}
 	// exactly at the threshold is not stale ( > , not >= )
 	edge := now.AddDate(0, 0, -90).Format("2006-01-02")
-	if IsStale(meta(kv{"updated", edge}), now, 90, nil) {
+	if IsStale(nil, meta(kv{"updated", edge}), now, 90, nil) {
 		t.Fatal("exactly stale_days old is not yet stale")
 	}
 	past := now.AddDate(0, 0, -91).Format("2006-01-02")
-	if !IsStale(meta(kv{"updated", past}), now, 90, nil) {
+	if !IsStale(nil, meta(kv{"updated", past}), now, 90, nil) {
 		t.Fatal("one day past the threshold is stale")
 	}
 	// unparseable is surfaced as stale
-	if !IsStale(meta(kv{"updated", "nope"}), now, 90, nil) {
+	if !IsStale(nil, meta(kv{"updated", "nope"}), now, 90, nil) {
 		t.Fatal("an unparseable date is stale, not silently dropped")
 	}
 	// a future date is not stale (negative delta)
 	future := now.AddDate(0, 0, 5).Format("2006-01-02")
-	if IsStale(meta(kv{"updated", future}), now, 90, nil) {
+	if IsStale(nil, meta(kv{"updated", future}), now, 90, nil) {
 		t.Fatal("a future date is not stale")
+	}
+}
+
+func TestIsExpired(t *testing.T) {
+	today := now.Format("2006-01-02")
+	yesterday := now.AddDate(0, 0, -1).Format("2006-01-02")
+	tomorrow := now.AddDate(0, 0, 1).Format("2006-01-02")
+	for _, tc := range []struct {
+		name string
+		m    *omap.Map
+		want bool
+	}{
+		{"absent never expires", meta(kv{"title", "x"}), false},
+		{"null never expires", meta(kv{"stale_after", nil}), false},
+		{"tomorrow has not expired", meta(kv{"stale_after", tomorrow}), false},
+		{"today has expired (>=)", meta(kv{"stale_after", today}), true},
+		{"yesterday has expired", meta(kv{"stale_after", yesterday}), true},
+		{"a time of day does not move the day", meta(kv{"stale_after", today + "T23:59:00"}), true},
+		{"a date object", meta(kv{"stale_after", date(yesterday)}), true},
+		{"unparseable is surfaced", meta(kv{"stale_after", "someday"}), true},
+		{"a one-digit month and day still read", meta(kv{"stale_after", canon.DateTime{ISO: "2099-1-5 10:00:00"}}), false},
+		{"a one-digit timestamp in the past", meta(kv{"stale_after", canon.DateTime{ISO: "2026-1-5 10:00:00"}}), true},
+		{"an offset does not move the day", meta(kv{"stale_after", canon.DateTime{ISO: tomorrow + " 01:00:00+14:00"}}), false},
+		{"a day that does not exist is surfaced", meta(kv{"stale_after", canon.Date{ISO: "2099-02-30"}}), true},
+	} {
+		if got := IsExpired(nil, tc.m, now); got != tc.want {
+			t.Errorf("%s: IsExpired = %v, want %v", tc.name, got, tc.want)
+		}
+	}
+}
+
+// The union is what query/search/`khub stale` report; status keeps the two
+// apart. An expiry rescues nothing from the age rule, and a fresh `updated`
+// rescues nothing from the expiry.
+func TestIsStaleIsTheUnion(t *testing.T) {
+	old := now.AddDate(0, 0, -200).Format("2006-01-02")
+	fresh := now.Format("2006-01-02")
+	past := now.AddDate(0, 0, -1).Format("2006-01-02")
+	future := now.AddDate(0, 0, 30).Format("2006-01-02")
+	if !IsStale(nil, meta(kv{"updated", fresh}, kv{"stale_after", past}), now, 90, nil) {
+		t.Fatal("a fresh entity past its stale_after is stale")
+	}
+	if !IsStale(nil, meta(kv{"updated", old}, kv{"stale_after", future}), now, 90, nil) {
+		t.Fatal("an expiry still ahead does not rescue an untouched entity")
+	}
+	if IsAged(meta(kv{"updated", fresh}, kv{"stale_after", past}), now, 90, nil) {
+		t.Fatal("IsAged ignores stale_after")
+	}
+}
+
+// A type that redeclares `stale_after` as another scalar type made it its own
+// field: it carries no expiry, whatever it holds.
+func TestRedeclaredStaleAfterNeverExpires(t *testing.T) {
+	ws := wsFromSchema(t, `
+version: "0.1.0"
+ontology:
+  entities:
+    note:
+      attributes:
+        stale_after: { type: text }
+    thing: {}
+storage:
+  note:  { layout: file, path: notes }
+  thing: { layout: file, path: things }
+`)
+	seed(t, ws, "notes/n1.md", kv{"type", "note"}, kv{"title", "N"}, kv{"stale_after", "when the quarter closes"})
+	seed(t, ws, "things/t1.md", kv{"type", "thing"}, kv{"title", "T"}, kv{"stale_after", date("2020-01-01")})
+	if p := mustProject(t, ws, 90); p.Expired != 1 {
+		t.Fatalf("only thing/t1 declares the base expiry; got %d expired", p.Expired)
 	}
 }

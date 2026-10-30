@@ -111,11 +111,12 @@ Go, shipped as a single static binary. It was a Python console script through 0.
   An inventory sits at the workspace root. (Nesting an inventory under a parent item's folder, and deriving the parent edge from that placement, is not yet supported; the parent relation is an explicit frontmatter edge.)
 - **Write rules.** Referential integrity hard-fails on write: a relation to a non-existent target is rejected. A missing required field or relation does not block capture: the entity is still written; completeness is enforced later by `check`.
 - **Lifecycle.** Every entity carries a boolean `draft` flag (`draft: true|false`, default `false`), a manual publish switch the author sets. `add` writes `draft: false` by default, `--draft` marks an entity unpublished, and `edit <id> draft true|false` toggles it; no verb auto-promotes or auto-demotes. Completeness is computed from the schema and enforced by `check`, never inferred from this flag, so a published entity can be incomplete (`check` reports it active-but-incomplete) and a draft can be complete. A draft is unpublished: excluded from required-completeness, and it never satisfies another entity's required relation.
-- **Standard fields.** Beyond `type` and the `draft` flag, an entity may carry OKF's optional `title`, `description`, and `resource` (the canonical URI of the underlying asset, khub's link-out), plus `author` (the writer, person or agent), `tags`, and `created`/`updated`. Per-type fields and relations come from the schema. The firm-ops preset adds `owner` (→ person) as its own accountability edge, distinct from the core `author`.
+- **Standard fields.** Beyond `type` and the `draft` flag, an entity may carry OKF's optional `title`, `description`, and `resource` (the canonical URI of the underlying asset, khub's link-out), plus `author` (the writer, person or agent), `tags`, `created`/`updated`, and `stale_after` (an authored expiry, OKF §5.5). Per-type fields and relations come from the schema. The firm-ops preset adds `owner` (→ person) as its own accountability edge, distinct from the core `author`.
 - **The integrity loop** keeps the graph clean without manual policing. Draft status, orphan, and stale are core projection properties: every read includes drafts in scope and carries each entity's `stale`/`orphan` flag by default; `check`/`stale` gate on the same computation. The acceptance signals:
   - `khub validate`: per-entity well-formedness against the schema, plus referential integrity.
   - `khub check`: graph-wide over the active (`draft: false`) subgraph. Relations resolve, required-completeness holds for `active` entities (computed from the schema; an active-but-incomplete entity is reported), a `draft` does not satisfy a required relation, no orphans (entities with no inbound or outbound relation), no dangling edges, and no stray files (a file inside a type's layout that is not a valid entity of that type; reference docs outside the type layouts are skipped).
-  - `khub stale`: entities whose `updated` is past a threshold; dates backfilled from `git log`.
+  - `khub stale`: entities whose `updated` is past a threshold, or whose authored `stale_after` has passed; dates backfilled from `git log`.
+- **Two stalenesses, never one number.** *Untouched* is derived: the effective date (`updated`, else a git commit date under `khub stale`, else `created`) is more than `stale_days` old. It is a guess about attention. *Expired* is authored: `stale_after` (a base `datetime`) is on or before today, judged by calendar day (the date as written decides; time of day and offset are ignored). A value that does not parse counts as expired and `validate` names it, so a typo is never silently dropped. A type that redeclares `stale_after` as a non-date scalar owns the field, and it carries no expiry. It is a statement about the content: a quarterly metric is stale on its date whether or not anyone edited it. `stale` on a read row, `query --stale` and `khub stale` take the union, and `khub stale` says which in `reason` (`age` / `expired`). `status` reports them apart, `stale` and `expired`, and never sums them. Only the authored one can gate, and only when asked: `check --stale` fails on an active expired entity, and nothing ever gates on age. No verb computes `stale_after` from an interval: the same trap as auto-promoting `draft`.
 
 ### Command Surface
 
@@ -127,7 +128,7 @@ The CLI is a thin, schema-introspecting adapter over the core library's verbs: c
 |-------|---------|------|
 | Workspace | `khub init <preset>` | scaffold a workspace from a preset |
 | | `khub schema [types \| show <type> \| edges]` | introspect the active schema: types, fields, enums, edges, required relations |
-| | `khub status` | counts per type, draft vs active, orphan and stale counts, OKF-conformance flag |
+| | `khub status` | counts per type, draft vs active, orphan, stale and expired counts, OKF-conformance flag |
 | Author | `khub add <type> [--field v …]` | mint a slug, write a well-formed entity (active by default; `--draft` to mark unpublished) |
 | | `khub get <id>` | print an entity: frontmatter and body |
 | | `khub edit <id> <field> <value>` | edit a field, bump `updated`, re-validate |
@@ -142,7 +143,7 @@ The CLI is a thin, schema-introspecting adapter over the core library's verbs: c
 | | `khub search <text>` | full-text search (FTS5, in-memory per invocation) |
 | Integrity | `khub validate [path]` | per-entity well-formedness and referential integrity (default: whole workspace) |
 | | `khub check` | graph-wide: relations resolve, required relations complete, no orphans, no stray files, no edge cycles |
-| | `khub stale [--days N]` | entities past an `updated` threshold; dates backfilled from `git log` |
+| | `khub stale [--days N]` | entities past an `updated` threshold or their `stale_after`; dates backfilled from `git log` |
 | Projection | `khub reindex` | regenerate the OKF `index.md` navigation from the graph |
 | | `khub backfill [--type T]` | add missing frontmatter and dates from `git log` |
 | | `khub viz` | self-contained Cytoscape HTML over the typed graph |

@@ -16,15 +16,25 @@ import (
 	"github.com/endgame-build/khub/internal/workspace"
 )
 
-// StaleEntry is gitlog.StaleEntry: one entity past the threshold, with the
-// date it was judged against and where that date came from.
+// StaleEntry is gitlog.StaleEntry: one entity past the threshold or its
+// authored expiry, with the date the age rule judged and where that date came
+// from.
 type StaleEntry struct {
 	Type          string
 	Slug          string
-	EffectiveDate time.Time
-	Age           int    // days since the effective date; drives the oldest-first sort
-	Source        string // "updated" | "git log" | "created"
+	EffectiveDate *time.Time // nil only for an expired entity with no judgeable date
+	Age           *int       // days since the effective date; nil alongside EffectiveDate
+	Source        string     // "updated" | "git log" | "created" | "none"
+	Reason        string     // ReasonExpired when stale_after has passed, else ReasonAge
 }
+
+// The two reasons an entity is stale. Expired wins when both hold: the
+// authored statement is the more specific one, and the row still carries the
+// age the other rule judged.
+const (
+	ReasonAge     = "age"
+	ReasonExpired = "expired"
+)
 
 // StaleReport is gitlog.StaleReport: the stale set plus whether git was
 // available to backfill missing dates.
@@ -34,12 +44,13 @@ type StaleReport struct {
 }
 
 // Stale is gitlog.stale: entities whose effective date is more than `days` old,
-// oldest first.
+// or whose authored `stale_after` has passed, oldest first.
 //
 // days is Python's `days: int | None` — nil resolves to the workspace's
 // stale_days, the single threshold source shared with status/query. now is a
 // civil date at UTC midnight (the CLI's date.today()), so the day delta is
-// exact. Entities with no judgeable date are skipped.
+// exact. An entity with no judgeable date is skipped unless it has expired;
+// such a row sorts last.
 func Stale(root string, days *int, now time.Time) (*StaleReport, error) {
 	resolved, err := introspect.LoadSchema(root)
 	if err != nil {
@@ -94,22 +105,30 @@ func Stale(root string, days *int, now time.Time) (*StaleReport, error) {
 			gitDate = &d
 		}
 		eff, source := project.EffectiveDate(meta, gitDate)
-		if eff == nil {
+		rtype, _ := resolved.Types.Get(node.Type)
+		expired := project.IsExpired(rtype, meta, now)
+		var age *int
+		if eff != nil {
+			a := daysBetween(*eff, now)
+			age = &a
+		}
+		if !expired && (age == nil || *age <= threshold) {
 			continue
 		}
-		age := daysBetween(*eff, now)
-		if age > threshold {
-			entries = append(entries, StaleEntry{
-				Type: node.Type, Slug: node.Slug, EffectiveDate: *eff, Age: age, Source: source,
-			})
+		reason := ReasonAge
+		if expired {
+			reason = ReasonExpired
 		}
+		entries = append(entries, StaleEntry{
+			Type: node.Type, Slug: node.Slug, EffectiveDate: eff, Age: age, Source: source, Reason: reason,
+		})
 	}
 	// list.sort(key=(age, type, slug), reverse=True): a reverse comparison on the
 	// whole key, not a reversal of the ascending order.
 	sort.SliceStable(entries, func(i, j int) bool {
 		a, b := entries[i], entries[j]
-		if a.Age != b.Age {
-			return a.Age > b.Age
+		if ka, kb := sortAge(a.Age), sortAge(b.Age); ka != kb {
+			return ka > kb
 		}
 		if a.Type != b.Type {
 			return a.Type > b.Type
@@ -117,6 +136,14 @@ func Stale(root string, days *int, now time.Time) (*StaleReport, error) {
 		return a.Slug > b.Slug
 	})
 	return &StaleReport{Entries: entries, GitAvailable: gitOK}, nil
+}
+
+// sortAge places an undated row after every dated one.
+func sortAge(age *int) int {
+	if age == nil {
+		return -1
+	}
+	return *age
 }
 
 // absent is `meta.get(key) is None`: a missing key and an explicit null read

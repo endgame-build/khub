@@ -16,6 +16,7 @@
 │ draft / active │ 0 / 3 │
 │ orphan         │ 1     │
 │ stale          │ 0     │
+│ expired        │ 0     │
 │ stray          │ 0     │
 │ malformed      │ 0     │
 │ OKF-conformant │ yes   │

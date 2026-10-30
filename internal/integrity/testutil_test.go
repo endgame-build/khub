@@ -181,7 +181,7 @@ func mustValidate(t *testing.T, root string, target *string, strict bool) *Valid
 
 func mustCheck(t *testing.T, root string, strict bool) *CheckReport {
 	t.Helper()
-	report, err := Check(root, strict)
+	report, err := Check(root, strict, nil)
 	if err != nil {
 		t.Fatalf("check: %v", err)
 	}

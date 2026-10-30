@@ -7,6 +7,7 @@ package cli
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 
@@ -50,7 +51,7 @@ func registerValidate(root *cobra.Command) {
 
 func registerCheck(root *cobra.Command) {
 	var format string
-	var strict bool
+	var strict, stale bool
 	cmd := newCmd("check", "Check the active graph: completeness, orphans, dangling edges, strays, cycles, bodies.",
 		"", func(cmd *cobra.Command, args []string) error {
 			return Guard(format, func() error {
@@ -58,7 +59,12 @@ func registerCheck(root *cobra.Command) {
 				if err != nil {
 					return err
 				}
-				report, err := integrity.Check(ws, strict)
+				var expiredAt *time.Time
+				if stale {
+					now := today()
+					expiredAt = &now
+				}
+				report, err := integrity.Check(ws, strict, expiredAt)
 				if err != nil {
 					return err
 				}
@@ -73,6 +79,7 @@ func registerCheck(root *cobra.Command) {
 		})
 	cmd.Args = clickArity(0)
 	cmd.Flags().BoolVar(&strict, "strict", false, "Fail the gate on orphans too (default: informational).")
+	cmd.Flags().BoolVar(&stale, "stale", false, "Fail the gate on active entities past their stale_after too.")
 	cmd.Flags().StringVar(&format, "format", "text", "text (Rich on a TTY) or json.")
 	root.AddCommand(cmd)
 }
@@ -247,6 +254,20 @@ func checkPayload(report *integrity.CheckReport) *omap.Map {
 		conflicts = append(conflicts, record)
 	}
 	payload.Set("alias_conflicts", conflicts)
+	// Present only under `--stale`: the key itself says the expiry gate ran,
+	// so a plain `check` keeps the shape it always had.
+	if report.StaleGate {
+		expired := make([]any, 0, len(report.StaleAfterExpired))
+		for _, e := range report.StaleAfterExpired {
+			record := omap.New()
+			record.Set("id", e.ID())
+			record.Set("type", e.Type)
+			record.Set("slug", e.Slug)
+			record.Set("stale_after", e.StaleAfter)
+			expired = append(expired, record)
+		}
+		payload.Set("expired", expired)
+	}
 	// Say which gate ran: `orphans` populated with passed=true means default mode.
 	payload.Set("strict", report.Strict)
 	// Last, after `strict`: the one bucket that never affects `passed`. A body
@@ -316,6 +337,9 @@ func checkHuman(report *integrity.CheckReport) {
 	}
 	for _, c := range report.AliasConflicts {
 		fmt.Printf("alias '%s' names more than one entity: %s\n", c.Alias, strings.Join(c.Claimants, ", "))
+	}
+	for _, e := range report.StaleAfterExpired {
+		fmt.Printf("expired %s: stale_after %s\n", e.ID(), e.StaleAfter)
 	}
 	required := map[string]bool{}
 	for _, name := range report.DraftRequiredSingletons {

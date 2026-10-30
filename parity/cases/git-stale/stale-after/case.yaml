@@ -1,0 +1,44 @@
+# `stale_after` is an authored expiry, a second staleness signal beside the
+# git-derived age rule. The clock is pinned to 2026-01-15.
+#
+# - an expiry on or before today expires the entity; a time of day does not
+#   move it (the verdict is by calendar day, like the age rule);
+# - an expiry still ahead does not;
+# - a value that is not a datetime is refused at write time (exit 2);
+# - `stale` carries `reason`: `expired` wins over `age` when both hold, and an
+#   expired entity with no judgeable date still lists, with null date and age;
+# - `status` counts `stale` (age) and `expired` apart, never summed;
+# - `query --stale` is the union of the two;
+# - plain `check` keeps its shape and passes; `check --stale` adds `expired`
+#   (active entities only — the draft is not a finding) and fails the gate;
+# - a hand-written value that is not a datetime fails `validate` and is
+#   surfaced as expired, as an unparseable `updated` is surfaced as stale;
+# - a YAML 1.1 timestamp with a one-digit month and day reads by its date
+#   (not expired, valid); a day that does not exist (2099-02-30) fails
+#   `validate` and is surfaced as expired, so the two gates agree;
+# - `edit <id> stale_after null` is refused; `edit <id> stale_after ""`
+#   clears it (writes null), and the entity leaves the stale list.
+steps:
+- argv: ["init", "build-hub", ".", "--no-wire"]
+- argv: ["add", "requirement", "--title", "Quarterly", "--kind", "functional", "--stale-after", "2026-01-01"]
+- argv: ["add", "requirement", "--title", "Holds", "--kind", "functional", "--stale-after", "2026-06-30"]
+- argv: ["add", "requirement", "--title", "Due today", "--kind", "functional", "--stale-after", "2026-01-15T09:00:00"]
+- argv: ["add", "requirement", "--title", "Drafted", "--kind", "functional", "--draft", "--stale-after", "2025-12-01"]
+- argv: ["add", "requirement", "--title", "Bad", "--kind", "functional", "--stale-after", "soon"]
+- argv: ["add", "requirement", "--title", "Old and expired", "--kind", "functional", "--stale-after", "2025-03-01", "--updated", "2025-01-01"]
+- argv: ["add", "requirement", "--title", "Untouched", "--kind", "functional", "--updated", "2025-01-01"]
+- argv: ["check"]
+- argv: ["check", "--stale"]
+- sh: "printf -- '---\\ntype: requirement\\ntitle: Undated\\nkind: functional\\nstale_after: 2025-06-01\\n---\\n' > knowledge/requirements/req-undated.md"
+- sh: "printf -- '---\\ntype: requirement\\ncreated: 2026-01-10\\nupdated: 2026-01-10\\ntitle: Typo\\nkind: functional\\nstale_after: someday\\n---\\n' > knowledge/requirements/req-typo.md"
+- argv: ["validate", "requirement/req-typo"]
+- argv: ["stale"]
+- argv: ["status"]
+- argv: ["query", "--stale", "--format", "ids"]
+- sh: "printf -- '---\\ntype: requirement\\ncreated: 2026-01-10\\nupdated: 2026-01-10\\ntitle: Odd\\nkind: functional\\nstale_after: 2099-1-5 10:00:00\\n---\\n' > knowledge/requirements/req-odd.md"
+- sh: "printf -- '---\\ntype: requirement\\ncreated: 2026-01-10\\nupdated: 2026-01-10\\ntitle: Feb\\nkind: functional\\nstale_after: 2099-02-30\\n---\\n' > knowledge/requirements/req-feb.md"
+- argv: ["validate", "requirement/req-odd"]
+- argv: ["validate", "requirement/req-feb"]
+- argv: ["edit", "req-quarterly", "stale_after", "null"]
+- argv: ["edit", "req-quarterly", "stale_after", ""]
+- argv: ["stale"]

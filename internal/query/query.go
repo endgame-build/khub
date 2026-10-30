@@ -92,7 +92,7 @@ func Query(root string, filters Filters, now time.Time) ([]Match, error) {
 		// count — one notion, three read sites.
 		rtype, _ := resolved.Types.Get(node.Type)
 		orphan := graph.IsOrphan(g, node, rtype)
-		stale := project.IsStale(meta, now, days, nil)
+		stale := project.IsStale(rtype, meta, now, days, nil)
 		if !passes(node, meta, g, filters, resolved, inverses, orphan, stale) {
 			continue
 		}

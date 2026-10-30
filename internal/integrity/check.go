@@ -16,6 +16,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/endgame-build/khub/internal/canon"
 	"github.com/endgame-build/khub/internal/entity"
@@ -24,6 +25,7 @@ import (
 	"github.com/endgame-build/khub/internal/index"
 	"github.com/endgame-build/khub/internal/introspect"
 	"github.com/endgame-build/khub/internal/omap"
+	"github.com/endgame-build/khub/internal/project"
 	"github.com/endgame-build/khub/internal/schema"
 	"github.com/endgame-build/khub/internal/template"
 	"github.com/endgame-build/khub/internal/values"
@@ -138,7 +140,24 @@ type CheckReport struct {
 	Misplaced []Misplaced
 	// Aliases that name more than one entity. Fails the gate.
 	AliasConflicts []AliasConflict
+	// StaleGate says `check --stale` ran: only then is StaleAfterExpired
+	// swept, and only then does it fail the gate. The age rule never gates —
+	// it is a guess about attention, not a statement about the content.
+	StaleGate bool
+	// Active entities whose authored `stale_after` has passed. The JSON
+	// bucket is `expired`.
+	StaleAfterExpired []StaleAfterExpiry
 }
+
+// StaleAfterExpiry is one active entity past its authored `stale_after`.
+type StaleAfterExpiry struct {
+	Type       string
+	Slug       string
+	StaleAfter string // the loaded value in its canonical string form (values.Str)
+}
+
+// ID is StaleAfterExpiry.id.
+func (e StaleAfterExpiry) ID() string { return e.Type + "/" + e.Slug }
 
 // Passed is CheckReport.passed.
 func (r *CheckReport) Passed() bool {
@@ -157,7 +176,8 @@ func (r *CheckReport) Passed() bool {
 		len(r.MissingSingletons) == 0 &&
 		len(r.DraftRequiredSingletons) == 0 &&
 		len(r.Misplaced) == 0 &&
-		len(r.AliasConflicts) == 0
+		len(r.AliasConflicts) == 0 &&
+		len(r.StaleAfterExpired) == 0
 }
 
 // Check is integrity.check: walk the active subgraph for completeness,
@@ -168,7 +188,11 @@ func (r *CheckReport) Passed() bool {
 // that points at a stray dangles instead of silently resolving to a non-entity.
 // A file that could not be parsed is a malformed entry, not a node, and fails
 // the check.
-func Check(root string, strict bool) (*CheckReport, error) {
+//
+// expiredAt turns on the opt-in expiry gate (`check --stale`): active
+// entities whose `stale_after` falls on or before that day are reported and
+// fail the gate. nil leaves the sweep off and the report's Expired empty.
+func Check(root string, strict bool, expiredAt *time.Time) (*CheckReport, error) {
 	resolved, err := introspect.LoadSchema(root)
 	if err != nil {
 		return nil, err
@@ -309,7 +333,30 @@ func Check(root string, strict bool) (*CheckReport, error) {
 		StrayTemplates:          strayTemplates,
 		MissingTemplates:        missingTemplates,
 		AliasConflicts:          aliasConflicts(valid, entityNodes),
+		StaleGate:               expiredAt != nil,
+		StaleAfterExpired:       staleAfterExpired(valid, entityNodes, expiredAt),
 	}, nil
+}
+
+// staleAfterExpired is the `check --stale` sweep: active entities past their
+// authored `stale_after`, judged by project.IsExpired — the same rule `khub
+// stale` and `status` apply. A draft is unpublished, so its expiry is not a
+// finding here, as its incompleteness is not.
+func staleAfterExpired(valid *index.Index, nodes []index.Node, at *time.Time) []StaleAfterExpiry {
+	out := []StaleAfterExpiry{}
+	if at == nil {
+		return out
+	}
+	for _, n := range nodes {
+		meta := valid.Meta[n]
+		rtype, _ := valid.Resolved.Types.Get(n.Type)
+		if values.AsBool(draftFlag(meta)) || !project.IsExpired(rtype, meta, *at) {
+			continue
+		}
+		raw, _ := meta.Get(project.StaleAfterField)
+		out = append(out, StaleAfterExpiry{Type: n.Type, Slug: n.Slug, StaleAfter: values.Str(raw)})
+	}
+	return out
 }
 
 // aliasConflicts groups every declared alias case-insensitively, the way ID

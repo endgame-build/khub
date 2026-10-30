@@ -138,7 +138,7 @@ func TestAuditValidationAndScanFailures(t *testing.T) {
 		t.Fatal("pattern skipped by validate")
 	}
 	auditWrite(t, root, "a/nested/hidden.yaml", "type: a\n")
-	check, err := integrity.Check(root, false)
+	check, err := integrity.Check(root, false, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

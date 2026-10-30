@@ -1,0 +1,8 @@
+No git history; using updated field only
+ stale
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━┳━━━━━┳━━━━━━━━━┳━━━━━━━━━┓
+┃ id                        │ effective_date │ age │ source  │ reason  ┃
+┡━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━╇━━━━━╇━━━━━━━━━╇━━━━━━━━━┩
+│ requirement/req-untouched │ 2025-01-01     │ 379 │ updated │ age     │
+│ requirement/req-quarterly │ 2026-01-15     │ 0   │ updated │ expired │
+└───────────────────────────┴────────────────┴─────┴─────────┴─────────┘

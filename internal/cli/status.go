@@ -1,5 +1,5 @@
 // status.go ports cli/status_cmd.py: per-type counts, the draft/active split,
-// orphan/stale counts, and the OKF flag — every number derived from the graph
+// orphan/stale/expired counts, and the OKF flag — every number derived from the graph
 // projection, none stored.
 
 package cli
@@ -45,7 +45,10 @@ func statusRun(format string) error {
 	data.Set("draft", proj.Draft)
 	data.Set("active", proj.Active)
 	data.Set("orphan", proj.Orphan)
+	// Two numbers, never one: `stale` is the age rule (untouched past
+	// stale_days), `expired` the authored rule (past stale_after).
 	data.Set("stale", proj.Stale)
+	data.Set("expired", proj.Expired)
 	data.Set("okf_conformant", proj.OKFConformant)
 	// Python guards these with getattr; the Go projection always carries them.
 	data.Set("stray", proj.Stray)
@@ -65,6 +68,7 @@ func statusRun(format string) error {
 			[]string{"draft / active", fmt.Sprintf("%d / %d", proj.Draft, proj.Active)},
 			[]string{"orphan", fmt.Sprint(proj.Orphan)},
 			[]string{"stale", fmt.Sprint(proj.Stale)},
+			[]string{"expired", fmt.Sprint(proj.Expired)},
 			[]string{"stray", fmt.Sprint(proj.Stray)},
 			[]string{"malformed", fmt.Sprint(proj.Malformed)},
 		)

@@ -303,7 +303,7 @@ func annotate(hits []Hit, idx *index.Index, now time.Time, staleDays int) {
 		draft, _ := meta.Get("draft")
 		hits[i].Draft = values.AsBool(draft)
 		hits[i].Orphan = graph.IsOrphan(g, node, rtype)
-		hits[i].Stale = project.IsStale(meta, now, staleDays, nil)
+		hits[i].Stale = project.IsStale(rtype, meta, now, staleDays, nil)
 
 		out := map[string]int{}
 		for _, e := range g.OutEdges(node) {

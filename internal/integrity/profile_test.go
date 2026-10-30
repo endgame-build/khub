@@ -13,7 +13,7 @@ func BenchmarkCheckLargeCorpus(b *testing.B) {
 	}
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		if _, err := Check(ws, false); err != nil {
+		if _, err := Check(ws, false, nil); err != nil {
 			b.Fatal(err)
 		}
 	}

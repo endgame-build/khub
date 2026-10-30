@@ -1,0 +1,14 @@
+# The human views of the authored expiry: the `stale` table's `reason`
+# column, the `expired` row of `status` beside `stale`, and the line
+# `check --stale` prints for each active expired entity. Clock pinned to
+# 2026-01-15.
+mode: human
+normalize:
+- tty-layout-free
+steps:
+- argv: ["init", "build-hub", ".", "--no-wire"]
+- argv: ["add", "requirement", "--title", "Quarterly", "--kind", "functional", "--stale-after", "2026-01-01"]
+- argv: ["add", "requirement", "--title", "Untouched", "--kind", "functional", "--updated", "2025-01-01"]
+- argv: ["stale"]
+- argv: ["status"]
+- argv: ["check", "--stale"]

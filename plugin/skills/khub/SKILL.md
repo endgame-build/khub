@@ -57,6 +57,7 @@ hand-edit is how a workspace acquires a field no default gate will report.
 
 - `khub add <type> --<field> <v> [--body <text>] [--draft] --format json` — mint an entity. Set relation fields inline (`--client acme-corp`). A relation to a missing target is rejected; a missing required field is captured anyway and reported later by `khub check`.
 - `khub edit <id> <field> <v> --format json` — change a field; `edit <id> draft false` publishes.
+- `--stale-after <date>` on `add` or `edit` — only when the source states an expiry ("holds until March"). Never derive one from an interval. `khub stale` lists it with `reason: expired` once the day comes; `khub check --stale` fails on it. Clear it with `edit <id> stale_after ""`.
 - `khub link <id> <predicate> <target>` / `khub unlink <id> <predicate> <target> --format json` — relations, idempotent. Read `changed` to tell a write from a no-op; both exit 0.
 - `khub remove <id> --format json` — delete; refuses while an inbound edge resolves to it unless `--force`.
 

@@ -140,13 +140,49 @@ func pyParseFloat(s string) (float64, bool) {
 func isDigit(ch rune) bool { return ch >= '0' && ch <= '9' }
 
 // IsDateish mirrors is_dateish: Python 3.11 date/datetime.fromisoformat over
-// str(value). Dates and datetimes pass as-is.
+// str(value). A loaded date or datetime passes when its calendar date exists:
+// the resolver types `2026-02-30` as a timestamp by shape alone, where
+// Python's constructor would have refused it, so validate checks the day.
 func IsDateish(v any) bool {
 	switch v.(type) {
 	case canon.Date, canon.DateTime:
-		return true
+		_, ok := CalendarDate(v)
+		return ok
 	}
 	return isoParses(Str(v))
+}
+
+// timestampDate is the date head of the YAML 1.1 timestamp the loaders
+// type as canon.Date or canon.DateTime: a four-digit year, then a month and
+// a day of one or two digits each (`2099-1-5 10:00:00` is a timestamp).
+var timestampDate = regexp.MustCompile(`^([0-9]{4})-([0-9]{1,2})-([0-9]{1,2})`)
+
+// CalendarDate is the calendar date a loaded canon.Date or canon.DateTime
+// names, at UTC midnight. The time of day and any offset are ignored: the
+// date as written decides. ok is false for any other value and for a date
+// that does not exist (`2099-02-30`).
+func CalendarDate(v any) (time.Time, bool) {
+	var iso string
+	switch x := v.(type) {
+	case canon.Date:
+		iso = x.ISO
+	case canon.DateTime:
+		iso = x.ISO
+	default:
+		return time.Time{}, false
+	}
+	m := timestampDate.FindStringSubmatch(iso)
+	if m == nil {
+		return time.Time{}, false
+	}
+	y, _ := strconv.Atoi(m[1])
+	mo, _ := strconv.Atoi(m[2])
+	d, _ := strconv.Atoi(m[3])
+	t := time.Date(y, time.Month(mo), d, 0, 0, 0, 0, time.UTC)
+	if t.Year() != y || int(t.Month()) != mo || t.Day() != d {
+		return time.Time{}, false // normalised: the day does not exist
+	}
+	return t, true
 }
 
 // Str mirrors Python str() for the value shapes khub holds.

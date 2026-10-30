@@ -26,6 +26,7 @@ ontology:
       author:      { type: text }                    # the writer — person or agent
       created:     { type: date, required: true }
       updated:     { type: date }
+      stale_after: { type: datetime }                # OKF — authored expiry; stale on and after this day
       title:       { type: text }                    # OKF
       description: { type: text }                    # OKF
       resource:    { type: text }                    # OKF — canonical URI / link-out

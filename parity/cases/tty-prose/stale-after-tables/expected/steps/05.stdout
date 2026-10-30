@@ -1,0 +1,23 @@
+ status
+┏━━━━━━━━━━━━━━━━┳━━━━━━━┓
+┃ type           │ count ┃
+┡━━━━━━━━━━━━━━━━╇━━━━━━━┩
+│ prd            │ 1     │
+│ arc42          │ 1     │
+│ capability     │ 0     │
+│ actor          │ 0     │
+│ use-case       │ 0     │
+│ requirement    │ 2     │
+│ adr            │ 0     │
+│ system         │ 0     │
+│ component      │ 0     │
+│ api            │ 0     │
+│ repo           │ 0     │
+│ draft / active │ 0 / 4 │
+│ orphan         │ 2     │
+│ stale          │ 1     │
+│ expired        │ 1     │
+│ stray          │ 0     │
+│ malformed      │ 0     │
+│ OKF-conformant │ yes   │
+└────────────────┴───────┘

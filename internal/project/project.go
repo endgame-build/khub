@@ -4,9 +4,12 @@
 //
 // A minimal, derived-at-runtime view of the entity tree: per-type counts, the
 // draft/active split, orphan (zero edges in or out), stale (older than
-// stale_days), and the OKF-conformance flag. Counts are never stored (WS-006);
-// orphan and stale are core projection properties computed identically for
-// status, query, and check (WS-008).
+// stale_days), expired (past an authored stale_after), and the
+// OKF-conformance flag. Counts are never stored (WS-006);
+// orphan is a core projection property computed identically for status,
+// query, and check (WS-008). Staleness has two rules, IsAged and IsExpired:
+// query, search and `khub stale` read their union (IsStale), status counts
+// each apart, and `check --stale` gates on IsExpired alone.
 //
 // project.stale_days is NOT here: it lives in internal/workspace as
 // workspace.StaleDays, alongside its DEFAULT_STALE_DAYS anchor.
@@ -32,7 +35,8 @@ type Projection struct {
 	Draft         int
 	Active        int
 	Orphan        int
-	Stale         int
+	Stale         int // the age rule only (IsAged): untouched past stale_days
+	Expired       int // the authored rule only (IsExpired): past stale_after
 	OKFConformant bool
 	Stray         int
 	Malformed     int
@@ -71,7 +75,7 @@ func Project(root string, staleDays int, now time.Time) (*Projection, error) {
 		counts.Set(node.Type, n+1)
 	}
 
-	draft, active, stale := 0, 0, 0
+	draft, active, stale, expired := 0, 0, 0, 0
 	brokenRef := false
 	hasOut := map[index.Node]bool{}
 	hasIn := map[index.Node]bool{}
@@ -83,10 +87,16 @@ func Project(root string, staleDays int, now time.Time) (*Projection, error) {
 		} else {
 			active++
 		}
-		if IsStale(meta, now, staleDays, nil) {
+		// Counted apart and never summed: an entity can be both, and the two
+		// mean different things (a guess about attention vs a statement about
+		// the content).
+		rtype, _ := resolved.Types.Get(node.Type)
+		if IsAged(meta, now, staleDays, nil) {
 			stale++
 		}
-		rtype, _ := resolved.Types.Get(node.Type)
+		if IsExpired(rtype, meta, now) {
+			expired++
+		}
 		for _, predicate := range rtype.Relations.Keys() {
 			rel, _ := rtype.Relations.Get(predicate)
 			raw, _ := meta.Get(predicate)
@@ -133,12 +143,13 @@ func Project(root string, staleDays int, now time.Time) (*Projection, error) {
 	}
 
 	return &Projection{
-		Counts: counts,
-		Total:  total,
-		Draft:  draft,
-		Active: active,
-		Orphan: orphan,
-		Stale:  stale,
+		Counts:  counts,
+		Total:   total,
+		Draft:   draft,
+		Active:  active,
+		Orphan:  orphan,
+		Stale:   stale,
+		Expired: expired,
 		// OKF conformance means the tree would export as a valid bundle: every
 		// file in a layout is a typed entity (no strays, no malformed) and every
 		// typed/union edge resolves.
@@ -173,14 +184,58 @@ func EffectiveDate(meta *omap.Map, gitDate *time.Time) (*time.Time, string) {
 	return nil, "none"
 }
 
-// IsStale is is_stale: no timestamp to judge against is never stale; a
-// present-but-unparseable date is surfaced as stale, not silently dropped.
-func IsStale(meta *omap.Map, now time.Time, staleDays int, gitDate *time.Time) bool {
+// IsStale is the single staleness verdict query, search and `khub stale`
+// share: the age rule OR the authored expiry. `status` never reports this
+// union; it counts IsAged and IsExpired apart.
+func IsStale(rtype *schema.ResolvedType, meta *omap.Map, now time.Time, staleDays int, gitDate *time.Time) bool {
+	return IsAged(meta, now, staleDays, gitDate) || IsExpired(rtype, meta, now)
+}
+
+// IsAged is is_stale's age rule: the effective date is more than staleDays
+// old. No timestamp to judge against is never aged; a present-but-unparseable
+// date is surfaced as aged, not silently dropped.
+func IsAged(meta *omap.Map, now time.Time, staleDays int, gitDate *time.Time) bool {
 	date, source := EffectiveDate(meta, gitDate)
 	if source == "none" {
 		return false
 	}
 	return date == nil || daysBetween(civil(now), *date) > staleDays
+}
+
+// StaleAfterField is the base attribute an author sets to declare an expiry.
+const StaleAfterField = "stale_after"
+
+// DeclaresExpiry reports whether rtype resolves `stale_after` to a date or
+// datetime, so the expiry rule reads it (nil: the base declaration).
+func DeclaresExpiry(rtype *schema.ResolvedType) bool {
+	if rtype == nil {
+		return true
+	}
+	attr, ok := rtype.Attributes.Get(StaleAfterField)
+	return ok && (attr.BaseType == "date" || attr.BaseType == "datetime")
+}
+
+// IsExpired is the authored rule: `stale_after` is set and today is on or
+// past its date. It is judged by calendar day, the clock every staleness
+// verdict runs on, so a time of day or an offset in the value does not move
+// it: the date as written decides. An absent or null value never expires; a
+// present-but-unparseable one (validate names it) is surfaced as expired, as
+// the age rule surfaces an unparseable `updated`.
+//
+// The rule applies only where the entity's type resolves `stale_after` to a
+// date or datetime — the base declaration. A type that redeclares the name
+// as another scalar type has made it its own field, with no expiry meaning,
+// so it never expires. A nil rtype reads as the base declaration.
+func IsExpired(rtype *schema.ResolvedType, meta *omap.Map, now time.Time) bool {
+	if !DeclaresExpiry(rtype) {
+		return false
+	}
+	raw, ok := meta.Get(StaleAfterField)
+	if !ok || raw == nil {
+		return false
+	}
+	date := asDate(raw)
+	return date == nil || !civil(now).Before(*date)
 }
 
 // civil normalizes a time to its calendar date at UTC midnight, so day
@@ -197,6 +252,11 @@ func daysBetween(now, then time.Time) int {
 // asDate is _as_date: a datetime yields its date, a date passes through, and
 // anything else goes through date.fromisoformat(str(value)[:10]) with a
 // ValueError -> None guard. The slice is 10 CHARACTERS, so it is taken over runes.
+//
+// A loaded date or datetime reads its date through values.CalendarDate, the
+// same reading validate applies: slicing `2099-1-5 10:00:00` to ten
+// characters would cut a valid timestamp into garbage, and a day that does
+// not exist (`2099-02-30`) yields nil here exactly as validate rejects it.
 func asDate(value any) *time.Time {
 	switch x := value.(type) {
 	case nil:
@@ -204,10 +264,12 @@ func asDate(value any) *time.Time {
 	case time.Time:
 		d := civil(x)
 		return &d
-	case canon.DateTime:
-		return parseISODate(truncateRunes(x.ISO, 10))
-	case canon.Date:
-		return parseISODate(truncateRunes(x.ISO, 10))
+	case canon.DateTime, canon.Date:
+		d, ok := values.CalendarDate(x)
+		if !ok {
+			return nil
+		}
+		return &d
 	}
 	return parseISODate(truncateRunes(values.Str(value), 10))
 }
