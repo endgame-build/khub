@@ -119,27 +119,47 @@ type Options struct {
 // An unknown opts.Type is a located error, same as query. An empty result is a
 // success, not an error (QRY-002).
 func Search(root, text string, opts Options) (Result, error) {
-	type_ := opts.Type
 	resolved, err := introspect.LoadSchema(root)
 	if err != nil {
 		return Result{}, err
 	}
-	if type_ != nil && !resolved.Types.Has(*type_) { // before the corpus scan
-		preset := "the"
-		if prov, perr := workspace.Provenance(root); perr == nil {
-			if p, _ := prov.Get("preset"); p != nil && p != "" {
-				preset, _ = p.(string)
-			}
-		}
-		known := append([]string{}, resolved.Types.Keys()...)
-		sort.Strings(known)
-		return Result{}, errs.UnknownType(*type_, preset, known)
+	if err := checkType(root, resolved, opts.Type); err != nil { // before the corpus scan
+		return Result{}, err
 	}
 	scanned, err := index.BuildWithBodies(root, resolved)
 	if err != nil {
 		return Result{}, err
 	}
-	idx := index.Filter(scanned, index.StrayNodes(scanned)) // strays are not entities
+	return Over(root, index.Filter(scanned, index.StrayNodes(scanned)), text, opts) // strays are not entities
+}
+
+// checkType is the unknown-type refusal, raised before any scan, same as query.
+func checkType(root string, resolved *schema.ResolvedSchema, type_ *string) error {
+	if type_ == nil || resolved.Types.Has(*type_) {
+		return nil
+	}
+	preset := "the"
+	if prov, perr := workspace.Provenance(root); perr == nil {
+		if p, _ := prov.Get("preset"); p != nil && p != "" {
+			preset, _ = p.(string)
+		}
+	}
+	known := append([]string{}, resolved.Types.Keys()...)
+	sort.Strings(known)
+	return errs.UnknownType(*type_, preset, known)
+}
+
+// Over is Search over an index the caller already scanned — built with
+// bodies (index.BuildWithBodies) and with its strays filtered, exactly the
+// index Search builds for itself. A verb that also walks the graph or reads
+// the entities (retrieve) scans the tree once and hands the index here, so
+// the FTS build, the ranking and the hit annotation have one implementation.
+func Over(root string, idx *index.Index, text string, opts Options) (Result, error) {
+	type_ := opts.Type
+	resolved := idx.Resolved
+	if err := checkType(root, resolved, type_); err != nil {
+		return Result{}, err
+	}
 	staleDays, err := workspace.StaleDays(root)
 	if err != nil {
 		return Result{}, err

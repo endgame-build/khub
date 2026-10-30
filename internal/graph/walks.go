@@ -68,30 +68,30 @@ func Neighbors(idx *index.Index, id string, predicate *string, direction string,
 	}
 	// bounds frontier expansion (and the source is never its own neighbour)
 	visited := map[index.Node]bool{src: true}
-	// dedup on the whole (node, predicate, direction) triple — adjacentHit IS
+	// dedup on the whole (node, predicate, direction) triple — Adjacency IS
 	// that triple, so it doubles as the key.
-	emitted := map[adjacentHit]bool{}
+	emitted := map[Adjacency]bool{}
 	frontier := []index.Node{src}
 	found := []Neighbor{}
 	for d := 0; d < depth && len(frontier) > 0; d++ {
 		var next []index.Node
 		for _, node := range frontier {
-			for _, a := range adjacent(g, node, direction, predicate) {
-				if a.node == src || emitted[a] {
+			for _, a := range Adjacent(g, node, direction, predicate) {
+				if a.Node == src || emitted[a] {
 					continue
 				}
 				emitted[a] = true
 				found = append(found, Neighbor{
-					Type:      a.node.Type,
-					Slug:      a.node.Slug,
-					Predicate: a.pred,
-					Direction: a.dir,
-					Derived:   a.dir == DirectionIn,
+					Type:      a.Node.Type,
+					Slug:      a.Node.Slug,
+					Predicate: a.Predicate,
+					Direction: a.Direction,
+					Derived:   a.Direction == DirectionIn,
 					Depth:     d + 1,
 				})
-				if !visited[a.node] {
-					visited[a.node] = true
-					next = append(next, a.node)
+				if !visited[a.Node] {
+					visited[a.Node] = true
+					next = append(next, a.Node)
 				}
 			}
 		}
@@ -100,27 +100,31 @@ func Neighbors(idx *index.Index, id string, predicate *string, direction string,
 	return found, nil
 }
 
-type adjacentHit struct {
-	node index.Node
-	pred string
-	dir  string
+// Adjacency is one step a walk may take from a node: the node it reaches,
+// over which predicate, in which direction ("in" is a derived inverse).
+type Adjacency struct {
+	Node      index.Node
+	Predicate string
+	Direction string
 }
 
-// adjacent yields (neighbour, predicate, direction) for one node, filtered —
-// _adjacent. Out-edges come first, exactly like the Python generator.
-func adjacent(g *Graph, node index.Node, direction string, predicate *string) []adjacentHit {
-	var out []adjacentHit
+// Adjacent yields (neighbour, predicate, direction) for one node, filtered —
+// _adjacent. Out-edges come first, exactly like the Python generator, each
+// side in adjacency-insertion order, so every walk built on it is
+// deterministic. neighbors and retrieve share it.
+func Adjacent(g *Graph, node index.Node, direction string, predicate *string) []Adjacency {
+	var out []Adjacency
 	if direction == DirectionOut || direction == DirectionBoth {
 		for _, e := range g.OutEdges(node) {
 			if predicate == nil || e.Predicate == *predicate {
-				out = append(out, adjacentHit{e.To, e.Predicate, DirectionOut})
+				out = append(out, Adjacency{e.To, e.Predicate, DirectionOut})
 			}
 		}
 	}
 	if direction == DirectionIn || direction == DirectionBoth {
 		for _, e := range g.InEdges(node) {
 			if predicate == nil || e.Predicate == *predicate {
-				out = append(out, adjacentHit{e.From, e.Predicate, DirectionIn})
+				out = append(out, Adjacency{e.From, e.Predicate, DirectionIn})
 			}
 		}
 	}
@@ -275,7 +279,7 @@ func WalkNeighbors(root, id string, predicate *string, direction string, depth i
 		return nil, err
 	}
 	if predicate != nil {
-		if err := requirePredicate(resolved, *predicate); err != nil {
+		if err := RequirePredicate(resolved, *predicate); err != nil {
 			return nil, err
 		}
 	}
@@ -290,7 +294,7 @@ func WalkImpact(root, id string, predicate string, reverse bool) ([]ImpactNode, 
 	if err != nil {
 		return nil, err
 	}
-	if err := requirePredicate(resolved, predicate); err != nil {
+	if err := RequirePredicate(resolved, predicate); err != nil {
 		return nil, err
 	}
 	return Impact(idx, id, predicate, reverse)
@@ -304,7 +308,7 @@ func WalkHistory(root, id string, predicate string, limit *int) ([]HistoryLink, 
 	if err != nil {
 		return nil, err
 	}
-	if err := requirePredicate(resolved, predicate); err != nil {
+	if err := RequirePredicate(resolved, predicate); err != nil {
 		return nil, err
 	}
 	return History(idx, id, predicate, limit)
@@ -324,12 +328,13 @@ func walkIndex(root string) (*schema.ResolvedSchema, *index.Index, error) {
 	return resolved, index.Filter(scanned, index.StrayNodes(scanned)), nil
 }
 
-// requirePredicate is _require_predicate: raise unless some type in the schema
-// declares predicate (universal edges included).
+// RequirePredicate is _require_predicate: raise unless some type in the schema
+// declares predicate (universal edges included). The refusal lists the
+// declared predicates, so a caller corrects the call without a second lookup.
 //
 // core/errors.py builds this LocatedError inline with no factory, so the code and
 // message are assembled here rather than in internal/errs.
-func requirePredicate(resolved *schema.ResolvedSchema, predicate string) error {
+func RequirePredicate(resolved *schema.ResolvedSchema, predicate string) error {
 	declared := map[string]bool{}
 	for _, tname := range resolved.Types.Keys() {
 		rtype, _ := resolved.Types.Get(tname)

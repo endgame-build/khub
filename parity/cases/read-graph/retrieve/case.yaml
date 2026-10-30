@@ -1,0 +1,44 @@
+# `retrieve` is one-call context assembly: seeds (a search, or ids), their
+# neighbourhood over the derived graph, and caps that trim the periphery
+# first. The graph is the neighbors-depth one plus a database under the API:
+#
+#   req-auth-required --realized_in--> cmp-api --depends_on--> cmp-database
+#   cmp-web --depends_on--> cmp-api        ad-…-use-jwt --affects--> cmp-api
+#
+# Pinned here: a text seed with the default one-hop expansion (seed order,
+# then walk order, reasons on every record); id seeds with --expand at a
+# depth, --out and --no-body; --max-entities trimming the deepest first
+# (then the greatest (type, slug)); --max-bytes holding the printed document
+# under the cap, and a cap too small for the seeds reporting insufficiency at
+# exit 0; the `note:` line for seeds the limit dropped (hits, and ids); a
+# search with no hit; the refusals: an unknown predicate (listing the
+# declared ones), no seed at all, text with --id and --type with --id (usage
+# errors); and the byte floor: a cap below the envelope shrinks the omitted
+# id list, and one below the irreducible document gets that document.
+steps:
+- argv: ["init", "build-hub", ".", "--no-wire"]
+- argv: ["add", "requirement", "--title", "Auth required", "--kind", "functional"]
+- argv: ["add", "component", "--title", "API", "--kind", "service", "--stack", "python"]
+- argv: ["add", "component", "--title", "Web", "--kind", "service"]
+- argv: ["add", "component", "--title", "Database", "--kind", "service"]
+- argv: ["add", "adr", "--title", "Use JWT", "--status", "accepted"]
+- argv: ["link", "req-auth-required", "realized_in", "cmp-api"]
+- argv: ["link", "cmp-web", "depends_on", "cmp-api"]
+- argv: ["link", "cmp-api", "depends_on", "cmp-database"]
+- argv: ["link", "ad-2026-01-15-use-jwt", "affects", "cmp-api"]
+- argv: ["retrieve", "auth"]
+- argv: ["retrieve", "--id", "cmp-web", "--expand", "depends_on:2", "--out", "--no-body"]
+- argv: ["retrieve", "--id", "cmp-api", "--in", "--no-body", "--format", "json"]
+- argv: ["retrieve", "auth", "--depth", "2", "--max-entities", "2", "--no-body"]
+- argv: ["retrieve", "auth", "--max-bytes", "800", "--no-body"]
+- argv: ["retrieve", "auth", "--max-bytes", "300", "--no-body"]
+- argv: ["retrieve", "--plain", "api web", "--type", "component", "--limit", "1", "--depth", "0", "--no-body"]
+- argv: ["retrieve", "nothing-matches-this", "--plain"]
+- argv: ["retrieve", "auth", "--expand", "nope"]
+- argv: ["retrieve"]
+- argv: ["retrieve", "auth", "--id", "cmp-api"]
+- argv: ["retrieve", "auth", "--expand", "depends_on:x"]
+- argv: ["retrieve", "--id", "cmp-api", "--id", "cmp-web", "--limit", "1", "--depth", "0", "--no-body"]
+- argv: ["retrieve", "--id", "cmp-api", "--type", "component"]
+- argv: ["retrieve", "auth", "--max-bytes", "170", "--no-body"]
+- argv: ["retrieve", "auth", "--max-bytes", "100", "--no-body"]

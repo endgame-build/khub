@@ -2,6 +2,29 @@
 
 Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); khub is pre-release.
 
+## [Unreleased]
+
+### Added
+
+- **`khub retrieve`.** One-call bounded context assembly, the read verb an
+  agent otherwise composes from `search`, `get` and `neighbors` while
+  managing its own budget. Seeds are a search (`retrieve "auth token"`, the
+  same MATCH syntax as `search`, `--plain` and `--type` honoured) or ids
+  (`--id`, repeatable), capped by `--limit` before expansion. The expansion
+  is a breadth-first walk over the derived graph, `--expand <predicate>[:<depth>]`
+  per predicate or every predicate to `--depth`, in `--in`/`--out`/both.
+  `--max-entities` and `--max-bytes` trim the periphery first (the deepest,
+  then the greatest `(type, slug)`, then the least relevant seed); the byte
+  cap holds the printed JSON document itself. There is no token budget: a
+  tokenizer is model-specific, bytes are what every caller can measure. The
+  document is `{count, entities, omitted}`: each entity the `get --edges`
+  record with `title`, the lifecycle flags and a `reason` (a seed's score and
+  snippet, or the predicate, direction, source id and depth it was reached
+  by); `omitted` counts what each cap dropped, names the first ids, and says
+  `truncated` and `insufficient` (a cap could not hold the seeds) outright.
+  `--no-body` drops the bodies. The Claude Code plugin (0.1.5) draws a row for
+  it, and the khub skill says when to reach for it.
+
 ## [0.30.0] — 2026-10-28
 
 Storage can now follow a hub's existing nesting, relations can point to files

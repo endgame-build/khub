@@ -1,6 +1,6 @@
 ---
 name: khub
-description: Use when working in a khub workspace (a repository with a .khub/ directory) to read or write typed, schema-validated context instead of grepping Markdown. Covers retrieval (query, get, neighbors, impact, history, search) and authoring (add, edit, link, unlink, remove). Discovers the active preset, types, and schema at runtime.
+description: Use when working in a khub workspace (a repository with a .khub/ directory) to read or write typed, schema-validated context instead of grepping Markdown. Covers retrieval (retrieve, query, get, neighbors, impact, history, search) and authoring (add, edit, link, unlink, remove). Discovers the active preset, types, and schema at runtime.
 allowed-tools: Bash
 ---
 
@@ -29,6 +29,7 @@ The schema lives at `.khub/ontology.yaml` (the domain model) with `.khub/policy.
 - `khub impact <id> --format json` — transitive closure over a predicate (blast radius).
 - `khub history <id> --format json` — a supersession chain.
 - `khub search <text> --format json` — BM25 full-text over titles, bodies, and fields; `--plain` takes words as typed (any may match) instead of FTS5 syntax. Hits carry `draft`/`orphan`/`stale` and per-predicate edge counts.
+- `khub retrieve <text> [--expand <pred>[:<depth>]] [--max-bytes <n>] --format json` — the seeds (a search, or `--id <id>` repeated) with their neighbourhood, as full `get` records, in one call. Reach for it when you would otherwise run `search`, then `get` on the hits, then `neighbors` on each: it returns seeds in rank order followed by what they link to, every record with a `reason` (the seed's score, or the predicate, direction and id it was reached from) and the lifecycle flags. Budget it: `--limit` caps the seeds, `--max-entities` and `--max-bytes` trim the far edge first, `--no-body` keeps the frontmatter and edges only. Read `omitted`: `truncated` means something was cut, `insufficient` means the cap could not hold the seeds themselves — raise the cap, lower `--limit` or pass `--no-body` rather than trusting a clipped answer. Use `search` alone when you only need to find; `get` when you already hold the ids and want nothing around them.
 
 ## Know when to write
 

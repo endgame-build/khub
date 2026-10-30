@@ -83,6 +83,21 @@ commands:
   - '--limit'
   - '--plain'
   - '--format'
+- name: 'retrieve'
+  params:
+  - 'arg:text'
+  - '--id'
+  - '--type'
+  - '--plain'
+  - '--expand'
+  - '--in'
+  - '--out'
+  - '--depth'
+  - '--limit'
+  - '--max-entities'
+  - '--max-bytes'
+  - '--no-body'
+  - '--format'
 - name: 'neighbors'
   params:
   - 'arg:id_'
@@ -191,6 +206,7 @@ error_codes:
 # and the legacy shape that could still trip it is deleted with legacy.go.
 - no_preset
 - no_schema_snapshot
+- no_seed
 - no_slug_source
 - no_workspace
 - number_violation

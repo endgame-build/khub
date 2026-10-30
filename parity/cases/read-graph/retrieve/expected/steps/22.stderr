@@ -1,0 +1,6 @@
+Usage: khub retrieve [OPTIONS] [TEXT]
+Try 'khub retrieve --help' for help.
+╭─ Error ──────────────────────────────────────────────────────────────────────╮
+│ Invalid value: --expand depends_on:x: the depth must be a whole number, 0 or │
+│ more                                                                         │
+╰──────────────────────────────────────────────────────────────────────────────╯

@@ -37,6 +37,11 @@ export function failingOf(check: Row): Array<{ bucket: string; items: unknown[] 
 function subjectOf(call: Simple): string {
   if (call.verb === 'query') return typeof call.flags.type === 'string' ? call.flags.type : ''
   if (call.verb === 'search') return call.positional[0] === undefined ? '' : `"${call.positional[0]}"`
+  if (call.verb === 'retrieve') {
+    if (call.positional[0] !== undefined) return `"${call.positional[0]}"`
+
+    return typeof call.flags.id === 'string' ? call.flags.id : ''
+  }
   if (call.verb === 'schema') return call.sub === 'show' ? (call.positional[0] ?? '') : ''
 
   return SUBJECT_VERBS.has(call.verb) ? (call.positional[0] ?? '') : ''
@@ -65,6 +70,18 @@ function searchResult(rows: Row[], note: string): Result {
 
   // khub's own note for an empty result already says there were no hits.
   return { line: rows.length === 0 && /^no hits/i.test(noted) ? noted : `${hits} · ${noted}`, tone: 'warn' }
+}
+
+// A retrieval says how much it holds and warns when a cap cut it; one that could not
+// hold its seeds is an error, since the answer is not the evidence asked for.
+function retrieveResult(row: Row): Result {
+  const omitted = isRow(row.omitted) ? row.omitted : {}
+  const n = Number(row.count)
+  const held = n === 0 ? 'no entities' : count(n, 'entity', 'entities')
+
+  if (omitted.insufficient === true) return { line: `${held} · insufficient`, tone: 'bad' }
+
+  return omitted.truncated === true ? { line: `${held} · truncated`, tone: 'warn' } : { line: held, tone: 'plain' }
 }
 
 function validateResult(row: Row): Result {
@@ -147,6 +164,9 @@ function resultOf(call: Simple, json: unknown, note: string): Result {
 
     case 'search':
       return searchResult(rows, note)
+
+    case 'retrieve':
+      return retrieveResult(row)
 
     case 'neighbors': {
       const inbound = rows.filter(found => found.direction === 'in').length
@@ -233,6 +253,9 @@ function listOf(call: Simple, json: unknown): KhubRow[] {
     case 'search':
     case 'stale':
       return rows.map(entityRow)
+
+    case 'retrieve':
+      return rowsOf(row.entities).map(entityRow)
 
     case 'neighbors':
       return rows.map(found => ({

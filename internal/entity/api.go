@@ -104,5 +104,20 @@ func EntityPath(root string, idx *index.Index, node index.Node) string {
 // case-folding rule and raising on ambiguity.
 func ResolveID(idx *index.Index, id string) (index.Node, error) { return resolveID(idx, id) }
 
+// View reads one entity of an index the caller already scanned — the record
+// `get` prints, with its stored and derived edges when edges is set. The
+// index must have its strays filtered, as every read verb's has, so a derived
+// edge never comes from a file that is not an entity.
+func View(root string, idx *index.Index, node index.Node, edges bool) (*EntityView, error) {
+	view, err := getView(root, idx, node)
+	if err != nil {
+		return nil, err
+	}
+	if edges {
+		view.Edges = entityEdges(idx, idx.Resolved, node, view.Meta)
+	}
+	return view, nil
+}
+
 // Slugify mints a slug from free text (Python slugify).
 func Slugify(text string) string { return slugify(text) }

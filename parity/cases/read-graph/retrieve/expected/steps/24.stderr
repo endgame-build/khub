@@ -1,0 +1,6 @@
+Usage: khub retrieve [OPTIONS] [TEXT]
+Try 'khub retrieve --help' for help.
+╭─ Error ──────────────────────────────────────────────────────────────────────╮
+│ Invalid value: --type and --plain shape a search; they do not apply to --id  │
+│ seeds                                                                        │
+╰──────────────────────────────────────────────────────────────────────────────╯

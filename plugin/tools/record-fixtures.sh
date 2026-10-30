@@ -77,6 +77,8 @@ rec neighbors_search neighbors cmp-search --format json
 rec impact_storage impact cmp-storage --reverse --format json
 rec search_hits search --plain search --format json
 rec search_empty search --plain zzzz --format json
+rec retrieve_search retrieve --plain search --no-body --format json
+rec retrieve_trimmed retrieve --id cmp-search --depth 2 --max-entities 2 --no-body --format json
 rec get_missing get nope --format json
 rec remove_refused remove cmp-search --format json
 rec reindex_dry reindex --dry-run
