@@ -1,0 +1,1 @@
+{"error": {"code": "invalid_base", "message": "Base IRI 'http://x' must end in '/', '#' or ':' so the minted IRIs append to it"}}

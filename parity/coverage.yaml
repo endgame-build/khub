@@ -160,6 +160,13 @@ commands:
 - name: 'schema diff'
   params:
   - '--format'
+- name: 'schema rdf'
+  params:
+  - '--out'
+  - '--instances'
+  - '--dry-run'
+  - '--base'
+  - '--format'
 error_codes:
 - alias_taken
 - ambiguity_error
@@ -180,6 +187,8 @@ error_codes:
 - illegal_predicate
 - internal_path_error
 - inbound_edge_refusal
+- invalid_base
+- invalid_out
 - invalid_schema
 - invalid_snapshot
 - invalid_slug

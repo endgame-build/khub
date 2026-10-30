@@ -175,15 +175,26 @@ func (idx *Index) pathNode(target string) (Node, bool) {
 // or directory in the workspace that satisfies rel without an edge: a path
 // reference (rel.ByPath) on an `any` relation.
 func (idx *Index) ResolvesToFile(rel *schema.ResolvedRelation, target string) bool {
+	_, ok := idx.FileRef(rel, target)
+	return ok
+}
+
+// FileRef is ResolvesToFile with the answer: the workspace-relative,
+// slash-separated path of the file or directory target names, when it
+// satisfies rel without an edge. The RDF projection mints the file's IRI
+// from it.
+func (idx *Index) FileRef(rel *schema.ResolvedRelation, target string) (string, bool) {
 	if !rel.ByPath || rel.Kind != schema.KindAny || idx.Root == "" {
-		return false
+		return "", false
 	}
 	clean, ok := cleanRef(target)
 	if !ok {
-		return false
+		return "", false
 	}
-	_, err := fsio.Stat(idx.Root, filepath.Join(idx.Root, filepath.FromSlash(clean)))
-	return err == nil
+	if _, err := fsio.Stat(idx.Root, filepath.Join(idx.Root, filepath.FromSlash(clean))); err != nil {
+		return "", false
+	}
+	return clean, true
 }
 
 // Satisfies reports whether a relation value resolves: to an entity, or, by

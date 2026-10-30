@@ -19,6 +19,7 @@ khub's docs, organized by [Diátaxis](https://diataxis.fr): learning, tasks, ref
 - [firm-ops preset](firm-ops-preset.md) — the operating graph of a consulting and delivery firm: 9 entity types, 14 relation predicates, per-type attributes.
 - [build-hub preset](build-hub-preset.md) — the knowledge hub of a build project: eleven types, the edges and the walks they buy. `build-lite` is an alias that resolves to it.
 - [Collections](collections-design.md) — the single-file collection row model: identity, locking, malformed handling, git attribution.
+- [RDF mapping](rdf-mapping.md) — what `khub schema rdf` writes: the khub ↔ RDFS/SHACL mapping, IRI minting, the `khub:` annotation vocabulary, and the serialization rules.
 
 ## Explanation — understand the design
 

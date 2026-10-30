@@ -147,6 +147,7 @@ The CLI is a thin, schema-introspecting adapter over the core library's verbs: c
 | | `khub backfill [--type T]` | add missing frontmatter and dates from `git log` |
 | | `khub viz` | self-contained Cytoscape HTML over the typed graph |
 | | `khub serve` | the same graph live over loopback HTTP, read-only, rebuilt per request |
+| | `khub schema rdf` | RDFS + SHACL Turtle over the resolved schema into `.khub/generated/schema.ttl`, the entities behind `--instances`; derived, never authored — [`rdf-mapping.md`](rdf-mapping.md) is the normative mapping |
 | | `khub build` | materialize the SQLite projection *(planned)* |
 | | `khub export --okf [path]` | render the workspace to a conformant OKF bundle *(planned)* |
 | | `khub diff-preset` | drift against the canonical preset, and promote-back *(planned)* |

@@ -1,0 +1,1 @@
+{"error": {"code": "unsafe_path", "message": "Path ../escape.ttl is outside workspace %WS%; a relative --out stays inside it, pass an absolute path to write elsewhere"}}

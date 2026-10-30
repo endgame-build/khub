@@ -53,6 +53,15 @@ func Emit(data any, fmt_ string, human func()) error {
 	return nil
 }
 
+// EmitRaw prints a document the caller asked for by name — `schema rdf
+// --out -` puts the Turtle itself on stdout — as it is, whatever the format
+// gate says. The write error reaches Guard as Emit's does, so EPIPE stays a
+// non-failure.
+func EmitRaw(text string) error {
+	_, err := fmt.Fprint(os.Stdout, text)
+	return err
+}
+
 // Note prints one advisory line to stderr, in JSON and human modes alike. A
 // command calls it before Emit, so the line reaches the caller even when
 // stdout is piped through `head`.

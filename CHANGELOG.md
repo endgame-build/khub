@@ -2,6 +2,19 @@
 
 Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); khub is pre-release.
 
+## [Unreleased]
+
+### Added
+
+- **RDF projection.** `khub schema rdf` writes the resolved schema as RDFS +
+  SHACL Turtle to `.khub/generated/schema.ttl` (`--out` elsewhere, `-` for
+  stdout; `--dry-run` reports): a class and a node shape per type, a shared
+  property per predicate, SHACL constraints for the ontology layer and
+  `khub:` annotations for storage, policy, `acyclic` and `inverse`.
+  `--instances` adds every entity as a typed individual with its attributes
+  and forward edges. `--base` moves the minted IRIs. `docs/rdf-mapping.md`
+  is the normative mapping; the firm-ops render is its golden fixture.
+
 ## [0.30.0] — 2026-10-28
 
 Storage can now follow a hub's existing nesting, relations can point to files

@@ -65,6 +65,17 @@ func Provenance(root string) (*omap.Map, error) {
 	return out, nil
 }
 
+// Name is the workspace's `name` from .khub/config.yaml — what init recorded
+// (`--name`, else the directory's name). "" when the key is missing or null.
+// `schema rdf` mints entity IRIs under it.
+func Name(root string) (string, error) {
+	cfg, err := loadConfig(root)
+	if err != nil {
+		return "", err
+	}
+	return configString(cfg, "name"), nil
+}
+
 // PresetSource is the `source` init recorded in .khub/config.yaml: the
 // directory the preset was resolved from, or "" for the packaged presets
 // (Python's None). A relative source is resolved against the workspace root,

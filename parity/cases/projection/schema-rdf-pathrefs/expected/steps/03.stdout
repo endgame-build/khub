@@ -1,0 +1,1807 @@
+# khub RDF projection: RDFS + SHACL over the resolved schema. Derived, never
+# edited by hand; `khub schema rdf` regenerates it. See docs/rdf-mapping.md.
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix sh: <http://www.w3.org/ns/shacl#> .
+@prefix khub: <urn:khub:vocab/> .
+@prefix type: <urn:khub:ontology/build-hub/type/> .
+@prefix field: <urn:khub:ontology/build-hub/field/> .
+@prefix shape: <urn:khub:ontology/build-hub/shape/> .
+
+<urn:khub:ontology/build-hub/> a owl:Ontology ;
+    rdfs:label "build-hub" ;
+    khub:preset "build-hub" ;
+    khub:presetVersion "0.6.0" ;
+    khub:workspace "ws" ;
+    khub:requiredScope "active" .
+
+khub:Entity a rdfs:Class ;
+    rdfs:comment "Every khub entity. Each type is a subclass." .
+
+khub:File a rdfs:Class ;
+    rdfs:comment "A workspace file a path reference names; not an entity." .
+
+khub:preset a rdf:Property ;
+    rdfs:comment "On the ontology: the preset the workspace was initialized from." .
+
+khub:presetVersion a rdf:Property ;
+    rdfs:comment "On the ontology: that preset's version." .
+
+khub:workspace a rdf:Property ;
+    rdfs:comment "On the ontology: the workspace this export was rendered from." .
+
+khub:requiredScope a rdf:Property ;
+    rdfs:comment "On the ontology: sh:minCount is khub's required gate, enforced on this subset of entities (drafts are exempt)." .
+
+khub:layout a rdf:Property ;
+    rdfs:comment "Storage: file, folder, collection or singleton." .
+
+khub:format a rdf:Property ;
+    rdfs:comment "Storage: md, json, yaml or jsonl." .
+
+khub:path a rdf:Property ;
+    rdfs:comment "Storage: where the type's entities live, one value per path template; on a khub:File, its workspace-relative path." .
+
+khub:idShape a rdf:Property ;
+    rdfs:comment "Storage: the id a new entity is minted with." .
+
+khub:template a rdf:Property ;
+    rdfs:comment "Storage: the body template stem the type declares." .
+
+khub:requiredSingleton a rdf:Property ;
+    rdfs:comment "Policy: a singleton `check` requires to exist." .
+
+khub:orphanExempt a rdf:Property ;
+    rdfs:comment "Policy: instances are exempt from the orphan sweep." .
+
+khub:when a rdf:Property ;
+    rdfs:comment "The moment to capture an entity of this type, in domain language." .
+
+khub:type a rdf:Property ;
+    rdfs:comment "The khub scalar kind of an attribute: text, number, date, datetime, bool or list." .
+
+khub:default a rdf:Property ;
+    rdfs:comment "The value an absent attribute reads as." .
+
+khub:pattern a rdf:Property ;
+    rdfs:comment "The authoritative RE2 pattern; sh:pattern is its portable rendering when one exists." .
+
+khub:kind a rdf:Property ;
+    rdfs:comment "A relation's target form: typed, union or any." .
+
+khub:acyclic a rdf:Property ;
+    rdfs:comment "`check` reports a cycle over this relation." .
+
+khub:inverse a rdf:Property ;
+    rdfs:comment "The derived inverse predicate the target answers to; never stored." .
+
+khub:pathRefs a rdf:Property ;
+    rdfs:comment "A value may name a workspace file by path instead of an entity." .
+
+type:prd a rdfs:Class ;
+    rdfs:subClassOf khub:Entity ;
+    rdfs:label "prd" ;
+    khub:when "someone states what the product is for, who it serves, or what is deliberately out of scope" ;
+    khub:layout "singleton" ;
+    khub:format "md" ;
+    khub:path "knowledge/prd.md" ;
+    khub:requiredSingleton true ;
+    khub:orphanExempt true .
+
+type:arc42 a rdfs:Class ;
+    rdfs:subClassOf khub:Entity ;
+    rdfs:label "arc42" ;
+    khub:when "the shape of the system is described or changes — context, building blocks, data model, a crosscutting concern" ;
+    khub:layout "singleton" ;
+    khub:format "md" ;
+    khub:path "knowledge/arc42.md" ;
+    khub:orphanExempt true .
+
+type:capability a rdfs:Class ;
+    rdfs:subClassOf khub:Entity ;
+    rdfs:label "capability" ;
+    khub:when "a coherent chunk of product value is named as a thing the product does — the map that use cases belong to and requirements are placed in" ;
+    khub:layout "file" ;
+    khub:format "md" ;
+    khub:path "knowledge/capabilities" ;
+    khub:idShape "cap-slug" .
+
+type:actor a rdfs:Class ;
+    rdfs:subClassOf khub:Entity ;
+    rdfs:label "actor" ;
+    khub:when "a human role is named that uses the product — a customer, an admin, an operator. Not a system or a scheduler; those are a use case's `trigger`" ;
+    khub:layout "file" ;
+    khub:format "md" ;
+    khub:path "knowledge/actors" ;
+    khub:idShape "act-slug" .
+
+type:use-case a rdfs:Class ;
+    rdfs:subClassOf khub:Entity ;
+    rdfs:label "use-case" ;
+    khub:when "someone describes what a user does end to end, or a flow the system runs on a schedule or an event. Record it when the flow is described, not when it ships" ;
+    khub:layout "file" ;
+    khub:format "md" ;
+    khub:path "knowledge/use-cases" ;
+    khub:idShape "uc-slug" .
+
+type:requirement a rdfs:Class ;
+    rdfs:subClassOf khub:Entity ;
+    rdfs:label "requirement" ;
+    khub:when "a rule is stated that the system must satisfy or must never violate. \"must\", \"never\", \"always\", \"policy\", \"has to\" are the tells; a stated invariant is a record, not a reply" ;
+    khub:layout "file" ;
+    khub:format "md" ;
+    khub:path "knowledge/requirements" ;
+    khub:idShape "req-slug" .
+
+type:adr a rdfs:Class ;
+    rdfs:subClassOf khub:Entity ;
+    rdfs:label "adr" ;
+    khub:when "a choice is made, rejected, or revisited between real alternatives — product or technical, including \"we considered X and are not doing it\". Capture the reasoning while it is still known" ;
+    khub:layout "file" ;
+    khub:format "md" ;
+    khub:path "knowledge/decisions" ;
+    khub:idShape "ad-YYYY-MM-DD-slug" .
+
+type:system a rdfs:Class ;
+    rdfs:subClassOf khub:Entity ;
+    rdfs:label "system" ;
+    khub:when "a group of components is named as one thing with one owner and one boundary — a product, a platform, a deployable whole" ;
+    khub:layout "file" ;
+    khub:format "md" ;
+    khub:path "knowledge/systems" ;
+    khub:idShape "sys-slug" .
+
+type:component a rdfs:Class ;
+    rdfs:subClassOf khub:Entity ;
+    rdfs:label "component" ;
+    khub:when "a part of the system is named as a thing that can break, be owned, or be swapped — a service, a library of ours, or a vendor dependency we sit on" ;
+    khub:layout "file" ;
+    khub:format "md" ;
+    khub:path "knowledge/components" ;
+    khub:idShape "cmp-slug" .
+
+type:api a rdfs:Class ;
+    rdfs:subClassOf khub:Entity ;
+    rdfs:label "api" ;
+    khub:when "an interface is agreed, published, or versioned — a REST or GraphQL surface, a gRPC service, an event stream, a data feed" ;
+    khub:layout "file" ;
+    khub:format "md" ;
+    khub:path "knowledge/apis" ;
+    khub:idShape "api-slug" .
+
+type:repo a rdfs:Class ;
+    rdfs:subClassOf khub:Entity ;
+    rdfs:label "repo" ;
+    khub:when "a codebase is named that holds part of this system — a service's repo, a shared library, a monorepo group" ;
+    khub:layout "file" ;
+    khub:format "md" ;
+    khub:path "knowledge/repos" ;
+    khub:idShape "rp-slug" .
+
+khub:draft a rdf:Property, owl:DatatypeProperty ;
+    rdfs:label "draft" .
+
+khub:author a rdf:Property, owl:DatatypeProperty ;
+    rdfs:label "author" .
+
+khub:created a rdf:Property, owl:DatatypeProperty ;
+    rdfs:label "created" .
+
+khub:updated a rdf:Property, owl:DatatypeProperty ;
+    rdfs:label "updated" .
+
+khub:title a rdf:Property, owl:DatatypeProperty ;
+    rdfs:label "title" .
+
+khub:description a rdf:Property, owl:DatatypeProperty ;
+    rdfs:label "description" .
+
+khub:resource a rdf:Property, owl:DatatypeProperty ;
+    rdfs:label "resource" .
+
+khub:tags a rdf:Property, owl:DatatypeProperty ;
+    rdfs:label "tags" .
+
+khub:aliases a rdf:Property, owl:DatatypeProperty ;
+    rdfs:label "aliases" .
+
+khub:related a rdf:Property, owl:ObjectProperty ;
+    rdfs:label "related" .
+
+khub:sources a rdf:Property, owl:ObjectProperty ;
+    rdfs:label "sources" .
+
+khub:references a rdf:Property, owl:ObjectProperty ;
+    rdfs:label "references" .
+
+khub:depends_on a rdf:Property, owl:ObjectProperty ;
+    rdfs:label "depends_on" .
+
+field:trigger a rdf:Property, owl:DatatypeProperty ;
+    rdfs:label "trigger" .
+
+field:actor a rdf:Property, owl:ObjectProperty ;
+    rdfs:label "actor" .
+
+field:capability a rdf:Property, owl:ObjectProperty ;
+    rdfs:label "capability" .
+
+field:served_by a rdf:Property, owl:ObjectProperty ;
+    rdfs:label "served_by" .
+
+field:kind a rdf:Property, owl:DatatypeProperty ;
+    rdfs:label "kind" .
+
+field:enforcement a rdf:Property, owl:DatatypeProperty ;
+    rdfs:label "enforcement" .
+
+field:capabilities a rdf:Property, owl:ObjectProperty ;
+    rdfs:label "capabilities" .
+
+field:use_cases a rdf:Property, owl:ObjectProperty ;
+    rdfs:label "use_cases" .
+
+field:realized_in a rdf:Property, owl:ObjectProperty ;
+    rdfs:label "realized_in" .
+
+field:status a rdf:Property, owl:DatatypeProperty ;
+    rdfs:label "status" .
+
+field:supersedes a rdf:Property, owl:ObjectProperty ;
+    rdfs:label "supersedes" .
+
+field:affects a rdf:Property, owl:ObjectProperty ;
+    rdfs:label "affects" .
+
+field:owner a rdf:Property, owl:DatatypeProperty ;
+    rdfs:label "owner" .
+
+field:stack a rdf:Property, owl:DatatypeProperty ;
+    rdfs:label "stack" .
+
+field:lifecycle a rdf:Property, owl:DatatypeProperty ;
+    rdfs:label "lifecycle" .
+
+field:tier a rdf:Property, owl:DatatypeProperty ;
+    rdfs:label "tier" .
+
+field:system a rdf:Property, owl:ObjectProperty ;
+    rdfs:label "system" .
+
+field:repo a rdf:Property ;
+    rdfs:label "repo" ;
+    rdfs:comment "An attribute on some types and a relation on others; each shape says which." .
+
+field:consumes a rdf:Property, owl:ObjectProperty ;
+    rdfs:label "consumes" .
+
+field:provider a rdf:Property, owl:ObjectProperty ;
+    rdfs:label "provider" .
+
+shape:prd a sh:NodeShape ;
+    sh:targetClass type:prd ;
+    sh:property [
+        sh:path khub:draft ;
+        sh:name "draft" ;
+        sh:order 0 ;
+        sh:datatype xsd:boolean ;
+        sh:maxCount 1 ;
+        khub:type "bool" ;
+        khub:default false
+    ] ;
+    sh:property [
+        sh:path khub:author ;
+        sh:name "author" ;
+        sh:order 1 ;
+        sh:datatype xsd:string ;
+        sh:maxCount 1 ;
+        khub:type "text"
+    ] ;
+    sh:property [
+        sh:path khub:created ;
+        sh:name "created" ;
+        sh:order 2 ;
+        sh:or (
+            [ sh:datatype xsd:date ]
+            [ sh:datatype xsd:dateTime ]
+        ) ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        khub:type "date"
+    ] ;
+    sh:property [
+        sh:path khub:updated ;
+        sh:name "updated" ;
+        sh:order 3 ;
+        sh:or (
+            [ sh:datatype xsd:date ]
+            [ sh:datatype xsd:dateTime ]
+        ) ;
+        sh:maxCount 1 ;
+        khub:type "date"
+    ] ;
+    sh:property [
+        sh:path khub:title ;
+        sh:name "title" ;
+        sh:order 4 ;
+        sh:datatype xsd:string ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        khub:type "text"
+    ] ;
+    sh:property [
+        sh:path khub:description ;
+        sh:name "description" ;
+        sh:order 5 ;
+        sh:datatype xsd:string ;
+        sh:maxCount 1 ;
+        khub:type "text"
+    ] ;
+    sh:property [
+        sh:path khub:resource ;
+        sh:name "resource" ;
+        sh:order 6 ;
+        sh:datatype xsd:string ;
+        sh:maxCount 1 ;
+        khub:type "text"
+    ] ;
+    sh:property [
+        sh:path khub:tags ;
+        sh:name "tags" ;
+        sh:order 7 ;
+        khub:type "list"
+    ] ;
+    sh:property [
+        sh:path khub:aliases ;
+        sh:name "aliases" ;
+        sh:order 8 ;
+        khub:type "list"
+    ] ;
+    sh:property [
+        sh:path khub:related ;
+        sh:name "related" ;
+        sh:order 9 ;
+        sh:nodeKind sh:IRI ;
+        sh:class khub:Entity ;
+        khub:kind "any"
+    ] ;
+    sh:property [
+        sh:path khub:sources ;
+        sh:name "sources" ;
+        sh:order 10 ;
+        sh:nodeKind sh:IRI ;
+        sh:class khub:Entity ;
+        khub:kind "any"
+    ] ;
+    sh:property [
+        sh:path khub:references ;
+        sh:name "references" ;
+        sh:order 11 ;
+        sh:nodeKind sh:IRI ;
+        sh:class khub:Entity ;
+        khub:kind "any"
+    ] ;
+    sh:property [
+        sh:path khub:depends_on ;
+        sh:name "depends_on" ;
+        sh:order 12 ;
+        sh:nodeKind sh:IRI ;
+        sh:class khub:Entity ;
+        khub:kind "any" ;
+        khub:acyclic true
+    ] .
+
+shape:arc42 a sh:NodeShape ;
+    sh:targetClass type:arc42 ;
+    sh:property [
+        sh:path khub:draft ;
+        sh:name "draft" ;
+        sh:order 0 ;
+        sh:datatype xsd:boolean ;
+        sh:maxCount 1 ;
+        khub:type "bool" ;
+        khub:default false
+    ] ;
+    sh:property [
+        sh:path khub:author ;
+        sh:name "author" ;
+        sh:order 1 ;
+        sh:datatype xsd:string ;
+        sh:maxCount 1 ;
+        khub:type "text"
+    ] ;
+    sh:property [
+        sh:path khub:created ;
+        sh:name "created" ;
+        sh:order 2 ;
+        sh:or (
+            [ sh:datatype xsd:date ]
+            [ sh:datatype xsd:dateTime ]
+        ) ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        khub:type "date"
+    ] ;
+    sh:property [
+        sh:path khub:updated ;
+        sh:name "updated" ;
+        sh:order 3 ;
+        sh:or (
+            [ sh:datatype xsd:date ]
+            [ sh:datatype xsd:dateTime ]
+        ) ;
+        sh:maxCount 1 ;
+        khub:type "date"
+    ] ;
+    sh:property [
+        sh:path khub:title ;
+        sh:name "title" ;
+        sh:order 4 ;
+        sh:datatype xsd:string ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        khub:type "text"
+    ] ;
+    sh:property [
+        sh:path khub:description ;
+        sh:name "description" ;
+        sh:order 5 ;
+        sh:datatype xsd:string ;
+        sh:maxCount 1 ;
+        khub:type "text"
+    ] ;
+    sh:property [
+        sh:path khub:resource ;
+        sh:name "resource" ;
+        sh:order 6 ;
+        sh:datatype xsd:string ;
+        sh:maxCount 1 ;
+        khub:type "text"
+    ] ;
+    sh:property [
+        sh:path khub:tags ;
+        sh:name "tags" ;
+        sh:order 7 ;
+        khub:type "list"
+    ] ;
+    sh:property [
+        sh:path khub:aliases ;
+        sh:name "aliases" ;
+        sh:order 8 ;
+        khub:type "list"
+    ] ;
+    sh:property [
+        sh:path khub:related ;
+        sh:name "related" ;
+        sh:order 9 ;
+        sh:nodeKind sh:IRI ;
+        sh:class khub:Entity ;
+        khub:kind "any"
+    ] ;
+    sh:property [
+        sh:path khub:sources ;
+        sh:name "sources" ;
+        sh:order 10 ;
+        sh:nodeKind sh:IRI ;
+        sh:class khub:Entity ;
+        khub:kind "any"
+    ] ;
+    sh:property [
+        sh:path khub:references ;
+        sh:name "references" ;
+        sh:order 11 ;
+        sh:nodeKind sh:IRI ;
+        sh:class khub:Entity ;
+        khub:kind "any"
+    ] ;
+    sh:property [
+        sh:path khub:depends_on ;
+        sh:name "depends_on" ;
+        sh:order 12 ;
+        sh:nodeKind sh:IRI ;
+        sh:class khub:Entity ;
+        khub:kind "any" ;
+        khub:acyclic true
+    ] .
+
+shape:capability a sh:NodeShape ;
+    sh:targetClass type:capability ;
+    sh:property [
+        sh:path khub:draft ;
+        sh:name "draft" ;
+        sh:order 0 ;
+        sh:datatype xsd:boolean ;
+        sh:maxCount 1 ;
+        khub:type "bool" ;
+        khub:default false
+    ] ;
+    sh:property [
+        sh:path khub:author ;
+        sh:name "author" ;
+        sh:order 1 ;
+        sh:datatype xsd:string ;
+        sh:maxCount 1 ;
+        khub:type "text"
+    ] ;
+    sh:property [
+        sh:path khub:created ;
+        sh:name "created" ;
+        sh:order 2 ;
+        sh:or (
+            [ sh:datatype xsd:date ]
+            [ sh:datatype xsd:dateTime ]
+        ) ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        khub:type "date"
+    ] ;
+    sh:property [
+        sh:path khub:updated ;
+        sh:name "updated" ;
+        sh:order 3 ;
+        sh:or (
+            [ sh:datatype xsd:date ]
+            [ sh:datatype xsd:dateTime ]
+        ) ;
+        sh:maxCount 1 ;
+        khub:type "date"
+    ] ;
+    sh:property [
+        sh:path khub:title ;
+        sh:name "title" ;
+        sh:order 4 ;
+        sh:datatype xsd:string ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        khub:type "text"
+    ] ;
+    sh:property [
+        sh:path khub:description ;
+        sh:name "description" ;
+        sh:order 5 ;
+        sh:datatype xsd:string ;
+        sh:maxCount 1 ;
+        khub:type "text"
+    ] ;
+    sh:property [
+        sh:path khub:resource ;
+        sh:name "resource" ;
+        sh:order 6 ;
+        sh:datatype xsd:string ;
+        sh:maxCount 1 ;
+        khub:type "text"
+    ] ;
+    sh:property [
+        sh:path khub:tags ;
+        sh:name "tags" ;
+        sh:order 7 ;
+        khub:type "list"
+    ] ;
+    sh:property [
+        sh:path khub:aliases ;
+        sh:name "aliases" ;
+        sh:order 8 ;
+        khub:type "list"
+    ] ;
+    sh:property [
+        sh:path khub:related ;
+        sh:name "related" ;
+        sh:order 9 ;
+        sh:nodeKind sh:IRI ;
+        sh:class khub:Entity ;
+        khub:kind "any"
+    ] ;
+    sh:property [
+        sh:path khub:sources ;
+        sh:name "sources" ;
+        sh:order 10 ;
+        sh:nodeKind sh:IRI ;
+        sh:class khub:Entity ;
+        khub:kind "any"
+    ] ;
+    sh:property [
+        sh:path khub:references ;
+        sh:name "references" ;
+        sh:order 11 ;
+        sh:nodeKind sh:IRI ;
+        sh:class khub:Entity ;
+        khub:kind "any"
+    ] ;
+    sh:property [
+        sh:path khub:depends_on ;
+        sh:name "depends_on" ;
+        sh:order 12 ;
+        sh:nodeKind sh:IRI ;
+        sh:class khub:Entity ;
+        khub:kind "any" ;
+        khub:acyclic true
+    ] .
+
+shape:actor a sh:NodeShape ;
+    sh:targetClass type:actor ;
+    sh:property [
+        sh:path khub:draft ;
+        sh:name "draft" ;
+        sh:order 0 ;
+        sh:datatype xsd:boolean ;
+        sh:maxCount 1 ;
+        khub:type "bool" ;
+        khub:default false
+    ] ;
+    sh:property [
+        sh:path khub:author ;
+        sh:name "author" ;
+        sh:order 1 ;
+        sh:datatype xsd:string ;
+        sh:maxCount 1 ;
+        khub:type "text"
+    ] ;
+    sh:property [
+        sh:path khub:created ;
+        sh:name "created" ;
+        sh:order 2 ;
+        sh:or (
+            [ sh:datatype xsd:date ]
+            [ sh:datatype xsd:dateTime ]
+        ) ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        khub:type "date"
+    ] ;
+    sh:property [
+        sh:path khub:updated ;
+        sh:name "updated" ;
+        sh:order 3 ;
+        sh:or (
+            [ sh:datatype xsd:date ]
+            [ sh:datatype xsd:dateTime ]
+        ) ;
+        sh:maxCount 1 ;
+        khub:type "date"
+    ] ;
+    sh:property [
+        sh:path khub:title ;
+        sh:name "title" ;
+        sh:order 4 ;
+        sh:datatype xsd:string ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        khub:type "text"
+    ] ;
+    sh:property [
+        sh:path khub:description ;
+        sh:name "description" ;
+        sh:order 5 ;
+        sh:datatype xsd:string ;
+        sh:maxCount 1 ;
+        khub:type "text"
+    ] ;
+    sh:property [
+        sh:path khub:resource ;
+        sh:name "resource" ;
+        sh:order 6 ;
+        sh:datatype xsd:string ;
+        sh:maxCount 1 ;
+        khub:type "text"
+    ] ;
+    sh:property [
+        sh:path khub:tags ;
+        sh:name "tags" ;
+        sh:order 7 ;
+        khub:type "list"
+    ] ;
+    sh:property [
+        sh:path khub:aliases ;
+        sh:name "aliases" ;
+        sh:order 8 ;
+        khub:type "list"
+    ] ;
+    sh:property [
+        sh:path khub:related ;
+        sh:name "related" ;
+        sh:order 9 ;
+        sh:nodeKind sh:IRI ;
+        sh:class khub:Entity ;
+        khub:kind "any"
+    ] ;
+    sh:property [
+        sh:path khub:sources ;
+        sh:name "sources" ;
+        sh:order 10 ;
+        sh:nodeKind sh:IRI ;
+        sh:class khub:Entity ;
+        khub:kind "any"
+    ] ;
+    sh:property [
+        sh:path khub:references ;
+        sh:name "references" ;
+        sh:order 11 ;
+        sh:nodeKind sh:IRI ;
+        sh:class khub:Entity ;
+        khub:kind "any"
+    ] ;
+    sh:property [
+        sh:path khub:depends_on ;
+        sh:name "depends_on" ;
+        sh:order 12 ;
+        sh:nodeKind sh:IRI ;
+        sh:class khub:Entity ;
+        khub:kind "any" ;
+        khub:acyclic true
+    ] .
+
+shape:use-case a sh:NodeShape ;
+    sh:targetClass type:use-case ;
+    sh:property [
+        sh:path khub:draft ;
+        sh:name "draft" ;
+        sh:order 0 ;
+        sh:datatype xsd:boolean ;
+        sh:maxCount 1 ;
+        khub:type "bool" ;
+        khub:default false
+    ] ;
+    sh:property [
+        sh:path khub:author ;
+        sh:name "author" ;
+        sh:order 1 ;
+        sh:datatype xsd:string ;
+        sh:maxCount 1 ;
+        khub:type "text"
+    ] ;
+    sh:property [
+        sh:path khub:created ;
+        sh:name "created" ;
+        sh:order 2 ;
+        sh:or (
+            [ sh:datatype xsd:date ]
+            [ sh:datatype xsd:dateTime ]
+        ) ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        khub:type "date"
+    ] ;
+    sh:property [
+        sh:path khub:updated ;
+        sh:name "updated" ;
+        sh:order 3 ;
+        sh:or (
+            [ sh:datatype xsd:date ]
+            [ sh:datatype xsd:dateTime ]
+        ) ;
+        sh:maxCount 1 ;
+        khub:type "date"
+    ] ;
+    sh:property [
+        sh:path khub:title ;
+        sh:name "title" ;
+        sh:order 4 ;
+        sh:datatype xsd:string ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        khub:type "text"
+    ] ;
+    sh:property [
+        sh:path khub:description ;
+        sh:name "description" ;
+        sh:order 5 ;
+        sh:datatype xsd:string ;
+        sh:maxCount 1 ;
+        khub:type "text"
+    ] ;
+    sh:property [
+        sh:path khub:resource ;
+        sh:name "resource" ;
+        sh:order 6 ;
+        sh:datatype xsd:string ;
+        sh:maxCount 1 ;
+        khub:type "text"
+    ] ;
+    sh:property [
+        sh:path khub:tags ;
+        sh:name "tags" ;
+        sh:order 7 ;
+        khub:type "list"
+    ] ;
+    sh:property [
+        sh:path khub:aliases ;
+        sh:name "aliases" ;
+        sh:order 8 ;
+        khub:type "list"
+    ] ;
+    sh:property [
+        sh:path field:trigger ;
+        sh:name "trigger" ;
+        sh:order 9 ;
+        sh:datatype xsd:string ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        sh:in ( "human" "scheduled" "event" "external" ) ;
+        khub:type "text"
+    ] ;
+    sh:property [
+        sh:path khub:related ;
+        sh:name "related" ;
+        sh:order 10 ;
+        sh:nodeKind sh:IRI ;
+        sh:class khub:Entity ;
+        khub:kind "any"
+    ] ;
+    sh:property [
+        sh:path khub:sources ;
+        sh:name "sources" ;
+        sh:order 11 ;
+        sh:nodeKind sh:IRI ;
+        sh:class khub:Entity ;
+        khub:kind "any"
+    ] ;
+    sh:property [
+        sh:path khub:references ;
+        sh:name "references" ;
+        sh:order 12 ;
+        sh:nodeKind sh:IRI ;
+        sh:class khub:Entity ;
+        khub:kind "any"
+    ] ;
+    sh:property [
+        sh:path khub:depends_on ;
+        sh:name "depends_on" ;
+        sh:order 13 ;
+        sh:nodeKind sh:IRI ;
+        sh:class khub:Entity ;
+        khub:kind "any" ;
+        khub:acyclic true
+    ] ;
+    sh:property [
+        sh:path field:actor ;
+        sh:name "actor" ;
+        sh:order 14 ;
+        sh:nodeKind sh:IRI ;
+        sh:class type:actor ;
+        sh:maxCount 1 ;
+        khub:kind "typed"
+    ] ;
+    sh:property [
+        sh:path field:capability ;
+        sh:name "capability" ;
+        sh:order 15 ;
+        sh:nodeKind sh:IRI ;
+        sh:class type:capability ;
+        sh:maxCount 1 ;
+        khub:kind "typed"
+    ] ;
+    sh:property [
+        sh:path field:served_by ;
+        sh:name "served_by" ;
+        sh:order 16 ;
+        sh:nodeKind sh:IRI ;
+        sh:class type:component ;
+        khub:kind "typed" ;
+        khub:inverse "serves"
+    ] .
+
+shape:requirement a sh:NodeShape ;
+    sh:targetClass type:requirement ;
+    sh:property [
+        sh:path khub:draft ;
+        sh:name "draft" ;
+        sh:order 0 ;
+        sh:datatype xsd:boolean ;
+        sh:maxCount 1 ;
+        khub:type "bool" ;
+        khub:default false
+    ] ;
+    sh:property [
+        sh:path khub:author ;
+        sh:name "author" ;
+        sh:order 1 ;
+        sh:datatype xsd:string ;
+        sh:maxCount 1 ;
+        khub:type "text"
+    ] ;
+    sh:property [
+        sh:path khub:created ;
+        sh:name "created" ;
+        sh:order 2 ;
+        sh:or (
+            [ sh:datatype xsd:date ]
+            [ sh:datatype xsd:dateTime ]
+        ) ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        khub:type "date"
+    ] ;
+    sh:property [
+        sh:path khub:updated ;
+        sh:name "updated" ;
+        sh:order 3 ;
+        sh:or (
+            [ sh:datatype xsd:date ]
+            [ sh:datatype xsd:dateTime ]
+        ) ;
+        sh:maxCount 1 ;
+        khub:type "date"
+    ] ;
+    sh:property [
+        sh:path khub:title ;
+        sh:name "title" ;
+        sh:order 4 ;
+        sh:datatype xsd:string ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        khub:type "text"
+    ] ;
+    sh:property [
+        sh:path khub:description ;
+        sh:name "description" ;
+        sh:order 5 ;
+        sh:datatype xsd:string ;
+        sh:maxCount 1 ;
+        khub:type "text"
+    ] ;
+    sh:property [
+        sh:path khub:resource ;
+        sh:name "resource" ;
+        sh:order 6 ;
+        sh:datatype xsd:string ;
+        sh:maxCount 1 ;
+        khub:type "text"
+    ] ;
+    sh:property [
+        sh:path khub:tags ;
+        sh:name "tags" ;
+        sh:order 7 ;
+        khub:type "list"
+    ] ;
+    sh:property [
+        sh:path khub:aliases ;
+        sh:name "aliases" ;
+        sh:order 8 ;
+        khub:type "list"
+    ] ;
+    sh:property [
+        sh:path field:kind ;
+        sh:name "kind" ;
+        sh:order 9 ;
+        sh:datatype xsd:string ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        sh:in ( "functional" "non-functional" "constraint" "business-rule" ) ;
+        khub:type "text"
+    ] ;
+    sh:property [
+        sh:path field:enforcement ;
+        sh:name "enforcement" ;
+        sh:order 10 ;
+        sh:datatype xsd:string ;
+        sh:maxCount 1 ;
+        sh:in ( "ui" "backend" "database" "external" "review" ) ;
+        khub:type "text"
+    ] ;
+    sh:property [
+        sh:path khub:related ;
+        sh:name "related" ;
+        sh:order 11 ;
+        sh:nodeKind sh:IRI ;
+        sh:class khub:Entity ;
+        khub:kind "any"
+    ] ;
+    sh:property [
+        sh:path khub:sources ;
+        sh:name "sources" ;
+        sh:order 12 ;
+        sh:nodeKind sh:IRI ;
+        sh:class khub:Entity ;
+        khub:kind "any"
+    ] ;
+    sh:property [
+        sh:path khub:references ;
+        sh:name "references" ;
+        sh:order 13 ;
+        sh:nodeKind sh:IRI ;
+        sh:class khub:Entity ;
+        khub:kind "any"
+    ] ;
+    sh:property [
+        sh:path khub:depends_on ;
+        sh:name "depends_on" ;
+        sh:order 14 ;
+        sh:nodeKind sh:IRI ;
+        sh:class khub:Entity ;
+        khub:kind "any" ;
+        khub:acyclic true
+    ] ;
+    sh:property [
+        sh:path field:capabilities ;
+        sh:name "capabilities" ;
+        sh:order 15 ;
+        sh:nodeKind sh:IRI ;
+        sh:class type:capability ;
+        khub:kind "typed"
+    ] ;
+    sh:property [
+        sh:path field:use_cases ;
+        sh:name "use_cases" ;
+        sh:order 16 ;
+        sh:nodeKind sh:IRI ;
+        sh:class type:use-case ;
+        khub:kind "typed"
+    ] ;
+    sh:property [
+        sh:path field:realized_in ;
+        sh:name "realized_in" ;
+        sh:order 17 ;
+        sh:nodeKind sh:IRI ;
+        sh:class type:component ;
+        khub:kind "typed"
+    ] .
+
+shape:adr a sh:NodeShape ;
+    sh:targetClass type:adr ;
+    sh:property [
+        sh:path khub:draft ;
+        sh:name "draft" ;
+        sh:order 0 ;
+        sh:datatype xsd:boolean ;
+        sh:maxCount 1 ;
+        khub:type "bool" ;
+        khub:default false
+    ] ;
+    sh:property [
+        sh:path khub:author ;
+        sh:name "author" ;
+        sh:order 1 ;
+        sh:datatype xsd:string ;
+        sh:maxCount 1 ;
+        khub:type "text"
+    ] ;
+    sh:property [
+        sh:path khub:created ;
+        sh:name "created" ;
+        sh:order 2 ;
+        sh:or (
+            [ sh:datatype xsd:date ]
+            [ sh:datatype xsd:dateTime ]
+        ) ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        khub:type "date"
+    ] ;
+    sh:property [
+        sh:path khub:updated ;
+        sh:name "updated" ;
+        sh:order 3 ;
+        sh:or (
+            [ sh:datatype xsd:date ]
+            [ sh:datatype xsd:dateTime ]
+        ) ;
+        sh:maxCount 1 ;
+        khub:type "date"
+    ] ;
+    sh:property [
+        sh:path khub:title ;
+        sh:name "title" ;
+        sh:order 4 ;
+        sh:datatype xsd:string ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        khub:type "text"
+    ] ;
+    sh:property [
+        sh:path khub:description ;
+        sh:name "description" ;
+        sh:order 5 ;
+        sh:datatype xsd:string ;
+        sh:maxCount 1 ;
+        khub:type "text"
+    ] ;
+    sh:property [
+        sh:path khub:resource ;
+        sh:name "resource" ;
+        sh:order 6 ;
+        sh:datatype xsd:string ;
+        sh:maxCount 1 ;
+        khub:type "text"
+    ] ;
+    sh:property [
+        sh:path khub:tags ;
+        sh:name "tags" ;
+        sh:order 7 ;
+        khub:type "list"
+    ] ;
+    sh:property [
+        sh:path khub:aliases ;
+        sh:name "aliases" ;
+        sh:order 8 ;
+        khub:type "list"
+    ] ;
+    sh:property [
+        sh:path field:status ;
+        sh:name "status" ;
+        sh:order 9 ;
+        sh:datatype xsd:string ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        sh:in ( "proposed" "accepted" "rejected" ) ;
+        khub:type "text"
+    ] ;
+    sh:property [
+        sh:path khub:related ;
+        sh:name "related" ;
+        sh:order 10 ;
+        sh:nodeKind sh:IRI ;
+        sh:or (
+            [ sh:class khub:Entity ]
+            [ sh:class khub:File ]
+        ) ;
+        khub:kind "any" ;
+        khub:pathRefs true
+    ] ;
+    sh:property [
+        sh:path khub:sources ;
+        sh:name "sources" ;
+        sh:order 11 ;
+        sh:nodeKind sh:IRI ;
+        sh:or (
+            [ sh:class khub:Entity ]
+            [ sh:class khub:File ]
+        ) ;
+        khub:kind "any" ;
+        khub:pathRefs true
+    ] ;
+    sh:property [
+        sh:path khub:references ;
+        sh:name "references" ;
+        sh:order 12 ;
+        sh:nodeKind sh:IRI ;
+        sh:or (
+            [ sh:class khub:Entity ]
+            [ sh:class khub:File ]
+        ) ;
+        khub:kind "any" ;
+        khub:pathRefs true
+    ] ;
+    sh:property [
+        sh:path khub:depends_on ;
+        sh:name "depends_on" ;
+        sh:order 13 ;
+        sh:nodeKind sh:IRI ;
+        sh:or (
+            [ sh:class khub:Entity ]
+            [ sh:class khub:File ]
+        ) ;
+        khub:kind "any" ;
+        khub:acyclic true ;
+        khub:pathRefs true
+    ] ;
+    sh:property [
+        sh:path field:supersedes ;
+        sh:name "supersedes" ;
+        sh:order 14 ;
+        sh:nodeKind sh:IRI ;
+        sh:class type:adr ;
+        sh:maxCount 1 ;
+        khub:kind "typed" ;
+        khub:acyclic true ;
+        khub:inverse "superseded" ;
+        khub:pathRefs true
+    ] ;
+    sh:property [
+        sh:path field:affects ;
+        sh:name "affects" ;
+        sh:order 15 ;
+        sh:nodeKind sh:IRI ;
+        sh:or (
+            [ sh:class khub:Entity ]
+            [ sh:class khub:File ]
+        ) ;
+        khub:kind "any" ;
+        khub:pathRefs true
+    ] .
+
+shape:system a sh:NodeShape ;
+    sh:targetClass type:system ;
+    sh:property [
+        sh:path khub:draft ;
+        sh:name "draft" ;
+        sh:order 0 ;
+        sh:datatype xsd:boolean ;
+        sh:maxCount 1 ;
+        khub:type "bool" ;
+        khub:default false
+    ] ;
+    sh:property [
+        sh:path khub:author ;
+        sh:name "author" ;
+        sh:order 1 ;
+        sh:datatype xsd:string ;
+        sh:maxCount 1 ;
+        khub:type "text"
+    ] ;
+    sh:property [
+        sh:path khub:created ;
+        sh:name "created" ;
+        sh:order 2 ;
+        sh:or (
+            [ sh:datatype xsd:date ]
+            [ sh:datatype xsd:dateTime ]
+        ) ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        khub:type "date"
+    ] ;
+    sh:property [
+        sh:path khub:updated ;
+        sh:name "updated" ;
+        sh:order 3 ;
+        sh:or (
+            [ sh:datatype xsd:date ]
+            [ sh:datatype xsd:dateTime ]
+        ) ;
+        sh:maxCount 1 ;
+        khub:type "date"
+    ] ;
+    sh:property [
+        sh:path khub:title ;
+        sh:name "title" ;
+        sh:order 4 ;
+        sh:datatype xsd:string ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        khub:type "text"
+    ] ;
+    sh:property [
+        sh:path khub:description ;
+        sh:name "description" ;
+        sh:order 5 ;
+        sh:datatype xsd:string ;
+        sh:maxCount 1 ;
+        khub:type "text"
+    ] ;
+    sh:property [
+        sh:path khub:resource ;
+        sh:name "resource" ;
+        sh:order 6 ;
+        sh:datatype xsd:string ;
+        sh:maxCount 1 ;
+        khub:type "text"
+    ] ;
+    sh:property [
+        sh:path khub:tags ;
+        sh:name "tags" ;
+        sh:order 7 ;
+        khub:type "list"
+    ] ;
+    sh:property [
+        sh:path khub:aliases ;
+        sh:name "aliases" ;
+        sh:order 8 ;
+        khub:type "list"
+    ] ;
+    sh:property [
+        sh:path field:owner ;
+        sh:name "owner" ;
+        sh:order 9 ;
+        sh:datatype xsd:string ;
+        sh:maxCount 1 ;
+        khub:type "text"
+    ] ;
+    sh:property [
+        sh:path khub:related ;
+        sh:name "related" ;
+        sh:order 10 ;
+        sh:nodeKind sh:IRI ;
+        sh:class khub:Entity ;
+        khub:kind "any"
+    ] ;
+    sh:property [
+        sh:path khub:sources ;
+        sh:name "sources" ;
+        sh:order 11 ;
+        sh:nodeKind sh:IRI ;
+        sh:class khub:Entity ;
+        khub:kind "any"
+    ] ;
+    sh:property [
+        sh:path khub:references ;
+        sh:name "references" ;
+        sh:order 12 ;
+        sh:nodeKind sh:IRI ;
+        sh:class khub:Entity ;
+        khub:kind "any"
+    ] ;
+    sh:property [
+        sh:path khub:depends_on ;
+        sh:name "depends_on" ;
+        sh:order 13 ;
+        sh:nodeKind sh:IRI ;
+        sh:class khub:Entity ;
+        khub:kind "any" ;
+        khub:acyclic true
+    ] .
+
+shape:component a sh:NodeShape ;
+    sh:targetClass type:component ;
+    sh:property [
+        sh:path khub:draft ;
+        sh:name "draft" ;
+        sh:order 0 ;
+        sh:datatype xsd:boolean ;
+        sh:maxCount 1 ;
+        khub:type "bool" ;
+        khub:default false
+    ] ;
+    sh:property [
+        sh:path khub:author ;
+        sh:name "author" ;
+        sh:order 1 ;
+        sh:datatype xsd:string ;
+        sh:maxCount 1 ;
+        khub:type "text"
+    ] ;
+    sh:property [
+        sh:path khub:created ;
+        sh:name "created" ;
+        sh:order 2 ;
+        sh:or (
+            [ sh:datatype xsd:date ]
+            [ sh:datatype xsd:dateTime ]
+        ) ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        khub:type "date"
+    ] ;
+    sh:property [
+        sh:path khub:updated ;
+        sh:name "updated" ;
+        sh:order 3 ;
+        sh:or (
+            [ sh:datatype xsd:date ]
+            [ sh:datatype xsd:dateTime ]
+        ) ;
+        sh:maxCount 1 ;
+        khub:type "date"
+    ] ;
+    sh:property [
+        sh:path khub:title ;
+        sh:name "title" ;
+        sh:order 4 ;
+        sh:datatype xsd:string ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        khub:type "text"
+    ] ;
+    sh:property [
+        sh:path khub:description ;
+        sh:name "description" ;
+        sh:order 5 ;
+        sh:datatype xsd:string ;
+        sh:maxCount 1 ;
+        khub:type "text"
+    ] ;
+    sh:property [
+        sh:path khub:resource ;
+        sh:name "resource" ;
+        sh:order 6 ;
+        sh:datatype xsd:string ;
+        sh:maxCount 1 ;
+        khub:type "text"
+    ] ;
+    sh:property [
+        sh:path khub:tags ;
+        sh:name "tags" ;
+        sh:order 7 ;
+        khub:type "list"
+    ] ;
+    sh:property [
+        sh:path khub:aliases ;
+        sh:name "aliases" ;
+        sh:order 8 ;
+        khub:type "list"
+    ] ;
+    sh:property [
+        sh:path field:kind ;
+        sh:name "kind" ;
+        sh:order 9 ;
+        sh:datatype xsd:string ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        sh:in ( "service" "library" "external" ) ;
+        khub:type "text"
+    ] ;
+    sh:property [
+        sh:path field:stack ;
+        sh:name "stack" ;
+        sh:order 10 ;
+        sh:datatype xsd:string ;
+        sh:maxCount 1 ;
+        khub:type "text"
+    ] ;
+    sh:property [
+        sh:path field:owner ;
+        sh:name "owner" ;
+        sh:order 11 ;
+        sh:datatype xsd:string ;
+        sh:maxCount 1 ;
+        khub:type "text"
+    ] ;
+    sh:property [
+        sh:path field:lifecycle ;
+        sh:name "lifecycle" ;
+        sh:order 12 ;
+        sh:datatype xsd:string ;
+        sh:maxCount 1 ;
+        sh:in ( "experimental" "production" "deprecated" ) ;
+        khub:type "text"
+    ] ;
+    sh:property [
+        sh:path field:tier ;
+        sh:name "tier" ;
+        sh:order 13 ;
+        sh:datatype xsd:string ;
+        sh:maxCount 1 ;
+        sh:in ( "tier-1" "tier-2" "tier-3" ) ;
+        khub:type "text"
+    ] ;
+    sh:property [
+        sh:path khub:related ;
+        sh:name "related" ;
+        sh:order 14 ;
+        sh:nodeKind sh:IRI ;
+        sh:class khub:Entity ;
+        khub:kind "any"
+    ] ;
+    sh:property [
+        sh:path khub:sources ;
+        sh:name "sources" ;
+        sh:order 15 ;
+        sh:nodeKind sh:IRI ;
+        sh:class khub:Entity ;
+        khub:kind "any"
+    ] ;
+    sh:property [
+        sh:path khub:references ;
+        sh:name "references" ;
+        sh:order 16 ;
+        sh:nodeKind sh:IRI ;
+        sh:class khub:Entity ;
+        khub:kind "any"
+    ] ;
+    sh:property [
+        sh:path khub:depends_on ;
+        sh:name "depends_on" ;
+        sh:order 17 ;
+        sh:nodeKind sh:IRI ;
+        sh:class khub:Entity ;
+        khub:kind "any" ;
+        khub:acyclic true
+    ] ;
+    sh:property [
+        sh:path field:system ;
+        sh:name "system" ;
+        sh:order 18 ;
+        sh:nodeKind sh:IRI ;
+        sh:class type:system ;
+        sh:maxCount 1 ;
+        khub:kind "typed"
+    ] ;
+    sh:property [
+        sh:path field:repo ;
+        sh:name "repo" ;
+        sh:order 19 ;
+        sh:nodeKind sh:IRI ;
+        sh:class type:repo ;
+        sh:maxCount 1 ;
+        khub:kind "typed"
+    ] ;
+    sh:property [
+        sh:path field:consumes ;
+        sh:name "consumes" ;
+        sh:order 20 ;
+        sh:nodeKind sh:IRI ;
+        sh:class type:api ;
+        khub:kind "typed" ;
+        khub:inverse "consumed_by"
+    ] .
+
+shape:api a sh:NodeShape ;
+    sh:targetClass type:api ;
+    sh:property [
+        sh:path khub:draft ;
+        sh:name "draft" ;
+        sh:order 0 ;
+        sh:datatype xsd:boolean ;
+        sh:maxCount 1 ;
+        khub:type "bool" ;
+        khub:default false
+    ] ;
+    sh:property [
+        sh:path khub:author ;
+        sh:name "author" ;
+        sh:order 1 ;
+        sh:datatype xsd:string ;
+        sh:maxCount 1 ;
+        khub:type "text"
+    ] ;
+    sh:property [
+        sh:path khub:created ;
+        sh:name "created" ;
+        sh:order 2 ;
+        sh:or (
+            [ sh:datatype xsd:date ]
+            [ sh:datatype xsd:dateTime ]
+        ) ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        khub:type "date"
+    ] ;
+    sh:property [
+        sh:path khub:updated ;
+        sh:name "updated" ;
+        sh:order 3 ;
+        sh:or (
+            [ sh:datatype xsd:date ]
+            [ sh:datatype xsd:dateTime ]
+        ) ;
+        sh:maxCount 1 ;
+        khub:type "date"
+    ] ;
+    sh:property [
+        sh:path khub:title ;
+        sh:name "title" ;
+        sh:order 4 ;
+        sh:datatype xsd:string ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        khub:type "text"
+    ] ;
+    sh:property [
+        sh:path khub:description ;
+        sh:name "description" ;
+        sh:order 5 ;
+        sh:datatype xsd:string ;
+        sh:maxCount 1 ;
+        khub:type "text"
+    ] ;
+    sh:property [
+        sh:path khub:resource ;
+        sh:name "resource" ;
+        sh:order 6 ;
+        sh:datatype xsd:string ;
+        sh:maxCount 1 ;
+        khub:type "text"
+    ] ;
+    sh:property [
+        sh:path khub:tags ;
+        sh:name "tags" ;
+        sh:order 7 ;
+        khub:type "list"
+    ] ;
+    sh:property [
+        sh:path khub:aliases ;
+        sh:name "aliases" ;
+        sh:order 8 ;
+        khub:type "list"
+    ] ;
+    sh:property [
+        sh:path field:kind ;
+        sh:name "kind" ;
+        sh:order 9 ;
+        sh:datatype xsd:string ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        sh:in ( "rest" "graphql" "grpc" "events" "data" ) ;
+        khub:type "text"
+    ] ;
+    sh:property [
+        sh:path field:status ;
+        sh:name "status" ;
+        sh:order 10 ;
+        sh:datatype xsd:string ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        sh:in ( "proposed" "active" "deprecated" ) ;
+        khub:type "text"
+    ] ;
+    sh:property [
+        sh:path khub:related ;
+        sh:name "related" ;
+        sh:order 11 ;
+        sh:nodeKind sh:IRI ;
+        sh:class khub:Entity ;
+        khub:kind "any"
+    ] ;
+    sh:property [
+        sh:path khub:sources ;
+        sh:name "sources" ;
+        sh:order 12 ;
+        sh:nodeKind sh:IRI ;
+        sh:class khub:Entity ;
+        khub:kind "any"
+    ] ;
+    sh:property [
+        sh:path khub:references ;
+        sh:name "references" ;
+        sh:order 13 ;
+        sh:nodeKind sh:IRI ;
+        sh:class khub:Entity ;
+        khub:kind "any"
+    ] ;
+    sh:property [
+        sh:path khub:depends_on ;
+        sh:name "depends_on" ;
+        sh:order 14 ;
+        sh:nodeKind sh:IRI ;
+        sh:class khub:Entity ;
+        khub:kind "any" ;
+        khub:acyclic true
+    ] ;
+    sh:property [
+        sh:path field:provider ;
+        sh:name "provider" ;
+        sh:order 15 ;
+        sh:nodeKind sh:IRI ;
+        sh:class type:component ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        khub:kind "typed"
+    ] .
+
+shape:repo a sh:NodeShape ;
+    sh:targetClass type:repo ;
+    sh:property [
+        sh:path khub:draft ;
+        sh:name "draft" ;
+        sh:order 0 ;
+        sh:datatype xsd:boolean ;
+        sh:maxCount 1 ;
+        khub:type "bool" ;
+        khub:default false
+    ] ;
+    sh:property [
+        sh:path khub:author ;
+        sh:name "author" ;
+        sh:order 1 ;
+        sh:datatype xsd:string ;
+        sh:maxCount 1 ;
+        khub:type "text"
+    ] ;
+    sh:property [
+        sh:path khub:created ;
+        sh:name "created" ;
+        sh:order 2 ;
+        sh:or (
+            [ sh:datatype xsd:date ]
+            [ sh:datatype xsd:dateTime ]
+        ) ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        khub:type "date"
+    ] ;
+    sh:property [
+        sh:path khub:updated ;
+        sh:name "updated" ;
+        sh:order 3 ;
+        sh:or (
+            [ sh:datatype xsd:date ]
+            [ sh:datatype xsd:dateTime ]
+        ) ;
+        sh:maxCount 1 ;
+        khub:type "date"
+    ] ;
+    sh:property [
+        sh:path khub:title ;
+        sh:name "title" ;
+        sh:order 4 ;
+        sh:datatype xsd:string ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        khub:type "text"
+    ] ;
+    sh:property [
+        sh:path khub:description ;
+        sh:name "description" ;
+        sh:order 5 ;
+        sh:datatype xsd:string ;
+        sh:maxCount 1 ;
+        khub:type "text"
+    ] ;
+    sh:property [
+        sh:path khub:resource ;
+        sh:name "resource" ;
+        sh:order 6 ;
+        sh:datatype xsd:string ;
+        sh:maxCount 1 ;
+        khub:type "text"
+    ] ;
+    sh:property [
+        sh:path khub:tags ;
+        sh:name "tags" ;
+        sh:order 7 ;
+        khub:type "list"
+    ] ;
+    sh:property [
+        sh:path khub:aliases ;
+        sh:name "aliases" ;
+        sh:order 8 ;
+        khub:type "list"
+    ] ;
+    sh:property [
+        sh:path field:repo ;
+        sh:name "repo" ;
+        sh:order 9 ;
+        sh:datatype xsd:string ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        sh:pattern "^[a-z0-9._-]+(/[a-z0-9._-]+)+$" ;
+        khub:pattern "^[a-z0-9._-]+(/[a-z0-9._-]+)+$" ;
+        khub:type "text"
+    ] ;
+    sh:property [
+        sh:path field:status ;
+        sh:name "status" ;
+        sh:order 10 ;
+        sh:datatype xsd:string ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        sh:in ( "active" "archived" ) ;
+        khub:type "text"
+    ] ;
+    sh:property [
+        sh:path khub:related ;
+        sh:name "related" ;
+        sh:order 11 ;
+        sh:nodeKind sh:IRI ;
+        sh:class khub:Entity ;
+        khub:kind "any"
+    ] ;
+    sh:property [
+        sh:path khub:sources ;
+        sh:name "sources" ;
+        sh:order 12 ;
+        sh:nodeKind sh:IRI ;
+        sh:class khub:Entity ;
+        khub:kind "any"
+    ] ;
+    sh:property [
+        sh:path khub:references ;
+        sh:name "references" ;
+        sh:order 13 ;
+        sh:nodeKind sh:IRI ;
+        sh:class khub:Entity ;
+        khub:kind "any"
+    ] ;
+    sh:property [
+        sh:path khub:depends_on ;
+        sh:name "depends_on" ;
+        sh:order 14 ;
+        sh:nodeKind sh:IRI ;
+        sh:class khub:Entity ;
+        khub:kind "any" ;
+        khub:acyclic true
+    ] .
+
+<urn:khub:workspace/ws/prd/prd> a type:prd ;
+    khub:draft false ;
+    khub:created "2026-01-15"^^xsd:date ;
+    khub:updated "2026-01-15"^^xsd:date ;
+    khub:title "PRD" .
+
+<urn:khub:workspace/ws/arc42/arc42> a type:arc42 ;
+    khub:draft false ;
+    khub:created "2026-01-15"^^xsd:date ;
+    khub:updated "2026-01-15"^^xsd:date ;
+    khub:title "Architecture" .
+
+<urn:khub:workspace/ws/adr/ad-2026-01-15-use-the-guide> a type:adr ;
+    khub:draft false ;
+    khub:created "2026-01-15"^^xsd:date ;
+    khub:updated "2026-01-15"^^xsd:date ;
+    khub:title "Use the guide" ;
+    field:status "accepted" ;
+    field:affects <urn:khub:workspace/ws/file/guide.md> .
+
+<urn:khub:workspace/ws/file/guide.md> a khub:File ;
+    khub:path "guide.md" .

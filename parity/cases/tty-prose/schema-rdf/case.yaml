@@ -1,0 +1,10 @@
+# The prose `schema rdf` prints on a terminal: one line naming the path and
+# the counts, "Would write" under --dry-run.
+mode: human
+normalize:
+- tty-layout-free
+steps:
+- argv: ["init", "firm-ops", ".", "--no-wire"]
+- argv: ["add", "client", "--name", "Initech"]
+- argv: ["schema", "rdf"]
+- argv: ["schema", "rdf", "--dry-run", "--instances"]
