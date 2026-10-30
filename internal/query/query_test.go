@@ -419,3 +419,76 @@ func TestHasAndMissingOverAnAttribute(t *testing.T) {
 		t.Fatalf("got %v", missing)
 	}
 }
+
+// --- --under / --via containment scope ---------------------------------------
+
+// A parent-stored hierarchy: folders list their children. `parent` is the
+// declared inverse of folder.children only; doc.children declares none.
+const treePreset = `
+version: "0.1.0"
+ontology:
+  entities:
+    folder:
+      relations:
+        children: { to: [folder, doc], many: true, inverse: parent }
+    doc:
+      relations:
+        children: { to: doc, many: true }
+storage:
+  folder: { layout: file, path: folders }
+  doc:    { layout: file, path: docs }
+`
+
+func treeWS(t *testing.T) string {
+	t.Helper()
+	ws := wsFromSchema(t, treePreset)
+	seed(t, ws, "folders/root.md", kv{"type", "folder"}, kv{"title", "Root"}, kv{"children", []any{"sub", "readme"}})
+	seed(t, ws, "folders/sub.md", kv{"type", "folder"}, kv{"title", "Sub"}, kv{"children", []any{"spec"}})
+	seed(t, ws, "docs/readme.md", kv{"type", "doc"}, kv{"title", "Readme"})
+	seed(t, ws, "docs/spec.md", kv{"type", "doc"}, kv{"title", "Spec"}, kv{"children", []any{"annex"}})
+	seed(t, ws, "docs/annex.md", kv{"type", "doc"}, kv{"title", "Annex"})
+	return ws
+}
+
+// A stored predicate walks from the entity up to the anchor: over `children`,
+// the entities under `spec` are the ones whose children reach it.
+func TestUnderStoredPredicateWalksUpward(t *testing.T) {
+	got := sortedSlugs(mustQuery(t, treeWS(t), Filters{Under: ptr("spec"), Via: ptr("children")}))
+	if !eq(got, []string{"root", "sub"}) {
+		t.Fatalf("got %v", got)
+	}
+}
+
+// A declared inverse walks the parent-stored edges down from the anchor, and
+// only the (source type, predicate) pairs that declare it: doc.children has no
+// `parent` inverse, so annex is not under root.
+func TestUnderDeclaredInverseWalksDownward(t *testing.T) {
+	ws := treeWS(t)
+	got := sortedSlugs(mustQuery(t, ws, Filters{Under: ptr("root"), Via: ptr("parent")}))
+	if !eq(got, []string{"readme", "spec", "sub"}) {
+		t.Fatalf("got %v", got)
+	}
+	docs := sortedSlugs(mustQuery(t, ws, Filters{Type: ptr("doc"), Under: ptr("root"), Via: ptr("parent")}))
+	if !eq(docs, []string{"readme", "spec"}) {
+		t.Fatalf("got %v", docs)
+	}
+}
+
+// Half a pair is refused rather than ignored, and an unknown --via lists the
+// declared inverses beside the stored predicates.
+func TestUnderRefusals(t *testing.T) {
+	ws := treeWS(t)
+	for _, f := range []Filters{{Under: ptr("root")}, {Via: ptr("parent")}} {
+		_, err := Query(ws, f, now)
+		var located *errs.Located
+		if !errors.As(err, &located) || located.Code != "filter_error" {
+			t.Fatalf("half pair %+v: want filter_error, got %#v", f, err)
+		}
+	}
+	_, err := Query(ws, Filters{Under: ptr("root"), Via: ptr("bogus")}, now)
+	var located *errs.Located
+	if !errors.As(err, &located) || located.Code != "unknown_predicate" ||
+		!strings.Contains(located.Message, "parent") {
+		t.Fatalf("want unknown_predicate listing the inverse, got %#v", err)
+	}
+}

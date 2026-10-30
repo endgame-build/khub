@@ -1,0 +1,1 @@
+{"error": {"code": "unknown_predicate", "message": "No predicate 'kind' in the schema. Declared predicates: actor, affects, capabilities, capability, consumed_by, consumes, depends_on, provider, realized_in, references, related, repo, served_by, serves, sources, superseded, supersedes, system, use_cases"}}

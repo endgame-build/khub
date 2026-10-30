@@ -1,0 +1,37 @@
+# `query --under <id> --via <predicate>` scopes a query to everything that
+# reaches the anchor over the named relation, any number of hops. The edge runs
+# from the contained entity to its container (a component's `system`), and the
+# anchor is never under itself. The other filters AND with it. `--under` and
+# `--via` come together; an undeclared predicate or an unknown anchor refuses,
+# and the refusal lists the declared inverses too. A declared inverse as `--via`
+# walks the stored edge down from the anchor instead: `--under <adr> --via
+# superseded` is every record that ADR replaced, directly or not.
+steps:
+- argv: ["init", "build-hub", ".", "--no-wire"]
+- argv: ["add", "system", "--title", "Shop"]
+- argv: ["add", "system", "--title", "Back Office"]
+- argv: ["add", "component", "--title", "Gateway", "--kind", "service", "--system", "sys-shop"]
+- argv: ["add", "component", "--title", "Cart", "--kind", "service", "--system", "sys-shop", "--draft"]
+- argv: ["add", "component", "--title", "Ledger", "--kind", "library", "--system", "sys-back-office"]
+- argv: ["add", "component", "--title", "Stripe", "--kind", "external"]
+- argv: ["link", "cmp-gateway", "depends_on", "cmp-cart"]
+- argv: ["link", "cmp-cart", "depends_on", "cmp-stripe"]
+- argv: ["query", "--under", "sys-shop", "--via", "system", "--format", "json"]
+- argv: ["query", "--under", "cmp-stripe", "--via", "depends_on", "--format", "json"]
+- argv: ["query", "--under", "cmp-stripe", "--via", "depends_on", "--active", "--format", "json"]
+- argv: ["query", "--under", "sys-back-office", "--via", "system", "--kind", "service", "--format", "json"]
+- argv: ["query", "--under", "cmp-gateway", "--via", "depends_on", "--format", "json"]
+- argv: ["query", "--under", "cmp-stripe", "--via", "depends_on", "--format", "ids"]
+- argv: ["query", "--under", "sys-shop"]
+- argv: ["query", "--via", "system"]
+- argv: ["query", "--under", "sys-shop", "--via", "part_of"]
+- argv: ["query", "--under", "sys-shop", "--via", "kind"]
+- argv: ["query", "--under", "sys-nowhere", "--via", "system"]
+- argv: ["add", "adr", "--title", "One", "--status", "rejected"]
+- argv: ["add", "adr", "--title", "Two", "--status", "accepted"]
+- argv: ["add", "adr", "--title", "Three", "--status", "accepted"]
+- argv: ["link", "ad-2026-01-15-two", "supersedes", "ad-2026-01-15-one"]
+- argv: ["link", "ad-2026-01-15-three", "supersedes", "ad-2026-01-15-two"]
+- argv: ["query", "--under", "ad-2026-01-15-three", "--via", "superseded", "--format", "json"]
+- argv: ["query", "--under", "ad-2026-01-15-two", "--via", "superseded", "--format", "ids"]
+- argv: ["query", "--under", "ad-2026-01-15-one", "--via", "supersedes", "--format", "ids"]

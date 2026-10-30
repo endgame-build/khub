@@ -2,7 +2,7 @@
 // `khub query`.
 //
 // ANDs a set of filters (type, frontmatter field, tag, --has/--missing predicate
-// presence, orphan/stale flags, draft scope) over the entity index and the
+// presence, orphan/stale flags, draft scope, --under containment) over the entity index and the
 // resolved edge graph. Filters read frontmatter and derived edges only, never
 // body prose (QRY-001). An empty result is a success, not an error (QRY-002).
 // Every match carries its orphan and stale flags (QRY-009), computed identically
@@ -15,6 +15,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/endgame-build/khub/internal/entity"
 	"github.com/endgame-build/khub/internal/errs"
 	"github.com/endgame-build/khub/internal/graph"
 	"github.com/endgame-build/khub/internal/index"
@@ -54,6 +55,10 @@ type Filters struct {
 	DraftOnly  bool
 	ActiveOnly bool
 	Limit      *int
+	// Under keeps the entities that reach this anchor over Via's stored edges,
+	// any number of hops; the anchor itself is excluded. Both or neither.
+	Under *string
+	Via   *string
 }
 
 // Query returns the entities passing every filter, each annotated orphan/stale.
@@ -78,6 +83,11 @@ func Query(root string, filters Filters, now time.Time) ([]Match, error) {
 		return nil, err
 	}
 
+	under, err := scope(resolved, idx, g, inverses, filters)
+	if err != nil {
+		return nil, err
+	}
+
 	nodes := append([]index.Node(nil), idx.Order...)
 	index.SortNodes(nodes)
 
@@ -85,6 +95,11 @@ func Query(root string, filters Filters, now time.Time) ([]Match, error) {
 	for _, node := range nodes {
 		if filters.Type != nil && *filters.Type != "" && node.Type != *filters.Type {
 			continue
+		}
+		if under != nil {
+			if _, ok := under[node]; !ok {
+				continue
+			}
 		}
 		meta := idx.Meta[node]
 		// A type declaring `orphan: true` is never flagged: edge-less is its
@@ -110,6 +125,52 @@ func Query(root string, filters Filters, now time.Time) ([]Match, error) {
 		matches = limitMatches(matches, *filters.Limit)
 	}
 	return matches, nil
+}
+
+// scope is the --under/--via set: nil when the pair is absent. --via names a
+// stored predicate, walked from the contained entity up to its container, or
+// a declared inverse, walked down from the anchor over the stored edges that
+// declare it. A stored predicate wins over an inverse of the same name, as it
+// does for --has. Half a pair is refused; the CLI catches it first.
+func scope(resolved *schema.ResolvedSchema, idx *index.Index, g *graph.Graph,
+	inverses inverseIndex, f Filters) (map[index.Node]int, error) {
+	if f.Under == nil && f.Via == nil {
+		return nil, nil
+	}
+	if f.Under == nil || f.Via == nil {
+		return nil, errs.New("filter_error", "--under and --via go together")
+	}
+	via := *f.Via
+	stored := map[string]bool{}
+	for _, tname := range resolved.Types.Keys() {
+		rtype, _ := resolved.Types.Get(tname)
+		for _, p := range rtype.Relations.Keys() {
+			stored[p] = true
+		}
+	}
+	sources := inverses[inverseKey{"", via}]
+	if !stored[via] && len(sources) == 0 {
+		declared := map[string]bool{}
+		for p := range stored {
+			declared[p] = true
+		}
+		for k := range inverses {
+			if k.Type == "" {
+				declared[k.Name] = true
+			}
+		}
+		return nil, graph.UnknownPredicate(via, declared)
+	}
+	anchor, err := entity.ResolveID(idx, *f.Under)
+	if err != nil {
+		return nil, err
+	}
+	if stored[via] {
+		return graph.Under(g, anchor, via), nil
+	}
+	return graph.UnderInverse(g, anchor, func(sourceType, predicate string) bool {
+		return sources[inverseSource{sourceType, predicate}]
+	}), nil
 }
 
 // title is `str(meta.get("title") or meta.get("name") or slug)`.

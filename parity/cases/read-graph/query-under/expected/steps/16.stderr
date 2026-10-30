@@ -1,0 +1,6 @@
+Usage: khub query [OPTIONS]
+Try 'khub query --help' for help.
+╭─ Error ──────────────────────────────────────────────────────────────────────╮
+│ Invalid value: --under needs --via <predicate>, the relation an entity       │
+│ follows up to its parent                                                     │
+╰──────────────────────────────────────────────────────────────────────────────╯

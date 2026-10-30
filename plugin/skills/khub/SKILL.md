@@ -24,6 +24,7 @@ The schema lives at `.khub/ontology.yaml` (the domain model) with `.khub/policy.
 ## Retrieve
 
 - `khub query --type <t> [--<field> <v>] [--tag <t>] [--has <pred>] [--missing <pred>] --format json` — filter by frontmatter; `--missing` surfaces gaps.
+- `khub query --under <id> --via <pred> --format json` — everything under `<id>`, any number of hops; ANDs with the other filters. A stored `<pred>` points from child to parent (`--via system`); for a hierarchy stored on the parent, pass its declared inverse (`--via superseded`).
 - `khub get <id>... --edges --format json` — one ID returns one object; multiple IDs return an all-or-nothing array in argument order, duplicates included. Raw output accepts one ID only.
 - `khub neighbors <id> --format json` — one-hop adjacency.
 - `khub impact <id> --format json` — transitive closure over a predicate (blast radius).
