@@ -5,6 +5,9 @@
 # Lived in kb/smoke.sh until kb moved to its own repo and took it along; khub needs
 # its own. `bash smoke.sh [workdir]`.
 set -uo pipefail
+# $KHUB is deliberately unquoted at every call: it is word-split so a wrapped
+# binary (`KHUB="env GOCOVERDIR=/tmp/cov ./khub-cover"`) runs as written.
+# shellcheck disable=SC2086
 
 REPO=$(cd "$(dirname "$0")" && pwd)
 WORK=${1:-/tmp/khub-smoke}
@@ -60,7 +63,7 @@ rm -rf "$WORK"; mkdir -p "$WORK"
 
 # -------------------------------------------------------------------- build-hub
 say "khub · build-hub"
-L=$WORK/hub; mkdir -p "$L"; cd "$L"
+L=$WORK/hub; mkdir -p "$L"; cd "$L" || exit 1
 ok 0 "init"                        $KHUB init build-hub .
 ok 0 "add repo"                    $KHUB -C "$L" add repo --title "API" --repo acme/api --status active
 ok 0 "add component (service)"     $KHUB -C "$L" add component --title "Public API" --kind service --repo rp-api
@@ -167,7 +170,7 @@ has "AGENTS.md is back"            "$L/AGENTS.md" "Record as you go"
 
 # --------------------------------------------------------------------- firm-ops
 say "khub · firm-ops (no singletons)"
-F=$WORK/firm; mkdir -p "$F"; cd "$F"
+F=$WORK/firm; mkdir -p "$F"; cd "$F" || exit 1
 ok 0 "init"                        $KHUB init firm-ops .
 ok 0 "add client"                  $KHUB -C "$F" add client --name "Acme Corp"
 ok 0 "validate"                    $KHUB -C "$F" validate --format json
@@ -176,7 +179,7 @@ hasnt "no singleton link"          "$F/AGENTS.md" "](knowledge/"
 
 # ---------------------------------------------------------------------- upgrade
 say "khub · upgrade"
-U=$WORK/upgrade; mkdir -p "$U"; cd "$U"
+U=$WORK/upgrade; mkdir -p "$U"; cd "$U" || exit 1
 ok 0 "init (build-lite, the alias)" $KHUB init build-lite .
 has  "alias records build-hub"     "$U/.khub/config.yaml" "preset: build-hub"
 has  "init writes index.md"        "$U/index.md" "# Index"
@@ -200,7 +203,7 @@ ok 2 "upgrade outside a workspace" $KHUB -C "$WORK" upgrade
 
 # ------------------------------------------------------- the misplaced-entity gate
 say "khub · a file the scan cannot reach"
-M=$WORK/misplaced; mkdir -p "$M"; cd "$M"
+M=$WORK/misplaced; mkdir -p "$M"; cd "$M" || exit 1
 $KHUB init build-hub . >/dev/null 2>&1
 $KHUB -C "$M" add component --title "API" --kind service >/dev/null 2>&1
 # sed to a temp file, not sed -i: GNU and BSD disagree on -i's argument.

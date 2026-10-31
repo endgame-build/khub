@@ -30,6 +30,9 @@
 #   curl -sSL -o khub.tar.gz https://github.com/endgame-build/khub/releases/download/v0.29.0/khub_linux_amd64.tar.gz
 #   (verify against checksums.txt beside it, then tar xzf khub.tar.gz khub)
 set -uo pipefail
+# `test && pass "…" || fail "…"` throughout: pass is a printf and never fails,
+# so fail runs exactly when the test is false — the if-then-else it reads as.
+# shellcheck disable=SC2015
 
 OLD=${1:?old khub binary}
 NEW=${2:?new khub binary}
@@ -201,7 +204,7 @@ backward() {
     grep -q '# tuned' .khub/config.yaml && pass "config.yaml restamped, stale_days comment kept" || fail "restamp lost the comment"
   fi
   [ "$(ls .khub/generated)" = "locks" ] && pass "journal removed; generated/ holds only locks/" || fail "generated/ holds more" "$(ls .khub/generated)"
-  [ -z "$(git status --porcelain | grep -F .gitignore)" ] && pass ".gitignore untouched" || fail ".gitignore moved"
+  if git status --porcelain | grep -qF .gitignore; then fail ".gitignore moved"; else pass ".gitignore untouched"; fi
 
   # ---- idempotence
   local after1; after1=$(git status --porcelain)
