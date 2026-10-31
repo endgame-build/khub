@@ -1,4 +1,7 @@
 #!/bin/bash
+# `test && pass "…" || fail "…"` throughout: pass is a printf and never fails,
+# so fail runs exactly when the test is false — the if-then-else it reads as.
+# shellcheck disable=SC2015
 # Cross-version compatibility smoke: a workspace OLD wrote must survive NEW.
 #
 #   parity/compat/smoke.sh <old-khub> <new-khub> [workdir] [--forward]
@@ -30,9 +33,6 @@
 #   curl -sSL -o khub.tar.gz https://github.com/endgame-build/khub/releases/download/v0.29.0/khub_linux_amd64.tar.gz
 #   (verify against checksums.txt beside it, then tar xzf khub.tar.gz khub)
 set -uo pipefail
-# `test && pass "…" || fail "…"` throughout: pass is a printf and never fails,
-# so fail runs exactly when the test is false — the if-then-else it reads as.
-# shellcheck disable=SC2015
 
 OLD=${1:?old khub binary}
 NEW=${2:?new khub binary}

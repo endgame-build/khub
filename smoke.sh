@@ -1,13 +1,13 @@
 #!/bin/bash
+# $KHUB is deliberately unquoted at every call: it is word-split so a wrapped
+# binary (`KHUB="env GOCOVERDIR=/tmp/cov ./khub-cover"`) runs as written.
+# shellcheck disable=SC2086
 # Extensive smoke over khub's CLI surface: build-hub and firm-ops, every command,
 # every exit code asserted. The unit suite proves the core; this proves the binary.
 #
 # Lived in kb/smoke.sh until kb moved to its own repo and took it along; khub needs
 # its own. `bash smoke.sh [workdir]`.
 set -uo pipefail
-# $KHUB is deliberately unquoted at every call: it is word-split so a wrapped
-# binary (`KHUB="env GOCOVERDIR=/tmp/cov ./khub-cover"`) runs as written.
-# shellcheck disable=SC2086
 
 REPO=$(cd "$(dirname "$0")" && pwd)
 WORK=${1:-/tmp/khub-smoke}

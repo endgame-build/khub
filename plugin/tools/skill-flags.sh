@@ -31,6 +31,7 @@ process.stdin.on("data", (d) => (s += d)).on("end", () => {
 
 fail=0
 for file in "$@"; do
+  # shellcheck disable=SC2016  # the loop's input: backticks are the Markdown code spans being matched
   while read -r line; do
     # shellcheck disable=SC2086  # the span is split into words on purpose
     set -- $line
@@ -57,7 +58,6 @@ for file in "$@"; do
       esac
       echo "$file: $verb${sub:+ $sub}: flag not in --help: $flag   (in: $line)"; fail=1
     done
-  # shellcheck disable=SC2016  # the backticks are the Markdown code spans being matched
   done < <(grep -o '`khub [^`]*`' "$file" | tr -d '`' | sort -u)
 done
 exit $fail

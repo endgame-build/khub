@@ -228,7 +228,7 @@ jobs:
           TMPDIR: ${{ runner.temp }}
         run: |
           cov=$RUNNER_TEMP/cov
-          mkdir -p "$cov"/{parity,smoke,scale,unit,all}
+          mkdir -p "$cov"/{parity,smoke,scale,unit,binary,all}
           go build -cover -o khub-cover ./cmd/khub
           go build -o parity-run ./parity/runner
           # The runner builds each child's environment from scratch, so
