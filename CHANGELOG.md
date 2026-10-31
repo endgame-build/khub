@@ -2,6 +2,243 @@
 
 Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); khub is pre-release.
 
+## [Unreleased]
+
+A khub Markdown entity is now an OKF 0.2 concept as written. The base block
+declares the OKF lifecycle, provenance and trust families, and the attribute
+vocabulary gains nested values. This release breaks existing workspaces, and
+`khub upgrade` migrates them in place: run it once after updating the binary.
+`validate` names each legacy shape until then.
+
+### Breaking
+
+- **`status` replaces `draft`.** The base `status` is `draft | stable |
+  deprecated`, default `stable`. `add` writes no status unless `--draft` asks
+  for `status: draft`, and `add --draft` beside a non-draft `--status`
+  refuses (`status_draft_conflict`). `edit <id> status draft|stable` moves it,
+  and drops a leftover `draft` key in the same write. `edit <id> draft …`
+  refuses (`draft_retired`). JSON rows keep a derived `draft` flag,
+  and `--draft`/`--active` and the `draft_singletons` keys are unchanged.
+  `validate` reports a leftover `draft` key as an error naming `khub upgrade`.
+  Until then a truthy legacy `draft` reads as draft whatever `status` says,
+  so a 0.30.0 draft is never published by accident.
+- **The `sources` relation is gone.** `sources` is now the OKF list of source
+  objects (`{resource, id, title, author, usage_count, last_modified,
+  usage_window}`), metadata that makes no edge. Move a bare id or path to
+  `references`; `validate` reports a bare `sources` entry naming `khub upgrade`.
+- **`khub reindex` writes an OKF 0.2 index.** The root `index.md`
+  frontmatter holds `okf_version: '0.2'` alone (`entity_count` is gone).
+  Sections are `# <type>` headings, entries are `* [Title](path) -
+  description` with the entity's `description`, and cross-links follow each
+  entry as indented `  * <predicate> → [Title](path)` sub-bullets. An empty
+  workspace's index is the frontmatter alone.
+- **`status`'s `okf_conformant` follows OKF 0.2 §11.** Every `.md` file below
+  the root, outside hidden directories, vendored trees and `.khub/ignore`,
+  needs frontmatter with a non-empty `type`, and `index.md` and `log.md` keep
+  their reserved shape. The root `CLAUDE.md` and `AGENTS.md` that `khub
+  wire` writes are exempt. Broken links and strays no longer break it, and a
+  `README.md` or `docs/` page without frontmatter now does. The
+  new `okf_nonconformant` lists the files, and text prints one `not
+  OKF-conformant: <path>` line each.
+- **build-hub 0.7.0.** adr `status` becomes `decision` (`proposed | accepted |
+  rejected`, required). api and repo drop their own `status` and inherit the
+  base one. The `proposed` lens reads `decision`, api's `spec` lens reads
+  `status: stable`, and repo's `archived` lens reads `status: deprecated`. A
+  value outside the base enum on a type that inherits it (an adr
+  `status: accepted`) is a `validate` error naming `khub upgrade`.
+- **`index.md` and `log.md` are never entities**, at any depth. They are no
+  longer strays inside a type directory. `add` refuses a slug whose file
+  would carry either name (`invalid_slug`), plain or templated, and a storage
+  path or path template whose file is either name refuses when the schema
+  loads.
+
+### Added
+
+- **`khub import --okf <dir>`** reads an OKF bundle into the workspace as
+  drafts. Each concept lands in the khub type its OKF `type` names, matched by
+  name or slug or mapped with `--type-map`; an unmapped type is skipped and
+  reported, never invented, and a map naming an undeclared type refuses the
+  run. Frontmatter is kept as written, unknown keys and key order included.
+  The id is minted by the type's scheme around the file's stem, with the stem
+  kept in `aliases` unless another entity already answers to it
+  (`alias_dropped`); a taken id is skipped rather than suffixed or merged. The
+  bundle's `verified` is quarantined as `okf_verified` and never counted, and
+  a relation value nothing answers to as `okf_unresolved`; a concept already
+  carrying the key import must write is skipped (`quarantine_taken`). Links to other
+  imported concepts become `references`, and export's `# Related` section
+  reads back into relations, so export and import round-trip without
+  duplicate edges. `--by` names the writer stamped on a concept with no
+  `generated`. A concept that cannot land is skipped and reported, and a
+  value or link naming it is quarantined or counted broken, never written as
+  an edge. The rest is written all or none under one workspace lock; a write
+  that fails undoes the run's other writes. `--dry-run` plans and writes
+  nothing.
+- **`khub export --okf <dir>`** writes the workspace as an OKF 0.2 bundle
+  another tool can read. Each entity becomes one md concept at a path
+  mirroring the workspace: md entities are copied as written, and json, yaml
+  and collection rows are materialized as md. Declared relations become a
+  `# Related` section of bundle-absolute links, every directory gets an
+  `index.md`, and the root one declares `okf_version: '0.2'`. Only entities
+  are exported, and strays are listed. The bundle is built beside the target
+  and swapped in, so a failed export changes nothing. A `.khub-export` file
+  at the bundle root lists the files the export wrote. The target must be
+  empty and must not overlap the workspace. `--force` replaces a previous
+  export only when the target holds that file, holds no `.khub/` and no
+  `.git/`, and holds nothing the file does not list, so it never deletes a
+  workspace, a repository or a file someone added. A target that is a symlink
+  is replaced where it points, and a replaced bundle that will not delete is
+  listed in `cleanup_left`. `--dry-run` lists the files and writes nothing.
+- **`upgrade` migrates legacy entities.** Every entity the scan sees (md,
+  per-item json and yaml, collection rows) is rewritten in place, with the
+  file's comments kept wherever the change can be spliced:
+  - `draft: true` becomes `status: draft`, and a falsy `draft` is dropped.
+  - Bare ids and paths in `sources` move to `references`; source objects stay.
+  - A `status` outside the base enum moves to the field whose enum holds it
+    (an adr's `accepted` becomes `decision: accepted`), or maps onto the base
+    enum (`proposed` → `draft`, `active` → `stable`, `archived` →
+    `deprecated`). A type that redeclares `status` keeps its own values, so
+    `--no-schema` moves no status.
+  - A date-only `stale_after` becomes that day's midnight UTC
+    (`2026-12-31T00:00:00Z`); `validate` names `khub upgrade` on it.
+
+  The rewrites ride the upgrade's journal, rollback and `--dry-run`. A real
+  run syncs every file it stages and publishes, so a large first migration
+  takes minutes; `--dry-run` skips the syncs.
+- **`upgrade` keeps the workspace's policy and storage edits.** Replacing
+  `policy.yaml` and `storage.yaml` keeps every per-type key or type entry the
+  shipped file lacks (a workspace's own `path_refs`, say), and at the same
+  preset version every value the workspace changed (a `format: json`, a
+  `path`), and reports each in `carried: [{file, type, key}]`. Across
+  versions a value both files carry goes to the shipped one, with the edit in
+  the `.bak`. A carried key the new schema rejects never blocks the upgrade:
+  it is let go and reported in `dropped: [{file, type, key, reason}]`. Before, the whole file was replaced, so migrated path
+  references dangled and json or yaml entities of an edited type vanished. JSON
+  appends `migrated` (`{id, path, changes: [{op, field, from, to}],
+  reemitted}`) and `migration_conflicts` (`{id, path, field, reason}`). A
+  `draft: true` beside a retired status wins and becomes `status: draft`.
+  Beside `stable` or `deprecated`, or on a type whose status cannot hold
+  `draft` (old layer files under `--no-schema`), it is a conflict and the
+  entity stays as written, as does a file migrate cannot read. A second
+  upgrade reports `migrated: []`.
+- **Nested attribute values.** `type: object` with `fields`, and `items` on a
+  `list`, nest the attribute grammar to any depth. `validate` checks each
+  declared nested key and reports every violation by its dotted path
+  (`verified[0].by is required`); a bare mapping where a list of objects is
+  declared counts as its one item. `add` and `edit` refuse a command-line
+  value for an object or a list of objects (`value_shape`). `schema show`
+  prints nested fields as indented rows.
+- **OKF families in the base.** `generated`, `verified`, `stale_after`,
+  `sources` and `usage_window`. Their datetimes are ISO 8601 with a `T` and an
+  explicit offset (`Z` or `+hh:mm`, either letter in either case), and `add`
+  and `edit` store such a value as written. A datetime without a pattern still normalizes as before.
+- **`khub verify <id> --by <actor>`** records a review as an OKF `verified`
+  event `{by, at, rev}`. `--by` is required, `--at` defaults to now, and `rev`
+  hashes the content the reviewer saw (body, declared fields, `status`,
+  relations), so a later content or status edit supersedes the review and a
+  tag edit does not. `--commit` adds a signed git commit of that entity's file
+  alone. It refuses (`commit_refused`) before writing when the file has
+  uncommitted changes or git cannot sign, restores the file when the commit
+  fails, and never commits unsigned or waits on a prompt.
+- **Trust tiers.** Every read derives `trust: unverified|machine|human` from
+  the live `verified` events (a live `human:` review wins). An event counts
+  only when its `by` follows the actor convention and its `at` is an OKF
+  datetime; one without a `rev` always holds, as OKF §5.3 reads it. `query --trust` filters on it,
+  `query`, `get`, `search` and `neighbors` rows end with it, `status` counts
+  each tier, and `check` lists reviews of a version that has since changed in
+  `superseded_verifications`, informational.
+- **`check --require-verified [--tier machine|human]`** fails the gate on
+  active entities whose trust ranks below the tier (default `machine`), listed
+  in a `below_tier` bucket that appears only under the flag.
+- **`stale_after` expires an entity.** From that instant it is stale whatever
+  its age. `khub stale` rows carry `reason: age|expired`, `status` counts
+  `expired` apart from `stale`, and `check --stale` makes active expired
+  entities fail the gate.
+- **`--by <actor>` on `add`, `edit`, `link` and `unlink`** names who a write is
+  stamped as (see the `generated` change below).
+- **`validate` gaps** for an actor outside the convention (`human:`,
+  `process:`, `<producer>[/<version>]`) and for a body footnote and a
+  `sources[].id` that do not cite each other, including a footnote on an
+  entity with no `sources`, and for two sources sharing an id. Inline and fenced code cite nothing. Neither fails
+  the gate.
+- **`KHUB_PARITY_NOW` takes an offset datetime** as well as a date.
+
+### Changed
+
+- **A content write stamps `generated: {by, at}`.** `add`, and an `edit`,
+  `link` or `unlink` that changes the body, a declared field, `status` or a
+  relation, record the last writer and when. An edit of bookkeeping alone
+  (`tags`, `aliases`, `stale_after`, `author`, `created`) bumps `updated` without a stamp, and an
+  edit that changes nothing writes nothing. `by` is `--by`, then `KHUB_ACTOR`,
+  then `agent/claude-code` under Claude Code, then `khub`, and never a person
+  read from git. `backfill`, `reindex` and `upgrade` never stamp, and existing
+  entities are not backfilled. Every content-write fixture moves by the stamp.
+- **`created` and `updated` are the local date**; `generated.at` and
+  `verified[].at` stay UTC.
+- **A schema field named like a flag of `add` or `edit` is a schema defect.**
+  The verb reads its flag first, so it can never set the field. `check` and
+  `validate` report it (`flag_shadowed`) and fail. It blocks no write: only a
+  write that passes that flag for a type declaring the field refuses, naming
+  both meanings, the rename and the positional `khub edit <id> <field>
+  <value>`, which still sets the field.
+- **An unparseable `KHUB_PARITY_NOW` refuses every command**
+  (`clock_pin_invalid`) instead of falling back to the real clock.
+- **Query filters read schema defaults, for every attribute.** A `--<field>`
+  filter on `query` reads an unwritten attribute as its schema default, as
+  lenses already do. So `--status stable` matches an entity that never wrote a
+  status, and a firm-ops `--active true` now matches a project that never
+  wrote `active`, whose default is true.
+- **`khub stale` lists an entity whose date does not parse.** It used to skip
+  one; it now lists it first, with the value as written in `effective_date`
+  and `age: null`, matching the `stale` flag `query` and `status` already
+  report.
+- **Read rows stay minimal.** `query` and `search` rows carry no `status`
+  field; they keep the derived `draft` flag and end with `trust`, as `get`
+  records do. The plugin reads none of the new fields, so its minimum khub
+  version is unchanged.
+- **Newly minted slugs for accented titles differ from 0.30.0.** Latin
+  accents are spelled out instead of dropped: `add requirement --title
+  "Café — Straße"` mints `req-cafe-strasse`, where 0.30.0 minted
+  `req-caf-stra-e`. A title arriving composed (NFC) or decomposed (NFD, as
+  macOS file names are) mints the same slug, and `ß`, `æ`, `œ`, `ø`, `ł`, `đ`,
+  `þ` are spelled `ss`, `ae`, `oe`, `o`, `l`, `d`, `th`. Existing files keep
+  their names. Lookup composes a name before folding it, so a decomposed
+  spelling finds a composed alias.
+- `reindex` and `export` label an entity with its `title`, else its `name`,
+  else its slug, and escape descriptions as well as titles in index rows.
+
+### Fixed
+
+- An unquoted impossible date (`2026-02-30`) passed `validate`; it is now an
+  error at the top level and inside an object.
+- A YAML document holding a long plain value the emitter had folded onto
+  several lines could no longer be spliced, so the next edit of a collection
+  row re-wrote the whole file and dropped every comment. Such a document now
+  splices like any other.
+- `upgrade` over a file or directory it cannot read refused with only
+  `os_error: PermissionError: [Errno 13] Permission denied: '<path>'`. It
+  still refuses, and the message now says upgrade copies the whole workspace
+  first, that nothing was written, and how to proceed.
+- A YAML merge key (`<<: *anchor`, a list of anchors, block or flow) made
+  the file malformed; it now loads as ruamel and PyYAML load it, an explicit
+  key beating a merged one. An edit keeps the `<<` line as written and writes
+  a changed merged value as an explicit key beside it.
+- A plain value with two spaces where the emitter wrapped the line (a long
+  `name` ending in `  tail`) read back with one space. The emitter no longer
+  breaks a line after a run of spaces, and never wraps a key. ruamel.yaml
+  does both, so this is a deliberate deviation from its bytes; no T3 case
+  moves (1089 of 1089 in both profiles).
+- A value holding NEL, LS or PS (U+0085, U+2028, U+2029) was single-quoted
+  with the break raw and read back changed; it is now double-quoted with the
+  break escaped. ruamel.yaml corrupts these values, so the T3 differential
+  excludes its 58 such rows (1031 of 1031 compared in both profiles).
+- A long plain value folded at a word starting with `-` read back with a
+  doubled space; the loader now folds plain scalars from their source lines.
+- A missing `.khub/config.yaml` crashed `query`, `status`, `stale` and
+  `upgrade` with `os_error`; it is now `config_missing`, naming the
+  `khub init <preset> . --force` that recreates it.
+- One name declared as both an attribute and a relation on a type is a schema
+  error instead of the attribute silently winning.
+
 ## [0.30.0] — 2026-10-28
 
 Storage can now follow a hub's existing nesting, relations can point to files

@@ -15,7 +15,6 @@
 │ related      │ any         │ any        │ many │          │                  │
 │ repo         │ component   │ repo       │ one  │          │                  │
 │ served_by    │ use-case    │ component  │ many │          │ inverse serves   │
-│ sources      │ any         │ any        │ many │          │                  │
 │ supersedes   │ adr         │ adr        │ one  │          │ inverse          │
 │              │             │            │      │          │ superseded;      │
 │              │             │            │      │          │ acyclic          │

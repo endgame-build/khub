@@ -13,6 +13,7 @@ import (
 	"testing"
 
 	"github.com/endgame-build/khub/internal/canon"
+	"github.com/endgame-build/khub/internal/clock"
 	"github.com/endgame-build/khub/internal/entity"
 	"github.com/endgame-build/khub/internal/errs"
 	"github.com/endgame-build/khub/internal/omap"
@@ -77,7 +78,7 @@ func mustCreate(t *testing.T, root, typeName, id string, draft bool, pairs ...st
 
 func link(t *testing.T, root, id, predicate, target string) {
 	t.Helper()
-	if _, err := entity.Link(root, id, predicate, target); err != nil {
+	if _, err := entity.Link(root, id, predicate, target, ""); err != nil {
 		t.Fatalf("link %s %s %s: %v", id, predicate, target, err)
 	}
 }
@@ -181,7 +182,7 @@ func mustValidate(t *testing.T, root string, target *string, strict bool) *Valid
 
 func mustCheck(t *testing.T, root string, strict bool) *CheckReport {
 	t.Helper()
-	report, err := Check(root, strict)
+	report, err := Check(root, strict, clock.Now())
 	if err != nil {
 		t.Fatalf("check: %v", err)
 	}

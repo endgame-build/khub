@@ -27,6 +27,7 @@ commands:
   - '--format'
 - name: 'add'
   params:
+  - '--by'
   - 'arg:type_'
   - '--id'
   - '--draft'
@@ -42,19 +43,29 @@ commands:
   - '--format'
 - name: 'edit'
   params:
+  - '--by'
   - 'arg:id_'
   - '--strict'
   - '--body'
   - '--body-file'
   - '--format'
+- name: 'verify'
+  params:
+  - 'arg:id_'
+  - '--by'
+  - '--at'
+  - '--commit'
+  - '--format'
 - name: 'link'
   params:
+  - '--by'
   - 'arg:id_'
   - 'arg:predicate'
   - 'arg:target'
   - '--format'
 - name: 'unlink'
   params:
+  - '--by'
   - 'arg:id_'
   - 'arg:predicate'
   - 'arg:target'
@@ -66,6 +77,7 @@ commands:
   - '--format'
 - name: 'query'
   params:
+  - '--trust'
   - '--type'
   - '--tag'
   - '--has'
@@ -110,7 +122,10 @@ commands:
   - '--format'
 - name: 'check'
   params:
+  - '--stale'
   - '--strict'
+  - '--require-verified'
+  - '--tier'
   - '--format'
 - name: 'stale'
   params:
@@ -119,6 +134,19 @@ commands:
 - name: 'reindex'
   params:
   - '--dry-run'
+- name: 'export'
+  params:
+  - '--okf'
+  - '--force'
+  - '--dry-run'
+  - '--format'
+- name: 'import'
+  params:
+  - '--okf'
+  - '--type-map'
+  - '--by'
+  - '--dry-run'
+  - '--format'
 - name: 'viz'
   params:
   - '--out'
@@ -165,27 +193,41 @@ error_codes:
 - ambiguity_error
 - bad_search_query
 - bad_target
-- collection_path_collision
 - body_field_reserved
 - bool_violation
 - cardinality_violation
+- clock_pin_invalid
+- collection_path_collision
+- commit_refused
+- config_missing
 - date_violation
+- draft_retired
 - duplicate_type
 - empty_preset
 - empty_relation_value
 - enum_violation
+- export_target_not_bundle
+- export_target_not_directory
+- export_target_not_empty
+- export_target_overlaps
+- export_target_unsafe
 - filter_error
+- flag_shadowed
 - fts_unavailable
 - id_prefix_undecided
 - illegal_predicate
-- internal_path_error
+- import_bundle_overlaps
+- import_bundle_unreadable
+- import_type_map_invalid
 - inbound_edge_refusal
+- internal_path_error
 - invalid_schema
-- invalid_snapshot
 - invalid_slug
+- invalid_snapshot
 - lookup_error
 - malformed_entity
 - malformed_projection
+- status_draft_conflict
 # missing_base: unreachable through the CLI since the ontology/policy/storage
 # split — LoadSchema always supplies the embedded base as the layered fallback,
 # and the legacy shape that could still trip it is deleted with legacy.go.
@@ -213,6 +255,7 @@ error_codes:
 - unknown_preset
 - unknown_relation_target
 - unknown_type
+- value_shape
 format_specials:
 - json
 - ids

@@ -91,7 +91,7 @@ test('the band shows the preset, the count and the gate, dim, with no bracket', 
     const ui = await $.ui.mount(band(surface))
 
     expect((await ui.find({ type: 'Text', text: /^khub$/ }))?.props.dimColor).toBe(true)
-    expect((await ui.find({ type: 'Text', text: /^build-hub 0\.6\.0 · 8 entities$/ }))?.props.dimColor).toBe(true)
+    expect((await ui.find({ type: 'Text', text: /^build-hub 0\.7\.0 · 8 entities$/ }))?.props.dimColor).toBe(true)
     expect((await ui.find({ type: 'Text', text: /^ · check ✓$/ }))?.props.dimColor).toBe(true)
     expect(await ui.find({ type: 'Text', text: /^ \[$/ })).toBe(undefined)
     expect(await ui.find({ type: 'Text', text: /^engine drawing$/ })).toBe(undefined)
@@ -137,7 +137,7 @@ test('a khub add runs unchanged, draws a compact row and shows +1 on the band', 
     expect(await row.find({ type: 'Text', text: /^adr\/ad-2026-01-15-use-re2-patterns$/ })).toBeDefined()
     expect(await row.find({ type: 'Text', text: /^engine drawing$/ })).toBe(undefined)
     expect((await line.find({ type: 'Text', text: /^\+1$/ }))?.props.color).toBe('green')
-    expect(await line.find({ type: 'Text', text: /^build-hub 0\.6\.0 · 9 entities$/ })).toBeDefined()
+    expect(await line.find({ type: 'Text', text: /^build-hub 0\.7\.0 · 9 entities$/ })).toBeDefined()
     await row.unmount()
     await line.unmount()
   }
@@ -448,7 +448,7 @@ test('a failing gate turns the band red and counts the errors', async ($, on) =>
     const line = await $.ui.mount(band(surface))
 
     expect((await line.find({ type: 'Text', text: /^khub$/ }))?.props.color).toBe('red')
-    expect((await line.find({ type: 'Text', text: /^build-hub 0\.6\.0 · 10 entities$/ }))?.props.color).toBe('red')
+    expect((await line.find({ type: 'Text', text: /^build-hub 0\.7\.0 · 10 entities$/ }))?.props.color).toBe('red')
     expect((await line.find({ type: 'Text', text: /^ · check ✗ 1 error$/ }))?.props.color).toBe('red')
     await line.unmount()
   }
@@ -466,7 +466,7 @@ test('a cut document keeps what the band shows', async ($, on) => {
 
   const line = await $.ui.mount(band())
 
-  expect(await line.find({ type: 'Text', text: /^build-hub 0\.6\.0 · 8 entities$/ })).toBeDefined()
+  expect(await line.find({ type: 'Text', text: /^build-hub 0\.7\.0 · 8 entities$/ })).toBeDefined()
   expect(await line.find({ type: 'Text', text: /^\+1$/ })).toBe(undefined)
 })
 
@@ -509,7 +509,7 @@ test('a khub updated during the session is picked up at the next turn start', as
 
   expect(host.ran).toEqual(BASELINE)
   expect(host.statuses).toEqual(['needs khub 0.27.0 or newer', undefined])
-  expect(await (await $.ui.mount(band())).find({ type: 'Text', text: /^build-hub 0\.6\.0 · 8 entities$/ })).toBeDefined()
+  expect(await (await $.ui.mount(band())).find({ type: 'Text', text: /^build-hub 0\.7\.0 · 8 entities$/ })).toBeDefined()
 })
 
 test('a machine with no khub says so on the status line', async ($, on) => {

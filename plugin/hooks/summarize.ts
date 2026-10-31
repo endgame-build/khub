@@ -11,7 +11,7 @@ type Result = { line: string; tone: KhubTone }
 // The first positional of these verbs names what the call is about, a type for add and an
 // id for the rest.
 const SUBJECT_VERBS = new Set([
-  'add', 'edit', 'get', 'history', 'impact', 'link', 'neighbors', 'remove', 'unlink', 'validate',
+  'add', 'edit', 'get', 'history', 'impact', 'link', 'neighbors', 'remove', 'unlink', 'validate', 'verify',
 ])
 
 const NOTHING: Result = { line: '', tone: 'plain' }
@@ -131,6 +131,13 @@ function resultOf(call: Simple, json: unknown, note: string): Result {
 
     case 'remove':
       return { line: `− ${text(row.id)}`, tone: 'ok' }
+
+    // A review names the entity, who reviewed it and when, and the signed commit under --commit.
+    case 'verify': {
+      const commit = typeof row.commit === 'string' ? ` · ${row.commit.slice(0, 7)}` : ''
+
+      return { line: `${text(row.id)} · ${text(row.by)} · ${text(row.at)}${commit} ✓`, tone: 'ok' }
+    }
 
     case 'get': {
       if (Array.isArray(json)) return entities

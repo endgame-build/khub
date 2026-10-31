@@ -1,0 +1,27 @@
+# import is permissive per concept and strict per run. Per concept, nothing
+# stops the others: an unknown OKF type with no map entry is skipped
+# (`unmapped_type`, never invented), a document with no frontmatter
+# (`no_frontmatter`), malformed YAML (`malformed_frontmatter`) and a concept
+# with no `type` (`missing_type`) are skipped, a broken link is counted and
+# left in the body, and index.md is never a concept. The whole run refuses,
+# exit 2 and nothing written, without --okf, for a bundle that is not a
+# directory, a bundle inside the workspace, and a type map that is not a
+# mapping of strings.
+steps:
+- argv: ["init", "firm-ops", "hub", "--no-wire"]
+- sh: |
+    mkdir -p bundle/notes
+    printf -- '---\nokf_version: "0.2"\n---\n# Notes\n' > bundle/index.md
+    printf -- '---\ntype: Fragment\ntitle: Kept\nstage: raw\n---\nSee [the gone one](/notes/gone.md) and [a site](https://example.com).\n' > bundle/notes/kept.md
+    printf -- '---\ntype: Playbook\ntitle: Unknown kind\n---\n' > bundle/notes/playbook.md
+    printf -- '# Just prose\n' > bundle/notes/prose.md
+    printf -- '---\ntype: [unclosed\n---\n' > bundle/notes/broken-yaml.md
+    printf -- '---\ntitle: No type\n---\n' > bundle/notes/untyped.md
+    printf -- '- not a mapping\n' > badmap.yaml
+    mkdir -p hub/inner && printf -- '---\ntype: fragment\n---\n' > hub/inner/a.md
+- argv: ["-C", "hub", "import", "--okf", "bundle", "--format", "json"]
+- argv: ["-C", "hub", "get", "fragment/kept", "--format", "raw"]
+- argv: ["-C", "hub", "import", "--format", "json"]
+- argv: ["-C", "hub", "import", "--okf", "badmap.yaml", "--format", "json"]
+- argv: ["-C", "hub", "import", "--okf", "hub/inner", "--format", "json"]
+- argv: ["-C", "hub", "import", "--okf", "bundle", "--type-map", "badmap.yaml", "--format", "json"]

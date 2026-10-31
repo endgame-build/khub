@@ -5,7 +5,7 @@ set -uo pipefail
 REPO=$(cd "$(dirname "$0")" && pwd)
 WORK=${1:-/tmp/khub-smoke-nested}
 KHUB="${KHUB:-$REPO/khub}"
-export KHUB_PARITY_NOW=2026-01-15
+export KHUB_PARITY_NOW=2026-01-15 KHUB_ACTOR=khub
 FAILED=0
 CASES=0
 

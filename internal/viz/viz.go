@@ -24,7 +24,6 @@ import (
 	"github.com/endgame-build/khub/internal/introspect"
 	"github.com/endgame-build/khub/internal/omap"
 	"github.com/endgame-build/khub/internal/schema"
-	"github.com/endgame-build/khub/internal/values"
 	"github.com/endgame-build/khub/internal/workspace"
 )
 
@@ -101,12 +100,11 @@ func Graph(root string, typeFilter *string) (*Elements, []string, error) {
 	for _, n := range nodes {
 		typeSet[n.Type] = true
 		rtype, _ := resolved.Types.Get(n.Type)
-		draftRaw, _ := idx.Meta[n].Get("draft")
 		titleRaw, _ := idx.Meta[n].Get("title")
 		title, _ := titleRaw.(string)
 		meta[n] = NodeMeta{
 			Title:  title,
-			Draft:  values.AsBool(draftRaw),
+			Draft:  rtype.IsDraft(idx.Meta[n]),
 			Orphan: graph.IsOrphan(g, n, rtype),
 		}
 	}

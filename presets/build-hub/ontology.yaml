@@ -62,13 +62,15 @@
 #    vendor API's provider is the external component.
 #  - `superseded`, `serves` and `consumed_by` are never stored — computed
 #    inverses, named so `get --edges` on the target shows them.
-#  - No status field declares a `default` — `add` applies no schema defaults,
-#    so status is always an explicit statement.
+#  - adr records its choice in `decision`, required and without a default, so
+#    every record states it. api and repo carry no status of their own: they
+#    inherit the base OKF `status` (draft, stable, deprecated), where an absent
+#    value reads as stable.
 #
 # Storage form and per-type gates live beside this file: storage.yaml carries
 # layout/path/id_prefix/id_date, policy.yaml carries required/orphan.
 
-version: "0.6.0"
+version: "0.7.0"
 
 ontology:
   entities:
@@ -151,8 +153,8 @@ ontology:
         technical, including "we considered X and are not doing it". Capture the reasoning
         while it is still known
       attributes:
-        title:  { required: true }
-        status: { enum: [proposed, accepted, rejected], required: true }
+        title:    { required: true }
+        decision: { enum: [proposed, accepted, rejected], required: true }
       relations:
         supersedes: { to: adr, inverse: superseded, acyclic: true }
         affects:    { to: any, many: true }   # blast radius — the query that earns this type
@@ -193,7 +195,6 @@ ontology:
       attributes:
         title:  { required: true }
         kind:   { enum: [rest, graphql, grpc, events, data], required: true }
-        status: { enum: [proposed, active, deprecated], required: true }
       relations:
         provider: { to: component, required: true }   # provided by; a vendor API names the external component
       # policy prose (versioning, auth, idempotency) is the body; the machine
@@ -207,7 +208,6 @@ ontology:
       attributes:
         title:  { required: true }
         repo:   { type: text, required: true, pattern: '^[a-z0-9._-]+(/[a-z0-9._-]+)+$' }   # org/name, nested groups allowed
-        status: { enum: [active, archived], required: true }
       # the registry: `component.repo` must resolve here. An engagement tightens
       # the pattern to its org. Ownership is derived from the components that
       # name this repo, never stored here.

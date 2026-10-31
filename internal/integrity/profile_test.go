@@ -1,6 +1,7 @@
 package integrity
 
 import (
+	"github.com/endgame-build/khub/internal/clock"
 	"os"
 	"testing"
 )
@@ -13,7 +14,7 @@ func BenchmarkCheckLargeCorpus(b *testing.B) {
 	}
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		if _, err := Check(ws, false); err != nil {
+		if _, err := Check(ws, false, clock.Now()); err != nil {
 			b.Fatal(err)
 		}
 	}

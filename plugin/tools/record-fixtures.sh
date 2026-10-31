@@ -17,7 +17,7 @@ trap 'rm -rf "$TMP"' EXIT
 
 (cd "$REPO" && go build -o "$TMP/khub" ./cmd/khub)
 
-export KHUB_PARITY_NOW=2026-01-15
+export KHUB_PARITY_NOW=2026-01-15 KHUB_ACTOR=khub TZ=UTC
 WS="$TMP/ws"
 BODY="$TMP/fixtures.body"
 ADR=ad-2026-01-15-use-re2-patterns
@@ -55,7 +55,7 @@ PY
 "$TMP/khub" init build-hub "$WS" --no-wire >/dev/null
 : >"$BODY"
 
-k add repo --title "API" --repo endgame/api --status active >/dev/null
+k add repo --title "API" --repo endgame/api >/dev/null
 k add component --title "Storage" --kind service --owner team-platform >/dev/null
 k add component --title "Search" --kind service --owner team-platform --lifecycle production \
   --tier tier-1 --repo rp-api --depends_on cmp-storage >/dev/null
@@ -82,7 +82,7 @@ rec remove_refused remove cmp-search --format json
 rec reindex_dry reindex --dry-run
 
 # A decision, linked.
-rec add_adr add adr --title "Use RE2 patterns" --status accepted --format json
+rec add_adr add adr --title "Use RE2 patterns" --decision accepted --format json
 rec query_added query --format json
 rec validate_adr validate "adr/$ADR" --format json
 rec link_adr link "$ADR" affects cmp-search --format json
@@ -107,6 +107,7 @@ rec query_dangling query --format json
 rec edit_fix edit "$REQ" realized_in cmp-search --format json
 rec edit_component edit cmp-search lifecycle deprecated --format json
 rec unlink_adr unlink "$ADR" affects cmp-search --format json
+rec verify_adr verify "$ADR" --by human:reviewer --format json
 k add actor --title "Temp" >/dev/null
 rec remove_actor remove act-temp --format json
 

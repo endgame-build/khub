@@ -1,0 +1,1 @@
+{"error": {"code": "flag_shadowed", "message": "--by is ambiguous for type 'memo': it is both a `khub add` flag and the type's field 'by'. Rename the field in the schema; until then, leave --by out (KHUB_ACTOR names the writer) and set the field with `khub edit <id> by <value>`"}}

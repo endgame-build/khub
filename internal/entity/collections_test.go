@@ -211,7 +211,7 @@ func TestCollectionEditIsRowLocal(t *testing.T) {
 	}
 
 	textBefore := readFile(t, file)
-	noop, err := Unlink(ws, "acme", "related", "demo")
+	noop, err := Unlink(ws, "acme", "related", "demo", "")
 	requireNoError(t, err)
 	if noop.Changed {
 		t.Fatal("the no-op unlink reported a change")
@@ -235,7 +235,7 @@ func TestCollectionRemoveRowOnly(t *testing.T) {
 		Fields: fields("title", "X", "repo", "endgame-build/x"), UseTemplate: true})
 	requireNoError(t, err)
 
-	_, err = Link(ws, "demo", "code", "repo/acme")
+	_, err = Link(ws, "demo", "code", "repo/acme", "")
 	requireNoError(t, err)
 
 	refused, err := Delete(ws, "repo/acme", false)

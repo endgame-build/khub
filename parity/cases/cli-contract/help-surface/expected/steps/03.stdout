@@ -2,7 +2,7 @@ Usage: khub upgrade [OPTIONS]
 
 Refresh an existing workspace: the shipped schema and templates, new scaffolds, the wire block.
 
-Replaces .khub/{ontology,policy,storage}.yaml and .khub/templates/*.yaml from the preset recorded in .khub/config.yaml, copying an edited file to <name>.bak first; preflights the candidate schema and scaffolds before publishing, then re-wires the agent files and regenerates index.md. Refuses outside a workspace: ``khub init`` scaffolds, ``khub upgrade`` refreshes.
+Replaces .khub/{ontology,policy,storage}.yaml and .khub/templates/*.yaml from the preset recorded in .khub/config.yaml, copying an edited file to <name>.bak first; migrates legacy entity fields (`draft`, bare `sources` entries, a retired `status`) in place; preflights the candidate schema and scaffolds before publishing, then re-wires the agent files and regenerates index.md. Refuses outside a workspace: ``khub init`` scaffolds, ``khub upgrade`` refreshes.
 
 Options:
   --dry-run  Preview core and tail outcomes without changing the workspace.

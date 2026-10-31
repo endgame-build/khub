@@ -5,10 +5,11 @@
 // integrity hard-fail) and read one back (id resolution, ambiguity detection,
 // read-time inverse-edge derivation). update/link/unlink/delete extend them.
 //
-// `draft` is a manual publish flag: add defaults it to false, --draft sets it,
-// and `edit <id> draft …` toggles it. khub never derives it from completeness —
-// capture is never blocked, and an active-but-incomplete entity is surfaced by
-// check, not by this flag.
+// `status: draft` is the manual publish flag: add writes it only for --draft,
+// and `edit <id> status draft|stable` moves it. An absent status reads as the
+// base default, stable, and is never written. khub never derives it from
+// completeness — capture is never blocked, and an active-but-incomplete entity
+// is surfaced by check, not by this flag.
 //
 // Every verb is schema-generic: it introspects the compiled schema at runtime
 // and has no per-type code path. The schema and git are the only gates.
@@ -19,13 +20,12 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
-	"os"
 	"path/filepath"
 	"sort"
 	"strings"
-	"time"
 
 	"github.com/endgame-build/khub/internal/canon"
+	"github.com/endgame-build/khub/internal/clock"
 	"github.com/endgame-build/khub/internal/errs"
 	"github.com/endgame-build/khub/internal/fsio"
 	"github.com/endgame-build/khub/internal/index"
@@ -33,6 +33,7 @@ import (
 	"github.com/endgame-build/khub/internal/omap"
 	"github.com/endgame-build/khub/internal/schema"
 	"github.com/endgame-build/khub/internal/template"
+	"github.com/endgame-build/khub/internal/trust"
 	"github.com/endgame-build/khub/internal/values"
 	"github.com/endgame-build/khub/internal/workspace"
 )
@@ -132,20 +133,21 @@ func create(root, typeName string, opts CreateOpts) (*CreateResult, error) {
 		part.rels.Set(predicate, unique)
 	}
 
-	// `draft` is manual: the --draft flag, or an explicit `draft` field, else false.
-	isDraft := opts.Draft
-	if explicit, has := part.attrs.Get("draft"); has {
-		part.attrs.Delete("draft")
-		if explicit != nil {
-			isDraft = truthy(explicit)
+	// --draft writes `status: draft`. An explicit --status that says otherwise
+	// is a contradiction, refused rather than settled by either flag.
+	if status, explicit := part.attrs.Get("status"); opts.Draft {
+		if explicit && status != values.StatusDraft {
+			return nil, errs.StatusDraftConflict(values.Str(status))
 		}
+		part.attrs.Set("status", values.StatusDraft)
 	}
+
+	stamp(rtype, part.attrs, opts.Actor)
 
 	meta := omap.New()
 	meta.Set("type", typeName)
 	meta.Set("created", today())
 	meta.Set("updated", today())
-	meta.Set("draft", isDraft)
 	for _, name := range rtype.Attributes.Keys() {
 		if v, has := part.attrs.Get(name); has {
 			meta.Set(name, v)
@@ -168,105 +170,128 @@ func create(root, typeName string, opts CreateOpts) (*CreateResult, error) {
 		v, _ := part.extras.Get(key)
 		meta.Set(key, v)
 	}
+	isDraft := rtype.IsDraft(meta)
 
-	switch rtype.Storage.Layout {
-	case schema.LayoutSingleton:
-		// The slug IS the type name; an --id saying otherwise is a mistake.
-		if opts.ID != "" && opts.ID != typeName {
+	explicit := opts.ID != ""
+	slug := typeName // a singleton's slug IS its type name
+	if rtype.Storage.Layout == schema.LayoutSingleton {
+		// An --id saying otherwise is a mistake.
+		if explicit && opts.ID != typeName {
 			return nil, errs.New("singleton_id", fmt.Sprintf(
 				"'%s' is a singleton — its id is always '%s' (drop --id)", typeName, typeName))
 		}
-		path := entityPath(root, idx, index.Node{Type: typeName, Slug: typeName})
-		if err := refuseIgnored(root, path, resolved.Ignore, typeName); err != nil {
+	} else {
+		// Minted after the frontmatter is assembled, so a --created override
+		// dates the id. Minting reads no siblings, so the same name or title
+		// mints the same slug twice: placeNew's index pre-check names the
+		// refusal cheaply, and the exclusive create is the real gate against a
+		// concurrent add. Neither an explicit nor a minted slug is ever suffixed.
+		if slug, err = chooseSlug(rtype, meta, opts.ID); err != nil {
 			return nil, err
 		}
-		if err := fsio.MkdirAll(root, filepath.Dir(path)); err != nil {
-			return nil, err
-		}
-		if err := writeNew(root, path, meta, body); err != nil {
-			if errors.Is(err, fs.ErrExist) {
-				return nil, errs.New("singleton_exists", fmt.Sprintf(
-					"Singleton '%s' already exists at %s; edit it instead of adding another",
-					typeName, relSlash(root, path)))
-			}
-			return nil, err
-		}
-		return &CreateResult{Type: typeName, Slug: typeName, Path: path, Draft: isDraft}, nil
-
-	case schema.LayoutCollection:
-		slug, err := chooseSlug(rtype, meta, opts.ID)
-		if err != nil {
-			return nil, err
-		}
-		if err := refuseIgnored(root, collectionFile(root, rtype), resolved.Ignore, typeName); err != nil {
-			return nil, err
-		}
-		if err := aliasTaken(idx, slug, opts.ID == ""); err != nil {
-			return nil, err
-		}
-		if err := createRow(root, rtype, typeName, meta, body, slug, opts.ID != ""); err != nil {
+	}
+	naming := errs.NamedByID
+	if !explicit {
+		naming = errs.Minted
+	}
+	path, err := placeNew(root, resolved, idx, rtype, slug, meta, naming)
+	if err != nil {
+		return nil, err
+	}
+	if rtype.Storage.Layout == schema.LayoutCollection {
+		if err := createRow(root, rtype, typeName, meta, body, slug, naming); err != nil {
 			return nil, err
 		}
 		return &CreateResult{
 			Type:    typeName,
 			Slug:    slug,
-			Path:    entityPath(root, idx, index.Node{Type: typeName, Slug: slug}),
+			Path:    path,
 			Draft:   isDraft,
 			Locator: locator(rtype, slug),
 		}, nil
-	}
-
-	// Slug + O_EXCL write. Minted after the frontmatter is assembled, so a
-	// --created override dates the id. Minting reads no siblings, so the same
-	// name or title mints the same slug twice: the index pre-check names the
-	// refusal cheaply, and the exclusive create is the real gate against a
-	// concurrent add. Neither an explicit nor a minted slug is ever suffixed.
-	slug, err := chooseSlug(rtype, meta, opts.ID)
-	if err != nil {
-		return nil, err
-	}
-	explicit := opts.ID != ""
-	// The slug is the file stem (file layout) or the folder name (folder
-	// layout), so a Windows device name is refused before anything is written.
-	// The test is on the final stem, prefix and date applied; a collection row
-	// returned above, since it is not a file.
-	if schema.ReservedDeviceName(slug) {
-		return nil, errs.ReservedSlug(slug, typeName, !explicit)
-	}
-	if idx.Nodes[index.Node{Type: typeName, Slug: slug}] {
-		return nil, errs.SlugTaken(slug, typeName, !explicit)
-	}
-	if err := aliasTaken(idx, slug, !explicit); err != nil {
-		return nil, err
-	}
-	path := entityPath(root, idx, index.Node{Type: typeName, Slug: slug})
-	if rtype.Templated() {
-		rel, err := templatedPath(rtype, slug, meta)
-		if err != nil {
-			return nil, err
-		}
-		path = filepath.Join(root, filepath.FromSlash(rel))
-	}
-	if err := refuseIgnored(root, path, resolved.Ignore, typeName); err != nil {
-		return nil, err
 	}
 	if err := fsio.MkdirAll(root, filepath.Dir(path)); err != nil {
 		return nil, err
 	}
 	if err := writeNew(root, path, meta, body); err != nil {
 		if errors.Is(err, fs.ErrExist) {
-			return nil, errs.SlugTaken(slug, typeName, !explicit)
+			if rtype.Storage.Layout == schema.LayoutSingleton {
+				return nil, singletonExists(root, typeName, path)
+			}
+			return nil, errs.SlugTaken(slug, typeName, naming)
 		}
 		return nil, err
 	}
 	return &CreateResult{Type: typeName, Slug: slug, Path: path, Draft: isDraft}, nil
 }
 
+// placeNew is the file a new entity of rtype under slug is written to, or the
+// gate that refuses it: a taken singleton, slug or alias, a Windows device
+// name, a reserved OKF navigation name, an ignored path. add and import both
+// pass through it, so an import lands only where an add could. naming says
+// how the slug was chosen, which the refusals' advice depends on. A
+// collection row's file is the collection's, and its slug is gated again by
+// the in-lock read that inserts it.
+func placeNew(
+	root string, resolved *schema.ResolvedSchema, idx *index.Index,
+	rtype *schema.ResolvedType, slug string, meta *omap.Map, naming errs.Naming,
+) (string, error) {
+	node := index.Node{Type: rtype.Name, Slug: slug}
+	switch rtype.Storage.Layout {
+	case schema.LayoutSingleton:
+		path := entityPath(root, idx, node)
+		if idx.Nodes[node] {
+			return "", singletonExists(root, rtype.Name, path)
+		}
+		return path, refuseIgnored(root, path, resolved.Ignore, rtype.Name)
+	case schema.LayoutCollection:
+		path := collectionFile(root, rtype)
+		if err := refuseIgnored(root, path, resolved.Ignore, rtype.Name); err != nil {
+			return "", err
+		}
+		if idx.Nodes[node] {
+			return "", errs.SlugTaken(slug, rtype.Name, naming)
+		}
+		return path, aliasTaken(idx, slug, naming)
+	}
+	// The slug is the file stem (file layout) or the folder name (folder
+	// layout), so a Windows device name is refused before anything is written.
+	if schema.ReservedDeviceName(slug) {
+		return "", errs.ReservedSlug(slug, rtype.Name, naming)
+	}
+	if idx.Nodes[node] {
+		return "", errs.SlugTaken(slug, rtype.Name, naming)
+	}
+	if err := aliasTaken(idx, slug, naming); err != nil {
+		return "", err
+	}
+	path := entityPath(root, idx, node)
+	if rtype.Templated() {
+		rel, err := templatedPath(rtype, slug, meta)
+		if err != nil {
+			return "", err
+		}
+		path = filepath.Join(root, filepath.FromSlash(rel))
+	}
+	// index.md and log.md are OKF navigation, never read back as an entity. A
+	// folder's _index.md is not.
+	if name := filepath.Base(path); schema.ReservedEntityName(name) {
+		return "", errs.NavigationSlug(slug, rtype.Name, name, naming)
+	}
+	return path, refuseIgnored(root, path, resolved.Ignore, rtype.Name)
+}
+
+func singletonExists(root, typeName, path string) *errs.Located {
+	return errs.New("singleton_exists", fmt.Sprintf(
+		"Singleton '%s' already exists at %s; edit it instead of adding another",
+		typeName, relSlash(root, path)))
+}
+
 // aliasTaken refuses a new slug that is already another entity's alias: the
 // name is taken for that entity, and a second one under it is a duplicate.
-func aliasTaken(idx *index.Index, slug string, minted bool) error {
+func aliasTaken(idx *index.Index, slug string, naming errs.Naming) error {
 	if owners := idx.AliasOwners(slug); len(owners) > 0 {
-		return errs.AliasTaken(slug, owners[0].ID(), minted)
+		return errs.AliasTaken(slug, owners[0].ID(), naming)
 	}
 	return nil
 }
@@ -279,8 +304,21 @@ func aliasTaken(idx *index.Index, slug string, minted bool) error {
 // reserved `body` key.
 func createRow(
 	root string, rtype *schema.ResolvedType, typeName string,
-	meta *omap.Map, body, slug string, explicit bool,
+	meta *omap.Map, body, slug string, naming errs.Naming,
 ) error {
+	row := newRow(meta, body)
+	return mutateCollection(root, rtype, func(rows *omap.Map) (bool, error) {
+		if _, taken := rows.Get(slug); taken {
+			return false, errs.SlugTaken(slug, typeName, naming)
+		}
+		rows.Set(slug, row)
+		return true, nil
+	})
+}
+
+// newRow is a collection row for an entity: its fields without `type`, and
+// its body in the reserved `body` key.
+func newRow(meta *omap.Map, body string) *omap.Map {
 	row := omap.New()
 	for _, k := range meta.Keys() {
 		if k == "type" {
@@ -292,13 +330,7 @@ func createRow(
 	if body != "" {
 		row.Set("body", body)
 	}
-	return mutateCollection(root, rtype, func(rows *omap.Map) (bool, error) {
-		if _, taken := rows.Get(slug); taken {
-			return false, errs.SlugTaken(slug, typeName, !explicit)
-		}
-		rows.Set(slug, row)
-		return true, nil
-	})
+	return row
 }
 
 // partitioned splits raw fields into validated attributes, relation value-lists,
@@ -323,6 +355,10 @@ func partition(rtype *schema.ResolvedType, fields *omap.Map, strict bool) (*part
 		// On a json/yaml type `body` is the prose channel (the reserved key the
 		// reader pops); written as a field it would be clobbered by the next
 		// render. md keeps `body` as an ordinary frontmatter field.
+		// `draft` was the publish flag before `status` carried it.
+		if key == "draft" && !rtype.Declares(key) {
+			return nil, errs.DraftRetired()
+		}
 		if key == "body" && rtype.Storage.Fmt != "md" {
 			return nil, errs.New("body_field_reserved", fmt.Sprintf(
 				"'body' is reserved on a %s entity; pass --body/--body-file for prose",
@@ -373,6 +409,11 @@ func partition(rtype *schema.ResolvedType, fields *omap.Map, strict bool) (*part
 // validateAttr validates and coerces a raw string against one attribute's
 // type/enum/pattern.
 func validateAttr(attr *schema.ResolvedAttribute, raw, storageFmt string) (any, error) {
+	// A mapping has no command-line spelling: storing the string would replace
+	// the object with text.
+	if attr.HoldsObjects() {
+		return nil, errs.ValueShape(raw, attr.Name, attr.BaseType == "list")
+	}
 	if attr.Enum != nil {
 		for _, allowed := range attr.Enum {
 			if allowed == raw {
@@ -393,8 +434,13 @@ func validateAttr(attr *schema.ResolvedAttribute, raw, storageFmt string) (any, 
 		// Mirror the number gate: reject a value validate would flag (e.g. an
 		// impossible 2026-13-45) at write time, not after it has landed.
 		if !values.IsDateish(raw) {
-			return nil, errs.New("date_violation", fmt.Sprintf(
-				"'%s' is not a valid %s for %s", raw, attr.BaseType, attr.Name))
+			return nil, errs.DateViolation(raw, attr.BaseType, attr.Name)
+		}
+		// A datetime that declares a pattern (the OKF datetimes) keeps the text
+		// the caller wrote: the pattern fixed its shape, and normalizing would
+		// trade ISO 8601's `T` for the space form the pattern then refuses.
+		if attr.BaseType == "datetime" && attr.Pattern != nil {
+			return canon.DateTime{ISO: raw}, nil
 		}
 		return asDateObj(raw, storageFmt), nil
 	case "list":
@@ -402,6 +448,13 @@ func validateAttr(attr *schema.ResolvedAttribute, raw, storageFmt string) (any, 
 		out := make([]any, len(parts))
 		for i, p := range parts {
 			out[i] = strings.TrimSpace(p)
+			if attr.Items != nil {
+				v, err := validateAttr(attr.Items, out[i].(string), storageFmt)
+				if err != nil {
+					return nil, err
+				}
+				out[i] = v
+			}
 		}
 		return out, nil
 	}
@@ -502,6 +555,7 @@ func getView(root string, idx *index.Index, node index.Node) (*EntityView, error
 		Body:    body,
 		Raw:     raw,
 		Locator: locator(rtype, node.Slug),
+		Trust:   trust.Tier(rtype, meta, body),
 	}
 	return view, nil
 }
@@ -509,8 +563,8 @@ func getView(root string, idx *index.Index, node index.Node) (*EntityView, error
 // --- update ------------------------------------------------------------------
 
 // Update edits id's fields: re-validate, bump `updated`, write a minimal diff.
-// `draft` moves only when the user edits it (`edit <id> draft true|false`); no
-// completeness recompute, no auto-promote.
+// `status` moves only when the user edits it (`edit <id> status draft|stable`);
+// no completeness recompute, no auto-promote.
 func Update(root, id string, opts UpdateOpts) (*UpdateResult, error) {
 	return fsio.Locked(root, func() (*UpdateResult, error) { return update(root, id, opts) })
 }
@@ -566,6 +620,12 @@ func update(root, id string, opts UpdateOpts) (*UpdateResult, error) {
 			v, _ := part.attrs.Get(name)
 			m.Set(name, v)
 		}
+		// Writing `status` settles the publish state, so a retired `draft`
+		// flag left beside it goes in the same write: the entity is migrated,
+		// and upgrade no longer sees two disagreeing flags.
+		if _, writesStatus := part.attrs.Get("status"); writesStatus && !rtype.OwnsDraft() {
+			m.Delete("draft")
+		}
 		for _, predicate := range part.rels.Keys() {
 			rel, _ := rtype.Relations.Get(predicate)
 			vals, _ := part.rels.Get(predicate)
@@ -591,13 +651,25 @@ func update(root, id string, opts UpdateOpts) (*UpdateResult, error) {
 			v, _ := part.extras.Get(key)
 			m.Set(key, v)
 		}
-		// Auto-bump `updated`, unless the user backdated it explicitly in this
-		// edit (reconciling an import): their value wins over today.
+	}
+	// settle finishes an edit of m (body is its body after the edit). An edit
+	// that changed nothing writes nothing. Otherwise `updated` is bumped,
+	// unless the user backdated it explicitly in this edit (reconciling an
+	// import), and `generated` is stamped only when content moved: a tag or
+	// other bookkeeping edit changes the file without a new writer.
+	settle := func(m *omap.Map, before, beforeRev, body string) bool {
+		if snapshot(m, body) == before {
+			return false
+		}
 		_, inAttrs := part.attrs.Get("updated")
 		_, inExtras := part.extras.Get("updated")
 		if !inAttrs && !inExtras {
 			m.Set("updated", today())
 		}
+		if trust.Rev(rtype, m, body) != beforeRev {
+			stamp(rtype, m, opts.Actor)
+		}
+		return true
 	}
 
 	if rtype.Storage.Layout == schema.LayoutCollection {
@@ -608,6 +680,7 @@ func update(root, id string, opts UpdateOpts) (*UpdateResult, error) {
 				return false, errs.LookupError(id)
 			}
 			row := rowAny.(*omap.Map)
+			before, beforeRev := snapshot(row, ""), trust.Rev(rtype, row, rowBody(row))
 			apply(row)
 			if opts.Body != nil {
 				if *opts.Body != "" {
@@ -616,9 +689,8 @@ func update(root, id string, opts UpdateOpts) (*UpdateResult, error) {
 					row.Delete("body") // --body '' clears (empty body writes no key)
 				}
 			}
-			draftAny, _ := row.Get("draft")
-			newDraft = values.AsBool(draftAny)
-			return true, nil
+			newDraft = rtype.IsDraft(row)
+			return settle(row, before, beforeRev, rowBody(row)), nil
 		})
 		if err != nil {
 			return nil, err
@@ -633,18 +705,18 @@ func update(root, id string, opts UpdateOpts) (*UpdateResult, error) {
 	if err != nil {
 		return nil, err
 	}
+	before, beforeRev := snapshot(meta, bodyText), trust.Rev(rtype, meta, bodyText)
 	apply(meta)
 	if opts.Body != nil {
 		bodyText = mdNormalized(*opts.Body, rtype)
 	}
-	if err := writeDoc(root, path, meta, bodyText); err != nil {
-		return nil, err
+	if settle(meta, before, beforeRev, bodyText) {
+		if err := writeDoc(root, path, meta, bodyText); err != nil {
+			return nil, err
+		}
 	}
-	// AsBool, not truthiness: a hand-authored draft: "false" must report active,
-	// matching how check/query/status read the same flag.
-	draftAny, _ := meta.Get("draft")
 	return &UpdateResult{
-		Type: node.Type, Slug: node.Slug, Path: path, Draft: values.AsBool(draftAny),
+		Type: node.Type, Slug: node.Slug, Path: path, Draft: rtype.IsDraft(meta),
 	}, nil
 }
 
@@ -652,12 +724,12 @@ func update(root, id string, opts UpdateOpts) (*UpdateResult, error) {
 
 // Link adds a schema-checked edge predicate → target on the source entity. A
 // no-op link (the edge already exists) leaves the file untouched and returns
-// Changed=false.
-func Link(root, id, predicate, target string) (*LinkResult, error) {
-	return fsio.Locked(root, func() (*LinkResult, error) { return link(root, id, predicate, target) })
+// Changed=false. A change is stamped as actor (see Actor); "" walks the ladder.
+func Link(root, id, predicate, target, actor string) (*LinkResult, error) {
+	return fsio.Locked(root, func() (*LinkResult, error) { return link(root, id, predicate, target, actor) })
 }
 
-func link(root, id, predicate, target string) (*LinkResult, error) {
+func link(root, id, predicate, target, actor string) (*LinkResult, error) {
 	_, idx, node, rel, err := edgeContext(root, id, predicate)
 	if err != nil {
 		return nil, err
@@ -706,7 +778,7 @@ func link(root, id, predicate, target string) (*LinkResult, error) {
 		return changed, nil
 	}
 
-	changed, err := applyEdgeMutation(root, idx, node, id, apply)
+	changed, err := applyEdgeMutation(root, idx, node, id, actor, apply)
 	if err != nil {
 		return nil, err
 	}
@@ -726,12 +798,12 @@ func containsTarget(idx *index.Index, rel *schema.ResolvedRelation, list []any, 
 
 // Unlink removes the edge predicate → target from the source; inverses
 // recompute. A no-op unlink (no such edge) leaves the file untouched and returns
-// Changed=false.
-func Unlink(root, id, predicate, target string) (*LinkResult, error) {
-	return fsio.Locked(root, func() (*LinkResult, error) { return unlink(root, id, predicate, target) })
+// Changed=false. A change is stamped as actor, as Link's is.
+func Unlink(root, id, predicate, target, actor string) (*LinkResult, error) {
+	return fsio.Locked(root, func() (*LinkResult, error) { return unlink(root, id, predicate, target, actor) })
 }
 
-func unlink(root, id, predicate, target string) (*LinkResult, error) {
+func unlink(root, id, predicate, target, actor string) (*LinkResult, error) {
 	_, idx, node, rel, err := edgeContext(root, id, predicate)
 	if err != nil {
 		return nil, err
@@ -775,7 +847,7 @@ func unlink(root, id, predicate, target string) (*LinkResult, error) {
 		}
 		return false, nil
 	}
-	changed, err := applyEdgeMutation(root, idx, node, id, apply)
+	changed, err := applyEdgeMutation(root, idx, node, id, actor, apply)
 	if err != nil {
 		return nil, err
 	}
@@ -814,9 +886,20 @@ func edgeContext(root, id, predicate string) (
 // spurious rewrite). Collection: the same mutation on the row inside the locked
 // read-modify-write; an unchanged row skips the file write the same way.
 func applyEdgeMutation(
-	root string, idx *index.Index, node index.Node, id string, apply func(*omap.Map) (bool, error),
+	root string, idx *index.Index, node index.Node, id, actor string, edit func(*omap.Map) (bool, error),
 ) (bool, error) {
 	rtype, _ := idx.Resolved.Types.Get(node.Type)
+	// A no-op touches nothing. A change is stamped only when it moved
+	// content; tidying an existing list without a new target moves none. The
+	// body is never touched here, so the revision compares frontmatter alone.
+	apply := func(m *omap.Map) (bool, error) {
+		before := trust.Rev(rtype, m, "")
+		changed, err := edit(m)
+		if changed && err == nil && trust.Rev(rtype, m, "") != before {
+			stamp(rtype, m, actor)
+		}
+		return changed, err
+	}
 	if rtype.Storage.Layout == schema.LayoutCollection {
 		changed := false
 		err := mutateCollection(root, rtype, func(rows *omap.Map) (bool, error) {
@@ -908,14 +991,8 @@ func delete(root, id string, force bool) (*DeleteResult, error) {
 
 // --- shared ------------------------------------------------------------------
 
-// today is date.today() at the write verbs' one clock seam. KHUB_PARITY_NOW —
-// the same env var the parity recorder pins Python's clock with — overrides it.
-func today() canon.Date {
-	if pinned := os.Getenv("KHUB_PARITY_NOW"); pinned != "" {
-		return canon.Date{ISO: pinned}
-	}
-	return canon.Date{ISO: time.Now().Format("2006-01-02")}
-}
+// today is the clock's date as a date value, so YAML writes it unquoted.
+func today() canon.Date { return canon.Date{ISO: clock.Today()} }
 
 // presetName is entity._preset: the workspace's preset for the unknown-type
 // message. A missing config.yaml raises here exactly as Python's

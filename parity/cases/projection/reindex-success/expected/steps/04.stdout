@@ -1,22 +1,14 @@
 --- index.md
 +++ index.md
-@@ -1,6 +1,6 @@
- ---
- okf_version: '0.1'
--entity_count: 2
-+entity_count: 4
- ---
- # Index
+@@ -8,3 +8,11 @@
+ # arc42
  
-@@ -12,3 +12,11 @@
- 
- - [Architecture](knowledge/arc42.md)
- 
-+## requirement
+ * [Architecture](knowledge/arc42.md)
 +
-+- [Alpha](knowledge/requirements/req-alpha.md)
++# requirement
 +
-+## component
++* [Alpha](knowledge/requirements/req-alpha.md)
 +
-+- [Beta](knowledge/components/cmp-beta.md)
++# component
 +
++* [Beta](knowledge/components/cmp-beta.md)

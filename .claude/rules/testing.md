@@ -24,8 +24,20 @@ format contract lives.
 ## Nondeterminism seams (do not add more)
 
 `KHUB_PARITY_NOW` (clock — cmd/go ships the same kind of seam in release
-binaries), `TTY_COMPATIBLE`/`FORCE_COLOR` (isatty), pinned git identity +
-`GIT_CONFIG_GLOBAL`, path normalizers (`%WS%`/`%HOME%`, symlink-resolving).
+binaries; a date or an offset datetime, anything else refuses),
+`KHUB_ACTOR` (the writer `generated.by` records), `TTY_COMPATIBLE`/`FORCE_COLOR`
+(isatty), pinned git identity + `GIT_CONFIG_GLOBAL`, path normalizers
+(`%WS%`/`%HOME%`, symlink-resolving), and `TZ=UTC` (dates are the local civil
+date, OKF stamps UTC).
+
+`KHUB_ACTOR` is a seam because actor provenance is product behaviour, not test
+scaffolding. The ladder is `--by`, then `KHUB_ACTOR`, then `CLAUDECODE` set
+(`agent/claude-code`), then `khub`, and khub never reads a person out of git.
+`CLAUDECODE` is set in any Claude Code shell, so every recorder and smoke script
+pins `KHUB_ACTOR=khub` above it (the runner's `baseEnv`, `smoke*.sh`,
+`record-fixtures.sh`, `parity/scale`); a Go test that asserts a stamp pins it
+in `TestMain`.
+
 Trap: the runner pins `COLUMNS=80` **and** pty winsize 80 — two width code
 paths agree only because both constants are 80.
 
@@ -74,8 +86,10 @@ a FAIL.
   probe from inside the hook. `fsio.Locked` is not re-entrant, so a tail that
   calls a locking entry point from there deadlocks — that is what the `Held`
   variants exist for.
-- **Unicode filesystems.** No `unicode/norm` anywhere; `casefold.go` has no
-  test file. macOS NFD vs NFC on slugs is the live bug shape.
+- **Unicode filesystems.** macOS hands out decomposed (NFD) names. Slug
+  minting spells Latin accents out (`internal/entity/slug_unicode_test.go`) and
+  lookup composes before folding (`internal/index/casefold_test.go`); keep
+  both when touching slugify or casefold.
 - **Binary coverage.** `go build -cover` + parity run with `GOCOVERDIR`
   *outside* the workspace (else the manifest picks up counter files), merged
   via `go tool covdata`. Report only, no threshold. Signal: `internal/cli`

@@ -1,0 +1,1 @@
+{"error": {"code": "config_missing", "message": ".khub/config.yaml is missing, so khub cannot read this workspace's preset or settings. Run khub init <preset> . --force here: it recreates only missing files and keeps the schema and entities"}}

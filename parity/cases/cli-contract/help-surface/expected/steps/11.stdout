@@ -12,6 +12,7 @@ Options:
   --draft  Isolate drafts.
   --active  Exclude drafts.
   --limit <int>  Cap the returned set.
+  --trust <str>  Keep entities at this review tier: unverified, machine, or human.
   --format <str>  text (Rich table on a TTY), json, or ids. [default: text]
   --help  Show this message and exit.
 

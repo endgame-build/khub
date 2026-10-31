@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/endgame-build/khub/internal/clock"
 	"github.com/endgame-build/khub/internal/entity"
 	"github.com/endgame-build/khub/internal/index"
 	"github.com/endgame-build/khub/internal/integrity"
@@ -64,11 +65,11 @@ func TestAuditRelationshipIdentity(t *testing.T) {
 	root := auditWorkspace(t)
 	auditCreate(t, root, "c", "target")
 	auditCreate(t, root, "a", "source", "owns", "target,c/target", "one", "target,c/target")
-	linked, err := entity.Link(root, "a/source", "owns", "c/target")
+	linked, err := entity.Link(root, "a/source", "owns", "c/target", "")
 	if err != nil || linked.Changed {
 		t.Fatalf("link=%v err=%v", linked, err)
 	}
-	linked, err = entity.Link(root, "a/source", "one", "c/target")
+	linked, err = entity.Link(root, "a/source", "one", "c/target", "")
 	if err != nil || linked.Changed {
 		t.Fatalf("single link=%v err=%v", linked, err)
 	}
@@ -79,16 +80,16 @@ func TestAuditRelationshipIdentity(t *testing.T) {
 	if len(view.Edges) != 2 || len(view.Edges[0].ResolvedTargets) != 1 || view.Edges[0].ResolvedTargets[0] != "c/target" {
 		t.Fatalf("edges=%+v", view.Edges)
 	}
-	removed, err := entity.Unlink(root, "a/source", "owns", "C/TARGET")
+	removed, err := entity.Unlink(root, "a/source", "owns", "C/TARGET", "")
 	if err != nil || !removed.Changed {
 		t.Fatalf("unlink=%v err=%v", removed, err)
 	}
 	auditWrite(t, root, "c/stray.md", "---\ntype: a\n---\n")
-	if _, err := entity.Link(root, "a/source", "owns", "stray"); err == nil {
+	if _, err := entity.Link(root, "a/source", "owns", "stray", ""); err == nil {
 		t.Fatal("stray accepted as target")
 	}
 	auditWrite(t, root, "a/dangling.md", "---\ntype: a\nowns: [missing]\n---\n")
-	removed, err = entity.Unlink(root, "a/dangling", "owns", "MISSING")
+	removed, err = entity.Unlink(root, "a/dangling", "owns", "MISSING", "")
 	if err != nil || !removed.Changed {
 		t.Fatalf("dangling unlink=%v %v", removed, err)
 	}
@@ -138,7 +139,7 @@ func TestAuditValidationAndScanFailures(t *testing.T) {
 		t.Fatal("pattern skipped by validate")
 	}
 	auditWrite(t, root, "a/nested/hidden.yaml", "type: a\n")
-	check, err := integrity.Check(root, false)
+	check, err := integrity.Check(root, false, clock.Now())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -236,7 +237,7 @@ func TestAuditUnlinkDeduplicatesRemainingAliases(t *testing.T) {
 	auditCreate(t, root, "c", "first")
 	auditCreate(t, root, "c", "second")
 	auditWrite(t, root, "a/source.md", "---\ntype: a\nowns: [first, c/first, second]\n---\n")
-	if _, err := entity.Unlink(root, "a/source", "owns", "second"); err != nil {
+	if _, err := entity.Unlink(root, "a/source", "owns", "second", ""); err != nil {
 		t.Fatal(err)
 	}
 	view, err := entity.Get(root, "a/source", true)

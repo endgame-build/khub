@@ -1,0 +1,8 @@
+# An unparseable KHUB_PARITY_NOW refuses every command before it reads or
+# writes anything (clock_pin_invalid, exit 2), never falling back to the real
+# clock: a typo would make a fixture depend on the day it ran.
+env:
+  KHUB_PARITY_NOW: "2026-1-15"
+steps:
+- argv: ["init", "build-hub", ".", "--no-wire", "--format", "json"]
+- argv: ["status"]

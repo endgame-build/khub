@@ -22,6 +22,7 @@ import (
 	"github.com/endgame-build/khub/internal/omap"
 	"github.com/endgame-build/khub/internal/project"
 	"github.com/endgame-build/khub/internal/schema"
+	"github.com/endgame-build/khub/internal/trust"
 	"github.com/endgame-build/khub/internal/values"
 	"github.com/endgame-build/khub/internal/workspace"
 )
@@ -35,6 +36,8 @@ type Match struct {
 	Stale  bool
 	// Carried so listing a type does not cost one `get` per row.
 	Title string
+	// Trust is the review tier (trust.Tier), derived on every read.
+	Trust string
 }
 
 // Filters is core.query.QueryFilters: the ANDed filter set parsed from the CLI.
@@ -54,6 +57,7 @@ type Filters struct {
 	DraftOnly  bool
 	ActiveOnly bool
 	Limit      *int
+	Trust      *string // keep only entities at this review tier
 }
 
 // Query returns the entities passing every filter, each annotated orphan/stale.
@@ -62,7 +66,7 @@ func Query(root string, filters Filters, now time.Time) ([]Match, error) {
 	if err != nil {
 		return nil, err
 	}
-	scanned, err := index.Build(root, resolved)
+	scanned, err := index.BuildWithBodies(root, resolved) // bodies feed trust.Rev
 	if err != nil {
 		return nil, err
 	}
@@ -76,6 +80,9 @@ func Query(root string, filters Filters, now time.Time) ([]Match, error) {
 	inverses := buildInverses(resolved)
 	if err := validateFilterNames(resolved, root, filters, inverses); err != nil {
 		return nil, err
+	}
+	if t := filters.Trust; t != nil && *t != trust.Unverified && *t != trust.Machine && *t != trust.Human {
+		return nil, errs.UnknownTier(*t, trust.Tiers)
 	}
 
 	nodes := append([]index.Node(nil), idx.Order...)
@@ -96,14 +103,18 @@ func Query(root string, filters Filters, now time.Time) ([]Match, error) {
 		if !passes(node, meta, g, filters, resolved, inverses, orphan, stale) {
 			continue
 		}
-		draftRaw, _ := meta.Get("draft")
+		tier := trust.Tier(rtype, meta, idx.Body[node])
+		if filters.Trust != nil && *filters.Trust != tier {
+			continue
+		}
 		matches = append(matches, Match{
 			Type:   node.Type,
 			Slug:   node.Slug,
-			Draft:  values.AsBool(draftRaw),
+			Draft:  rtype.IsDraft(meta),
 			Orphan: orphan,
 			Stale:  stale,
 			Title:  title(meta, node.Slug),
+			Trust:  tier,
 		})
 	}
 	if filters.Limit != nil {
@@ -236,8 +247,8 @@ func fieldKeys(f Filters) []string {
 // frontmatter) — _passes.
 func passes(node index.Node, meta *omap.Map, g *graph.Graph, f Filters,
 	resolved *schema.ResolvedSchema, inverses inverseIndex, orphan, stale bool) bool {
-	draftRaw, _ := meta.Get("draft")
-	isDraft := values.AsBool(draftRaw)
+	rtype, _ := resolved.Types.Get(node.Type)
+	isDraft := rtype.IsDraft(meta)
 	if f.ActiveOnly && isDraft {
 		return false
 	}
@@ -248,6 +259,17 @@ func passes(node index.Node, meta *omap.Map, g *graph.Graph, f Filters,
 		wantedAny, _ := f.Fields.Get(fname)
 		wanted, _ := wantedAny.(string)
 		got, _ := meta.Get(fname)
+		// An unwritten attribute reads as its schema default, as lenses read it:
+		// `--status stable` matches an entity that never wrote a status. The
+		// base status reads as the effective lifecycle, so a legacy
+		// `draft: true` matches `--status draft`.
+		attr, isAttr := rtype.Attributes.Get(fname)
+		switch {
+		case isAttr && fname == "status" && !attr.OverriddenFromBase:
+			got = rtype.EffectiveStatus(meta)
+		case isAttr && got == nil:
+			got = attr.Default
+		}
 		if !fieldMatches(got, wanted) {
 			return false
 		}

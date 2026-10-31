@@ -11,6 +11,7 @@ Options:
   --strict  Reject fields the schema does not declare.
   --body <str>  Replace the body with this string ('' clears it).
   --body-file <str>  Replace the body from a file ('-' for stdin).
+  --by <str>  Who the write is stamped as in generated.by. Default: KHUB_ACTOR, then agent/claude-code under Claude Code, then khub.
   --format <str>  text or json (emits the updated record). [default: text]
   --help  Show this message and exit.
 

@@ -1,0 +1,22 @@
+# The 0.7.0 shapes. `validate` names each pre-OKF shape `khub upgrade`
+# migrates: a `draft` key, a bare string in `sources`, and an adr `status`
+# outside the base enum; writes are never blocked by them. `edit <id> draft …`
+# refuses (draft_retired). index.md and log.md are OKF navigation at any
+# depth: never an entity, never a stray, and `add --id index` refuses. An
+# unwritten `status` reads as stable for a `query --status` filter.
+steps:
+- argv: ["init", "build-hub", ".", "--no-wire"]
+- sh: |
+    printf -- '---\ntype: adr\ntitle: Old\ncreated: 2026-01-15\ndecision: accepted\nstatus: accepted\ndraft: true\nsources: [knowledge/prd.md, {resource: https://example.com/spec}]\n---\n' > knowledge/decisions/ad-2026-01-15-old.md
+    printf '# Decisions\n' > knowledge/decisions/index.md
+    printf '# Log\n' > knowledge/decisions/log.md
+- argv: ["validate", "adr/ad-2026-01-15-old", "--format", "json"]
+- argv: ["edit", "adr/ad-2026-01-15-old", "title", "Older", "--format", "json"]
+- argv: ["edit", "adr/ad-2026-01-15-old", "draft", "false", "--format", "json"]
+- argv: ["status", "--format", "json"]
+- argv: ["check", "--format", "json"]
+- argv: ["add", "requirement", "--title", "R", "--kind", "functional", "--id", "index", "--format", "json"]
+- argv: ["add", "requirement", "--title", "Kept", "--kind", "functional", "--format", "json"]
+- argv: ["add", "requirement", "--title", "Held", "--kind", "functional", "--draft", "--format", "json"]
+- argv: ["query", "--type", "requirement", "--status", "stable", "--format", "json"]
+- argv: ["query", "--type", "requirement", "--status", "draft", "--format", "json"]

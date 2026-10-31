@@ -45,6 +45,7 @@ import (
 	"github.com/endgame-build/khub/internal/project"
 	"github.com/endgame-build/khub/internal/schema"
 	"github.com/endgame-build/khub/internal/template"
+	"github.com/endgame-build/khub/internal/trust"
 	"github.com/endgame-build/khub/internal/values"
 	"github.com/endgame-build/khub/internal/workspace"
 )
@@ -79,6 +80,7 @@ type Hit struct {
 	Locator string // "" when not a collection row
 	Out     []EdgeCount
 	In      []EdgeCount
+	Trust   string // the review tier (trust.Tier)
 
 	// Match and TitleMatch are set for a plain search only: the
 	// IDF-weighted share of the query's words this hit contains anywhere,
@@ -300,10 +302,10 @@ func annotate(hits []Hit, idx *index.Index, now time.Time, staleDays int) {
 		node := index.Node{Type: hits[i].Type, Slug: hits[i].Slug}
 		meta := idx.Meta[node]
 		rtype, _ := idx.Resolved.Types.Get(node.Type)
-		draft, _ := meta.Get("draft")
-		hits[i].Draft = values.AsBool(draft)
+		hits[i].Draft = rtype.IsDraft(meta)
 		hits[i].Orphan = graph.IsOrphan(g, node, rtype)
 		hits[i].Stale = project.IsStale(meta, now, staleDays, nil)
+		hits[i].Trust = trust.Tier(rtype, meta, idx.Body[node])
 
 		out := map[string]int{}
 		for _, e := range g.OutEdges(node) {

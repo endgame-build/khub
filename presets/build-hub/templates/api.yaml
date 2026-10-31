@@ -21,11 +21,11 @@ sections:
 lenses:
 - code: spec
   name: A live interface names its spec
-  when: {status: active}
+  when: {status: stable}
   instruction: |
-    Where is the machine-readable contract? An active api with no `resource`
+    Where is the machine-readable contract? A stable api with no `resource`
     pointing at its OpenAPI, AsyncAPI or schema file is a promise nobody can test.
-    If the spec does not exist, `status: proposed` is the honest value.
+    If the spec does not exist, `status: draft` is the honest value.
 - code: consumed
   name: The consumers are in the graph
   after: spec

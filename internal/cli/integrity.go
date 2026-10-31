@@ -10,8 +10,12 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/endgame-build/khub/internal/clock"
+	"github.com/endgame-build/khub/internal/errs"
 	"github.com/endgame-build/khub/internal/integrity"
+	"github.com/endgame-build/khub/internal/introspect"
 	"github.com/endgame-build/khub/internal/omap"
+	"github.com/endgame-build/khub/internal/trust"
 )
 
 func registerValidate(root *cobra.Command) {
@@ -32,6 +36,9 @@ func registerValidate(root *cobra.Command) {
 				if err != nil {
 					return err
 				}
+				if err := addShadowErrors(cmd.Root(), ws, report, target); err != nil {
+					return err
+				}
 				if eerr := Emit(validatePayload(report), format, func() { validateHuman(report) }); eerr != nil {
 					return eerr
 				}
@@ -50,7 +57,8 @@ func registerValidate(root *cobra.Command) {
 
 func registerCheck(root *cobra.Command) {
 	var format string
-	var strict bool
+	var strict, stale, requireVerified bool
+	var tier string
 	cmd := newCmd("check", "Check the active graph: completeness, orphans, dangling edges, strays, cycles, bodies.",
 		"", func(cmd *cobra.Command, args []string) error {
 			return Guard(format, func() error {
@@ -58,10 +66,22 @@ func registerCheck(root *cobra.Command) {
 				if err != nil {
 					return err
 				}
-				report, err := integrity.Check(ws, strict)
+				report, err := integrity.Check(ws, strict, clock.Now())
 				if err != nil {
 					return err
 				}
+				report.StaleGate = stale
+				if requireVerified {
+					if tier != trust.Machine && tier != trust.Human {
+						return errs.UnknownTier(tier, []string{trust.Machine, trust.Human})
+					}
+					report.TierGate = tier
+				}
+				resolved, err := introspect.LoadSchema(ws)
+				if err != nil {
+					return err
+				}
+				report.FlagShadowed = shadowedFields(cmd.Root(), resolved)
 				if eerr := Emit(checkPayload(report), format, func() { checkHuman(report) }); eerr != nil {
 					return eerr
 				}
@@ -73,6 +93,9 @@ func registerCheck(root *cobra.Command) {
 		})
 	cmd.Args = clickArity(0)
 	cmd.Flags().BoolVar(&strict, "strict", false, "Fail the gate on orphans too (default: informational).")
+	cmd.Flags().BoolVar(&stale, "stale", false, "Fail the gate on active entities whose stale_after has passed.")
+	cmd.Flags().BoolVar(&requireVerified, "require-verified", false, "Fail the gate on active entities below --tier.")
+	cmd.Flags().StringVar(&tier, "tier", trust.Machine, "The review tier --require-verified asks for: machine or human.")
 	cmd.Flags().StringVar(&format, "format", "text", "text (Rich on a TTY) or json.")
 	root.AddCommand(cmd)
 }
@@ -247,12 +270,83 @@ func checkPayload(report *integrity.CheckReport) *omap.Map {
 		conflicts = append(conflicts, record)
 	}
 	payload.Set("alias_conflicts", conflicts)
+	// Only under --stale, so a default check keeps its shape.
+	if report.StaleGate {
+		payload.Set("expired", strList(report.Expired))
+	}
+	// Only under --require-verified: active entities below the asked tier.
+	if report.TierGate != "" {
+		below := make([]any, 0)
+		for _, f := range report.BelowGate() {
+			record := omap.New()
+			record.Set("id", f.ID())
+			record.Set("type", f.Type)
+			record.Set("slug", f.Slug)
+			record.Set("trust", f.Trust)
+			below = append(below, record)
+		}
+		payload.Set("below_tier", below)
+	}
+	// A schema field a write verb's flag shadows: that verb can never set it.
+	shadowed := make([]any, 0, len(report.FlagShadowed))
+	for _, f := range report.FlagShadowed {
+		record := omap.New()
+		record.Set("id", f.Type+"/*")
+		record.Set("type", f.Type)
+		record.Set("field", f.Field)
+		record.Set("flag", "--"+f.Field)
+		record.Set("commands", strList(f.Commands))
+		shadowed = append(shadowed, record)
+	}
+	payload.Set("flag_shadowed", shadowed)
 	// Say which gate ran: `orphans` populated with passed=true means default mode.
 	payload.Set("strict", report.Strict)
-	// Last, after `strict`: the one bucket that never affects `passed`. A body
+	// Last, after `strict`: the buckets that never affect `passed`. A body
 	// whose prose does not satisfy a section rule is that document, unfinished.
 	payload.Set("thin", findingRecords(report.Thin, false))
+	// Informational too: a review of a version that has since changed.
+	superseded := make([]any, 0, len(report.Superseded))
+	for _, s := range report.Superseded {
+		record := omap.New()
+		record.Set("id", s.ID())
+		record.Set("type", s.Type)
+		record.Set("slug", s.Slug)
+		record.Set("event", s.Event)
+		record.Set("by", s.By)
+		record.Set("rev", s.Rev)
+		superseded = append(superseded, record)
+	}
+	payload.Set("superseded_verifications", superseded)
 	return payload
+}
+
+// shadowReason says why a shadowed field is a defect, for check and validate.
+func shadowReason(f integrity.FlagShadow) string {
+	verbs := make([]string, len(f.Commands))
+	for i, v := range f.Commands {
+		verbs[i] = "`khub " + v + "`"
+	}
+	return fmt.Sprintf("--%s is a flag of %s, so `--%s <value>` never sets field '%s' "+
+		"(only `khub edit <id> %s <value>` does); rename the field in the schema",
+		f.Field, strings.Join(verbs, " and "), f.Field, f.Field, f.Field)
+}
+
+// addShadowErrors adds each shadowed field to validate's errors, one row per
+// field against its type (`<type>/*`), within the target's types.
+func addShadowErrors(root *cobra.Command, ws string, report *integrity.ValidateReport, target *string) error {
+	resolved, err := introspect.LoadSchema(ws)
+	if err != nil {
+		return err
+	}
+	for _, f := range shadowedFields(root, resolved) {
+		if target != nil && strings.SplitN(*target, "/", 2)[0] != f.Type {
+			continue
+		}
+		report.Errors = append(report.Errors, integrity.FieldError{
+			Type: f.Type, Slug: "*", Field: f.Field, Reason: shadowReason(f),
+		})
+	}
+	return nil
 }
 
 func checkHuman(report *integrity.CheckReport) {
@@ -263,12 +357,13 @@ func checkHuman(report *integrity.CheckReport) {
 		// Reported on BOTH paths: a drafted optional singleton does not fail the
 		// gate, so on its own it lands here; the failing path prints it too.
 		for _, name := range report.DraftSingletons {
-			fmt.Printf("singleton %s is unpublished (draft: true) (informational)\n", name)
+			fmt.Printf("singleton %s is unpublished (status: draft) (informational)\n", name)
 		}
 		// Informational is not the same as invisible.
 		for _, th := range report.Thin {
 			fmt.Printf("thin %s: %s (informational)\n", th.ID(), th.Reason)
 		}
+		printSuperseded(report, " (informational)")
 		fmt.Println("Graph check passed")
 		return
 	}
@@ -317,6 +412,17 @@ func checkHuman(report *integrity.CheckReport) {
 	for _, c := range report.AliasConflicts {
 		fmt.Printf("alias '%s' names more than one entity: %s\n", c.Alias, strings.Join(c.Claimants, ", "))
 	}
+	for _, f := range report.FlagShadowed {
+		fmt.Printf("flag_shadowed %s.%s: %s\n", f.Type, f.Field, shadowReason(f))
+	}
+	for _, f := range report.BelowGate() {
+		fmt.Printf("below tier %s: trust %s, %s asked for\n", f.ID(), f.Trust, report.TierGate)
+	}
+	if report.StaleGate {
+		for _, id := range report.Expired {
+			fmt.Printf("expired %s: its stale_after has passed\n", id)
+		}
+	}
 	required := map[string]bool{}
 	for _, name := range report.DraftRequiredSingletons {
 		required[name] = true
@@ -327,10 +433,18 @@ func checkHuman(report *integrity.CheckReport) {
 		if required[name] {
 			gate = "required singleton"
 		}
-		fmt.Printf("%s %s is unpublished (draft: true)\n", gate, name)
+		fmt.Printf("%s %s is unpublished (status: draft)\n", gate, name)
 	}
 	// Last: the gate did not fail because of these.
 	for _, th := range report.Thin {
 		fmt.Printf("thin %s: %s\n", th.ID(), th.Reason)
+	}
+	printSuperseded(report, "")
+}
+
+func printSuperseded(report *integrity.CheckReport, note string) {
+	for _, s := range report.Superseded {
+		fmt.Printf("superseded verification %s: verified[%d] by %s saw rev %s, and the content has changed since%s\n",
+			s.ID(), s.Event, s.By, s.Rev, note)
 	}
 }

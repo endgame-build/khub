@@ -13,9 +13,12 @@ package canon
 // happens once, at the boundary, exactly as it does in Python.
 
 import (
-	"github.com/endgame-build/khub/internal/fsio"
 	"os"
+	"path/filepath"
 	"strings"
+
+	"github.com/endgame-build/khub/internal/errs"
+	"github.com/endgame-build/khub/internal/fsio"
 )
 
 // NormalizeNewlines applies Python's universal-newline rules to already-read text.
@@ -26,20 +29,29 @@ func NormalizeNewlines(s string) string {
 	return strings.ReplaceAll(strings.ReplaceAll(s, "\r\n", "\n"), "\r", "\n")
 }
 
-// ReadText reads a file the way Python's read_text() does.
+// ReadText reads a file the way Python's read_text() does, refusing one past
+// MaxTextBytes.
 func ReadText(path string) (string, error) {
 	raw, err := os.ReadFile(path)
 	if err != nil {
 		return "", err
 	}
-	return NormalizeNewlines(string(raw)), nil
+	return sized(path, raw)
 }
 
-// ReadTextIn applies the same newline rules through workspace-confined I/O.
+// ReadTextIn applies the same newline rules and cap through workspace-confined
+// I/O.
 func ReadTextIn(root, path string) (string, error) {
 	raw, err := fsio.ReadFile(root, path)
 	if err != nil {
 		return "", err
+	}
+	return sized(path, raw)
+}
+
+func sized(path string, raw []byte) (string, error) {
+	if len(raw) > MaxTextBytes {
+		return "", errs.TextTooLarge(filepath.ToSlash(path), len(raw), MaxTextBytes)
 	}
 	return NormalizeNewlines(string(raw)), nil
 }

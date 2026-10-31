@@ -8,12 +8,14 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
 	"github.com/endgame-build/khub/internal/canon"
 	"github.com/endgame-build/khub/internal/index"
 	"github.com/endgame-build/khub/internal/omap"
+	"github.com/endgame-build/khub/internal/project"
 	"github.com/endgame-build/khub/internal/schema"
 )
 
@@ -59,8 +61,9 @@ func TestCrossLinksEdgesAndSlugFallback(t *testing.T) {
 	}
 }
 
-// TS-PRJ-001-U03 (REQ-PRJ001-01, PRJ-002) + U06: the OKF version and the entity
-// count are stamped, and an empty workspace still renders a valid zero-row index.
+// TS-PRJ-001-U03 (REQ-PRJ001-01, PRJ-002) + U06: okf_version is the only
+// frontmatter key (OKF 0.2 §8), and an empty workspace renders the frontmatter
+// alone.
 func TestIndexStampsOKFVersion(t *testing.T) {
 	cases := []struct {
 		name      string
@@ -69,7 +72,7 @@ func TestIndexStampsOKFVersion(t *testing.T) {
 		wantBody  string
 	}{
 		{"seeded", firmOpsWS, 5, "initech-deal"},
-		{"empty", freshWS, 0, "_No entities._"},
+		{"empty", freshWS, 0, ""},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -84,8 +87,11 @@ func TestIndexStampsOKFVersion(t *testing.T) {
 			if v, _ := meta.Get("okf_version"); v != OKFVersion {
 				t.Errorf("okf_version = %v, want %q", v, OKFVersion)
 			}
-			if v, _ := meta.Get("entity_count"); v != tc.wantCount {
-				t.Errorf("entity_count = %v, want %d", v, tc.wantCount)
+			if keys := meta.Keys(); len(keys) != 1 {
+				t.Errorf("frontmatter keys = %v, want okf_version alone", keys)
+			}
+			if tc.wantBody == "" && content != "---\nokf_version: '0.2'\n---\n" {
+				t.Errorf("empty index = %q", content)
 			}
 			if !strings.Contains(content, tc.wantBody) {
 				t.Errorf("body does not contain %q:\n%s", tc.wantBody, content)
@@ -158,19 +164,46 @@ func TestReindexWritesTheIndex(t *testing.T) {
 	}
 	text := readRaw(t, root, "index.md")
 	for _, heading := range []string{
-		"## opportunity", "## project", "## meeting", "## person", "## client",
+		"# opportunity\n", "# project\n", "# meeting\n", "# person\n", "# client\n",
 	} {
 		if !strings.Contains(text, heading) {
 			t.Errorf("missing %q", heading)
 		}
 	}
 	for _, xlink := range []string{
-		"owner → [Noor P](identity/team/noor.md)",
-		"engagement → [Initech PoV](projects/initech-pov/_index.md)",
+		"\n  * owner → [Noor P](identity/team/noor.md)\n",
+		"\n  * engagement → [Initech PoV](projects/initech-pov/_index.md)\n",
 	} {
 		if !strings.Contains(text, xlink) {
 			t.Errorf("missing cross-link %q", xlink)
 		}
+	}
+}
+
+// An entry is `* [Title](link) - description` (OKF 0.2 §8), the description
+// folded onto one line, and an entry without one ends at the link. The written
+// index is itself conformant.
+func TestIndexEntriesCarryTheDescription(t *testing.T) {
+	root := freshWS(t)
+	seed(t, root, "fragments/described.md", kv{"type", "fragment"}, kv{"stage", "raw"},
+		kv{"title", "Described"}, kv{"description", "Line one\n  and two"})
+	seed(t, root, "fragments/plain.md", kv{"type", "fragment"}, kv{"stage", "raw"})
+	mustReindex(t, root, false)
+	text := readRaw(t, root, "index.md")
+	for _, want := range []string{
+		"\n* [Described](fragments/described.md) - Line one and two\n",
+		"\n* [plain](fragments/plain.md)\n",
+	} {
+		if !strings.Contains(text, want) {
+			t.Errorf("missing %q in\n%s", want, text)
+		}
+	}
+	bad, err := project.OKFNonconformant(root, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if slices.Contains(bad, "index.md") {
+		t.Errorf("the written index is not OKF-conformant:\n%s", text)
 	}
 }
 

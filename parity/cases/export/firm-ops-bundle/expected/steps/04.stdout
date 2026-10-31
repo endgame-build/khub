@@ -1,0 +1,1 @@
+{"error": {"code": "export_target_not_empty", "message": "Target bundle is not empty. Pass --force to replace it, which khub does only for a bundle it exported before"}}

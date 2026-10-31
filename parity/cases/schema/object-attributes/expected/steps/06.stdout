@@ -1,0 +1,7 @@
+note/bad: updated: '2026-02-30' is not a valid date for updated
+note/bad: generated: generated.by is required
+note/bad: generated: '2026-13-45T00:00:00Z' is not a valid datetime for generated.at
+note/bad: verified: 'nobody' does not match the pattern for verified[1].by ([a-z]+:.+)
+note/bad: verified: verified[2].by is required
+note/odd: generated: 'x' is not a valid object for generated
+Validated 3 entities; 6 errors, 0 gaps

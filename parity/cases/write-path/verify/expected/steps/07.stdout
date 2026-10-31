@@ -1,0 +1,1 @@
+{"error": {"code": "commit_refused", "message": "Refusing to commit: git has no user.signingkey, so the commit could not be signed; configure signing (SSH or GPG) or drop --commit"}}

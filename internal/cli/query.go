@@ -10,15 +10,16 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/endgame-build/khub/internal/clock"
 	"github.com/endgame-build/khub/internal/omap"
 	"github.com/endgame-build/khub/internal/query"
 )
 
 func registerQuery(root *cobra.Command) {
 	var (
-		typeName, tag, has, missing, format string
-		orphan, stale, draft, active        bool
-		limit                               int
+		typeName, tag, has, missing, format, trustTier string
+		orphan, stale, draft, active                   bool
+		limit                                          int
 	)
 	cmd := newCmd("query", "Filter entities: khub query --type opportunity --stage prospect --format json.",
 		"", nil)
@@ -32,6 +33,7 @@ func registerQuery(root *cobra.Command) {
 	cmd.Flags().BoolVar(&draft, "draft", false, "Isolate drafts.")
 	cmd.Flags().BoolVar(&active, "active", false, "Exclude drafts.")
 	cmd.Flags().IntVar(&limit, "limit", 0, "Cap the returned set.")
+	cmd.Flags().StringVar(&trustTier, "trust", "", "Keep entities at this review tier: unverified, machine, or human.")
 	cmd.Flags().StringVar(&format, "format", "text", "text (Rich table on a TTY), json, or ids.")
 	cmd.RunE = func(cmd *cobra.Command, args []string) error {
 		_, extra, err := splitDynamic(cmd, args, 0)
@@ -56,12 +58,13 @@ func registerQuery(root *cobra.Command) {
 				Tag:        optString(cmd, "tag", tag),
 				Has:        optString(cmd, "has", has),
 				Missing:    optString(cmd, "missing", missing),
+				Trust:      optString(cmd, "trust", trustTier),
 				Orphan:     orphan,
 				Stale:      stale,
 				DraftOnly:  draft,
 				ActiveOnly: active,
 				Limit:      optInt(cmd, "limit", limit),
-			}, today())
+			}, clock.Now())
 			if qerr != nil {
 				return qerr
 			}
@@ -82,10 +85,11 @@ func registerQuery(root *cobra.Command) {
 				record.Set("draft", m.Draft)
 				record.Set("orphan", m.Orphan)
 				record.Set("stale", m.Stale)
+				record.Set("trust", m.Trust)
 				records = append(records, record)
 				rows = append(rows, []string{
 					m.Type + "/" + m.Slug, m.Type, m.Title,
-					pyBool(m.Draft), pyBool(m.Orphan), pyBool(m.Stale),
+					pyBool(m.Draft), pyBool(m.Orphan), pyBool(m.Stale), m.Trust,
 				})
 			}
 			return Emit(records, format, func() {
@@ -93,7 +97,7 @@ func registerQuery(root *cobra.Command) {
 					fmt.Println("No entities match")
 					return
 				}
-				printTable("query", []string{"id", "type", "title", "draft", "orphan", "stale"}, rows)
+				printTable("query", []string{"id", "type", "title", "draft", "orphan", "stale", "trust"}, rows)
 			})
 		})
 	}

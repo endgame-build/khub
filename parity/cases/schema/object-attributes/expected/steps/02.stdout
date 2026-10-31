@@ -1,0 +1,78 @@
+ note (file · ids slug)
+┏━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━┳━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━┓
+┃ field            │ type     │ required │ enum             │ notes            ┃
+┡━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━╇━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━┩
+│ type             │ text     │ ✓        │                  │                  │
+│ status           │ text     │          │ draft, stable,   │ default stable   │
+│                  │          │          │ deprecated       │                  │
+│ author           │ text     │          │                  │                  │
+│ created          │ date     │ ✓        │                  │                  │
+│ updated          │ date     │          │                  │                  │
+│ title            │ text     │          │                  │                  │
+│ description      │ text     │          │                  │                  │
+│ resource         │ text     │          │                  │                  │
+│ tags             │ list     │          │                  │                  │
+│ aliases          │ list     │          │                  │                  │
+│ generated        │ object   │          │                  │                  │
+│   generated.by   │ text     │ ✓        │                  │                  │
+│   generated.at   │ datetime │          │                  │                  │
+│ verified         │ list     │          │                  │                  │
+│   verified[]     │ object   │          │                  │                  │
+│     verified[].b │ text     │ ✓        │                  │ pattern          │
+│ y                │          │          │                  │ [a-z]+:.+        │
+│     verified[].r │ text     │          │                  │                  │
+│ ev               │          │          │                  │                  │
+│ stale_after      │ datetime │          │                  │ pattern          │
+│                  │          │          │                  │ \d{4}-\d{2}-\d{2 │
+│                  │          │          │                  │ }[Tt]\d{2}:\d{2} │
+│                  │          │          │                  │ :\d{2}(\.\d+)?([ │
+│                  │          │          │                  │ Zz]|[+-]\d{2}:\d │
+│                  │          │          │                  │ {2})             │
+│ sources          │ list     │          │                  │                  │
+│   sources[]      │ object   │          │                  │                  │
+│     sources[].re │ text     │ ✓        │                  │                  │
+│ source           │          │          │                  │                  │
+│     sources[].id │ text     │          │                  │                  │
+│     sources[].ti │ text     │          │                  │                  │
+│ tle              │          │          │                  │                  │
+│     sources[].au │ text     │          │                  │                  │
+│ thor             │          │          │                  │                  │
+│     sources[].us │ number   │          │                  │                  │
+│ age_count        │          │          │                  │                  │
+│     sources[].la │ datetime │          │                  │ pattern          │
+│ st_modified      │          │          │                  │ \d{4}-\d{2}-\d{2 │
+│                  │          │          │                  │ }[Tt]\d{2}:\d{2} │
+│                  │          │          │                  │ :\d{2}(\.\d+)?([ │
+│                  │          │          │                  │ Zz]|[+-]\d{2}:\d │
+│                  │          │          │                  │ {2})             │
+│     sources[].us │ object   │          │                  │                  │
+│ age_window       │          │          │                  │                  │
+│       sources[]. │ datetime │          │                  │ pattern          │
+│ usage_window.fro │          │          │                  │ \d{4}-\d{2}-\d{2 │
+│ m                │          │          │                  │ }[Tt]\d{2}:\d{2} │
+│                  │          │          │                  │ :\d{2}(\.\d+)?([ │
+│                  │          │          │                  │ Zz]|[+-]\d{2}:\d │
+│                  │          │          │                  │ {2})             │
+│       sources[]. │ datetime │          │                  │ pattern          │
+│ usage_window.to  │          │          │                  │ \d{4}-\d{2}-\d{2 │
+│                  │          │          │                  │ }[Tt]\d{2}:\d{2} │
+│                  │          │          │                  │ :\d{2}(\.\d+)?([ │
+│                  │          │          │                  │ Zz]|[+-]\d{2}:\d │
+│                  │          │          │                  │ {2})             │
+│ usage_window     │ object   │          │                  │                  │
+│   usage_window.f │ datetime │          │                  │ pattern          │
+│ rom              │          │          │                  │ \d{4}-\d{2}-\d{2 │
+│                  │          │          │                  │ }[Tt]\d{2}:\d{2} │
+│                  │          │          │                  │ :\d{2}(\.\d+)?([ │
+│                  │          │          │                  │ Zz]|[+-]\d{2}:\d │
+│                  │          │          │                  │ {2})             │
+│   usage_window.t │ datetime │          │                  │ pattern          │
+│ o                │          │          │                  │ \d{4}-\d{2}-\d{2 │
+│                  │          │          │                  │ }[Tt]\d{2}:\d{2} │
+│                  │          │          │                  │ :\d{2}(\.\d+)?([ │
+│                  │          │          │                  │ Zz]|[+-]\d{2}:\d │
+│                  │          │          │                  │ {2})             │
+│ related          │ → any    │          │ any              │                  │
+│ references       │ → any    │          │ any              │                  │
+│ depends_on       │ → any    │          │ any              │ acyclic          │
+└──────────────────┴──────────┴──────────┴──────────────────┴──────────────────┘

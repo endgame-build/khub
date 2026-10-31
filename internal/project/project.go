@@ -4,7 +4,8 @@
 //
 // A minimal, derived-at-runtime view of the entity tree: per-type counts, the
 // draft/active split, orphan (zero edges in or out), stale (older than
-// stale_days), and the OKF-conformance flag. Counts are never stored (WS-006);
+// stale_days), expired (past an authored `stale_after`), and the
+// OKF-conformance flag. Counts are never stored (WS-006);
 // orphan and stale are core projection properties computed identically for
 // status, query, and check (WS-008).
 //
@@ -19,7 +20,7 @@ import (
 	"github.com/endgame-build/khub/internal/index"
 	"github.com/endgame-build/khub/internal/introspect"
 	"github.com/endgame-build/khub/internal/omap"
-	"github.com/endgame-build/khub/internal/schema"
+	"github.com/endgame-build/khub/internal/trust"
 	"github.com/endgame-build/khub/internal/values"
 )
 
@@ -27,15 +28,21 @@ import (
 // keyed by type name in SCHEMA DECLARATION order — the status JSON emits it
 // verbatim, so the order is contract.
 type Projection struct {
-	Counts        *omap.Map // string -> int
-	Total         int
-	Draft         int
-	Active        int
-	Orphan        int
-	Stale         int
+	Counts  *omap.Map // string -> int
+	Total   int
+	Draft   int
+	Active  int
+	Orphan  int
+	Stale   int // past the `updated`-age threshold
+	Expired int // past an authored `stale_after`; never summed into Stale
+	// Trust counts entities per review tier (trust.Tier), keyed unverified,
+	// machine, human in that order.
+	Trust         *omap.Map
 	OKFConformant bool
-	Stray         int
-	Malformed     int
+	// OKFNonconformant names the files that make OKFConformant false.
+	OKFNonconformant []string
+	Stray            int
+	Malformed        int
 }
 
 // Project scans the entity tree and derives counts and health flags.
@@ -43,8 +50,8 @@ type Projection struct {
 // Entity identity is (type, slug): two entities of different types may share a
 // slug without colliding. An edge connects two DISTINCT nodes, so a
 // self-reference does not rescue an otherwise-isolated entity from orphanhood.
-// OKF conformance requires typed/union relation targets to resolve to a node of
-// a declared target type; universal (`to: any`) edges may point anywhere.
+// OKF conformance is OKF 0.2 §11 over the Markdown tree (OKFNonconformant);
+// broken links, strays and layouts do not enter it.
 //
 // Strays (a file whose internal `type` mismatches its layout) and malformed
 // files are excluded from the entity counts — matching the integrity verbs — and
@@ -54,7 +61,7 @@ func Project(root string, staleDays int, now time.Time) (*Projection, error) {
 	if err != nil {
 		return nil, err
 	}
-	idx, err := index.Build(root, resolved)
+	idx, err := index.BuildWithBodies(root, resolved) // bodies feed trust.Rev
 	if err != nil {
 		return nil, err
 	}
@@ -71,22 +78,30 @@ func Project(root string, staleDays int, now time.Time) (*Projection, error) {
 		counts.Set(node.Type, n+1)
 	}
 
-	draft, active, stale := 0, 0, 0
-	brokenRef := false
+	nonconformant, err := OKFNonconformant(root, resolved.Ignore)
+	if err != nil {
+		return nil, err
+	}
+
+	draft, active, stale, expired := 0, 0, 0, 0
+	tiers := map[string]int{}
 	hasOut := map[index.Node]bool{}
 	hasIn := map[index.Node]bool{}
 	for _, node := range valid.Order {
 		meta := valid.Meta[node]
-		draftRaw, _ := meta.Get("draft")
-		if values.AsBool(draftRaw) {
+		rtype, _ := resolved.Types.Get(node.Type)
+		if rtype.IsDraft(meta) {
 			draft++
 		} else {
 			active++
 		}
-		if IsStale(meta, now, staleDays, nil) {
+		if AgeStale(meta, now, staleDays, nil) {
 			stale++
 		}
-		rtype, _ := resolved.Types.Get(node.Type)
+		if Expired(meta, now) {
+			expired++
+		}
+		tiers[trust.Tier(rtype, meta, valid.Body[node])]++
 		for _, predicate := range rtype.Relations.Keys() {
 			rel, _ := rtype.Relations.Get(predicate)
 			raw, _ := meta.Get(predicate)
@@ -105,9 +120,6 @@ func Project(root string, staleDays int, now time.Time) (*Projection, error) {
 				}
 				if others > 0 {
 					hasOut[node] = true
-				}
-				if rel.Kind != schema.KindAny && len(resolvedTo) == 0 {
-					brokenRef = true
 				}
 			}
 		}
@@ -133,19 +145,28 @@ func Project(root string, staleDays int, now time.Time) (*Projection, error) {
 	}
 
 	return &Projection{
-		Counts: counts,
-		Total:  total,
-		Draft:  draft,
-		Active: active,
-		Orphan: orphan,
-		Stale:  stale,
-		// OKF conformance means the tree would export as a valid bundle: every
-		// file in a layout is a typed entity (no strays, no malformed) and every
-		// typed/union edge resolves.
-		OKFConformant: !brokenRef && len(strays) == 0 && len(idx.Malformed) == 0,
-		Stray:         len(strays),
-		Malformed:     len(idx.Malformed),
+		Counts:           counts,
+		Total:            total,
+		Draft:            draft,
+		Active:           active,
+		Orphan:           orphan,
+		Stale:            stale,
+		Expired:          expired,
+		Trust:            trustCounts(tiers),
+		OKFConformant:    len(nonconformant) == 0,
+		OKFNonconformant: nonconformant,
+		Stray:            len(strays),
+		Malformed:        len(idx.Malformed),
 	}, nil
+}
+
+// trustCounts orders the tier counts lowest tier first, every tier present.
+func trustCounts(tiers map[string]int) *omap.Map {
+	out := omap.New()
+	for _, t := range trust.Tiers {
+		out.Set(t, tiers[t])
+	}
+	return out
 }
 
 // EffectiveDate returns the date staleness is judged against, with its
@@ -173,14 +194,31 @@ func EffectiveDate(meta *omap.Map, gitDate *time.Time) (*time.Time, string) {
 	return nil, "none"
 }
 
-// IsStale is is_stale: no timestamp to judge against is never stale; a
-// present-but-unparseable date is surfaced as stale, not silently dropped.
+// IsStale is the one staleness reading every read surface shares: past the
+// `updated`-age threshold (AgeStale) or past an authored `stale_after`
+// (Expired).
 func IsStale(meta *omap.Map, now time.Time, staleDays int, gitDate *time.Time) bool {
+	return AgeStale(meta, now, staleDays, gitDate) || Expired(meta, now)
+}
+
+// AgeStale is is_stale's age rule: no timestamp to judge against is never
+// stale; a present-but-unparseable date is surfaced as stale, not silently
+// dropped.
+func AgeStale(meta *omap.Map, now time.Time, staleDays int, gitDate *time.Time) bool {
 	date, source := EffectiveDate(meta, gitDate)
 	if source == "none" {
 		return false
 	}
 	return date == nil || daysBetween(civil(now), *date) > staleDays
+}
+
+// Expired reports whether an authored `stale_after` has passed: now is at or
+// after it. A value that does not parse as a datetime expires nothing;
+// validate reports it.
+func Expired(meta *omap.Map, now time.Time) bool {
+	raw, _ := meta.Get("stale_after")
+	at, ok := values.Instant(raw)
+	return ok && !now.Before(at)
 }
 
 // civil normalizes a time to its calendar date at UTC midnight, so day

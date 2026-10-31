@@ -1,0 +1,1 @@
+{"error": {"code": "pattern_violation", "message": "'2026-01-14' does not match the pattern for verified.at (\\d{4}-\\d{2}-\\d{2}[Tt]\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?([Zz]|[+-]\\d{2}:\\d{2}))"}}

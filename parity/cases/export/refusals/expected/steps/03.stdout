@@ -1,0 +1,1 @@
+{"error": {"code": "export_target_overlaps", "message": "Refusing to export into hub/bundle: it overlaps the workspace, so one would be read as part of the other. Pass a directory outside the workspace that does not hold it"}}

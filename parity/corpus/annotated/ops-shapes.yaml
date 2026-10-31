@@ -1,0 +1,27 @@
+# Shapes the delete and rename splices touch: a comment above a key, a
+# trailing comment, block values of every kind, a quoted key, a flow value.
+type: adr
+status: accepted   # renamed to decision by the migration
+# publish flag, retired by the migration
+draft: true  # trailing comment on the deleted pair
+"quoted key": kept
+tags:
+- alpha
+  # inside the sequence
+- beta   # on the last item
+# after the sequence, before the next key
+notes: |
+  a literal block
+
+  with a blank line
+meta: {a: 1, b: [x, y]}  # flow value
+rows:
+  alpha:
+    type: repo
+    draft: false   # nested pair
+    status: active
+  # between rows
+  beta:
+    status: archived
+updated: 2026-01-15
+# trailing note

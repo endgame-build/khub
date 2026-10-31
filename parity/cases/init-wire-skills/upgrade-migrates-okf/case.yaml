@@ -1,0 +1,24 @@
+# upgrade migrates the pre-OKF entity shapes the 0.7.0 schema retired, in
+# place and comment-preserving: `draft: true` becomes `status: draft`, a falsy
+# `draft` is dropped, a bare id in `sources` moves to `references`, an adr
+# `status` that is a decision value moves to `decision`, and an api or repo
+# status outside the base enum maps onto it (active → stable, archived →
+# deprecated), and a date-only `stale_after` (OKF 0.1) widens to midnight
+# UTC. validate names each shape first; the dry run lists `migrated`
+# and leaves the tree; after the upgrade validate and check are clean, and a
+# second upgrade reports `migrated: []`.
+steps:
+- argv: ["init", "build-hub", ".", "--no-wire"]
+- sh: |
+    B='## Context\n\nThe checkout service needs a store for orders that survives restarts, supports transactions across rows, and runs on the hosting we already pay for today.\n\n## Decision\n\nWe store orders in one managed relational database that the checkout service owns and migrates itself.\n\n## Consequences\n\nSchema changes need migrations, and reporting can read a replica, but no other service may ever write those tables directly.\n'
+    printf -- '---\ntype: component\ntitle: Checkout  # the money path\ncreated: 2026-01-15\ndraft: false\nkind: service\nstale_after: 2026-12-31  # review by\nsources:\n- ad-2026-01-15-use-postgres\n---\nBody.\n' > knowledge/components/cmp-checkout.md
+    printf -- '---\ntype: adr\ntitle: Use Postgres\ncreated: 2026-01-15\nstatus: accepted   # decided in review\ndraft: true\naffects:\n- cmp-checkout\n---\n'"$B" > knowledge/decisions/ad-2026-01-15-use-postgres.md
+    printf -- '---\ntype: adr\ntitle: Try Mongo\ncreated: 2026-01-15\nstatus: rejected\ndraft: false\n---\n'"$B" > knowledge/decisions/ad-2026-01-15-try-mongo.md
+    printf -- '---\ntype: api\ntitle: Orders\ncreated: 2026-01-15\nkind: rest\nstatus: active\nprovider: cmp-checkout\n---\n' > knowledge/apis/api-orders.md
+    printf -- '---\ntype: repo\ntitle: Shop\ncreated: 2026-01-15\nrepo: acme/shop\nstatus: archived\n---\n' > knowledge/repos/rp-shop.md
+- argv: ["validate", "--format", "json"]
+- argv: ["upgrade", "--dry-run", "--no-wire", "--format", "json"]
+- argv: ["upgrade", "--no-wire", "--format", "json"]
+- argv: ["validate", "--format", "json"]
+- argv: ["check", "--format", "json"]
+- argv: ["upgrade", "--no-wire", "--format", "json"]

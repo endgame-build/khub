@@ -96,7 +96,7 @@ func walkTemplate(r *os.Root, root string, tp *schema.PathTemplate, i int, dir s
 			return nil
 		}
 		if leaf {
-			if info.Mode().IsRegular() {
+			if info.Mode().IsRegular() && !schema.ReservedEntityName(name) {
 				*out = append(*out, rel)
 			}
 			return nil
@@ -191,3 +191,8 @@ func (idx *Index) ResolvesToFile(rel *schema.ResolvedRelation, target string) bo
 func (idx *Index) Satisfies(rel *schema.ResolvedRelation, target string) bool {
 	return len(idx.ResolveTarget(rel, target)) > 0 || idx.ResolvesToFile(rel, target)
 }
+
+// LocalRef is a link or path value made workspace-local: the anchor dropped,
+// backslashes read as separators, the path cleaned. ok is false for an empty
+// value or one that leaves its root (`..`, an absolute path).
+func LocalRef(target string) (string, bool) { return cleanRef(target) }

@@ -60,6 +60,18 @@ test('add names the new id and marks a draft', () => {
   )
 })
 
+test('verify names the entity, the reviewer and when, and a signed commit', () => {
+  expect(say(`khub verify ${ADR} --by human:reviewer --format json`, F.verify_adr)).toEqual({
+    head: `khub verify ${ADR}`,
+    line: `adr/${ADR} · human:reviewer · 2026-01-15T00:00:00Z ✓`,
+    tone: 'ok',
+  })
+  expect(
+    sayOf('khub verify adr-x --by human:a --commit', { id: 'adr/adr-x', by: 'human:a', at: 'T', commit: '0123456789abcdef' })
+      .line,
+  ).toBe('adr/adr-x · human:a · T · 0123456 ✓')
+})
+
 test('edit names the field it set, from positionals or from a flag', () => {
   expect(say(`khub edit ${REQ} realized_in cmp-search --format json`, F.edit_fix).line).toBe(
     `~ requirement/${REQ} · realized_in cmp-search`,

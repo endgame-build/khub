@@ -3,8 +3,8 @@
 
 hint: >-
   one line — what this codebase is for. `repo` is the remote as a path (`org/name`, or
-  the full group path where the host nests them), and `status` says whether it is still
-  moving.
+  the full group path where the host nests them), and `status: deprecated` says it has
+  stopped moving.
 
 sections:
 - heading: What lives here
@@ -22,7 +22,7 @@ lenses:
     the rule — a monorepo is one record whose components all point at it.
 - code: archived
   name: Archived, but still depended on
-  when: {status: archived}
+  when: {status: deprecated}
   after: remote
   instruction: |
     Nothing moves here any more. Walk the components that name this repo: if any is

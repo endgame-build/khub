@@ -386,17 +386,32 @@ func chooseStyle(s string, a analysis, keyContext bool) string {
 	if strings.ContainsRune(s, '\'') || strings.ContainsRune(s, '\n') {
 		return "double"
 	}
-	if a.allowSingle && (!keyContext || !a.multiline) {
+	// Deviation from ruamel: a value holding NEL, LS or PS is never
+	// single-quoted. Written raw there, a YAML 1.2 reader keeps the break and
+	// the indent after it, and ruamel folds it to a space, so neither reads
+	// the value back; double quotes escape them (\N, \L, \P).
+	if a.allowSingle && (!keyContext || !a.multiline) && !strings.ContainsAny(s, exoticBreaks) {
 		return "single"
 	}
 	return "double"
 }
 
+// exoticBreaks are the line breaks YAML 1.1 has and YAML 1.2 dropped.
+const exoticBreaks = "\u0085\u2028\u2029"
+
 // --- writers (verbatim ports) ------------------------------------------------
 
+// writePlain is ruamel's write_plain with two deliberate deviations. It never
+// breaks the line after a run of two or more spaces: reading back folds a
+// line break and the spaces before it into one space, so ruamel's break there
+// silently changes the value (`a  b` reads back as `a b`), and the line runs
+// on to the next lone space instead. And it never breaks a scalar it may not
+// split (a simple key): ruamel wraps a long key holding a space onto two
+// lines and then cannot read its own output.
 func (e *emitter) writePlain(s string, contIndent int, split bool) {
 	runes := []rune(s)
 	spaces, breaks := false, false
+	run := 0 // length of the space run written just before the current word
 	start := 0
 	for end := 0; end <= len(runes); end++ {
 		var ch rune
@@ -408,8 +423,10 @@ func (e *emitter) writePlain(s string, contIndent int, split bool) {
 			if !hasCh || ch != ' ' {
 				if start+1 == end && e.col >= e.width && split {
 					e.writeIndent(contIndent)
+					run = 0
 				} else {
 					e.write(string(runes[start:end]))
+					run = end - start
 				}
 				start = end
 			}
@@ -431,10 +448,11 @@ func (e *emitter) writePlain(s string, contIndent int, split bool) {
 		} else {
 			if !hasCh || ch == ' ' || isBreak(ch) {
 				data := runes[start:end]
-				if len(data)+e.col > e.width && e.col > contIndent {
+				if split && len(data)+e.col > e.width && e.col > contIndent && run <= 1 {
 					e.writeIndent(contIndent)
 				}
 				e.write(string(data))
+				run = 0
 				start = end
 			}
 		}

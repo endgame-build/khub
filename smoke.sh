@@ -11,7 +11,7 @@ WORK=${1:-/tmp/khub-smoke}
 KHUB="${KHUB:-$REPO/khub}"   # the built binary; override to smoke another build
 # Dated ids (adr) carry the mint day; pin the clock so the ids below are
 # stable — the same seam the parity recorder uses.
-export KHUB_PARITY_NOW=2026-01-15
+export KHUB_PARITY_NOW=2026-01-15 KHUB_ACTOR=khub
 FAILED=0
 CASES=0
 
@@ -53,25 +53,25 @@ rm -rf "$WORK"; mkdir -p "$WORK"
 say "khub · build-hub"
 L=$WORK/hub; mkdir -p "$L"; cd "$L"
 ok 0 "init"                        $KHUB init build-hub .
-ok 0 "add repo"                    $KHUB -C "$L" add repo --title "API" --repo acme/api --status active
+ok 0 "add repo"                    $KHUB -C "$L" add repo --title "API" --repo acme/api
 ok 0 "add component (service)"     $KHUB -C "$L" add component --title "Public API" --kind service --repo rp-api
 ok 0 "add component (external)"    $KHUB -C "$L" add component --title "Stripe" --kind external --stack Stripe
 ok 0 "add requirement functional"  $KHUB -C "$L" add requirement --title "Pay by card" --kind functional
 ok 0 "add requirement constraint"  $KHUB -C "$L" add requirement --title "Settle in 2s" --kind constraint
-ok 0 "add adr"                     $KHUB -C "$L" add adr --title "Use Stripe" --status accepted
+ok 0 "add adr"                     $KHUB -C "$L" add adr --title "Use Stripe" --decision accepted
 ok 0 "add capability"              $KHUB -C "$L" add capability --title "Checkout"
 ok 0 "add actor"                   $KHUB -C "$L" add actor --title "Shopper"
 ok 0 "add system (--owner)"        $KHUB -C "$L" add system --title "Storefront" --owner team-payments
-ok 0 "add api (vendor's, provider)" $KHUB -C "$L" add api --title "Stripe Charges" --kind rest --status active --provider cmp-stripe
-ok 0 "add api without --provider"  $KHUB -C "$L" add api --title "Orders Feed" --kind events --status proposed
+ok 0 "add api (vendor's, provider)" $KHUB -C "$L" add api --title "Stripe Charges" --kind rest --provider cmp-stripe
+ok 0 "add api without --provider"  $KHUB -C "$L" add api --title "Orders Feed" --kind events
 ok 1 "check: required edge unset"  $KHUB -C "$L" check --format json
 ok 0 "link provider closes it"     $KHUB -C "$L" link api-orders-feed provider cmp-public-api
 ok 0 "add use-case"                $KHUB -C "$L" add use-case --title "Pay for a basket" --trigger human --actor act-shopper --capability cap-checkout
-ok 2 "add: bad enum refused"       $KHUB -C "$L" add adr --title "Bad" --status bogus
+ok 2 "add: bad enum refused"       $KHUB -C "$L" add adr --title "Bad" --decision bogus
 ok 2 "add: bad trigger refused"    $KHUB -C "$L" add use-case --title "Bad" --trigger cron
-ok 2 "add: dangling target refused" $KHUB -C "$L" add adr --title "Ghost" --status proposed --affects nope
-ok 2 "add: same title refused"     $KHUB -C "$L" add adr --title "Use Stripe" --status proposed
-ok 0 "add: same title with --id"   $KHUB -C "$L" add adr --title "Use Stripe" --status proposed --id ad-2026-01-15-use-stripe-again
+ok 2 "add: dangling target refused" $KHUB -C "$L" add adr --title "Ghost" --decision proposed --affects nope
+ok 2 "add: same title refused"     $KHUB -C "$L" add adr --title "Use Stripe" --decision proposed
+ok 0 "add: same title with --id"   $KHUB -C "$L" add adr --title "Use Stripe" --decision proposed --id ad-2026-01-15-use-stripe-again
 ok 0 "link affects"                $KHUB -C "$L" link ad-2026-01-15-use-stripe affects cmp-public-api
 ok 0 "link affects (--id adr)"     $KHUB -C "$L" link ad-2026-01-15-use-stripe-again affects cmp-public-api
 ok 0 "link realized_in (fr)"       $KHUB -C "$L" link req-pay-by-card realized_in cmp-public-api
@@ -84,7 +84,7 @@ ok 0 "link system"                 $KHUB -C "$L" link cmp-public-api system sys-
 ok 0 "link depends_on"             $KHUB -C "$L" link cmp-public-api depends_on cmp-stripe
 ok 0 "unlink is idempotent"        $KHUB -C "$L" unlink cmp-public-api depends_on cmp-stripe
 ok 0 "relink"                      $KHUB -C "$L" link cmp-public-api depends_on cmp-stripe
-ok 0 "edit status"                 $KHUB -C "$L" edit adr/ad-2026-01-15-use-stripe status proposed
+ok 0 "edit decision"               $KHUB -C "$L" edit adr/ad-2026-01-15-use-stripe decision proposed
 ok 0 "get --edges"                 $KHUB -C "$L" get cmp-public-api --edges --format json
 ok 0 "query --type"                $KHUB -C "$L" query --type requirement --format json
 ok 0 "query --missing"             $KHUB -C "$L" query --missing realized_in --format json
@@ -143,7 +143,7 @@ say "khub · upgrade"
 U=$WORK/upgrade; mkdir -p "$U"; cd "$U"
 ok 0 "init (build-lite, the alias)" $KHUB init build-lite .
 has  "alias records build-hub"     "$U/.khub/config.yaml" "preset: build-hub"
-has  "init writes index.md"        "$U/index.md" "# Index"
+has  "init writes index.md"        "$U/index.md" "okf_version: '0.2'"
 ok 0 "upgrade on a fresh init"     $KHUB -C "$U" upgrade
 ok 1 "fresh upgrade leaves no .bak" test -e "$U/.khub/storage.yaml.bak"
 printf '\n# mine\n' >> "$U/.khub/storage.yaml"

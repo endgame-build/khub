@@ -19,8 +19,8 @@ OUT="$REPO/docs/cli-reference.md"
 # Registration order, matching newRoot() in internal/cli/root.go — the order
 # `khub --help` lists them in, so the reference reads the same way.
 COMMANDS=(
-  init upgrade status add get edit link unlink remove query search neighbors impact
-  history validate check stale reindex viz serve backfill wire schema
+  init upgrade status add get edit link unlink remove verify query search neighbors impact
+  history validate check stale reindex export import viz serve backfill wire schema
   "schema types" "schema show" "schema edges" "schema base" "schema snapshot" "schema diff"
 )
 
@@ -43,7 +43,8 @@ export COLUMNS=80 TTY_COMPATIBLE=0 NO_COLOR=1
     echo
     echo '```console'
     echo "\$ khub $cmd --help"
-    # shellcheck disable=SC2086 -- word splitting is intended for "schema show"
+    # Word splitting is intended: "schema show" is two words.
+    # shellcheck disable=SC2086
     "$KHUB" $cmd --help | sed -e 's/[[:space:]]*$//'
     echo '```'
   done

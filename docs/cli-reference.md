@@ -24,6 +24,7 @@ Commands:
   link  Add a relation: khub link initech-pov partner northwind.
   unlink  Remove a relation: khub unlink initech-pov partner northwind.
   remove  Remove an entity, guarded by inbound edges: khub remove old-fragment [--force].
+  verify  Record a review: khub verify ad-2026-01-15-use-jwt --by human:ilya.
   query  Filter entities: khub query --type opportunity --stage prospect --format json.
   search  Full-text search: khub search modernization --type transcript --format json.
   neighbors  Walk one-hop neighbors: khub neighbors initech-pov [--predicate client --in].
@@ -33,6 +34,8 @@ Commands:
   check  Check the active graph: completeness, orphans, dangling edges, strays, cycles, bodies.
   stale  List entities past the `updated` threshold, oldest first: khub stale [--days N].
   reindex  Regenerate the OKF index.md from the graph: khub reindex [--dry-run].
+  export  Write the workspace as an OKF 0.2 bundle: khub export --okf DIR.
+  import  Read an OKF bundle into the workspace as drafts: khub import --okf DIR.
   viz  Render the typed graph to a self-contained Cytoscape HTML: khub viz [--out F] [--open] [--type T].
   serve  Serve a read-only graph view on loopback: khub serve [--port 7777].
   backfill  Backfill missing dates and frontmatter: khub backfill [--type T] [--dry-run].
@@ -75,7 +78,7 @@ Usage: khub upgrade [OPTIONS]
 
 Refresh an existing workspace: the shipped schema and templates, new scaffolds, the wire block.
 
-Replaces .khub/{ontology,policy,storage}.yaml and .khub/templates/*.yaml from the preset recorded in .khub/config.yaml, copying an edited file to <name>.bak first; preflights the candidate schema and scaffolds before publishing, then re-wires the agent files and regenerates index.md. Refuses outside a workspace: ``khub init`` scaffolds, ``khub upgrade`` refreshes.
+Replaces .khub/{ontology,policy,storage}.yaml and .khub/templates/*.yaml from the preset recorded in .khub/config.yaml, copying an edited file to <name>.bak first; migrates legacy entity fields (`draft`, bare `sources` entries, a retired `status`) in place; preflights the candidate schema and scaffolds before publishing, then re-wires the agent files and regenerates index.md. Refuses outside a workspace: ``khub init`` scaffolds, ``khub upgrade`` refreshes.
 
 Options:
   --dry-run  Preview core and tail outcomes without changing the workspace.
@@ -120,6 +123,7 @@ Options:
   --body <str>  Body prose as a string.
   --body-file <str>  Read the body from a file ('-' for stdin).
   --no-template  Start with an empty body. Refused on a type whose template has a required heading, since the result would fail validate; use --body to supply your own sections.
+  --by <str>  Who the write is stamped as in generated.by. Default: KHUB_ACTOR, then agent/claude-code under Claude Code, then khub.
   --format <str>  text or json (emits the written record). [default: text]
   --help  Show this message and exit.
 
@@ -160,6 +164,7 @@ Options:
   --strict  Reject fields the schema does not declare.
   --body <str>  Replace the body with this string ('' clears it).
   --body-file <str>  Replace the body from a file ('-' for stdin).
+  --by <str>  Who the write is stamped as in generated.by. Default: KHUB_ACTOR, then agent/claude-code under Claude Code, then khub.
   --format <str>  text or json (emits the updated record). [default: text]
   --help  Show this message and exit.
 
@@ -179,6 +184,7 @@ Arguments:
   TARGET <str>
 
 Options:
+  --by <str>  Who the write is stamped as in generated.by. Default: KHUB_ACTOR, then agent/claude-code under Claude Code, then khub.
   --format <str>  text or json (emits the edge record). [default: text]
   --help  Show this message and exit.
 
@@ -198,6 +204,7 @@ Arguments:
   TARGET <str>
 
 Options:
+  --by <str>  Who the write is stamped as in generated.by. Default: KHUB_ACTOR, then agent/claude-code under Claude Code, then khub.
   --format <str>  text or json (emits the edge record). [default: text]
   --help  Show this message and exit.
 
@@ -221,6 +228,23 @@ Options:
 
 ```
 
+## khub verify
+
+```console
+$ khub verify --help
+Usage: khub verify [OPTIONS] [ID]
+
+Record a review: khub verify ad-2026-01-15-use-jwt --by human:ilya.
+
+Options:
+  --by <str>  Who reviewed it (required): human:<name>, process:<name>, or <producer>[/<version>].
+  --at <str>  When, as ISO 8601 with a T and an offset; default now.
+  --commit  Also make a signed git commit of the entity's file; refused when signing is not configured.
+  --format <str>  text or json (emits the recorded event). [default: text]
+  --help  Show this message and exit.
+
+```
+
 ## khub query
 
 ```console
@@ -239,6 +263,7 @@ Options:
   --draft  Isolate drafts.
   --active  Exclude drafts.
   --limit <int>  Cap the returned set.
+  --trust <str>  Keep entities at this review tier: unverified, machine, or human.
   --format <str>  text (Rich table on a TTY), json, or ids. [default: text]
   --help  Show this message and exit.
 
@@ -351,6 +376,9 @@ Check the active graph: completeness, orphans, dangling edges, strays, cycles, b
 
 Options:
   --strict  Fail the gate on orphans too (default: informational).
+  --stale  Fail the gate on active entities whose stale_after has passed.
+  --require-verified  Fail the gate on active entities below --tier.
+  --tier <str>  The review tier --require-verified asks for: machine or human. [default: machine]
   --format <str>  text (Rich on a TTY) or json. [default: text]
   --help  Show this message and exit.
 
@@ -381,6 +409,45 @@ Regenerate the OKF index.md from the graph: khub reindex [--dry-run].
 
 Options:
   --dry-run  Print the diff against the current index.md and write nothing.
+  --help  Show this message and exit.
+
+```
+
+## khub export
+
+```console
+$ khub export --help
+Usage: khub export [OPTIONS]
+
+Write the workspace as an OKF 0.2 bundle: khub export --okf DIR.
+
+One md concept per entity at a path mirroring the workspace; json, yaml and collection rows are materialized as md. Declared relations become a `# Related` section of bundle-absolute links. Every directory gets an index.md, and the root one declares okf_version. Only entities are exported: .khub/, agent files and ignored paths stay out, and strays are listed. The bundle is built beside the target and swapped in, so a failed export changes nothing. A .khub-export file at the bundle root lists the files the export wrote. The target must be empty or absent, and must not overlap the workspace. --force replaces a target only when it holds that file, holds no .khub/ and no .git/, and holds nothing the file does not list.
+
+Options:
+  --okf <str>  The bundle directory to write (required).
+  --force  Replace a bundle khub exported before, when it holds only the files its .khub-export lists.
+  --dry-run  List the files the bundle would hold and write nothing.
+  --format <str>  text or json (the written paths). [default: text]
+  --help  Show this message and exit.
+
+```
+
+## khub import
+
+```console
+$ khub import --help
+Usage: khub import [OPTIONS]
+
+Read an OKF bundle into the workspace as drafts: khub import --okf DIR.
+
+Every `.md` concept in the bundle except index.md and log.md lands as a draft in the type its `type` names, matched by name or slug, or mapped with --type-map. Frontmatter is kept as written, unknown keys included. The id is the type's scheme around the file's stem, as add mints one, with the stem kept in `aliases` unless another entity already answers to it. The bundle's `verified` is kept as `okf_verified` and never counted, and a relation value nothing answers to is kept in `okf_unresolved`; a concept already carrying the key import writes is skipped. A link to another imported concept becomes a `references` edge; export's `# Related` section is read back into relations. A concept that cannot land is skipped and reported. The concepts that land are written all or none, and nothing is written to the bundle.
+
+Options:
+  --okf <str>  The bundle directory to read (required).
+  --type-map <str>  A YAML file mapping OKF types to this workspace's types.
+  --by <str>  Who `generated.by` records on a concept that has no `generated`. Default: KHUB_ACTOR, then agent/claude-code under Claude Code, then khub.
+  --dry-run  Plan the import and write nothing.
+  --format <str>  text or json (every imported and skipped concept). [default: text]
   --help  Show this message and exit.
 
 ```

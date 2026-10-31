@@ -72,6 +72,13 @@ var reads = []readCase{
 	{"history", []string{"history", "{history_id}"}, 0},
 	{"stale --days 90", []string{"stale", "--days", "90"}, 0},
 	{"reindex --dry-run", []string{"reindex", "--dry-run"}, 0},
+	// upgrade copies the workspace into a candidate, migrates and validates it.
+	// A real run syncs every file it publishes, so it is disk bound; like every
+	// row here it is tracked by its exponent, never held to a wall clock.
+	// The real run follows every corpus read: its warm-up brings the cached corpus up to date,
+	// and every timed run after it is an upgrade with nothing to change.
+	{"upgrade --dry-run", []string{"upgrade", "--dry-run", "--no-wire"}, 0},
+	{"upgrade", []string{"upgrade", "--no-wire"}, 0},
 	// Reads the ontology and nothing else — the one command whose cost should
 	// not move with the corpus at all, and so the control for everything above.
 	{"schema show <type>", []string{"schema", "show", "requirement"}, 0},
@@ -129,7 +136,7 @@ func main() {
 		roots[scale], sizes[scale], manifests[scale] = root, m.Total, m
 	}
 
-	env := append(os.Environ(), "KHUB_PARITY_NOW="+today.Format("2006-01-02"))
+	env := append(os.Environ(), "KHUB_PARITY_NOW="+today.Format("2006-01-02"), "KHUB_ACTOR=khub")
 	rows := map[string]map[int]stats{}
 	for _, scale := range scales {
 		subs := handles(manifests[scale])

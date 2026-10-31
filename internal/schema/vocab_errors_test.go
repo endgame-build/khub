@@ -184,7 +184,7 @@ func TestBrokenBaseDocumentStillValidated(t *testing.T) {
 	_, err := ResolveWith(badBase, files)
 	le := asLocatedErr(t, err)
 	want := "Invalid schema at ontology.base.attributes.t.type: " +
-		"Input should be 'text', 'number', 'date', 'datetime', 'bool' or 'list'"
+		"Input should be 'text', 'number', 'date', 'datetime', 'bool', 'list' or 'object'"
 	if le.Message != want {
 		t.Errorf("message = %q,\nwant      %q", le.Message, want)
 	}

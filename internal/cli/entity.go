@@ -24,8 +24,8 @@ import (
 
 func registerAdd(root *cobra.Command) {
 	var (
-		id, bodyText, bodyFile, format string
-		draft, strict, noTemplate      bool
+		id, bodyText, bodyFile, format, actor string
+		draft, strict, noTemplate             bool
 	)
 	cmd := newCmd("add [TYPE]",
 		"Create an entity: khub add opportunity --client initech --owner noor --stage prospect.",
@@ -41,6 +41,7 @@ func registerAdd(root *cobra.Command) {
 	cmd.Flags().BoolVar(&noTemplate, "no-template", false,
 		"Start with an empty body. Refused on a type whose template has a required heading, "+
 			"since the result would fail validate; use --body to supply your own sections.")
+	cmd.Flags().StringVar(&actor, "by", "", actorHelp)
 	cmd.Flags().StringVar(&format, "format", "text", "text or json (emits the written record).")
 	cmd.RunE = func(cmd *cobra.Command, args []string) error {
 		positional, extra, err := splitDynamic(cmd, args, 1)
@@ -54,6 +55,9 @@ func registerAdd(root *cobra.Command) {
 			ws, rerr := resolveRoot()
 			if rerr != nil {
 				return rerr
+			}
+			if serr := refuseAmbiguousFlag(cmd, ws, arg(positional, 0), ""); serr != nil {
+				return serr
 			}
 			fields, ferr := fieldsOrUsage(cmd, extra, "[TYPE]")
 			if ferr != nil {
@@ -77,7 +81,7 @@ func registerAdd(root *cobra.Command) {
 			}
 			result, cerr := entity.Create(ws, typeName, entity.CreateOpts{
 				Fields: fields, ID: explicitID(cmd, id), Draft: draft, Body: text,
-				Strict: strict, UseTemplate: !noTemplate,
+				Strict: strict, UseTemplate: !noTemplate, Actor: actor,
 			})
 			if cerr != nil {
 				return emptyIDError(cmd, id, cerr)
@@ -142,7 +146,7 @@ func registerGet(root *cobra.Command) {
 }
 
 func registerEdit(root *cobra.Command) {
-	var bodyText, bodyFile, format string
+	var bodyText, bodyFile, format, actor string
 	var strict bool
 	cmd := newCmd("edit [ID]",
 		"Edit an entity: khub edit initech-deal stage proposal-sent  (or --field value).",
@@ -152,6 +156,7 @@ func registerEdit(root *cobra.Command) {
 	cmd.Flags().BoolVar(&strict, "strict", false, "Reject fields the schema does not declare.")
 	cmd.Flags().StringVar(&bodyText, "body", "", "Replace the body with this string ('' clears it).")
 	cmd.Flags().StringVar(&bodyFile, "body-file", "", "Replace the body from a file ('-' for stdin).")
+	cmd.Flags().StringVar(&actor, "by", "", actorHelp)
 	cmd.Flags().StringVar(&format, "format", "text", "text or json (emits the updated record).")
 	cmd.RunE = func(cmd *cobra.Command, args []string) error {
 		positional, extra, err := splitDynamic(cmd, args, 1)
@@ -165,6 +170,9 @@ func registerEdit(root *cobra.Command) {
 			ws, rerr := resolveRoot()
 			if rerr != nil {
 				return rerr
+			}
+			if serr := refuseAmbiguousFlag(cmd, ws, "", arg(positional, 0)); serr != nil {
+				return serr
 			}
 			fields, ferr := fieldsOrUsage(cmd, extra, "[ID]")
 			if ferr != nil {
@@ -183,7 +191,7 @@ func registerEdit(root *cobra.Command) {
 				return &ExitError{Code: 2}
 			}
 			result, uerr := entity.Update(ws, id, entity.UpdateOpts{
-				Fields: fields, Body: body, Strict: strict,
+				Fields: fields, Body: body, Strict: strict, Actor: actor,
 			})
 			if uerr != nil {
 				return uerr
@@ -195,8 +203,12 @@ func registerEdit(root *cobra.Command) {
 	root.AddCommand(cmd)
 }
 
+// actorHelp is the one --by help line the four write verbs share.
+const actorHelp = "Who the write is stamped as in generated.by. Default: KHUB_ACTOR, " +
+	"then agent/claude-code under Claude Code, then khub."
+
 func registerLink(root *cobra.Command) {
-	var format string
+	var format, actor string
 	cmd := newCmd("link [ID] [PREDICATE] [TARGET]", "Add a relation: khub link initech-pov partner northwind.",
 		"[ID] [PREDICATE] [TARGET]", func(cmd *cobra.Command, args []string) error {
 			return Guard(format, func() error {
@@ -208,7 +220,7 @@ func registerLink(root *cobra.Command) {
 					fmt.Fprintln(os.Stderr, "Provide ID PREDICATE TARGET.")
 					return &ExitError{Code: 2}
 				}
-				result, err := entity.Link(ws, args[0], args[1], args[2])
+				result, err := entity.Link(ws, args[0], args[1], args[2], actor)
 				if err != nil {
 					return err
 				}
@@ -223,12 +235,13 @@ func registerLink(root *cobra.Command) {
 			})
 		})
 	cmd.Args = clickArity(3)
+	cmd.Flags().StringVar(&actor, "by", "", actorHelp)
 	cmd.Flags().StringVar(&format, "format", "text", "text or json (emits the edge record).")
 	root.AddCommand(cmd)
 }
 
 func registerUnlink(root *cobra.Command) {
-	var format string
+	var format, actor string
 	cmd := newCmd("unlink [ID] [PREDICATE] [TARGET]", "Remove a relation: khub unlink initech-pov partner northwind.",
 		"[ID] [PREDICATE] [TARGET]", func(cmd *cobra.Command, args []string) error {
 			return Guard(format, func() error {
@@ -240,7 +253,7 @@ func registerUnlink(root *cobra.Command) {
 					fmt.Fprintln(os.Stderr, "Provide ID PREDICATE TARGET.")
 					return &ExitError{Code: 2}
 				}
-				result, err := entity.Unlink(ws, args[0], args[1], args[2])
+				result, err := entity.Unlink(ws, args[0], args[1], args[2], actor)
 				if err != nil {
 					return err
 				}
@@ -255,6 +268,7 @@ func registerUnlink(root *cobra.Command) {
 			})
 		})
 	cmd.Args = clickArity(3)
+	cmd.Flags().StringVar(&actor, "by", "", actorHelp)
 	cmd.Flags().StringVar(&format, "format", "text", "text or json (emits the edge record).")
 	root.AddCommand(cmd)
 }
@@ -392,6 +406,7 @@ func getRecord(ws string, view *entity.EntityView) *omap.Map {
 		}
 		record.Set("edges", edges)
 	}
+	record.Set("trust", view.Trust)
 	return record
 }
 

@@ -4,5 +4,5 @@
 # preset that declares one.
 steps:
 - argv: ["init", "build-hub", ".", "--no-wire"]
-- argv: ["add", "repo", "--title", "Bad", "--repo", "no spaces allowed", "--status", "active"]
-- argv: ["add", "repo", "--title", "Good", "--repo", "org/name", "--status", "active", "--format", "json"]
+- argv: ["add", "repo", "--title", "Bad", "--repo", "no spaces allowed"]
+- argv: ["add", "repo", "--title", "Good", "--repo", "org/name", "--format", "json"]

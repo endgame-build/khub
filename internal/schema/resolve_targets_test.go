@@ -88,8 +88,8 @@ func TestAuthoredPresetsResolve(t *testing.T) {
 		t.Error("project carries attr 'stage'; the post-review model dropped it")
 	}
 	// base merged in
-	if !project.Attributes.Has("draft") {
-		t.Error("project missing base attr 'draft'")
+	if !project.Attributes.Has("status") {
+		t.Error("project missing base attr 'status'")
 	}
 
 	// Iteration order = declaration order (the file's authored type order).

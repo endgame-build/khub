@@ -11,7 +11,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"time"
 
 	"github.com/spf13/cobra"
 
@@ -19,18 +18,6 @@ import (
 	"github.com/endgame-build/khub/internal/errs"
 	"github.com/endgame-build/khub/internal/omap"
 )
-
-// today is date.today() at the CLI's one clock seam. KHUB_PARITY_NOW — the env
-// var the parity recorder pins Python's clock with — overrides it.
-func today() time.Time {
-	if pinned := os.Getenv("KHUB_PARITY_NOW"); pinned != "" {
-		if d, err := time.ParseInLocation("2006-01-02", pinned, time.UTC); err == nil {
-			return d
-		}
-	}
-	n := time.Now()
-	return time.Date(n.Year(), n.Month(), n.Day(), 0, 0, 0, 0, time.UTC)
-}
 
 // relPath is Path.relative_to(root) as the records print it: forward slashes,
 // no leading "./".

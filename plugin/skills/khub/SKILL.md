@@ -14,7 +14,7 @@ If `khub` is not installed (`command not found`), load the `setup` skill first �
 
 Never hardcode a type or a field. Read the live schema:
 
-- `khub status --format json` — counts per type, draft/active, and the active preset.
+- `khub status --format json` — counts per type, draft/active (`status: draft` is a draft), and the active preset.
 - `khub schema --format json` — every type with its fields, enums, required flags, and relations.
 - `khub schema show <type> --format json` — one type's shape; build an `add`/`edit` from it.
 - `khub schema diff --format json` — schema changes since the last `khub schema snapshot`; `pending: true` means existing entities may predate the current schema.
@@ -23,7 +23,7 @@ The schema lives at `.khub/ontology.yaml` (the domain model) with `.khub/policy.
 
 ## Retrieve
 
-- `khub query --type <t> [--<field> <v>] [--tag <t>] [--has <pred>] [--missing <pred>] --format json` — filter by frontmatter; `--missing` surfaces gaps.
+- `khub query --type <t> [--<field> <v>] [--tag <t>] [--has <pred>] [--missing <pred>] [--trust human] --format json` — filter by frontmatter; `--missing` surfaces gaps, `--trust` filters by review tier (`unverified`, `machine`, `human`).
 - `khub get <id>... --edges --format json` — one ID returns one object; multiple IDs return an all-or-nothing array in argument order, duplicates included. Raw output accepts one ID only.
 - `khub neighbors <id> --format json` — one-hop adjacency.
 - `khub impact <id> --format json` — transitive closure over a predicate (blast radius).
@@ -56,9 +56,13 @@ entity file gets hand-edited anyway, run `khub validate` on it immediately: an u
 hand-edit is how a workspace acquires a field no default gate will report.
 
 - `khub add <type> --<field> <v> [--body <text>] [--draft] --format json` — mint an entity. Set relation fields inline (`--client acme-corp`). A relation to a missing target is rejected; a missing required field is captured anyway and reported later by `khub check`.
-- `khub edit <id> <field> <v> --format json` — change a field; `edit <id> draft false` publishes.
+- `khub edit <id> <field> <v> --format json` — change a field; `edit <id> status stable` publishes a draft. `--draft` on `add` writes `status: draft`; an entity with no `status` is stable.
 - `khub link <id> <predicate> <target>` / `khub unlink <id> <predicate> <target> --format json` — relations, idempotent. Read `changed` to tell a write from a no-op; both exit 0.
+- `khub import --okf <bundle> [--type-map <file>] --format json` — read an external OKF bundle in as drafts; read `skipped` for every concept that did not land and `unresolved` for relation values kept aside in `okf_unresolved`. The bundle's own `verified` is kept as `okf_verified` and does not count as a review.
 - `khub remove <id> --format json` — delete; refuses while an inbound edge resolves to it unless `--force`.
+- `khub verify <id> --by <actor> --format json` — record that someone reviewed an entity. Use it only when a review actually happened, and name who did it: `human:<name>` for a person who confirmed the content, `process:<name>` for a check that ran. Never verify as `human:` on your own say-so. A later content or status edit supersedes the review; reads show it in `trust`, and `khub check --require-verified [--tier human]` fails on active entities below the tier.
+
+Every content write stamps `generated: {by, at}`: an `add`, or a change to the body, a declared field, `status` or a relation. A bookkeeping-only edit (`tags`, `aliases`, `stale_after`, `author`, `created`) and an edit that changes nothing stamp nothing. Under Claude Code `by` is `agent/claude-code` unless `KHUB_ACTOR` or `--by` says otherwise; pass `--by human:<name>` only when that person wrote the content.
 
 ## The loop
 

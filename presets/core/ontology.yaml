@@ -12,18 +12,24 @@
 # (read the effective block with `khub schema base`).
 #
 # Grammar:
-#   attributes: map keyed by name -> { type, required?, default?, enum?, pattern? }
-#               scalar `type` is one of text|number|date|datetime|bool|list (default text)
-#   relations:  map keyed by predicate -> { to, many?, required? }
+#   attributes: map keyed by name -> { type, required?, default?, enum?, pattern?, fields?, items? }
+#               `type` is one of text|number|date|datetime|bool|list|object (default text)
+#               `fields` declares an object's keys, `items` a list's element, in the same grammar
+#   relations:  map keyed by predicate -> { to, many?, required?, inverse?, acyclic? }
 #               `to` is a type name, a list of type names, or `any`
 #               the field name IS the predicate; single by default, `many: true` for multi-valued
+#
+# `status`, `generated`, `verified`, `stale_after`, `sources` and `usage_window`
+# are the OKF 0.2 families. `status: draft` is the manual publish flag; an
+# absent status reads as its default, `stable`, and is never written. An OKF
+# datetime is ISO 8601 with a `T` and an explicit offset (Z or +hh:mm).
 
 ontology:
   base:
     attributes:
       type:        { type: text, required: true }    # discriminator — each entity kind pins its value
-      draft:       { type: bool, default: false }    # lifecycle flag (default published)
-      author:      { type: text }                    # the writer — person or agent
+      status:      { enum: [draft, stable, deprecated], default: stable }  # OKF lifecycle; draft = unpublished
+      author:      { type: text }                    # the creator, set once
       created:     { type: date, required: true }
       updated:     { type: date }
       title:       { type: text }                    # OKF
@@ -31,8 +37,42 @@ ontology:
       resource:    { type: text }                    # OKF — canonical URI / link-out
       tags:        { type: list }
       aliases:     { type: list }                    # other names an ID lookup resolves to
+      generated:                                     # OKF — the last writer
+        type: object
+        fields:
+          by: { required: true }
+          at: { type: datetime, pattern: &okf_datetime '\d{4}-\d{2}-\d{2}[Tt]\d{2}:\d{2}:\d{2}(\.\d+)?([Zz]|[+-]\d{2}:\d{2})' }
+      verified:                                      # OKF — review events, newest last
+        type: list
+        items:
+          type: object
+          fields:
+            by:  { required: true }
+            at:  { type: datetime, pattern: *okf_datetime }
+            rev: {}
+      stale_after: { type: datetime, pattern: *okf_datetime }  # OKF — stale from this moment
+      sources:                                       # OKF — what the concept was derived from
+        type: list
+        items:
+          type: object
+          fields:
+            resource:      { required: true }
+            id:            {}
+            title:         {}
+            author:        {}
+            usage_count:   { type: number }
+            last_modified: { type: datetime, pattern: *okf_datetime }
+            usage_window:
+              type: object
+              fields:
+                from: { type: datetime, pattern: *okf_datetime }
+                to:   { type: datetime, pattern: *okf_datetime }
+      usage_window:                                  # OKF — the period the concept describes
+        type: object
+        fields:
+          from: { type: datetime, pattern: *okf_datetime }
+          to:   { type: datetime, pattern: *okf_datetime }
     relations:
       related:     { to: any, many: true }
-      sources:     { to: any, many: true }
       references:  { to: any, many: true }
       depends_on:  { to: any, many: true, acyclic: true }

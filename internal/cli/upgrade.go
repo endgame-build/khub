@@ -15,6 +15,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/endgame-build/khub/internal/migrate"
 	"github.com/endgame-build/khub/internal/omap"
 	"github.com/endgame-build/khub/internal/wire"
 	"github.com/endgame-build/khub/internal/workspace"
@@ -95,7 +96,8 @@ func registerUpgrade(root *cobra.Command) {
 							}
 						}
 					}
-					idle := len(result.Config) == 0 && len(result.SingletonsCreated) == 0 &&
+					idle := len(result.Config) == 0 && len(result.Carried) == 0 && len(result.Dropped) == 0 && len(result.SingletonsCreated) == 0 &&
+						len(result.Migrated) == 0 && len(result.MigrationConflicts) == 0 &&
 						wireChanges == 0 &&
 						indexStep.Err == "" && *indexStep.Result == "unchanged"
 					if idle {
@@ -108,8 +110,20 @@ func registerUpgrade(root *cobra.Command) {
 									c.Backup)
 							}
 						}
+						for _, c := range result.Carried {
+							fmt.Printf("kept %s %s.%s from your workspace\n", c.File, c.Type, c.Key)
+						}
+						for _, d := range result.Dropped {
+							fmt.Printf("dropped %s %s.%s from your workspace: %s\n", d.File, d.Type, d.Key, d.Reason)
+						}
 						if len(result.SingletonsCreated) > 0 {
 							fmt.Println("created singletons: " + strings.Join(result.SingletonsCreated, ", "))
+						}
+						for _, e := range result.Migrated {
+							fmt.Println(migrationLine(e))
+						}
+						for _, c := range result.MigrationConflicts {
+							fmt.Println(conflictLine(c))
 						}
 						if wireStep.Result != nil {
 							for _, outcome := range wireStep.Result.Outcomes {
@@ -144,6 +158,7 @@ func registerUpgrade(root *cobra.Command) {
 	cmd.Args = clickArity(0)
 	cmd.Long = cmd.Short + "\n\nReplaces .khub/{ontology,policy,storage}.yaml and .khub/templates/*.yaml from " +
 		"the preset recorded in .khub/config.yaml, copying an edited file to <name>.bak first; " +
+		"migrates legacy entity fields (`draft`, bare `sources` entries, a retired `status`) in place; " +
 		"preflights the candidate schema and scaffolds before publishing, then re-wires the agent " +
 		"files and regenerates index.md. " +
 		"Refuses outside a workspace: ``khub init`` scaffolds, ``khub upgrade`` refreshes."
@@ -191,11 +206,90 @@ func upgradePayload(
 		config = append(config, record)
 	}
 	payload.Set("config", config)
+	carried := make([]any, 0, len(result.Carried))
+	for _, c := range result.Carried {
+		record := omap.New()
+		record.Set("file", c.File)
+		record.Set("type", c.Type)
+		record.Set("key", c.Key)
+		carried = append(carried, record)
+	}
+	payload.Set("carried", carried)
+	dropped := make([]any, 0, len(result.Dropped))
+	for _, d := range result.Dropped {
+		record := omap.New()
+		record.Set("file", d.File)
+		record.Set("type", d.Type)
+		record.Set("key", d.Key)
+		record.Set("reason", d.Reason)
+		dropped = append(dropped, record)
+	}
+	payload.Set("dropped", dropped)
 	payload.Set("singletons_created", strList(result.SingletonsCreated))
 	payload.Set("schema_drift", strList(result.SchemaDrift))
 	wired.set(payload, "wire", func(r *wire.Result) any { return wireOutcomes(r) }, true)
 	indexed.set(payload, "index", func(action *string) any { return *action }, true)
 	payload.Set("dry_run", result.DryRun)
 	payload.Set("removed_types", strList(result.RemovedTypes))
+	migrated := make([]any, 0, len(result.Migrated))
+	for _, e := range result.Migrated {
+		changes := make([]any, 0, len(e.Changes))
+		for _, c := range e.Changes {
+			change := omap.New()
+			change.Set("op", string(c.Op))
+			change.Set("field", c.Field)
+			change.Set("from", c.From)
+			change.Set("to", c.To)
+			changes = append(changes, change)
+		}
+		record := omap.New()
+		record.Set("id", e.ID)
+		record.Set("path", e.Path)
+		record.Set("changes", changes)
+		record.Set("reemitted", e.Reemitted)
+		migrated = append(migrated, record)
+	}
+	payload.Set("migrated", migrated)
+	conflicts := make([]any, 0, len(result.MigrationConflicts))
+	for _, c := range result.MigrationConflicts {
+		record := omap.New()
+		record.Set("id", nullable(c.ID))
+		record.Set("path", c.Path)
+		record.Set("field", nullable(c.Field))
+		record.Set("reason", c.Reason)
+		conflicts = append(conflicts, record)
+	}
+	payload.Set("migration_conflicts", conflicts)
 	return payload
+}
+
+// conflictLine is one entity or file the migration left as written.
+func conflictLine(c migrate.Conflict) string {
+	if c.ID == "" {
+		return fmt.Sprintf("not migrated %s: %s", c.Path, c.Reason)
+	}
+	return fmt.Sprintf("not migrated %s (%s): %s", c.ID, c.Path, c.Reason)
+}
+
+// migrationLine is one migrated entity in the text report:
+// `migrated note/a (notes/a.md): draft → status, status true → draft`.
+func migrationLine(e migrate.Entity) string {
+	parts := make([]string, 0, len(e.Changes))
+	for _, c := range e.Changes {
+		switch c.Op {
+		case migrate.OpRenameKey:
+			parts = append(parts, fmt.Sprintf("%v → %v", c.From, c.To))
+		case migrate.OpMapValue:
+			parts = append(parts, fmt.Sprintf("%s %v → %v", c.Field, c.From, c.To))
+		case migrate.OpDeleteKey:
+			parts = append(parts, "dropped "+c.Field)
+		case migrate.OpMoveEntries:
+			parts = append(parts, fmt.Sprintf("%s → %v", c.Field, c.To))
+		}
+	}
+	line := fmt.Sprintf("migrated %s (%s): %s", e.ID, e.Path, strings.Join(parts, ", "))
+	if e.Reemitted {
+		line += " — rewritten whole, comments not kept"
+	}
+	return line
 }

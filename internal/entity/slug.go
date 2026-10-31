@@ -8,6 +8,12 @@ package entity
 import (
 	"fmt"
 	"regexp"
+	"strings"
+	"unicode"
+
+	"golang.org/x/text/runes"
+	"golang.org/x/text/transform"
+	"golang.org/x/text/unicode/norm"
 
 	"github.com/endgame-build/khub/internal/errs"
 	"github.com/endgame-build/khub/internal/omap"
@@ -26,11 +32,27 @@ var slugStrip = regexp.MustCompile(`[^a-z0-9]+`)
 // `created` a dated id carries.
 var isoDay = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}`)
 
+// latinLetters spells the Latin letters that carry no combining mark, so no
+// Unicode decomposition reaches an ASCII base for them.
+var latinLetters = strings.NewReplacer(
+	"ß", "ss", "ẞ", "ss", "æ", "ae", "Æ", "ae", "œ", "oe", "Œ", "oe", "ø", "o", "Ø", "o",
+	"ł", "l", "Ł", "l", "đ", "d", "Đ", "d", "ð", "d", "Ð", "d", "þ", "th", "Þ", "th", "ı", "i",
+)
+
 // slugify lowercases, collapses non-alphanumeric runs to single hyphens, and
 // trims hyphens. Python str.lower(), NOT casefold — target matching folds case,
 // slug minting only lowers.
+//
+// Latin accents are spelled out first, so `Café` mints `cafe` whether it
+// arrives composed (NFC) or decomposed (NFD, as macOS file names do):
+// x/text decomposes and drops the combining marks, and latinLetters covers
+// the letters that do not decompose. Other scripts are left to slugStrip.
 func slugify(text string) string {
-	lowered := toLower(text)
+	plain, _, err := transform.String(transform.Chain(norm.NFD, runes.Remove(runes.In(unicode.Mn)), norm.NFC), text)
+	if err != nil {
+		plain = text // a transformer over a whole in-memory string does not fail
+	}
+	lowered := toLower(latinLetters.Replace(plain))
 	return trimHyphens(slugStrip.ReplaceAllString(lowered, "-"))
 }
 
@@ -98,6 +120,12 @@ func mintSlug(rtype *schema.ResolvedType, meta *omap.Map) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	return mintFrom(rtype, meta, base)
+}
+
+// mintFrom is the type's id scheme around base: its prefix (literal, or
+// decided by an attribute's value) and its date.
+func mintFrom(rtype *schema.ResolvedType, meta *omap.Map, base string) (string, error) {
 	stem := ""
 	if rtype.IDPrefix != nil {
 		prefix, resolved := rtype.IDPrefix.Resolve(meta)

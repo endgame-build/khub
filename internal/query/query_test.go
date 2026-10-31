@@ -40,7 +40,7 @@ func qws(t *testing.T) string {
 		{"active", true}, {"team", []any{"noor"}},
 	}, recent...)...)
 	seed(t, ws, "projects/no-owner/_index.md", append([]kv{
-		{"type", "project"}, {"client", "initech"}, {"draft", true},
+		{"type", "project"}, {"client", "initech"}, {"status", "draft"},
 	}, recent...)...)
 	// an orphan (no edges) and a stale (old, but edged) client for the flag filters
 	seed(t, ws, "clients/orphan-client.md", append([]kv{{"type", "client"}, {"name", "Orphan"}}, recent...)...)
@@ -190,7 +190,9 @@ func TestQueryTagMatchesMembership(t *testing.T) {
 	}
 }
 
-// A many-valued relation matches on membership; a bool matches case-insensitively.
+// A many-valued relation matches on membership; a bool matches
+// case-insensitively; an unwritten attribute matches its schema default
+// (`active` defaults true, so no-owner, which never wrote it, is active).
 func TestQueryMatchesListAndBoolFields(t *testing.T) {
 	ws := qws(t)
 	team := mustQuery(t, ws, Filters{Type: ptr("project"), Fields: fields("team", "noor")})
@@ -198,12 +200,12 @@ func TestQueryMatchesListAndBoolFields(t *testing.T) {
 		t.Fatalf("got %v", slugs(team))
 	}
 	active := mustQuery(t, ws, Filters{Type: ptr("project"), Fields: fields("active", "true")})
-	if !eq(slugs(active), []string{"has-owner"}) {
+	if !eq(slugs(active), []string{"has-owner", "no-owner"}) {
 		t.Fatalf("got %v", slugs(active))
 	}
 	// YAML True renders "True"; the compare lowercases both sides.
 	upper := mustQuery(t, ws, Filters{Type: ptr("project"), Fields: fields("active", "TRUE")})
-	if !eq(slugs(upper), []string{"has-owner"}) {
+	if !eq(slugs(upper), []string{"has-owner", "no-owner"}) {
 		t.Fatalf("got %v", slugs(upper))
 	}
 }
@@ -417,5 +419,29 @@ func TestHasAndMissingOverAnAttribute(t *testing.T) {
 	missing := sortedSlugs(mustQuery(t, ws, Filters{Type: ptr("adr"), Missing: ptr("status")}))
 	if !eq(missing, []string{"blank", "nullish"}) {
 		t.Fatalf("got %v", missing)
+	}
+}
+
+// A legacy `draft: true` with no lifecycle status reads as draft everywhere
+// query looks: `--draft`, and `--status draft` rather than the stable default.
+func TestQueryReadsTheEffectiveStatus(t *testing.T) {
+	ws := freshWS(t)
+	recent := []kv{{"created", date("2026-06-01")}}
+	seed(t, ws, "clients/legacy.md", append([]kv{{"type", "client"}, {"name", "Legacy"}, {"draft", true}}, recent...)...)
+	seed(t, ws, "clients/retired.md", append([]kv{
+		{"type", "client"}, {"name", "Retired"}, {"status", "rejected"}, {"draft", true}}, recent...)...)
+	seed(t, ws, "clients/plain.md", append([]kv{{"type", "client"}, {"name", "Plain"}}, recent...)...)
+	client := ptr("client")
+	for _, c := range []struct {
+		f    Filters
+		want []string
+	}{
+		{Filters{Type: client, Fields: fields("status", "draft")}, []string{"legacy", "retired"}},
+		{Filters{Type: client, Fields: fields("status", "stable")}, []string{"plain"}},
+		{Filters{Type: client, DraftOnly: true}, []string{"legacy", "retired"}},
+	} {
+		if got := sortedSlugs(mustQuery(t, ws, c.f)); !eq(got, c.want) {
+			t.Fatalf("%+v: got %v, want %v", c.f, got, c.want)
+		}
 	}
 }

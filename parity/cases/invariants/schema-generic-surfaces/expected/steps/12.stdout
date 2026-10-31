@@ -1,1 +1,1 @@
-[{"id": "widget/wg-flange", "type": "widget", "slug": "wg-flange", "predicate": "bolts_onto", "direction": "in", "derived": true, "depth": 1}]
+[{"id": "widget/wg-flange", "type": "widget", "slug": "wg-flange", "predicate": "bolts_onto", "direction": "in", "derived": true, "depth": 1, "trust": "unverified"}]

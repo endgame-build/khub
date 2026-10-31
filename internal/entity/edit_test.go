@@ -25,7 +25,6 @@ func deal(t *testing.T, ws string, over ...any) string {
 		"type", "opportunity",
 		"created", "2026-01-01",
 		"updated", "2026-01-01",
-		"draft", false,
 		"stage", "prospect",
 		"client", "initech",
 		"owner", "noor",
@@ -96,7 +95,7 @@ const commentedDeal = "---\n" +
 	"type: opportunity\n" +
 	"created: 2026-01-01\n" +
 	"updated: 2026-01-01\n" +
-	"draft: false\n" +
+	"status: stable\n" +
 	"stage: prospect  # current pipeline stage\n" +
 	"client: initech\n" +
 	"owner: noor\n" +
@@ -114,11 +113,12 @@ func TestMinimalDiffPreservesOrder(t *testing.T) {
 	_, err := Update(ws, "initech-deal", UpdateOpts{Fields: fields("stage", "won")})
 	requireNoError(t, err)
 	after := readFile(t, path)
-	if got := changedKeys(commentedDeal, after); !equalStrings(got, []string{"stage", "updated"}) {
-		t.Fatalf("changed keys = %v, want [stage updated]", got)
+	// The write also appends its `generated` stamp (`by` is its first line).
+	if got := changedKeys(commentedDeal, after); !equalStrings(got, []string{"by", "generated", "stage", "updated"}) {
+		t.Fatalf("changed keys = %v, want [by generated stage updated]", got)
 	}
 	if got := readMeta(t, path).Keys(); !equalStrings(got,
-		[]string{"type", "created", "updated", "draft", "stage", "client", "owner"}) {
+		[]string{"type", "created", "updated", "status", "stage", "client", "owner", "generated"}) {
 		t.Fatalf("key order moved: %v", got)
 	}
 }
@@ -167,36 +167,51 @@ func TestCreateThenEditIsMinimalDiff(t *testing.T) {
 	}
 }
 
-// TS-ENT-003-U04: a field edit never flips draft — no auto-promote.
+// TS-ENT-003-U04: a field edit never moves status — no auto-promote.
 func TestFieldEditDoesNotTouchDraft(t *testing.T) {
 	ws := newWS(t, "firm-ops")
 	editPrereqs(t, ws)
-	path := deal(t, ws, "draft", true)
+	path := deal(t, ws, "status", "draft")
 	res, err := Update(ws, "initech-deal", UpdateOpts{Fields: fields("stage", "won")})
 	requireNoError(t, err)
 	if !res.Draft {
 		t.Fatal("UpdateResult.Draft flipped")
 	}
-	if got := metaValue(t, path, "draft"); got != true {
-		t.Fatalf("draft = %#v, want true", got)
+	if got := metaValue(t, path, "status"); got != "draft" {
+		t.Fatalf("status = %#v, want draft", got)
 	}
 }
 
-// TS-ENT-003-U04: `edit <id> draft true|false` sets the flag by hand.
+// TS-ENT-003-U04: `edit <id> status draft|stable` sets the flag by hand.
 func TestEditTogglesDraft(t *testing.T) {
 	ws := newWS(t, "firm-ops")
 	editPrereqs(t, ws)
-	path := deal(t, ws, "draft", false)
+	path := deal(t, ws)
 
-	_, err := Update(ws, "initech-deal", UpdateOpts{Fields: fields("draft", "true")})
+	res, err := Update(ws, "initech-deal", UpdateOpts{Fields: fields("status", "draft")})
 	requireNoError(t, err)
-	if got := metaValue(t, path, "draft"); got != true {
-		t.Fatalf("draft = %#v after true", got)
+	if got := metaValue(t, path, "status"); got != "draft" || !res.Draft {
+		t.Fatalf("status = %#v (Draft %v) after draft", got, res.Draft)
 	}
-	_, err = Update(ws, "initech-deal", UpdateOpts{Fields: fields("draft", "false")})
+	res, err = Update(ws, "initech-deal", UpdateOpts{Fields: fields("status", "stable")})
 	requireNoError(t, err)
-	if got := metaValue(t, path, "draft"); got != false {
-		t.Fatalf("draft = %#v after false", got)
+	if got := metaValue(t, path, "status"); got != "stable" || res.Draft {
+		t.Fatalf("status = %#v (Draft %v) after stable", got, res.Draft)
+	}
+}
+
+// The retired `draft` field refuses, naming the call that replaced it, and
+// writes nothing.
+func TestEditDraftIsRetired(t *testing.T) {
+	ws := newWS(t, "firm-ops")
+	editPrereqs(t, ws)
+	path := deal(t, ws)
+	before := readFile(t, path)
+	_, err := Update(ws, "initech-deal", UpdateOpts{Fields: fields("draft", "true")})
+	e := requireCode(t, err, "draft_retired")
+	requireMessageContains(t, e, "khub edit <id> status draft|stable")
+	if readFile(t, path) != before {
+		t.Fatal("a refused draft edit wrote the file")
 	}
 }
 

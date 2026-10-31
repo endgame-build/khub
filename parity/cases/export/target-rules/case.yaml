@@ -1,0 +1,29 @@
+# export refuses, exit 2 and nothing written: a non-empty directory without
+# --force (`export_target_not_empty`); --force on a directory khub's export
+# did not write, here one holding a file where the bundle puts a directory
+# and another khub workspace whose root index.md declares okf_version
+# (`export_target_not_bundle`); a regular file
+# (`export_target_not_directory`); and a directory that holds the workspace
+# (`export_target_overlaps`). Then a real export, which writes .khub-export
+# listing its files. --force refuses that bundle once it holds a .git/ or a
+# file the marker does not list (`export_target_unsafe`), and replaces it
+# whole once it holds neither.
+steps:
+- argv: ["init", "firm-ops", "hub", "--no-wire"]
+- argv: ["init", "firm-ops", "other", "--no-wire"]
+- sh: |
+    printf -- '---\ntype: client\nname: Initech\ncreated: 2026-01-15\nupdated: 2026-01-15\n---\n' > hub/clients/initech.md
+    mkdir -p ne && printf -- 'f\n' > ne/clients
+    printf -- 'x\n' > afile
+- argv: ["-C", "hub", "export", "--okf", "ne", "--format", "json"]
+- argv: ["-C", "hub", "export", "--okf", "ne", "--force", "--format", "json"]
+- argv: ["-C", "hub", "export", "--okf", "other", "--force", "--format", "json"]
+- argv: ["-C", "hub", "export", "--okf", "afile", "--format", "json"]
+- argv: ["-C", "hub", "export", "--okf", ".", "--format", "json"]
+- argv: ["-C", "hub", "export", "--okf", "bundle", "--format", "json"]
+- sh: "printf -- 'stale\\n' > bundle/clients/initech.md && mkdir bundle/.git && printf -- 'ref\\n' > bundle/.git/HEAD"
+- argv: ["-C", "hub", "export", "--okf", "bundle", "--force", "--format", "json"]
+- sh: "rm -r bundle/.git && printf -- 'mine\\n' > bundle/clients/notes.md"
+- argv: ["-C", "hub", "export", "--okf", "bundle", "--force", "--format", "json"]
+- sh: "rm bundle/clients/notes.md"
+- argv: ["-C", "hub", "export", "--okf", "bundle", "--force", "--format", "json"]

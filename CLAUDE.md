@@ -119,10 +119,11 @@ comes back, with zero per-type code and no logic of its own. See
 - **`validate` vs `check` are distinct gates.** `validate` = per-entity
   well-formedness + referential integrity over *present* declared fields (missing
   required does NOT block capture). `check` = graph-wide over the active
-  (`draft: false`) subgraph: required-completeness, orphans, dangling edges,
+  (not `status: draft`) subgraph: required-completeness, orphans, dangling edges,
   strays, cycles. Don't collapse them.
-- **`draft` is a manual publish flag**, never derived from completeness. No verb
-  auto-promotes/demotes.
+- **`status: draft` is a manual publish flag**, never derived from completeness.
+  An absent status reads as `stable` and is never written; read rows keep a
+  derived `draft` flag. No verb auto-promotes/demotes.
 - **Capture is never blocked.** Referential integrity hard-fails on write; a
   missing required field just leaves the entity incomplete for `check` to report.
 - **Writes are workspace-serialized and atomic.** One stable
@@ -142,7 +143,9 @@ Each invariant has a sentinel fixture under `parity/cases/invariants/`.
 (round-trip at width 80, safe at width 4096) — and its 1.1-vs-1.2 scalar
 resolution split. This is a property of **khub's file format**, not a leftover of
 the Python implementation: entities must stay diff-stable for git and readable by
-anything else that touches them.
+anything else that touches them. It deviates where ruamel would corrupt a value:
+a plain scalar never breaks after a run of spaces, a simple key never wraps,
+and a value holding NEL, LS or PS is double-quoted rather than single-quoted.
 
 `parity/yamlgate` is the standing regression for it (`go run ./parity/yamlgate
 parity/corpus`), and `parity/tools/gen_*_cases.py` regenerate its corpora.

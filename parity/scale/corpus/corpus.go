@@ -156,7 +156,7 @@ type khub struct {
 }
 
 func newKhub(bin, root string, today time.Time) *khub {
-	env := append(os.Environ(), "KHUB_PARITY_NOW="+today.Format("2006-01-02"))
+	env := append(os.Environ(), "KHUB_PARITY_NOW="+today.Format("2006-01-02"), "KHUB_ACTOR=khub")
 	return &khub{bin: bin, root: root, env: env}
 }
 
@@ -461,9 +461,9 @@ func (w *world) makeRepos(k *khub, count int) ([]string, error) {
 		archived := i%10 == 9
 		d := w.age()
 		tags := w.sample(Tags, 2)
-		status := "active"
+		status := "stable"
 		if archived {
-			status = "archived"
+			status = "deprecated"
 		}
 		slug, err := k.add("repo",
 			field{"title", titleCase(name)},
@@ -640,7 +640,7 @@ func (w *world) makeAdrs(k *khub, count int, targets []string) (ids, chain []str
 			supersedes = w.pick(ids[chainLen:])
 		}
 		slug, err := k.add("adr",
-			field{"title", name}, field{"status", status},
+			field{"title", name}, field{"decision", status},
 			field{"affects", strings.Join(affects, ",")},
 			field{"supersedes", supersedes},
 			field{"tags", strings.Join(tags, ",")},

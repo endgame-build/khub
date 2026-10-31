@@ -1,0 +1,25 @@
+# export then import round-trips a firm-ops workspace without silent drops:
+# every concept lands in a fresh workspace at the same path and under the same
+# id (firm-ops mints no prefix, so each stem already follows the scheme and no
+# alias is added), its frontmatter keys in the same order with the same values
+# (OKF families, an unknown key, a comment), its body unchanged and export's
+# `# Related` section read back and stripped, with no edge written twice. The
+# changes are the ones import makes on purpose, each reported: `status: draft`
+# (the client was stable), a `generated` stamp where the concept had none, the
+# bundle's `verified` kept as `okf_verified` (never counted, so the client
+# reads unverified), and the dangling `partner` moved to `okf_unresolved`, so
+# `check` passes where the source fails.
+steps:
+- argv: ["init", "firm-ops", "src", "--no-wire"]
+- sh: |
+    printf -- '---\ntype: client\nname: Initech  # the client\ndescription: A systems integrator.\ncreated: 2026-01-15\nupdated: 2026-01-15\nstatus: stable\ngenerated:\n  by: khub\n  at: 2026-01-15T00:00:00Z\nverified:\n- {by: human:noor, at: 2026-01-16T00:00:00Z, rev: r1}\nsources:\n- resource: https://initech.example\n  id: s1\nstale_after: 2027-01-01T00:00:00Z\nx_crm_note: kept as written\npartner: ghost-partner\n---\nWe met Initech through a referral.[^s1]\n\n[^s1]: The CRM record.\n' > src/clients/initech.md
+    printf -- '---\ntype: person\nname: Noor\nrole: partner\ncreated: 2026-01-15\n---\n' > src/identity/team/noor.md
+    mkdir -p src/opportunities/initech-deal
+    printf -- '---\ntype: opportunity\nname: Initech deal\nstage: prospect\nclient: initech\nowner: noor\ncreated: 2026-01-15\nupdated: 2026-01-15\n---\nA first conversation.\n' > src/opportunities/initech-deal/_index.md
+- argv: ["-C", "src", "export", "--okf", "bundle", "--format", "json"]
+- argv: ["init", "firm-ops", "dst", "--no-wire"]
+- argv: ["-C", "dst", "import", "--okf", "bundle", "--format", "json"]
+- argv: ["-C", "dst", "get", "client/initech", "--format", "raw"]
+- argv: ["-C", "dst", "get", "person/noor", "--format", "raw"]
+- argv: ["-C", "dst", "get", "opportunity/initech-deal", "--format", "raw"]
+- argv: ["-C", "dst", "check", "--format", "json"]

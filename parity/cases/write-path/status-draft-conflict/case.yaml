@@ -1,0 +1,7 @@
+# `add --draft` with a `--status` that is not draft asks for two publish
+# states: refused (`status_draft_conflict`, exit 2), nothing written.
+# `--status draft --draft` agree and write a draft.
+steps:
+- argv: ["init", "firm-ops", ".", "--no-wire"]
+- argv: ["add", "client", "--name", "Acme", "--status", "stable", "--draft", "--format", "json"]
+- argv: ["add", "client", "--name", "Acme", "--status", "draft", "--draft", "--format", "json"]

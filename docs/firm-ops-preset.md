@@ -4,14 +4,14 @@
 
 `khub init firm-ops ./my-hub` seeds a workspace from it. For a hands-on first run, start with [`getting-started.md`](getting-started.md); to author or extend the types yourself, see [`schema.md`](schema.md).
 
-Preset version **0.3.0**. Nine entity types. Fourteen relation predicates: ten declared here, four inherited from the core base. Ids are bare slugs of `name` (opportunity, person, client) or `title` (the rest) — no prefix, no date, no ordinal — and every type requires the one it mints from; a repeated one is refused (`pass --id <slug>`).
+Preset version **0.3.0**. Nine entity types. Thirteen relation predicates: ten declared here, three inherited from the core base. Ids are bare slugs of `name` (opportunity, person, client) or `title` (the rest) — no prefix, no date, no ordinal — and every type requires the one it mints from; a repeated one is refused (`pass --id <slug>`).
 
 ## What every entity carries
 
 The base block is embedded in the binary and merged into every type at resolve time (`khub schema base` prints it), so every firm-ops entity carries it on top of its own fields:
 
-- **Base attributes** — `type`, `draft`, `author`, `created`, `updated`, `title`, `description`, `resource`, and `tags`.
-- **Four universal edges** — `related`, `sources`, `references`, `depends_on`, each `any → any` and many-valued.
+- **Base attributes** — `type`, `status` (`draft | stable | deprecated`, default `stable`), `author`, `created`, `updated`, `title`, `description`, `resource`, `tags`, `aliases`, and the OKF families `generated`, `verified`, `stale_after`, `sources` and `usage_window` (see [`schema.md`](schema.md)).
+- **Three universal edges** — `related`, `references`, `depends_on`, each `any → any` and many-valued.
 
 The tables below list only what firm-ops adds or tightens. A `required` note on `updated`, `created`, or `title` marks a type overriding a base default; an `optional` note relaxes one.
 
@@ -32,7 +32,6 @@ Fourteen predicates. Ten are firm-ops relations declared on specific types; the 
 | `related_opportunities` | partnership → opportunity (many) | no |
 | `related_projects` | partnership → project (many) | no |
 | `related` | any → any (many) | no |
-| `sources` | any → any (many) | no |
 | `references` | any → any (many) | no |
 | `depends_on` | any → any (many) | no |
 

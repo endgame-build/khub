@@ -1,0 +1,1 @@
+{"path": ".", "preset": "firm-ops", "version_from": "0.3.0", "version_to": "0.3.0", "config": [], "carried": [{"file": ".khub/storage.yaml", "type": "fragment", "key": "format"}], "dropped": [], "singletons_created": [], "schema_drift": [], "wire": null, "index": "updated", "dry_run": false, "removed_types": [], "migrated": [], "migration_conflicts": []}

@@ -1,1 +1,1 @@
-{"id": "requirement/req-draft-one", "type": "requirement", "slug": "req-draft-one", "path": "knowledge/requirements/req-draft-one.md", "draft": false}
+{"error": {"code": "draft_retired", "message": "The 'draft' field is retired; status carries the publish state. Run `khub edit <id> status draft|stable`, or pass --draft to add"}}

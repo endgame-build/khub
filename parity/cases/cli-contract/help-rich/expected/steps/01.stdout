@@ -26,6 +26,8 @@
 │ unlink     Remove a relation: khub unlink initech-pov partner northwind.     │
 │ remove     Remove an entity, guarded by inbound edges: khub remove           │
 │            old-fragment [--force].                                           │
+│ verify     Record a review: khub verify ad-2026-01-15-use-jwt --by           │
+│            human:ilya.                                                       │
 │ query      Filter entities: khub query --type opportunity --stage prospect   │
 │            --format json.                                                    │
 │ search     Full-text search: khub search modernization --type transcript     │
@@ -43,6 +45,9 @@
 │            stale [--days N].                                                 │
 │ reindex    Regenerate the OKF index.md from the graph: khub reindex          │
 │            [--dry-run].                                                      │
+│ export     Write the workspace as an OKF 0.2 bundle: khub export --okf DIR.  │
+│ import     Read an OKF bundle into the workspace as drafts: khub import      │
+│            --okf DIR.                                                        │
 │ viz        Render the typed graph to a self-contained Cytoscape HTML: khub   │
 │            viz [--out F] [--open] [--type T].                                │
 │ serve      Serve a read-only graph view on loopback: khub serve [--port      │

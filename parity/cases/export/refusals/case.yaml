@@ -1,0 +1,9 @@
+# export refuses, exit 2 and nothing written: without --okf (usage), a target
+# inside the workspace (it would read the bundle back), and a workspace with an
+# unparseable file (the bundle would silently miss it).
+steps:
+- argv: ["init", "firm-ops", "hub", "--no-wire"]
+- argv: ["-C", "hub", "export", "--format", "json"]
+- argv: ["-C", "hub", "export", "--okf", "hub/bundle", "--format", "json"]
+- sh: "printf -- '---\\ntype: client\\nname: [unclosed\\n---\\n' > hub/clients/bad.md"
+- argv: ["-C", "hub", "export", "--okf", "bundle", "--format", "json"]

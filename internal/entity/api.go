@@ -74,6 +74,7 @@ type EntityView struct {
 	Raw     string
 	Edges   []Edge // nil unless --edges was requested
 	Locator string
+	Trust   string // the review tier (trust.Tier), derived on read
 }
 
 // CreateOpts carries create's keyword arguments.
@@ -83,7 +84,8 @@ type CreateOpts struct {
 	Draft       bool
 	Body        string
 	Strict      bool
-	UseTemplate bool // false = --no-template
+	UseTemplate bool   // false = --no-template
+	Actor       string // --by; "" walks the Actor ladder
 }
 
 // UpdateOpts carries update's keyword arguments. Body is nil to leave the body
@@ -92,6 +94,7 @@ type UpdateOpts struct {
 	Fields *omap.Map
 	Body   *string
 	Strict bool
+	Actor  string // --by; "" walks the Actor ladder
 }
 
 // EntityPath is the file backing one entity — for a collection type, the

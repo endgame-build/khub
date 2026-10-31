@@ -55,6 +55,9 @@ func PyTypeName(v any) string {
 
 // Parse returns (meta, body) from document text; error on a malformed document.
 func Parse(text, fmt_ string) (*omap.Map, string, error) {
+	if err := checkSize(text); err != nil {
+		return nil, "", err
+	}
 	if fmt_ == "md" {
 		// python-frontmatter semantics (see ParseFrontmatter): no fence, or an
 		// unterminated one, yields empty metadata and the text as body — never
@@ -184,6 +187,9 @@ func FTSBody(meta *omap.Map, body string) string {
 // LoadCollection returns raw rows keyed by slug; error on ANY bad row (whole-file
 // malformed contract). Empty text → zero rows.
 func LoadCollection(text, fmt_ string) (*omap.Map, error) {
+	if err := checkSize(text); err != nil {
+		return nil, err
+	}
 	rows := omap.New()
 	if fmt_ == "jsonl" {
 		for n, line := range strings.Split(text, "\n") {

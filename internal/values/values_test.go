@@ -5,6 +5,9 @@ import (
 	"encoding/json"
 	"os"
 	"testing"
+
+	"github.com/endgame-build/khub/internal/canon"
+	"github.com/endgame-build/khub/internal/omap"
 )
 
 func TestPredicatesDifferential(t *testing.T) {
@@ -80,4 +83,83 @@ func bytesReader(b []byte) *os.File { // tiny shim: use a pipe-free reader
 	r, w, _ := os.Pipe()
 	go func() { _, _ = w.Write(b); _ = w.Close() }()
 	return r
+}
+
+func TestLoadedTimestampMustBeOnTheCalendar(t *testing.T) {
+	cases := []struct {
+		v    any
+		want bool
+	}{
+		{canon.Date{ISO: "2026-01-15"}, true},
+		{canon.Date{ISO: "2024-02-29"}, true},
+		{canon.Date{ISO: "2026-13-45"}, false},
+		{canon.Date{ISO: "2026-02-29"}, false},
+		{canon.DateTime{ISO: "2026-1-5T10:00:00"}, true},
+		{canon.DateTime{ISO: "2026-01-15 23:59:59.5 +05:30"}, true},
+		{canon.DateTime{ISO: "2026-13-45T00:00:00Z"}, false},
+		{canon.DateTime{ISO: "2026-02-30T10:00:00+05:30"}, false},
+		{canon.DateTime{ISO: "2026-01-15T24:00:00Z"}, false},
+	}
+	for _, c := range cases {
+		if got := IsDateish(c.v); got != c.want {
+			t.Errorf("IsDateish(%v) = %v, want %v", c.v, got, c.want)
+		}
+	}
+}
+
+// `status: draft` decides; a published lifecycle value outranks a legacy
+// `draft` flag; any other status (a retired domain value) leaves the flag to
+// decide.
+func TestIsDraftReadsStatusThenTheLegacyFlag(t *testing.T) {
+	meta := func(kv ...any) *omap.Map {
+		m := omap.New()
+		for i := 0; i+1 < len(kv); i += 2 {
+			m.Set(kv[i].(string), kv[i+1])
+		}
+		return m
+	}
+	for _, c := range []struct {
+		meta *omap.Map
+		want bool
+	}{
+		{meta("status", "draft"), true},
+		{meta("status", "stable"), false},
+		{meta("status", "Draft"), false},
+		{meta("draft", true), true},
+		{meta("draft", "yes"), true},
+		{meta("draft", false), false},
+		{meta("draft", "no"), false},
+		// A truthy legacy draft wins until upgrade migrates it.
+		{meta("status", "stable", "draft", true), true},
+		{meta("status", "deprecated", "draft", true), true},
+		{meta("status", "rejected", "draft", true), true},
+		{meta("status", "rejected", "draft", false), false},
+		{meta("status", "draft", "draft", false), true},
+		{omap.New(), false},
+	} {
+		if got := IsDraftOf(c.meta, false); got != c.want {
+			t.Errorf("IsDraftOf(%v) = %v, want %v", c.meta.Keys(), got, c.want)
+		}
+	}
+}
+
+// OKFInstant reads only OKF datetimes (a T and an explicit offset, either
+// letter in either case); IsDateish accepts what the OKF pattern accepts.
+func TestOKFInstant(t *testing.T) {
+	for s, want := range map[string]bool{
+		"2026-12-31T00:00:00Z":        true,
+		"2026-12-31t00:00:00z":        true,
+		"2026-12-31T00:00:00.5+02:00": true,
+		"2026-12-31T00:00:00":         false,
+		"2026-12-31 00:00:00Z":        false,
+		"2026-12-31":                  false,
+		"2026-02-30T00:00:00Z":        false,
+	} {
+		if _, ok := OKFInstant(s); ok != want {
+			t.Errorf("OKFInstant(%q) = %v, want %v", s, ok, want)
+		}
+		if want && !IsDateish(s) {
+			t.Errorf("IsDateish(%q) = false for an OKF datetime", s)
+		}
+	}
 }

@@ -186,6 +186,7 @@ test. It gives a workspace at a fixed root and khub answering from the fixtures.
 | `query`, `stale` | per row `id`, `title`, `draft`, `orphan`, `stale` |
 | `add`, `edit`, `remove` | `id`, `draft` |
 | `link`, `unlink` | `id`, `slug`, `predicate`, `target`, `changed` |
+| `verify` | `id`, `by`, `at`, `commit` |
 | `get` | `id`, `title` or `name` at the top or in `frontmatter`, `edges` |
 | `search` | per row `id`, `title`, the flags, and the stderr `note:` line |
 | `neighbors` | per row `id`, `predicate`, `direction` |
@@ -194,6 +195,14 @@ test. It gives a workspace at a fixed root and khub answering from the fixtures.
 | `status` | `total`, `draft`, `orphan`, `stale` |
 | `validate` | `count`, `errors[].{id, field, reason}`, `gaps` |
 | `schema show`, `schema diff`, `schema snapshot` | `name`, `fields`, `relations`, `pending`, `changes`, `types` |
+
+Rows of `query`, `get`, `search` and `neighbors` end with `trust`, and
+`status` carries `expired` and `trust` counts and the `okf_nonconformant`
+paths; the mod reads none of them, so they need no `MIN_KHUB` bump. `check`'s `superseded_verifications` never fails
+the gate and is listed in `INFORMATIONAL`. `expired` appears only under
+`check --stale` and `below_tier` only under `check --require-verified`; both
+fail the gate, so neither is in `INFORMATIONAL`. A `flag_shadowed` finding's
+`id` is `<type>/*`.
 
 `khub query --format ids` prints bare slugs, which two types may share. The mod
 reads `query --format json` for qualified ids.

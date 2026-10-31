@@ -1,0 +1,19 @@
+---
+type: fragment
+title: opportunities/initech-deal/_index.md
+---
+---
+type: opportunity
+name: Initech deal
+stage: prospect
+client: initech
+owner: noor
+created: 2026-01-15
+updated: 2026-01-15
+---
+A first conversation.
+
+# Related
+
+- client: [Initech](/clients/initech.md)
+- owner: [Noor](/identity/team/noor.md)
