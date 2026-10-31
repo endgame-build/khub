@@ -30,26 +30,30 @@ rec() {
   local name="$1" exit=0
   shift
   k "$@" >"$TMP/out" 2>"$TMP/err" || exit=$?
-  python3 - "$WS" "$name" "$exit" "$TMP/out" "$TMP/err" "$@" >>"$BODY" <<'PY'
-import json, os, re, sys
+  node - "$WS" "$name" "$exit" "$TMP/out" "$TMP/err" "$@" >>"$BODY" <<'JS'
+const fs = require("fs");
+const path = require("path");
+const [ws, name, code, out, err, ...args] = process.argv.slice(2);
 
-ws, name, code, out, err, *args = sys.argv[1:]
+// khub prints the workspace path in a few documents. It reads `<ws>` in a fixture,
+// however khub spelled it, so no temporary or home path is recorded.
+const escape = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+const roots = [...new Set([ws, fs.realpathSync(ws)])].sort((a, b) => b.length - a.length);
+const portable = (text) => {
+  for (const root of roots) {
+    text = text.replace(new RegExp("(?:\\.\\./)*/?" + escape(root.replace(/^\/+/, "")), "g"), "<ws>");
+  }
+  return text;
+};
+const strip = (file) => fs.readFileSync(file, "utf8").replace(/\n+$/, "");
 
-# khub prints the workspace path in a few documents. It reads `<ws>` in a fixture,
-# however khub spelled it, so no temporary or home path is recorded.
-def portable(text):
-    for root in sorted({ws, os.path.realpath(ws)}, key=len, reverse=True):
-        text = re.sub(r"(?:\.\./)*/?" + re.escape(root.lstrip("/")), "<ws>", text)
-    return text
-
-entry = {
-    "args": args,
-    "exit": int(code),
-    "stdout": portable(open(out).read().rstrip("\n")),
-    "stderr": portable(open(err).read().rstrip("\n")),
-}
-print(f"  {name}: {json.dumps(entry, ensure_ascii=False)},")
-PY
+// Python json.dumps spacing (", " and ": "), which the fixtures were first
+// recorded with; JSON.stringify would move every line.
+const j = (v) => JSON.stringify(v);
+const entry = `{"args": [${args.map(j).join(", ")}], "exit": ${Number(code)}, ` +
+  `"stdout": ${j(portable(strip(out)))}, "stderr": ${j(portable(strip(err)))}}`;
+process.stdout.write(`  ${name}: ${entry},\n`);
+JS
 }
 
 "$TMP/khub" init build-hub "$WS" --no-wire >/dev/null
@@ -91,13 +95,13 @@ rec link_adr_again link "$ADR" affects cmp-search --format json
 # A requirement, then a relation typed by hand to a slug that does not exist.
 k add requirement --title "Search answers within 300 ms" --kind non-functional >/dev/null
 rec add_refused add requirement --title "Other" --kind non-functional --realized_in cmp-serach --format json
-python3 - "$WS/knowledge/requirements/$REQ.md" <<'PY'
-import pathlib, sys
-
-path = pathlib.Path(sys.argv[1])
-head, rest = path.read_text().split("\n---", 1)
-path.write_text(head + "\nrealized_in:\n- cmp-serach\n---" + rest)
-PY
+node - "$WS/knowledge/requirements/$REQ.md" <<'JS'
+const fs = require("fs");
+const file = process.argv[2];
+const text = fs.readFileSync(file, "utf8");
+const at = text.indexOf("\n---");
+fs.writeFileSync(file, text.slice(0, at) + "\nrealized_in:\n- cmp-serach\n---" + text.slice(at + 4));
+JS
 rec validate_requirement_dangling validate "requirement/$REQ" --format json
 rec check_dangling check --format json
 rec status_dangling status --format json
