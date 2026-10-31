@@ -9,10 +9,6 @@ name: Nightly
 # is why no job may use continue-on-error: that reports success to `needs`,
 # and the failure would never be seen.
 on:
-  # TEMPORARY, for PR #143 only: workflow_dispatch needs the file on the
-  # default branch, so the PR runs the nightly on every push instead. Remove
-  # this trigger before merging.
-  pull_request:
   schedule:
     - cron: "17 9 * * *"
   workflow_dispatch:
