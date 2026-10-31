@@ -305,8 +305,14 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # Every shell script CI runs: the npm assembler and its smoke, the three
+      # root smokes, and the parity drivers (coverage floor, scale, compat).
+      # plugin/tools/*.sh are linted in the plugin job beside their tests.
       - name: shellcheck
-        run: shellcheck npm/build-packages.sh npm/smoke.sh
+        run: |
+          shellcheck npm/build-packages.sh npm/smoke.sh smoke.sh smoke-windows.sh \
+            parity/tools/coverage-floor.sh parity/tools/gen_cli_reference.sh \
+            parity/scale/smoke.sh parity/scale/benchcmp.sh parity/compat/smoke.sh
       - name: POSIX sh syntax
         run: |
           sh -n npm/build-packages.sh

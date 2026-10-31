@@ -57,6 +57,7 @@ for file in "$@"; do
       esac
       echo "$file: $verb${sub:+ $sub}: flag not in --help: $flag   (in: $line)"; fail=1
     done
+  # shellcheck disable=SC2016  # the backticks are the Markdown code spans being matched
   done < <(grep -o '`khub [^`]*`' "$file" | tr -d '`' | sort -u)
 done
 exit $fail
