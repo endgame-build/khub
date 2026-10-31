@@ -189,17 +189,14 @@ jobs:
           # -subset-of also asserts the binary offers no command the coverage
           # table does not know about (cobra ships `completion` by default).
           ./parity-run${{ matrix.exe }} -coverage parity/coverage.yaml -cases parity/cases -subset-of "$PWD/khub${{ matrix.exe }}"
-      # The fixtures prove the core; this proves the binary end to end — every
-      # command over both build presets, with exit codes asserted.
+      # The fixtures prove the core; this proves the binary end to end.
+      # smoke-windows.sh runs all of smoke.sh — every command over both build
+      # presets, exit codes asserted — then what Windows is likeliest to break
+      # and the other two should not: native paths (cygpath legs skip
+      # elsewhere), git-dated stale and backfill, the lock under concurrent
+      # writers, line endings, and serve's TTY refusal. On every OS, so those
+      # cases are held by the blocking legs and not only the experimental one.
       - name: CLI smoke
-        if: matrix.os != 'windows-latest'
-        run: bash smoke.sh
-      # The Windows smoke runs all of smoke.sh against khub.exe, then what
-      # Windows is likeliest to break: native C:\ paths, git-dated stale and
-      # backfill, the lock under concurrent writers, line endings, and
-      # serve's TTY refusal.
-      - name: CLI smoke (Windows)
-        if: matrix.os == 'windows-latest'
         run: bash smoke-windows.sh
       # Replaces the Typer doc generator, which read the Python app's
       # decorators. This regenerates from what the binary prints, so the

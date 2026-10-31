@@ -94,6 +94,14 @@ ok 0 "link depends_on"             $KHUB -C "$L" link cmp-public-api depends_on 
 ok 0 "unlink is idempotent"        $KHUB -C "$L" unlink cmp-public-api depends_on cmp-stripe
 ok 0 "relink"                      $KHUB -C "$L" link cmp-public-api depends_on cmp-stripe
 ok 0 "edit status"                 $KHUB -C "$L" edit adr/ad-2026-01-15-use-stripe status proposed
+# gofmt's loop, for the writer: the same edit twice leaves the bytes alone,
+# and a value that is already set is a no-op on disk (the clock is pinned,
+# so `updated` cannot move between the two).
+ADR=$L/knowledge/decisions/ad-2026-01-15-use-stripe.md
+ok 0 "edit status again (same value)" $KHUB -C "$L" edit adr/ad-2026-01-15-use-stripe status proposed
+cp "$ADR" "$L/adr.first"
+ok 0 "edit status a third time"      $KHUB -C "$L" edit adr/ad-2026-01-15-use-stripe status proposed
+ok 0 "edit is idempotent on disk"    cmp "$ADR" "$L/adr.first"
 ok 0 "get --edges"                 $KHUB -C "$L" get cmp-public-api --edges --format json
 ok 0 "query --type"                $KHUB -C "$L" query --type requirement --format json
 ok 0 "query --missing"             $KHUB -C "$L" query --missing realized_in --format json
@@ -123,6 +131,25 @@ ok 0 "viz"                         $KHUB -C "$L" viz --out "$L/viz.html"
 ok 0 "backfill --dry-run"          $KHUB -C "$L" backfill --dry-run
 ok 0 "wire"                        $KHUB -C "$L" wire
 ok 2 "remove refuses on inbound"   $KHUB -C "$L" remove cmp-public-api
+
+# ------------------------------------------------------------ unicode titles
+# The same visible title in its composed (NFC) and decomposed (NFD) forms.
+# Slugify strips what is not ASCII, so the two mint different slugs today
+# (caf vs cafe) and an id in the other form does not resolve — the known
+# gap (.claude/rules/testing.md, "Unicode filesystems"), pinned here so a
+# change to it is deliberate. What must hold on every filesystem, APFS's
+# normalisation-insensitive lookup included, is the invariant below: the
+# index agrees with the directory, one row per file, and check still passes.
+say "khub · unicode titles, NFC and NFD"
+NFC=$(printf 'Caf\303\251 menu'); NFD=$(printf 'Cafe\314\201 menu')
+ok 0 "add the NFC title"           $KHUB -C "$L" add requirement --title "$NFC" --kind functional
+ok 0 "add the NFD title"           $KHUB -C "$L" add requirement --title "$NFD" --kind functional
+same "two slugs, ASCII only" "$($KHUB -C "$L" query --type requirement --format ids | grep -c 'menu$')" "2"
+same "index rows match files on disk" \
+  "$($KHUB -C "$L" query --type requirement --format ids | wc -l | tr -d ' ')" \
+  "$(find "$L/knowledge/requirements" -name '*.md' | wc -l | tr -d ' ')"
+ok 2 "the other form does not resolve" $KHUB -C "$L" get "req-$(printf 'caf\303\251')-menu"
+ok 0 "check still passes"          $KHUB -C "$L" check
 ok 0 "remove --force"              $KHUB -C "$L" remove cmp-stripe --force
 ok 1 "check now dangles"           $KHUB -C "$L" check --format json
 
