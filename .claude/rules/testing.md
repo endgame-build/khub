@@ -79,7 +79,8 @@ a FAIL.
 - **Binary coverage.** `go build -cover` + parity run with `GOCOVERDIR`
   *outside* the workspace (else the manifest picks up counter files), merged
   via `go tool covdata`. Report only, no threshold. Signal: `internal/cli`
-  near-total from parity alone — a drop means per-type branching crept in.
+  about 84% from parity alone (the rest is OS-error and `viz --open`
+  paths that differ by machine) — a drop means per-type branching crept in.
 - **Scale.** Every fixture holds a dozen entities; the bugs that only appear
   at n (a walk that never terminates, an index that drops rows, a scan gone
   quadratic) live in `parity/scale/`: a Go generator drives `khub add` for

@@ -28,6 +28,12 @@ jobs:
     # required check until it has been green for a while.
     runs-on: ${{ matrix.os }}
     continue-on-error: ${{ matrix.os == 'windows-latest' }}
+    timeout-minutes: 20
+    # What .goreleaser.yml ships: one static binary. Left unset, the runners'
+    # C compilers make every gate below test a cgo, dynamically linked khub
+    # instead. The race detector is the one step that needs cgo (go-extras).
+    env:
+      CGO_ENABLED: "0"
     # bash on every OS: Git Bash on Windows, so one spelling of every step
     # serves all three. On ubuntu and macos this differs from the implicit
     # `bash -e {0}` only by pipefail, and only the YAML gate (already
@@ -243,6 +249,7 @@ jobs:
     permissions:
       contents: read
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: shellcheck
@@ -268,6 +275,7 @@ jobs:
     permissions:
       contents: read
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
