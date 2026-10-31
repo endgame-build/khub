@@ -161,6 +161,17 @@ tsc -p .                            # after Claude Code has laid .claude-plugin/
 bash tools/record-fixtures.sh       # rebuild tests/fixtures.ts from the built binary
 ```
 
+Two more run in the `plugin` job, from the repo root:
+
+```bash
+bash plugin/tools/budget.sh         # SKILL.md bytes, description chars, wire block bytes ≤ plugin/budget.json; --write re-records
+bash plugin/tools/skill-flags.sh ./khub <ws>... -- plugin/skills/*/SKILL.md   # every `khub …` a skill names is a call the binary accepts
+```
+
+`budget.json` is a ceiling, re-recorded deliberately in the commit that grows
+the text, like a parity fixture. The flag lint reads field flags from the live
+schema of the workspaces given, so it spells no type or field.
+
 `validate` and `test` need no credentials and no network. `tools/try.sh` builds
 khub and a scratch workspace, then prints the command that opens a session there
 with the plugin loaded.

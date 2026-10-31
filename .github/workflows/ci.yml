@@ -354,3 +354,31 @@ jobs:
           git diff --exit-code plugin/tests/fixtures.ts
       - name: Plugin tests
         run: claude plugin test plugin
+      # The skill text's standing cost, in exact bytes and chars against
+      # plugin/budget.json; parity pins the wire block by hash, this is the
+      # number beside the hash. Grow a budget with --write in the same commit.
+      - name: Static budgets
+        run: bash plugin/tools/budget.sh
+      # The skills are prose about the CLI. Every backticked `khub …` they
+      # name must be a call the built binary accepts, field flags read from
+      # the live schema of both presets. The wired block is khub's own prose
+      # about its own flags, so it is checked the same way.
+      - name: Skills name real flags
+        env:
+          KHUB_PARITY_NOW: "2026-01-15"
+        run: |
+          go build -o khub ./cmd/khub
+          ./khub init build-hub "$RUNNER_TEMP/bh" >/dev/null
+          ./khub init firm-ops "$RUNNER_TEMP/fo" >/dev/null
+          bash plugin/tools/skill-flags.sh ./khub "$RUNNER_TEMP/bh" "$RUNNER_TEMP/fo" -- \
+            plugin/skills/khub/SKILL.md plugin/skills/setup/SKILL.md "$RUNNER_TEMP/bh/CLAUDE.md"
+      # What Claude Code projects the plugin to cost per session: an estimate
+      # (about bytes/3), offline, report only.
+      - name: Projected token cost
+        run: |
+          {
+            echo "### Projected token cost"
+            echo '```'
+            claude --plugin-dir plugin plugin details khub
+            echo '```'
+          } | tee -a "$GITHUB_STEP_SUMMARY"
