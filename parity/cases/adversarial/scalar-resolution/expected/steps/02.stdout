@@ -1,0 +1,1 @@
+{"id": "fragment/yaml-scalars", "type": "fragment", "slug": "yaml-scalars", "path": "fragments/yaml-scalars.md", "frontmatter": {"type": "fragment", "created": "2026-01-15", "name": "scalars", "a": true, "b": false, "c": true, "d": 15, "e": 90, "f": "2026-01-15", "g": ".inf", "h": "-.inf", "i": ".nan", "count": 100000000000000000000000000000}, "body": "body"}

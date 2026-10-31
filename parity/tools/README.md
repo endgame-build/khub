@@ -14,7 +14,6 @@ environment is the easiest way to get it, e.g.
 | `gen_load_cases.py` | Regenerates the YAML 1.1-vs-1.2 scalar resolution corpus | needs `ruamel.yaml` |
 | `gen_json_cases.py` | Regenerates the JSON-dialect corpus | stdlib only |
 | `gen_mdparse_cases.py` | Regenerates the frontmatter-split corpus | stdlib only |
-| `seed_adversarial.py` | Plants hostile fixtures (exotic scalars, CRLF, comments) into a workspace for fuzz runs | takes a workspace path |
 | `gen_cli_reference.sh` | Regenerates `docs/cli-reference.md` from the built binary | `KHUB=./khub` |
 
 The scale fixture is not here: `parity/scale/` is Go (generator, timed smoke,
