@@ -21,10 +21,13 @@
 //
 // Write rows gate cpu_e and cpu_r only: write wall time is fsync-bound and
 // showed 0.7–8.8s outliers for a 30–100ms operation. A baseline recorded on
-// another machine (goos, cpu model or core count differ) keeps the exponents
-// blocking and downgrades both ratios to a note, because ratios depend on
-// the microarchitecture where exponents travel. Tolerances live in the
-// baseline, so a change to them is reviewed like any other number.
+// another machine (goos, cpu model or core count differ) keeps only the
+// exponent ceiling blocking and downgrades the per-command delta and both
+// ratios to notes: the first run on a GitHub runner against a container
+// baseline put every exponent a uniform 0.06–0.12 higher, the machine's
+// process floor diluting the small scale differently, so only the absolute
+// cliff detector travels. Tolerances live in the baseline, so a change to
+// them is reviewed like any other number.
 //
 //	go run ./parity/scale/gate -baseline parity/scale/baseline.json bench.json
 //	go run ./parity/scale/gate -baseline parity/scale/baseline.json -format md bench.json
@@ -339,7 +342,7 @@ func gate(base Baseline, b Bench, runner string, md bool) (string, string) {
 	notes := []string{}
 
 	if !sameMachine {
-		notes = append(notes, fmt.Sprintf("the baseline was recorded on %s/%s, %d cores (%s); this is %s, %d cores (%s): exponents gate, ratios are a note",
+		notes = append(notes, fmt.Sprintf("the baseline was recorded on %s/%s, %d cores (%s); this is %s, %d cores (%s): only the exponent ceiling gates, deltas and ratios are notes",
 			base.Recorded.Runner, base.Recorded.GOOS, base.Recorded.NProc, base.Recorded.CPUModel, b.GOOS, b.NProc, b.CPUModel))
 	}
 	if control, ok := marks(b, "reads", corpus.Control); ok {
@@ -397,7 +400,12 @@ func gate(base Baseline, b Bench, runner string, md bool) (string, string) {
 					why = append(why, fmt.Sprintf("cpu_e %.2f > %.2f", m.CPUE, tol.ExponentCeiling))
 				}
 				if m.CPUE > bm.CPUE+tol.ExponentDelta {
-					why = append(why, fmt.Sprintf("cpu_e %.2f > base %.2f + %.2f", m.CPUE, bm.CPUE, tol.ExponentDelta))
+					s := fmt.Sprintf("cpu_e %.2f > base %.2f + %.2f", m.CPUE, bm.CPUE, tol.ExponentDelta)
+					if sameMachine {
+						why = append(why, s)
+					} else {
+						notes = append(notes, c.Label+": "+s+" (not gated off the recording machine)")
+					}
 				}
 				if bm.CPUR > 0 && m.CPUR > bm.CPUR*tol.CPURatio {
 					s := fmt.Sprintf("cpu_r %.1f > base %.1f × %.2f", m.CPUR, bm.CPUR, tol.CPURatio)

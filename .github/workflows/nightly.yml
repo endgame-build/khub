@@ -98,8 +98,8 @@ jobs:
       # passes whatever it says. Promote by dropping the `|| true` once
       # unchanged main has shown zero FAIL and zero INVALID for three to
       # four weeks of nightlies. Until a baseline is recorded on this runner
-      # class (the rebaseline input below), the ratios are notes and only
-      # the exponents are judged.
+      # class (the rebaseline input below), the per-command deltas and the
+      # ratios are notes and only the absolute exponent ceiling is judged.
       - name: Performance gate (report only)
         id: gate
         run: |

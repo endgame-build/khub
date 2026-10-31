@@ -170,14 +170,17 @@ quadratic term still small at n=2000 is invisible at n≤2000.
 
 The baseline is a deliberate commit, like a parity re-record, and it must be
 **recorded on the runner class that gates**: ratios depend on the
-microarchitecture where exponents travel, so a baseline from another machine
-(the file records goos, core count and CPU model) keeps the exponents
-blocking and downgrades both ratios to notes. The nightly's `rebaseline`
+microarchitecture, and even the exponents shift with it: the first run on a
+GitHub runner against a container-recorded baseline put every exponent a
+uniform 0.06–0.12 higher, because the runner's process floor dilutes the small
+scale differently. So a baseline from another machine (the file records goos,
+core count and CPU model) keeps only the absolute exponent ceiling blocking
+and downgrades the per-command delta and both ratios to notes. The nightly's `rebaseline`
 dispatch input runs the bench three times on the runner and uploads a
 baseline recorded from their medians; `gate -record` prints the per-command
 deltas against the previous baseline for the commit message. The committed
 `baseline.json` was recorded in a development container, so on the GitHub
-runner the ratios are notes until that dispatch has run once.
+runner only the ceiling judges until that dispatch has run once.
 
 The gate runs nightly, report-only, until unchanged `main` has shown zero
 FAIL and zero INVALID for three to four weeks; then the `|| true` in
