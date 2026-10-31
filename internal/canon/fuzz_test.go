@@ -216,3 +216,41 @@ func FuzzEmitRoundTrip(f *testing.F) {
 		}
 	})
 }
+
+// FuzzFrontmatterJSONValid: whatever md frontmatter the scan accepts under
+// YAML 1.1, both JSON dialects must re-emit as valid JSON. The three other
+// targets fuzz JSON or text the loader already shaped; this one starts where
+// an entity starts, so a scalar that resolves to a value JSON has no token
+// for (`.inf` became `+.Inf`) fails here instead of in an agent's parser.
+// Seeded from the 1.1-vs-1.2 resolution corpus, one `a: <scalar>` per row.
+func FuzzFrontmatterJSONValid(f *testing.F) {
+	scanCorpus(f, "../../parity/corpus/load-cases.jsonl", func(line []byte) {
+		v, err := DecodeOrderedJSON(line)
+		if err != nil {
+			f.Fatalf("load-cases.jsonl: %v", err)
+		}
+		if row, ok := v.(*omap.Map); ok {
+			if s, has := row.Get("scalar"); has {
+				if str, ok := s.(string); ok {
+					f.Add("a: " + str)
+				}
+			}
+		}
+	})
+	f.Fuzz(func(t *testing.T, fm string) {
+		meta, _, err := Parse("---\n"+fm+"\n---\nbody\n", "md")
+		if err != nil || meta == nil {
+			t.Skip()
+		}
+		for _, d := range dialects {
+			name, enc := d.name, d.fn
+			out, err := enc(meta)
+			if err != nil {
+				t.Fatalf("%s: %v", name, err)
+			}
+			if !json.Valid([]byte(out)) {
+				t.Fatalf("%s produced invalid JSON for %q: %q", name, fm, out)
+			}
+		}
+	})
+}

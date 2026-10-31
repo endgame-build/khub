@@ -2,6 +2,16 @@
 
 Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); khub is pre-release.
 
+## [Unreleased]
+
+### Fixed
+
+- **Digitless floats in JSON.** A hand-written `.inf`, `-.inf` or `.nan` in
+  frontmatter printed `+.Inf`, `-I.nf` and `N.aN` under `--format json`, which
+  no JSON parser accepts. Every JSON dialect now carries the YAML spelling as a
+  string (`"g": ".inf"`); the YAML emitter writes the literal back and human
+  output prints `inf`/`nan`.
+
 ## [0.30.0] — 2026-10-28
 
 Storage can now follow a hub's existing nesting, relations can point to files
