@@ -63,3 +63,23 @@ func TestDigitlessFloats(t *testing.T) {
 		t.Error("YAMLFloatLiteral names a finite float")
 	}
 }
+
+// A `.nan` in a hand-written document must read as unchanged by a splice
+// that edits another key: NaN is not equal to itself, and before this
+// check every edit of such a document re-emitted the whole thing, turning
+// the author's `017` into `17` along the way.
+func TestSpliceKeepsNaNDocumentsInPlace(t *testing.T) {
+	src := "d: 017\ni: .nan\nstage: raw\n"
+	m, _, err := LoadDocMap(src, Mode12)
+	if err != nil {
+		t.Fatal(err)
+	}
+	m.Set("stage", "triaged")
+	out, err := SpliceMapping([]byte(src), m, Mode12)
+	if err != nil {
+		t.Fatalf("splice: %v", err)
+	}
+	if string(out) != "d: 017\ni: .nan\nstage: triaged\n" {
+		t.Fatalf("splice re-emitted the document:\n%s", out)
+	}
+}
