@@ -1,7 +1,8 @@
 # Testing khub — which gate holds what
 
-CLAUDE.md lists the commands. This file is what each gate covers, the record
-discipline, and where new tests are worth adding.
+CLAUDE.md lists the commands and `docs/ci.md` is the inventory of every CI
+job. This file is what each gate covers, the record discipline, and where new
+tests are worth adding; `.claude/rules/ci.md` is how to change the workflows.
 
 ## The harness is custom on purpose
 

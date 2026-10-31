@@ -27,8 +27,14 @@ go build -o parity-run ./parity/runner
 ./parity-run -bin "$PWD/khub" -cases parity/cases                # every fixture
 ./parity-run -coverage parity/coverage.yaml -cases parity/cases \
              -subset-of "$PWD/khub"                              # no uncovered command/flag/error code
-bash smoke.sh                                                    # end to end, both build presets
+bash smoke-windows.sh                                            # all of smoke.sh, then the Windows-likely cases (every OS)
+KHUB=$PWD/khub bash parity/scale/smoke.sh --scale 300            # a generated corpus against its own manifest, with the footprint pin
 ```
+
+CI runs more than this per PR (the race detector, a shuffled run, a coverage
+floor, the plugin budgets and flag lint, the cross-version self row) and a
+nightly on top (scale at 550, the bench and its gate, fuzzing, the coverage
+union, a snapshot release). `docs/ci.md` lists every job and what it proves.
 
 The distribution channel has its own gates, which CI runs as the
 `npm-package` job:

@@ -18,6 +18,8 @@ not stale references.
 
 Read before non-trivial work: `docs/design-memo.md` (rationale + invariants),
 `docs/cli.md` (full command surface + JSON contracts), `docs/collections-design.md`.
+Before touching a workflow or a gate: `docs/ci.md` (every job and what it
+proves) and `.claude/rules/ci.md` (the rules for changing them).
 
 ## Commands
 
