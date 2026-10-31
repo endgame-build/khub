@@ -187,14 +187,20 @@ func FuzzEmitRoundTrip(f *testing.F) {
 		if strings.ContainsAny(text, "\u2028\u2029\u0085") {
 			t.Skip()
 		}
+		v, err := LoadDoc(text)
+		if err != nil {
+			t.Skip()
+		}
+		// The same gap reached through the escape spelling: a double-quoted
+		// `\L`, `\P` or `\N` loads to the raw character, which the text
+		// check above cannot see. The nightly fuzz found it on its first run.
+		if holdsLineSeparator(v) {
+			t.Skip()
+		}
 		// Second known gap: goccy lexes `<<` inside a plain scalar (`0<<: null`) as a
 		// merge key on the way back in, though it read the same key fine the first
 		// time; ruamel treats it as a plain string. Crasher kept as the record.
 		if strings.Contains(text, "<<") {
-			t.Skip()
-		}
-		v, err := LoadDoc(text)
-		if err != nil {
 			t.Skip()
 		}
 		// Third known gap, and this one is ruamel's own, reproduced byte for
@@ -317,3 +323,27 @@ func hasFoldHazard(v any, col, width int) bool {
 // indicatorLine matches a folded continuation line holding only a block
 // indicator and the space the fold left after it.
 var indicatorLine = regexp.MustCompile(`(?m)^ +[-?:] $`)
+
+// holdsLineSeparator reports whether any string under v carries one of the
+// three characters goccy reads as a YAML 1.1 line break inside a quoted
+// scalar (U+2028, U+2029, U+0085).
+func holdsLineSeparator(v any) bool {
+	switch x := v.(type) {
+	case string:
+		return strings.ContainsAny(x, "\u2028\u2029\u0085")
+	case *omap.Map:
+		for _, k := range x.Keys() {
+			child, _ := x.Get(k)
+			if strings.ContainsAny(k, "\u2028\u2029\u0085") || holdsLineSeparator(child) {
+				return true
+			}
+		}
+	case []any:
+		for _, item := range x {
+			if holdsLineSeparator(item) {
+				return true
+			}
+		}
+	}
+	return false
+}
