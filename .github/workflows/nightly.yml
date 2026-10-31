@@ -11,7 +11,12 @@ name: Nightly
 on:
   schedule:
     - cron: "17 9 * * *"
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      rebaseline:
+        description: "Record parity/scale/baseline.json from three bench runs on this runner class (upload only; commit it deliberately)"
+        type: boolean
+        default: false
 
 permissions: {}
 
@@ -74,17 +79,58 @@ jobs:
           check-latest: true
           cache: true
       - run: go build -o khub ./cmd/khub
+      # Both clocks, eleven interleaved repeats, the write cycle on a copy of
+      # each corpus (which must come back byte-identical, or the bench itself
+      # fails). The JSON is what the gate reads; the table is for a human.
       - name: Growth bench (100, 550, 2000)
         run: |
-          go run ./parity/scale/bench -bin ./khub -cache "$RUNNER_TEMP/corpora" -regen \
-            -scales 100,550,2000 -repeat 5 -format json > bench.json
+          go run ./parity/scale/bench -bin ./khub -cache "$RUNNER_TEMP/corpora" -work "$RUNNER_TEMP/bench-work" \
+            -regen -scales 100,550,2000 -repeat 11 -format json > bench.json
           {
             echo "### Growth bench"
             echo '```'
-            go run ./parity/scale/bench -bin ./khub -cache "$RUNNER_TEMP/corpora" \
-              -scales 100,550,2000 -repeat 5
+            go run ./parity/scale/bench -bin ./khub -cache "$RUNNER_TEMP/corpora" -work "$RUNNER_TEMP/bench-work" \
+              -scales 100,550,2000 -repeat 3
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
+      # The rule (parity/scale/gate) against parity/scale/baseline.json.
+      # REPORT ONLY for now: the verdict goes to the summary and the step
+      # passes whatever it says. Promote by dropping the `|| true` once
+      # unchanged main has shown zero FAIL and zero INVALID for three to
+      # four weeks of nightlies. Until a baseline is recorded on this runner
+      # class (the rebaseline input below), the ratios are notes and only
+      # the exponents are judged.
+      - name: Performance gate (report only)
+        id: gate
+        run: |
+          {
+            echo "### Performance gate"
+            go run ./parity/scale/gate -baseline parity/scale/baseline.json -format md bench.json || true
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+      # A failing row gets a CPU profile of the matching in-process benchmark
+      # on the same 2000 corpus, so the cause is in the artifact, not a guess.
+      - name: Profiles for a failing gate
+        if: steps.gate.outputs.verdict == 'fail'
+        env:
+          PROF_WS: ${{ runner.temp }}/corpora/2000
+        run: |
+          mkdir -p profiles
+          PROF_QUERY=$(go run ./parity/scale/manifest "$PROF_WS/smoke-manifest.json" search.needle)
+          export PROF_QUERY
+          for pkg in integrity query search; do
+            go test -run '^$' -bench LargeCorpus -benchtime 10x -cpuprofile "profiles/$pkg.pprof" "./internal/$pkg"
+            go tool pprof -top -nodecount=30 "profiles/$pkg.pprof" > "profiles/$pkg.top.txt" 2>&1 || true
+          done
+      - name: Record a baseline on this runner class
+        if: inputs.rebaseline
+        run: |
+          for i in 1 2 3; do
+            go run ./parity/scale/bench -bin ./khub -cache "$RUNNER_TEMP/corpora" -work "$RUNNER_TEMP/bench-work" \
+              -profile gate -format json > "baseline-run-$i.json"
+          done
+          go run ./parity/scale/gate -record -runner "$ImageOS" -baseline parity/scale/baseline.json \
+            baseline-run-1.json baseline-run-2.json baseline-run-3.json > baseline.json
+          echo "baseline.json recorded on $ImageOS; download the artifact and commit it with the delta table from the log" >> "$GITHUB_STEP_SUMMARY"
       - name: In-process benchmarks, HEAD vs last release
         run: |
           {
@@ -99,8 +145,12 @@ jobs:
           name: bench
           path: |
             bench.json
+            baseline.json
+            baseline-run-*.json
+            profiles/
             ${{ runner.temp }}/benchcmp/base.txt
             ${{ runner.temp }}/benchcmp/head.txt
+          if-no-files-found: ignore
 
   # The canon fuzz targets past their seeds, 90s each, in a matrix so one
   # crasher does not hide the others. The growing corpus lives under
