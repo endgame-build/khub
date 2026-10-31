@@ -46,6 +46,15 @@ hasnt() {
     printf '  \033[31mFAIL\033[0m %-50s (unexpectedly in %s)\n' "$1" "$2"
   else printf '  ok   %-50s\n' "$1"; fi
 }
+# same <label> <got> <want> — two strings must match.
+same() {
+  CASES=$((CASES + 1))
+  if [ "$2" == "$3" ]; then printf '  ok   %-50s\n' "$1"
+  else
+    FAILED=$((FAILED + 1))
+    printf '  \033[31mFAIL\033[0m %-50s\n       got=  %s\n       want= %s\n' "$1" "$2" "$3"
+  fi
+}
 
 rm -rf "$WORK"; mkdir -p "$WORK"
 
@@ -172,5 +181,41 @@ S=$M/.khub/storage.yaml
 sed 's|path: knowledge/components|path: knowledge/architecture/components|' "$S" >"$S.tmp" && mv "$S.tmp" "$S"
 ok 1 "check reports the misplaced entity" $KHUB -C "$M" check --format json
 
+
+# ------------------------------------------- concurrent writers on one collection
+# Collections share the one workspace lock with every other mutation, and a
+# write publishes through a unique .khub-write-* sibling plus rename. Eight
+# writers, three rounds, distinct titles: every add must land, in each of
+# the three collection formats. With the lock disabled this loses two rows
+# in three while every add still exits 0 — the bug class is silent data
+# loss, which no byte-pinned fixture can see. It runs on Windows too through
+# smoke-windows.sh, the one place LockFileEx is exercised for collections.
+# No shipped preset holds a collection; preset-cells is the corpus preset.
+say "khub · concurrent writers on one collection"
+WRITERS=8; ROUNDS=3
+for spec in repo:repos.jsonl vendor:vendors.yaml account:accounts.json; do
+  type=${spec%%:*}; file=${spec#*:}
+  C=$WORK/cells-$type; mkdir -p "$C"
+  ok 0 "$type: init preset-cells"  $KHUB init preset-cells "$C" --no-wire --preset-source "$REPO/parity/corpus"
+  RACE=$(mktemp -d "${TMPDIR:-/tmp}/khub-coll-race.XXXXXX")
+  n=0
+  for _r in $(seq "$ROUNDS"); do
+    for _w in $(seq "$WRITERS"); do
+      n=$((n + 1))
+      ( $KHUB -C "$C" add "$type" --title "Row $n" --format json >"$RACE/$n.out" 2>&1
+        echo $? >"$RACE/$n.exit" ) &
+    done
+    wait
+  done
+  same "$type: $n concurrent adds all exited 0" "$(cat "$RACE"/*.exit | grep -c '^0$')" "$n"
+  ok 0 "$type: $file still parses"    $KHUB -C "$C" validate
+  same "$type: no row lost"            "$($KHUB -C "$C" query --type "$type" --format ids | wc -l | tr -d ' ')" "$n"
+  same "$type: no duplicate slug"      "$($KHUB -C "$C" query --type "$type" --format ids | sort | uniq -d | wc -l | tr -d ' ')" "0"
+  same "$type: every reported id is a row" \
+    "$(grep -ho '"id": "[^"]*"' "$RACE"/*.out | sed 's/.*"\([^"]*\)"$/\1/; s#^[^/]*/##' | sort | tr '\n' ' ')" \
+    "$($KHUB -C "$C" query --type "$type" --format ids | sort | tr '\n' ' ')"
+  same "$type: no publication temporaries left" "$(find "$C" -name '.khub-write-*' | wc -l | tr -d ' ')" "0"
+  rm -rf "$RACE"
+done
 printf '\n\033[1m%s cases, %s failed\033[0m\n' "$CASES" "$FAILED"
 exit $((FAILED > 0))
