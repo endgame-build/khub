@@ -6,7 +6,7 @@
     "preset": "build-hub",
     "khub_version": "0.30.0",
     "total": 300,
-    "tree_sha256": "2e1ebe741f2c13412ab9e50e1673fa39e7abde07a9f37d29f5cd1bc2d81578e0"
+    "tree_sha256": "04cc4a89df15f7242b8211e45f4c614dafb3d936d735b056fcea54093aedf56d"
   },
   "env": [
     "KHUB_PARITY_NOW=2026-01-15",
@@ -22,10 +22,10 @@
         "status"
       ],
       "exit": 0,
-      "stdout_bytes": 379,
+      "stdout_bytes": 382,
       "stderr_bytes": 0,
       "rows": 0,
-      "sha256": "ba74d3d4a32683a1e36ffb66b0b9d9e91570bc76aed2abdcf254792f1676ab12"
+      "sha256": "cdb939ed6f361e367ef4afb092ff520d8b6368b9d6f633692a879eb61c58de92"
     },
     {
       "label": "schema",
@@ -44,10 +44,10 @@
         "check"
       ],
       "exit": 0,
-      "stdout_bytes": 1604,
+      "stdout_bytes": 4069,
       "stderr_bytes": 0,
       "rows": 0,
-      "sha256": "67c9263ad03f8c5c7c6b3f61bdd906f782ba10e2c55ed4c05be76c8bfaed8dd1"
+      "sha256": "d2201af2b9c5484916e868a9f3c8a09e32da3f6ba9cc3fd80653215672a0e71f"
     },
     {
       "label": "check --strict",
@@ -56,10 +56,34 @@
         "--strict"
       ],
       "exit": 1,
-      "stdout_bytes": 1604,
+      "stdout_bytes": 4069,
       "stderr_bytes": 0,
       "rows": 0,
-      "sha256": "dac4434deb855fc521705fadf2720b72a981206d9be6b3e9c006cf37f2dc3dcb"
+      "sha256": "3ef683cda5bba92f7e6aa320f88202ed0764b3a1397bdd55d38eb4861a57e610"
+    },
+    {
+      "label": "check --stale",
+      "argv": [
+        "check",
+        "--stale"
+      ],
+      "exit": 1,
+      "stdout_bytes": 5694,
+      "stderr_bytes": 0,
+      "rows": 0,
+      "sha256": "2521262c548746e2cdf01a9535f46b774b49652c9be9d19e047fde6a397d1206"
+    },
+    {
+      "label": "check --require-verified",
+      "argv": [
+        "check",
+        "--require-verified"
+      ],
+      "exit": 1,
+      "stdout_bytes": 35908,
+      "stderr_bytes": 0,
+      "rows": 0,
+      "sha256": "f2b961fef41687cad4f88b0a00535ce7cee2108ccf53cf18419a18c4db683e20"
     },
     {
       "label": "validate (whole corpus)",
@@ -90,10 +114,10 @@
         "query"
       ],
       "exit": 0,
-      "stdout_bytes": 75807,
+      "stdout_bytes": 75434,
       "stderr_bytes": 0,
       "rows": 300,
-      "sha256": "a60f5aa0de8f7e060e2ec56741195213b74af3fb3d84b0c7b7d21a1d370ec338"
+      "sha256": "9f5d6ac3604ecc5b502d2f5935b40fb9e646ce3475688406d62b044f34f67135"
     },
     {
       "label": "query --type requirement",
@@ -103,10 +127,10 @@
         "requirement"
       ],
       "exit": 0,
-      "stdout_bytes": 39244,
+      "stdout_bytes": 39067,
       "stderr_bytes": 0,
       "rows": 142,
-      "sha256": "b43ccafe30746b1b75a4584951d2b7645c469ec1d8f232a653315d41a14fab2e"
+      "sha256": "0ff79a2fc04952f5702e89d79d5b0d47b99a644a9deb1b93e0eaa5beff8dd857"
     },
     {
       "label": "query --orphan",
@@ -115,10 +139,10 @@
         "--orphan"
       ],
       "exit": 0,
-      "stdout_bytes": 5249,
+      "stdout_bytes": 5212,
       "stderr_bytes": 0,
       "rows": 19,
-      "sha256": "26c19420900057df7429c57f164a89ea890fff37078c4edefb1112d5486d2860"
+      "sha256": "ad0b3e463117540398740803b203682c2b9c15156f770678c24824cf876d180a"
     },
     {
       "label": "query --tag",
@@ -128,10 +152,23 @@
         "platform"
       ],
       "exit": 0,
-      "stdout_bytes": 18633,
+      "stdout_bytes": 18532,
       "stderr_bytes": 0,
       "rows": 73,
-      "sha256": "70dc79ff2bdd1ba9d72af0b9db1245ebc0701ff2837b94b37b75340f14fb441f"
+      "sha256": "8f61805917e5f8bd310d6baea3fe381aac213deee8d2b90a69f8c66018feb87b"
+    },
+    {
+      "label": "query --trust human",
+      "argv": [
+        "query",
+        "--trust",
+        "human"
+      ],
+      "exit": 0,
+      "stdout_bytes": 13968,
+      "stderr_bytes": 0,
+      "rows": 56,
+      "sha256": "cd551d394a2df2f280e6319f942a2947365f74f0d330f72e02495f012964584e"
     },
     {
       "label": "search (one hit)",
@@ -140,10 +177,10 @@
         "xylotrope"
       ],
       "exit": 0,
-      "stdout_bytes": 519,
+      "stdout_bytes": 516,
       "stderr_bytes": 0,
       "rows": 1,
-      "sha256": "019819ce8ef470fc039a04b8e916af9a65ee66d50159fdbf77d152254f3534b1"
+      "sha256": "822bc87a6153304cab086af67b67f5817d4213601e798537a7792c8dfca698cb"
     },
     {
       "label": "search (many hits)",
@@ -152,10 +189,10 @@
         "platform"
       ],
       "exit": 0,
-      "stdout_bytes": 2373,
+      "stdout_bytes": 2376,
       "stderr_bytes": 0,
       "rows": 5,
-      "sha256": "543829f1aa66358ded772886cfb495e5820720601c59fe34bdbabc02dfa24155"
+      "sha256": "0edc64523d2345fb9055d08a6291b89d8dbbe9c7ff3160687a01c748390d41f1"
     },
     {
       "label": "search (no hit)",
@@ -176,10 +213,10 @@
         "req-refund-tax-filings-before-the-cutoff"
       ],
       "exit": 0,
-      "stdout_bytes": 794,
+      "stdout_bytes": 990,
       "stderr_bytes": 0,
       "rows": 0,
-      "sha256": "146da2c10026c73dfe2d6234a7d8db2e6de25a5909eeb8e050abe1ab22d31194"
+      "sha256": "1fbeb64c73c85cecc62353411ebaeb1252d127645073342066ec70ce7cd355a5"
     },
     {
       "label": "get --edges",
@@ -214,10 +251,10 @@
         "cmp-ledger-helpers"
       ],
       "exit": 0,
-      "stdout_bytes": 2680,
+      "stdout_bytes": 2665,
       "stderr_bytes": 0,
       "rows": 12,
-      "sha256": "550525a4e72e2d425a771dd8d29f0700e293a8b46c525ca41af1341f9fce86f1"
+      "sha256": "039df7e5fe290204b089b7517b438807b9f2ac0c5e2e741ad5965a205cbf183d"
     },
     {
       "label": "neighbors --depth 12",
@@ -228,10 +265,10 @@
         "12"
       ],
       "exit": 0,
-      "stdout_bytes": 118174,
+      "stdout_bytes": 117591,
       "stderr_bytes": 0,
       "rows": 533,
-      "sha256": "c7e51979f01a02f0c6dd90783eb89a246eb542e289367c03df446e0f46a23b55"
+      "sha256": "5118d9cc7d2a827597aee01897844e110d2397f31915a0b13ca250976c31fb6e"
     },
     {
       "label": "impact",
@@ -278,10 +315,10 @@
         "90"
       ],
       "exit": 0,
-      "stdout_bytes": 30769,
+      "stdout_bytes": 34654,
       "stderr_bytes": 0,
-      "rows": 142,
-      "sha256": "c3c17cc16409f0c8d7477132960716a5565e11161702332168d9624bbd0cd845"
+      "rows": 160,
+      "sha256": "396f0bb7746309d093402caa018fc482100e0f8bfd0497aaea1be4ba4a6b7816"
     },
     {
       "label": "reindex --dry-run",
@@ -294,6 +331,31 @@
       "stderr_bytes": 0,
       "rows": 0,
       "sha256": "ea7c47b8f667c0e54ffa9a115895097035a5db7cd3b2b1c3d63b4ede788348f4"
+    },
+    {
+      "label": "upgrade --dry-run",
+      "argv": [
+        "upgrade",
+        "--dry-run",
+        "--no-wire"
+      ],
+      "exit": 0,
+      "stdout_bytes": 292,
+      "stderr_bytes": 0,
+      "rows": 0,
+      "sha256": "7b06a8f7f033f2981195dbdb77e996587bc62265ed01460197112e3662207e7e"
+    },
+    {
+      "label": "upgrade",
+      "argv": [
+        "upgrade",
+        "--no-wire"
+      ],
+      "exit": 0,
+      "stdout_bytes": 293,
+      "stderr_bytes": 0,
+      "rows": 0,
+      "sha256": "1057315e2d67295f32277f683a1c223c453c7e1d1e7de07a37e5cb9257f98482"
     },
     {
       "label": "schema show \u003ctype\u003e",

@@ -87,11 +87,15 @@ now_ms() {
 # ok <expected-exit> <label> <command...> — asserts the exit code, reports the
 # wall clock. The timing is the point of this file as much as the exit code:
 # a command that answers correctly in nine seconds has still regressed.
+# With STDOUT_TO=<file> set for the call, stdout lands in that file for the
+# assertions after it, and a failure shows stderr alone.
 ok() {
   local want=$1 label=$2; shift 2
   CASES=$((CASES + 1))
   local start; start=$(now_ms)
-  local out; out=$("$@" 2>&1); local got=$?
+  local out
+  if [ -n "${STDOUT_TO:-}" ]; then out=$("$@" 2>&1 >"$STDOUT_TO"); else out=$("$@" 2>&1); fi
+  local got=$?
   local ms=$(( $(now_ms) - start ))
   if [ "$got" != "$want" ]; then
     FAILED=$((FAILED + 1))
@@ -144,7 +148,14 @@ M_ORPHAN_N=$(echo "$M_ORPHANS" | wc -w | tr -d ' ')
 M_DRAFTS=$(field drafts)
 M_UNLINKED=$(field missing_realized_in)
 M_STALE90=$(field stale.90)
-M_STALE365=$(field stale.365)
+M_LISTED90=$(field stale_listed.90)
+M_LISTED365=$(field stale_listed.365)
+M_TRUST=$(field okf.trust);          M_HUMAN=$(field okf.trust.human)
+M_SUPERSEDED=$(field okf.superseded); M_BELOW_HUMAN=$(field okf.below_human)
+M_EXPIRED=$(field okf.expired);      M_EXPIRED_ACTIVE=$(field okf.expired_active)
+M_IMPORTED=$(field okf.import.imported); M_IMPORT_SKIPPED=$(field okf.import.skipped)
+M_QUARANTINED=$(field okf.import.quarantined)
+M_PRESET=$(field generated.preset)
 M_TAG=ledger
 M_TAG_N=$(field tags.ledger)
 M_HUB=$(field closures.0.id);        M_HUB_REV=$(field closures.0.reverse);   M_HUB_FWD=$(field closures.0.forward)
@@ -178,6 +189,17 @@ ok 0 "check --format json"         "$KHUB" -C "$WORK" check --format json
 # carries them on purpose — unlinked requirements — so the strict gate must
 # fail and the ordinary one must not.
 ok 1 "check --strict fails on orphans" "$KHUB" -C "$WORK" check --strict
+# Expiry and review gate only when asked for. The corpus carries active
+# entities past their `stale_after` and active entities no human reviewed,
+# so each flag fails, and on exactly its own bucket.
+ok 1 "check --stale fails on expired" "$KHUB" -C "$WORK" check --stale
+same "check --stale: exactly the active expired" \
+  "$("$KHUB" -C "$WORK" check --stale --format json | json count expired)" "$M_EXPIRED_ACTIVE"
+ok 1 "check --require-verified --tier human fails" "$KHUB" -C "$WORK" check --require-verified --tier human
+same "below_tier: every active entity short of human" \
+  "$("$KHUB" -C "$WORK" check --require-verified --tier human --format json | json count below_tier)" "$M_BELOW_HUMAN"
+same "check: the reviews an edit superseded" \
+  "$("$KHUB" -C "$WORK" check --format json | json count superseded_verifications)" "$M_SUPERSEDED"
 same "check: nothing is thin" \
   "$("$KHUB" -C "$WORK" check --format json | json count thin)" "0"
 same "check: the orphan list is the manifest's" \
@@ -199,6 +221,8 @@ same "status: orphans"         "$(printf '%s' "$STATUS" | json field orphan)" "$
 same "status: stale (90-day default)" "$(printf '%s' "$STATUS" | json field stale)" "$M_STALE90"
 same "status: no strays, nothing malformed" \
   "$(printf '%s' "$STATUS" | json field stray)/$(printf '%s' "$STATUS" | json field malformed)" "0/0"
+same "status: trust per tier"  "$(printf '%s' "$STATUS" | json field trust)"   "$M_TRUST"
+same "status: expired, apart from stale" "$(printf '%s' "$STATUS" | json field expired)" "$M_EXPIRED"
 
 # The orphan set, not just its size: a checker that reports the right number
 # of the wrong entities is worse than one that reports none.
@@ -213,8 +237,12 @@ same "query --active is the complement" \
   "$("$KHUB" -C "$WORK" query --active --format ids | wc -l | tr -d ' ')" "$((M_TOTAL - M_DRAFTS))"
 same "query --missing realized_in" \
   "$("$KHUB" -C "$WORK" query --type requirement --missing realized_in --format ids | wc -l | tr -d ' ')" "$M_UNLINKED"
-same "stale --days 90"  "$("$KHUB" -C "$WORK" stale --days 90 --format json | json len)"  "$M_STALE90"
-same "stale --days 365" "$("$KHUB" -C "$WORK" stale --days 365 --format json | json len)" "$M_STALE365"
+same "query --trust human" \
+  "$("$KHUB" -C "$WORK" query --trust human --format ids | wc -l | tr -d ' ')" "$M_HUMAN"
+# `stale` lists the expired whatever their age, so it holds more than the
+# age-only count `status` reports.
+same "stale --days 90"  "$("$KHUB" -C "$WORK" stale --days 90 --format json | json len)"  "$M_LISTED90"
+same "stale --days 365" "$("$KHUB" -C "$WORK" stale --days 365 --format json | json len)" "$M_LISTED365"
 
 # --------------------------------------------------------------------- the walks
 say "walks"
@@ -286,6 +314,27 @@ if [ -f "$REPO/parity/scale/footprint.json" ]; then
 else
   printf '  ..   no parity/scale/footprint.json; nothing to compare\n'
 fi
+
+# ------------------------------------------------------------- the OKF bundle
+# export writes the corpus as an OKF bundle outside the workspace, and import
+# reads it into a fresh workspace of the same preset. Neither writes to the
+# corpus, so the mutation cases below still start from the manifest.
+say "OKF bundle round trip"
+BUNDLE=$TOOLS/bundle
+FRESH=$TOOLS/fresh
+STDOUT_TO=$TOOLS/export.json ok 0 "export --okf" "$KHUB" -C "$WORK" export --okf "$BUNDLE" --format json
+same "export: one concept per entity" "$(json count concepts < "$TOOLS/export.json")" "$M_TOTAL"
+ok 0 "init a fresh $M_PRESET workspace" "$KHUB" init "$M_PRESET" "$FRESH" --format json
+STDOUT_TO=$TOOLS/import.json ok 0 "import --okf into it" "$KHUB" -C "$FRESH" import --okf "$BUNDLE" --format json
+same "import: every concept but the singletons" "$(json count imported < "$TOOLS/import.json")" "$M_IMPORTED"
+same "import: the singletons init wrote are skipped" "$(json count skipped < "$TOOLS/import.json")" "$M_IMPORT_SKIPPED"
+same "import: every review quarantined" \
+  "$(json counttrue imported.verified_quarantined < "$TOOLS/import.json")" "$M_QUARANTINED"
+FRESH_STATUS=$("$KHUB" -C "$FRESH" status --format json)
+same "imported: the whole corpus is there" "$(printf '%s' "$FRESH_STATUS" | json field total)" "$M_TOTAL"
+same "imported: no review counts" \
+  "$(printf '%s' "$FRESH_STATUS" | json field trust)" "{\"human\":0,\"machine\":0,\"unverified\":$M_TOTAL}"
+same "imported: stale_after survives" "$(printf '%s' "$FRESH_STATUS" | json field expired)" "$M_EXPIRED"
 
 # ----------------------------------------------------------------- the byte format
 say "file format"

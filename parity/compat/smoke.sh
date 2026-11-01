@@ -15,11 +15,13 @@
 # upgrades again, reads the graph, and writes one edit.
 #
 # Assertions are exit codes, the upgrade JSON against the tree (backups named
-# == backups present; git status scoped to what the report names; nothing
-# modified under a storage root; the journal gone), idempotence (the second
+# == backups present; git status scoped to what the report names; the
+# entity files modified are exactly the ones `migrated` names; the journal
+# gone), idempotence (the second
 # upgrade reports nothing and moves nothing), and the read surface (entity and
 # edge counts the authoring set fixed). With --forward, NEW authors and OLD
-# reads; that half only reports.
+# reads. That half only reports. A miss prints WARN and never fails the run,
+# because a format change NEW makes is one OLD cannot read by design.
 #
 # Before the upgrade, NEW reads the raw OLD tree as it is — the common case,
 # a user who bumped the npm pin and never ran `upgrade`. When OLD knows
@@ -29,8 +31,8 @@
 # A tree whose entities still carry the retired `draft` key predates OKF 0.2
 # and migrates. There the raw `validate` fails with errors that each name
 # `khub upgrade`, the upgrade rewrites exactly the entity files its
-# `migrated` names, and the schema diffs against OLD's snapshot are reported,
-# not asserted, because the base block moved. The authoring vocabulary is
+# `migrated` names, and the schema diffs against OLD's snapshot print an
+# uncounted note, because the base block moved. The authoring vocabulary is
 # read from the scaffolded ontology (build-hub 0.7.0 records an adr's choice
 # in `decision`), never from `--version`.
 #
@@ -57,10 +59,16 @@ export GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_SYSTEM=/dev/null
 export TTY_COMPATIBLE=0 NO_COLOR=1
 
 OLDV=$("$OLD" --version) NEWV=$("$NEW" --version)
-FAILED=0 CASES=0
+FAILED=0 CASES=0 WARNED=0 REPORT_ONLY=0
 say() { printf '\n== %s\n' "$*"; }
 pass() { CASES=$((CASES + 1)); printf '  ok   %s\n' "$1"; }
-fail() { CASES=$((CASES + 1)); FAILED=$((FAILED + 1)); printf '  FAIL %s\n       %s\n' "$1" "${2:-}"; }
+# note <text> — prints, never counts: a value a check cannot hold this run.
+note() { printf '  ..   %s\n' "$1"; }
+fail() {
+  CASES=$((CASES + 1))
+  if [ "$REPORT_ONLY" = 1 ]; then WARNED=$((WARNED + 1)); printf '  WARN %s\n       %s\n' "$1" "${2:-}"
+  else FAILED=$((FAILED + 1)); printf '  FAIL %s\n       %s\n' "$1" "${2:-}"; fi
+}
 # ok <want-exit> <label> <cmd...>  — runs, captures stdout to $OUT, asserts exit
 OUT=
 ok() {
@@ -135,9 +143,14 @@ author() {
       ok 0 "link related (file -> row)" "$bin" link json-card related vendor/neon
       AUTHORED=7 ANCHOR=repo/khub ANCHOR_EDGES=1 LINKED=json-card STORAGE='^(notes|cards|sheets|dossiers|charter\.md|repos\.jsonl|vendors\.yaml|accounts\.json)' ;;
   esac
-  # A retired `draft` key anywhere in the entities: this tree migrates.
+  # An entity file under a storage root that carries the retired `draft` key
+  # means this tree migrates. Read from the files, not from khub, so the
+  # upgrade report is checked against it rather than trusted.
+  local legacy
+  legacy=$(find . -type f ! -path './.git/*' ! -path './.khub/*' | sed 's|^\./||' | grep -E "$STORAGE" \
+    | while read -r f; do if grep -qE '^[ -]*draft: |"draft": ' "$f"; then echo "$f"; fi; done)
   MIGRATES=0
-  grep -rqE '^[ -]*draft: |"draft": ' --exclude-dir=.khub --exclude-dir=.git . && MIGRATES=1
+  [ -n "$legacy" ] && MIGRATES=1
   return 0
 }
 
@@ -184,7 +197,7 @@ backward() {
   if [ "$old_snapshot" = 1 ]; then
     ok 0 "raw tree: schema diff against OLD's snapshot" "$NEW" schema diff --format json
     if [ "$MIGRATES" = 1 ]; then
-      pass "raw tree: base block moved, schema diff reports pending=$(printf '%s' "$OUT" | jq -r .pending)"
+      note "raw tree: base block moved, schema diff reports pending=$(printf '%s' "$OUT" | jq -r .pending)"
     else
       jq_eq "raw tree: nothing pending across versions" '.pending' 'false'
     fi
@@ -284,7 +297,7 @@ backward() {
     if [ "$MIGRATES" = 0 ] && [ "$(printf '%s' "$report" | jq -r '.version_from')" = "$(printf '%s' "$report" | jq -r '.version_to')" ]; then
       jq_eq "preset version unchanged: nothing pending" '.pending' 'false'
     else
-      pass "preset or base moved: schema diff reports pending=$(printf '%s' "$OUT" | jq -r .pending)"
+      note "preset or base moved: schema diff reports pending=$(printf '%s' "$OUT" | jq -r .pending)"
     fi
   fi
   ok 0 "schema snapshot" "$NEW" schema snapshot --format json
@@ -294,7 +307,7 @@ backward() {
   # ---- one write on an OLD-authored entity is a minimal diff
   git add -A && git commit -qm snapshot
   ok 0 "edit OLD entity" "$NEW" edit "$LINKED" --tags compat --format json
-  local files; files=$(git diff --name-only | wc -l)
+  local files; files=$(git diff --name-only | wc -l | tr -d " ")
   [ "$files" = 1 ] && pass "edit touched one file" || fail "edit touched $files files" "$(git diff --name-only)"
   ok 0 "validate after edit" "$NEW" validate --format json
   jq_eq "edit validates" '.errors' '[]'
@@ -308,6 +321,7 @@ forward() {
   author "$preset" "$dir" "$NEW" "$@"
   ok 0 "reindex" "$NEW" reindex
   git init -q . && git add -A && git commit -qm "authored by $NEWV"
+  REPORT_ONLY=1
   ok 0 "OLD validate" "$OLD" validate --format json
   jq_eq "OLD validate: no errors" '.errors' '[]'
   ok 0 "OLD check" "$OLD" check --format json
@@ -323,6 +337,7 @@ forward() {
     "$(printf '%s' "$OUT" | jq -c .config)" "$(printf '%s' "$OUT" | jq -c '[.wire[].action]')" "$(printf '%s' "$OUT" | jq -r .index)" \
     "$(printf '%s' "$OUT" | jq -c 'del(.path,.preset,.version_from,.version_to,.config,.singletons_created,.schema_drift,.wire,.index,.dry_run,.removed_types)')"
   [ -z "$(git status --porcelain)" ] && pass "OLD dry-run moved nothing" || fail "OLD dry-run moved files" "$(git status --porcelain)"
+  REPORT_ONLY=0
   cd "$WORK" || exit 1
 }
 
@@ -334,5 +349,6 @@ if [ "$FORWARD" = 1 ]; then
   forward firm-ops
 fi
 
+[ "$WARNED" = 0 ] || printf '\n%d forward checks warned (report-only)\n' "$WARNED"
 printf '\n%s -> %s: %d checks, %d failed\n' "$OLDV" "$NEWV" "$CASES" "$FAILED"
 [ "$FAILED" = 0 ]

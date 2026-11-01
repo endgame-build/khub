@@ -59,6 +59,12 @@ same() {
   fi
 }
 
+# tree_sum <dir> — a checksum line per file, lock files aside, so a file
+# rewritten in place shows as well as one added or removed.
+tree_sum() { find "$1" -type f ! -path '*/.khub/generated/*' -exec cksum {} + | sort; }
+# body_of — a Markdown entity on stdin, minus its frontmatter.
+body_of() { awk 'n >= 2 { print } /^---$/ { n++ }'; }
+
 rm -rf "$WORK"; mkdir -p "$WORK"
 
 # -------------------------------------------------------------------- build-hub
@@ -200,6 +206,82 @@ $KHUB -C "$U" upgrade --format json > "$U/again.json"
 has  "idempotent: nothing replaced" "$U/again.json" '"config": []'
 has  "idempotent: no singletons"   "$U/again.json" '"singletons_created": []'
 ok 2 "upgrade outside a workspace" $KHUB -C "$WORK" upgrade
+
+# ---------------------------------------------------------------------- OKF 0.2
+# One chain over the OKF surface parity pins piece by piece. A review raises
+# trust, a content edit supersedes it and a tag edit does not, stale_after
+# expires an entity, status publishes a draft, and export then import carry
+# the workspace into a fresh one as drafts with the reviews quarantined.
+say "khub · OKF 0.2: trust, freshness, lifecycle"
+O=$WORK/okf; mkdir -p "$O"; cd "$O" || exit 1
+ok 0 "init"                        $KHUB init build-hub .
+ok 0 "add component"               $KHUB -C "$O" add component --title "Public API" --kind service
+ok 0 "add requirement"             $KHUB -C "$O" add requirement --title "Pay by card" --kind functional
+ok 0 "link realized_in"            $KHUB -C "$O" link req-pay-by-card realized_in cmp-public-api
+$KHUB -C "$O" get cmp-public-api --format json > "$O/get.json"
+has  "a new entity is unverified"  "$O/get.json" '"trust": "unverified"'
+has  "add stamps generated"        "$O/get.json" '"generated": {"by": "khub"'
+ok 2 "verify needs --by"           $KHUB -C "$O" verify cmp-public-api
+ok 0 "verify --by human:"          $KHUB -C "$O" verify cmp-public-api --by human:ada
+$KHUB -C "$O" get cmp-public-api --format json > "$O/get.json"
+has  "a human review: trust human" "$O/get.json" '"trust": "human"'
+same "query --trust human"         "$($KHUB -C "$O" query --trust human --format ids)" "cmp-public-api"
+ok 1 "check --require-verified --tier human" $KHUB -C "$O" check --require-verified --tier human --format json
+ok 0 "edit content, --by"          $KHUB -C "$O" edit cmp-public-api --title "Public API v2" --by agent/smoke
+$KHUB -C "$O" get cmp-public-api --format json > "$O/get.json"
+has  "the edit is stamped --by"    "$O/get.json" '"by": "agent/smoke"'
+has  "a content edit supersedes the review" "$O/get.json" '"trust": "unverified"'
+$KHUB -C "$O" check --format json > "$O/check.json"
+has  "check lists the superseded review" "$O/check.json" '"superseded_verifications": [{"id": "component/cmp-public-api"'
+ok 0 "verify again"                $KHUB -C "$O" verify cmp-public-api --by human:ada
+ok 0 "edit tags"                   $KHUB -C "$O" edit cmp-public-api --tags edge
+$KHUB -C "$O" get cmp-public-api --format json > "$O/get.json"
+has  "a tag edit keeps the review" "$O/get.json" '"trust": "human"'
+$KHUB -C "$O" check --stale --format json > "$O/check.json"
+has  "nothing expired yet"         "$O/check.json" '"expired": []'
+ok 0 "edit stale_after (past)"     $KHUB -C "$O" edit req-pay-by-card stale_after 2025-01-01T00:00:00Z
+$KHUB -C "$O" stale --format json > "$O/stale.json"
+has  "stale says expired"          "$O/stale.json" '"reason": "expired"'
+ok 1 "check --stale fails on it"   $KHUB -C "$O" check --stale --format json
+$KHUB -C "$O" check --format json > "$O/check.json"
+hasnt "plain check has no expired bucket" "$O/check.json" '"expired"'
+$KHUB -C "$O" status --format json > "$O/status.json"
+has  "status counts it"            "$O/status.json" '"expired": 1'
+ok 0 "add --draft"                 $KHUB -C "$O" add requirement --title "Refunds" --kind functional --draft
+ok 2 "edit draft is retired"       $KHUB -C "$O" edit req-refunds draft false
+ok 0 "edit status stable publishes" $KHUB -C "$O" edit req-refunds status stable
+same "no draft left"               "$($KHUB -C "$O" query --draft --format ids | wc -l | tr -d ' ')" "0"
+
+say "khub · OKF 0.2: export and import"
+B=$WORK/okf-bundle
+ok 0 "export --okf"                $KHUB -C "$O" export --okf "$B"
+has  "the bundle root declares 0.2" "$B/index.md" "okf_version: '0.2'"
+ok 0 "the bundle lists what it wrote" test -f "$B/.khub-export"
+has  "a concept keeps its review"  "$B/knowledge/components/cmp-public-api.md" "by: human:ada"
+ok 2 "export refuses a non-empty target" $KHUB -C "$O" export --okf "$B"
+ok 0 "export --force replaces its own bundle" $KHUB -C "$O" export --okf "$B" --force
+ok 2 "export refuses a target inside the workspace" $KHUB -C "$O" export --okf "$O/knowledge" --force
+I=$WORK/okf-import; mkdir -p "$I"; cd "$I" || exit 1
+ok 0 "init the importing workspace" $KHUB init build-hub .
+TREE=$(tree_sum "$I")
+ok 0 "import --dry-run"            $KHUB -C "$I" import --okf "$B" --dry-run
+same "the dry run wrote nothing"   "$(tree_sum "$I")" "$TREE"
+ok 0 "import --okf"                $KHUB -C "$I" import --okf "$B"
+same "concepts land as drafts"     "$($KHUB -C "$I" query --draft --format ids | sort | tr '\n' ' ')" "cmp-public-api req-pay-by-card req-refunds "
+$KHUB -C "$I" get cmp-public-api --format json > "$I/get.json"
+has  "the bundle's review is quarantined" "$I/get.json" '"okf_verified"'
+has  "and never counted"           "$I/get.json" '"trust": "unverified"'
+$KHUB -C "$I" get req-pay-by-card --edges --format json > "$I/edges.json"
+has  "the relation round-trips"    "$I/edges.json" '"predicate": "realized_in"'
+has  "stale_after round-trips"     "$I/edges.json" '"stale_after": "2025-01-01T00:00:00Z"'
+has  "the title round-trips"       "$I/get.json" '"title": "Public API v2"'
+same "the body round-trips" \
+  "$($KHUB -C "$I" get cmp-public-api --format raw | body_of)" \
+  "$($KHUB -C "$O" get cmp-public-api --format raw | body_of)"
+ok 0 "the imported workspace validates" $KHUB -C "$I" validate
+TREE=$(tree_sum "$I")
+ok 0 "import again"                $KHUB -C "$I" import --okf "$B"
+same "a second import writes nothing" "$(tree_sum "$I")" "$TREE"
 
 # ------------------------------------------------------- the misplaced-entity gate
 say "khub · a file the scan cannot reach"

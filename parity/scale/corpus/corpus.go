@@ -17,10 +17,11 @@
 //
 // The manifest is computed from this package's OWN model of the graph — an
 // independent implementation of "orphan", "transitive closure", "one hop",
-// "stale" — so a disagreement between it and khub is a real finding rather
-// than khub agreeing with itself. It reads nothing back out of khub except
-// declared configuration (the type list, the per-type `orphan` exemption),
-// which is authored input, not a computed answer.
+// "stale", "expired", "trust tier" — so a disagreement between it and khub
+// is a real finding rather than khub agreeing with itself. It reads nothing
+// back out of khub except declared configuration (the type list, the
+// per-type `orphan` exemption, which types are singletons), which is
+// authored input, not a computed answer.
 //
 // Deterministic: the same seed, scale and today produce byte-identical files.
 package corpus
@@ -144,6 +145,13 @@ var reqKinds = []string{"functional", "non-functional", "constraint", "business-
 
 var adrStatuses = []string{"accepted", "accepted", "accepted", "proposed", "rejected"}
 
+// Reviewers sign the verify events: one human, and a machine actor in each
+// spelling the actor convention allows.
+var (
+	humanReviewer    = "human:qa"
+	machineReviewers = []string{"process:ci", "bench/1"}
+)
+
 // ---------------------------------------------------------------- khub driver
 
 // khub drives one binary against one workspace, out of process. Every call
@@ -219,6 +227,13 @@ type edge struct{ predicate, target string }
 
 type dates struct{ created, updated time.Time }
 
+// review is one `khub verify` the generator ran. A later content edit
+// supersedes it.
+type review struct {
+	by         string
+	superseded bool
+}
+
 // world is the corpus under construction plus this package's own model of its
 // graph. `edges` is the only thing the manifest is computed from; it is
 // deliberately never read back out of khub.
@@ -236,6 +251,10 @@ type world struct {
 	tags   map[string][]string
 	titles map[string]string
 	drafts map[string]bool
+	// staleAfter holds the instants written as `stale_after`, and reviews the
+	// verify calls made, per entity.
+	staleAfter map[string]time.Time
+	reviews    map[string][]review
 	// inbound is built once by index(); nil until then.
 	inbound map[string][]edge
 }
@@ -245,10 +264,20 @@ func newWorld(r *rand.Rand, today time.Time) *world {
 		r: r, today: today,
 		types: map[string]string{}, edges: map[string][]edge{}, dates: map[string]dates{},
 		tags: map[string][]string{}, titles: map[string]string{}, drafts: map[string]bool{},
+		staleAfter: map[string]time.Time{}, reviews: map[string][]review{},
 	}
 }
 
-func (w *world) born(slug, typ string, out []edge, d dates, tags []string, draft bool, title string) {
+// born records an entity `add` wrote. staleAfter is the value nextStaleAfter
+// gave that add, empty for none.
+func (w *world) born(slug, typ string, out []edge, d dates, tags []string, draft bool, title, staleAfter string) error {
+	if staleAfter != "" {
+		at, err := time.Parse(time.RFC3339, staleAfter)
+		if err != nil {
+			return err
+		}
+		w.staleAfter[slug] = at
+	}
 	w.order = append(w.order, slug)
 	w.types[slug] = typ
 	w.edges[slug] = out
@@ -258,6 +287,21 @@ func (w *world) born(slug, typ string, out []edge, d dates, tags []string, draft
 	if draft {
 		w.drafts[slug] = true
 	}
+	return nil
+}
+
+// nextStaleAfter is the `stale_after` the next entity is written with, by
+// its position: one in nine is half a year past today, so it has expired,
+// and one in nine half a year ahead, so it has not. Position, not the PRNG,
+// so the rest of the corpus draws what it drew before.
+func (w *world) nextStaleAfter() string {
+	switch len(w.order) % 9 {
+	case 4:
+		return w.today.AddDate(0, -6, 0).UTC().Format(time.RFC3339)
+	case 7:
+		return w.today.AddDate(0, 6, 0).UTC().Format(time.RFC3339)
+	}
+	return ""
 }
 
 // age is a plausible created/updated pair: a quarter recent, the rest
@@ -389,6 +433,42 @@ func (w *world) stale(days int) int {
 	return n
 }
 
+// expired is khub's `stale_after` rule: the clock is at or after it.
+func (w *world) expired(slug string) bool {
+	at, ok := w.staleAfter[slug]
+	return ok && !w.today.Before(at)
+}
+
+// listed counts what `khub stale --days` lists: past the age threshold, or
+// expired whatever the age.
+func (w *world) listed(days int) int {
+	n := 0
+	for _, slug := range w.order {
+		if daysBetween(w.dates[slug].updated, w.today) > days || w.expired(slug) {
+			n++
+		}
+	}
+	return n
+}
+
+// tier is the trust a read derives: a live human review wins, any other
+// live review is machine, and none is unverified. Every actor here follows
+// the convention and every `at` is an offset datetime, so liveness is only
+// supersession.
+func (w *world) tier(slug string) string {
+	t := "unverified"
+	for _, r := range w.reviews[slug] {
+		if r.superseded {
+			continue
+		}
+		if strings.HasPrefix(r.by, "human:") {
+			return "human"
+		}
+		t = "machine"
+	}
+	return t
+}
+
 func daysBetween(from, to time.Time) int {
 	return int(to.Sub(from).Hours() / 24)
 }
@@ -465,6 +545,7 @@ func (w *world) makeRepos(k *khub, count int) ([]string, error) {
 		if archived {
 			status = "deprecated"
 		}
+		after := w.nextStaleAfter()
 		slug, err := k.add("repo",
 			field{"title", titleCase(name)},
 			field{"repo", "acme/" + name},
@@ -472,12 +553,15 @@ func (w *world) makeRepos(k *khub, count int) ([]string, error) {
 			field{"tags", strings.Join(tags, ",")},
 			field{"created", iso(d.created)},
 			field{"updated", iso(d.updated)},
+			field{"stale_after", after},
 			field{"body", repoBody(name, archived)},
 		)
 		if err != nil {
 			return nil, err
 		}
-		w.born(slug, "repo", nil, d, tags, false, name)
+		if err := w.born(slug, "repo", nil, d, tags, false, name, after); err != nil {
+			return nil, err
+		}
 		out = append(out, slug)
 	}
 	return out, nil
@@ -511,16 +595,20 @@ func (w *world) makeComponents(k *khub, count int, repos []string) ([]string, er
 	for _, v := range vendors[:externals] {
 		d := w.age()
 		tags := w.sample(Tags, 2)
+		after := w.nextStaleAfter()
 		slug, err := k.add("component",
 			field{"title", v.name}, field{"kind", "external"}, field{"stack", v.stack},
 			field{"tags", strings.Join(tags, ",")},
 			field{"created", iso(d.created)}, field{"updated", iso(d.updated)},
+			field{"stale_after", after},
 			field{"body", componentBody(v.name, "external", v.stack, "")},
 		)
 		if err != nil {
 			return nil, err
 		}
-		w.born(slug, "component", nil, d, tags, false, v.name)
+		if err := w.born(slug, "component", nil, d, tags, false, v.name, after); err != nil {
+			return nil, err
+		}
 		out = append(out, slug)
 	}
 
@@ -541,12 +629,14 @@ func (w *world) makeComponents(k *khub, count int, repos []string) ([]string, er
 				deps = w.sample(out, min(len(out), w.r.IntN(t.fan+1)))
 			}
 			draft := w.r.Float64() < 0.06
+			after := w.nextStaleAfter()
 			slug, err := k.add("component",
 				field{"title", name}, field{"kind", t.kind}, field{"stack", stack}, field{"repo", repo},
 				field{"depends_on", strings.Join(deps, ",")},
 				field{"tags", strings.Join(tags, ",")},
 				field{"draft", boolFlag(draft)},
 				field{"created", iso(d.created)}, field{"updated", iso(d.updated)},
+				field{"stale_after", after},
 				field{"body", componentBody(name, t.kind, stack, team)},
 			)
 			if err != nil {
@@ -556,7 +646,9 @@ func (w *world) makeComponents(k *khub, count int, repos []string) ([]string, er
 			for _, dep := range deps {
 				edges = append(edges, edge{"depends_on", dep})
 			}
-			w.born(slug, "component", edges, d, tags, draft, name)
+			if err := w.born(slug, "component", edges, d, tags, draft, name, after); err != nil {
+				return nil, err
+			}
 			out = append(out, slug)
 		}
 	}
@@ -588,12 +680,14 @@ func (w *world) makeRequirements(k *khub, count int, components []string) (ids [
 		}
 		draft := w.r.Float64() < 0.08
 		body := w.requirementBody(name, kind, i == needleAt)
+		after := w.nextStaleAfter()
 		slug, err := k.add("requirement",
 			field{"title", name}, field{"kind", kind},
 			field{"realized_in", strings.Join(realized, ",")},
 			field{"tags", strings.Join(tags, ",")},
 			field{"draft", boolFlag(draft)},
 			field{"created", iso(d.created)}, field{"updated", iso(d.updated)},
+			field{"stale_after", after},
 			field{"body", body},
 		)
 		if err != nil {
@@ -603,7 +697,9 @@ func (w *world) makeRequirements(k *khub, count int, components []string) (ids [
 		for _, c := range realized {
 			edges = append(edges, edge{"realized_in", c})
 		}
-		w.born(slug, "requirement", edges, d, tags, draft, name)
+		if err := w.born(slug, "requirement", edges, d, tags, draft, name, after); err != nil {
+			return nil, nil, "", err
+		}
 		ids = append(ids, slug)
 		if bare {
 			unlinked[slug] = true
@@ -639,12 +735,14 @@ func (w *world) makeAdrs(k *khub, count int, targets []string) (ids, chain []str
 		case i >= chainLen && len(ids) > chainLen && w.r.Float64() < 0.25:
 			supersedes = w.pick(ids[chainLen:])
 		}
+		after := w.nextStaleAfter()
 		slug, err := k.add("adr",
 			field{"title", name}, field{"decision", status},
 			field{"affects", strings.Join(affects, ",")},
 			field{"supersedes", supersedes},
 			field{"tags", strings.Join(tags, ",")},
 			field{"created", iso(d.created)}, field{"updated", iso(d.updated)},
+			field{"stale_after", after},
 			field{"body", w.adrBody(name, status)},
 		)
 		if err != nil {
@@ -657,13 +755,61 @@ func (w *world) makeAdrs(k *khub, count int, targets []string) (ids, chain []str
 		if supersedes != "" {
 			edges = append(edges, edge{"supersedes", supersedes})
 		}
-		w.born(slug, "adr", edges, d, tags, false, name)
+		if err := w.born(slug, "adr", edges, d, tags, false, name, after); err != nil {
+			return nil, nil, err
+		}
 		ids = append(ids, slug)
 		if i < chainLen {
 			chain = append(chain, slug)
 		}
 	}
 	return ids, chain, nil
+}
+
+// reviewAll records reviews through `khub verify`, by position and past the
+// entities in skip: one in eight reviewed by a human, one in eight by a
+// machine, one in sixteen by a machine and then a human (the human wins). One
+// in three of the machine-only reviews is then superseded by a body edit.
+// Every verify runs after the last add, so nothing else moves a review's rev.
+func (w *world) reviewAll(k *khub, skip map[string]bool) error {
+	for i, slug := range w.order {
+		if skip[slug] {
+			continue
+		}
+		var by []string
+		switch {
+		case i%8 == 1:
+			by = []string{humanReviewer}
+		case i%8 == 3:
+			by = []string{machineReviewers[i/8%2]}
+		case i%16 == 6:
+			by = []string{machineReviewers[i/16%2], humanReviewer}
+		}
+		for _, actor := range by {
+			if _, err := k.run("verify", slug, "--by", actor, "--format", "json"); err != nil {
+				return err
+			}
+			w.reviews[slug] = append(w.reviews[slug], review{by: actor})
+		}
+		if i%24 == 11 { // within i%8 == 3, a machine-only review
+			if err := w.revise(k, slug); err != nil {
+				return err
+			}
+			for j := range w.reviews[slug] {
+				w.reviews[slug][j].superseded = true
+			}
+		}
+	}
+	return nil
+}
+
+// revise sets an entity's description, a content edit that supersedes every
+// review before it and leaves the template-shaped body alone. `updated` is
+// passed as it stands, so the stale counts do not move.
+func (w *world) revise(k *khub, slug string) error {
+	_, err := k.run("edit", slug, "description", "Revised after the review.",
+		"--updated", iso(w.dates[slug].updated), "--format", "json")
+	return err
 }
 
 // -------------------------------------------------------------------- bodies
@@ -755,14 +901,45 @@ type Manifest struct {
 	Orphans   []string       `json:"orphans"`
 	Drafts    int            `json:"drafts"`
 	// Requirements written without `realized_in` — the orphan gap by design.
-	MissingRealizedIn int            `json:"missing_realized_in"`
-	Stale             map[string]int `json:"stale"`
-	Tags              map[string]int `json:"tags"`
-	Closures          []Closure      `json:"closures"`
-	Degrees           []Degree       `json:"degrees"`
-	History           History        `json:"history"`
-	Search            Search         `json:"search"`
-	Probes            Probes         `json:"probes"`
+	MissingRealizedIn int `json:"missing_realized_in"`
+	// Stale is past the age threshold only, as `status` counts it;
+	// StaleListed adds the expired, as `khub stale --days` lists them.
+	Stale       map[string]int `json:"stale"`
+	StaleListed map[string]int `json:"stale_listed"`
+	Tags        map[string]int `json:"tags"`
+	Closures    []Closure      `json:"closures"`
+	Degrees     []Degree       `json:"degrees"`
+	History     History        `json:"history"`
+	Search      Search         `json:"search"`
+	OKF         OKF            `json:"okf"`
+	Probes      Probes         `json:"probes"`
+}
+
+// OKF is the review and expiry state, from the generator's record of the
+// verify calls it ran and the `stale_after` values it wrote.
+type OKF struct {
+	// Trust counts every entity, drafts included, per tier.
+	Trust map[string]int `json:"trust"`
+	// Superseded counts review events a later content edit superseded.
+	Superseded int `json:"superseded"`
+	// BelowHuman counts active entities under the human tier, what
+	// `check --require-verified --tier human` fails on.
+	BelowHuman int `json:"below_human"`
+	// Expired counts entities past their `stale_after`, drafts included;
+	// ExpiredActive counts the active ones, what `check --stale` fails on.
+	Expired       int    `json:"expired"`
+	ExpiredActive int    `json:"expired_active"`
+	Import        Import `json:"import"`
+}
+
+// Import is what `khub import --okf` of this corpus's export does in a fresh
+// workspace of the same preset. `init` already wrote every singleton there,
+// so those concepts are skipped; every other one lands, and each that carried
+// a review has it quarantined.
+type Import struct {
+	Imported    int `json:"imported"`
+	Skipped     int `json:"skipped"`
+	Quarantined int `json:"quarantined"`
 }
 
 type Generated struct {
@@ -824,9 +1001,39 @@ type Probes struct {
 	LinkTarget string `json:"link_target"`
 }
 
-func (w *world) manifest(scale int, seed uint64, version string, typeNames []string, exempt map[string]bool,
+func (w *world) manifest(scale int, seed uint64, version string, typeNames []string, exempt, singleton map[string]bool,
 	chain []string, unlinked map[string]bool, needleID string) *Manifest {
 	w.index()
+
+	okf := OKF{Trust: map[string]int{"unverified": 0, "machine": 0, "human": 0}}
+	for _, slug := range w.order {
+		tier := w.tier(slug)
+		okf.Trust[tier]++
+		active := !w.drafts[slug]
+		if active && tier != "human" {
+			okf.BelowHuman++
+		}
+		for _, r := range w.reviews[slug] {
+			if r.superseded {
+				okf.Superseded++
+			}
+		}
+		if w.expired(slug) {
+			okf.Expired++
+			if active {
+				okf.ExpiredActive++
+			}
+		}
+		switch {
+		case singleton[w.types[slug]]:
+			okf.Import.Skipped++
+		case len(w.reviews[slug]) > 0:
+			okf.Import.Imported++
+			okf.Import.Quarantined++
+		default:
+			okf.Import.Imported++
+		}
+	}
 
 	perType := map[string]int{}
 	for _, t := range typeNames {
@@ -919,6 +1126,9 @@ func (w *world) manifest(scale int, seed uint64, version string, typeNames []str
 		Stale: map[string]int{
 			"30": w.stale(30), "90": w.stale(90), "365": w.stale(365), "3650": w.stale(3650),
 		},
+		StaleListed: map[string]int{
+			"30": w.listed(30), "90": w.listed(90), "365": w.listed(365), "3650": w.listed(3650),
+		},
 		Tags:     tagCounts,
 		Closures: closures,
 		Degrees:  degrees,
@@ -927,6 +1137,7 @@ func (w *world) manifest(scale int, seed uint64, version string, typeNames []str
 			MiddleReaches: len(w.closure(middle, "supersedes", false)),
 		},
 		Search: Search{Needle: Needle, ID: needleID},
+		OKF:    okf,
 		Probes: Probes{
 			CycleFrom: cycleFrom, CycleTo: cycleTo,
 			HeldComponent: held,
@@ -1012,12 +1223,16 @@ func Build(o Options) (*Manifest, error) {
 	// sweep by schema, not by omission. Their scaffolded bodies stay — a
 	// template's own scaffold satisfies every rule it declares — and only their
 	// dates are backdated, through the same `edit` an author would use.
+	scaffolded := map[string]bool{}
 	for _, single := range []string{"prd", "arc42"} {
 		d := w.age()
 		if _, err := k.run("edit", single, "--created", iso(d.created), "--updated", iso(d.updated), "--format", "json"); err != nil {
 			return nil, err
 		}
-		w.born(single, single, nil, d, nil, false, "")
+		if err := w.born(single, single, nil, d, nil, false, "", ""); err != nil {
+			return nil, err
+		}
+		scaffolded[single] = true
 	}
 
 	say("  repos        %d", plan.Repo)
@@ -1046,6 +1261,10 @@ func Build(o Options) (*Manifest, error) {
 	if err != nil {
 		return nil, err
 	}
+	say("  reviews")
+	if err := w.reviewAll(k, scaffolded); err != nil {
+		return nil, err
+	}
 
 	if _, err := k.run("reindex"); err != nil {
 		return nil, err
@@ -1053,11 +1272,11 @@ func Build(o Options) (*Manifest, error) {
 
 	// Declared configuration, read from khub because it is authored input the
 	// generator must agree with, not an answer it is checking.
-	typeNames, exempt, err := schemaTypes(k)
+	typeNames, exempt, singleton, err := schemaTypes(k)
 	if err != nil {
 		return nil, err
 	}
-	m := w.manifest(o.Scale, o.Seed, version, typeNames, exempt, chain, unlinked, needleID)
+	m := w.manifest(o.Scale, o.Seed, version, typeNames, exempt, singleton, chain, unlinked, needleID)
 	payload, err := json.MarshalIndent(m, "", "  ")
 	if err != nil {
 		return nil, err
@@ -1077,33 +1296,34 @@ func Build(o Options) (*Manifest, error) {
 	return m, nil
 }
 
-// schemaTypes reads the declared type list and each type's `orphan` exemption.
-func schemaTypes(k *khub) ([]string, map[string]bool, error) {
+// schemaTypes reads the declared type list, each type's `orphan` exemption,
+// and which types are singletons.
+func schemaTypes(k *khub) ([]string, map[string]bool, map[string]bool, error) {
 	out, err := k.run("schema", "types", "--format", "json")
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	var names []string
 	if err := json.Unmarshal(out, &names); err != nil {
-		return nil, nil, fmt.Errorf("khub schema types: unreadable payload %q: %w", out, err)
+		return nil, nil, nil, fmt.Errorf("khub schema types: unreadable payload %q: %w", out, err)
 	}
-	exempt := map[string]bool{}
+	exempt, singleton := map[string]bool{}, map[string]bool{}
 	for _, name := range names {
 		out, err := k.run("schema", "show", name, "--format", "json")
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
 		var view struct {
-			Orphan bool `json:"orphan"`
+			Orphan bool   `json:"orphan"`
+			Layout string `json:"layout"`
 		}
 		if err := json.Unmarshal(out, &view); err != nil {
-			return nil, nil, fmt.Errorf("khub schema show %s: unreadable payload: %w", name, err)
+			return nil, nil, nil, fmt.Errorf("khub schema show %s: unreadable payload: %w", name, err)
 		}
-		if view.Orphan {
-			exempt[name] = true
-		}
+		exempt[name] = view.Orphan
+		singleton[name] = view.Layout == "singleton"
 	}
-	return names, exempt, nil
+	return names, exempt, singleton, nil
 }
 
 // Read loads a manifest written beside a workspace.

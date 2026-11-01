@@ -126,7 +126,7 @@ jobs:
               r=FAIL; status=1
             fi
             tail -1 "$log"
-            grep -E '^  FAIL|^       ' "$log" || true
+            grep -E '^  (FAIL|WARN)|^       ' "$log" || true
             counts=$(tail -1 "$log" | sed -E 's/.*: ([0-9]+) checks, ([0-9]+) failed/\1 | \2/')
             echo "| $v | $counts | $r |" >> "$GITHUB_STEP_SUMMARY"
           done < <(grep -v '^#' parity/compat/versions.txt)

@@ -70,11 +70,16 @@ a FAIL.
 
 ## What golden bytes cannot catch — add tests here
 
-- **Inputs outside the corpus.** `internal/canon/fuzz_test.go` holds four
-  targets seeded from `parity/corpus`: `FuzzJSONValid` (both encoders emit
-  what `json.Valid` accepts), `FuzzReconcatIdentity` (a no-change splice is
-  byte-identical), `FuzzSpliceIdempotent`, `FuzzEmitRoundTrip` (emit → load →
-  emit is stable in both profiles). `go test` runs the seeds; `go test
+- **Inputs outside the corpus.** `internal/canon/fuzz_test.go` holds five
+  targets seeded from `parity/corpus`: `FuzzJSONValid` and
+  `FuzzFrontmatterJSONValid` (both encoders emit what `json.Valid` accepts),
+  `FuzzReconcatIdentity` (a no-change splice is byte-identical),
+  `FuzzSpliceIdempotent`, `FuzzEmitRoundTrip` (emit → load → emit is stable
+  in both profiles). Two more cover OKF input. `FuzzMigrateIdempotent`
+  (`internal/migrate`) holds that a second migration changes nothing and no
+  key is lost. `FuzzImportRead` (`internal/okfimport`) holds that a concept
+  file an attacker wrote loads or refuses with a known code, and that no
+  link resolves outside the bundle. `go test` runs the seeds; `go test
   -fuzz=FuzzEmitRoundTrip ./internal/canon` explores. Every rustfmt/ruff
   idempotency bug on record was an input nobody's corpus held.
 - **Non-idempotency.** T1c proves verbatim round-trip; add gofmt's loop:
@@ -105,18 +110,22 @@ a FAIL.
   unit tests and both smokes, per package, with `cover.html`.
 - **Scale.** Every fixture holds a dozen entities; the bugs that only appear
   at n (a walk that never terminates, an index that drops rows, a scan gone
-  quadratic) live in `parity/scale/`: a Go generator drives `khub add` for
-  ~550 entities and writes an **independent** ground-truth manifest (orphans,
-  closures, degree, stale counts from its own graph model, never read back
-  from khub); `smoke.sh` there asserts khub against it, timed, with the
-  mutation cases (cycle, dangle, `check` vs `check --strict`); `bench` fits a
-  growth exponent per command across 100/550/2000. Not in CI per commit — run
-  it before a release or after touching `index`, `graph`, `integrity`,
-  `query`, `search`. Nothing in it spells an id or a title, so an id-scheme
-  change never touches it. Per PR, `go-extras` runs it at 300 in full mode —
-  the regenerate-and-diff pass is the one check that a map order leaks into
-  written bytes at n — and `parity/scale/footprint` pins the bytes every
-  read prints there (`footprint.json`, exact, re-recorded deliberately).
+  quadratic) live in `parity/scale/`: a Go generator drives `khub add` and
+  `khub verify` for ~550 entities and writes an **independent** ground-truth
+  manifest (orphans, closures, degree, stale and expired counts, trust tiers,
+  superseded reviews and the import counts, all from its own model, never
+  read back from khub); `smoke.sh` there asserts khub against it, timed,
+  with the mutation cases (cycle, dangle, `check` vs `check --strict`), the
+  OKF gates (`check --stale`, `check --require-verified`) and an export and
+  import round trip; `bench` fits a growth exponent per command across
+  100/550/2000, export and import included. Run the bench by hand before a
+  release or after touching `index`, `graph`, `integrity`, `query`,
+  `search`, `export`, `okfimport`. Nothing in it spells an id or a title,
+  so an id-scheme change never touches it. Per PR, `go-extras` runs it at
+  300 in full mode — the regenerate-and-diff pass is the one check that a
+  map order leaks into written bytes at n — and `parity/scale/footprint`
+  pins the bytes every read prints there (`footprint.json`, exact,
+  re-recorded deliberately).
   Nightly, 550 on two OSes, the bench with both clocks and the write cycle
   on a copy that must come back byte-identical, and `parity/scale/gate`
   against `baseline.json` (CPU-min exponents and ratios; wall time only as a
@@ -127,11 +136,12 @@ a FAIL.
   is the parallel entity parse in `index.each()`; the cross-process lock
   tests are invisible to it by design and stay what they are.
 - **Fuzzing past the seeds.** `go test` runs the seed corpus; the nightly
-  runs each canon target for 90s with the growing corpus cached between
+  runs each fuzz target for 90s with the growing corpus cached between
   nights. A crasher lands under `testdata/fuzz/<target>/` and, committed,
   fails plain `go test` until it is fixed or recorded as a known gap beside
-  the ones already in `fuzz_test.go` (two loader gaps in goccy, one
-  emitter gap that is ruamel's own, reproduced byte for byte).
+  the ones already in that package's `fuzz_test.go` (canon's are two
+  loader gaps in goccy and one emitter gap that is ruamel's own, reproduced
+  byte for byte).
 - **Other versions' workspaces.** `parity/compat/smoke.sh OLD NEW` has an
   older published binary author a workspace and this one read it raw,
   upgrade it, upgrade it again and edit it, with the assertions driven by

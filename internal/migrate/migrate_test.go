@@ -55,7 +55,7 @@ storage:
   lrow: { layout: collection, format: jsonl, path: lrows.jsonl }
 `
 
-func newWS(t *testing.T) string {
+func newWS(t testing.TB) string {
 	t.Helper()
 	src := t.TempDir()
 	write(t, src, "legacy/ontology.yaml", ontology)
@@ -67,7 +67,7 @@ func newWS(t *testing.T) string {
 	return root
 }
 
-func write(t *testing.T, root, rel, text string) {
+func write(t testing.TB, root, rel, text string) {
 	t.Helper()
 	p := filepath.Join(root, filepath.FromSlash(rel))
 	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
@@ -78,7 +78,7 @@ func write(t *testing.T, root, rel, text string) {
 	}
 }
 
-func read(t *testing.T, root, rel string) string {
+func read(t testing.TB, root, rel string) string {
 	t.Helper()
 	b, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(rel)))
 	if err != nil {

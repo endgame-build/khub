@@ -2,10 +2,10 @@
 //
 // An agent reads khub's JSON into its context, so the size of every answer is
 // a cost khub charges on each call, and nothing measured it. This runs the
-// read surface (parity/scale/corpus.Reads, minus the process floor and the
-// PathBound rows) against a generated corpus on a pipe, with the clock
-// pinned, and records per command the exit code, stdout and stderr bytes,
-// the row count of an array answer, and a hash of stdout. The bytes are
+// read surface (parity/scale/corpus.Reads, minus the process floor) against a
+// generated corpus on a pipe, from inside the corpus, with the clock pinned,
+// and records per command the exit code, stdout and stderr bytes, the row
+// count of an array answer, and a hash of stdout. The bytes are
 // deterministic — byte-identical across runs, workspace paths and a fresh
 // regeneration — so the record is an exact pin, like a parity fixture: a
 // change is re-recorded deliberately, with the delta table this prints in the
@@ -116,7 +116,7 @@ func main() {
 	env := append(os.Environ(), got.Env...)
 	subs := corpus.Handles(m)
 	for _, c := range corpus.Reads {
-		if c.Label == corpus.Floor || corpus.PathBound[c.Label] {
+		if c.Label == corpus.Floor {
 			continue
 		}
 		argv := corpus.Fill(c.Argv, subs)
@@ -263,7 +263,10 @@ func fingerprint(root string) string {
 }
 
 func run(bin, root string, argv []string, env []string) (int, []byte, []byte, error) {
+	// From inside the corpus, so an answer that spells the workspace path
+	// (upgrade's) reads the same wherever the corpus lives.
 	cmd := exec.Command(bin, append([]string{"-C", root}, argv...)...)
+	cmd.Dir = root
 	cmd.Env = env
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
