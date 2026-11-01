@@ -284,8 +284,11 @@ func TestCollectionWriteTakesTheSidecarLock(t *testing.T) {
 	if _, statErr := os.Stat(lock); statErr != nil {
 		t.Fatalf("no lock sidecar at %s: %v", lock, statErr)
 	}
-	if _, statErr := os.Stat(filepath.Join(ws, "repo.jsonl.tmp")); statErr == nil {
-		t.Fatal("the atomic swap left its temp sibling behind")
+	// Publication writes a unique .khub-write-* sibling and renames it over
+	// the file; a leftover means the swap did not complete.
+	left, _ := filepath.Glob(filepath.Join(ws, ".khub-write-*"))
+	if len(left) > 0 {
+		t.Fatalf("the atomic swap left its temp sibling behind: %v", left)
 	}
 }
 

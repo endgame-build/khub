@@ -11,6 +11,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -186,14 +187,33 @@ func FuzzEmitRoundTrip(f *testing.F) {
 		if strings.ContainsAny(text, "\u2028\u2029\u0085") {
 			t.Skip()
 		}
+		v, err := LoadDoc(text)
+		if err != nil {
+			t.Skip()
+		}
+		// The same gap reached through the escape spelling: a double-quoted
+		// `\L`, `\P` or `\N` loads to the raw character, which the text
+		// check above cannot see. The nightly fuzz found it on its first run.
+		if holdsLineSeparator(v) {
+			t.Skip()
+		}
 		// Second known gap: goccy lexes `<<` inside a plain scalar (`0<<: null`) as a
 		// merge key on the way back in, though it read the same key fine the first
 		// time; ruamel treats it as a plain string. Crasher kept as the record.
 		if strings.Contains(text, "<<") {
 			t.Skip()
 		}
-		v, err := LoadDoc(text)
-		if err != nil {
+		// Third known gap, and this one is ruamel's own, reproduced byte for
+		// byte (checked against ruamel 0.19.1): a plain scalar wider than the
+		// profile is folded at a space, and the fold loses what was there. A
+		// simple key (one line, at most 128 runes) folds into a continuation
+		// line that reads as a new key (`<79 zeros> \n  0:`), which neither
+		// emitter can load back; a run of two or more spaces folds to one on
+		// reload, so the second emit is shorter. The two seeds in testdata/fuzz
+		// are the record. Only a whole-document re-emit can reach either —
+		// splice keeps a hand-written scalar's bytes — and no schema declares
+		// such a key.
+		if hasFoldHazard(v, 0, 80) {
 			t.Skip()
 		}
 		for _, p := range profiles {
@@ -201,6 +221,14 @@ func FuzzEmitRoundTrip(f *testing.F) {
 			first, err := dump(v)
 			if err != nil {
 				t.Skip() // not every value is emittable (unsupported types)
+			}
+			// Fourth known gap, a loader one like the first two: when a fold
+			// leaves an indicator alone on its continuation line (`  - `),
+			// goccy keeps that line's trailing space while ruamel folds it
+			// away, so the value grows a space on each pass. ruamel's own
+			// round trip of the same bytes is stable. Seed kept as the record.
+			if indicatorLine.MatchString(first) {
+				t.Skip()
 			}
 			again, err := LoadDoc(first)
 			if err != nil {
@@ -215,4 +243,107 @@ func FuzzEmitRoundTrip(f *testing.F) {
 			}
 		}
 	})
+}
+
+// FuzzFrontmatterJSONValid: whatever md frontmatter the scan accepts under
+// YAML 1.1, both JSON dialects must re-emit as valid JSON. The three other
+// targets fuzz JSON or text the loader already shaped; this one starts where
+// an entity starts, so a scalar that resolves to a value JSON has no token
+// for (`.inf` became `+.Inf`) fails here instead of in an agent's parser.
+// Seeded from the 1.1-vs-1.2 resolution corpus, one `a: <scalar>` per row.
+func FuzzFrontmatterJSONValid(f *testing.F) {
+	scanCorpus(f, "../../parity/corpus/load-cases.jsonl", func(line []byte) {
+		v, err := DecodeOrderedJSON(line)
+		if err != nil {
+			f.Fatalf("load-cases.jsonl: %v", err)
+		}
+		if row, ok := v.(*omap.Map); ok {
+			if s, has := row.Get("scalar"); has {
+				if str, ok := s.(string); ok {
+					f.Add("a: " + str)
+				}
+			}
+		}
+	})
+	f.Fuzz(func(t *testing.T, fm string) {
+		meta, _, err := Parse("---\n"+fm+"\n---\nbody\n", "md")
+		if err != nil || meta == nil {
+			t.Skip()
+		}
+		for _, d := range dialects {
+			name, enc := d.name, d.fn
+			out, err := enc(meta)
+			if err != nil {
+				t.Fatalf("%s: %v", name, err)
+			}
+			if !json.Valid([]byte(out)) {
+				t.Fatalf("%s produced invalid JSON for %q: %q", name, fm, out)
+			}
+		}
+	})
+}
+
+// hasFoldHazard reports whether any scalar under v is wide enough to fold at
+// the profile width and would lose bytes doing so: a simple key (one line,
+// at most 128 runes; the explicit `? ` form above that folds safely) holding
+// a space, or any string holding a run of two or more spaces. col is the
+// column the scalar starts at, over-approximated for a value (its key may be
+// quoted), which errs on the side of skipping.
+func hasFoldHazard(v any, col, width int) bool {
+	oneLine := func(s string) bool { return !strings.ContainsAny(s, "\n\r\u0085  ") }
+	switch x := v.(type) {
+	case string:
+		return col+len([]rune(x)) > width && oneLine(x) && strings.Contains(x, "  ")
+	case *omap.Map:
+		for _, k := range x.Keys() {
+			n := len([]rune(k))
+			if col+n > width && oneLine(k) &&
+				(strings.Contains(k, "  ") || (n <= 128 && strings.Contains(k, " "))) {
+				return true
+			}
+			child, _ := x.Get(k)
+			next := col + 2
+			if _, ok := child.(string); ok {
+				next = col + n + 4 // `key: ` or `'key': `
+			}
+			if hasFoldHazard(child, next, width) {
+				return true
+			}
+		}
+	case []any:
+		for _, item := range x {
+			if hasFoldHazard(item, col+2, width) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// indicatorLine matches a folded continuation line holding only a block
+// indicator and the space the fold left after it.
+var indicatorLine = regexp.MustCompile(`(?m)^ +[-?:] $`)
+
+// holdsLineSeparator reports whether any string under v carries one of the
+// three characters goccy reads as a YAML 1.1 line break inside a quoted
+// scalar (U+2028, U+2029, U+0085).
+func holdsLineSeparator(v any) bool {
+	switch x := v.(type) {
+	case string:
+		return strings.ContainsAny(x, "\u2028\u2029\u0085")
+	case *omap.Map:
+		for _, k := range x.Keys() {
+			child, _ := x.Get(k)
+			if strings.ContainsAny(k, "\u2028\u2029\u0085") || holdsLineSeparator(child) {
+				return true
+			}
+		}
+	case []any:
+		for _, item := range x {
+			if holdsLineSeparator(item) {
+				return true
+			}
+		}
+	}
+	return false
 }

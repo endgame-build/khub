@@ -18,6 +18,8 @@ not stale references.
 
 Read before non-trivial work: `docs/design-memo.md` (rationale + invariants),
 `docs/cli.md` (full command surface + JSON contracts), `docs/collections-design.md`.
+Before touching a workflow or a gate: `docs/ci.md` (every job and what it
+proves) and `.claude/rules/ci.md` (the rules for changing them).
 
 ## Commands
 
@@ -39,8 +41,20 @@ go build -o parity-run ./parity/runner
 ./parity-run -bin "$PWD/khub" -coverage parity/coverage.yaml -subset-of "$PWD/khub"
 ./parity-run -bin "$PWD/khub" -record -only <family>/<case>      # re-record one case
 bash smoke.sh                                                    # end-to-end, both build presets
+bash smoke-windows.sh                                            # all of smoke.sh, then the Windows-likely cases (every OS)
 bash parity/tools/gen_cli_reference.sh                           # regenerate docs/cli-reference.md
+bash parity/tools/coverage-floor.sh "$PWD/khub-cover" /tmp/cov    # parity with a `go build -cover` binary; internal/cli ≥ parity/coverage-floor.txt
+KHUB=$PWD/khub bash parity/scale/smoke.sh --scale 300            # a generated corpus against its own manifest, plus the footprint pin
+bash parity/compat/smoke.sh <old-khub> "$PWD/khub"               # a workspace an older binary wrote survives this one
+go run ./parity/scale/bench -bin ./khub -profile gate -format json > bench.json && go run ./parity/scale/gate -baseline parity/scale/baseline.json bench.json
 ```
+
+CI runs the first block on three OSes per PR (`ci.yml`), the race detector,
+shuffle, scale smoke and coverage floor beside it (`go-extras`), the compat self
+row on every PR and the published-version matrix when the upgrade surface
+changes (`compat.yml`), and the rest nightly (`nightly.yml`: scale at 550,
+bench and gate, benchstat against the last release, fuzzing, full coverage,
+govulncheck, a goreleaser snapshot through the npm assembler).
 
 The Claude Code plugin lives under `plugin/` (the two agent skills and the mod),
 listed by the marketplace manifest `.claude-plugin/marketplace.json`. The binary
@@ -65,7 +79,10 @@ npm/smoke.sh                   # assemble, pack, install and run the npm package
 `parity/cases/**/expected/` holds raw bytes — stdout, stderr, exit code, and a
 tree manifest per step. **Those bytes are the contract.** A change that moves
 them is a behaviour change: re-record deliberately, review the diff, and say why
-in the commit. Never re-record to make a red suite green.
+in the commit. Never re-record to make a red suite green. The same discipline
+holds for every recorded number: `parity/scale/footprint.json` (bytes per read),
+`parity/scale/baseline.json` (growth and ratios), `plugin/budget.json` (the
+skills' size), `parity/coverage-floor.txt`.
 
 ## Architecture
 

@@ -1,0 +1,11 @@
+# Published khub versions the compat smoke authors with (OLD side).
+# One per line, exact npm versions of @endgame-build/khub. The floor is the
+# plugin's MIN_KHUB (plugin/hooks/workspace.ts): the plugin promises to read
+# those binaries, so the binary promises to read their workspaces. Every
+# minor from the floor to the newest published release is listed; a release
+# adds a line, a MIN_KHUB bump removes lines. Edit deliberately and say why
+# in the commit. Lines starting with # are ignored.
+0.27.0
+0.28.0
+0.29.0
+0.30.0

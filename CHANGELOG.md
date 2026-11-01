@@ -2,6 +2,25 @@
 
 Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); khub is pre-release.
 
+## [Unreleased]
+
+### Notes
+
+- **Reading a 0.30 workspace with an older binary.** A `.khub/ignore` makes
+  `check` on 0.29 and earlier report every ignored entity as `misplaced`;
+  path-template storage and `id_ordinal` are not understood there either. A
+  workspace that uses none of the 0.30 features reads cleanly on 0.27 and
+  later, and a 0.27 `upgrade` would rewrite the wire block back and re-lay
+  the skill files 0.28 removed — pin one khub version per team.
+
+### Fixed
+
+- **Digitless floats in JSON.** A hand-written `.inf`, `-.inf` or `.nan` in
+  frontmatter printed `+.Inf`, `-I.nf` and `N.aN` under `--format json`, which
+  no JSON parser accepts. Every JSON dialect now carries the YAML spelling as a
+  string (`"g": ".inf"`); the YAML emitter writes the literal back and human
+  output prints `inf`/`nan`.
+
 ## [0.30.0] — 2026-10-28
 
 Storage can now follow a hub's existing nesting, relations can point to files

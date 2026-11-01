@@ -34,7 +34,7 @@ wrong, not the call, and the report names what to fix.
 
 ### JSON record shape
 
-Every JSON record that identifies an entity carries the qualified `id` = `"type/slug"` plus separate `type` and `slug` keys, uniform across `query`, `search`, `add`, `get`, `edit`, `link`, `unlink`, `remove`, `neighbors`, `impact`, `history`, `stale`, and the `validate`/`check` error rows. Writes obey the same output gate as reads: JSON on a pipe or under `--format json`, prose only on a TTY. For example, `khub get initech-pov --format json` emits `{"id": "opportunity/initech-pov", "type": "opportunity", "slug": "initech-pov", …}`. (`check`'s `orphans` are qualified `type/slug`; `strays` are file paths, `path` or `path#slug`.)
+Every JSON record that identifies an entity carries the qualified `id` = `"type/slug"` plus separate `type` and `slug` keys, uniform across `query`, `search`, `add`, `get`, `edit`, `link`, `unlink`, `remove`, `neighbors`, `impact`, `history`, `stale`, and the `validate`/`check` error rows. Writes obey the same output gate as reads: JSON on a pipe or under `--format json`, prose only on a TTY. For example, `khub get initech-pov --format json` emits `{"id": "opportunity/initech-pov", "type": "opportunity", "slug": "initech-pov", …}`. (`check`'s `orphans` are qualified `type/slug`; `strays` are file paths, `path` or `path#slug`.) A frontmatter float with no digits (`.inf`, `-.inf`, `.nan`, which JSON cannot spell) is carried as a string of that YAML literal, so every `--format json` document stays parseable.
 
 ## Validation and open schema
 

@@ -3,37 +3,50 @@
 // smoke.sh prints a wall clock next to each case, which is enough to notice a
 // regression and not enough to answer the question underneath it: is a
 // command's cost linear in the corpus, or quadratic and merely still small.
-// So this runs the read surface over corpora of several sizes and reports,
-// per command, the median milliseconds at each size and the fitted exponent
-// between the smallest and the largest — n^1.0 is linear, n^2.0 is the wall.
+// So this runs the read surface and one write cycle over corpora of several
+// sizes and reports, per command, the cost at each size and the fitted
+// exponent between the smallest and the largest — n^1.0 is linear, n^2.0 is
+// the wall.
 //
 // Out of process, on purpose: khub is one static binary and the number a user
-// feels at the shell is the only one there is. `--version` is the process
-// floor and `schema show <type>` the control that reads the ontology and not
-// the corpus; everything else should sit above them by about what its scan
-// costs.
+// feels at the shell is the only one there is. Two clocks per sample: wall
+// time, which is what the user feels, and the child's CPU time (user + sys),
+// which ignores the scheduler contention of a shared runner and is the
+// statistic parity/scale/gate compares, as the min over the repeats — under
+// contention noise only ever adds time. Runs are interleaved across scales
+// and cases, so a slow stretch hits every row alike instead of one scale.
+//
+// `--version` is the process floor and `schema show <type>` the control that
+// reads the ontology and not the corpus; everything else should sit above
+// them by about what its scan costs.
 //
 //	go run ./parity/scale/bench -bin ./khub                       # 100/550/2000, corpora cached
 //	go run ./parity/scale/bench -bin ./khub -scales 100,550       # fewer
-//	go run ./parity/scale/bench -bin ./khub -format json
+//	go run ./parity/scale/bench -bin ./khub -profile gate         # 100 and 2000, 11 repeats, what the gate reads
+//	go run ./parity/scale/bench -bin ./khub -format json          # every sample, for the gate
 //	go run ./parity/scale/bench -bin ./khub -regen                # rebuild the corpora first
 //
-// Not a gate. Nothing here fails on a threshold: the milliseconds depend on
-// the machine, the filesystem and what else is running. The exponent is the
-// part that travels.
+// Not a gate by itself. Nothing here fails on a threshold: parity/scale/gate
+// holds the rule, against a recorded baseline. What does fail here is a
+// command that exits wrong on its warm-up, a no-op link that reports a
+// change, and a write cycle that leaves the corpus different from the cached
+// original — a write-path oracle at n that no fixture can be.
 package main
 
 import (
 	"bytes"
+	"crypto/sha256"
 	// A dev tool, not a khub output path — see parity/scale/corpus/corpus.go.
 	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
+	"io/fs"
 	"math"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strconv"
 	"strings"
@@ -42,60 +55,73 @@ import (
 	"github.com/endgame-build/khub/parity/scale/corpus"
 )
 
-// readCase is one timed command. `{…}` placeholders are filled from the
-// corpus's own manifest, so nothing here spells an id, a title or an id
-// scheme — the rule smoke.sh follows. `expect` is enforced once, on the
-// warm-up run: a command that is fast because it errored out is the one
-// measurement mistake this file cannot afford.
-type readCase struct {
-	label  string
-	argv   []string
-	expect int
+// Stat summarises one clock over the repeats. Samples are kept: the gate
+// computes, the bench measures.
+type Stat struct {
+	Median  float64   `json:"median"`
+	Min     float64   `json:"min"`
+	Max     float64   `json:"max"`
+	Samples []float64 `json:"samples"`
 }
 
-var reads = []readCase{
-	{"status", []string{"status"}, 0},
-	{"check", []string{"check"}, 0},
-	{"check --strict", []string{"check", "--strict"}, 1},
-	{"validate (whole corpus)", []string{"validate"}, 0},
-	{"validate <one entity>", []string{"validate", "requirement/{needle_id}"}, 0},
-	{"query --orphan", []string{"query", "--orphan"}, 0},
-	{"query --tag", []string{"query", "--tag", "{tag}"}, 0},
-	{"search (one hit)", []string{"search", "{needle}"}, 0},
-	{"search (no hit)", []string{"search", "quxzzytl"}, 0},
-	{"get", []string{"get", "{needle_id}"}, 0},
-	{"get --edges", []string{"get", "{held}", "--edges"}, 0},
-	{"neighbors", []string{"neighbors", "{neighbors_id}"}, 0},
-	{"neighbors --depth 12", []string{"neighbors", "{neighbors_id}", "--depth", "12"}, 0},
-	{"impact", []string{"impact", "{deepest_id}"}, 0},
-	{"impact --reverse", []string{"impact", "{hub_id}", "--reverse"}, 0},
-	{"history", []string{"history", "{history_id}"}, 0},
-	{"stale --days 90", []string{"stale", "--days", "90"}, 0},
-	{"reindex --dry-run", []string{"reindex", "--dry-run"}, 0},
-	// Reads the ontology and nothing else — the one command whose cost should
-	// not move with the corpus at all, and so the control for everything above.
-	{"schema show <type>", []string{"schema", "show", "requirement"}, 0},
-	// No workspace at all: what a process costs before khub does anything.
-	{"--version (process floor)", []string{"--version"}, 0},
+// Row is one case at one scale, both clocks, milliseconds.
+type Row struct {
+	Wall Stat `json:"wall"`
+	CPU  Stat `json:"cpu"`
 }
 
-type stats struct {
-	Median float64 `json:"median"`
-	Min    float64 `json:"min"`
-	Max    float64 `json:"max"`
+// Corpus is the fingerprint of one corpus the run measured.
+type Corpus struct {
+	corpus.Generated
+	Total int `json:"total"`
 }
+
+// Report is the JSON document. The header says what machine measured, so a
+// baseline recorded elsewhere can be told apart from one recorded here.
+type Report struct {
+	Khub       string                      `json:"khub"`
+	Commit     string                      `json:"commit"`
+	Go         string                      `json:"go"`
+	GOOS       string                      `json:"goos"`
+	GOARCH     string                      `json:"goarch"`
+	NProc      int                         `json:"nproc"`
+	GOMAXPROCS int                         `json:"gomaxprocs"`
+	CPUModel   string                      `json:"cpu_model"`
+	LoadBefore []float64                   `json:"load_before"`
+	LoadAfter  []float64                   `json:"load_after"`
+	Scales     []int                       `json:"scales"`
+	Entities   map[string]int              `json:"entities"`
+	Repeat     int                         `json:"repeat"`
+	Corpus     map[string]Corpus           `json:"corpus"`
+	Reads      map[string]map[string]Row   `json:"reads"`
+	Writes     map[string]map[string]Row   `json:"writes"`
+	WriteCheck map[string]string           `json:"write_check"`
+	labels     map[string][]string         // declaration order per section
+	sizes      map[int]int                 // scale → entities
+	samples    map[string]map[int][]sample // label → scale → samples
+}
+
+type sample struct{ wall, cpu float64 }
 
 func main() {
 	bin := flag.String("bin", "./khub", "the khub binary to time")
 	scalesFlag := flag.String("scales", "100,550,2000", "corpus sizes, comma separated")
 	cache := flag.String("cache", filepath.Join(os.TempDir(), "khub-scale"), "where corpora are cached, one directory per scale")
+	work := flag.String("work", filepath.Join(os.TempDir(), "khub-scale-bench"), "where the write cycle's corpus copies go")
 	repeat := flag.Int("repeat", 5, "timed runs per command, after one warm-up")
 	seed := flag.Uint64("seed", 1, "PRNG seed for the corpora")
 	todayFlag := flag.String("today", "2026-01-15", "YYYY-MM-DD pinned into every corpus and the clock khub sees")
 	regen := flag.Bool("regen", false, "rebuild the corpora first")
+	writes := flag.Bool("writes", true, "run the write cycle too, on a copy of each corpus")
+	profile := flag.String("profile", "", "`gate` sets -scales 100,2000 -repeat 11: what parity/scale/gate reads")
 	format := flag.String("format", "text", "text or json")
 	flag.Parse()
 
+	if *profile == "gate" {
+		*scalesFlag, *repeat = "100,2000", 11
+	} else if *profile != "" {
+		fail(fmt.Errorf("-profile: unknown profile %q", *profile))
+	}
 	today, err := time.Parse("2006-01-02", *todayFlag)
 	if err != nil {
 		fail(fmt.Errorf("-today: %w", err))
@@ -113,69 +139,124 @@ func main() {
 	if err != nil {
 		fail(err)
 	}
-	if *format == "text" {
-		fmt.Printf("\033[1mkhub bench\033[0m — scales %s, median of %d runs, out of process\n", joinInts(scales), *repeat)
+	chatty := *format == "text"
+	if chatty {
+		fmt.Printf("\033[1mkhub bench\033[0m — scales %s, %d interleaved runs after a warm-up, out of process\n", joinInts(scales), *repeat)
+	}
+
+	r := &Report{
+		Khub: version(binPath), Commit: commit(), Go: runtime.Version(), GOOS: runtime.GOOS, GOARCH: runtime.GOARCH,
+		NProc: runtime.NumCPU(), GOMAXPROCS: runtime.GOMAXPROCS(0), CPUModel: cpuModel(), LoadBefore: loadavg(),
+		Scales: scales, Entities: map[string]int{}, Repeat: *repeat, Corpus: map[string]Corpus{},
+		Reads: map[string]map[string]Row{}, Writes: map[string]map[string]Row{}, WriteCheck: map[string]string{},
+		labels: map[string][]string{}, sizes: map[int]int{}, samples: map[string]map[int][]sample{},
 	}
 
 	roots := map[int]string{}
-	sizes := map[int]int{}
-	manifests := map[int]*corpus.Manifest{}
+	copies := map[int]string{}
+	subs := map[int]map[string]string{}
 	for _, scale := range scales {
 		root := filepath.Join(*cache, strconv.Itoa(scale))
-		m, err := corpusFor(binPath, root, scale, *seed, today, *regen, *format == "text")
+		m, err := corpusFor(binPath, root, scale, *seed, today, *regen, chatty)
 		if err != nil {
 			fail(err)
 		}
-		roots[scale], sizes[scale], manifests[scale] = root, m.Total, m
+		key := strconv.Itoa(scale)
+		roots[scale], r.sizes[scale], r.Entities[key] = root, m.Total, m.Total
+		r.Corpus[key] = Corpus{Generated: m.Generated, Total: m.Total}
+		subs[scale] = corpus.Handles(m)
+		if *writes {
+			dst := filepath.Join(*work, key)
+			if err := copyCorpus(root, dst); err != nil {
+				fail(err)
+			}
+			copies[scale] = dst
+		}
 	}
 
 	env := append(os.Environ(), "KHUB_PARITY_NOW="+today.Format("2006-01-02"))
-	rows := map[string]map[int]stats{}
-	for _, scale := range scales {
-		subs := handles(manifests[scale])
-		for _, c := range reads {
-			argv := make([]string, len(c.argv))
-			for i, a := range c.argv {
-				argv[i] = fill(a, subs)
-			}
-			run := func() (int, error) { return invoke(binPath, roots[scale], argv, env) }
-			code, err := run()
-			if err != nil {
-				fail(err)
-			}
-			if code != c.expect {
-				fail(fmt.Errorf("khub %s at n=%d exited %d, wanted %d — the measurement would be of the error path",
-					strings.Join(argv, " "), sizes[scale], code, c.expect))
-			}
-			if rows[c.label] == nil {
-				rows[c.label] = map[int]stats{}
-			}
-			rows[c.label][scale] = timed(run, *repeat)
+	for _, c := range corpus.Reads {
+		r.labels["reads"] = append(r.labels["reads"], c.Label)
+	}
+	if *writes {
+		for _, c := range corpus.Writes {
+			r.labels["writes"] = append(r.labels["writes"], c.Label)
 		}
 	}
 
-	if *format == "json" {
-		payload := map[string]any{
-			"scales":   scales,
-			"entities": sizes,
-			"repeat":   *repeat,
-			"reads":    map[string]map[string]stats{},
-		}
-		reads := payload["reads"].(map[string]map[string]stats)
-		for label, per := range rows {
-			reads[label] = map[string]stats{}
-			for scale, s := range per {
-				reads[label][strconv.Itoa(scale)] = s
+	// The warm-up pays for the page cache and checks every exit code once.
+	for _, scale := range scales {
+		for _, c := range corpus.Reads {
+			argv := corpus.Fill(c.Argv, subs[scale])
+			if _, code, err := invoke(binPath, roots[scale], argv, env); err != nil {
+				fail(err)
+			} else if code != c.Exit {
+				fail(fmt.Errorf("khub %s at n=%d exited %d, wanted %d — the measurement would be of the error path",
+					strings.Join(argv, " "), r.sizes[scale], code, c.Exit))
 			}
 		}
-		out, err := json.MarshalIndent(payload, "", "  ")
+		if *writes {
+			if _, err := writeCycle(binPath, copies[scale], subs[scale], env, 0); err != nil {
+				fail(err)
+			}
+		}
+	}
+
+	// Interleaved: every repeat visits every scale and every case before the
+	// next repeat starts, so a slow stretch on the machine hits all rows.
+	for i := 1; i <= *repeat; i++ {
+		for _, scale := range scales {
+			for _, c := range corpus.Reads {
+				argv := corpus.Fill(c.Argv, subs[scale])
+				s, _, err := invoke(binPath, roots[scale], argv, env)
+				if err != nil {
+					fail(err)
+				}
+				r.record(c.Label, scale, s)
+			}
+			if *writes {
+				got, err := writeCycle(binPath, copies[scale], subs[scale], env, i)
+				if err != nil {
+					fail(err)
+				}
+				for j, c := range corpus.Writes {
+					r.record(c.Label, scale, got[j])
+				}
+			}
+		}
+	}
+	r.LoadAfter = loadavg()
+
+	// The write cycle must have left every copy exactly as the cache has it.
+	if *writes {
+		for _, scale := range scales {
+			key := strconv.Itoa(scale)
+			if diff := treeDiff(roots[scale], copies[scale]); diff != "" {
+				r.WriteCheck[key] = diff
+				if chatty {
+					fmt.Fprintf(os.Stderr, "bench: the write cycle changed the corpus at n=%d:\n%s", r.sizes[scale], diff)
+				}
+			} else {
+				r.WriteCheck[key] = "identical"
+			}
+		}
+	}
+
+	r.fold()
+	if *format == "json" {
+		out, err := json.MarshalIndent(r, "", "  ")
 		if err != nil {
 			fail(err)
 		}
 		fmt.Println(string(out))
-		return
+	} else {
+		r.table()
 	}
-	table(rows, scales, sizes)
+	for _, v := range r.WriteCheck {
+		if v != "identical" {
+			os.Exit(1)
+		}
+	}
 }
 
 func fail(err error) {
@@ -183,13 +264,65 @@ func fail(err error) {
 	os.Exit(1)
 }
 
-// corpusFor returns a cached corpus under root, generating it when absent.
-// Generation is the slow part by an order of magnitude and the corpus is
-// deterministic, so it is built once.
+func (r *Report) record(label string, scale int, s sample) {
+	if r.samples[label] == nil {
+		r.samples[label] = map[int][]sample{}
+	}
+	r.samples[label][scale] = append(r.samples[label][scale], s)
+}
+
+// fold turns the samples into the per-section rows the JSON carries.
+func (r *Report) fold() {
+	for section, labels := range r.labels {
+		dst := r.Reads
+		if section == "writes" {
+			dst = r.Writes
+		}
+		for _, label := range labels {
+			dst[label] = map[string]Row{}
+			for scale, ss := range r.samples[label] {
+				wall := make([]float64, len(ss))
+				cpu := make([]float64, len(ss))
+				for i, s := range ss {
+					wall[i], cpu[i] = s.wall, s.cpu
+				}
+				dst[label][strconv.Itoa(scale)] = Row{Wall: summarise(wall), CPU: summarise(cpu)}
+			}
+		}
+	}
+}
+
+func summarise(samples []float64) Stat {
+	sorted := slices.Clone(samples)
+	slices.Sort(sorted)
+	median := sorted[len(sorted)/2]
+	if len(sorted)%2 == 0 {
+		median = (sorted[len(sorted)/2-1] + sorted[len(sorted)/2]) / 2
+	}
+	return Stat{Median: median, Min: sorted[0], Max: sorted[len(sorted)-1], Samples: samples}
+}
+
+// corpusFor returns the cached corpus under root, generating it when absent
+// or when it was generated with another scale, seed or day than asked. A
+// corpus an older khub wrote is kept — the version is in the manifest, and
+// the report says so — because regeneration is the slow part by an order
+// of magnitude and the bytes are deterministic.
 func corpusFor(bin, root string, scale int, seed uint64, today time.Time, regen, chatty bool) (*corpus.Manifest, error) {
+	day := today.Format("2006-01-02")
 	if !regen {
 		if m, err := corpus.Read(root); err == nil {
-			return m, nil
+			g := m.Generated
+			if g.Scale == scale && g.Seed == seed && g.Today == day {
+				if chatty && g.KhubVersion != version(bin) {
+					fmt.Printf("  note: the corpus at %s was written by khub %s; this binary is %s (pass -regen to rebuild)\n",
+						root, g.KhubVersion, version(bin))
+				}
+				return m, nil
+			}
+			if chatty {
+				fmt.Printf("  the corpus at %s was generated with scale %d, seed %d, today %s; rebuilding\n",
+					root, g.Scale, g.Seed, g.Today)
+			}
 		}
 	}
 	if chatty {
@@ -198,80 +331,152 @@ func corpusFor(bin, root string, scale int, seed uint64, today time.Time, regen,
 	return corpus.Build(corpus.Options{Bin: bin, Work: root, Scale: scale, Seed: seed, Today: today})
 }
 
-// handles are the ids and terms the cases need, out of the manifest.
-func handles(m *corpus.Manifest) map[string]string {
-	topTag, topN := "", -1
-	for _, tag := range corpus.Tags {
-		if n := m.Tags[tag]; n > topN {
-			topTag, topN = tag, n
-		}
+// copyCorpus replaces dst with a copy of src. The cache is never mutated:
+// a crash mid-cycle would otherwise corrupt the corpus every later run
+// silently reuses.
+func copyCorpus(src, dst string) error {
+	if err := os.RemoveAll(dst); err != nil {
+		return err
 	}
-	subs := map[string]string{
-		"needle":       m.Search.Needle,
-		"needle_id":    m.Search.ID,
-		"tag":          topTag,
-		"neighbors_id": m.Degrees[0].ID,
-		"history_id":   m.History.Newest,
-		"held":         m.Probes.HeldComponent,
+	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
+		return err
 	}
-	for _, c := range m.Closures {
-		switch c.Role {
-		case "hub":
-			subs["hub_id"] = c.ID
-		case "deepest":
-			subs["deepest_id"] = c.ID
-		}
-	}
-	return subs
+	return os.CopyFS(dst, os.DirFS(src))
 }
 
-func fill(arg string, subs map[string]string) string {
-	for key, value := range subs {
-		arg = strings.ReplaceAll(arg, "{"+key+"}", value)
+// writeCycle runs corpus.Writes once on a probe titled for this repeat and
+// returns one sample per verb, in order. The slug comes out of add's JSON;
+// the no-op link must say `changed: false`.
+func writeCycle(bin, root string, subs map[string]string, env []string, repeat int) ([]sample, error) {
+	local := map[string]string{}
+	for k, v := range subs {
+		local[k] = v
 	}
-	return arg
+	local["probe_title"] = fmt.Sprintf("Bench probe %d", repeat)
+	out := make([]sample, 0, len(corpus.Writes))
+	for _, c := range corpus.Writes {
+		argv := corpus.Fill(c.Argv, local)
+		s, code, stdout, err := invokeOut(bin, root, argv, env)
+		if err != nil {
+			return nil, err
+		}
+		if code != c.Exit {
+			return nil, fmt.Errorf("khub %s exited %d, wanted %d:\n%s", strings.Join(argv, " "), code, c.Exit, stdout)
+		}
+		var rec struct {
+			Slug    string `json:"slug"`
+			Changed *bool  `json:"changed"`
+		}
+		if err := json.Unmarshal(stdout, &rec); err != nil {
+			return nil, fmt.Errorf("khub %s: %w\n%s", strings.Join(argv, " "), err, stdout)
+		}
+		switch c.Label {
+		case "add":
+			if rec.Slug == "" {
+				return nil, fmt.Errorf("add minted no slug:\n%s", stdout)
+			}
+			local["probe"] = rec.Slug
+		case "link":
+			if rec.Changed == nil || !*rec.Changed {
+				return nil, fmt.Errorf("the first link reported no change:\n%s", stdout)
+			}
+		case "link (no-op)":
+			if rec.Changed == nil || *rec.Changed {
+				return nil, fmt.Errorf("the no-op link reported a change — the measurement would be of a real write:\n%s", stdout)
+			}
+		}
+		out = append(out, s)
+	}
+	return out, nil
+}
+
+// treeDiff compares every regular file under a and b, ignoring
+// .khub/generated (locks and journals), and names what differs.
+func treeDiff(a, b string) string {
+	hashes := func(root string) (map[string][32]byte, error) {
+		out := map[string][32]byte{}
+		err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+			if err != nil {
+				return err
+			}
+			rel, _ := filepath.Rel(root, path)
+			if d.IsDir() {
+				if rel == filepath.Join(".khub", "generated") {
+					return filepath.SkipDir
+				}
+				return nil
+			}
+			if !d.Type().IsRegular() {
+				return nil
+			}
+			raw, err := os.ReadFile(path)
+			if err != nil {
+				return err
+			}
+			out[filepath.ToSlash(rel)] = sha256.Sum256(raw)
+			return nil
+		})
+		return out, err
+	}
+	ha, err := hashes(a)
+	if err != nil {
+		return err.Error()
+	}
+	hb, err := hashes(b)
+	if err != nil {
+		return err.Error()
+	}
+	var lines []string
+	for p, h := range ha {
+		if hb2, ok := hb[p]; !ok {
+			lines = append(lines, "  missing after the cycle: "+p)
+		} else if hb2 != h {
+			lines = append(lines, "  changed by the cycle: "+p)
+		}
+	}
+	for p := range hb {
+		if _, ok := ha[p]; !ok {
+			lines = append(lines, "  left behind by the cycle: "+p)
+		}
+	}
+	slices.Sort(lines)
+	if len(lines) == 0 {
+		return ""
+	}
+	return strings.Join(lines, "\n") + "\n"
 }
 
 // invoke runs one khub command against root with its output discarded and
-// returns the exit code. A version probe takes no workspace.
-func invoke(bin, root string, argv []string, env []string) (int, error) {
+// returns the sample and exit code. A version probe takes no workspace.
+func invoke(bin, root string, argv []string, env []string) (sample, int, error) {
+	s, code, _, err := invokeOut(bin, root, argv, env)
+	return s, code, err
+}
+
+func invokeOut(bin, root string, argv []string, env []string) (sample, int, []byte, error) {
 	full := argv
 	if argv[0] != "--version" {
 		full = append([]string{"-C", root}, argv...)
 	}
 	cmd := exec.Command(bin, full...)
 	cmd.Env = env
-	var sink bytes.Buffer
-	cmd.Stdout = &sink
-	cmd.Stderr = &sink
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	start := time.Now()
 	err := cmd.Run()
-	if err == nil {
-		return 0, nil
-	}
-	var exit *exec.ExitError
-	if errors.As(err, &exit) {
-		return exit.ExitCode(), nil
-	}
-	return -1, fmt.Errorf("%s %s: %w", bin, strings.Join(full, " "), err)
-}
-
-// timed is the median of repeat runs; the caller has already spent the
-// warm-up, which pays for the page cache and is not what anyone is asking.
-func timed(run func() (int, error), repeat int) stats {
-	samples := make([]float64, 0, repeat)
-	for range repeat {
-		start := time.Now()
-		if _, err := run(); err != nil {
-			fail(err)
+	wall := float64(time.Since(start).Microseconds()) / 1000
+	code := 0
+	if err != nil {
+		var exit *exec.ExitError
+		if !errors.As(err, &exit) {
+			return sample{}, -1, nil, fmt.Errorf("%s %s: %w", bin, strings.Join(full, " "), err)
 		}
-		samples = append(samples, float64(time.Since(start).Microseconds())/1000)
+		code = exit.ExitCode()
 	}
-	slices.Sort(samples)
-	median := samples[len(samples)/2]
-	if len(samples)%2 == 0 {
-		median = (samples[len(samples)/2-1] + samples[len(samples)/2]) / 2
-	}
-	return stats{Median: median, Min: samples[0], Max: samples[len(samples)-1]}
+	ps := cmd.ProcessState
+	cpu := float64((ps.UserTime() + ps.SystemTime()).Microseconds()) / 1000
+	return sample{wall: wall, cpu: cpu}, code, stdout.Bytes(), nil
 }
 
 // exponent is the fitted b in t ∝ n^b across the two ends: 1.0 linear, 2.0
@@ -284,43 +489,117 @@ func exponent(smallN int, smallMs float64, bigN int, bigMs float64) float64 {
 	return math.Log(bigMs/smallMs) / math.Log(float64(bigN)/float64(smallN))
 }
 
-// table prints one row per command in declaration order. `sizes` is what each
-// corpus actually holds — an exponent fitted against the number asked for
-// rather than the number written is wrong in exactly the direction that
-// flatters the tool.
-func table(rows map[string]map[int]stats, scales []int, sizes map[int]int) {
-	grows := len(scales) > 1
-	fmt.Printf("\n\033[1mreads — median ms, out of process\033[0m\n")
-	var head strings.Builder
-	for _, s := range scales {
-		fmt.Fprintf(&head, "%11s", "n="+strconv.Itoa(sizes[s]))
-	}
-	tail := ""
-	if grows {
-		tail = fmt.Sprintf("%11s%10s", "µs/entity", "growth")
-	}
-	fmt.Printf("  %-26s%s%s\n", "command", head.String(), tail)
-	width := 26 + 11*len(scales)
-	if grows {
-		width += 21
-	}
-	fmt.Printf("  %s\n", strings.Repeat("-", width))
-	lo, hi := scales[0], scales[len(scales)-1]
-	for _, c := range reads {
-		per := rows[c.label]
-		var cells strings.Builder
-		for _, s := range scales {
-			fmt.Fprintf(&cells, "%11.1f", per[s].Median)
-		}
-		if !grows {
-			fmt.Printf("  %-26s%s\n", c.label, cells.String())
+// table prints one row per command in declaration order: wall median per
+// scale, then CPU min per scale with its growth. `sizes` is what each corpus
+// actually holds — an exponent fitted against the number asked for rather
+// than the number written is wrong in exactly the direction that flatters
+// the tool.
+func (r *Report) table() {
+	grows := len(r.Scales) > 1
+	lo, hi := r.Scales[0], r.Scales[len(r.Scales)-1]
+	for _, section := range []string{"reads", "writes"} {
+		labels := r.labels[section]
+		if len(labels) == 0 {
 			continue
 		}
-		perEntity := per[hi].Median * 1000 / float64(sizes[hi])
-		b := exponent(sizes[lo], per[lo].Median, sizes[hi], per[hi].Median)
-		fmt.Printf("  %-26s%s%11.1f%10s\n", c.label, cells.String(), perEntity, fmt.Sprintf("n^%.2f", b))
+		rows := r.Reads
+		if section == "writes" {
+			rows = r.Writes
+		}
+		fmt.Printf("\n\033[1m%s — wall median ms │ cpu min ms, out of process\033[0m\n", section)
+		var head strings.Builder
+		for _, s := range r.Scales {
+			fmt.Fprintf(&head, "%11s", "n="+strconv.Itoa(r.sizes[s]))
+		}
+		tail := ""
+		if grows {
+			tail = fmt.Sprintf("%10s", "growth")
+		}
+		fmt.Printf("  %-28s%s │%s%s\n", "command", head.String(), head.String(), tail)
+		fmt.Printf("  %s\n", strings.Repeat("-", 28+22*len(r.Scales)+2+len(tail)))
+		for _, label := range labels {
+			per := rows[label]
+			var wall, cpu strings.Builder
+			for _, s := range r.Scales {
+				row := per[strconv.Itoa(s)]
+				fmt.Fprintf(&wall, "%11.1f", row.Wall.Median)
+				fmt.Fprintf(&cpu, "%11.1f", row.CPU.Min)
+			}
+			growth := ""
+			if grows {
+				b := exponent(r.sizes[lo], per[strconv.Itoa(lo)].CPU.Min, r.sizes[hi], per[strconv.Itoa(hi)].CPU.Min)
+				growth = fmt.Sprintf("%10s", fmt.Sprintf("n^%.2f", b))
+			}
+			fmt.Printf("  %-28s%s │%s%s\n", label, wall.String(), cpu.String(), growth)
+		}
 	}
-	fmt.Println("  the exponent is fitted between the smallest and the largest scale; n^1.0 is linear, n^2.0 the wall")
+	if grows {
+		fmt.Println("  growth is fitted on cpu min between the smallest and the largest scale; n^1.0 is linear, n^2.0 the wall")
+	}
+	for key, v := range r.WriteCheck {
+		if v == "identical" {
+			fmt.Printf("  write cycle at n=%s left the corpus byte-identical\n", key)
+		}
+	}
+}
+
+// --- the machine --------------------------------------------------------------
+
+func version(bin string) string {
+	out, err := exec.Command(bin, "--version").Output()
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(out))
+}
+
+func commit() string {
+	out, err := exec.Command("git", "rev-parse", "--short", "HEAD").Output()
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(out))
+}
+
+// cpuModel is best effort: /proc/cpuinfo on linux, sysctl on darwin, else
+// the architecture. The gate only compares it for equality.
+func cpuModel() string {
+	switch runtime.GOOS {
+	case "linux":
+		raw, err := os.ReadFile("/proc/cpuinfo")
+		if err == nil {
+			for line := range strings.SplitSeq(string(raw), "\n") {
+				if name, value, ok := strings.Cut(line, ":"); ok && strings.TrimSpace(name) == "model name" {
+					return strings.TrimSpace(value)
+				}
+			}
+		}
+	case "darwin":
+		if out, err := exec.Command("sysctl", "-n", "machdep.cpu.brand_string").Output(); err == nil {
+			return strings.TrimSpace(string(out))
+		}
+	}
+	return runtime.GOARCH
+}
+
+func loadavg() []float64 {
+	raw, err := os.ReadFile("/proc/loadavg")
+	if err != nil {
+		return nil
+	}
+	fields := strings.Fields(string(raw))
+	if len(fields) < 3 {
+		return nil
+	}
+	out := make([]float64, 0, 3)
+	for _, f := range fields[:3] {
+		v, err := strconv.ParseFloat(f, 64)
+		if err != nil {
+			return nil
+		}
+		out = append(out, v)
+	}
+	return out
 }
 
 func joinInts(ns []int) string {

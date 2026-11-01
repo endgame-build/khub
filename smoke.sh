@@ -1,4 +1,7 @@
 #!/bin/bash
+# $KHUB is deliberately unquoted at every call: it is word-split so a wrapped
+# binary (`KHUB="env GOCOVERDIR=/tmp/cov ./khub-cover"`) runs as written.
+# shellcheck disable=SC2086
 # Extensive smoke over khub's CLI surface: build-hub and firm-ops, every command,
 # every exit code asserted. The unit suite proves the core; this proves the binary.
 #
@@ -46,12 +49,21 @@ hasnt() {
     printf '  \033[31mFAIL\033[0m %-50s (unexpectedly in %s)\n' "$1" "$2"
   else printf '  ok   %-50s\n' "$1"; fi
 }
+# same <label> <got> <want> — two strings must match.
+same() {
+  CASES=$((CASES + 1))
+  if [ "$2" == "$3" ]; then printf '  ok   %-50s\n' "$1"
+  else
+    FAILED=$((FAILED + 1))
+    printf '  \033[31mFAIL\033[0m %-50s\n       got=  %s\n       want= %s\n' "$1" "$2" "$3"
+  fi
+}
 
 rm -rf "$WORK"; mkdir -p "$WORK"
 
 # -------------------------------------------------------------------- build-hub
 say "khub · build-hub"
-L=$WORK/hub; mkdir -p "$L"; cd "$L"
+L=$WORK/hub; mkdir -p "$L"; cd "$L" || exit 1
 ok 0 "init"                        $KHUB init build-hub .
 ok 0 "add repo"                    $KHUB -C "$L" add repo --title "API" --repo acme/api --status active
 ok 0 "add component (service)"     $KHUB -C "$L" add component --title "Public API" --kind service --repo rp-api
@@ -85,6 +97,14 @@ ok 0 "link depends_on"             $KHUB -C "$L" link cmp-public-api depends_on 
 ok 0 "unlink is idempotent"        $KHUB -C "$L" unlink cmp-public-api depends_on cmp-stripe
 ok 0 "relink"                      $KHUB -C "$L" link cmp-public-api depends_on cmp-stripe
 ok 0 "edit status"                 $KHUB -C "$L" edit adr/ad-2026-01-15-use-stripe status proposed
+# gofmt's loop, for the writer: the same edit twice leaves the bytes alone,
+# and a value that is already set is a no-op on disk (the clock is pinned,
+# so `updated` cannot move between the two).
+ADR=$L/knowledge/decisions/ad-2026-01-15-use-stripe.md
+ok 0 "edit status again (same value)" $KHUB -C "$L" edit adr/ad-2026-01-15-use-stripe status proposed
+cp "$ADR" "$L/adr.first"
+ok 0 "edit status a third time"      $KHUB -C "$L" edit adr/ad-2026-01-15-use-stripe status proposed
+ok 0 "edit is idempotent on disk"    cmp "$ADR" "$L/adr.first"
 ok 0 "get --edges"                 $KHUB -C "$L" get cmp-public-api --edges --format json
 ok 0 "query --type"                $KHUB -C "$L" query --type requirement --format json
 ok 0 "query --missing"             $KHUB -C "$L" query --missing realized_in --format json
@@ -114,6 +134,25 @@ ok 0 "viz"                         $KHUB -C "$L" viz --out "$L/viz.html"
 ok 0 "backfill --dry-run"          $KHUB -C "$L" backfill --dry-run
 ok 0 "wire"                        $KHUB -C "$L" wire
 ok 2 "remove refuses on inbound"   $KHUB -C "$L" remove cmp-public-api
+
+# ------------------------------------------------------------ unicode titles
+# The same visible title in its composed (NFC) and decomposed (NFD) forms.
+# Slugify strips what is not ASCII, so the two mint different slugs today
+# (caf vs cafe) and an id in the other form does not resolve — the known
+# gap (.claude/rules/testing.md, "Unicode filesystems"), pinned here so a
+# change to it is deliberate. What must hold on every filesystem, APFS's
+# normalisation-insensitive lookup included, is the invariant below: the
+# index agrees with the directory, one row per file, and check still passes.
+say "khub · unicode titles, NFC and NFD"
+NFC=$(printf 'Caf\303\251 menu'); NFD=$(printf 'Cafe\314\201 menu')
+ok 0 "add the NFC title"           $KHUB -C "$L" add requirement --title "$NFC" --kind functional
+ok 0 "add the NFD title"           $KHUB -C "$L" add requirement --title "$NFD" --kind functional
+same "two slugs, ASCII only" "$($KHUB -C "$L" query --type requirement --format ids | grep -c 'menu$')" "2"
+same "index rows match files on disk" \
+  "$($KHUB -C "$L" query --type requirement --format ids | wc -l | tr -d ' ')" \
+  "$(find "$L/knowledge/requirements" -name '*.md' | wc -l | tr -d ' ')"
+ok 2 "the other form does not resolve" $KHUB -C "$L" get "req-$(printf 'caf\303\251')-menu"
+ok 0 "check still passes"          $KHUB -C "$L" check
 ok 0 "remove --force"              $KHUB -C "$L" remove cmp-stripe --force
 ok 1 "check now dangles"           $KHUB -C "$L" check --format json
 
@@ -131,7 +170,7 @@ has "AGENTS.md is back"            "$L/AGENTS.md" "Record as you go"
 
 # --------------------------------------------------------------------- firm-ops
 say "khub · firm-ops (no singletons)"
-F=$WORK/firm; mkdir -p "$F"; cd "$F"
+F=$WORK/firm; mkdir -p "$F"; cd "$F" || exit 1
 ok 0 "init"                        $KHUB init firm-ops .
 ok 0 "add client"                  $KHUB -C "$F" add client --name "Acme Corp"
 ok 0 "validate"                    $KHUB -C "$F" validate --format json
@@ -140,7 +179,7 @@ hasnt "no singleton link"          "$F/AGENTS.md" "](knowledge/"
 
 # ---------------------------------------------------------------------- upgrade
 say "khub · upgrade"
-U=$WORK/upgrade; mkdir -p "$U"; cd "$U"
+U=$WORK/upgrade; mkdir -p "$U"; cd "$U" || exit 1
 ok 0 "init (build-lite, the alias)" $KHUB init build-lite .
 has  "alias records build-hub"     "$U/.khub/config.yaml" "preset: build-hub"
 has  "init writes index.md"        "$U/index.md" "# Index"
@@ -164,7 +203,7 @@ ok 2 "upgrade outside a workspace" $KHUB -C "$WORK" upgrade
 
 # ------------------------------------------------------- the misplaced-entity gate
 say "khub · a file the scan cannot reach"
-M=$WORK/misplaced; mkdir -p "$M"; cd "$M"
+M=$WORK/misplaced; mkdir -p "$M"; cd "$M" || exit 1
 $KHUB init build-hub . >/dev/null 2>&1
 $KHUB -C "$M" add component --title "API" --kind service >/dev/null 2>&1
 # sed to a temp file, not sed -i: GNU and BSD disagree on -i's argument.
@@ -172,5 +211,41 @@ S=$M/.khub/storage.yaml
 sed 's|path: knowledge/components|path: knowledge/architecture/components|' "$S" >"$S.tmp" && mv "$S.tmp" "$S"
 ok 1 "check reports the misplaced entity" $KHUB -C "$M" check --format json
 
+
+# ------------------------------------------- concurrent writers on one collection
+# Collections share the one workspace lock with every other mutation, and a
+# write publishes through a unique .khub-write-* sibling plus rename. Eight
+# writers, three rounds, distinct titles: every add must land, in each of
+# the three collection formats. With the lock disabled this loses two rows
+# in three while every add still exits 0 — the bug class is silent data
+# loss, which no byte-pinned fixture can see. It runs on Windows too through
+# smoke-windows.sh, the one place LockFileEx is exercised for collections.
+# No shipped preset holds a collection; preset-cells is the corpus preset.
+say "khub · concurrent writers on one collection"
+WRITERS=8; ROUNDS=3
+for spec in repo:repos.jsonl vendor:vendors.yaml account:accounts.json; do
+  type=${spec%%:*}; file=${spec#*:}
+  C=$WORK/cells-$type; mkdir -p "$C"
+  ok 0 "$type: init preset-cells"  $KHUB init preset-cells "$C" --no-wire --preset-source "$REPO/parity/corpus"
+  RACE=$(mktemp -d "${TMPDIR:-/tmp}/khub-coll-race.XXXXXX")
+  n=0
+  for _r in $(seq "$ROUNDS"); do
+    for _w in $(seq "$WRITERS"); do
+      n=$((n + 1))
+      ( $KHUB -C "$C" add "$type" --title "Row $n" --format json >"$RACE/$n.out" 2>&1
+        echo $? >"$RACE/$n.exit" ) &
+    done
+    wait
+  done
+  same "$type: $n concurrent adds all exited 0" "$(cat "$RACE"/*.exit | grep -c '^0$')" "$n"
+  ok 0 "$type: $file still parses"    $KHUB -C "$C" validate
+  same "$type: no row lost"            "$($KHUB -C "$C" query --type "$type" --format ids | wc -l | tr -d ' ')" "$n"
+  same "$type: no duplicate slug"      "$($KHUB -C "$C" query --type "$type" --format ids | sort | uniq -d | wc -l | tr -d ' ')" "0"
+  same "$type: every reported id is a row" \
+    "$(grep -ho '"id": "[^"]*"' "$RACE"/*.out | sed 's/.*"\([^"]*\)"$/\1/; s#^[^/]*/##' | sort | tr '\n' ' ')" \
+    "$($KHUB -C "$C" query --type "$type" --format ids | sort | tr '\n' ' ')"
+  same "$type: no publication temporaries left" "$(find "$C" -name '.khub-write-*' | wc -l | tr -d ' ')" "0"
+  rm -rf "$RACE"
+done
 printf '\n\033[1m%s cases, %s failed\033[0m\n' "$CASES" "$FAILED"
 exit $((FAILED > 0))

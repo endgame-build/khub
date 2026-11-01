@@ -1,0 +1,7 @@
+# khub's recorded bytes are the contract: parity expectations, case files, the
+# embedded presets and the YAML corpora must check out LF on every OS. CI's
+# Windows leg also sets core.autocrlf=false before checkout; this covers a
+# contributor's clone, where that step never runs.
+* text=auto eol=lf
+parity/** -text
+presets/** -text

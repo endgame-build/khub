@@ -43,7 +43,8 @@ export COLUMNS=80 TTY_COMPATIBLE=0 NO_COLOR=1
     echo
     echo '```console'
     echo "\$ khub $cmd --help"
-    # shellcheck disable=SC2086 -- word splitting is intended for "schema show"
+    # Word splitting is intended: "schema show" is two words.
+    # shellcheck disable=SC2086
     "$KHUB" $cmd --help | sed -e 's/[[:space:]]*$//'
     echo '```'
   done
