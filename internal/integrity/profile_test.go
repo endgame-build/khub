@@ -1,9 +1,10 @@
 package integrity
 
 import (
-	"github.com/endgame-build/khub/internal/clock"
 	"os"
 	"testing"
+
+	"github.com/endgame-build/khub/internal/clock"
 )
 
 // PROF_WS=/tmp/bench10k/ws go test ./internal/integrity -bench=Check -cpuprofile=/tmp/check.out

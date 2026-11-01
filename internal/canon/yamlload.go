@@ -9,6 +9,7 @@ package canon
 
 import (
 	"fmt"
+	"math/big"
 	"regexp"
 	"strconv"
 	"strings"
@@ -405,10 +406,21 @@ func parseYAMLInt11(s string) any {
 		}
 		return n
 	}
-	if neg {
-		t = "-" + t
+	return bigInt(s, t, base, neg)
+}
+
+// bigInt is an integer past int64, parsed in its base and carried as the
+// decimal literal Python's unbounded int would print. Digits the base does
+// not hold stay the string the scalar was.
+func bigInt(s, digits string, base int, neg bool) any {
+	n, ok := new(big.Int).SetString(digits, base)
+	if !ok {
+		return s
 	}
-	return BigInt{Literal: t}
+	if neg {
+		n.Neg(n)
+	}
+	return BigInt{Literal: n.String()}
 }
 
 func parseSexagesimal(s string) any {
@@ -452,10 +464,7 @@ func parseYAMLInt(s string) any {
 		}
 		return n
 	}
-	if neg {
-		t = "-" + t
-	}
-	return BigInt{Literal: t} // decimal big ints only; radix big ints are unreachable in khub data
+	return bigInt(s, t, base, neg)
 }
 
 func parseYAMLFloat(s string) float64 {

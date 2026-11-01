@@ -1,10 +1,11 @@
 package migrate_test
 
-// FuzzMigrateIdempotent runs the migration the way `khub upgrade` does, over
-// a workspace on disk, since migrate exposes no per-document entry point. The
-// legacy tests prove the rewrites on shapes somebody wrote down; this proves
-// the properties every rewrite must keep on shapes nobody did. `go test` runs
-// the seeds; `go test -fuzz=FuzzMigrateIdempotent ./internal/migrate` explores.
+// FuzzMigrateIdempotent runs the per-document rewrite `khub upgrade` applies
+// (exported here by export_test.go) in memory, against the schema in
+// migrate_test.go. The legacy tests prove the rewrites on shapes somebody
+// wrote down; this proves the properties every rewrite must keep on shapes
+// nobody did. `go test` runs the seeds; `go test
+// -fuzz=FuzzMigrateIdempotent ./internal/migrate` explores.
 
 import (
 	"io/fs"
@@ -15,18 +16,19 @@ import (
 	"testing"
 
 	"github.com/endgame-build/khub/internal/canon"
+	"github.com/endgame-build/khub/internal/introspect"
 	"github.com/endgame-build/khub/internal/migrate"
 	"github.com/endgame-build/khub/internal/omap"
 	"github.com/endgame-build/khub/internal/values"
 )
 
-// fuzzKinds are the files a fuzzed document lands in, one per legacy shape
+// fuzzKinds are the types a fuzzed document is read as, one per legacy shape
 // the ontology in migrate_test.go holds.
-var fuzzKinds = []struct{ rel, format string }{
-	{"notes/f.md", "md"},     // base status, sources, references, stale_after
-	{"decisions/f.md", "md"}, // a decision enum that holds retired status values
-	{"svcs/f.yaml", "yaml"},  // a non-md document, its prose in `body`
-	{"olds/f.md", "md"},      // a redeclared status that cannot hold draft
+var fuzzKinds = []struct{ typ, format string }{
+	{"note", "md"},  // base status, sources, references, stale_after
+	{"adr", "md"},   // a decision enum that holds retired status values
+	{"svc", "yaml"}, // a non-md document, its prose in `body`
+	{"old", "md"},   // a redeclared status that cannot hold draft
 }
 
 // legacyKey matches a document that carries a key the migration rewrites.
@@ -108,24 +110,32 @@ func seedMigrate(f *testing.F) {
 // wherever the input did.
 func FuzzMigrateIdempotent(f *testing.F) {
 	seedMigrate(f)
-	root := newWS(f)
+	resolved, err := introspect.LoadSchema(newWS(f))
+	if err != nil {
+		f.Fatal(err)
+	}
 	f.Fuzz(func(t *testing.T, kind uint8, doc string) {
 		k := fuzzKinds[int(kind)%len(fuzzKinds)]
-		write(t, root, k.rel, doc)
-		defer os.Remove(filepath.Join(root, filepath.FromSlash(k.rel)))
-
-		first, err := migrate.Run(root, plainWrite)
-		out := read(t, root, k.rel)
-		if err != nil || len(first.Conflicts) > 0 || len(first.Migrated) == 0 {
-			if out != doc {
-				t.Fatalf("unmigrated document rewritten (err %v, %+v):\n--- in\n%q\n--- out\n%q", err, first, doc, out)
+		doc = canon.NormalizeNewlines(doc) // as upgrade reads every file
+		rtype, ok := resolved.Types.Get(k.typ)
+		if !ok {
+			t.Fatalf("no type %s in the test schema", k.typ)
+		}
+		scan, _, err := canon.Parse(doc, k.format)
+		if err != nil {
+			return // the index reads it as malformed, so upgrade never migrates it
+		}
+		first, err := migrate.Doc(rtype, doc, k.format, scan)
+		if err != nil {
+			t.Fatalf("rewrite failed: %v\n%q", err, doc)
+		}
+		if first.Conflict != nil || len(first.Changes) == 0 {
+			if first.Text != "" {
+				t.Fatalf("unmigrated document rewritten (%+v):\n--- in\n%q", first, doc)
 			}
 			return
 		}
-		if len(first.Migrated) != 1 || first.Migrated[0].Path != k.rel {
-			t.Fatalf("one document, migrated %+v", first.Migrated)
-		}
-		changes := first.Migrated[0].Changes
+		out := first.Text
 
 		in, _, inErr := canon.ReadDoc(doc, k.format)
 		if inErr != nil {
@@ -135,20 +145,16 @@ func FuzzMigrateIdempotent(f *testing.F) {
 		if err != nil {
 			t.Fatalf("output does not parse: %v\n--- in\n%q\n--- out\n%q", err, doc, out)
 		}
-		if _, _, err := canon.Parse(doc, k.format); err == nil {
-			if _, _, err := canon.Parse(out, k.format); err != nil {
-				t.Fatalf("output does not scan: %v\n--- in\n%q\n--- out\n%q", err, doc, out)
-			}
-		}
-		keepsKeys(t, in, got, changes, doc, out)
-		movesBareSources(t, in, got, changes, doc, out)
-
-		second, err := migrate.Run(root, plainWrite)
+		outScan, _, err := canon.Parse(out, k.format)
 		if err != nil {
-			t.Fatalf("second run: %v", err)
+			t.Fatalf("output does not scan: %v\n--- in\n%q\n--- out\n%q", err, doc, out)
 		}
-		if again := read(t, root, k.rel); again != out || len(second.Migrated) != 0 || len(second.Conflicts) != 0 {
-			t.Fatalf("second run is not a no-op (%+v):\n--- first\n%q\n--- second\n%q", second, out, again)
+		keepsKeys(t, in, got, first.Changes, doc, out)
+		movesBareSources(t, in, got, first.Changes, doc, out)
+
+		second, err := migrate.Doc(rtype, out, k.format, outScan)
+		if err != nil || second.Conflict != nil || len(second.Changes) != 0 {
+			t.Fatalf("second run is not a no-op (err %v, %+v):\n--- in\n%q\n--- first\n%q", err, second, doc, out)
 		}
 	})
 }
@@ -213,7 +219,3 @@ func encode(t *testing.T, v any) string {
 	}
 	return s
 }
-
-// plainWrite is the writer upgrade passes for its throwaway candidate: no
-// fsync, which would cost the fuzzer most of its throughput.
-func plainWrite(_, path string, data []byte) error { return os.WriteFile(path, data, 0o644) }

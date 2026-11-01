@@ -190,27 +190,32 @@ func unreadable(id, rel string, err error) Conflict {
 	return Conflict{ID: id, Path: rel, Reason: "unreadable: " + err.Error()}
 }
 
-func migrateDoc(root, rel string, rtype *schema.ResolvedType, node index.Node, scan *omap.Map, res *Result, write Writer) error {
-	path := filepath.Join(root, filepath.FromSlash(rel))
-	text, err := canon.ReadTextIn(root, path)
-	if err != nil {
-		res.Conflicts = append(res.Conflicts, unreadable(node.ID(), rel, err))
-		return nil
-	}
-	format := canon.FmtOf(path)
+// rewrite is what rewriteDoc makes of one document. Text is set only when
+// Changes is. A Conflict (Field and Reason set) leaves the document as written.
+type rewrite struct {
+	Text      string
+	Changes   []Change
+	Reemitted bool
+	Conflict  *Conflict
+}
+
+// rewriteDoc migrates one md, json or yaml entity document in memory. text is
+// in format with its newlines normalized, as canon.ReadTextIn returns it, and
+// scan is the entity as the index read it. It touches no disk. Run calls it
+// per file and writes what comes back.
+func rewriteDoc(rtype *schema.ResolvedType, text, format string, scan *omap.Map) (rewrite, error) {
 	meta, body, err := canon.ReadDoc(text, format)
 	if err != nil {
 		// The scan's lenient read took it; the edit-altitude read refuses it.
-		res.Conflicts = append(res.Conflicts, unreadable(node.ID(), rel, err))
-		return nil
+		c := unreadable("", "", err)
+		return rewrite{Conflict: &c}, nil
 	}
 	p := planEntity(rtype, meta, scan, nil)
 	if p.conflict != nil {
-		res.Conflicts = append(res.Conflicts, Conflict{node.ID(), rel, p.conflict.Field, p.conflict.Reason})
-		return nil
+		return rewrite{Conflict: p.conflict}, nil
 	}
 	if len(p.changes) == 0 {
-		return nil
+		return rewrite{}, nil
 	}
 	out, err := canon.SpliceDoc(text, p.meta, body, format, canon.Mode12, p.renames...)
 	reemitted := errors.Is(err, canon.ErrNoSplice)
@@ -218,13 +223,36 @@ func migrateDoc(root, rel string, rtype *schema.ResolvedType, node index.Node, s
 		out, err = canon.Render(p.meta, body, format)
 	}
 	if err != nil {
-		return err
-	}
-	if err := write(root, path, []byte(out)); err != nil {
-		return err
+		return rewrite{}, err
 	}
 	// json carries no comments, so its re-emit loses nothing.
-	res.Migrated = append(res.Migrated, Entity{node.ID(), rel, p.changes, reemitted && format != "json"})
+	return rewrite{Text: out, Changes: p.changes, Reemitted: reemitted && format != "json"}, nil
+}
+
+func migrateDoc(root, rel string, rtype *schema.ResolvedType, node index.Node, scan *omap.Map, res *Result, write Writer) error {
+	path := filepath.Join(root, filepath.FromSlash(rel))
+	text, err := canon.ReadTextIn(root, path)
+	if err != nil {
+		res.Conflicts = append(res.Conflicts, unreadable(node.ID(), rel, err))
+		return nil
+	}
+	rw, err := rewriteDoc(rtype, text, canon.FmtOf(path), scan)
+	if err != nil {
+		return err
+	}
+	if rw.Conflict != nil {
+		c := *rw.Conflict
+		c.ID, c.Path = node.ID(), rel
+		res.Conflicts = append(res.Conflicts, c)
+		return nil
+	}
+	if len(rw.Changes) == 0 {
+		return nil
+	}
+	if err := write(root, path, []byte(rw.Text)); err != nil {
+		return err
+	}
+	res.Migrated = append(res.Migrated, Entity{node.ID(), rel, rw.Changes, rw.Reemitted})
 	return nil
 }
 

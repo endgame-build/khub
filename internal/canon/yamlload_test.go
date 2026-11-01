@@ -157,3 +157,28 @@ func mustMap(t *testing.T, k string, v any) *omap.Map {
 	m.Set(k, v)
 	return m
 }
+
+// An integer past int64 is parsed in its base and carried as the decimal
+// Python prints, so JSON gets a valid number with the right value.
+func TestBigIntsKeepTheirValue(t *testing.T) {
+	for _, c := range []struct {
+		lit  string
+		v11  bool
+		want any
+	}{
+		{"001000000000000000000000", true, BigInt{Literal: "9223372036854775808"}},
+		{"0x10000000000000000", true, BigInt{Literal: "18446744073709551616"}},
+		{"-0b10000000000000000000000000000000000000000000000000000000000000000", true, BigInt{Literal: "-18446744073709551616"}},
+		{"0o1000000000000000000000", false, BigInt{Literal: "9223372036854775808"}},
+		{"000123456789012345678901234567890", false, BigInt{Literal: "123456789012345678901234567890"}},
+		{"0x", true, "0x"},
+	} {
+		parse := parseYAMLInt
+		if c.v11 {
+			parse = parseYAMLInt11
+		}
+		if got := parse(c.lit); got != c.want {
+			t.Errorf("%s: got %#v, want %#v", c.lit, got, c.want)
+		}
+	}
+}

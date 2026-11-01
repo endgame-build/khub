@@ -238,6 +238,12 @@ vocabulary gains nested values. This release breaks existing workspaces, and
   `khub init <preset> . --force` that recreates it.
 - One name declared as both an attribute and a relation on a type is a schema
   error instead of the attribute silently winning.
+- **Integers past int64 kept their radix digits.** A frontmatter integer
+  too large for int64 written in octal (YAML 1.1 `0…`, 1.2 `0o…`), hex or
+  binary, or a decimal with leading zeros, printed its digits as if decimal.
+  The value was wrong, and under `--format json` a leading zero made a number
+  no JSON parser accepts. It now carries its decimal value, as PyYAML and
+  ruamel load it.
 - **Digitless floats in JSON.** A hand-written `.inf`, `-.inf` or `.nan` in
   frontmatter printed `+.Inf`, `-I.nf` and `N.aN` under `--format json`, which
   no JSON parser accepts. Every JSON dialect now carries the YAML spelling as a
