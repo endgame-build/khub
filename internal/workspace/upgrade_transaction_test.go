@@ -311,3 +311,41 @@ func TestInStorageMatchesStoragePathsOnly(t *testing.T) {
 		t.Error("a nil schema declared a storage path")
 	}
 }
+
+// A file or directory upgrade cannot read refuses the whole run, naming it,
+// before anything is written: the candidate must hold every file.
+func TestUpgradeRefusesAnUnreadableFile(t *testing.T) {
+	if runtime.GOOS == "windows" || os.Geteuid() == 0 {
+		t.Skip("permission bits do not deny this account a read")
+	}
+	src := presetSource(t)
+	root := filepath.Join(t.TempDir(), "ws")
+	mustInit(t, "note", root, InitOptions{PresetSource: src})
+	growPreset(t, src)
+	config, _ := os.ReadFile(filepath.Join(root, ".khub", "config.yaml"))
+	for _, c := range []struct{ path, name string }{
+		{filepath.Join(root, "notes", "locked.md"), "notes/locked.md"},
+		{filepath.Join(root, "notes", "sealed"), "notes/sealed"},
+	} {
+		if strings.HasSuffix(c.path, ".md") {
+			writeFile(t, c.path, "---\ntype: note\n---\n")
+		} else if err := os.MkdirAll(c.path, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Chmod(c.path, 0); err != nil {
+			t.Fatal(err)
+		}
+		for _, dry := range []bool{true, false} {
+			_, err := Upgrade(root, UpgradeOptions{DryRun: dry})
+			if err == nil || !strings.Contains(err.Error(), "Upgrade cannot read "+c.name) {
+				t.Fatalf("%s dry=%v: err = %v", c.name, dry, err)
+			}
+		}
+		if err := os.Chmod(c.path, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if after, _ := os.ReadFile(filepath.Join(root, ".khub", "config.yaml")); !bytes.Equal(after, config) {
+		t.Fatal("a refused upgrade changed config.yaml")
+	}
+}

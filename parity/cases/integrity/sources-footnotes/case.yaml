@@ -1,0 +1,10 @@
+# A body footnote and an OKF `sources[].id` cite each other. `validate`
+# reports a footnote naming no source, and a source no footnote cites, as
+# gaps that never fail the gate; a footnote inside fenced code cites nothing,
+# and an entity without `sources` keeps its footnotes as plain Markdown.
+steps:
+- argv: ["init", "build-hub", ".", "--no-wire"]
+- sh: |
+    printf -- '---\ntype: requirement\ntitle: Cited\nkind: functional\ncreated: 2026-01-15\nsources:\n- {resource: "https://example.com/a", id: a}\n- {resource: "https://example.com/b", id: b}\n---\nHolds[^a], says[^ghost].\n\n```\n[^b]\n```\n\n[^a]: The spec.\n' > knowledge/requirements/req-cited.md
+    printf -- '---\ntype: requirement\ntitle: Plain\nkind: functional\ncreated: 2026-01-15\n---\nA note[^1].\n\n[^1]: Just Markdown.\n' > knowledge/requirements/req-plain.md
+- argv: ["validate", "requirement", "--format", "json"]

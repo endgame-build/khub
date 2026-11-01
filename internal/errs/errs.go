@@ -93,6 +93,27 @@ func quoteAll(ss []string) []string {
 	return out
 }
 
+// FacetMisplaced is `invalid_schema`: an attribute declares `fields` (or
+// `items`) without the type that reads it, at loc.
+func FacetMisplaced(loc, facet, wantType string) *Located {
+	return &Located{
+		Code: "invalid_schema",
+		Message: fmt.Sprintf("Invalid schema at %s.%s: Value error, '%s' applies only to type: %s; "+
+			"declare type: %s or drop the key", loc, facet, facet, wantType, wantType),
+	}
+}
+
+// AttributeIsRelation is `invalid_schema`: one name declared on a type as both
+// an attribute and a relation, which a key on disk cannot be at once.
+func AttributeIsRelation(type_, name string) *Located {
+	return &Located{
+		Code: "invalid_schema",
+		Message: fmt.Sprintf("Invalid schema at ontology.entities.%s: '%s' is declared as both an attribute "+
+			"and a relation; rename one", type_, name),
+		Type: type_,
+	}
+}
+
 // --- workspace ---------------------------------------------------------------
 
 // UnknownPreset is `unknown_preset`: `init` named a preset the binary does
@@ -130,6 +151,27 @@ func UnknownType(name, preset string, known []string) *Located {
 // directory.
 func NoWorkspace() *Located {
 	return &Located{Code: "no_workspace", Message: "No .khub workspace found. Run khub init <preset>"}
+}
+
+// UpgradeUnreadable is `os_error`: upgrade copies the whole workspace into a
+// candidate before changing anything, and one file could not be read.
+func UpgradeUnreadable(path string) *Located {
+	return &Located{
+		Code: "os_error",
+		Message: fmt.Sprintf("Upgrade cannot read %s, and it copies the whole workspace before changing anything; "+
+			"nothing was written. Make the file readable (or move it out of the workspace) and run khub upgrade again", path),
+	}
+}
+
+// ConfigMissing is a workspace whose .khub/config.yaml is gone: khub cannot
+// read its preset or thresholds, and re-running init recreates only missing
+// files.
+func ConfigMissing() *Located {
+	return &Located{
+		Code: "config_missing",
+		Message: ".khub/config.yaml is missing, so khub cannot read this workspace's preset or settings. " +
+			"Run khub init <preset> . --force here: it recreates only missing files and keeps the schema and entities",
+	}
 }
 
 // NoPreset is the upgrade guard: a workspace whose config.yaml records no
@@ -207,45 +249,6 @@ func IDPrefixUndecided(type_, by string, members []string) *Located {
 	}
 }
 
-// SlugTaken is a slug that already names an entity of the type. An explicit
-// --id is the caller's own collision; a minted one is the design working
-// (minting reads no siblings, so the same title mints the same id), and the
-// message names the way out.
-func SlugTaken(slug, type_ string, minted bool) *Located {
-	message := fmt.Sprintf("Slug '%s' is already taken in %s; choose another --id", slug, type_)
-	if minted {
-		message = fmt.Sprintf("Slug '%s' already exists in %s; "+
-			"pass --id <slug> to name this one differently", slug, type_)
-	}
-	return &Located{Code: "slug_taken", Message: message, Type: type_, Target: slug}
-}
-
-// ReservedSlug is `invalid_slug`: the file or folder name the slug would
-// write is one Windows reserves for a device (schema.ReservedDeviceName holds
-// the list). It is refused on every platform, so a workspace written
-// anywhere checks out on Windows. As SlugTaken does, the way out names the
-// flag the caller has not yet used.
-func ReservedSlug(slug, type_ string, minted bool) *Located {
-	message := fmt.Sprintf("Slug '%s' in %s is a reserved device name on Windows; choose another --id", slug, type_)
-	if minted {
-		message = fmt.Sprintf("Slug '%s' in %s is a reserved device name on Windows; "+
-			"pass --id <slug> to name this one differently", slug, type_)
-	}
-	return &Located{Code: "invalid_slug", Message: message, Type: type_, Target: slug}
-}
-
-// AliasTaken is `alias_taken`: a new entity's slug is already another
-// entity's alias, so creating it would split one thing into two. The way out
-// names the flag the caller has not yet used, as SlugTaken does.
-func AliasTaken(slug, owner string, minted bool) *Located {
-	message := fmt.Sprintf("'%s' is an alias of %s; choose another --id", slug, owner)
-	if minted {
-		message = fmt.Sprintf("'%s' is an alias of %s; pass --id <slug> to name this one differently",
-			slug, owner)
-	}
-	return &Located{Code: "alias_taken", Message: message, Target: slug}
-}
-
 // StrictUnknownField is `strict_unknown_field`: a field the type does not
 // declare, refused because --strict was passed.
 func StrictUnknownField(field string) *Located {
@@ -283,6 +286,101 @@ func NumberViolation(value, field string) *Located {
 	return &Located{
 		Code:     "number_violation",
 		Message:  fmt.Sprintf("'%s' is not a valid number for %s", value, field),
+		Relation: field,
+		Target:   value,
+	}
+}
+
+// ValueShape is `value_shape`: a command-line value for a field whose value is
+// an object (a mapping) or a list of them. One string cannot spell a mapping,
+// and storing it would replace the object with text.
+func ValueShape(value, field string, list bool) *Located {
+	shape := "an object"
+	if list {
+		shape = "a list of objects"
+	}
+	return &Located{
+		Code: "value_shape",
+		Message: fmt.Sprintf("Field '%s' holds %s, which a command-line value cannot express; "+
+			"write it in the entity file", field, shape),
+		Relation: field,
+		Target:   value,
+	}
+}
+
+// DraftRetired is `draft_retired`: a write naming the `draft` field, which
+// `status` replaced as the publish flag.
+func DraftRetired() *Located {
+	return &Located{
+		Code: "draft_retired",
+		Message: "The 'draft' field is retired; status carries the publish state. " +
+			"Run `khub edit <id> status draft|stable`, or pass --draft to add",
+		Target: "draft",
+	}
+}
+
+// ClockPinInvalid is `clock_pin_invalid`: KHUB_PARITY_NOW holds neither form
+// the clock reads, so no command runs rather than one that reads the real
+// clock while the caller believes it pinned.
+func ClockPinInvalid(value string) *Located {
+	return &Located{
+		Code: "clock_pin_invalid",
+		Message: fmt.Sprintf("KHUB_PARITY_NOW '%s' is neither a date (2026-01-15) nor an offset "+
+			"datetime (2026-01-15T10:00:00Z); fix or unset it", value),
+		Target: value,
+	}
+}
+
+// FieldShadowsFlag is `flag_shadowed`: the caller passed --<field> to a write
+// verb, and the type being written declares a field of that name. The verb
+// reads its own flag first, so the value would silently miss the field. Only
+// the flag form is ambiguous: `khub edit <id> <field> <value>` sets the field.
+// hint says how to do without the flag until the field is renamed.
+func FieldShadowsFlag(type_, field, command, hint string) *Located {
+	return &Located{
+		Code: "flag_shadowed",
+		Message: fmt.Sprintf("--%s is ambiguous for type '%s': it is both a `khub %s` flag and the "+
+			"type's field '%s'. Rename the field in the schema; until then, leave --%s out (%s) "+
+			"and set the field with `khub edit <id> %s <value>`",
+			field, type_, command, field, field, hint, field),
+		Type:   type_,
+		Target: field,
+	}
+}
+
+// CommitRefused is `commit_refused`: `verify --commit` could not make the
+// signed commit it promises. khub never commits unsigned; the reason says what
+// to fix.
+func CommitRefused(reason string) *Located {
+	return &Located{Code: "commit_refused", Message: "Refusing to commit: " + reason}
+}
+
+// UnknownTier is `filter_error`: a review tier khub does not know, with the
+// tiers the option takes.
+func UnknownTier(value string, tiers []string) *Located {
+	return &Located{
+		Code:    "filter_error",
+		Message: fmt.Sprintf("No trust tier '%s'. Tiers: %s", value, strings.Join(tiers, ", ")),
+		Target:  value,
+	}
+}
+
+// NoReviewList is `invalid_schema`: `verify` on a type whose schema does not
+// declare `verified` as a list of objects, so it has nowhere to record one.
+func NoReviewList(type_ string) *Located {
+	return &Located{
+		Code:    "invalid_schema",
+		Message: fmt.Sprintf("Type '%s' does not declare verified as a list of objects, so it records no review", type_),
+		Type:    type_,
+	}
+}
+
+// DateViolation is `date_violation`: a value that is not a valid date or
+// datetime (kind) for field.
+func DateViolation(value, kind, field string) *Located {
+	return &Located{
+		Code:     "date_violation",
+		Message:  fmt.Sprintf("'%s' is not a valid %s for %s", value, kind, field),
 		Relation: field,
 		Target:   value,
 	}
@@ -460,4 +558,214 @@ func PathIgnored(type_, path string) *Located {
 		Type:   type_,
 		Target: path,
 	}
+}
+
+// TextTooLarge is `malformed_entity`: a text document past khub's size cap.
+// path is empty when the caller holds only the text.
+func TextTooLarge(path string, size, limit int) *Located {
+	where := "The document"
+	if path != "" {
+		where = path
+	}
+	return &Located{
+		Code:    "malformed_entity",
+		Message: fmt.Sprintf("%s is %d bytes, past khub's %d-byte limit for a text document", where, size, limit),
+	}
+}
+
+// --- OKF export and import ---------------------------------------------------
+
+// ExportTargetOverlaps is `export_target_overlaps`: the bundle directory is
+// the workspace, inside it, or holds it, so a scan would read one as the other.
+func ExportTargetOverlaps(target string) *Located {
+	target = filepath.ToSlash(target)
+	return &Located{
+		Code: "export_target_overlaps",
+		Message: fmt.Sprintf("Refusing to export into %s: it overlaps the workspace, so one would "+
+			"be read as part of the other. Pass a directory outside the workspace that does not hold it", target),
+		Target: target,
+	}
+}
+
+// ExportTargetNotDirectory is `export_target_not_directory`: the target is a
+// file.
+func ExportTargetNotDirectory(target string) *Located {
+	target = filepath.ToSlash(target)
+	return &Located{
+		Code:    "export_target_not_directory",
+		Message: fmt.Sprintf("Refusing to export into %s: it is a file. Pass a directory", target),
+		Target:  target,
+	}
+}
+
+// ExportTargetNotEmpty is `export_target_not_empty`: the target holds files
+// and --force was not passed.
+func ExportTargetNotEmpty(target string) *Located {
+	target = filepath.ToSlash(target)
+	return &Located{
+		Code: "export_target_not_empty",
+		Message: fmt.Sprintf("Target %s is not empty. Pass --force to replace it, which khub does only "+
+			"for a bundle it exported before", target),
+		Target: target,
+	}
+}
+
+// ExportTargetNotBundle is `export_target_not_bundle`: --force names a
+// non-empty directory that is not a previous export, so replacing it would
+// destroy files khub did not write.
+func ExportTargetNotBundle(target string) *Located {
+	target = filepath.ToSlash(target)
+	return &Located{
+		Code: "export_target_not_bundle",
+		Message: fmt.Sprintf("Refusing to replace %s: it is not a bundle khub exported (no .khub-export "+
+			"at its root). Export into an empty or new directory", target),
+		Target: target,
+	}
+}
+
+// ExportTargetUnsafe is `export_target_unsafe`: --force names a previous
+// export that now holds something replacing it would delete — a workspace's
+// .khub/, a repository's .git/, or a file the export did not write.
+func ExportTargetUnsafe(target, path string) *Located {
+	target = filepath.ToSlash(target)
+	return &Located{
+		Code: "export_target_unsafe",
+		Message: fmt.Sprintf("Refusing to replace %s: it holds %s, which khub's export did not write "+
+			"and replacing the bundle would delete. Move it out, or export into an empty or new directory",
+			target, path),
+		Target: target,
+	}
+}
+
+// ExportPathCollision is `export_path_collision`: two entities' concepts, or
+// a concept and a reserved OKF name, would share one bundle path.
+func ExportPathCollision(id, path, holder string) *Located {
+	return &Located{
+		Code: "export_path_collision",
+		Message: fmt.Sprintf("Cannot export %s: its concept path %s is already %s. "+
+			"Rename one of the entities", id, path, holder),
+		Target: path,
+	}
+}
+
+// ImportBundleUnreadable is `import_bundle_unreadable`: the bundle is not a
+// directory khub can read.
+func ImportBundleUnreadable(bundle, why string) *Located {
+	bundle = filepath.ToSlash(bundle)
+	return &Located{
+		Code:    "import_bundle_unreadable",
+		Message: fmt.Sprintf("Bundle %s %s. Pass the directory an OKF bundle lives in", bundle, why),
+		Target:  bundle,
+	}
+}
+
+// ImportBundleOverlaps is `import_bundle_overlaps`: the bundle and the
+// workspace overlap, so the workspace would read its own files as concepts.
+func ImportBundleOverlaps(bundle string) *Located {
+	bundle = filepath.ToSlash(bundle)
+	return &Located{
+		Code: "import_bundle_overlaps",
+		Message: fmt.Sprintf("Refusing to import %s: the bundle and the workspace overlap, so the "+
+			"workspace would read its own files as concepts. Import a bundle outside the workspace", bundle),
+		Target: bundle,
+	}
+}
+
+// ImportTypeMapInvalid is `import_type_map_invalid`: the --type-map file is
+// unreadable, not a mapping of strings, or names a type the workspace lacks.
+func ImportTypeMapInvalid(file, why string) *Located {
+	file = filepath.ToSlash(file)
+	return &Located{
+		Code: "import_type_map_invalid",
+		Message: fmt.Sprintf("Type map %s %s. It must be a YAML mapping of OKF type to a declared "+
+			"khub type, one string each: `Metric: capability`", file, why),
+		Target: file,
+	}
+}
+
+// QuarantineTaken is `quarantine_taken`: an imported concept already carries
+// a key import must write (`okf_verified`, `okf_type`, `okf_unresolved`), so
+// what import quarantines there (what) would overwrite it.
+func QuarantineTaken(key, what string) *Located {
+	return &Located{
+		Code: "quarantine_taken",
+		Message: fmt.Sprintf("The concept already carries `%s`, so %s cannot be quarantined there "+
+			"without overwriting it", key, what),
+	}
+}
+
+// ImportWriteFailed is `import_write_failed`: a write failed after the plan
+// was final, and undoing the run's other writes failed too. left lists the
+// files it could not remove or restore. A run that undid everything reports
+// the write's own OS error instead.
+func ImportWriteFailed(path, cause string, left []string) *Located {
+	path = filepath.ToSlash(path)
+	return &Located{
+		Code: "import_write_failed",
+		Message: fmt.Sprintf("Import stopped: writing %s failed (%s), and these files it wrote could not be "+
+			"removed or restored, so inspect them before retrying: %s", path, cause, strings.Join(left, ", ")),
+		Target: path,
+	}
+}
+
+// StatusDraftConflict is `status_draft_conflict`: `add --draft` with a
+// `--status` that is not draft asks for two publish states at once.
+func StatusDraftConflict(status string) *Located {
+	return &Located{
+		Code: "status_draft_conflict",
+		Message: fmt.Sprintf("--draft writes status: draft, but --status says '%s'. "+
+			"Pass one of them", status),
+	}
+}
+
+// Naming is how a new slug was chosen. A refusal's advice depends on it:
+// what to pass, or what to rename.
+type Naming int
+
+const (
+	NamedByID Naming = iota // an explicit --id
+	Minted                  // minted from the name or title
+	Imported                // an imported concept's file stem
+)
+
+// advice is the corrective step a slug refusal names.
+func (n Naming) advice() string {
+	switch n {
+	case Minted:
+		return "pass --id <slug> to name this one differently"
+	case Imported:
+		return "rename the concept's file in the bundle, or remove the existing entity"
+	default:
+		return "choose another --id"
+	}
+}
+
+// SlugTaken is `slug_taken`: another entity of the type holds the slug.
+func SlugTaken(slug, type_ string, naming Naming) *Located {
+	message := fmt.Sprintf("Slug '%s' is already taken in %s; %s", slug, type_, naming.advice())
+	if naming != NamedByID {
+		message = fmt.Sprintf("Slug '%s' already exists in %s; %s", slug, type_, naming.advice())
+	}
+	return &Located{Code: "slug_taken", Message: message, Type: type_, Target: slug}
+}
+
+// ReservedSlug is `invalid_slug`: the slug is a Windows device name.
+func ReservedSlug(slug, type_ string, naming Naming) *Located {
+	return &Located{Code: "invalid_slug", Message: fmt.Sprintf(
+		"Slug '%s' in %s is a reserved device name on Windows; %s", slug, type_, naming.advice()),
+		Type: type_, Target: slug}
+}
+
+// NavigationSlug is `invalid_slug`: the slug's file would be an OKF
+// navigation file (index.md, log.md).
+func NavigationSlug(slug, type_, name string, naming Naming) *Located {
+	return &Located{Code: "invalid_slug", Message: fmt.Sprintf(
+		"Slug '%s' in %s is reserved: %s is an OKF navigation file; %s", slug, type_, name, naming.advice()),
+		Type: type_, Target: slug}
+}
+
+// AliasTaken is `alias_taken`: the slug is another entity's alias.
+func AliasTaken(slug, owner string, naming Naming) *Located {
+	return &Located{Code: "alias_taken", Message: fmt.Sprintf(
+		"'%s' is an alias of %s; %s", slug, owner, naming.advice()), Target: slug}
 }

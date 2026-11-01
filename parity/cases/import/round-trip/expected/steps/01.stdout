@@ -1,0 +1,1 @@
+{"path": "src", "preset": "firm-ops", "version": "0.3.0", "name": "src", "source": null, "entity_files_modified": 0, "seeded_over_corpus": false, "singletons_created": [], "preserved": [], "index": "created", "skill_hint": "cd src && npx skills add endgame-build/khub"}

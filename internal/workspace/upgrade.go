@@ -26,6 +26,7 @@ import (
 	"github.com/endgame-build/khub/internal/errs"
 	"github.com/endgame-build/khub/internal/fsio"
 	"github.com/endgame-build/khub/internal/introspect"
+	"github.com/endgame-build/khub/internal/migrate"
 	"github.com/endgame-build/khub/internal/omap"
 	"github.com/endgame-build/khub/internal/presets"
 	"github.com/endgame-build/khub/internal/schema"
@@ -70,6 +71,12 @@ type UpgradeResult struct {
 	VersionFrom string
 	VersionTo   string
 	Config      []ConfigChange
+	// Carried lists the policy and storage keys kept from the workspace over
+	// the shipped files (see carryEdits).
+	Carried []Carried
+	// Dropped lists the carried keys let go because the schema they produced
+	// did not resolve (see settleCarried).
+	Dropped []Dropped
 	// SingletonsCreated names the singleton types this run minted — creations
 	// only, the same rule init follows.
 	SingletonsCreated []string
@@ -78,6 +85,10 @@ type UpgradeResult struct {
 	SchemaDrift  []string
 	DryRun       bool
 	RemovedTypes []string
+	// Migrated lists the entities rewritten from a legacy shape, and
+	// MigrationConflicts the ones left unchanged because their fields disagree.
+	Migrated           []migrate.Entity
+	MigrationConflicts []migrate.Conflict
 }
 
 // Upgrade brings the workspace at root up to the preset the binary ships:
@@ -116,9 +127,12 @@ func upgradeCandidate(root string, opt UpgradeOptions, sourceDir string) (*Upgra
 	target := pyPath(filepath.ToSlash(root))
 	khubDir := pyJoin(target, ".khub")
 	config := []ConfigChange{}
+	carried := []Carried{}
+	dropped := []Dropped{}
 	versionTo := versionFrom
 	if !opt.NoSchema {
-		config, err = replaceConfig(target, khubDir, preset, merged, source)
+		sameVersion := preset == recorded && versionFrom == merged.Version
+		config, carried, dropped, err = replaceConfig(target, khubDir, preset, merged, source, sameVersion)
 		if err != nil {
 			return nil, err
 		}
@@ -159,50 +173,72 @@ func upgradeCandidate(root string, opt UpgradeOptions, sourceDir string) (*Upgra
 		VersionFrom:       versionFrom,
 		VersionTo:         versionTo,
 		Config:            config,
+		Carried:           carried,
+		Dropped:           dropped,
 		SingletonsCreated: created,
 		SchemaDrift:       drift,
 	}, nil
 }
 
 // replaceConfig puts every shipped file back over the workspace copy: the
-// three layer files in write order, then the templates by name. Only what
-// changed is reported.
-func replaceConfig(target, khubDir, preset string, merged *flattened, source fs.FS) ([]ConfigChange, error) {
+// three layer files in write order, then the templates by name. policy.yaml
+// and storage.yaml keep the workspace's own per-type keys (carryEdits); the
+// ontology is replaced whole. Only what changed is reported.
+func replaceConfig(target, khubDir, preset string, merged *flattened, source fs.FS, sameVersion bool) ([]ConfigChange, []Carried, []Dropped, error) {
 	changes := []ConfigChange{}
-	for _, layer := range merged.layers() {
-		incoming, err := layerBytes(preset, merged.Version, layer.Doc)
-		if err != nil {
-			return nil, err
+	declared := map[string]bool{}
+	if entities, ok := mapIn(merged.Ontology, "ontology"); ok {
+		if types, ok := mapIn(entities, "entities"); ok {
+			for _, t := range types.Keys() {
+				declared[t] = true
+			}
 		}
-		change, reported, err := replaceFile(target, pyJoin(khubDir, layer.File), incoming, true)
+	}
+	settled, carried, dropped, err := settleCarried(target, khubDir, merged, declared, sameVersion)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	carried = append([]Carried{}, carried...)
+	dropped = append([]Dropped{}, dropped...)
+	for _, layer := range merged.layers() {
+		doc := layer.Doc
+		path := pyJoin(khubDir, layer.File)
+		if d, ok := settled[layer.File]; ok {
+			doc = d
+		}
+		incoming, err := layerBytes(preset, merged.Version, doc)
 		if err != nil {
-			return nil, err
+			return nil, nil, nil, err
+		}
+		change, reported, err := replaceFile(target, path, incoming, true)
+		if err != nil {
+			return nil, nil, nil, err
 		}
 		if reported {
 			changes = append(changes, change)
 		}
 	}
 	if !presets.HasTemplates(preset, source) {
-		return changes, nil
+		return changes, carried, dropped, nil
 	}
 	tplDir := pyJoin(khubDir, "templates")
 	if err := fsio.MkdirAll(osPath(target), osPath(tplDir)); err != nil {
-		return nil, err
+		return nil, nil, nil, err
 	}
 	for _, tpl := range presets.Templates(preset, source) {
 		payload, err := fs.ReadFile(source, tpl)
 		if err != nil {
-			return nil, err
+			return nil, nil, nil, err
 		}
 		change, reported, err := replaceFile(target, pyJoin(tplDir, pyName(tpl)), string(payload), false)
 		if err != nil {
-			return nil, err
+			return nil, nil, nil, err
 		}
 		if reported {
 			changes = append(changes, change)
 		}
 	}
-	return changes, nil
+	return changes, carried, dropped, nil
 }
 
 // replaceFile is kb's _replace_config for one file. A workspace predating the

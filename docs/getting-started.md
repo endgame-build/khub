@@ -151,7 +151,7 @@ khub get acme-diagnostic --format json
 ```
 
 ```text
-{"id": "project/acme-diagnostic", "type": "project", "slug": "acme-diagnostic", "path": "projects/acme-diagnostic/_index.md", "frontmatter": {"type": "project", "created": "2026-07-08", "updated": "2026-07-08", "draft": false, "title": "Acme Diagnostic", "client": "acme-corp", "owner": "dana-lee"}, "body": ""}
+{"id": "project/acme-diagnostic", "type": "project", "slug": "acme-diagnostic", "path": "projects/acme-diagnostic/_index.md", "frontmatter": {"type": "project", "created": "2026-07-08", "updated": "2026-07-08", "title": "Acme Diagnostic", "client": "acme-corp", "owner": "dana-lee"}, "body": ""}
 ```
 
 That JSON is a projection. The file on disk is the truth, plain Markdown with YAML frontmatter, ready to commit:
@@ -165,7 +165,6 @@ cat projects/acme-diagnostic/_index.md
 type: project
 created: 2026-07-08
 updated: 2026-07-08
-draft: false
 title: Acme Diagnostic
 client: acme-corp
 owner: dana-lee
@@ -264,28 +263,31 @@ khub status
 ```
 
 ```text
-          status
-┏━━━━━━━━━━━━━━━━┳━━━━━━━┓
-┃ type           ┃ count ┃
-┡━━━━━━━━━━━━━━━━╇━━━━━━━┩
-│ opportunity    │     0 │
-│ project        │     1 │
-│ meeting        │     0 │
-│ transcript     │     0 │
-│ fragment       │     0 │
-│ case-study     │     0 │
-│ partnership    │     0 │
-│ person         │     2 │
-│ client         │     1 │
-├────────────────┼───────┤
-│ draft / active │ 0 / 4 │
-│ orphan         │     1 │
-│ stale          │     0 │
-│ stray          │     0 │
-│ malformed      │     0 │
-│ OKF-conformant │   yes │
-└────────────────┴───────┘
+ status
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━┓
+┃ type                         │ count     ┃
+┡━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━┩
+│ opportunity                  │ 0         │
+│ project                      │ 1         │
+│ meeting                      │ 0         │
+│ transcript                   │ 0         │
+│ fragment                     │ 0         │
+│ case-study                   │ 0         │
+│ partnership                  │ 0         │
+│ person                       │ 2         │
+│ client                       │ 1         │
+│ draft / active               │ 0 / 4     │
+│ orphan                       │ 1         │
+│ stale                        │ 0         │
+│ expired                      │ 0         │
+│ unverified / machine / human │ 4 / 0 / 0 │
+│ stray                        │ 0         │
+│ malformed                    │ 0         │
+│ OKF-conformant               │ yes       │
+└──────────────────────────────┴───────────┘
 ```
+
+OKF 0.2 asks every Markdown file in the tree for frontmatter with a `type`. The agent files `init` wired in are khub's own and do not count, but a `README.md` or a `docs/` page without a `type` would turn the flag to `no`, and `status` would print a `not OKF-conformant: <path>` line for each.
 
 ## Gate it
 

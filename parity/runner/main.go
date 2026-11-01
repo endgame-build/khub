@@ -415,7 +415,7 @@ func baseEnv(home, mode string) []string {
 		"XDG_CONFIG_HOME=" + filepath.Join(home, ".config"),
 		"TZ=UTC", "LANG=C.UTF-8", "LC_ALL=C.UTF-8",
 		"COLUMNS=80",
-		"KHUB_PARITY_NOW=2026-01-15",
+		"KHUB_PARITY_NOW=2026-01-15", "KHUB_ACTOR=khub",
 		"GIT_AUTHOR_NAME=Parity", "GIT_AUTHOR_EMAIL=parity@example.com",
 		"GIT_COMMITTER_NAME=Parity", "GIT_COMMITTER_EMAIL=parity@example.com",
 		"GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_SYSTEM=/dev/null",

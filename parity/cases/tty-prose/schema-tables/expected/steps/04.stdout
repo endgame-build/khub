@@ -1,16 +1,16 @@
- schema: build-hub@0.6.0
+ schema: build-hub@0.7.0
 ┏━━━━━━━━━━━━━┳━━━━━━━━┳━━━━━━━━━━━┳━━━━━━━━━━━┓
 ┃ type        │ fields │ relations │ layout    ┃
 ┡━━━━━━━━━━━━━╇━━━━━━━━╇━━━━━━━━━━━╇━━━━━━━━━━━┩
-│ prd         │ 10     │ 4         │ singleton │
-│ arc42       │ 10     │ 4         │ singleton │
-│ capability  │ 10     │ 4         │ file      │
-│ actor       │ 10     │ 4         │ file      │
-│ use-case    │ 11     │ 7         │ file      │
-│ requirement │ 12     │ 7         │ file      │
-│ adr         │ 11     │ 7         │ file      │
-│ system      │ 11     │ 4         │ file      │
-│ component   │ 15     │ 8         │ file      │
-│ api         │ 12     │ 6         │ file      │
-│ repo        │ 12     │ 4         │ file      │
+│ prd         │ 15     │ 3         │ singleton │
+│ arc42       │ 15     │ 3         │ singleton │
+│ capability  │ 15     │ 3         │ file      │
+│ actor       │ 15     │ 3         │ file      │
+│ use-case    │ 16     │ 6         │ file      │
+│ requirement │ 17     │ 6         │ file      │
+│ adr         │ 16     │ 6         │ file      │
+│ system      │ 16     │ 3         │ file      │
+│ component   │ 20     │ 7         │ file      │
+│ api         │ 16     │ 5         │ file      │
+│ repo        │ 16     │ 3         │ file      │
 └─────────────┴────────┴───────────┴───────────┘

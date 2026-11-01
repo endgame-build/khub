@@ -249,3 +249,18 @@ func TestSplitLines(t *testing.T) {
 		}
 	}
 }
+
+// A date that does not parse is surfaced, never skipped: first, as the oldest,
+// with the value as written and no age.
+func TestStaleListsAnUnparseableDateFirst(t *testing.T) {
+	root := staleWS(t)
+	writeRaw(t, root, "fragments/bad-note.md",
+		"---\ntype: fragment\nstage: raw\nupdated: 2026-02-30\n---\n")
+	report := mustStale(t, root, ptr(90))
+	if got := slugOrder(report); len(got) != 3 || got[0] != "bad-note" {
+		t.Fatalf("order = %v, want bad-note first", got)
+	}
+	if e := report.Entries[0]; !e.Unparseable || e.Raw != "2026-02-30" || e.Source != "updated" {
+		t.Errorf("entry = %+v", e)
+	}
+}

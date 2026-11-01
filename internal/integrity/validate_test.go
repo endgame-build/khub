@@ -8,6 +8,8 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
+	"sort"
 	"strings"
 	"testing"
 )
@@ -253,7 +255,7 @@ func TestDirectoryAtEntityPathRefusesValidation(t *testing.T) {
 // order; a body missing one is a `body` finding on that entity.
 func TestValidateBodyStructureContract(t *testing.T) {
 	root := wsFor(t, "build-hub")
-	create(t, root, "adr", "ad-2026-01-15-x", "title", "X", "status", "proposed")
+	create(t, root, "adr", "ad-2026-01-15-x", "title", "X", "decision", "proposed")
 	// Replace the templated body with prose that satisfies no heading.
 	path := "knowledge/decisions/ad-2026-01-15-x.md"
 	front, _, _ := strings.Cut(readRaw(t, root, path), "\n---\n")
@@ -315,7 +317,7 @@ func TestIdGateThreeArms(t *testing.T) {
 	root := wsFor(t, "build-hub")
 	adr := func(slug, title string) {
 		seed(t, root, "knowledge/decisions/"+slug+".md", kv{"type", "adr"}, kv{"title", title},
-			kv{"status", "proposed"}, kv{"created", "2026-01-15"})
+			kv{"decision", "proposed"}, kv{"created", "2026-01-15"})
 	}
 	cmp := func(slug, title string) {
 		seed(t, root, "knowledge/components/"+slug+".md", kv{"type", "component"}, kv{"title", title},
@@ -374,7 +376,7 @@ func TestIdGateDeviceSlug(t *testing.T) {
 	const reason = "slug is a reserved device name on Windows — rename it with `git mv`, then fix references to it"
 	file := wsFor(t, "build-hub")
 	seed(t, file, "knowledge/decisions/con.md", kv{"type", "adr"}, kv{"title", "Con"},
-		kv{"status", "proposed"}, kv{"created", "2026-01-15"})
+		kv{"decision", "proposed"}, kv{"created", "2026-01-15"})
 	folder := wsFor(t, "firm-ops")
 	seed(t, folder, "projects/nul/_index.md", kv{"type", "project"}, kv{"title", "Nul"},
 		kv{"updated", "2026-01-15"})
@@ -389,7 +391,7 @@ func TestIdGateDeviceSlug(t *testing.T) {
 // A collection row is not a file, so a device-named slug passes the id gate.
 func TestIdGateExemptsCollectionDeviceSlug(t *testing.T) {
 	root := collectionWS(t)
-	create(t, root, "repo", "nul", "repo", "acme/nul", "status", "active")
+	create(t, root, "repo", "nul", "repo", "acme/nul")
 	if report := mustValidate(t, root, nil, false); len(report.Errors) != 0 {
 		t.Fatalf("errors = %v", report.Errors)
 	}
@@ -464,4 +466,38 @@ func writePresetDir(t *testing.T, name, doc string) string {
 		}
 	}
 	return dir
+}
+
+// validate names `khub upgrade` only for a value upgrade migrates: a retired
+// status it maps, bare `sources` entries, and a date-only `stale_after`. A typo gets the plain enum
+// error, and an object entry beside bare ones keeps its own index.
+func TestValidateNamesUpgradeOnlyForWhatItMigrates(t *testing.T) {
+	root := cleanWS(t)
+	dated := []kv{{"created", "2026-06-01"}, {"updated", "2026-06-01"}}
+	seed(t, root, "clients/legacy.md", append([]kv{{"type", "client"}, {"name", "L"}, {"status", "active"}}, dated...)...)
+	seed(t, root, "clients/typo.md", append([]kv{{"type", "client"}, {"name", "T"}, {"status", "stabel"}}, dated...)...)
+	seed(t, root, "clients/mixed.md", append([]kv{{"type", "client"}, {"name", "M"}, {"sources", []any{
+		"initech", om("resource", "https://ok.example"), om("id", "s3")}}}, dated...)...)
+	seed(t, root, "clients/expiring.md", append([]kv{{"type", "client"}, {"name", "E"}, {"stale_after", "2026-12-31"}}, dated...)...)
+	seed(t, root, "clients/soon.md", append([]kv{{"type", "client"}, {"name", "S"}, {"stale_after", "soon"}}, dated...)...)
+	var got []string
+	for _, e := range mustValidate(t, root, nil, false).Errors {
+		if e.Type == "client" {
+			got = append(got, e.Slug+" "+e.Field+": "+e.Reason)
+		}
+	}
+	pat := `(\d{4}-\d{2}-\d{2}[Tt]\d{2}:\d{2}:\d{2}(\.\d+)?([Zz]|[+-]\d{2}:\d{2}))`
+	want := []string{
+		"expiring stale_after: '2026-12-31' does not match the pattern for stale_after " + pat +
+			" — run `khub upgrade` to make a date-only stale_after a datetime",
+		"legacy status: 'active' is not a valid status (draft, stable, deprecated) — run `khub upgrade` to migrate a legacy status",
+		"mixed sources: sources holds bare entries ('initech') — run `khub upgrade` to move them to references",
+		"mixed sources: sources[2].resource is required",
+		"soon stale_after: 'soon' does not match the pattern for stale_after " + pat,
+		"typo status: 'stabel' is not a valid status (draft, stable, deprecated)",
+	}
+	sort.Strings(got)
+	if !slices.Equal(got, want) {
+		t.Fatalf("got\n%s", strings.Join(got, "\n"))
+	}
 }

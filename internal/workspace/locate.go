@@ -6,7 +6,9 @@
 package workspace
 
 import (
+	"errors"
 	"fmt"
+	"io/fs"
 	"math"
 	"os"
 	"path/filepath"
@@ -53,7 +55,7 @@ func FindWorkspace(start string) (string, error) {
 // from .khub/config.yaml, as the two-key ordered record the schema/status
 // views embed verbatim ({"preset": ..., "version": ...}; key order is the
 // JSON contract). Missing or null values read as "". A missing config.yaml
-// errors like Python's FileNotFoundError (the CLI os_error boundary).
+// is config_missing.
 func Provenance(root string) (*omap.Map, error) {
 	cfg, err := loadConfig(root)
 	if err != nil {
@@ -104,9 +106,13 @@ func StaleDays(root string) (int, error) {
 }
 
 // loadConfig reads and parses .khub/config.yaml — resolve.load_yaml applied
-// to the config path, including the `data or {}` falsy-to-empty collapse.
+// to the config path, including the `data or {}` falsy-to-empty collapse. A
+// missing file is the config_missing refusal.
 func loadConfig(root string) (*omap.Map, error) {
 	data, err := fsio.ReadFile(root, filepath.Join(root, ".khub", "config.yaml"))
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil, errs.ConfigMissing()
+	}
 	if err != nil {
 		return nil, err
 	}

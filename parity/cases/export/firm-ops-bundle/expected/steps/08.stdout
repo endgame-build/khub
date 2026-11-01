@@ -1,0 +1,12 @@
+---
+type: fragment
+title: index.md
+---
+---
+okf_version: '0.2'
+---
+# Subdirectories
+
+* [clients](clients/index.md)
+* [identity](identity/index.md)
+* [opportunities](opportunities/index.md)

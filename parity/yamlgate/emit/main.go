@@ -1,6 +1,11 @@
 // T3 — emit-from-scratch differential: parity/corpus/emit-cases.jsonl holds
 // (value, ruamel RT dump, ruamel safe/4096 dump) recorded from Python; the
 // canon emitter must reproduce both byte-for-byte.
+//
+// A row whose ruamel dump holds a raw NEL, LS or PS is excluded and counted:
+// ruamel escapes them in double quotes, so a raw one sits in a single-quoted
+// scalar that no reader reads back (ruamel folds it to a space), and canon
+// deliberately double-quotes such a value instead.
 package main
 
 import (
@@ -33,7 +38,7 @@ func main() {
 	sc := bufio.NewScanner(f)
 	sc.Buffer(make([]byte, 1<<20), 1<<20)
 
-	total, okRT, okSafe, shown := 0, 0, 0, 0
+	total, okRT, okSafe, shown, excluded := 0, 0, 0, 0, 0
 	maxShow := 12
 	if v := os.Getenv("SHOW"); v != "" {
 		_, _ = fmt.Sscanf(v, "%d", &maxShow) // unparsable SHOW keeps the default
@@ -42,6 +47,10 @@ func main() {
 		var r row
 		if err := json.Unmarshal(sc.Bytes(), &r); err != nil {
 			panic(err)
+		}
+		if strings.ContainsAny(r.RT+r.Safe, "\u0085\u2028\u2029") {
+			excluded++
+			continue
 		}
 		total++
 		val, err := canon.DecodeOrderedJSON(r.Value)
@@ -64,7 +73,8 @@ func main() {
 			fmt.Printf("== %s (safe) err=%v\n  want %s\n  got  %s\n", r.Name, errSafe, firstDiff(r.Safe, gotSafe), firstDiffB(r.Safe, gotSafe))
 		}
 	}
-	fmt.Printf("\nT3: rt %d/%d  safe %d/%d\n", okRT, total, okSafe, total)
+	fmt.Printf("\nexcluded %d rows ruamel writes a raw NEL, LS or PS into (it cannot read them back)\n", excluded)
+	fmt.Printf("T3: rt %d/%d  safe %d/%d\n", okRT, total, okSafe, total)
 }
 
 func firstDiff(want, got string) string {

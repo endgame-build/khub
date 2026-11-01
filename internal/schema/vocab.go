@@ -21,6 +21,7 @@ package schema
 import (
 	"errors"
 	"fmt"
+	"path"
 	"regexp"
 	"strconv"
 	"strings"
@@ -28,8 +29,10 @@ import (
 	"github.com/endgame-build/khub/internal/omap"
 )
 
-// Scalar attribute types (schema_model.ScalarType).
-var scalarTypes = []string{"text", "number", "date", "datetime", "bool", "list"}
+// Attribute types (schema_model.ScalarType, plus `object`). An object's
+// value is a mapping whose keys `fields` declares; a list's elements may be
+// declared by `items`.
+var scalarTypes = []string{"text", "number", "date", "datetime", "bool", "list", "object"}
 
 // Layout literal set (schema_model.TypeDecl.layout).
 var layoutLiterals = []string{"file", "folder", "collection", "singleton"}
@@ -56,8 +59,9 @@ const TemplateNamePattern = `^[a-z][a-z0-9-]*$`
 
 var templateNameRE = regexp.MustCompile(TemplateNamePattern)
 
-// AttrDecl is a scalar or enum attribute declaration. Type may be omitted on
-// an override (it is inherited from the base) or when Enum is given.
+// AttrDecl is an attribute declaration. Type may be omitted on an override
+// (it is inherited from the base) or when Enum is given. Fields and Items nest
+// the same grammar: the keys of an object, the element of a list.
 type AttrDecl struct {
 	Type *string // nil = not declared
 	// nil = not declared: an override inherits the base's required, while an
@@ -66,6 +70,8 @@ type AttrDecl struct {
 	Default  any      // nil = not declared (Python cannot tell `default: null` from absent either)
 	Enum     []string // nil/empty = not declared (Python truthiness: [] inherits the base's)
 	Pattern  *string
+	Fields   *Ordered[*AttrDecl] // nil = not declared
+	Items    *AttrDecl           // nil = not declared
 }
 
 // ToDecl is the `to:` union — a single type name (or the literal "any"), or a
@@ -187,6 +193,9 @@ func (t *TypeDecl) storageMatrix() error {
 		if t.Path == nil || *t.Path == "" {
 			return errors.New("a singleton type needs path: the exact file it lives at")
 		}
+		if err := reservedLeaf(*t.Path); err != nil {
+			return err
+		}
 		suffix := strings.TrimLeft(pySuffix(*t.Path), ".")
 		fmtv := t.Format
 		if !t.FormatSet {
@@ -290,11 +299,24 @@ func (t *TypeDecl) parseTemplates() error {
 			return fmt.Errorf("'%s' in a list of paths is not a template; "+
 				"each entry places {slug}", raw)
 		}
+		if err := reservedLeaf(raw); err != nil {
+			return err
+		}
 		tp, err := ParseTemplate(raw, t.Format)
 		if err != nil {
 			return err
 		}
 		t.Templates = append(t.Templates, tp)
+	}
+	return nil
+}
+
+// reservedLeaf refuses a storage path whose file is OKF navigation: an entity
+// stored there would never be read back.
+func reservedLeaf(p string) error {
+	if name := path.Base(p); ReservedEntityName(name) {
+		return fmt.Errorf("'%s' stores entities at %s, which OKF reserves for navigation; "+
+			"choose another file name", p, name)
 	}
 	return nil
 }
@@ -598,7 +620,13 @@ func buildAttrDecl(v any, loc []string, c *vocabCollector) *AttrDecl {
 		ad.Enum = takeStrList(ev, at(loc, "enum"), c)
 	}
 	ad.Pattern = takeStrOrNil(m, "pattern", loc, c)
-	addExtras(m, loc, c, "type", "required", "default", "enum", "pattern")
+	if _, has := m.Get("fields"); has {
+		ad.Fields = buildAttrMap(m, "fields", loc, c)
+	}
+	if iv, has := m.Get("items"); has {
+		ad.Items = buildAttrDecl(iv, at(loc, "items"), c)
+	}
+	addExtras(m, loc, c, "type", "required", "default", "enum", "pattern", "fields", "items")
 	return ad
 }
 

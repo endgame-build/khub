@@ -9,6 +9,7 @@ package canon
 
 import (
 	"fmt"
+	"math/big"
 	"regexp"
 	"strconv"
 	"strings"
@@ -74,28 +75,26 @@ func LoadDocMode(text string, mode ResolveMode) (any, error) {
 		return nil, nil
 	}
 	anchors := map[string]any{}
-	r := &resolver{mode: mode}
+	r := &resolver{mode: mode, sizes: map[string]int{}}
 	return r.node(f.Docs[0].Body, anchors)
 }
 
-type resolver struct{ mode ResolveMode }
+// resolver counts the nodes a document expands to: nodes is every node read
+// so far, aliases included at their anchor's full size, and aliased is the
+// part the aliases added, which MaxAliasNodes caps.
+type resolver struct {
+	mode           ResolveMode
+	nodes, aliased int
+	sizes          map[string]int // anchor name → expanded node count
+}
 
 func (r *resolver) node(n ast.Node, anchors map[string]any) (any, error) {
+	r.nodes++
 	switch x := n.(type) {
 	case *ast.MappingNode:
-		m := omap.New()
-		for _, mv := range x.Values {
-			if err := r.entry(mv, m, anchors); err != nil {
-				return nil, err
-			}
-		}
-		return m, nil
+		return r.mapping(x.Values, anchors)
 	case *ast.MappingValueNode: // single-pair mapping parses as this
-		m := omap.New()
-		if err := r.entry(x, m, anchors); err != nil {
-			return nil, err
-		}
-		return m, nil
+		return r.mapping([]*ast.MappingValueNode{x}, anchors)
 	case *ast.SequenceNode:
 		items := []any{}
 		for _, it := range x.Values {
@@ -107,17 +106,26 @@ func (r *resolver) node(n ast.Node, anchors map[string]any) (any, error) {
 		}
 		return items, nil
 	case *ast.AnchorNode:
+		start := r.nodes
 		v, err := r.node(x.Value, anchors)
 		if err != nil {
 			return nil, err
 		}
-		anchors[x.Name.GetToken().Value] = v
+		name := x.Name.GetToken().Value
+		anchors[name] = v
+		r.sizes[name] = r.nodes - start
 		return v, nil
 	case *ast.AliasNode:
 		name := x.Value.GetToken().Value
 		v, ok := anchors[name]
 		if !ok {
 			return nil, fmt.Errorf("unknown alias '%s'", name)
+		}
+		r.nodes += r.sizes[name]
+		r.aliased += r.sizes[name]
+		if r.aliased > MaxAliasNodes {
+			return nil, fmt.Errorf("aliases expand past %d nodes; khub refuses the document "+
+				"rather than render an alias bomb — write the repeated values out", MaxAliasNodes)
 		}
 		return v, nil
 	case *ast.NullNode:
@@ -134,6 +142,80 @@ func (r *resolver) node(n ast.Node, anchors map[string]any) (any, error) {
 	}
 }
 
+// mapping resolves one mapping's pairs. A plain `<<` key is a YAML merge: its
+// value, a mapping or a list of them, supplies keys the mapping does not
+// write itself, so an explicit key wins wherever it sits. The merged keys'
+// order follows the loader each mode mirrors. ruamel (Mode12) keeps the
+// explicit keys first, then each merged mapping's new keys in list order.
+// PyYAML (Mode11) puts the merged pairs first, walking a merge list from its
+// last mapping, then the explicit pairs, and a key keeps the place where it
+// first appeared and the value it was given last. Merged values are shared,
+// so an alias in a merge counts toward MaxAliasNodes like any other.
+func (r *resolver) mapping(values []*ast.MappingValueNode, anchors map[string]any) (*omap.Map, error) {
+	explicit := omap.New()
+	var merged []*omap.Map // the `<<` mappings in written order; goccy refuses a second `<<`
+	for _, mv := range values {
+		if _, isMerge := mv.Key.(*ast.MergeKeyNode); isMerge {
+			val, err := r.node(mv.Value, anchors)
+			if err != nil {
+				return nil, err
+			}
+			if merged, err = mergeSources(val); err != nil {
+				return nil, err
+			}
+			continue
+		}
+		if err := r.entry(mv, explicit, anchors); err != nil {
+			return nil, err
+		}
+	}
+	if len(merged) == 0 {
+		return explicit, nil
+	}
+	if r.mode == Mode12 {
+		for _, mm := range merged {
+			for _, k := range mm.Keys() {
+				if _, has := explicit.Get(k); !has {
+					v, _ := mm.Get(k)
+					explicit.Set(k, v)
+				}
+			}
+		}
+		return explicit, nil
+	}
+	out := omap.New()
+	put := func(src *omap.Map) {
+		for _, k := range src.Keys() {
+			v, _ := src.Get(k)
+			out.Set(k, v) // omap keeps a key's first position and takes the new value
+		}
+	}
+	for i := len(merged) - 1; i >= 0; i-- {
+		put(merged[i])
+	}
+	put(explicit)
+	return out, nil
+}
+
+// mergeSources reads a `<<` value as the mappings it merges.
+func mergeSources(v any) ([]*omap.Map, error) {
+	if m, ok := v.(*omap.Map); ok {
+		return []*omap.Map{m}, nil
+	}
+	if list, ok := v.([]any); ok {
+		out := make([]*omap.Map, 0, len(list))
+		for _, item := range list {
+			m, ok := item.(*omap.Map)
+			if !ok {
+				return nil, fmt.Errorf("expected a mapping for merging, but found %s", PyTypeName(item))
+			}
+			out = append(out, m)
+		}
+		return out, nil
+	}
+	return nil, fmt.Errorf("expected a mapping or list of mappings for merging, but found %s", PyTypeName(v))
+}
+
 func (r *resolver) entry(mv *ast.MappingValueNode, m *omap.Map, anchors map[string]any) error {
 	keyAny, err := r.node(mv.Key, anchors)
 	if err != nil {
@@ -142,27 +224,6 @@ func (r *resolver) entry(mv *ast.MappingValueNode, m *omap.Map, anchors map[stri
 	key, ok := scalarKeyString(keyAny)
 	if !ok {
 		return fmt.Errorf("unsupported mapping key %v", keyAny)
-	}
-	if key == "<<" { // YAML merge: existing keys win, merges apply in order
-		val, err := r.node(mv.Value, anchors)
-		if err != nil {
-			return err
-		}
-		merges := []any{val}
-		if lst, isList := val.([]any); isList {
-			merges = lst
-		}
-		for _, mg := range merges {
-			if mm, isMap := mg.(*omap.Map); isMap {
-				for _, k := range mm.Keys() {
-					if _, exists := m.Get(k); !exists {
-						v, _ := mm.Get(k)
-						m.Set(k, v)
-					}
-				}
-			}
-		}
-		return nil
 	}
 	if _, dup := m.Get(key); dup {
 		return fmt.Errorf("duplicate key '%s'", key)
@@ -208,7 +269,39 @@ func (r *resolver) scalar(n ast.Node) (any, error) {
 		return lit.Value.Value, nil
 	}
 	s := tok.Value
+	if strings.ContainsRune(strings.TrimSpace(tok.Origin), '\n') {
+		s = foldPlain(tok.Origin)
+	}
 	return ResolvePlainScalarMode(s, r.mode), nil
+}
+
+// foldPlain folds a multi-line plain scalar from its source lines, as YAML
+// does: each line is trimmed, adjacent lines join with one space, and each
+// blank line between them becomes a newline. goccy's own value keeps the
+// trailing space of a continuation line that starts with `-`, so a value the
+// emitter folded there read back with a doubled space.
+func foldPlain(origin string) string {
+	lines := strings.Split(strings.TrimSpace(origin), "\n")
+	var b strings.Builder
+	blank := 0
+	for i, line := range lines {
+		line = strings.Trim(line, " \t\r")
+		switch {
+		case line == "":
+			blank++
+		case i == 0:
+			b.WriteString(line)
+		default:
+			if blank > 0 {
+				b.WriteString(strings.Repeat("\n", blank))
+			} else {
+				b.WriteByte(' ')
+			}
+			b.WriteString(line)
+			blank = 0
+		}
+	}
+	return b.String()
 }
 
 // firstNonPrintable reports the first character PyYAML's Reader would reject.
@@ -313,10 +406,21 @@ func parseYAMLInt11(s string) any {
 		}
 		return n
 	}
-	if neg {
-		t = "-" + t
+	return bigInt(s, t, base, neg)
+}
+
+// bigInt is an integer past int64, parsed in its base and carried as the
+// decimal literal Python's unbounded int would print. Digits the base does
+// not hold stay the string the scalar was.
+func bigInt(s, digits string, base int, neg bool) any {
+	n, ok := new(big.Int).SetString(digits, base)
+	if !ok {
+		return s
 	}
-	return BigInt{Literal: t}
+	if neg {
+		n.Neg(n)
+	}
+	return BigInt{Literal: n.String()}
 }
 
 func parseSexagesimal(s string) any {
@@ -360,10 +464,7 @@ func parseYAMLInt(s string) any {
 		}
 		return n
 	}
-	if neg {
-		t = "-" + t
-	}
-	return BigInt{Literal: t} // decimal big ints only; radix big ints are unreachable in khub data
+	return bigInt(s, t, base, neg)
 }
 
 func parseYAMLFloat(s string) float64 {

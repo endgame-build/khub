@@ -1,1 +1,1 @@
-[{"id": "story/first", "type": "story", "slug": "first", "title": "First edited", "draft": false, "orphan": false, "stale": false, "score": -1.8591900269768007, "snippet": "First edited", "path": "work/ep-1/first.md", "edges": {"out": {"epic": 1}, "in": {}}}]
+[{"id": "story/first", "type": "story", "slug": "first", "title": "First edited", "draft": false, "orphan": false, "stale": false, "score": -1.8591900269768007, "snippet": "First edited", "path": "work/ep-1/first.md", "edges": {"out": {"epic": 1}, "in": {}}, "trust": "unverified"}]

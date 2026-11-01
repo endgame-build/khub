@@ -13,7 +13,7 @@ sections:
 - heading: Decision
   hint: one paragraph, active voice
   word_count: {min: 15}
-  # A decision that has not been taken is a proposal. `status: proposed` is how a
+  # A decision that has not been taken is a proposal. `decision: proposed` is how a
   # record says so; hedging inside the Decision section says it by accident.
   forbidden_text:
   - {pattern: '\b(tbd|to be decided|we should consider|still deciding)\b'}
@@ -56,7 +56,7 @@ lenses:
     blast radius, and a rule buried in an ADR body is a rule nothing can check.
 - code: proposed
   name: Still proposed
-  when: {status: proposed}
+  when: {decision: proposed}
   after: rule
   instruction: |
     This record is not decided yet. Confirm the Decision section reads as the

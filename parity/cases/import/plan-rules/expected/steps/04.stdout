@@ -1,0 +1,13 @@
+---
+type: project
+name: Build
+client: acme
+owner: noor
+status: draft
+okf_unresolved:
+  origin_opportunity:
+  - deal
+generated:
+  by: khub
+  at: 2026-01-15T00:00:00Z
+---

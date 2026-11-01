@@ -32,6 +32,22 @@ import (
 	"github.com/endgame-build/khub/internal/workspace"
 )
 
+// File is one agent file wire writes at the workspace root.
+type File struct {
+	Name string
+	// Import pulls the schema in with @-imports (Claude Code); without it the
+	// block points at the schema files instead.
+	Import bool
+}
+
+// The agent files wire writes, in write order. OKF conformance exempts them
+// as khub's own wiring.
+var (
+	Claude = File{Name: "CLAUDE.md", Import: true}
+	Agents = File{Name: "AGENTS.md", Import: false}
+	Files  = []File{Claude, Agents}
+)
+
 // Block markers. Everything between them is khub's to rewrite; everything
 // outside is the file owner's.
 const (
@@ -237,8 +253,10 @@ func BuildBlock(spec BlockSpec, importSupported bool) string {
 			"`khub neighbors <id>`, `khub impact <id>`, `khub history <id>`, "+
 			"`khub search <text>`.",
 		"- Write: `khub add <type> --<field> <v>`, `khub edit <id> <field> <v>`, "+
-			"`khub link <id> <pred> <target>`, `khub unlink`, `khub remove <id>`. "+
-			"Capture is never blocked; `--draft` marks an entity unpublished.",
+			"`khub link <id> <pred> <target>`, `khub unlink`, `khub remove <id>`, "+
+			"`khub verify <id> --by <actor>` (a review someone actually did). "+
+			"Capture is never blocked; `--draft` writes `status: draft`, and "+
+			"`khub edit <id> status stable` publishes.",
 		"- Every read and every write above takes `--format json`. Piped output is "+
 			"JSON by default; a table is only for a TTY. (`reindex`, `viz`, `backfill` "+
 			"and `wire` are operator commands and print prose.)",
@@ -326,13 +344,13 @@ func wire(root string, opt Options) (*Result, error) {
 	// filepath.Join matches pathlib's `/` for the shapes root takes here (an
 	// absolute resolved workspace root, or init's normalized target — "." joins
 	// away in both).
-	candidates := []candidate{
-		{filepath.Join(root, "CLAUDE.md"), BuildBlock(spec, true)},
-		{filepath.Join(root, "AGENTS.md"), BuildBlock(spec, false)},
+	var candidates []candidate
+	for _, f := range Files {
+		candidates = append(candidates, candidate{filepath.Join(root, f.Name), BuildBlock(spec, f.Import)})
 	}
 	targets := candidates
 	if opt.Claude || opt.Agents {
-		chosen := map[string]bool{"CLAUDE.md": opt.Claude, "AGENTS.md": opt.Agents}
+		chosen := map[string]bool{Claude.Name: opt.Claude, Agents.Name: opt.Agents}
 		targets = nil
 		for _, c := range candidates {
 			if chosen[filepath.Base(c.path)] {

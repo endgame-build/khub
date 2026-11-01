@@ -13,6 +13,7 @@ import (
 	"github.com/endgame-build/khub/internal/index"
 	"github.com/endgame-build/khub/internal/introspect"
 	"github.com/endgame-build/khub/internal/schema"
+	"github.com/endgame-build/khub/internal/trust"
 )
 
 // Direction literals for Neighbors.
@@ -31,6 +32,7 @@ type Neighbor struct {
 	Direction string // "out" (stored) | "in" (derived inverse)
 	Derived   bool
 	Depth     int
+	Trust     string // the neighbour's review tier (trust.Tier); set by WalkNeighbors
 }
 
 // ImpactNode is a node in the transitive closure, with its depth from the source.
@@ -270,7 +272,7 @@ func firstSuccessor(g *Graph, node index.Node, predicate string) (index.Node, bo
 // WalkNeighbors is walk_neighbors: load, index, and walk in one call. A named
 // predicate no type declares is a located error; nil (no filter) stays valid.
 func WalkNeighbors(root, id string, predicate *string, direction string, depth int) ([]Neighbor, error) {
-	resolved, idx, err := walkIndex(root)
+	resolved, idx, err := walkIndex(root, true) // bodies feed trust.Rev
 	if err != nil {
 		return nil, err
 	}
@@ -279,14 +281,23 @@ func WalkNeighbors(root, id string, predicate *string, direction string, depth i
 			return nil, err
 		}
 	}
-	return Neighbors(idx, id, predicate, direction, depth)
+	found, err := Neighbors(idx, id, predicate, direction, depth)
+	if err != nil {
+		return nil, err
+	}
+	for i, n := range found {
+		node := index.Node{Type: n.Type, Slug: n.Slug}
+		rtype, _ := resolved.Types.Get(n.Type)
+		found[i].Trust = trust.Tier(rtype, idx.Meta[node], idx.Body[node])
+	}
+	return found, nil
 }
 
 // WalkImpact is walk_impact. An explicit or default predicate no type declares is
 // a located error, so impact on a preset without that edge fails cleanly instead
 // of returning a lone source node.
 func WalkImpact(root, id string, predicate string, reverse bool) ([]ImpactNode, error) {
-	resolved, idx, err := walkIndex(root)
+	resolved, idx, err := walkIndex(root, false)
 	if err != nil {
 		return nil, err
 	}
@@ -300,7 +311,7 @@ func WalkImpact(root, id string, predicate string, reverse bool) ([]ImpactNode, 
 // preset (e.g. firm-ops) that declares no supersession — a located error, not a
 // silent one-node chain.
 func WalkHistory(root, id string, predicate string, limit *int) ([]HistoryLink, error) {
-	resolved, idx, err := walkIndex(root)
+	resolved, idx, err := walkIndex(root, false)
 	if err != nil {
 		return nil, err
 	}
@@ -312,12 +323,17 @@ func WalkHistory(root, id string, predicate string, limit *int) ([]HistoryLink, 
 
 // walkIndex is _walk_index plus the schema load the walk_* entries share: the
 // index the walks see has strays filtered, like every other verb.
-func walkIndex(root string) (*schema.ResolvedSchema, *index.Index, error) {
+// walkIndex scans for a walk; bodies keeps each entity's body, for trust.
+func walkIndex(root string, bodies bool) (*schema.ResolvedSchema, *index.Index, error) {
 	resolved, err := introspect.LoadSchema(root)
 	if err != nil {
 		return nil, nil, err
 	}
-	scanned, err := index.Build(root, resolved)
+	build := index.Build
+	if bodies {
+		build = index.BuildWithBodies
+	}
+	scanned, err := build(root, resolved)
 	if err != nil {
 		return nil, nil, err
 	}

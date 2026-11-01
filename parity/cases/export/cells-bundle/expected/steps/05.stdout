@@ -1,0 +1,11 @@
+---
+type: note
+title: repos/r1.md
+created: 2026-01-15
+---
+---
+type: repo
+title: R1
+created: '2026-01-15'
+stack: go
+---

@@ -1,0 +1,10 @@
+# With no --by and no KHUB_ACTOR, a write under Claude Code (CLAUDECODE set)
+# is stamped `agent/claude-code`; khub never reads a human out of git
+# identity.
+env:
+  KHUB_ACTOR: ""
+  CLAUDECODE: "1"
+steps:
+- argv: ["init", "build-hub", ".", "--no-wire"]
+- argv: ["add", "requirement", "--title", "First", "--kind", "functional", "--format", "json"]
+- argv: ["get", "req-first", "--format", "raw"]

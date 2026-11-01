@@ -47,9 +47,11 @@ agent forever. Never introduce a prompt, pager, or stdin-blocking confirmation.
 
 ## Output for agents
 
-Keep right: `query` returns minimal records (`id,type,slug,title,draft,orphan,stale`)
-with `get` as the full fetch; `validate` vs `check` stay distinct; capture is
-never blocked. When adding surface: verbosity costs agent *accuracy*, not just
+Keep right: `query` returns minimal records
+(`id,type,slug,title,draft,orphan,stale,trust`) with `get` as the full fetch;
+`trust` is derived on read and rides last, and no lifecycle `status` joins the
+rows (`draft` is derived from it); `validate` vs `check` stay distinct; capture
+is never blocked. When adding surface: verbosity costs agent *accuracy*, not just
 tokens — prefer stable fields and codes over prose; errors an agent can hit on
 a write should name the corrective call (as `TargetNotEmpty` does).
 

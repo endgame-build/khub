@@ -31,7 +31,7 @@ func TestScalarManyLinkNoCharSplit(t *testing.T) {
 	seed(t, ws, "fragments/note.md",
 		kv("type", "fragment", "stage", "raw", "owner", "ann", "related", "ann"))
 
-	res, err := Link(ws, "note", "related", "bob")
+	res, err := Link(ws, "note", "related", "bob", "")
 	requireNoError(t, err)
 	if !res.Changed {
 		t.Fatal("link reported no change")
@@ -51,7 +51,7 @@ func TestScalarManyUnlinkClean(t *testing.T) {
 	seed(t, ws, "fragments/note.md",
 		kv("type", "fragment", "stage", "raw", "owner", "ann", "related", "ann"))
 
-	res, err := Unlink(ws, "note", "related", "ann")
+	res, err := Unlink(ws, "note", "related", "ann", "")
 	requireNoError(t, err)
 	if !res.Changed {
 		t.Fatal("unlink reported no change")
@@ -150,10 +150,10 @@ func TestGoodDateAccepted(t *testing.T) {
 func TestBadBoolRejected(t *testing.T) {
 	ws := newWS(t, "firm-ops")
 	editPrereqs(t, ws)
-	path := deal(t, ws)
+	path := project(t, ws)
 	before := readFile(t, path)
 
-	_, err := Update(ws, "initech-deal", UpdateOpts{Fields: fields("draft", "banana")})
+	_, err := Update(ws, "initech-pov", UpdateOpts{Fields: fields("active", "banana")})
 	e := requireCode(t, err, "bool_violation")
 	requireMessageContains(t, e,
 		"'banana' is not a valid boolean (true/false, yes/no, 1/0, on/off)")
@@ -166,11 +166,11 @@ func TestBadBoolRejected(t *testing.T) {
 func TestBoolishValueAccepted(t *testing.T) {
 	ws := newWS(t, "firm-ops")
 	editPrereqs(t, ws)
-	path := deal(t, ws, "draft", false)
-	_, err := Update(ws, "initech-deal", UpdateOpts{Fields: fields("draft", "yes")})
+	path := project(t, ws, "active", false)
+	_, err := Update(ws, "initech-pov", UpdateOpts{Fields: fields("active", "yes")})
 	requireNoError(t, err)
-	if got := metaValue(t, path, "draft"); got != true {
-		t.Fatalf("draft = %#v, want true", got)
+	if got := metaValue(t, path, "active"); got != true {
+		t.Fatalf("active = %#v, want true", got)
 	}
 }
 
@@ -232,7 +232,7 @@ func TestSlugFromTitleElseRefuses(t *testing.T) {
 func TestSelfLinkRejected(t *testing.T) {
 	ws := newWS(t, "firm-ops")
 	people(t, ws)
-	_, err := Link(ws, "ann", "related", "ann")
+	_, err := Link(ws, "ann", "related", "ann", "")
 	e := requireCode(t, err, "self_link")
 	requireMessageContains(t, e, "Cannot link 'ann' to itself via 'related'")
 }
@@ -245,12 +245,12 @@ func TestAmbiguousBareTargetRaises(t *testing.T) {
 	seed(t, ws, "partnerships/acme/_index.md", kv("type", "partnership", "partner", "Acme"))
 	seed(t, ws, "identity/team/pat.md", kv("type", "person", "name", "Pat", "role", "partner"))
 
-	_, err := Link(ws, "pat", "related", "acme")
+	_, err := Link(ws, "pat", "related", "acme", "")
 	e := requireCode(t, err, "ambiguity_error")
 	requireMessageContains(t, e,
 		"Slug 'acme' is ambiguous: client/acme, partnership/acme. Qualify as type/slug")
 
-	res, err := Link(ws, "pat", "related", "client/acme")
+	res, err := Link(ws, "pat", "related", "client/acme", "")
 	requireNoError(t, err)
 	if !res.Changed {
 		t.Fatal("the qualified link reported no change")
@@ -285,25 +285,25 @@ func TestLinkChangedFlagAndNoSpuriousRewrite(t *testing.T) {
 		kv("type", "partnership", "partner", "Northwind", "owner", "noor"))
 	path := project(t, ws)
 
-	first, err := Link(ws, "initech-pov", "partner", "northwind")
+	first, err := Link(ws, "initech-pov", "partner", "northwind", "")
 	requireNoError(t, err)
 	if !first.Changed {
 		t.Fatal("the first link reported no change")
 	}
 	afterLink := readFile(t, path)
-	again, err := Link(ws, "initech-pov", "partner", "northwind")
+	again, err := Link(ws, "initech-pov", "partner", "northwind", "")
 	requireNoError(t, err)
 	if again.Changed || readFile(t, path) != afterLink {
 		t.Fatal("a repeat link rewrote the file")
 	}
 
-	removed, err := Unlink(ws, "initech-pov", "partner", "northwind")
+	removed, err := Unlink(ws, "initech-pov", "partner", "northwind", "")
 	requireNoError(t, err)
 	if !removed.Changed {
 		t.Fatal("unlink reported no change")
 	}
 	afterUnlink := readFile(t, path)
-	noop, err := Unlink(ws, "initech-pov", "partner", "northwind")
+	noop, err := Unlink(ws, "initech-pov", "partner", "northwind", "")
 	requireNoError(t, err)
 	if noop.Changed || readFile(t, path) != afterUnlink {
 		t.Fatal("a repeat unlink rewrote the file")
@@ -337,16 +337,26 @@ func TestEditSelfLinkRejected(t *testing.T) {
 	_ = requireCode(t, err, "self_link")
 }
 
-// review round: UpdateResult.Draft parses a hand-authored draft: 'false' as
-// active (AsBool, not truthiness).
-func TestUpdateResultDraftReadsBoolish(t *testing.T) {
+// UpdateResult.Draft reads the effective status: a truthy legacy `draft`
+// flag reads as draft whatever `status` says, until upgrade migrates it.
+func TestUpdateResultDraftReadsStatus(t *testing.T) {
 	ws := newWS(t, "firm-ops")
+	// A legacy `draft: true` with no status stays a draft until upgrade.
 	seed(t, ws, "identity/team/ann.md",
-		kv("type", "person", "name", "Ann", "role", "partner", "draft", "false"))
+		kv("type", "person", "name", "Ann", "role", "partner", "draft", true))
 	res, err := Update(ws, "ann", UpdateOpts{Fields: fields("name", "Ann B")})
 	requireNoError(t, err)
-	if res.Draft {
-		t.Fatal("a string 'false' draft reported as a draft")
+	if !res.Draft {
+		t.Fatal("a legacy draft: true with no status reported as published")
+	}
+	// The legacy flag wins over a written status, so a 0.30.0 draft is never
+	// published by accident.
+	seed(t, ws, "identity/team/bo.md",
+		kv("type", "person", "name", "Bo", "role", "partner", "status", "stable", "draft", true))
+	res, err = Update(ws, "bo", UpdateOpts{Fields: fields("name", "Bo B")})
+	requireNoError(t, err)
+	if !res.Draft {
+		t.Fatal("a legacy draft: true beside status: stable reported as published")
 	}
 }
 

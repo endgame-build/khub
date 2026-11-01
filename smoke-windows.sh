@@ -17,7 +17,7 @@ WORK=${1:-${TMPDIR:-/tmp}/khub-smoke-windows}
 if [ -z "${KHUB:-}" ]; then
   if [ -x "$REPO/khub.exe" ]; then KHUB="$REPO/khub.exe"; else KHUB="$REPO/khub"; fi
 fi
-export KHUB KHUB_PARITY_NOW=2026-01-15
+export KHUB KHUB_PARITY_NOW=2026-01-15 KHUB_ACTOR=khub
 # The gate decides on stdout alone here: no override may make serve start.
 unset TTY_COMPATIBLE FORCE_COLOR
 # A pinned git identity, and no user or system config (Git for Windows ships

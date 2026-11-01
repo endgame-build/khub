@@ -24,7 +24,7 @@ export function initial(baseRelations, derivedRelations) {
     focus: [],
     depth: 1,
     hiddenTypes: new Set(),
-    // The four base predicates (related/sources/references/depends_on) are
+    // The three base predicates (related/references/depends_on) are
     // `to: any` on every type: simultaneously the densest edges in the graph
     // and the least informative. Hidden by default; the Filters panel says so.
     hiddenPredicates: new Set((baseRelations || []).concat(derivedRelations || [])),

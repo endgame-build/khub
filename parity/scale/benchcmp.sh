@@ -35,14 +35,25 @@ trap 'git -C "$REPO" worktree remove --force "$WORK/base" >/dev/null 2>&1 || tru
 
 (cd "$WORK/base" && go build -o "$WORK/khub-base" ./cmd/khub)
 # The benchmarks are HEAD's on both sides, so only the packages under them
-# differ (a benchmark that reads PROF_QUERY must read it on both). A new
-# benchmark that names a symbol the base lacks fails the base build here,
-# which is the honest outcome: there is nothing to compare it with yet.
+# differ (a benchmark that reads PROF_QUERY must read it on both). A file
+# that calls an API the base lacks cannot build there, so the base keeps its
+# own copy, whose benchmark of the same name times the same operation; a
+# file the base never had is dropped there and reports HEAD alone.
 for f in $(cd "$REPO" && git ls-files 'internal/*/profile_test.go'); do
   cp "$REPO/$f" "$WORK/base/$f"
+  if ! (cd "$WORK/base" && go test -c -o /dev/null "./$(dirname "$f")" >/dev/null 2>&1); then
+    if git -C "$WORK/base" cat-file -e "HEAD:$f" 2>/dev/null; then
+      git -C "$WORK/base" checkout -q -- "$f"
+    else
+      rm "$WORK/base/$f"
+    fi
+    echo "note: $f does not build against $base; the base's own benchmark stands in"
+  fi
 done
-(cd "$REPO" && go build -o "$WORK/khub-head" ./cmd/khub \
-  && go build -o "$WORK/gen" ./parity/scale/gen && go build -o "$WORK/manifest" ./parity/scale/manifest)
+# The generator and its manifest reader come from the base tree too: HEAD's
+# generator speaks HEAD's vocabulary, which an older binary may refuse.
+(cd "$REPO" && go build -o "$WORK/khub-head" ./cmd/khub)
+(cd "$WORK/base" && go build -o "$WORK/gen" ./parity/scale/gen && go build -o "$WORK/manifest" ./parity/scale/manifest)
 
 "$WORK/gen" -bin "$WORK/khub-base" -work "$WORK/corpus" -scale "$SCALE" -seed 1 -today 2026-01-15 -quiet
 needle=$("$WORK/manifest" "$WORK/corpus/smoke-manifest.json" search.needle)

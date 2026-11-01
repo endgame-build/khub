@@ -1,0 +1,1 @@
+{"counts": {"prd": 1, "arc42": 1, "capability": 0, "actor": 0, "use-case": 0, "requirement": 4, "adr": 0, "system": 0, "component": 0, "api": 0, "repo": 0}, "total": 6, "draft": 1, "active": 5, "orphan": 4, "stale": 1, "expired": 2, "trust": {"unverified": 6, "machine": 0, "human": 0}, "okf_conformant": true, "okf_nonconformant": [], "stray": 0, "malformed": 0}

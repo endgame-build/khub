@@ -77,12 +77,12 @@ func TestResolveIDFoldsCaseAsAFallback(t *testing.T) {
 func TestGetEdgesIncludesDerivedInverses(t *testing.T) {
 	ws := newWS(t, "build-hub")
 	older, err := Create(ws, "adr", CreateOpts{
-		Fields: fields("title", "Old choice", "status", "accepted"), UseTemplate: true})
+		Fields: fields("title", "Old choice", "decision", "accepted"), UseTemplate: true})
 	requireNoError(t, err)
 	newer, err := Create(ws, "adr", CreateOpts{
-		Fields: fields("title", "New choice", "status", "accepted"), UseTemplate: true})
+		Fields: fields("title", "New choice", "decision", "accepted"), UseTemplate: true})
 	requireNoError(t, err)
-	_, err = Link(ws, newer.Slug, "supersedes", older.Slug)
+	_, err = Link(ws, newer.Slug, "supersedes", older.Slug, "")
 	requireNoError(t, err)
 
 	forward, err := Get(ws, newer.Slug, true)

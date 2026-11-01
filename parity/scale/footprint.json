@@ -6,13 +6,14 @@
     "preset": "build-hub",
     "khub_version": "0.30.0",
     "total": 300,
-    "tree_sha256": "5bef26c44c8a03a348898b34e67628f8fa70979ca439a9bdc523f8f98ea44623"
+    "tree_sha256": "04cc4a89df15f7242b8211e45f4c614dafb3d936d735b056fcea54093aedf56d"
   },
   "env": [
     "KHUB_PARITY_NOW=2026-01-15",
     "COLUMNS=80",
     "TTY_COMPATIBLE=0",
-    "NO_COLOR=1"
+    "NO_COLOR=1",
+    "TZ=UTC"
   ],
   "cases": [
     {
@@ -21,10 +22,10 @@
         "status"
       ],
       "exit": 0,
-      "stdout_bytes": 284,
+      "stdout_bytes": 382,
       "stderr_bytes": 0,
       "rows": 0,
-      "sha256": "4b9bee27987c9c165cc128125b76d9a389812c80815e270850d237ac3280eb8a"
+      "sha256": "cdb939ed6f361e367ef4afb092ff520d8b6368b9d6f633692a879eb61c58de92"
     },
     {
       "label": "schema",
@@ -32,10 +33,10 @@
         "schema"
       ],
       "exit": 0,
-      "stdout_bytes": 25787,
+      "stdout_bytes": 58007,
       "stderr_bytes": 0,
       "rows": 0,
-      "sha256": "d0f78f255211a94863633eb79ed6ab931c50d3d39cb3e322181c241cfd813139"
+      "sha256": "ee097d5592b2b5bfa005d5eba890609dec89dbcab47d1fb3d4cb03afae6e9081"
     },
     {
       "label": "check",
@@ -43,10 +44,10 @@
         "check"
       ],
       "exit": 0,
-      "stdout_bytes": 1551,
+      "stdout_bytes": 4069,
       "stderr_bytes": 0,
       "rows": 0,
-      "sha256": "beae6c94bfecff49d4b4a1cfe6aa1e4372fd40a3ed1e11a8e8be0024ad6f6257"
+      "sha256": "d2201af2b9c5484916e868a9f3c8a09e32da3f6ba9cc3fd80653215672a0e71f"
     },
     {
       "label": "check --strict",
@@ -55,10 +56,34 @@
         "--strict"
       ],
       "exit": 1,
-      "stdout_bytes": 1551,
+      "stdout_bytes": 4069,
       "stderr_bytes": 0,
       "rows": 0,
-      "sha256": "29bb905604db278e95075bd3218a69412dd2e9eef87f78171422bd3e8c886e8d"
+      "sha256": "3ef683cda5bba92f7e6aa320f88202ed0764b3a1397bdd55d38eb4861a57e610"
+    },
+    {
+      "label": "check --stale",
+      "argv": [
+        "check",
+        "--stale"
+      ],
+      "exit": 1,
+      "stdout_bytes": 5694,
+      "stderr_bytes": 0,
+      "rows": 0,
+      "sha256": "2521262c548746e2cdf01a9535f46b774b49652c9be9d19e047fde6a397d1206"
+    },
+    {
+      "label": "check --require-verified",
+      "argv": [
+        "check",
+        "--require-verified"
+      ],
+      "exit": 1,
+      "stdout_bytes": 35908,
+      "stderr_bytes": 0,
+      "rows": 0,
+      "sha256": "f2b961fef41687cad4f88b0a00535ce7cee2108ccf53cf18419a18c4db683e20"
     },
     {
       "label": "validate (whole corpus)",
@@ -89,10 +114,10 @@
         "query"
       ],
       "exit": 0,
-      "stdout_bytes": 68907,
+      "stdout_bytes": 75434,
       "stderr_bytes": 0,
       "rows": 300,
-      "sha256": "f947078e1b41dcc392d31027704a5363fa66a02f75ec3702da69d43f624c5a3a"
+      "sha256": "9f5d6ac3604ecc5b502d2f5935b40fb9e646ce3475688406d62b044f34f67135"
     },
     {
       "label": "query --type requirement",
@@ -102,10 +127,10 @@
         "requirement"
       ],
       "exit": 0,
-      "stdout_bytes": 35978,
+      "stdout_bytes": 39067,
       "stderr_bytes": 0,
       "rows": 142,
-      "sha256": "f303292f4c98eac005988f84a25777024634c7218a94bb8dba1624885bfca197"
+      "sha256": "0ff79a2fc04952f5702e89d79d5b0d47b99a644a9deb1b93e0eaa5beff8dd857"
     },
     {
       "label": "query --orphan",
@@ -114,10 +139,10 @@
         "--orphan"
       ],
       "exit": 0,
-      "stdout_bytes": 4812,
+      "stdout_bytes": 5212,
       "stderr_bytes": 0,
       "rows": 19,
-      "sha256": "ab57c9cdf670803b6558101825589c340e8869653900e3a7ec3c281c4b5eda93"
+      "sha256": "ad0b3e463117540398740803b203682c2b9c15156f770678c24824cf876d180a"
     },
     {
       "label": "query --tag",
@@ -127,10 +152,23 @@
         "platform"
       ],
       "exit": 0,
-      "stdout_bytes": 16954,
+      "stdout_bytes": 18532,
       "stderr_bytes": 0,
       "rows": 73,
-      "sha256": "b2c1aff1028f30476e5c7897c1a728cca7cc4ea6ba07392915b36c85d3c79e5d"
+      "sha256": "8f61805917e5f8bd310d6baea3fe381aac213deee8d2b90a69f8c66018feb87b"
+    },
+    {
+      "label": "query --trust human",
+      "argv": [
+        "query",
+        "--trust",
+        "human"
+      ],
+      "exit": 0,
+      "stdout_bytes": 13968,
+      "stderr_bytes": 0,
+      "rows": 56,
+      "sha256": "cd551d394a2df2f280e6319f942a2947365f74f0d330f72e02495f012964584e"
     },
     {
       "label": "search (one hit)",
@@ -139,10 +177,10 @@
         "xylotrope"
       ],
       "exit": 0,
-      "stdout_bytes": 497,
+      "stdout_bytes": 516,
       "stderr_bytes": 0,
       "rows": 1,
-      "sha256": "139f3ea2f38011cf0099541bee28093c798599c607a02330592f3b6b1f0ff48b"
+      "sha256": "822bc87a6153304cab086af67b67f5817d4213601e798537a7792c8dfca698cb"
     },
     {
       "label": "search (many hits)",
@@ -151,10 +189,10 @@
         "platform"
       ],
       "exit": 0,
-      "stdout_bytes": 2263,
+      "stdout_bytes": 2376,
       "stderr_bytes": 0,
       "rows": 5,
-      "sha256": "b79f9f5444fe9e491eeef28600963d7b1aaf1bc9117d540ed13db67c94ee838b"
+      "sha256": "0edc64523d2345fb9055d08a6291b89d8dbbe9c7ff3160687a01c748390d41f1"
     },
     {
       "label": "search (no hit)",
@@ -175,10 +213,10 @@
         "req-refund-tax-filings-before-the-cutoff"
       ],
       "exit": 0,
-      "stdout_bytes": 708,
+      "stdout_bytes": 990,
       "stderr_bytes": 0,
       "rows": 0,
-      "sha256": "53eeb73eef713d0af980895631a62e5477a446e2e9b50e0659f0c9588b1ec05e"
+      "sha256": "1fbeb64c73c85cecc62353411ebaeb1252d127645073342066ec70ce7cd355a5"
     },
     {
       "label": "get --edges",
@@ -188,10 +226,10 @@
         "--edges"
       ],
       "exit": 0,
-      "stdout_bytes": 512,
+      "stdout_bytes": 578,
       "stderr_bytes": 0,
       "rows": 0,
-      "sha256": "71d06f0a7548ae79bb3a32e02f63729f65022466f6bdb2a61e85bceb06a949a7"
+      "sha256": "bddf5c28b9f2114d6e3f0738bee280c1b8ac189dec5d921f676ad03699ee3ee0"
     },
     {
       "label": "get \u003cchain middle\u003e --edges",
@@ -201,10 +239,10 @@
         "--edges"
       ],
       "exit": 0,
-      "stdout_bytes": 2005,
+      "stdout_bytes": 2073,
       "stderr_bytes": 0,
       "rows": 0,
-      "sha256": "a21c8b342499c43ea758b57a3210203ab961700386259e4012322f3eff6f676e"
+      "sha256": "b06a1adac4b182568f21f8ec040a9db5eddf6aa771f1bf03f238b96af4bb319c"
     },
     {
       "label": "neighbors",
@@ -213,10 +251,10 @@
         "cmp-ledger-helpers"
       ],
       "exit": 0,
-      "stdout_bytes": 2404,
+      "stdout_bytes": 2665,
       "stderr_bytes": 0,
       "rows": 12,
-      "sha256": "975706eb69e416f35f80ad2e95712358effb57b4d901d865d768a2b202adc2fe"
+      "sha256": "039df7e5fe290204b089b7517b438807b9f2ac0c5e2e741ad5965a205cbf183d"
     },
     {
       "label": "neighbors --depth 12",
@@ -227,10 +265,10 @@
         "12"
       ],
       "exit": 0,
-      "stdout_bytes": 105915,
+      "stdout_bytes": 117591,
       "stderr_bytes": 0,
       "rows": 533,
-      "sha256": "0b304600b1049c70e8650ba1be19a55b30e1e12403f4f52b51be10f0833c6b40"
+      "sha256": "5118d9cc7d2a827597aee01897844e110d2397f31915a0b13ca250976c31fb6e"
     },
     {
       "label": "impact",
@@ -277,10 +315,10 @@
         "90"
       ],
       "exit": 0,
-      "stdout_bytes": 28355,
+      "stdout_bytes": 34654,
       "stderr_bytes": 0,
-      "rows": 142,
-      "sha256": "afcb3e50647f4a5fd6001360fe9b58af694582f98a7ff2edff8282ade593f0b5"
+      "rows": 160,
+      "sha256": "396f0bb7746309d093402caa018fc482100e0f8bfd0497aaea1be4ba4a6b7816"
     },
     {
       "label": "reindex --dry-run",
@@ -295,6 +333,31 @@
       "sha256": "ea7c47b8f667c0e54ffa9a115895097035a5db7cd3b2b1c3d63b4ede788348f4"
     },
     {
+      "label": "upgrade --dry-run",
+      "argv": [
+        "upgrade",
+        "--dry-run",
+        "--no-wire"
+      ],
+      "exit": 0,
+      "stdout_bytes": 292,
+      "stderr_bytes": 0,
+      "rows": 0,
+      "sha256": "7b06a8f7f033f2981195dbdb77e996587bc62265ed01460197112e3662207e7e"
+    },
+    {
+      "label": "upgrade",
+      "argv": [
+        "upgrade",
+        "--no-wire"
+      ],
+      "exit": 0,
+      "stdout_bytes": 293,
+      "stderr_bytes": 0,
+      "rows": 0,
+      "sha256": "1057315e2d67295f32277f683a1c223c453c7e1d1e7de07a37e5cb9257f98482"
+    },
+    {
       "label": "schema show \u003ctype\u003e",
       "argv": [
         "schema",
@@ -302,10 +365,10 @@
         "requirement"
       ],
       "exit": 0,
-      "stdout_bytes": 2792,
+      "stdout_bytes": 5744,
       "stderr_bytes": 0,
       "rows": 0,
-      "sha256": "2cb3ac9fb1c26d9ad3af056d82b9a3abbe141de205ff3ecca1add82dc69d1bfb"
+      "sha256": "d4b1eecee2802410c152b9ae4c6b3b39491b16e82089479fba91cf966904ea93"
     }
   ]
 }

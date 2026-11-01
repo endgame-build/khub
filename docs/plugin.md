@@ -14,7 +14,7 @@ other session it draws nothing.
 ## What it shows
 
 ```text
-khub  build-hub 0.6.0 · 146 entities [+2 −1 ~3] · 3 draft · check ✓
+khub  build-hub 0.7.0 · 146 entities [+2 −1 ~3] · 3 draft · check ✓
 
 ● khub query adr 38 ms json
   ⎿ 12 entities
@@ -32,10 +32,10 @@ The band is one line above the prompt.
 
 | Part | Meaning |
 |---|---|
-| `build-hub 0.6.0` | The workspace's preset and its version. |
+| `build-hub 0.7.0` | The workspace's preset and its version. |
 | `146 entities` | Every entity in the workspace, drafts included. |
 | `[+2 −1 ~3]` | What the session changed: 2 entities added, 1 removed, 3 edited. A count of zero is left out, and the bracket is absent while the session has changed nothing. |
-| `3 draft` | Entities with `draft: true`. A count of zero is left out. |
+| `3 draft` | Entities with `status: draft`. A count of zero is left out. |
 | `check ✓` | `khub check` passes. |
 
 A failing `khub check` reads `check ✗ 1 error` or `check ✗ <n> errors` and turns

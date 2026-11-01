@@ -1,0 +1,19 @@
+# upgrade migrates collection rows and non-md files as well: a yaml collection
+# is spliced row by row and keeps its header, row and inter-row comments; json
+# and jsonl collections and a json per-item file are re-emitted, having no
+# comments to keep. A row whose `draft: true` disagrees with its `status` is a
+# migration conflict: it stays as written, validate still names its `draft`,
+# and every later upgrade reports it again until it is settled by hand.
+steps:
+- argv: ["init", "preset-cells", ".", "--no-wire", "--preset-source", "PRESETSRC"]
+- sh: |
+    printf -- '---\ntype: note\ntitle: A  # hand comment\ncreated: 2026-01-15\ndraft: true\nsources:\n- s1\n---\n' > notes/a.md
+    printf -- 'type: sheet\ntitle: S1\ncreated: 2026-01-15\ndraft: false  # retired flag\n' > sheets/s1.yaml
+    printf -- '{\n  "type": "card",\n  "title": "C1",\n  "created": "2026-01-15",\n  "draft": true\n}\n' > cards/c1.json
+    printf -- '# vendors, kept by hand\nacme:\n  type: vendor\n  title: Acme\n  created: 2026-01-15\n  draft: true   # pending review\n# between rows\nglobex:\n  type: vendor\n  title: Globex\n  created: 2026-01-15\n  status: active\n  draft: false\ninitech:\n  type: vendor\n  title: Initech\n  created: 2026-01-15\n  status: stable\n  draft: true\n' > vendors.yaml
+    printf -- '{"a1": {"type": "account", "title": "A1", "created": "2026-01-15", "draft": true}}\n' > accounts.json
+    printf -- '{"slug": "r1", "type": "repo", "title": "R1", "created": "2026-01-15", "status": "archived"}\n' > repos.jsonl
+- argv: ["upgrade", "--dry-run", "--no-wire", "--format", "json"]
+- argv: ["upgrade", "--no-wire", "--format", "json"]
+- argv: ["validate", "--format", "json"]
+- argv: ["upgrade", "--no-wire", "--format", "json"]

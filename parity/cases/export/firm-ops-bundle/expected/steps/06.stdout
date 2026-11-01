@@ -1,0 +1,33 @@
+---
+type: fragment
+title: clients/initech.md
+---
+---
+type: client
+name: Initech  # the client
+description: A systems integrator.
+created: 2026-01-15
+updated: 2026-01-15
+status: stable
+generated:
+  by: khub
+  at: 2026-01-15T00:00:00Z
+verified:
+- {by: human:noor, at: 2026-01-16T00:00:00Z, rev: r1}
+sources:
+- resource: https://initech.example
+  id: s1
+stale_after: 2027-01-01T00:00:00Z
+usage_window:
+  from: 2026-01-01T00:00:00Z
+  to: 2026-06-30T00:00:00Z
+x_crm_note: kept as written
+partner: ghost-partner
+---
+We met Initech through a referral.[^s1]
+
+[^s1]: The CRM record.
+
+# Related
+
+- partner: ghost-partner

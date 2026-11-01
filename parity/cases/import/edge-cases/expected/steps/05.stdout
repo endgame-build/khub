@@ -1,0 +1,1 @@
+{"error": {"code": "import_bundle_unreadable", "message": "Bundle badmap.yaml is not a directory. Pass the directory an OKF bundle lives in"}}

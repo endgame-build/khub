@@ -538,11 +538,20 @@ func StrayNodes(idx *Index) map[Node]bool {
 	return out
 }
 
-// Filter returns a view of idx with drop nodes removed.
+// Filter returns a view of idx with drop nodes removed; idx itself when
+// nothing drops.
 func Filter(idx *Index, drop map[Node]bool) *Index {
 	if len(drop) == 0 {
 		return idx
 	}
+	return filtered(idx, drop)
+}
+
+// Copy returns a fresh view of idx a caller may add nodes to without
+// touching idx. The entities' frontmatter maps are shared, not copied.
+func Copy(idx *Index) *Index { return filtered(idx, nil) }
+
+func filtered(idx *Index, drop map[Node]bool) *Index {
 	out := &Index{
 		Resolved:    idx.Resolved,
 		Collections: idx.Collections,

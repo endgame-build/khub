@@ -49,9 +49,9 @@ locator (`clients.jsonl#acme`) instead of a bare path.
 
 Rows may carry the reserved `body` field, the same mapping the per-entity
 json/yaml formats shipped (popped to the body on read, placed back on write).
-`search` indexes it via `formats.fts_body`; OKF export materializes a row as
-one md concept with the row's fields as frontmatter and the `body` field as the
-concept body.
+`search` indexes it via `formats.fts_body`; `khub export --okf` materializes a
+row as one md concept at `<collection path without its extension>/<slug>.md`,
+with the row's fields as frontmatter and the `body` field as the concept body.
 
 ## Writes
 

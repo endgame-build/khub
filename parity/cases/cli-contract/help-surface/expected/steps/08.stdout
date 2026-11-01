@@ -8,6 +8,7 @@ Arguments:
   TARGET <str>
 
 Options:
+  --by <str>  Who the write is stamped as in generated.by. Default: KHUB_ACTOR, then agent/claude-code under Claude Code, then khub.
   --format <str>  text or json (emits the edge record). [default: text]
   --help  Show this message and exit.
 

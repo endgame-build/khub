@@ -234,7 +234,7 @@ func TestSchemaEndpointNamesBaseRelations(t *testing.T) {
 	for _, r := range payload.BaseRelations {
 		base[r.Predicate] = true
 	}
-	for _, want := range []string{"related", "sources", "references", "depends_on"} {
+	for _, want := range []string{"related", "references", "depends_on"} {
 		if !base[want] {
 			t.Errorf("base_relations missing %q", want)
 		}

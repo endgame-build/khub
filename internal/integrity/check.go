@@ -1,7 +1,7 @@
 // The `check` gate — src/khub/core/integrity.py:402-777.
 //
-// check is graph-wide over the active (draft:false) subgraph. It computes
-// required-completeness from the schema, never from the draft flag
+// check is graph-wide over the active (not `status: draft`) subgraph. It
+// computes required-completeness from the schema, never from the status
 // (REQ-INT002-05), and finds the structural gaps that define it:
 // active-but-incomplete entities, drafts that cannot satisfy a required
 // relation, orphans, dangling edges, stray files, misplaced files, malformed
@@ -16,6 +16,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/endgame-build/khub/internal/canon"
 	"github.com/endgame-build/khub/internal/entity"
@@ -23,10 +24,10 @@ import (
 	"github.com/endgame-build/khub/internal/graph"
 	"github.com/endgame-build/khub/internal/index"
 	"github.com/endgame-build/khub/internal/introspect"
-	"github.com/endgame-build/khub/internal/omap"
+	"github.com/endgame-build/khub/internal/project"
 	"github.com/endgame-build/khub/internal/schema"
 	"github.com/endgame-build/khub/internal/template"
-	"github.com/endgame-build/khub/internal/values"
+	"github.com/endgame-build/khub/internal/trust"
 )
 
 // Incomplete is integrity.Incomplete: an active entity missing required fields
@@ -138,11 +139,54 @@ type CheckReport struct {
 	Misplaced []Misplaced
 	// Aliases that name more than one entity. Fails the gate.
 	AliasConflicts []AliasConflict
+	// Active entities whose authored `stale_after` has passed, as qualified
+	// ids. Computed always; a gate only under StaleGate (`check --stale`).
+	Expired   []string
+	StaleGate bool
+	// Active entities and their review tier (trust.Tier), every one of them;
+	// TierGate ("machine" or "human", "" for off) turns those below it into a
+	// failing finding (`check --require-verified`).
+	BelowTier []TierFinding
+	TierGate  string
+	// Review events whose recorded `rev` no longer matches the content: the
+	// review saw an earlier version. Informational, like Thin.
+	Superseded []SupersededVerification
+	// Schema fields that share a name with a write verb's own flag, so that
+	// verb can never set them. The CLI fills it (it owns the flags); a schema
+	// defect, so it fails the gate.
+	FlagShadowed []FlagShadow
 }
+
+// FlagShadow is one field a write verb's flag shadows: Commands are the verbs
+// (`add`, `edit`) whose own --<Field> flag wins over it.
+type FlagShadow struct {
+	Type, Field string
+	Commands    []string
+}
+
+// SupersededVerification is one `verified` event (Event, its index in the
+// list) whose `rev` no longer matches the entity's content.
+type SupersededVerification struct {
+	Type, Slug string
+	Event      int
+	By, Rev    string
+}
+
+// ID is SupersededVerification.id.
+func (s SupersededVerification) ID() string { return s.Type + "/" + s.Slug }
 
 // Passed is CheckReport.passed.
 func (r *CheckReport) Passed() bool {
 	if r.Strict && len(r.Orphans) > 0 {
+		return false
+	}
+	if r.StaleGate && len(r.Expired) > 0 {
+		return false
+	}
+	if len(r.BelowGate()) > 0 {
+		return false
+	}
+	if len(r.FlagShadowed) > 0 {
 		return false
 	}
 	return len(r.Incomplete) == 0 &&
@@ -168,12 +212,12 @@ func (r *CheckReport) Passed() bool {
 // that points at a stray dangles instead of silently resolving to a non-entity.
 // A file that could not be parsed is a malformed entry, not a node, and fails
 // the check.
-func Check(root string, strict bool) (*CheckReport, error) {
+func Check(root string, strict bool, now time.Time) (*CheckReport, error) {
 	resolved, err := introspect.LoadSchema(root)
 	if err != nil {
 		return nil, err
 	}
-	scanned, err := index.Build(root, resolved)
+	scanned, err := index.BuildWithBodies(root, resolved) // bodies feed trust.Rev
 	if err != nil {
 		return nil, err
 	}
@@ -258,7 +302,7 @@ func Check(root string, strict bool) (*CheckReport, error) {
 		rtype, _ := resolved.Types.Get(tname)
 		node := index.Node{Type: tname, Slug: tname}
 		if valid.Nodes[node] {
-			if values.AsBool(draftFlag(valid.Meta[node])) {
+			if rtype.IsDraft(valid.Meta[node]) {
 				draftSingletons = append(draftSingletons, tname)
 			}
 		} else if rtype.Required {
@@ -309,7 +353,76 @@ func Check(root string, strict bool) (*CheckReport, error) {
 		StrayTemplates:          strayTemplates,
 		MissingTemplates:        missingTemplates,
 		AliasConflicts:          aliasConflicts(valid, entityNodes),
+		Expired:                 expiredEntities(resolved, valid, entityNodes, now),
+		BelowTier:               tiers(resolved, valid, entityNodes),
+		Superseded:              supersededVerifications(resolved, valid, entityNodes),
 	}, nil
+}
+
+// supersededVerifications lists every review event that saw an earlier
+// version of its entity.
+func supersededVerifications(resolved *schema.ResolvedSchema, idx *index.Index, nodes []index.Node) []SupersededVerification {
+	out := []SupersededVerification{}
+	for _, n := range nodes {
+		rtype, _ := resolved.Types.Get(n.Type)
+		events := trust.Events(idx.Meta[n])
+		for _, i := range trust.Superseded(rtype, idx.Meta[n], idx.Body[n]) {
+			by, _ := events[i].Get("by")
+			rev, _ := events[i].Get("rev")
+			out = append(out, SupersededVerification{
+				Type: n.Type, Slug: n.Slug, Event: i, By: pyStr(by), Rev: pyStr(rev),
+			})
+		}
+	}
+	return out
+}
+
+// TierFinding is one active entity and its review tier.
+type TierFinding struct {
+	Type, Slug, Trust string
+}
+
+// ID is TierFinding.id.
+func (f TierFinding) ID() string { return f.Type + "/" + f.Slug }
+
+// BelowGate is the tier gate's finding: the active entities below TierGate,
+// none while the gate is off.
+func (r *CheckReport) BelowGate() []TierFinding {
+	out := []TierFinding{}
+	if r.TierGate == "" {
+		return out
+	}
+	for _, f := range r.BelowTier {
+		if trust.Rank(f.Trust) < trust.Rank(r.TierGate) {
+			out = append(out, f)
+		}
+	}
+	return out
+}
+
+// tiers lists every active entity with its review tier.
+func tiers(resolved *schema.ResolvedSchema, idx *index.Index, nodes []index.Node) []TierFinding {
+	out := []TierFinding{}
+	for _, n := range nodes {
+		rtype, _ := resolved.Types.Get(n.Type)
+		if !rtype.IsDraft(idx.Meta[n]) {
+			out = append(out, TierFinding{n.Type, n.Slug, trust.Tier(rtype, idx.Meta[n], idx.Body[n])})
+		}
+	}
+	return out
+}
+
+// expiredEntities lists the active entities whose `stale_after` has passed:
+// an authored expiry, apart from the age staleness `khub stale` reports.
+func expiredEntities(resolved *schema.ResolvedSchema, idx *index.Index, nodes []index.Node, now time.Time) []string {
+	out := []string{}
+	for _, n := range nodes {
+		rtype, _ := resolved.Types.Get(n.Type)
+		if !rtype.IsDraft(idx.Meta[n]) && project.Expired(idx.Meta[n], now) {
+			out = append(out, n.ID())
+		}
+	}
+	return out
 }
 
 // aliasConflicts groups every declared alias case-insensitively, the way ID
@@ -346,16 +459,6 @@ func aliasConflicts(valid *index.Index, nodes []index.Node) []AliasConflict {
 		}
 	}
 	return out
-}
-
-// draftFlag is `meta.get("draft", False)` — a missing key defaults to False,
-// which as_bool then reads (a hand-authored `draft: "false"` is PUBLISHED).
-func draftFlag(meta *omap.Map) any {
-	v, ok := meta.Get("draft")
-	if !ok {
-		return false
-	}
-	return v
 }
 
 // skipDir is integrity._SKIP_DIRS: the shared prune list plus khub's own
@@ -445,7 +548,7 @@ func misplacedFiles(root string, resolved *schema.ResolvedSchema) ([]Misplaced, 
 			continue
 		}
 		rel = filepath.ToSlash(rel) // reported as Misplaced.Path
-		if skipped(rel) {
+		if skipped(rel) || schema.ReservedEntityName(filepath.Base(rel)) {
 			continue
 		}
 		accepted := false
@@ -538,41 +641,19 @@ func templatedMisplaced(idx *index.Index) []Misplaced {
 // already not a pinned contract; this uses the 3.12+ string order.
 func rglobMD(root string, resolved *schema.ResolvedSchema) ([]string, error) {
 	trees := storageTrees(resolved)
-	ignore := resolved.Ignore
 	var out []string
-	var walk func(dir string) error
-	walk = func(dir string) error {
-		entries, err := fsio.ReadDir(root, dir)
-		if err != nil {
-			return err
-		}
-		for _, e := range entries {
-			path := filepath.Join(dir, e.Name())
-			if rel, err := filepath.Rel(root, path); err == nil && ignore.Ignored(rel, e.IsDir()) {
-				continue
-			}
-			if e.Type().IsRegular() {
-				name := e.Name()
-				if strings.HasSuffix(name, ".md") {
-					out = append(out, path)
-				} else if strings.HasSuffix(name, ".json") || strings.HasSuffix(name, ".yaml") {
-					if rel, err := filepath.Rel(root, path); err == nil && underStorageTree(rel, trees) {
-						out = append(out, path)
-					}
-				}
-			}
-			if e.IsDir() && !skipDir(e.Name()) && !strings.HasPrefix(e.Name(), ".") {
-				if isLink(path) {
-					continue
-				}
-				if err := walk(path); err != nil {
-					return err
-				}
+	err := index.WalkTree(root, resolved.Ignore, func(path string) error {
+		name := filepath.Base(path)
+		if strings.HasSuffix(name, ".md") {
+			out = append(out, path)
+		} else if strings.HasSuffix(name, ".json") || strings.HasSuffix(name, ".yaml") {
+			if rel, err := filepath.Rel(root, path); err == nil && underStorageTree(rel, trees) {
+				out = append(out, path)
 			}
 		}
 		return nil
-	}
-	if err := walk(root); err != nil {
+	})
+	if err != nil {
 		return nil, err
 	}
 	// Order by the slash form, so a Windows separator sorts as "/" does.
@@ -608,11 +689,6 @@ func underStorageTree(rel string, trees []string) bool {
 		}
 	}
 	return false
-}
-
-func isLink(path string) bool {
-	fi, err := os.Lstat(path)
-	return err == nil && fsio.IsLink(fi)
 }
 
 // skipped applies the _SKIP_DIRS / leading-dot filter to every part of the
@@ -686,10 +762,10 @@ func incompleteEntities(
 	out := []Incomplete{}
 	for _, node := range nodes {
 		meta := idx.Meta[node]
-		if values.AsBool(draftFlag(meta)) {
+		rtype, _ := resolved.Types.Get(node.Type)
+		if rtype.IsDraft(meta) {
 			continue // drafts are exempt from required-completeness
 		}
-		rtype, _ := resolved.Types.Get(node.Type)
 		// Both lists stay non-nil: an Incomplete is emitted when EITHER is
 		// non-empty, and the other must serialize as [] (Python's empty list),
 		// never JSON null.
@@ -717,7 +793,7 @@ func incompleteEntities(
 			}
 			anyActive := false
 			for t := range resolvedTo {
-				if !values.AsBool(draftFlag(idx.Meta[t])) {
+				if ttype, _ := resolved.Types.Get(t.Type); !ttype.IsDraft(idx.Meta[t]) {
 					anyActive = true
 					break
 				}

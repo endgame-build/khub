@@ -1,0 +1,7 @@
+Initialized build-hub workspace at .
+created singletons: prd, arc42
+index.md created
+
+Agent skill not installed. To install:
+  npx skills add endgame-build/khub
+In Claude Code: /plugin marketplace add endgame-build/khub, then /plugin install khub@khub

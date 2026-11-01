@@ -222,6 +222,10 @@ jobs:
           test "$files" -ge 130 || { echo "corpus shrank to $files files"; exit 1; }
           grep -qE "^t1c: ok=$files diff=0 error=0 skip=0$" gate.txt
           grep -qE "^t2: ok=[0-9]+ diff=0 error=0" gate.txt
+          grep -qE "^t4: ok=[0-9]+ diff=0 error=0" gate.txt
+          grep -qE "^t5: ok=[0-9]+ diff=0 error=0" gate.txt
+          grep -qE "^t6: ok=[0-9]+ diff=0 error=0" gate.txt
+          grep -qE "^t7: ok=[0-9]+ diff=0 error=0" gate.txt
           emit=$(go run ./parity/yamlgate/emit | tail -1)
           echo "$emit"
           # "T3: rt N/M  safe P/Q" — every case must pass on both profiles.
@@ -327,6 +331,38 @@ jobs:
       # runnable locally and covered by the shellcheck step above.
       - name: Assembly smoke over fixture tarballs
         run: npm/smoke.sh
+
+  # A foreign OKF 0.2 parser reads khub's export: the reference
+  # implementation's document.py at a pinned commit of
+  # GoogleCloudPlatform/knowledge-catalog. Informational, so a red run here
+  # never fails CI; khub's own fixtures pin the bundle bytes.
+  okf-reference:
+    permissions:
+      contents: read
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    env:
+      KNOWLEDGE_CATALOG_SHA: 62432a095456147ee71e70ac6e4dc0d2dea3ac30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          go-version: "1.26"
+          check-latest: true
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with:
+          version: "0.13.1"
+      - name: shellcheck
+        run: shellcheck parity/tools/okf_reference.sh
+      - name: Build khub
+        run: go build -o "$RUNNER_TEMP/khub" ./cmd/khub
+      - name: Fetch the reference parser
+        run: |
+          mkdir -p "$RUNNER_TEMP/okf"
+          curl -fsSL -o "$RUNNER_TEMP/okf/document.py" \
+            "https://raw.githubusercontent.com/GoogleCloudPlatform/knowledge-catalog/$KNOWLEDGE_CATALOG_SHA/okf/src/reference_agent/bundle/document.py"
+      - name: Export firm-ops and build-hub, then validate each bundle
+        run: parity/tools/okf_reference.sh "$RUNNER_TEMP/khub" "$RUNNER_TEMP/okf"
 
   # The Claude Code plugin under plugin/, and the marketplace manifest at the root.
   # Neither command needs credentials or the network once Claude Code is installed.

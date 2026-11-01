@@ -66,23 +66,23 @@ func TestCheckDraftTargetDoesNotSatisfy(t *testing.T) {
 	}
 }
 
-// Fix #5 (scan hardening): draft reads via as_bool — `draft: "false"` is
-// PUBLISHED, `draft: yes` is a draft.
-func TestCheckDraftStringReadsViaAsBool(t *testing.T) {
+// Only `status: draft` is a draft: a retired `draft: yes` key publishes
+// nothing and drafts nothing, and `status: stable` is published.
+func TestCheckDraftIsStatusDraft(t *testing.T) {
 	root := freshWS(t)
 	seed(t, root, "clients/c.md", kv{"type", "client"}, kv{"name", "C"},
 		kv{"created", "2026-06-01"}, kv{"updated", "2026-06-01"})
 	seed(t, root, "projects/pub/_index.md", kv{"type", "project"}, kv{"client", "c"},
-		kv{"draft", "false"}, kv{"created", "2026-06-01"}, kv{"updated", "2026-06-01"})
+		kv{"status", "stable"}, kv{"created", "2026-06-01"}, kv{"updated", "2026-06-01"})
 	seed(t, root, "projects/hidden/_index.md", kv{"type", "project"}, kv{"client", "c"},
-		kv{"draft", "yes"}, kv{"created", "2026-06-01"}, kv{"updated", "2026-06-01"})
+		kv{"status", "draft"}, kv{"created", "2026-06-01"}, kv{"updated", "2026-06-01"})
 
 	incomplete := incompleteByID(mustCheck(t, root, false))
 	if _, ok := incomplete["project/pub"]; !ok {
-		t.Error(`draft: "false" was treated as a draft`)
+		t.Error("status: stable was treated as a draft")
 	}
 	if _, ok := incomplete["project/hidden"]; ok {
-		t.Error("draft: yes was treated as published")
+		t.Error("status: draft was treated as published")
 	}
 }
 
@@ -207,7 +207,7 @@ func TestCheckSelfLoopIsACycle(t *testing.T) {
 func TestCheckSupersedesCycle(t *testing.T) {
 	root := wsFor(t, "build-hub")
 	for _, id := range []string{"ad-1", "ad-2", "ad-3"} {
-		create(t, root, "adr", id, "title", strings.ToUpper(id), "status", "accepted")
+		create(t, root, "adr", id, "title", strings.ToUpper(id), "decision", "accepted")
 	}
 	link(t, root, "ad-3", "supersedes", "ad-2")
 	link(t, root, "ad-2", "supersedes", "ad-1")
@@ -231,7 +231,7 @@ func TestCheckSupersedesCycle(t *testing.T) {
 func TestCheckSelfSupersessionIsReported(t *testing.T) {
 	root := wsFor(t, "build-hub")
 	seed(t, root, "knowledge/decisions/solo.md",
-		kv{"type", "adr"}, kv{"title", "Solo"}, kv{"status", "accepted"},
+		kv{"type", "adr"}, kv{"title", "Solo"}, kv{"decision", "accepted"},
 		kv{"supersedes", "solo"}, kv{"created", "2026-01-01"})
 
 	found := false
@@ -346,7 +346,7 @@ func TestOrphanFlaggedTypesAreExempt(t *testing.T) {
 // active-but-incomplete, which names the field the orphan line never did.
 func TestOrphanFlaggedTypeStillReportsCompleteness(t *testing.T) {
 	root := wsFor(t, "build-hub")
-	writeRaw(t, root, "knowledge/prd.md", "---\ntype: prd\ncreated: 2026-06-01\ndraft: false\n---\n")
+	writeRaw(t, root, "knowledge/prd.md", "---\ntype: prd\ncreated: 2026-06-01\n---\n")
 
 	incomplete := incompleteByID(mustCheck(t, root, false))
 	got, ok := incomplete["prd/prd"]
@@ -397,7 +397,7 @@ func TestDraftRequiredSingletonFailsAndIsNotMissing(t *testing.T) {
 		t.Fatalf("draft_required_singletons = %v on a published workspace", got)
 	}
 
-	update(t, root, "prd", "draft", "true")
+	update(t, root, "prd", "status", "draft")
 	drafted := mustCheck(t, root, false)
 	if !reflect.DeepEqual(drafted.DraftSingletons, []string{"prd"}) {
 		t.Errorf("draft_singletons = %v", drafted.DraftSingletons)
@@ -412,7 +412,7 @@ func TestDraftRequiredSingletonFailsAndIsNotMissing(t *testing.T) {
 		t.Error("a drafted required singleton passed the gate")
 	}
 
-	update(t, root, "prd", "draft", "false")
+	update(t, root, "prd", "status", "stable")
 	if _, err := entity.Delete(root, "prd", false); err != nil {
 		t.Fatalf("delete prd: %v", err)
 	}
@@ -429,7 +429,7 @@ func TestDraftRequiredSingletonFailsAndIsNotMissing(t *testing.T) {
 // nowhere let `check` pass while the workspace had quietly lost a document.
 func TestDraftOptionalSingletonIsInformational(t *testing.T) {
 	root := wsFor(t, "build-hub") // arc42 is a singleton, but not required
-	update(t, root, "arc42", "draft", "true")
+	update(t, root, "arc42", "status", "draft")
 
 	report := mustCheck(t, root, false)
 	if !reflect.DeepEqual(report.DraftSingletons, []string{"arc42"}) {
@@ -464,7 +464,7 @@ func TestCheckReportsMalformedAndFails(t *testing.T) {
 // edges into it are suppressed and counted rather than burying the real error.
 func TestMalformedCollectionSuppressesDerivativeDangles(t *testing.T) {
 	root := collectionWS(t)
-	create(t, root, "repo", "svc-a", "repo", "acme/a", "status", "active")
+	create(t, root, "repo", "svc-a", "repo", "acme/a")
 	create(t, root, "component", "cmp-api", "title", "API", "kind", "service", "repo", "svc-a")
 
 	if before := mustCheck(t, root, false); len(before.Dangling) != 0 {

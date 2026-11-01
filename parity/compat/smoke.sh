@@ -15,16 +15,26 @@
 # upgrades again, reads the graph, and writes one edit.
 #
 # Assertions are exit codes, the upgrade JSON against the tree (backups named
-# == backups present; git status scoped to what the report names; nothing
-# modified under a storage root; the journal gone), idempotence (the second
+# == backups present; git status scoped to what the report names; the
+# entity files modified are exactly the ones `migrated` names; the journal
+# gone), idempotence (the second
 # upgrade reports nothing and moves nothing), and the read surface (entity and
 # edge counts the authoring set fixed). With --forward, NEW authors and OLD
-# reads; that half only reports.
+# reads. That half only reports. A miss prints WARN and never fails the run,
+# because a format change NEW makes is one OLD cannot read by design.
 #
 # Before the upgrade, NEW reads the raw OLD tree as it is — the common case,
 # a user who bumped the npm pin and never ran `upgrade`. When OLD knows
 # `schema snapshot` (0.27 and later) it takes the snapshot, and NEW's
 # `schema diff` must then report nothing pending.
+#
+# A tree whose entities still carry the retired `draft` key predates OKF 0.2
+# and migrates. There the raw `validate` fails with errors that each name
+# `khub upgrade`, the upgrade rewrites exactly the entity files its
+# `migrated` names, and the schema diffs against OLD's snapshot print an
+# uncounted note, because the base block moved. The authoring vocabulary is
+# read from the scaffolded ontology (build-hub 0.7.0 records an adr's choice
+# in `decision`), never from `--version`.
 #
 # Env pinned exactly as parity/runner does: KHUB_PARITY_NOW, the git identity,
 # GIT_CONFIG_GLOBAL/SYSTEM, TTY_COMPATIBLE=0 (every call is a pipe). Needs
@@ -49,10 +59,16 @@ export GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_SYSTEM=/dev/null
 export TTY_COMPATIBLE=0 NO_COLOR=1
 
 OLDV=$("$OLD" --version) NEWV=$("$NEW" --version)
-FAILED=0 CASES=0
+FAILED=0 CASES=0 WARNED=0 REPORT_ONLY=0
 say() { printf '\n== %s\n' "$*"; }
 pass() { CASES=$((CASES + 1)); printf '  ok   %s\n' "$1"; }
-fail() { CASES=$((CASES + 1)); FAILED=$((FAILED + 1)); printf '  FAIL %s\n       %s\n' "$1" "${2:-}"; }
+# note <text> — prints, never counts: a value a check cannot hold this run.
+note() { printf '  ..   %s\n' "$1"; }
+fail() {
+  CASES=$((CASES + 1))
+  if [ "$REPORT_ONLY" = 1 ]; then WARNED=$((WARNED + 1)); printf '  WARN %s\n       %s\n' "$1" "${2:-}"
+  else FAILED=$((FAILED + 1)); printf '  FAIL %s\n       %s\n' "$1" "${2:-}"; fi
+}
 # ok <want-exit> <label> <cmd...>  — runs, captures stdout to $OUT, asserts exit
 OUT=
 ok() {
@@ -81,14 +97,25 @@ author() {
   local preset=$1 dir=$2 bin=$3; shift 3
   mkdir -p "$dir"; cd "$dir" || exit 1
   ok 0 "init $preset ($($bin --version))" "$bin" init "$preset" . "$@"
+  local okf=0
+  grep -qE '^ +decision:' .khub/ontology.yaml 2>/dev/null && okf=1
   case $preset in
     build-hub)
-      ok 0 "add repo"        "$bin" add repo --title "API" --repo acme/api --status active
+      if [ "$okf" = 1 ]; then
+        ok 0 "add repo"        "$bin" add repo --title "API" --repo acme/api
+      else
+        ok 0 "add repo"        "$bin" add repo --title "API" --repo acme/api --status active
+      fi
       ok 0 "add component"   "$bin" add component --title "Public API" --kind service --repo rp-api
       ok 0 "add component"   "$bin" add component --title "Stripe" --kind external --stack Stripe
       ok 0 "add requirement" "$bin" add requirement --title "Pay by card" --kind functional
-      ok 0 "add adr"         "$bin" add adr --title "Use Stripe" --status accepted
-      ok 0 "add adr --draft" "$bin" add adr --title "Drop Stripe" --status proposed --draft
+      if [ "$okf" = 1 ]; then
+        ok 0 "add adr"         "$bin" add adr --title "Use Stripe" --decision accepted
+        ok 0 "add adr --draft" "$bin" add adr --title "Drop Stripe" --decision proposed --draft
+      else
+        ok 0 "add adr"         "$bin" add adr --title "Use Stripe" --status accepted
+        ok 0 "add adr --draft" "$bin" add adr --title "Drop Stripe" --status proposed --draft
+      fi
       ok 0 "link realized_in" "$bin" link req-pay-by-card realized_in cmp-public-api
       ok 0 "link affects"     "$bin" link ad-2026-01-15-use-stripe affects cmp-public-api
       ok 0 "link depends_on"  "$bin" link cmp-public-api depends_on cmp-stripe
@@ -116,6 +143,15 @@ author() {
       ok 0 "link related (file -> row)" "$bin" link json-card related vendor/neon
       AUTHORED=7 ANCHOR=repo/khub ANCHOR_EDGES=1 LINKED=json-card STORAGE='^(notes|cards|sheets|dossiers|charter\.md|repos\.jsonl|vendors\.yaml|accounts\.json)' ;;
   esac
+  # An entity file under a storage root that carries the retired `draft` key
+  # means this tree migrates. Read from the files, not from khub, so the
+  # upgrade report is checked against it rather than trusted.
+  local legacy
+  legacy=$(find . -type f ! -path './.git/*' ! -path './.khub/*' | sed 's|^\./||' | grep -E "$STORAGE" \
+    | while read -r f; do if grep -qE '^[ -]*draft: |"draft": ' "$f"; then echo "$f"; fi; done)
+  MIGRATES=0
+  [ -n "$legacy" ] && MIGRATES=1
+  return 0
 }
 
 # disturb: edits the OLD side makes so the upgrade has work to do.
@@ -144,8 +180,13 @@ backward() {
   local singletons_glob='knowledge/arc42.md'
 
   # ---- read without upgrading: the common case
-  ok 0 "raw tree: validate" "$NEW" validate --format json
-  jq_eq "raw tree: no errors" '.errors' '[]'
+  if [ "$MIGRATES" = 1 ]; then
+    ok 1 "raw tree: validate fails on the legacy shapes" "$NEW" validate --format json
+    jq_eq "raw tree: every error names khub upgrade" '[.errors[]|select(.reason|test("khub upgrade")|not)]' '[]'
+  else
+    ok 0 "raw tree: validate" "$NEW" validate --format json
+    jq_eq "raw tree: no errors" '.errors' '[]'
+  fi
   ok 0 "raw tree: check" "$NEW" check --format json
   jq_eq "raw tree: check passed" '.passed' 'true'
   ok 0 "raw tree: query" "$NEW" query --format json
@@ -155,7 +196,11 @@ backward() {
   ok 0 "raw tree: status" "$NEW" status --format json
   if [ "$old_snapshot" = 1 ]; then
     ok 0 "raw tree: schema diff against OLD's snapshot" "$NEW" schema diff --format json
-    jq_eq "raw tree: nothing pending across versions" '.pending' 'false'
+    if [ "$MIGRATES" = 1 ]; then
+      note "raw tree: base block moved, schema diff reports pending=$(printf '%s' "$OUT" | jq -r .pending)"
+    else
+      jq_eq "raw tree: nothing pending across versions" '.pending' 'false'
+    fi
   fi
   [ -z "$(git status --porcelain)" ] && pass "reads moved nothing" || fail "a read moved files" "$(git status --porcelain)"
 
@@ -185,14 +230,26 @@ backward() {
   # the backup holds the OLD bytes
   tail -c 8 .khub/storage.yaml.bak | grep -q '# mine' && pass "backup carries the edit" || fail "backup lacks the edit"
   ! grep -q '# mine' .khub/storage.yaml && pass "replaced layer is the shipped one" || fail "layer still carries the edit"
+  # the entity files the migration rewrote
+  local migrated; migrated=$(printf '%s' "$report" | jq -r '.migrated[].path' | sort -u)
+  if [ "$MIGRATES" = 1 ]; then
+    [ -n "$migrated" ] && pass "migrated names the legacy entities" || fail "a legacy tree migrated nothing"
+    jq_eq "no migration conflicts" '.migration_conflicts' '[]'
+  else
+    [ -z "$migrated" ] && pass "nothing to migrate" || fail "migrated a current tree" "$migrated"
+  fi
   # git status within what the report names
   local allowed='^(\.khub/(ontology|policy|storage)\.yaml(\.bak)?|\.khub/templates/.*|\.khub/config\.yaml|index\.md|CLAUDE\.md|AGENTS\.md)$'
   local created; created=$(printf '%s' "$report" | jq -r '.singletons_created[]')
   [ -n "$created" ] && allowed="$allowed|^$singletons_glob$"
-  status_within "git status within .khub/, index.md, agent files, named singletons" "$allowed"
-  # nothing MODIFIED or DELETED under a storage root (creations are singletons, asserted above)
-  local touched; touched=$(git status --porcelain | grep -E '^ ?[MD]' | awk '{print $2}' | grep -E "$STORAGE" || true)
-  [ -z "$touched" ] && pass "no entity modified or deleted under storage roots" || fail "entities moved" "$touched"
+  local m
+  for m in $migrated; do allowed="$allowed|^$(printf '%s' "$m" | sed 's/[.[*^()+?{|]/\\&/g')$"; done
+  status_within "git status within .khub/, index.md, agent files, named singletons, migrated" "$allowed"
+  # MODIFIED under a storage root == migrated; nothing DELETED (creations are singletons, asserted above)
+  local touched; touched=$(git status --porcelain | grep -E '^ ?M' | awk '{print $2}' | grep -E "$STORAGE" | sort -u || true)
+  [ "$touched" = "$migrated" ] && pass "entities modified == migrated" || fail "entities moved" "modified=[$touched] migrated=[$migrated]"
+  local gone; gone=$(git status --porcelain | grep -E '^ ?D' | awk '{print $2}' | grep -E "$STORAGE" || true)
+  [ -z "$gone" ] && pass "no entity deleted under storage roots" || fail "entities deleted" "$gone"
   # untracked under storage == singletons_created
   local newfiles; newfiles=$(git status --porcelain | grep '^??' | awk '{print $2}' | grep -E "$STORAGE" || true)
   if [ -z "$created" ]; then [ -z "$newfiles" ] && pass "no new entity files" || fail "unreported new files" "$newfiles"
@@ -209,10 +266,10 @@ backward() {
   # ---- idempotence
   local after1; after1=$(git status --porcelain)
   ok 0 "upgrade again" "$NEW" upgrade --format json
-  jq_eq "second upgrade: nothing to do" '[.config,.singletons_created,.schema_drift,([.wire[].action]|unique),.index]' '[[],[],[],["unchanged"],"unchanged"]'
+  jq_eq "second upgrade: nothing to do" '[.config,.singletons_created,.schema_drift,([.wire[].action]|unique),.index,.migrated]' '[[],[],[],["unchanged"],"unchanged",[]]'
   [ "$(git status --porcelain)" = "$after1" ] && pass "second upgrade moved nothing" || fail "second upgrade moved files"
   ok 0 "dry-run after upgrade" "$NEW" upgrade --dry-run --format json
-  jq_eq "dry-run after upgrade: nothing pending" '[.config,.singletons_created,([.wire[].action]|unique),.index]' '[[],[],["unchanged"],"unchanged"]'
+  jq_eq "dry-run after upgrade: nothing pending" '[.config,.singletons_created,([.wire[].action]|unique),.index,.migrated]' '[[],[],["unchanged"],"unchanged",[]]'
   git add -A && git commit -qm "upgraded by $NEWV"
 
   # ---- read surface on the upgraded tree
@@ -237,9 +294,11 @@ backward() {
   ok 0 "schema" "$NEW" schema --format json
   if [ "$old_snapshot" = 1 ]; then
     ok 0 "schema diff after upgrade" "$NEW" schema diff --format json
-    [ "$(printf '%s' "$report" | jq -r '.version_from')" = "$(printf '%s' "$report" | jq -r '.version_to')" ] \
-      && jq_eq "preset version unchanged: nothing pending" '.pending' 'false' \
-      || pass "preset version moved: schema diff reports pending=$(printf '%s' "$OUT" | jq -r .pending)"
+    if [ "$MIGRATES" = 0 ] && [ "$(printf '%s' "$report" | jq -r '.version_from')" = "$(printf '%s' "$report" | jq -r '.version_to')" ]; then
+      jq_eq "preset version unchanged: nothing pending" '.pending' 'false'
+    else
+      note "preset or base moved: schema diff reports pending=$(printf '%s' "$OUT" | jq -r .pending)"
+    fi
   fi
   ok 0 "schema snapshot" "$NEW" schema snapshot --format json
   ok 0 "schema diff" "$NEW" schema diff --format json
@@ -248,7 +307,7 @@ backward() {
   # ---- one write on an OLD-authored entity is a minimal diff
   git add -A && git commit -qm snapshot
   ok 0 "edit OLD entity" "$NEW" edit "$LINKED" --tags compat --format json
-  local files; files=$(git diff --name-only | wc -l)
+  local files; files=$(git diff --name-only | wc -l | tr -d " ")
   [ "$files" = 1 ] && pass "edit touched one file" || fail "edit touched $files files" "$(git diff --name-only)"
   ok 0 "validate after edit" "$NEW" validate --format json
   jq_eq "edit validates" '.errors' '[]'
@@ -262,6 +321,7 @@ forward() {
   author "$preset" "$dir" "$NEW" "$@"
   ok 0 "reindex" "$NEW" reindex
   git init -q . && git add -A && git commit -qm "authored by $NEWV"
+  REPORT_ONLY=1
   ok 0 "OLD validate" "$OLD" validate --format json
   jq_eq "OLD validate: no errors" '.errors' '[]'
   ok 0 "OLD check" "$OLD" check --format json
@@ -277,6 +337,7 @@ forward() {
     "$(printf '%s' "$OUT" | jq -c .config)" "$(printf '%s' "$OUT" | jq -c '[.wire[].action]')" "$(printf '%s' "$OUT" | jq -r .index)" \
     "$(printf '%s' "$OUT" | jq -c 'del(.path,.preset,.version_from,.version_to,.config,.singletons_created,.schema_drift,.wire,.index,.dry_run,.removed_types)')"
   [ -z "$(git status --porcelain)" ] && pass "OLD dry-run moved nothing" || fail "OLD dry-run moved files" "$(git status --porcelain)"
+  REPORT_ONLY=0
   cd "$WORK" || exit 1
 }
 
@@ -288,5 +349,6 @@ if [ "$FORWARD" = 1 ]; then
   forward firm-ops
 fi
 
+[ "$WARNED" = 0 ] || printf '\n%d forward checks warned (report-only)\n' "$WARNED"
 printf '\n%s -> %s: %d checks, %d failed\n' "$OLDV" "$NEWV" "$CASES" "$FAILED"
 [ "$FAILED" = 0 ]

@@ -22,9 +22,12 @@ import (
 	"github.com/endgame-build/khub/internal/errs"
 	"github.com/endgame-build/khub/internal/index"
 	"github.com/endgame-build/khub/internal/introspect"
+	"github.com/endgame-build/khub/internal/migrate"
 	"github.com/endgame-build/khub/internal/omap"
 	"github.com/endgame-build/khub/internal/schema"
 	"github.com/endgame-build/khub/internal/template"
+	"github.com/endgame-build/khub/internal/trust"
+	"github.com/endgame-build/khub/internal/values"
 )
 
 // FieldError is integrity.FieldError: one per-entity validation failure —
@@ -79,7 +82,7 @@ func Validate(root string, target *string, strict bool) (*ValidateReport, error)
 	if err != nil {
 		return nil, err
 	}
-	scanned, err := index.Build(root, resolved)
+	scanned, err := index.BuildWithBodies(root, resolved) // bodies feed the footnote gap
 	if err != nil {
 		return nil, err
 	}
@@ -87,6 +90,7 @@ func Validate(root string, target *string, strict bool) (*ValidateReport, error)
 	valid := index.Filter(scanned, index.StrayNodes(scanned))
 
 	errors := []FieldError{}
+	gaps := []FieldError{}
 	count := 0
 	// The one entity a `type/slug` target names — kb `_reviewed`: the body
 	// metrics and lenses are computed for it alone.
@@ -102,6 +106,8 @@ func Validate(root string, target *string, strict bool) (*ValidateReport, error)
 		rtype, _ := resolved.Types.Get(node.Type)
 		errors = append(errors,
 			validateEntity(rtype, node.Type, node.Slug, valid.Meta[node], valid, strict)...)
+		gaps = append(gaps, actorGaps(node.Type, node.Slug, valid.Meta[node])...)
+		gaps = append(gaps, footnoteGaps(node.Type, node.Slug, valid.Meta[node], valid.Body[node])...)
 	}
 
 	// Body contract: an md type with a workspace template requires the
@@ -153,7 +159,7 @@ func Validate(root string, target *string, strict bool) (*ValidateReport, error)
 		}
 	}
 	return &ValidateReport{
-		Count: count, Errors: errors, Gaps: body.gaps, Body: metrics, Lenses: lenses,
+		Count: count, Errors: errors, Gaps: append(append([]FieldError{}, body.gaps...), gaps...), Body: metrics, Lenses: lenses,
 	}, nil
 }
 
@@ -278,11 +284,14 @@ func validateEntity(
 	for _, key := range meta.Keys() {
 		value, _ := meta.Get(key)
 		if attr, ok := rtype.Attributes.Get(key); ok {
-			if reason, bad := attrError(attr, value); bad {
+			for _, reason := range legacyAttrErrors(rtype, attr, value) {
 				errors = append(errors, FieldError{tname, slug, key, reason})
 			}
 		} else if _, ok := rtype.Relations.Get(key); ok {
 			errors = append(errors, relationErrors(rtype, tname, slug, key, value, idx)...)
+		} else if key == "draft" {
+			errors = append(errors, FieldError{tname, slug, key,
+				"'draft' is retired; status carries the publish state — run `khub upgrade` to migrate it"})
 		} else if strict {
 			errors = append(errors, FieldError{
 				tname, slug, key, "undeclared key rejected under --strict",
@@ -291,6 +300,140 @@ func validateEntity(
 		// else: an undeclared key is an allowed extension — left unchecked.
 	}
 	return errors
+}
+
+// legacyAttrErrors is attrErrors with the pre-OKF shapes `khub upgrade`
+// migrates named as such: a bare string entry in the base `sources` (once a
+// relation, now a list of OKF source objects), a `status` outside the
+// base enum that upgrade can place, and a date-only `stale_after`. The detection is migrate's own, so the
+// hint appears only for what upgrade migrates; a typo gets the plain error.
+func legacyAttrErrors(rtype *schema.ResolvedType, attr *schema.ResolvedAttribute, value any) []string {
+	if attr.OverriddenFromBase {
+		return attrErrors(attr, value)
+	}
+	if attr.Name == "sources" && migrate.LegacySources(rtype) {
+		if bare, kept := migrate.SplitSources(value); len(bare) > 0 {
+			quoted := make([]string, len(bare))
+			for i, e := range bare {
+				quoted[i] = "'" + pyStr(e) + "'"
+			}
+			reasons := []string{fmt.Sprintf("sources holds bare entries (%s) — "+
+				"run `khub upgrade` to move them to references", strings.Join(quoted, ", "))}
+			entries := values.Items(value)
+			for _, i := range kept {
+				reasons = append(reasons, attrErrorsAt(attr.Items, fmt.Sprintf("%s[%d]", attr.Name, i), entries[i])...)
+			}
+			return reasons
+		}
+	}
+	reasons := attrErrors(attr, value)
+	if attr.Name == "status" && len(reasons) > 0 {
+		// LegacyStatus places only a non-empty string the enum lacks, so the
+		// one reason here is the enum error.
+		if homes, to := migrate.LegacyStatus(rtype, value); len(homes) == 1 || to != "" {
+			reasons[0] += " — run `khub upgrade` to migrate a legacy status"
+		}
+	}
+	if attr.Name == "stale_after" && len(reasons) > 0 {
+		if _, ok := migrate.LegacyStaleAfter(rtype, value); ok {
+			reasons[0] += " — run `khub upgrade` to make a date-only stale_after a datetime"
+		}
+	}
+	return reasons
+}
+
+// actorGaps reports a `generated.by` or `verified[].by` that follows no actor
+// convention, as a gap: an actor string is an assertion khub records, never a
+// write it refuses.
+func actorGaps(tname, slug string, meta *omap.Map) []FieldError {
+	var out []FieldError
+	check := func(field, path string, v any) {
+		if s, isStr := v.(string); isStr && s != "" && !trust.ValidActor(s) {
+			out = append(out, FieldError{tname, slug, field, fmt.Sprintf(
+				"%s '%s' follows no actor convention (human:<name>, process:<name>, or <producer>[/<version>])",
+				path, s)})
+		}
+	}
+	if g, isMap := metaGet(meta, "generated").(*omap.Map); isMap {
+		by, _ := g.Get("by")
+		check("generated", "generated.by", by)
+	}
+	events, isList := metaGet(meta, "verified").([]any)
+	if !isList {
+		events = []any{metaGet(meta, "verified")}
+	}
+	for i, e := range events {
+		if m, isMap := e.(*omap.Map); isMap {
+			by, _ := m.Get("by")
+			check("verified", fmt.Sprintf("verified[%d].by", i), by)
+		}
+	}
+	return out
+}
+
+// footnoteLabel finds a Markdown footnote, as a reference `[^x]` or a
+// definition `[^x]:`; codeSpan finds an inline code span.
+var (
+	footnoteLabel = regexp.MustCompile(`\[\^([^\]\s]+)\]`)
+	codeSpan      = regexp.MustCompile("`+[^`\n]*`+")
+)
+
+// footnoteGaps pairs the body's footnotes with the OKF `sources` entries, both
+// ways, as gaps: a footnote naming no `sources[].id`, and an id no footnote
+// cites. Fenced code, inline code and HTML comments are not prose and cite
+// nothing. A footnote on an entity without `sources` names no source either.
+func footnoteGaps(tname, slug string, meta *omap.Map, body string) []FieldError {
+	var entries []any
+	switch raw := metaGet(meta, "sources").(type) {
+	case nil:
+	case []any:
+		entries = raw
+	default:
+		entries = []any{raw}
+	}
+	type source struct {
+		index int
+		id    string
+	}
+	var ids []source
+	var out []FieldError
+	first := map[string]int{} // id → index of the entry that took it first
+	for i, e := range entries {
+		if m, isMap := e.(*omap.Map); isMap {
+			if id, _ := m.Get("id"); id != nil && pyStr(id) != "" {
+				id := pyStr(id)
+				if at, dup := first[id]; dup {
+					out = append(out, FieldError{tname, slug, "sources", fmt.Sprintf(
+						"sources[%d].id '%s' repeats sources[%d].id, so a footnote [^%s] cannot tell them apart; "+
+							"give each source its own id", i, id, at, id)})
+					continue
+				}
+				first[id] = i
+				ids = append(ids, source{i, id})
+			}
+		}
+	}
+	known := func(id string) bool { _, ok := first[id]; return ok }
+	cited := map[string]bool{}
+	prose := codeSpan.ReplaceAllString(template.Prose(body), " ")
+	for _, m := range footnoteLabel.FindAllStringSubmatch(prose, -1) {
+		label := m[1]
+		if cited[label] {
+			continue
+		}
+		cited[label] = true
+		if !known(label) {
+			out = append(out, FieldError{tname, slug, "sources", fmt.Sprintf(
+				"footnote [^%s] names no sources entry; give one `id: %s` or drop the footnote", label, label)})
+		}
+	}
+	for _, s := range ids {
+		if !cited[s.id] {
+			out = append(out, FieldError{tname, slug, "sources", fmt.Sprintf(
+				"sources[%d].id '%s' is cited by no footnote [^%s] in the body", s.index, s.id, s.id)})
+		}
+	}
+	return out
 }
 
 // The retired scheme, `<prefix>-NNN-<slug>`, matched only so the finding that
@@ -393,53 +536,102 @@ func longestFirst(prefixes []string) []string {
 	return out
 }
 
-// attrError is integrity._attr_error: a reason if value is illegal for attr.
+// attrErrors is integrity._attr_error: every reason value is illegal for
+// attr. A scalar yields at most one; an object or a list yields one per nested
+// violation.
 //
 // Enum and pattern are the strong checks; the scalar-type check is conservative
 // — it flags a clear mismatch (a word where a number belongs) but never a value
 // the write path already coerced and stored.
-func attrError(attr *schema.ResolvedAttribute, value any) (string, bool) {
+func attrErrors(attr *schema.ResolvedAttribute, value any) []string {
+	return attrErrorsAt(attr, attr.Name, value)
+}
+
+// attrErrorsAt is attrErrors for a value at path: the attribute's name at the
+// top, a dotted path inside an object or a list (`verified[0].by`).
+func attrErrorsAt(attr *schema.ResolvedAttribute, path string, value any) []string {
 	if value == nil {
-		return "", false // an absent value is a completeness concern, not well-formedness
+		return nil // an absent value is a completeness concern, not well-formedness
 	}
 	if s, isStr := value.(string); isStr && strings.TrimSpace(s) == "" {
 		// `check` already counts '' as missing (via present), and the write path
 		// already rejects it for an enum. validate let it through for a plain text
 		// field, so the two gates disagreed about the same byte. null is the way to
 		// say "absent" — it passes validate and is what backfill scaffolds.
-		return fmt.Sprintf("%s is empty; omit the field or write null, not ''", attr.Name), true
+		return []string{fmt.Sprintf("%s is empty; omit the field or write null, not ''", path)}
+	}
+	if attr.BaseType == "object" {
+		return objectErrors(attr, path, value)
+	}
+	if attr.BaseType == "list" && attr.Items != nil {
+		// A value that is not a list is one element, so a bare mapping where a
+		// list of objects is declared reads as that list's only item (OKF).
+		var reasons []string
+		for i, e := range values.Items(value) {
+			reasons = append(reasons, attrErrorsAt(attr.Items, fmt.Sprintf("%s[%d]", path, i), e)...)
+		}
+		return reasons
 	}
 	if attr.Enum != nil {
 		if !containsStr(attr.Enum, pyStr(value)) {
-			return fmt.Sprintf("'%s' is not a valid %s (%s)",
-				pyStr(value), attr.Name, strings.Join(attr.Enum, ", ")), true
+			return []string{fmt.Sprintf("'%s' is not a valid %s (%s)",
+				pyStr(value), path, strings.Join(attr.Enum, ", "))}
 		}
-		return "", false
+		return nil
 	}
 	// A pattern that MATCHES falls through to the scalar-type check, exactly as
 	// in Python — the pattern branch is a guard clause, not a terminal one.
 	if attr.Pattern != nil && !attr.MatchPattern(pyStr(value)) {
-		return fmt.Sprintf("'%s' does not match the pattern for %s (%s)",
-			pyStr(value), attr.Name, *attr.Pattern), true
+		return []string{fmt.Sprintf("'%s' does not match the pattern for %s (%s)",
+			pyStr(value), path, *attr.Pattern)}
 	}
-	return typeError(attr, value)
+	if reason, bad := typeError(attr, path, value); bad {
+		return []string{reason}
+	}
+	return nil
+}
+
+// objectErrors checks a mapping against the keys its object declares. A
+// declared key that is missing fails only when required; an undeclared key is
+// an allowed extension, as it is at the top level.
+func objectErrors(attr *schema.ResolvedAttribute, path string, value any) []string {
+	m, isMap := value.(*omap.Map)
+	if !isMap {
+		return []string{fmt.Sprintf("'%s' is not a valid object for %s", pyStr(value), path)}
+	}
+	if attr.Fields == nil {
+		return nil
+	}
+	var reasons []string
+	for _, k := range attr.Fields.Keys() {
+		field, _ := attr.Fields.Get(k)
+		v, _ := m.Get(k)
+		if v == nil {
+			if field.Required {
+				reasons = append(reasons, fmt.Sprintf("%s.%s is required", path, k))
+			}
+			continue
+		}
+		reasons = append(reasons, attrErrorsAt(field, path+"."+k, v)...)
+	}
+	return reasons
 }
 
 // typeError is integrity._type_error.
-func typeError(attr *schema.ResolvedAttribute, value any) (string, bool) {
+func typeError(attr *schema.ResolvedAttribute, path string, value any) (string, bool) {
 	switch attr.BaseType {
 	case "bool":
 		if !isBool(value) {
-			return fmt.Sprintf("'%s' is not a valid bool for %s", pyStr(value), attr.Name), true
+			return fmt.Sprintf("'%s' is not a valid bool for %s", pyStr(value), path), true
 		}
 	case "number":
 		if !isNumber(value) {
-			return fmt.Sprintf("'%s' is not a valid number for %s", pyStr(value), attr.Name), true
+			return fmt.Sprintf("'%s' is not a valid number for %s", pyStr(value), path), true
 		}
 	case "date", "datetime":
 		if !isDateish(value) {
 			return fmt.Sprintf("'%s' is not a valid %s for %s",
-				pyStr(value), attr.BaseType, attr.Name), true
+				pyStr(value), attr.BaseType, path), true
 		}
 	}
 	return "", false

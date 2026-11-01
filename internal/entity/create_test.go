@@ -119,8 +119,8 @@ func TestNumberFieldKeepsIntShape(t *testing.T) {
 	}
 }
 
-// TS-ENT-001-U03: draft is the manual flag — default false even when a required
-// field is missing.
+// TS-ENT-001-U03: `status: draft` is the manual flag — never written unless
+// asked for, even when a required field is missing.
 func TestDraftIsManual(t *testing.T) {
 	ws := newWS(t, "firm-ops")
 	prereqs(t, ws)
@@ -134,8 +134,8 @@ func TestDraftIsManual(t *testing.T) {
 	if got := metaValue(t, active.Path, "stage"); got != "prospect" {
 		t.Fatalf("stage = %#v", got)
 	}
-	if got := metaValue(t, active.Path, "draft"); got != false {
-		t.Fatalf("draft = %#v, want false", got)
+	if hasKey(t, active.Path, "status") || hasKey(t, active.Path, "draft") {
+		t.Fatalf("an active entity wrote a status:\n%s", readFile(t, active.Path))
 	}
 
 	drafted, err := Create(ws, "opportunity", CreateOpts{
@@ -146,8 +146,8 @@ func TestDraftIsManual(t *testing.T) {
 	if !drafted.Draft {
 		t.Fatal("--draft must mark the entity unpublished")
 	}
-	if got := metaValue(t, drafted.Path, "draft"); got != true {
-		t.Fatalf("draft = %#v, want true", got)
+	if got := metaValue(t, drafted.Path, "status"); got != "draft" {
+		t.Fatalf("status = %#v, want draft", got)
 	}
 }
 
@@ -250,7 +250,7 @@ func TestLayoutResolutionAndEngagementEdge(t *testing.T) {
 	}
 }
 
-// The frontmatter key canon: type, created, updated, draft, schema-declared
+// The frontmatter key canon: type, created, updated, schema-declared
 // attributes in DECLARATION order, then relations, then extras in input order.
 func TestFrontmatterKeyOrderIsTheSchemaCanon(t *testing.T) {
 	ws := newWS(t, "firm-ops")
@@ -263,7 +263,8 @@ func TestFrontmatterKeyOrderIsTheSchemaCanon(t *testing.T) {
 	requireNoError(t, err)
 	got := readMeta(t, res.Path).Keys()
 	want := []string{
-		"type", "created", "updated", "draft",
+		"type", "created", "updated",
+		"generated",     // the stamp, at its base-block position
 		"name", "stage", // declaration order on the type
 		"client", "owner", // relation declaration order
 		"zeta", "alpha", // extras keep CLI input order

@@ -12,8 +12,11 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"testing"
+
+	"github.com/goccy/go-yaml/lexer"
 
 	"github.com/endgame-build/khub/internal/omap"
 )
@@ -78,6 +81,24 @@ func seedFrontmatter(f *testing.F) {
 	}
 }
 
+// seedOps adds documents shaped for the delete and rename splices: block
+// values, quoted keys, comments on every side of a pair, CRLF.
+func seedOps(f *testing.F) {
+	f.Helper()
+	for _, s := range []string{
+		"# h\ntype: adr\nstatus: accepted  # c\n# above\ndraft: true\ntitle: X\n",
+		"\"status\": x\ntags:\n- a\n- b   # last\n# after\nnext: 1\n",
+		"text: |\n  one\n\n  two\nmeta: {a: 1}  # c\nb: 2",
+		"alpha:\n  type: repo\n  draft: false # d\n  status: active\n# between\nbeta:\n  x: 1\n",
+		"# h\r\na: 1\r\ndraft: true\r\nstatus: x  # c\r\n",
+		"desc: the quick brown\n  fox jumps\nlist:\n  - x\n  - y\nz: 0\n",
+		"generated:\n  by: khub  # writer\n# about rows\nrows:\n  a:\n    type: x\n  # inside\n  b:\n    tags:\n    - t   # last\n",
+		"title: Cm  # title note\nverified:\n- {by: human:a, at: 2026-01-01T00:00:00Z, rev: r1}  # first\nsrc: {by: a}  # bare\n",
+	} {
+		f.Add(s)
+	}
+}
+
 // FuzzJSONValid: whatever the ordered decoder accepts, both encoders must
 // re-emit as JSON encoding/json agrees is valid — the CLI dialect with its
 // ASCII escapes and the on-disk dialect with raw UTF-8.
@@ -103,9 +124,12 @@ func FuzzJSONValid(f *testing.F) {
 }
 
 // FuzzReconcatIdentity: a splice that changes nothing must reproduce the
-// source byte for byte — the T1c property, through the public API.
+// source byte for byte — the T1c property, through the public API. Renaming
+// the first key away and back is a change that cancels out, so it must too,
+// whenever the source spells that key the way the emitter would.
 func FuzzReconcatIdentity(f *testing.F) {
 	seedFrontmatter(f)
+	seedOps(f)
 	f.Fuzz(func(t *testing.T, text string) {
 		m, _, err := LoadDocMap(text, Mode12)
 		if err != nil || m == nil {
@@ -121,54 +145,175 @@ func FuzzReconcatIdentity(f *testing.F) {
 		if string(out) != text {
 			t.Fatalf("no-change splice moved bytes:\n--- src\n%s\n--- out\n%s", text, out)
 		}
+		if m.Len() == 0 {
+			return
+		}
+		key := m.Keys()[0]
+		fresh := freshKey(m)
+		there, err := SpliceMapping([]byte(text), renamedKey(m, key, fresh), Mode12, Rename{Path: []string{key}, To: fresh})
+		if errors.Is(err, ErrNoSplice) {
+			return
+		}
+		if err != nil {
+			t.Fatalf("rename: %v", err)
+		}
+		back, err := SpliceMapping(there, m, Mode12, Rename{Path: []string{fresh}, To: key})
+		if errors.Is(err, ErrNoSplice) {
+			// The key may render in a shape the lexer cannot reconcat: goccy
+			// drops the space in `'0' :`, so T1c refuses the renamed text.
+			return
+		}
+		if err != nil {
+			t.Fatalf("rename back: %v\n%s", err, there)
+		}
+		if spelled, ok := renderKey(key); ok && spelled == keySpelling(t, text, key) && string(back) != text {
+			t.Fatalf("rename and back moved bytes:\n--- src\n%s\n--- out\n%s", text, back)
+		}
 	})
 }
 
-// FuzzSpliceIdempotent: splicing a changed value, then splicing the same
-// value again, changes nothing the second time, and the result reads back
-// with the value it was asked for.
+// FuzzSpliceIdempotent: changing a value, deleting a key, renaming a key,
+// growing a list, appending a key to the first nested mapping and turning a
+// block into a scalar each splice to a document that reads back as asked, and
+// splicing the same want again changes nothing.
 func FuzzSpliceIdempotent(f *testing.F) {
 	seedFrontmatter(f)
+	seedOps(f)
 	f.Fuzz(func(t *testing.T, text string) {
 		m, _, err := LoadDocMap(text, Mode12)
 		if err != nil || m == nil || m.Len() == 0 {
 			t.Skip()
 		}
-		key := m.Keys()[0]
-		switch v, _ := m.Get(key); v.(type) {
+		keys := m.Keys()
+		first := keys[0]
+		switch v, _ := m.Get(first); v.(type) {
 		case *omap.Map, []any:
-			t.Skip() // only a scalar value is spliced in place
+			// only a scalar value is spliced in place
+		default:
+			edited := renamedKey(m, first, first)
+			edited.Set(first, "fuzzed")
+			spliceTwice(t, text, edited)
 		}
-		m.Set(key, "fuzzed")
-		first, err := SpliceMapping([]byte(text), m, Mode12)
-		if errors.Is(err, ErrNoSplice) {
-			t.Skip()
-		}
-		if err != nil {
-			t.Fatalf("first splice: %v", err)
-		}
-		back, _, err := LoadDocMap(string(first), Mode12)
-		if err != nil || back == nil {
-			t.Fatalf("spliced document does not parse: %v\n%s", err, first)
-		}
-		if got, _ := back.Get(key); got != "fuzzed" {
-			t.Fatalf("%s = %#v after splice, want %q\n%s", key, got, "fuzzed", first)
-		}
-		second, err := SpliceMapping(first, m, Mode12)
-		if errors.Is(err, ErrNoSplice) {
-			// The first splice may have laid the value out in a shape the
-			// splicer refuses to edit in place (a folded long line, say). The
-			// write path then re-emits the whole document; that fallback is
-			// policy, not a failure of idempotency.
-			t.Skip()
-		}
-		if err != nil {
-			t.Fatalf("second splice: %v", err)
-		}
-		if string(second) != string(first) {
-			t.Fatalf("splice is not idempotent:\n--- first\n%s\n--- second\n%s", first, second)
+		spliceTwice(t, text, withoutKey(m, keys[len(keys)/2]))
+		fresh := freshKey(m)
+		spliceTwice(t, text, renamedKey(m, first, fresh), Rename{Path: []string{first}, To: fresh})
+		for _, k := range keys {
+			v, _ := m.Get(k)
+			switch x := v.(type) {
+			case []any:
+				// The first list grows by one item; the first block becomes a scalar.
+				if len(x) > 0 {
+					grown := renamedKey(m, "", "")
+					grown.Set(k, append(slices.Clone(x), "fuzzed"))
+					spliceTwice(t, text, grown)
+				}
+				flat := renamedKey(m, "", "")
+				flat.Set(k, "fuzzed")
+				spliceTwice(t, text, flat)
+			}
+			if block, ok := mapValue(m, k); ok && block.Len() > 0 {
+				grown := renamedKey(block, "", "")
+				grown.Set(freshKey(block), "fuzzed")
+				outer := renamedKey(m, "", "")
+				outer.Set(k, grown)
+				spliceTwice(t, text, outer)
+				flat := renamedKey(m, "", "")
+				flat.Set(k, "fuzzed")
+				spliceTwice(t, text, flat)
+				break
+			}
 		}
 	})
+}
+
+// mapValue is m's value at k when that value is a mapping.
+func mapValue(m *omap.Map, k string) (*omap.Map, bool) {
+	v, _ := m.Get(k)
+	block, ok := v.(*omap.Map)
+	return block, ok
+}
+
+// spliceTwice splices want into text, requires the result to read back as
+// want, and requires a second splice of the same want to change nothing.
+// ErrNoSplice at either step is the fallback policy, not a failure: the write
+// path then re-emits the whole document.
+func spliceTwice(t *testing.T, text string, want *omap.Map, renames ...Rename) {
+	t.Helper()
+	first, err := SpliceMapping([]byte(text), want, Mode12, renames...)
+	if errors.Is(err, ErrNoSplice) {
+		return
+	}
+	if err != nil {
+		t.Fatalf("first splice: %v", err)
+	}
+	back, _, err := LoadDocMap(string(first), Mode12)
+	if err != nil || back == nil {
+		t.Fatalf("spliced document does not parse: %v\n%s", err, first)
+	}
+	if !equalValue(back, want) {
+		t.Fatalf("spliced document does not read back as asked:\n%s", first)
+	}
+	second, err := SpliceMapping(first, want, Mode12)
+	if errors.Is(err, ErrNoSplice) {
+		return
+	}
+	if err != nil {
+		t.Fatalf("second splice: %v", err)
+	}
+	if string(second) != string(first) {
+		t.Fatalf("splice is not idempotent:\n--- first\n%s\n--- second\n%s", first, second)
+	}
+}
+
+// renamedKey copies m with key from renamed to to, in place.
+func renamedKey(m *omap.Map, from, to string) *omap.Map {
+	out := omap.New()
+	for _, k := range m.Keys() {
+		v, _ := m.Get(k)
+		if k == from {
+			k = to
+		}
+		out.Set(k, v)
+	}
+	return out
+}
+
+// withoutKey copies m without key.
+func withoutKey(m *omap.Map, key string) *omap.Map {
+	out := renamedKey(m, key, key)
+	out.Delete(key)
+	return out
+}
+
+// freshKey is a top-level key name m does not hold.
+func freshKey(m *omap.Map) string {
+	k := "renamed_key"
+	for {
+		if _, taken := m.Get(k); !taken {
+			return k
+		}
+		k += "_"
+	}
+}
+
+// keySpelling is the source text of a top-level key's token.
+func keySpelling(t *testing.T, text, key string) string {
+	t.Helper()
+	locs, err := keyLocs(text)
+	if err != nil {
+		return ""
+	}
+	loc, ok := locs[pathKey([]string{key})]
+	if !ok {
+		return ""
+	}
+	toks := lexer.Tokenize(text)
+	i, ok := tokenIndex(toks)[loc.offset]
+	if !ok {
+		return ""
+	}
+	origin := toks[i].Origin
+	return strings.TrimRight(origin[leadLen(origin):], spaceChars)
 }
 
 // FuzzEmitRoundTrip: what the emitter writes, the loader reads back, and

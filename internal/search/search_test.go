@@ -345,7 +345,7 @@ func TestSearchHitsCarryFlagsAndEdgeCounts(t *testing.T) {
 	seedRaw(t, ws, "knowledge/requirements/req-a.md",
 		"---\ntype: requirement\ntitle: Gateway auth\nrealized_in: [cmp-api]\n---\n")
 	seedRaw(t, ws, "knowledge/requirements/req-b.md",
-		"---\ntype: requirement\ntitle: Gateway limits\ndraft: true\nrealized_in: [cmp-api]\n---\n")
+		"---\ntype: requirement\ntitle: Gateway limits\nstatus: draft\nrealized_in: [cmp-api]\n---\n")
 	seedRaw(t, ws, "knowledge/requirements/req-lone.md",
 		"---\ntype: requirement\ntitle: Gateway lone\n---\n")
 	now := time.Date(2026, 1, 15, 0, 0, 0, 0, time.UTC)
@@ -382,7 +382,7 @@ func TestSearchHitsCarryFlagsAndEdgeCounts(t *testing.T) {
 func TestSearchFlagsAgreeWithQuery(t *testing.T) {
 	ws := relevanceWS(t)
 	seedRaw(t, ws, "knowledge/components/cmp-stale-probe.md",
-		"---\ntype: component\ntitle: Probe\ndraft: true\nupdated: 2024-01-01\n---\nprobe\n")
+		"---\ntype: component\ntitle: Probe\nstatus: draft\nupdated: 2024-01-01\n---\nprobe\n")
 	now := time.Date(2026, 1, 15, 0, 0, 0, 0, time.UTC)
 	matches, err := query.Query(ws, query.Filters{}, now)
 	if err != nil {

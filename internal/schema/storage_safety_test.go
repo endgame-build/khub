@@ -26,6 +26,10 @@ func TestStorageOwnershipAndPathSafety(t *testing.T) {
 		{"reserved trailing space", "a: {layout: file, path: 'notes/con /a'}\n  b: {layout: file, path: b}", false},
 		{"reserved superscript", "a: {layout: file, path: com¹}\n  b: {layout: file, path: b}", false},
 		{"reserved-looking", "a: {layout: singleton, path: console.md}\n  b: {layout: file, path: con-b}", true},
+		{"navigation singleton", "a: {layout: singleton, path: docs/log.md}\n  b: {layout: file, path: b}", false},
+		{"navigation template leaf", "a: {layout: file, path: 'spokes/{slug}/index.md'}\n  b: {layout: file, path: b}", false},
+		{"navigation in a list", "a: {layout: file, path: ['notes/{slug}.md', 'old/{slug}/log.md']}\n  b: {layout: file, path: b}", false},
+		{"slug-named template", "a: {layout: file, path: 'spokes/{slug}/spec.md'}\n  b: {layout: file, path: b}", true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			doc := "ontology:\n  entities:\n    a: {}\n    b: {}\nstorage:\n  " + tc.storage + "\n"
@@ -95,5 +99,16 @@ func TestReservedDeviceName(t *testing.T) {
 		if ReservedDeviceName(name) {
 			t.Errorf("ReservedDeviceName(%q) = true", name)
 		}
+	}
+}
+
+// A path whose file is index.md or log.md refuses at load, naming the path.
+func TestNavigationLeafRefusedAtResolve(t *testing.T) {
+	doc := "ontology:\n  entities:\n    spec: {}\nstorage:\n  spec: {layout: file, path: 'spokes/{slug}/index.md'}\n"
+	le := asLocatedErr(t, func() error { _, err := ResolveWith(nil, writeSchemaFiles(t, doc)); return err }())
+	want := "Invalid schema at storage.spec: Value error, 'spokes/{slug}/index.md' stores entities at index.md, " +
+		"which OKF reserves for navigation; choose another file name"
+	if le.Code != "invalid_schema" || le.Message != want {
+		t.Errorf("got %s %q\nwant %q", le.Code, le.Message, want)
 	}
 }

@@ -14,7 +14,7 @@ WORK=${1:-/tmp/khub-smoke}
 KHUB="${KHUB:-$REPO/khub}"   # the built binary; override to smoke another build
 # Dated ids (adr) carry the mint day; pin the clock so the ids below are
 # stable — the same seam the parity recorder uses.
-export KHUB_PARITY_NOW=2026-01-15
+export KHUB_PARITY_NOW=2026-01-15 KHUB_ACTOR=khub
 FAILED=0
 CASES=0
 
@@ -59,31 +59,37 @@ same() {
   fi
 }
 
+# tree_sum <dir> — a checksum line per file, lock files aside, so a file
+# rewritten in place shows as well as one added or removed.
+tree_sum() { find "$1" -type f ! -path '*/.khub/generated/*' -exec cksum {} + | sort; }
+# body_of — a Markdown entity on stdin, minus its frontmatter.
+body_of() { awk 'n >= 2 { print } /^---$/ { n++ }'; }
+
 rm -rf "$WORK"; mkdir -p "$WORK"
 
 # -------------------------------------------------------------------- build-hub
 say "khub · build-hub"
 L=$WORK/hub; mkdir -p "$L"; cd "$L" || exit 1
 ok 0 "init"                        $KHUB init build-hub .
-ok 0 "add repo"                    $KHUB -C "$L" add repo --title "API" --repo acme/api --status active
+ok 0 "add repo"                    $KHUB -C "$L" add repo --title "API" --repo acme/api
 ok 0 "add component (service)"     $KHUB -C "$L" add component --title "Public API" --kind service --repo rp-api
 ok 0 "add component (external)"    $KHUB -C "$L" add component --title "Stripe" --kind external --stack Stripe
 ok 0 "add requirement functional"  $KHUB -C "$L" add requirement --title "Pay by card" --kind functional
 ok 0 "add requirement constraint"  $KHUB -C "$L" add requirement --title "Settle in 2s" --kind constraint
-ok 0 "add adr"                     $KHUB -C "$L" add adr --title "Use Stripe" --status accepted
+ok 0 "add adr"                     $KHUB -C "$L" add adr --title "Use Stripe" --decision accepted
 ok 0 "add capability"              $KHUB -C "$L" add capability --title "Checkout"
 ok 0 "add actor"                   $KHUB -C "$L" add actor --title "Shopper"
 ok 0 "add system (--owner)"        $KHUB -C "$L" add system --title "Storefront" --owner team-payments
-ok 0 "add api (vendor's, provider)" $KHUB -C "$L" add api --title "Stripe Charges" --kind rest --status active --provider cmp-stripe
-ok 0 "add api without --provider"  $KHUB -C "$L" add api --title "Orders Feed" --kind events --status proposed
+ok 0 "add api (vendor's, provider)" $KHUB -C "$L" add api --title "Stripe Charges" --kind rest --provider cmp-stripe
+ok 0 "add api without --provider"  $KHUB -C "$L" add api --title "Orders Feed" --kind events
 ok 1 "check: required edge unset"  $KHUB -C "$L" check --format json
 ok 0 "link provider closes it"     $KHUB -C "$L" link api-orders-feed provider cmp-public-api
 ok 0 "add use-case"                $KHUB -C "$L" add use-case --title "Pay for a basket" --trigger human --actor act-shopper --capability cap-checkout
-ok 2 "add: bad enum refused"       $KHUB -C "$L" add adr --title "Bad" --status bogus
+ok 2 "add: bad enum refused"       $KHUB -C "$L" add adr --title "Bad" --decision bogus
 ok 2 "add: bad trigger refused"    $KHUB -C "$L" add use-case --title "Bad" --trigger cron
-ok 2 "add: dangling target refused" $KHUB -C "$L" add adr --title "Ghost" --status proposed --affects nope
-ok 2 "add: same title refused"     $KHUB -C "$L" add adr --title "Use Stripe" --status proposed
-ok 0 "add: same title with --id"   $KHUB -C "$L" add adr --title "Use Stripe" --status proposed --id ad-2026-01-15-use-stripe-again
+ok 2 "add: dangling target refused" $KHUB -C "$L" add adr --title "Ghost" --decision proposed --affects nope
+ok 2 "add: same title refused"     $KHUB -C "$L" add adr --title "Use Stripe" --decision proposed
+ok 0 "add: same title with --id"   $KHUB -C "$L" add adr --title "Use Stripe" --decision proposed --id ad-2026-01-15-use-stripe-again
 ok 0 "link affects"                $KHUB -C "$L" link ad-2026-01-15-use-stripe affects cmp-public-api
 ok 0 "link affects (--id adr)"     $KHUB -C "$L" link ad-2026-01-15-use-stripe-again affects cmp-public-api
 ok 0 "link realized_in (fr)"       $KHUB -C "$L" link req-pay-by-card realized_in cmp-public-api
@@ -96,14 +102,14 @@ ok 0 "link system"                 $KHUB -C "$L" link cmp-public-api system sys-
 ok 0 "link depends_on"             $KHUB -C "$L" link cmp-public-api depends_on cmp-stripe
 ok 0 "unlink is idempotent"        $KHUB -C "$L" unlink cmp-public-api depends_on cmp-stripe
 ok 0 "relink"                      $KHUB -C "$L" link cmp-public-api depends_on cmp-stripe
-ok 0 "edit status"                 $KHUB -C "$L" edit adr/ad-2026-01-15-use-stripe status proposed
+ok 0 "edit decision"               $KHUB -C "$L" edit adr/ad-2026-01-15-use-stripe decision proposed
 # gofmt's loop, for the writer: the same edit twice leaves the bytes alone,
 # and a value that is already set is a no-op on disk (the clock is pinned,
 # so `updated` cannot move between the two).
 ADR=$L/knowledge/decisions/ad-2026-01-15-use-stripe.md
-ok 0 "edit status again (same value)" $KHUB -C "$L" edit adr/ad-2026-01-15-use-stripe status proposed
+ok 0 "edit decision again (same value)" $KHUB -C "$L" edit adr/ad-2026-01-15-use-stripe decision proposed
 cp "$ADR" "$L/adr.first"
-ok 0 "edit status a third time"      $KHUB -C "$L" edit adr/ad-2026-01-15-use-stripe status proposed
+ok 0 "edit decision a third time"    $KHUB -C "$L" edit adr/ad-2026-01-15-use-stripe decision proposed
 ok 0 "edit is idempotent on disk"    cmp "$ADR" "$L/adr.first"
 ok 0 "get --edges"                 $KHUB -C "$L" get cmp-public-api --edges --format json
 ok 0 "query --type"                $KHUB -C "$L" query --type requirement --format json
@@ -137,21 +143,21 @@ ok 2 "remove refuses on inbound"   $KHUB -C "$L" remove cmp-public-api
 
 # ------------------------------------------------------------ unicode titles
 # The same visible title in its composed (NFC) and decomposed (NFD) forms.
-# Slugify strips what is not ASCII, so the two mint different slugs today
-# (caf vs cafe) and an id in the other form does not resolve — the known
-# gap (.claude/rules/testing.md, "Unicode filesystems"), pinned here so a
-# change to it is deliberate. What must hold on every filesystem, APFS's
-# normalisation-insensitive lookup included, is the invariant below: the
-# index agrees with the directory, one row per file, and check still passes.
+# Slugify spells Latin accents out, so both mint one slug and the second add
+# refuses as taken (.claude/rules/testing.md, "Unicode filesystems"). Lookup
+# folds case and composition, not accents: the accented id does not resolve.
+# What must hold on every filesystem, APFS's normalisation-insensitive lookup
+# included, is the invariant below: the index agrees with the directory, one
+# row per file, and check still passes.
 say "khub · unicode titles, NFC and NFD"
 NFC=$(printf 'Caf\303\251 menu'); NFD=$(printf 'Cafe\314\201 menu')
 ok 0 "add the NFC title"           $KHUB -C "$L" add requirement --title "$NFC" --kind functional
-ok 0 "add the NFD title"           $KHUB -C "$L" add requirement --title "$NFD" --kind functional
-same "two slugs, ASCII only" "$($KHUB -C "$L" query --type requirement --format ids | grep -c 'menu$')" "2"
+ok 2 "the NFD title mints the same slug" $KHUB -C "$L" add requirement --title "$NFD" --kind functional
+same "one slug, accents spelled out" "$($KHUB -C "$L" query --type requirement --format ids | grep -c '^req-cafe-menu$')" "1"
 same "index rows match files on disk" \
   "$($KHUB -C "$L" query --type requirement --format ids | wc -l | tr -d ' ')" \
   "$(find "$L/knowledge/requirements" -name '*.md' | wc -l | tr -d ' ')"
-ok 2 "the other form does not resolve" $KHUB -C "$L" get "req-$(printf 'caf\303\251')-menu"
+ok 2 "the accented id does not resolve" $KHUB -C "$L" get "req-$(printf 'caf\303\251')-menu"
 ok 0 "check still passes"          $KHUB -C "$L" check
 ok 0 "remove --force"              $KHUB -C "$L" remove cmp-stripe --force
 ok 1 "check now dangles"           $KHUB -C "$L" check --format json
@@ -182,7 +188,7 @@ say "khub · upgrade"
 U=$WORK/upgrade; mkdir -p "$U"; cd "$U" || exit 1
 ok 0 "init (build-lite, the alias)" $KHUB init build-lite .
 has  "alias records build-hub"     "$U/.khub/config.yaml" "preset: build-hub"
-has  "init writes index.md"        "$U/index.md" "# Index"
+has  "init writes index.md"        "$U/index.md" "okf_version: '0.2'"
 ok 0 "upgrade on a fresh init"     $KHUB -C "$U" upgrade
 ok 1 "fresh upgrade leaves no .bak" test -e "$U/.khub/storage.yaml.bak"
 printf '\n# mine\n' >> "$U/.khub/storage.yaml"
@@ -200,6 +206,82 @@ $KHUB -C "$U" upgrade --format json > "$U/again.json"
 has  "idempotent: nothing replaced" "$U/again.json" '"config": []'
 has  "idempotent: no singletons"   "$U/again.json" '"singletons_created": []'
 ok 2 "upgrade outside a workspace" $KHUB -C "$WORK" upgrade
+
+# ---------------------------------------------------------------------- OKF 0.2
+# One chain over the OKF surface parity pins piece by piece. A review raises
+# trust, a content edit supersedes it and a tag edit does not, stale_after
+# expires an entity, status publishes a draft, and export then import carry
+# the workspace into a fresh one as drafts with the reviews quarantined.
+say "khub · OKF 0.2: trust, freshness, lifecycle"
+O=$WORK/okf; mkdir -p "$O"; cd "$O" || exit 1
+ok 0 "init"                        $KHUB init build-hub .
+ok 0 "add component"               $KHUB -C "$O" add component --title "Public API" --kind service
+ok 0 "add requirement"             $KHUB -C "$O" add requirement --title "Pay by card" --kind functional
+ok 0 "link realized_in"            $KHUB -C "$O" link req-pay-by-card realized_in cmp-public-api
+$KHUB -C "$O" get cmp-public-api --format json > "$O/get.json"
+has  "a new entity is unverified"  "$O/get.json" '"trust": "unverified"'
+has  "add stamps generated"        "$O/get.json" '"generated": {"by": "khub"'
+ok 2 "verify needs --by"           $KHUB -C "$O" verify cmp-public-api
+ok 0 "verify --by human:"          $KHUB -C "$O" verify cmp-public-api --by human:ada
+$KHUB -C "$O" get cmp-public-api --format json > "$O/get.json"
+has  "a human review: trust human" "$O/get.json" '"trust": "human"'
+same "query --trust human"         "$($KHUB -C "$O" query --trust human --format ids)" "cmp-public-api"
+ok 1 "check --require-verified --tier human" $KHUB -C "$O" check --require-verified --tier human --format json
+ok 0 "edit content, --by"          $KHUB -C "$O" edit cmp-public-api --title "Public API v2" --by agent/smoke
+$KHUB -C "$O" get cmp-public-api --format json > "$O/get.json"
+has  "the edit is stamped --by"    "$O/get.json" '"by": "agent/smoke"'
+has  "a content edit supersedes the review" "$O/get.json" '"trust": "unverified"'
+$KHUB -C "$O" check --format json > "$O/check.json"
+has  "check lists the superseded review" "$O/check.json" '"superseded_verifications": [{"id": "component/cmp-public-api"'
+ok 0 "verify again"                $KHUB -C "$O" verify cmp-public-api --by human:ada
+ok 0 "edit tags"                   $KHUB -C "$O" edit cmp-public-api --tags edge
+$KHUB -C "$O" get cmp-public-api --format json > "$O/get.json"
+has  "a tag edit keeps the review" "$O/get.json" '"trust": "human"'
+$KHUB -C "$O" check --stale --format json > "$O/check.json"
+has  "nothing expired yet"         "$O/check.json" '"expired": []'
+ok 0 "edit stale_after (past)"     $KHUB -C "$O" edit req-pay-by-card stale_after 2025-01-01T00:00:00Z
+$KHUB -C "$O" stale --format json > "$O/stale.json"
+has  "stale says expired"          "$O/stale.json" '"reason": "expired"'
+ok 1 "check --stale fails on it"   $KHUB -C "$O" check --stale --format json
+$KHUB -C "$O" check --format json > "$O/check.json"
+hasnt "plain check has no expired bucket" "$O/check.json" '"expired"'
+$KHUB -C "$O" status --format json > "$O/status.json"
+has  "status counts it"            "$O/status.json" '"expired": 1'
+ok 0 "add --draft"                 $KHUB -C "$O" add requirement --title "Refunds" --kind functional --draft
+ok 2 "edit draft is retired"       $KHUB -C "$O" edit req-refunds draft false
+ok 0 "edit status stable publishes" $KHUB -C "$O" edit req-refunds status stable
+same "no draft left"               "$($KHUB -C "$O" query --draft --format ids | wc -l | tr -d ' ')" "0"
+
+say "khub · OKF 0.2: export and import"
+B=$WORK/okf-bundle
+ok 0 "export --okf"                $KHUB -C "$O" export --okf "$B"
+has  "the bundle root declares 0.2" "$B/index.md" "okf_version: '0.2'"
+ok 0 "the bundle lists what it wrote" test -f "$B/.khub-export"
+has  "a concept keeps its review"  "$B/knowledge/components/cmp-public-api.md" "by: human:ada"
+ok 2 "export refuses a non-empty target" $KHUB -C "$O" export --okf "$B"
+ok 0 "export --force replaces its own bundle" $KHUB -C "$O" export --okf "$B" --force
+ok 2 "export refuses a target inside the workspace" $KHUB -C "$O" export --okf "$O/knowledge" --force
+I=$WORK/okf-import; mkdir -p "$I"; cd "$I" || exit 1
+ok 0 "init the importing workspace" $KHUB init build-hub .
+TREE=$(tree_sum "$I")
+ok 0 "import --dry-run"            $KHUB -C "$I" import --okf "$B" --dry-run
+same "the dry run wrote nothing"   "$(tree_sum "$I")" "$TREE"
+ok 0 "import --okf"                $KHUB -C "$I" import --okf "$B"
+same "concepts land as drafts"     "$($KHUB -C "$I" query --draft --format ids | sort | tr '\n' ' ')" "cmp-public-api req-pay-by-card req-refunds "
+$KHUB -C "$I" get cmp-public-api --format json > "$I/get.json"
+has  "the bundle's review is quarantined" "$I/get.json" '"okf_verified"'
+has  "and never counted"           "$I/get.json" '"trust": "unverified"'
+$KHUB -C "$I" get req-pay-by-card --edges --format json > "$I/edges.json"
+has  "the relation round-trips"    "$I/edges.json" '"predicate": "realized_in"'
+has  "stale_after round-trips"     "$I/edges.json" '"stale_after": "2025-01-01T00:00:00Z"'
+has  "the title round-trips"       "$I/get.json" '"title": "Public API v2"'
+same "the body round-trips" \
+  "$($KHUB -C "$I" get cmp-public-api --format raw | body_of)" \
+  "$($KHUB -C "$O" get cmp-public-api --format raw | body_of)"
+ok 0 "the imported workspace validates" $KHUB -C "$I" validate
+TREE=$(tree_sum "$I")
+ok 0 "import again"                $KHUB -C "$I" import --okf "$B"
+same "a second import writes nothing" "$(tree_sum "$I")" "$TREE"
 
 # ------------------------------------------------------- the misplaced-entity gate
 say "khub · a file the scan cannot reach"

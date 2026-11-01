@@ -194,9 +194,9 @@ func schemaBase(format string) error {
 	}
 	view := introspect.BaseView(resolved)
 	return Emit(view, format, func() {
-		rows := appendRows([][]string{}, view, "fields", fieldRow)
+		rows := appendRows([][]string{}, view, "fields", fieldRows)
 		printTable("base fields", []string{"field", "type", "required", "enum", "notes"}, rows)
-		relRows := appendRows([][]string{}, view, "relations", relationRow)
+		relRows := appendRows([][]string{}, view, "relations", relationRows)
 		printTable("base relations", []string{"predicate", "to", "required", "kind", "notes"}, relRows)
 	})
 }
@@ -235,8 +235,8 @@ func schemaShow(name, format string) error {
 	}
 	return Emit(view, format, func() {
 		layout, _ := view.Get("layout")
-		rows := appendRows([][]string{}, view, "fields", fieldRow)
-		rows = appendRows(rows, view, "relations", relationRow)
+		rows := appendRows([][]string{}, view, "fields", fieldRows)
+		rows = appendRows(rows, view, "relations", relationRows)
 		// A minting type shows the id it will mint beside its layout, so the
 		// title and the `bad_id` finding name the same shape.
 		title := fmt.Sprintf("%s (%v)", name, layout)
@@ -247,17 +247,43 @@ func schemaShow(name, format string) error {
 	})
 }
 
-// appendRows renders one row per element of the view's `key` list. The two
-// schema tables differ in where the rows land and under which header — `base`
-// builds two tables, `show` one — never in how a row is built, so this is the
-// whole of what they share (fieldRow and relationRow were already common).
-func appendRows(dst [][]string, view *omap.Map, key string, row func(*omap.Map) []string) [][]string {
+// appendRows renders the rows of each element of the view's `key` list. The
+// two schema tables differ in where the rows land and under which header —
+// `base` builds two tables, `show` one — never in how a row is built, so this
+// is the whole of what they share (fieldRows and relationRows are common).
+func appendRows(dst [][]string, view *omap.Map, key string, rows func(*omap.Map) [][]string) [][]string {
 	v, _ := view.Get(key)
 	for _, e := range v.([]any) {
-		dst = append(dst, row(e.(*omap.Map)))
+		dst = append(dst, rows(e.(*omap.Map))...)
 	}
 	return dst
 }
+
+// fieldRows is a field's row, then one indented row per nested field: an
+// object's keys as `generated.by`, a list's element as `verified[]`.
+func fieldRows(fv *omap.Map) [][]string {
+	name, _ := fv.Get("name")
+	return nestedRows(fv, "", fmt.Sprint(name))
+}
+
+func nestedRows(fv *omap.Map, indent, path string) [][]string {
+	row := fieldRow(fv)
+	row[0] = indent + path
+	rows := [][]string{row}
+	if fields, _ := fv.Get("fields"); fields != nil {
+		for _, f := range fields.([]any) {
+			sub := f.(*omap.Map)
+			name, _ := sub.Get("name")
+			rows = append(rows, nestedRows(sub, indent+"  ", path+"."+fmt.Sprint(name))...)
+		}
+	}
+	if items, _ := fv.Get("items"); items != nil {
+		rows = append(rows, nestedRows(items.(*omap.Map), indent+"  ", path+"[]")...)
+	}
+	return rows
+}
+
+func relationRows(rv *omap.Map) [][]string { return [][]string{relationRow(rv)} }
 
 func fieldRow(fv *omap.Map) []string {
 	name, _ := fv.Get("name")

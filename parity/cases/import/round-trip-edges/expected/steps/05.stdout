@@ -1,0 +1,13 @@
+---
+type: use-case
+title: Pay an invoice
+trigger: human
+created: 2026-01-15
+served_by:
+- component/cmp-ledger
+- cmp-billing
+status: draft
+generated:
+  by: process:importer
+  at: 2026-01-15T00:00:00Z
+---

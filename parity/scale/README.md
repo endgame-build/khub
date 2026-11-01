@@ -11,10 +11,10 @@ Four pieces, all Go, all stdlib:
 
 | | |
 |---|---|
-| `corpus/` | the generator — writes a build-hub workspace of 300–2000 entities, every one authored by `khub add`, and its manifest |
+| `corpus/` | the generator — writes a build-hub workspace of 300–2000 entities, every one authored by `khub add` and some reviewed by `khub verify`, and its manifest |
 | `gen/` | the generator's command line |
-| `smoke.sh` | 80 assertions over that workspace, every command timed |
-| `bench/` | the read surface and one write cycle over several corpus sizes, both clocks, reporting how cost grows |
+| `smoke.sh` | about a hundred assertions over that workspace, every command timed |
+| `bench/` | the read surface, one write cycle and one OKF export and import over several corpus sizes, both clocks, reporting how cost grows |
 | `gate/` | the performance rule: bench's JSON against `baseline.json`, pass / fail / invalid |
 | `footprint/` | the bytes every read puts in front of an agent, pinned exactly in `footprint.json` |
 | `manifest/` | the one helper `smoke.sh` needs: a manifest field, a JSON reduction, the clock |
@@ -74,6 +74,17 @@ The shape is deliberate, not random:
 - **One deliberate supersession chain** of known length, kept clear of the
   scattered pairs, so `history` has an expected answer from either end.
 - **A needle** (`xylotrope`) planted in exactly one body, so `search` does too.
+- **Expiry and reviews by position**, not by the PRNG, so the rest of the
+  corpus draws what it would without them. One entity in nine is written
+  with a `stale_after` half a year before the pinned day, and one in nine
+  half a year after it. Once every add is done, `khub verify` records a
+  human review on one entity in eight, a machine review on one in eight
+  (`process:ci` or `bench/1`), and a machine then a human review on one in
+  sixteen. A `description` edit then supersedes a third of the machine-only
+  reviews.
+  The singletons carry neither. Every scale holds active entities that
+  expired and active entities nobody reviewed, so `check --stale` and
+  `check --require-verified` fail at all of them.
 
 The adr is the dated type: `--created` is passed so the date in the minted id
 is the day the decision was taken, not the day the generator ran — which is
@@ -86,12 +97,16 @@ The generator writes `smoke-manifest.json` at the workspace root: counts per
 type, the orphan set, transitive `depends_on` closures for three chosen roots
 (the hub with the most ancestors, the deepest service, one in the middle),
 one-hop in/out degree for three chosen nodes, the supersession chain, the
-needle's id, stale counts at four thresholds, tag counts, and handles for the
-mutation cases. It is computed from the generator's **own** model of the graph
-— an independent implementation of "orphan", "transitive closure", "one hop",
-"stale" — never read back out of khub. The only things it takes from khub are
-declared configuration: the type list and each type's `orphan` exemption,
-which are authored input, not computed answers.
+needle's id, stale counts at four thresholds (age only, as `status` counts,
+and with the expired added, as `stale` lists), tag counts, the entities per
+trust tier, the superseded and expired counts, what an import of the corpus's
+OKF export into a fresh workspace should land, and handles for the mutation
+cases. It is computed from the generator's **own** model of the graph — an
+independent implementation of "orphan", "transitive closure", "one hop",
+"stale", "expired", "trust tier" — never read back out of khub. The only
+things it takes from khub are declared configuration: the type list, each
+type's `orphan` exemption and which types are singletons, which are authored
+input, not computed answers.
 
 That is the point. A smoke test that compares khub's output to khub's output
 only proves khub is consistent with itself. Every assertion in `smoke.sh` is
@@ -107,7 +122,8 @@ that dropped the `-NNN-` ordinal from minted ids would not touch a line of it.
 `smoke.sh` prints a wall clock beside each case, which is enough to notice a
 regression and not enough to answer the question underneath it: is a
 command's cost linear in the corpus, or quadratic and merely still small.
-`bench` runs the read surface and one write cycle over several sizes and fits
+`bench` runs the read surface, one write cycle and one OKF export and import
+over several sizes and fits
 an exponent between the smallest and the largest — `n^1.0` is linear, `n^2.0`
 is the wall — so the answer is a column rather than a hunch.
 
@@ -139,6 +155,13 @@ really removes, nothing is left behind. Every write costs one full scan,
 about what `status` costs, and grows at the same rate as the reads. Write
 wall time is fsync-bound (0.7–8.8 s outliers were seen for a 30–100 ms
 operation on a busy disk) and is never judged.
+
+The OKF section exports each corpus into a fresh directory, initialises a
+fresh workspace of the same preset (not timed), and imports the bundle into
+it, every repeat from nothing; import must land the count the manifest
+expects. Both write and sync one file per entity, so their wall time is
+disk-bound: on a macOS laptop at n=300, about 3 s of wall for 0.35 s of CPU.
+`-okf=false` skips the section, and the gate does not read it.
 
 Corpora are cached under `-cache` (default `$TMPDIR/khub-scale/<scale>`)
 because they are deterministic and generating one is slower than measuring
@@ -251,10 +274,12 @@ regression is visible to a human reading the output; `gate` holds the rule,
 against a recorded baseline, nightly.
 
 Per commit, only the small end runs: `smoke.sh --scale 300` with the
-footprint check (`go-extras` in `ci.yml`, about sixteen seconds). The 550
-smoke on two OSes, the full bench, the gate and the in-process comparison
-against the last release run in `nightly.yml`. Run the bench by hand after
-touching `index`, `graph`, `integrity`, `query`, `search` or `entity`.
+footprint check (`go-extras` in `ci.yml`). It takes about half a minute,
+because the corpus is generated twice, reviews included, and exported and
+imported once. The 550 smoke on two OSes, the full bench, the gate and the
+in-process comparison against the last release run in `nightly.yml`. Run
+the bench by hand after touching `index`, `graph`, `integrity`, `query`,
+`search`, `entity`, `export` or `okfimport`.
 
 Not a second fixture suite. The parity cases stay the contract for bytes;
 this asserts answers, counts, exit codes and sizes, and says nothing about

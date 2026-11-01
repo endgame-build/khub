@@ -10,6 +10,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/endgame-build/khub/internal/clock"
 	"github.com/endgame-build/khub/internal/omap"
 	"github.com/endgame-build/khub/internal/search"
 )
@@ -29,7 +30,7 @@ func registerSearch(root *cobra.Command) {
 					return err
 				}
 				res, err := search.Search(ws, args[0], search.Options{
-					Type: optString(cmd, "type", typeName), Limit: limit, Plain: plain, Now: today()})
+					Type: optString(cmd, "type", typeName), Limit: limit, Plain: plain, Now: clock.Now()})
 				if err != nil {
 					return err
 				}
@@ -68,6 +69,7 @@ func registerSearch(root *cobra.Command) {
 					edges.Set("out", edgeCounts(h.Out))
 					edges.Set("in", edgeCounts(h.In))
 					record.Set("edges", edges)
+					record.Set("trust", h.Trust)
 					records = append(records, record)
 					rows = append(rows, []string{h.Type + "/" + h.Slug, h.Title, h.Snippet})
 				}

@@ -4,9 +4,8 @@ import "testing"
 
 // casefold is Python's str.casefold(), not strings.ToLower: full Unicode
 // folding, so ß matches SS and a dotted capital I matches its lowercase
-// form. Slug and alias lookup go through it; slugify's own lower step does
-// not, which is why "ß İstanbul Café" mints req-i-stanbul-caf and still
-// resolves by any casing of that id. This file pins the fold itself.
+// form. It composes first, so a decomposed name (macOS NFD) matches its
+// composed spelling (NFC). Slug and alias lookup go through it.
 func TestCasefoldIsFullUnicodeFolding(t *testing.T) {
 	cases := []struct{ in, want string }{
 		{"Straße", "strasse"},
@@ -31,11 +30,12 @@ func TestCasefoldIsFullUnicodeFolding(t *testing.T) {
 			t.Errorf("casefold is not idempotent on %q", s)
 		}
 	}
-	// What it does NOT do: a decomposed é (e + U+0301) and a composed é are
-	// different strings to the fold. Normalisation is nobody's job yet
-	// (.claude/rules/testing.md, "Unicode filesystems"); this pins the
-	// current contract so a change to it is deliberate.
-	if casefold("Café") == casefold("Café") {
-		t.Error("casefold now normalises NFD to NFC; update smoke.sh's unicode block and this test")
+	for _, c := range []struct{ a, b string }{
+		{"Café", "Cafe\u0301"}, // NFC é vs e + combining acute
+		{"ÅNGSTRÖM", "ångström"},
+	} {
+		if casefold(c.a) != casefold(c.b) {
+			t.Errorf("casefold(%q) = %q, casefold(%q) = %q", c.a, casefold(c.a), c.b, casefold(c.b))
+		}
 	}
 }

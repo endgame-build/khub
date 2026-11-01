@@ -3,10 +3,10 @@
 // smoke.sh prints a wall clock next to each case, which is enough to notice a
 // regression and not enough to answer the question underneath it: is a
 // command's cost linear in the corpus, or quadratic and merely still small.
-// So this runs the read surface and one write cycle over corpora of several
-// sizes and reports, per command, the cost at each size and the fitted
-// exponent between the smallest and the largest — n^1.0 is linear, n^2.0 is
-// the wall.
+// So this runs the read surface, one write cycle and one OKF export and
+// import over corpora of several sizes and reports, per command, the cost at
+// each size and the fitted exponent between the smallest and the largest —
+// n^1.0 is linear, n^2.0 is the wall.
 //
 // Out of process, on purpose: khub is one static binary and the number a user
 // feels at the shell is the only one there is. Two clocks per sample: wall
@@ -95,6 +95,7 @@ type Report struct {
 	Corpus     map[string]Corpus           `json:"corpus"`
 	Reads      map[string]map[string]Row   `json:"reads"`
 	Writes     map[string]map[string]Row   `json:"writes"`
+	OKF        map[string]map[string]Row   `json:"okf"`
 	WriteCheck map[string]string           `json:"write_check"`
 	labels     map[string][]string         // declaration order per section
 	sizes      map[int]int                 // scale → entities
@@ -113,6 +114,7 @@ func main() {
 	todayFlag := flag.String("today", "2026-01-15", "YYYY-MM-DD pinned into every corpus and the clock khub sees")
 	regen := flag.Bool("regen", false, "rebuild the corpora first")
 	writes := flag.Bool("writes", true, "run the write cycle too, on a copy of each corpus")
+	okf := flag.Bool("okf", true, "time export --okf and import --okf of each corpus, into fresh directories")
 	profile := flag.String("profile", "", "`gate` sets -scales 100,2000 -repeat 11: what parity/scale/gate reads")
 	format := flag.String("format", "text", "text or json")
 	flag.Parse()
@@ -148,13 +150,15 @@ func main() {
 		Khub: version(binPath), Commit: commit(), Go: runtime.Version(), GOOS: runtime.GOOS, GOARCH: runtime.GOARCH,
 		NProc: runtime.NumCPU(), GOMAXPROCS: runtime.GOMAXPROCS(0), CPUModel: cpuModel(), LoadBefore: loadavg(),
 		Scales: scales, Entities: map[string]int{}, Repeat: *repeat, Corpus: map[string]Corpus{},
-		Reads: map[string]map[string]Row{}, Writes: map[string]map[string]Row{}, WriteCheck: map[string]string{},
-		labels: map[string][]string{}, sizes: map[int]int{}, samples: map[string]map[int][]sample{},
+		Reads: map[string]map[string]Row{}, Writes: map[string]map[string]Row{}, OKF: map[string]map[string]Row{},
+		WriteCheck: map[string]string{}, labels: map[string][]string{}, sizes: map[int]int{},
+		samples: map[string]map[int][]sample{},
 	}
 
 	roots := map[int]string{}
 	copies := map[int]string{}
 	subs := map[int]map[string]string{}
+	manifests := map[int]*corpus.Manifest{}
 	for _, scale := range scales {
 		root := filepath.Join(*cache, strconv.Itoa(scale))
 		m, err := corpusFor(binPath, root, scale, *seed, today, *regen, chatty)
@@ -165,6 +169,7 @@ func main() {
 		roots[scale], r.sizes[scale], r.Entities[key] = root, m.Total, m.Total
 		r.Corpus[key] = Corpus{Generated: m.Generated, Total: m.Total}
 		subs[scale] = corpus.Handles(m)
+		manifests[scale] = m
 		if *writes {
 			dst := filepath.Join(*work, key)
 			if err := copyCorpus(root, dst); err != nil {
@@ -174,7 +179,7 @@ func main() {
 		}
 	}
 
-	env := append(os.Environ(), "KHUB_PARITY_NOW="+today.Format("2006-01-02"))
+	env := append(os.Environ(), "KHUB_PARITY_NOW="+today.Format("2006-01-02"), "KHUB_ACTOR=khub", "TZ=UTC")
 	for _, c := range corpus.Reads {
 		r.labels["reads"] = append(r.labels["reads"], c.Label)
 	}
@@ -183,6 +188,10 @@ func main() {
 			r.labels["writes"] = append(r.labels["writes"], c.Label)
 		}
 	}
+	if *okf {
+		r.labels["okf"] = okfLabels
+	}
+	okfScratch := func(scale int) string { return filepath.Join(*work, strconv.Itoa(scale)+"-okf") }
 
 	// The warm-up pays for the page cache and checks every exit code once.
 	for _, scale := range scales {
@@ -197,6 +206,11 @@ func main() {
 		}
 		if *writes {
 			if _, err := writeCycle(binPath, copies[scale], subs[scale], env, 0); err != nil {
+				fail(err)
+			}
+		}
+		if *okf {
+			if _, err := okfCycle(binPath, roots[scale], okfScratch(scale), manifests[scale], env); err != nil {
 				fail(err)
 			}
 		}
@@ -221,6 +235,15 @@ func main() {
 				}
 				for j, c := range corpus.Writes {
 					r.record(c.Label, scale, got[j])
+				}
+			}
+			if *okf {
+				got, err := okfCycle(binPath, roots[scale], okfScratch(scale), manifests[scale], env)
+				if err != nil {
+					fail(err)
+				}
+				for j, label := range okfLabels {
+					r.record(label, scale, got[j])
 				}
 			}
 		}
@@ -274,10 +297,7 @@ func (r *Report) record(label string, scale int, s sample) {
 // fold turns the samples into the per-section rows the JSON carries.
 func (r *Report) fold() {
 	for section, labels := range r.labels {
-		dst := r.Reads
-		if section == "writes" {
-			dst = r.Writes
-		}
+		dst := r.section(section)
 		for _, label := range labels {
 			dst[label] = map[string]Row{}
 			for scale, ss := range r.samples[label] {
@@ -292,6 +312,22 @@ func (r *Report) fold() {
 	}
 }
 
+// sections is the report's sections, in the order the tables print them.
+var sections = []string{"reads", "writes", "okf"}
+
+// section is the rows of one section of the report.
+func (r *Report) section(name string) map[string]map[string]Row {
+	switch name {
+	case "reads":
+		return r.Reads
+	case "writes":
+		return r.Writes
+	case "okf":
+		return r.OKF
+	}
+	panic("bench: no report section " + name)
+}
+
 func summarise(samples []float64) Stat {
 	sorted := slices.Clone(samples)
 	slices.Sort(sorted)
@@ -302,9 +338,10 @@ func summarise(samples []float64) Stat {
 	return Stat{Median: median, Min: sorted[0], Max: sorted[len(sorted)-1], Samples: samples}
 }
 
-// corpusFor returns the cached corpus under root, generating it when absent
-// or when it was generated with another scale, seed or day than asked. A
-// corpus an older khub wrote is kept — the version is in the manifest, and
+// corpusFor returns the cached corpus under root, generating it when absent,
+// when it was generated with another scale, seed or day than asked, or when
+// its manifest has no trust counts (the review gates in corpus.Reads need a
+// corpus seeded with reviews). A corpus an older khub wrote is kept — the version is in the manifest, and
 // the report says so — because regeneration is the slow part by an order
 // of magnitude and the bytes are deterministic.
 func corpusFor(bin, root string, scale int, seed uint64, today time.Time, regen, chatty bool) (*corpus.Manifest, error) {
@@ -312,14 +349,17 @@ func corpusFor(bin, root string, scale int, seed uint64, today time.Time, regen,
 	if !regen {
 		if m, err := corpus.Read(root); err == nil {
 			g := m.Generated
-			if g.Scale == scale && g.Seed == seed && g.Today == day {
+			reviewed := m.OKF.Trust != nil
+			if g.Scale == scale && g.Seed == seed && g.Today == day && reviewed {
 				if chatty && g.KhubVersion != version(bin) {
 					fmt.Printf("  note: the corpus at %s was written by khub %s; this binary is %s (pass -regen to rebuild)\n",
 						root, g.KhubVersion, version(bin))
 				}
 				return m, nil
 			}
-			if chatty {
+			if chatty && !reviewed {
+				fmt.Printf("  the corpus at %s carries no reviews; rebuilding\n", root)
+			} else if chatty {
 				fmt.Printf("  the corpus at %s was generated with scale %d, seed %d, today %s; rebuilding\n",
 					root, g.Scale, g.Seed, g.Today)
 			}
@@ -388,6 +428,60 @@ func writeCycle(bin, root string, subs map[string]string, env []string, repeat i
 		out = append(out, s)
 	}
 	return out, nil
+}
+
+var okfLabels = []string{"export --okf", "import --okf"}
+
+// okfCycle exports the corpus into a fresh directory under scratch, then
+// imports that bundle into a fresh workspace of the corpus's preset, and
+// returns one sample each. The init between them is not timed, and import
+// must land the count the manifest expects. Both directories are removed
+// first and last, so every repeat starts from nothing.
+func okfCycle(bin, root, scratch string, m *corpus.Manifest, env []string) ([]sample, error) {
+	bundle, fresh := filepath.Join(scratch, "bundle"), filepath.Join(scratch, "fresh")
+	reset := func() error {
+		if err := os.RemoveAll(scratch); err != nil {
+			return err
+		}
+		return os.MkdirAll(scratch, 0o755)
+	}
+	if err := reset(); err != nil {
+		return nil, err
+	}
+	steps := []struct {
+		root  string
+		argv  []string
+		timed bool
+	}{
+		{root, []string{"export", "--okf", bundle, "--format", "json"}, true},
+		{scratch, []string{"init", m.Generated.Preset, fresh, "--no-wire", "--format", "json"}, false},
+		{fresh, []string{"import", "--okf", bundle, "--format", "json"}, true},
+	}
+	var out []sample
+	var last []byte
+	for _, step := range steps {
+		s, code, stdout, err := invokeOut(bin, step.root, step.argv, env)
+		if err != nil {
+			return nil, err
+		}
+		if code != 0 {
+			return nil, fmt.Errorf("khub %s exited %d, wanted 0:\n%s", strings.Join(step.argv, " "), code, stdout)
+		}
+		if step.timed {
+			out = append(out, s)
+		}
+		last = stdout
+	}
+	var rec struct {
+		Imported []json.RawMessage `json:"imported"`
+	}
+	if err := json.Unmarshal(last, &rec); err != nil {
+		return nil, fmt.Errorf("khub import: %w\n%s", err, last)
+	}
+	if len(rec.Imported) != m.OKF.Import.Imported {
+		return nil, fmt.Errorf("import landed %d concepts, the manifest expects %d", len(rec.Imported), m.OKF.Import.Imported)
+	}
+	return out, reset()
 }
 
 // treeDiff compares every regular file under a and b, ignoring
@@ -497,15 +591,12 @@ func exponent(smallN int, smallMs float64, bigN int, bigMs float64) float64 {
 func (r *Report) table() {
 	grows := len(r.Scales) > 1
 	lo, hi := r.Scales[0], r.Scales[len(r.Scales)-1]
-	for _, section := range []string{"reads", "writes"} {
+	for _, section := range sections {
 		labels := r.labels[section]
 		if len(labels) == 0 {
 			continue
 		}
-		rows := r.Reads
-		if section == "writes" {
-			rows = r.Writes
-		}
+		rows := r.section(section)
 		fmt.Printf("\n\033[1m%s — wall median ms │ cpu min ms, out of process\033[0m\n", section)
 		var head strings.Builder
 		for _, s := range r.Scales {

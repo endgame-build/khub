@@ -13,6 +13,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/endgame-build/khub/internal/canon"
+	"github.com/endgame-build/khub/internal/clock"
 	"github.com/endgame-build/khub/internal/errs"
 	"github.com/endgame-build/khub/internal/omap"
 )
@@ -90,9 +91,13 @@ func Fail(message, code, fmt_ string) error {
 
 // Guard is the single error boundary: a Located error renders via Fail; an
 // OS error renders as os_error with Python's "{TypeName}: {err}" shape;
-// EPIPE passes through untouched (khub schema | head is not an error).
+// EPIPE passes through untouched (khub schema | head is not an error). An
+// unparseable KHUB_PARITY_NOW refuses before fn runs, so before any write.
 func Guard(fmt_ string, fn func() error) error {
-	err := fn()
+	err := clock.Check()
+	if err == nil {
+		err = fn()
+	}
 	if err == nil {
 		return nil
 	}

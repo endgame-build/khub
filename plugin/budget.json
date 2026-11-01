@@ -1,10 +1,10 @@
 {
-  "skill.khub.bytes": 15669,
+  "skill.khub.bytes": 17074,
   "skill.khub.description_chars": 328,
   "skill.setup.bytes": 4337,
   "skill.setup.description_chars": 161,
-  "wire.build-hub.CLAUDE.md.bytes": 4251,
-  "wire.build-hub.AGENTS.md.bytes": 4114,
-  "wire.firm-ops.CLAUDE.md.bytes": 3322,
-  "wire.firm-ops.AGENTS.md.bytes": 3185
+  "wire.build-hub.CLAUDE.md.bytes": 4357,
+  "wire.build-hub.AGENTS.md.bytes": 4220,
+  "wire.firm-ops.CLAUDE.md.bytes": 3428,
+  "wire.firm-ops.AGENTS.md.bytes": 3291
 }

@@ -152,26 +152,28 @@ jobs:
             ${{ runner.temp }}/benchcmp/head.txt
           if-no-files-found: ignore
 
-  # The canon fuzz targets past their seeds, 90s each, in a matrix so one
-  # crasher does not hide the others. The growing corpus lives under
+  # Every fuzz target past its seeds, 90s each, in a matrix so one crasher
+  # does not hide the others. The growing corpus lives under
   # GOCACHE/fuzz; setup-go's cache saves only on a key miss, which would
   # freeze it, so it rides in an explicit restore/save pair keyed per run
   # with a prefix restore. A crasher lands in the checkout under
-  # internal/canon/testdata/fuzz/<target>/ and is uploaded; committing it
-  # there makes plain `go test` fail on every PR until it is fixed or
-  # recorded as a known gap beside the ones already in fuzz_test.go.
+  # <pkg>/testdata/fuzz/<target>/ and is uploaded; committing it there makes
+  # plain `go test` fail on every PR until it is fixed or recorded as a known
+  # gap beside the ones already in that package's fuzz_test.go.
   fuzz:
     permissions:
       contents: read
     strategy:
       fail-fast: false
       matrix:
-        target:
-          - FuzzJSONValid
-          - FuzzFrontmatterJSONValid
-          - FuzzReconcatIdentity
-          - FuzzSpliceIdempotent
-          - FuzzEmitRoundTrip
+        include:
+          - { target: FuzzJSONValid, pkg: internal/canon }
+          - { target: FuzzFrontmatterJSONValid, pkg: internal/canon }
+          - { target: FuzzReconcatIdentity, pkg: internal/canon }
+          - { target: FuzzSpliceIdempotent, pkg: internal/canon }
+          - { target: FuzzEmitRoundTrip, pkg: internal/canon }
+          - { target: FuzzMigrateIdempotent, pkg: internal/migrate }
+          - { target: FuzzImportRead, pkg: internal/okfimport }
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -182,14 +184,14 @@ jobs:
           check-latest: true
           cache: false
       - id: dir
-        run: echo "fuzz=$(go env GOCACHE)/fuzz/github.com/endgame-build/khub/internal/canon/${{ matrix.target }}" >> "$GITHUB_OUTPUT"
+        run: echo "fuzz=$(go env GOCACHE)/fuzz/github.com/endgame-build/khub/${{ matrix.pkg }}/${{ matrix.target }}" >> "$GITHUB_OUTPUT"
       - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ steps.dir.outputs.fuzz }}
           key: fuzz-${{ matrix.target }}-${{ github.run_id }}
           restore-keys: fuzz-${{ matrix.target }}-
       - name: Fuzz ${{ matrix.target }} for 90s
-        run: go test -run '^$' -fuzz "^${{ matrix.target }}$" -fuzztime 90s ./internal/canon 2>&1 | tee fuzz.log
+        run: go test -run '^$' -fuzz "^${{ matrix.target }}$" -fuzztime 90s ./${{ matrix.pkg }} 2>&1 | tee fuzz.log
       - uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         if: always()
         with:
@@ -200,7 +202,7 @@ jobs:
         with:
           name: crasher-${{ matrix.target }}
           path: |
-            internal/canon/testdata/fuzz/${{ matrix.target }}/
+            ${{ matrix.pkg }}/testdata/fuzz/${{ matrix.target }}/
             fuzz.log
 
   # Statement coverage from everything that runs the binary — parity, both

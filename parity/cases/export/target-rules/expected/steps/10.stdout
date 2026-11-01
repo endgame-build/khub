@@ -1,0 +1,1 @@
+{"error": {"code": "export_target_unsafe", "message": "Refusing to replace bundle: it holds clients/notes.md, which khub's export did not write and replacing the bundle would delete. Move it out, or export into an empty or new directory"}}

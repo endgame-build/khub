@@ -377,6 +377,21 @@ func attrView(a *schema.ResolvedAttribute) *omap.Map {
 	}
 	f.Set("pattern", strPtr(a.Pattern))
 	f.Set("default", a.Default)
+	// Only when declared, so a schema that nests nothing renders (and
+	// snapshots) exactly as before. An element is anonymous: it has no name.
+	if a.Fields != nil {
+		fields := []any{}
+		for _, name := range a.Fields.Keys() {
+			sub, _ := a.Fields.Get(name)
+			fields = append(fields, attrView(sub))
+		}
+		f.Set("fields", fields)
+	}
+	if a.Items != nil {
+		items := attrView(a.Items)
+		items.Delete("name")
+		f.Set("items", items)
+	}
 	return f
 }
 

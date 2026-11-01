@@ -1,0 +1,1 @@
+{"error": {"code": "value_shape", "message": "Field 'verified' holds a list of objects, which a command-line value cannot express; write it in the entity file"}}

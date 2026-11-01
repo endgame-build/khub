@@ -13,6 +13,12 @@
 - **gonum** links a handful of leaf packages, no `mat`/BLAS; it is used only
   for strongly connected components.
 - **ncruces/go-sqlite3** is `wasm2go`-translated Go: no wazero, no CGO.
+- **golang.org/x/text** is pure Go. `cases` folds case for lookup;
+  `unicode/norm` composes names (NFC) before lookup folds them; and slug
+  minting decomposes (NFD), drops the combining marks with `runes` and
+  `transform`, and composes again, so `Café` mints `cafe` from either form.
+  The Latin letters with no decomposition (ß, æ, œ, ø, ł, đ, ð, þ) are a small
+  table in `internal/entity/slug.go`, because x/text has no transliterator.
 - **Author regexes compile as RE2, never a backtracking engine.** Schema
   `pattern`s and template `{pattern:}` rules are author-supplied and run over
   untrusted values; stdlib `regexp` matches in linear time, so no timeout is

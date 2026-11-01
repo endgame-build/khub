@@ -4,5 +4,8 @@ created: 2026-01-15
 name: CRLF entity
 stage: raw
 updated: 2026-01-15
+generated:
+  by: khub
+  at: 2026-01-15T00:00:00Z
 ---
 body

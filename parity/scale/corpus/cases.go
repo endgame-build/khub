@@ -19,18 +19,23 @@ type Case struct {
 // Reads is the read surface, in the order the tables print it. The last two
 // are the controls: `schema show <type>` reads the ontology and not the
 // corpus, so its cost should not move with n; `--version` is the process
-// floor, what a process costs before khub does anything.
+// floor, what a process costs before khub does anything. Every corpus holds
+// orphans, active expired entities and active unreviewed ones, so the three
+// opt-in gates fail at every scale.
 var Reads = []Case{
 	{"status", []string{"status"}, 0},
 	{"schema", []string{"schema"}, 0},
 	{"check", []string{"check"}, 0},
 	{"check --strict", []string{"check", "--strict"}, 1},
+	{"check --stale", []string{"check", "--stale"}, 1},
+	{"check --require-verified", []string{"check", "--require-verified"}, 1},
 	{"validate (whole corpus)", []string{"validate"}, 0},
 	{"validate <one entity>", []string{"validate", "requirement/{needle_id}"}, 0},
 	{"query", []string{"query"}, 0},
 	{"query --type requirement", []string{"query", "--type", "requirement"}, 0},
 	{"query --orphan", []string{"query", "--orphan"}, 0},
 	{"query --tag", []string{"query", "--tag", "{tag}"}, 0},
+	{"query --trust human", []string{"query", "--trust", "human"}, 0},
 	{"search (one hit)", []string{"search", "{needle}"}, 0},
 	{"search (many hits)", []string{"search", "{tag}"}, 0},
 	{"search (no hit)", []string{"search", "quxzzytl"}, 0},
@@ -44,6 +49,12 @@ var Reads = []Case{
 	{"history", []string{"history", "{history_id}"}, 0},
 	{"stale --days 90", []string{"stale", "--days", "90"}, 0},
 	{"reindex --dry-run", []string{"reindex", "--dry-run"}, 0},
+	// upgrade copies the workspace into a candidate, migrates and validates
+	// it. A real run syncs every file it publishes, so it is disk bound. The
+	// first run brings the corpus up to date; every run after it changes
+	// nothing.
+	{"upgrade --dry-run", []string{"upgrade", "--dry-run", "--no-wire"}, 0},
+	{"upgrade", []string{"upgrade", "--no-wire"}, 0},
 	{Control, []string{"schema", "show", "requirement"}, 0},
 	{Floor, []string{"--version"}, 0},
 }
@@ -64,6 +75,7 @@ var Writes = []Case{
 	{"link", []string{"link", "{probe}", "realized_in", "{link_target}", "--format", "json"}, 0},
 	{"link (no-op)", []string{"link", "{probe}", "realized_in", "{link_target}", "--format", "json"}, 0},
 	{"edit", []string{"edit", "{probe}", "kind", "non-functional", "--format", "json"}, 0},
+	{"verify", []string{"verify", "{probe}", "--by", "process:bench", "--format", "json"}, 0},
 	{"unlink", []string{"unlink", "{probe}", "realized_in", "{link_target}", "--format", "json"}, 0},
 	{"remove", []string{"remove", "{probe}", "--format", "json"}, 0},
 }

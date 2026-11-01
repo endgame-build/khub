@@ -1,0 +1,1 @@
+{"error": {"code": "commit_refused", "message": "Refusing to commit: the workspace is not inside a git work tree"}}

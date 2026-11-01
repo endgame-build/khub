@@ -1,0 +1,20 @@
+# import writes all or none. The plan is final before the first write, so a
+# write can fail only on the filesystem: here the requirements directory
+# denies new files. The component written before it is removed again, the
+# run fails with the write's own error (`os_error`, exit 2), and the tree is
+# as it was. Root, and on Windows an administrator with the backup and
+# restore privileges, ignore the denial, so on such an account the runner
+# skips this case (see cli-contract/err-os-error).
+requires: [write-denial]
+steps:
+- argv: ["init", "build-hub", "ws", "--no-wire"]
+- sh: |
+    mkdir -p bundle/a bundle/b
+    printf -- '---\ntype: component\ntitle: Ledger\nkind: service\n---\n' > bundle/a/ledger.md
+    printf -- '---\ntype: requirement\ntitle: Pays\nkind: functional\nrealized_in: ledger\n---\n' > bundle/b/pays.md
+- sh: "chmod 500 ws/knowledge/requirements"
+  sh_windows: "MSYS_NO_PATHCONV=1 icacls 'ws\\knowledge\\requirements' /deny '*S-1-1-0:(WD,AD)'"
+- argv: ["-C", "ws", "import", "--okf", "bundle", "--format", "json"]
+- sh: "chmod 755 ws/knowledge/requirements"
+  sh_windows: "MSYS_NO_PATHCONV=1 icacls 'ws\\knowledge\\requirements' /remove:d '*S-1-1-0'"
+- argv: ["-C", "ws", "query", "--format", "ids"]

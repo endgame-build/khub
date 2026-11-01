@@ -1,0 +1,1 @@
+{"error": {"code": "draft_retired", "message": "The 'draft' field is retired; status carries the publish state. Run `khub edit <id> status draft|stable`, or pass --draft to add"}}

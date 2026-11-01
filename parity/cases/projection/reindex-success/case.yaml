@@ -6,5 +6,5 @@ steps:
 - argv: ["reindex"]
 - argv: ["reindex"]
 - argv: ["reindex", "--dry-run"]
-- argv: ["add", "adr", "--title", "Gamma", "--status", "accepted"]
+- argv: ["add", "adr", "--title", "Gamma", "--decision", "accepted"]
 - argv: ["reindex", "--dry-run"]

@@ -1,0 +1,18 @@
+# `verify` records a review as an OKF `verified` event, {by, at, rev}: `--by`
+# is required (exit 2 without it), `at` defaults to the clock, and `rev` is
+# the content revision the review saw. A bare `verified` mapping becomes a
+# list. A review bumps no `updated` and stamps no `generated`. `--at` must be
+# an OKF datetime. `--commit` outside a git work tree, or without a signing
+# key, refuses before anything is written (commit_refused).
+steps:
+- argv: ["init", "build-hub", ".", "--no-wire"]
+- sh: |
+    printf -- '---\ntype: requirement\ntitle: Holds\nkind: functional\ncreated: 2026-01-10\nupdated: 2026-01-10\nverified: {by: human:old, at: 2026-01-10T00:00:00Z}\n---\nBody.\n' > knowledge/requirements/req-holds.md
+- argv: ["verify", "req-holds"]
+- argv: ["verify", "req-holds", "--by", "human:ilya", "--format", "json"]
+- argv: ["verify", "req-holds", "--by", "process:ci", "--at", "2026-01-14T10:00:00+02:00", "--format", "json"]
+- argv: ["verify", "req-holds", "--by", "process:ci", "--at", "2026-01-14", "--format", "json"]
+- argv: ["verify", "req-holds", "--by", "human:ilya", "--commit", "--format", "json"]
+- sh: "git init -q . && git add -A && git commit -qm seed"
+- argv: ["verify", "req-holds", "--by", "human:ilya", "--commit", "--format", "json"]
+- argv: ["get", "req-holds", "--format", "raw"]
