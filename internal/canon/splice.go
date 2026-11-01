@@ -61,6 +61,7 @@ package canon
 
 import (
 	"errors"
+	"math"
 	"slices"
 	"sort"
 	"strings"
@@ -763,6 +764,13 @@ func equalValue(a, b any) bool {
 			}
 		}
 		return true
+	case float64:
+		// NaN is the one value that is not equal to itself. A `.nan` scalar a
+		// hand-written document carries must still read as unchanged, or every
+		// edit of that document would re-emit the whole thing (and lose the
+		// author's `017` and comments on the way).
+		y, ok := b.(float64)
+		return ok && (x == y || (math.IsNaN(x) && math.IsNaN(y)))
 	default:
 		return a == b // the remaining canon scalars are all comparable
 	}

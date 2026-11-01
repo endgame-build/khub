@@ -1,0 +1,188 @@
+{
+  "recorded": {
+    "khub": "0.30.0",
+    "commit": "e2946cb",
+    "go": "go1.26.0",
+    "goos": "linux",
+    "runner": "dev-container",
+    "nproc": 4,
+    "cpu_model": "Intel(R) Xeon(R) Processor @ 2.80GHz",
+    "runs": 3
+  },
+  "profile": {
+    "scales": [
+      100,
+      2000
+    ],
+    "repeat": 11,
+    "statistic": "min"
+  },
+  "tolerance": {
+    "exponent_ceiling": 1.15,
+    "exponent_delta": 0.1,
+    "cpu_ratio": 1.35,
+    "wall_ratio": 2
+  },
+  "control": "schema show \u003ctype\u003e",
+  "floor": "--version (process floor)",
+  "floor_wall_ms": 5.52,
+  "reads": {
+    "--version (process floor)": {
+      "cpu_e": 0.01,
+      "cpu_r": 0.7,
+      "wall_r": 1
+    },
+    "check": {
+      "cpu_e": 0.81,
+      "cpu_r": 65.56,
+      "wall_r": 54.67
+    },
+    "check --strict": {
+      "cpu_e": 0.84,
+      "cpu_r": 63.25,
+      "wall_r": 54.98
+    },
+    "get": {
+      "cpu_e": 0.78,
+      "cpu_r": 33.8,
+      "wall_r": 18.66
+    },
+    "get --edges": {
+      "cpu_e": 0.81,
+      "cpu_r": 33.46,
+      "wall_r": 19.6
+    },
+    "get \u003cchain middle\u003e --edges": {
+      "cpu_e": 0.79,
+      "cpu_r": 32.36,
+      "wall_r": 20.49
+    },
+    "history": {
+      "cpu_e": 0.85,
+      "cpu_r": 36.06,
+      "wall_r": 25.22
+    },
+    "impact": {
+      "cpu_e": 0.8,
+      "cpu_r": 35.69,
+      "wall_r": 22.6
+    },
+    "impact --reverse": {
+      "cpu_e": 0.79,
+      "cpu_r": 34.43,
+      "wall_r": 19.88
+    },
+    "neighbors": {
+      "cpu_e": 0.83,
+      "cpu_r": 35.76,
+      "wall_r": 21.44
+    },
+    "neighbors --depth 12": {
+      "cpu_e": 0.83,
+      "cpu_r": 42.35,
+      "wall_r": 27.55
+    },
+    "query": {
+      "cpu_e": 0.8,
+      "cpu_r": 37.88,
+      "wall_r": 25.36
+    },
+    "query --orphan": {
+      "cpu_e": 0.81,
+      "cpu_r": 36.3,
+      "wall_r": 22.49
+    },
+    "query --tag": {
+      "cpu_e": 0.81,
+      "cpu_r": 35.91,
+      "wall_r": 22.37
+    },
+    "query --type requirement": {
+      "cpu_e": 0.8,
+      "cpu_r": 38.37,
+      "wall_r": 24.05
+    },
+    "reindex --dry-run": {
+      "cpu_e": 0.81,
+      "cpu_r": 42.02,
+      "wall_r": 28.88
+    },
+    "schema": {
+      "cpu_e": 0.01,
+      "cpu_r": 1.15,
+      "wall_r": 1.57
+    },
+    "schema show \u003ctype\u003e": {
+      "cpu_e": 0,
+      "cpu_r": 1,
+      "wall_r": 1.44
+    },
+    "search (many hits)": {
+      "cpu_e": 0.79,
+      "cpu_r": 39.11,
+      "wall_r": 29.71
+    },
+    "search (no hit)": {
+      "cpu_e": 0.78,
+      "cpu_r": 39.26,
+      "wall_r": 28.2
+    },
+    "search (one hit)": {
+      "cpu_e": 0.78,
+      "cpu_r": 38.92,
+      "wall_r": 30.75
+    },
+    "stale --days 90": {
+      "cpu_e": 0.76,
+      "cpu_r": 32.75,
+      "wall_r": 20.53
+    },
+    "status": {
+      "cpu_e": 0.82,
+      "cpu_r": 35.51,
+      "wall_r": 20.84
+    },
+    "validate (whole corpus)": {
+      "cpu_e": 0.8,
+      "cpu_r": 54.25,
+      "wall_r": 44.13
+    },
+    "validate \u003cone entity\u003e": {
+      "cpu_e": 0.83,
+      "cpu_r": 35.8,
+      "wall_r": 20.4
+    }
+  },
+  "writes": {
+    "add": {
+      "cpu_e": 0.81,
+      "cpu_r": 34.15,
+      "wall_r": null
+    },
+    "edit": {
+      "cpu_e": 0.81,
+      "cpu_r": 33.22,
+      "wall_r": null
+    },
+    "link": {
+      "cpu_e": 0.79,
+      "cpu_r": 31.74,
+      "wall_r": null
+    },
+    "link (no-op)": {
+      "cpu_e": 0.81,
+      "cpu_r": 31.14,
+      "wall_r": null
+    },
+    "remove": {
+      "cpu_e": 0.81,
+      "cpu_r": 34.42,
+      "wall_r": null
+    },
+    "unlink": {
+      "cpu_e": 0.82,
+      "cpu_r": 32.58,
+      "wall_r": null
+    }
+  }
+}

@@ -1,14 +1,22 @@
 #!/bin/sh
 # Assembly smoke for khub's npm package. Runs in CI on every PR, and locally.
 #
-#   npm/smoke.sh
+#   npm/smoke.sh                        # over fixture archives
+#   npm/smoke.sh <dist> <version-out>   # over real goreleaser artifacts
 #
 # The real package is assembled from goreleaser artifacts on a tag
-# (release.yml). This proves the assembler itself without a release: fake
-# per-platform binaries in the same archive + checksums.txt shape goreleaser
-# emits (a tar.gz holding khub, or for windows a zip holding khub.exe), then
-# assert the package tree is sound, that a PACKED TARBALL carries what it
-# should, and that the launcher runs what landed.
+# (release.yml). With no arguments this proves the assembler itself without
+# a release: fake per-platform binaries in the same archive + checksums.txt
+# shape goreleaser emits (a tar.gz holding khub, or for windows a zip holding
+# khub.exe), then assert the package tree is sound, that a PACKED TARBALL
+# carries what it should, and that the launcher runs what landed.
+#
+# Given a goreleaser dist directory (a `--snapshot` build, say) and the text
+# the linux binary in it prints for --version, the same assertions run over
+# the real archives, so .goreleaser.yml and the assembler are proven together
+# before a tag ever exists. The assembler refuses a snapshot VERSION by
+# design, so the package is still assembled as 9.9.9; only the bytes inside
+# are real.
 set -eu
 
 die() { printf 'npm smoke: %s\n' "$*" >&2; exit 1; }
@@ -27,6 +35,14 @@ dist=$(mktemp -d)
 work=$(mktemp -d)
 trap 'rm -rf "$dist" "$work"' EXIT INT TERM
 
+want_out=9.9.9-fixture
+if [ "$#" -gt 0 ]; then
+  [ "$#" = 2 ] || die "usage: npm/smoke.sh [<dist> <version-out>]"
+  [ -f "$1/checksums.txt" ] || die "no checksums.txt in $1"
+  cp "$1"/khub_*.tar.gz "$1"/khub_*.zip "$1/checksums.txt" "$dist/"
+  want_out=$2
+fi
+if [ "$#" = 0 ]; then
 for a in darwin_amd64 darwin_arm64 linux_amd64 linux_arm64; do
   d="$work/src-$a"
   mkdir -p "$d"
@@ -43,6 +59,7 @@ for a in windows_amd64 windows_arm64; do
   (cd "$d" && zip -q "$dist/khub_$a.zip" khub.exe)
 done
 (cd "$dist" && sums ./*.tar.gz ./*.zip | sed 's|\./||' >checksums.txt)
+fi
 
 out="$work/pkgs"
 "$here/build-packages.sh" 9.9.9 "$dist" "$out"
@@ -93,7 +110,7 @@ done
 (cd "$proj" \
   && npm init -y >/dev/null \
   && npm install --ignore-scripts --no-audit --no-fund ./*.tgz >/dev/null \
-  && [ "$(npx --no-install @endgame-build/khub)" = "9.9.9-fixture" ]) \
+  && [ "$(npx --no-install @endgame-build/khub --version)" = "$want_out" ]) \
   || die "the packed package did not install and run under --ignore-scripts"
 
 # A tampered archive must be refused, zip or tarball. Each is tampered alone,

@@ -62,10 +62,12 @@ fi
 # clock helper is called twice per case.
 TOOLS=$(mktemp -d "${TMPDIR:-/tmp}/khub-scale-tools.XXXXXX")
 trap 'rm -rf "$TOOLS"' EXIT
-(cd "$REPO" && go build -o "$TOOLS/gen" ./parity/scale/gen && go build -o "$TOOLS/manifest" ./parity/scale/manifest) || {
+(cd "$REPO" && go build -o "$TOOLS/gen" ./parity/scale/gen && go build -o "$TOOLS/manifest" ./parity/scale/manifest \
+  && go build -o "$TOOLS/footprint" ./parity/scale/footprint) || {
   echo "building parity/scale helpers failed" >&2; exit 2; }
 GEN=$TOOLS/gen
 M=$TOOLS/manifest
+FOOTPRINT=$TOOLS/footprint
 
 FAILED=0
 CASES=0
@@ -271,6 +273,19 @@ same "reindex is idempotent" "$(cksum < "$WORK/index.md")" "$BEFORE"
 same "index.md links every entity" \
   "$(comm -23 <(files | sed -e 's#.*/##' -e 's/\.md$//' | sort -u) \
               <(grep -o '([^)]*\.md)' "$WORK/index.md" | sed -e 's#.*/##' -e 's/\.md)$//' | sort -u) | wc -l | tr -d ' ')" "0"
+
+# -------------------------------------------------------------------- footprint
+# What each read puts in front of an agent, in bytes, against the exact
+# record in parity/scale/footprint.json (recorded at the per-PR scale; at
+# another scale the helper says so and passes). The corpus still matches the
+# manifest here, before the mutation cases. Exit 1 is an answer that moved,
+# exit 2 a corpus that moved; both print the delta table.
+say "footprint"
+if [ -f "$REPO/parity/scale/footprint.json" ]; then
+  ok 0 "every read's bytes match the record" "$FOOTPRINT" -bin "$KHUB" -work "$WORK" -check "$REPO/parity/scale/footprint.json"
+else
+  printf '  ..   no parity/scale/footprint.json; nothing to compare\n'
+fi
 
 # ----------------------------------------------------------------- the byte format
 say "file format"

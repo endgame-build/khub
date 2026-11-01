@@ -238,6 +238,20 @@ vocabulary gains nested values. This release breaks existing workspaces, and
   `khub init <preset> . --force` that recreates it.
 - One name declared as both an attribute and a relation on a type is a schema
   error instead of the attribute silently winning.
+- **Digitless floats in JSON.** A hand-written `.inf`, `-.inf` or `.nan` in
+  frontmatter printed `+.Inf`, `-I.nf` and `N.aN` under `--format json`, which
+  no JSON parser accepts. Every JSON dialect now carries the YAML spelling as a
+  string (`"g": ".inf"`); the YAML emitter writes the literal back and human
+  output prints `inf`/`nan`.
+
+### Notes
+
+- **Reading a 0.30 workspace with an older binary.** A `.khub/ignore` makes
+  `check` on 0.29 and earlier report every ignored entity as `misplaced`;
+  path-template storage and `id_ordinal` are not understood there either. A
+  workspace that uses none of the 0.30 features reads cleanly on 0.27 and
+  later, and a 0.27 `upgrade` would rewrite the wire block back and re-lay
+  the skill files 0.28 removed — pin one khub version per team.
 
 ## [0.30.0] — 2026-10-28
 

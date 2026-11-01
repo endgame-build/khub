@@ -1,0 +1,139 @@
+name: Compat
+
+# Cross-version compatibility: a workspace that every published version in
+# parity/compat/versions.txt wrote must survive the binary built from this
+# commit — read as it is, previewed, upgraded, upgraded again, read, and
+# edited once. The self row (OLD = NEW) runs on every pull request with no
+# network and blocks; the published-version matrix runs nightly, on dispatch,
+# and on a pull request that touches what an upgrade reads or writes.
+on:
+  schedule:
+    - cron: "41 4 * * *"
+  workflow_dispatch: {}
+  pull_request:
+
+permissions: {}
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  CGO_ENABLED: "0"
+
+jobs:
+  # The script against itself: proves the mechanics on every change, in a
+  # few seconds, with nothing installed.
+  self:
+    permissions:
+      contents: read
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          go-version: "1.26"
+          check-latest: true
+          cache: true
+      - run: go build -o khub ./cmd/khub
+      - name: Self row
+        run: bash parity/compat/smoke.sh "$PWD/khub" "$PWD/khub" "$RUNNER_TEMP/compat-self"
+      # The floor of versions.txt is the plugin's MIN_KHUB: the plugin
+      # promises to read those binaries, so the binary promises to read
+      # their workspaces, and one bump moves both.
+      - name: versions.txt starts at the plugin's MIN_KHUB
+        run: |
+          floor=$(grep -v '^#' parity/compat/versions.txt | grep -m1 .)
+          grep -q "MIN_KHUB = '$floor'" plugin/hooks/workspace.ts \
+            || { echo "versions.txt floor $floor is not plugin/hooks/workspace.ts MIN_KHUB"; exit 1; }
+
+  matrix:
+    permissions:
+      contents: read
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # Report-only for one release cycle: a red row here is information about
+    # a published version, not a reason to hold a PR. Drop this line once
+    # the rows have been green across a release.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # The path check below diffs against the PR base; a shallow
+          # checkout has no base commit to diff against.
+          fetch-depth: 0
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          go-version: "1.26"
+          check-latest: true
+          cache: true
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version: "22"
+      - run: go build -o khub ./cmd/khub
+      # In the job, with plain git, never a workflow-level `paths:` filter: a
+      # filtered workflow reports nothing on the PRs it skips, which leaves a
+      # required check pending forever. This runs always and says why it
+      # skipped. The base is the PR's base sha, which the event carries.
+      - name: Does this change touch the upgrade surface?
+        id: touch
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          if [ "$EVENT" != pull_request ]; then
+            echo "matrix=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          changed=$(git diff --name-only "$BASE...HEAD" -- \
+            internal/workspace internal/schema internal/wire internal/reindex \
+            presets parity/compat .github/workflows/compat.yml)
+          if [ -n "$changed" ]; then
+            echo "matrix=true" >> "$GITHUB_OUTPUT"
+            printf 'compat-relevant changes:\n%s\n' "$changed"
+          else
+            echo "matrix=false" >> "$GITHUB_OUTPUT"
+            echo "no compat-relevant paths changed; matrix skipped"
+          fi
+      - name: Published versions write, this binary upgrades and reads
+        if: steps.touch.outputs.matrix == 'true'
+        run: |
+          new=$(./khub --version)
+          status=0
+          {
+            echo "### Compat: published versions into $new"
+            echo
+            echo "| OLD | checks | failed | result |"
+            echo "|---|---|---|---|"
+          } >> "$GITHUB_STEP_SUMMARY"
+          # A per-version prefix: nothing lands on the runner's PATH, two
+          # versions never share a node_modules, and --ignore-scripts as
+          # release.yml installs it. The loop reads from a process
+          # substitution, not a pipe, so `status` survives it.
+          while read -r v; do
+            [ -n "$v" ] || continue
+            prefix="$RUNNER_TEMP/khub-$v"
+            mkdir -p "$prefix"
+            npm install --prefix "$prefix" --no-audit --no-fund --ignore-scripts \
+              "@endgame-build/khub@$v" >/dev/null
+            old="$prefix/node_modules/.bin/khub"
+            test "$("$old" --version)" = "$v"
+            log="$RUNNER_TEMP/compat-$v.log"
+            if bash parity/compat/smoke.sh "$old" "$PWD/khub" "$RUNNER_TEMP/compat-$v" --forward >"$log" 2>&1; then
+              r=ok
+            else
+              r=FAIL; status=1
+            fi
+            tail -1 "$log"
+            grep -E '^  FAIL|^       ' "$log" || true
+            counts=$(tail -1 "$log" | sed -E 's/.*: ([0-9]+) checks, ([0-9]+) failed/\1 | \2/')
+            echo "| $v | $counts | $r |" >> "$GITHUB_STEP_SUMMARY"
+          done < <(grep -v '^#' parity/compat/versions.txt)
+          exit "$status"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: compat-logs
+          path: ${{ runner.temp }}/compat-*.log
+          if-no-files-found: ignore

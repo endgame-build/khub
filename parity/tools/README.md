@@ -14,8 +14,6 @@ environment is the easiest way to get it, e.g.
 | `gen_load_cases.py` | Regenerates the YAML 1.1-vs-1.2 scalar resolution corpus | needs `ruamel.yaml` |
 | `gen_json_cases.py` | Regenerates the JSON-dialect corpus | stdlib only |
 | `gen_mdparse_cases.py` | Regenerates the frontmatter-split corpus | stdlib only |
-| `concurrency.py` | N processes writing one collection at once — exercises the flock path a byte-diff cannot see | takes the binary path as an argument |
-| `seed_adversarial.py` | Plants hostile fixtures (exotic scalars, CRLF, comments) into a workspace for fuzz runs | takes a workspace path |
 | `gen_cli_reference.sh` | Regenerates `docs/cli-reference.md` from the built binary | `KHUB=./khub` |
 | `okf_validate.py` | Runs the OKF reference parser (`document.py`) over an exported bundle: every concept parses, has a `type` and normalizes `verified`; only the root `index.md` has frontmatter. CI's `okf-reference` job runs it informationally through `okf_reference.sh`, against `document.py` pinned to a knowledge-catalog commit | needs `pyyaml` and the reference `document.py`: `uv run --with pyyaml==6.0.3 python parity/tools/okf_validate.py <bundle> <dir holding document.py>` |
 | `okf_reference.sh` | Builds a firm-ops and a build-hub workspace with a few linked and reviewed entities, exports each with `khub export --okf`, and runs `okf_validate.py` over both bundles | `uv` and the reference `document.py`: `parity/tools/okf_reference.sh <khub binary> <dir holding document.py>` |

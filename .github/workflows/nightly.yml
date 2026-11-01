@@ -1,0 +1,344 @@
+name: Nightly
+
+# What is wrong per commit and right once a day: the scale smoke at 550 on
+# two OSes, the growth bench over three corpus sizes, the in-process
+# benchmarks against the last release, fuzzing past the seeds, the full
+# coverage union, a fresh vulnerability query, and a goreleaser snapshot
+# run through the real npm assembler. Nothing here blocks a PR. A failed
+# scheduled run opens or updates one tracking issue (the `report` job), which
+# is why no job may use continue-on-error: that reports success to `needs`,
+# and the failure would never be seen.
+on:
+  schedule:
+    - cron: "17 9 * * *"
+  workflow_dispatch:
+    inputs:
+      rebaseline:
+        description: "Record parity/scale/baseline.json from three bench runs on this runner class (upload only; commit it deliberately)"
+        type: boolean
+        default: false
+
+permissions: {}
+
+concurrency:
+  group: nightly
+  cancel-in-progress: false
+
+defaults:
+  run:
+    # bash -eo pipefail, so a `| tee` never swallows a failure.
+    shell: bash
+
+env:
+  CGO_ENABLED: "0"
+
+jobs:
+  # parity/scale/smoke.sh at the README's scale, with the regenerate-and-diff
+  # determinism pass, on the two OSes khub is used on. The per-PR run is 300
+  # on ubuntu alone (ci.yml, go-extras).
+  scale:
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          go-version: "1.26"
+          check-latest: true
+          cache: true
+      - run: go build -o khub ./cmd/khub
+      - name: Scale smoke (550 entities)
+        env:
+          TMPDIR: ${{ runner.temp }}
+        run: KHUB="$PWD/khub" bash parity/scale/smoke.sh --scale 550 --work "$RUNNER_TEMP/scale"
+
+  # The growth bench (how each command's cost grows with the corpus) and the
+  # in-process benchmarks against the last release tag. Corpora are
+  # regenerated every night: they are khub's own output, so the only correct
+  # cache key is a hash of nearly every .go file plus the presets, which
+  # misses almost every night anyway, and bench would reuse a stale corpus
+  # silently. About two and a half minutes on a job nobody waits for.
+  bench:
+    permissions:
+      contents: read
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0 # the release tags, for benchcmp
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          go-version: "1.26"
+          check-latest: true
+          cache: true
+      - run: go build -o khub ./cmd/khub
+      # Both clocks, eleven interleaved repeats, the write cycle on a copy of
+      # each corpus (which must come back byte-identical, or the bench itself
+      # fails). The JSON is what the gate reads; the table is for a human.
+      - name: Growth bench (100, 550, 2000)
+        run: |
+          go run ./parity/scale/bench -bin ./khub -cache "$RUNNER_TEMP/corpora" -work "$RUNNER_TEMP/bench-work" \
+            -regen -scales 100,550,2000 -repeat 11 -format json > bench.json
+          {
+            echo "### Growth bench"
+            echo '```'
+            go run ./parity/scale/bench -bin ./khub -cache "$RUNNER_TEMP/corpora" -work "$RUNNER_TEMP/bench-work" \
+              -scales 100,550,2000 -repeat 3
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+      # The rule (parity/scale/gate) against parity/scale/baseline.json.
+      # REPORT ONLY for now: the verdict goes to the summary and the step
+      # passes whatever it says. Promote by dropping the `|| true` once
+      # unchanged main has shown zero FAIL and zero INVALID for three to
+      # four weeks of nightlies. Until a baseline is recorded on this runner
+      # class (the rebaseline input below), the per-command deltas and the
+      # ratios are notes and only the absolute exponent ceiling is judged.
+      - name: Performance gate (report only)
+        id: gate
+        run: |
+          {
+            echo "### Performance gate"
+            go run ./parity/scale/gate -baseline parity/scale/baseline.json -format md bench.json || true
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+      # A failing row gets a CPU profile of the matching in-process benchmark
+      # on the same 2000 corpus, so the cause is in the artifact, not a guess.
+      - name: Profiles for a failing gate
+        if: steps.gate.outputs.verdict == 'fail'
+        env:
+          PROF_WS: ${{ runner.temp }}/corpora/2000
+        run: |
+          mkdir -p profiles
+          PROF_QUERY=$(go run ./parity/scale/manifest "$PROF_WS/smoke-manifest.json" search.needle)
+          export PROF_QUERY
+          for pkg in integrity query search; do
+            go test -run '^$' -bench LargeCorpus -benchtime 10x -cpuprofile "profiles/$pkg.pprof" "./internal/$pkg"
+            go tool pprof -top -nodecount=30 "profiles/$pkg.pprof" > "profiles/$pkg.top.txt" 2>&1 || true
+          done
+      - name: Record a baseline on this runner class
+        if: inputs.rebaseline
+        run: |
+          for i in 1 2 3; do
+            go run ./parity/scale/bench -bin ./khub -cache "$RUNNER_TEMP/corpora" -work "$RUNNER_TEMP/bench-work" \
+              -profile gate -format json > "baseline-run-$i.json"
+          done
+          go run ./parity/scale/gate -record -runner "$ImageOS" -baseline parity/scale/baseline.json \
+            baseline-run-1.json baseline-run-2.json baseline-run-3.json > baseline.json
+          echo "baseline.json recorded on $ImageOS; download the artifact and commit it with the delta table from the log" >> "$GITHUB_STEP_SUMMARY"
+      - name: In-process benchmarks, HEAD vs last release
+        run: |
+          {
+            echo "### benchstat, last release vs HEAD"
+            echo '```'
+            bash parity/scale/benchcmp.sh "$RUNNER_TEMP/benchcmp"
+            echo '```'
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: bench
+          path: |
+            bench.json
+            baseline.json
+            baseline-run-*.json
+            profiles/
+            ${{ runner.temp }}/benchcmp/base.txt
+            ${{ runner.temp }}/benchcmp/head.txt
+          if-no-files-found: ignore
+
+  # The canon fuzz targets past their seeds, 90s each, in a matrix so one
+  # crasher does not hide the others. The growing corpus lives under
+  # GOCACHE/fuzz; setup-go's cache saves only on a key miss, which would
+  # freeze it, so it rides in an explicit restore/save pair keyed per run
+  # with a prefix restore. A crasher lands in the checkout under
+  # internal/canon/testdata/fuzz/<target>/ and is uploaded; committing it
+  # there makes plain `go test` fail on every PR until it is fixed or
+  # recorded as a known gap beside the ones already in fuzz_test.go.
+  fuzz:
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - FuzzJSONValid
+          - FuzzFrontmatterJSONValid
+          - FuzzReconcatIdentity
+          - FuzzSpliceIdempotent
+          - FuzzEmitRoundTrip
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          go-version: "1.26"
+          check-latest: true
+          cache: false
+      - id: dir
+        run: echo "fuzz=$(go env GOCACHE)/fuzz/github.com/endgame-build/khub/internal/canon/${{ matrix.target }}" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ steps.dir.outputs.fuzz }}
+          key: fuzz-${{ matrix.target }}-${{ github.run_id }}
+          restore-keys: fuzz-${{ matrix.target }}-
+      - name: Fuzz ${{ matrix.target }} for 90s
+        run: go test -run '^$' -fuzz "^${{ matrix.target }}$" -fuzztime 90s ./internal/canon 2>&1 | tee fuzz.log
+      - uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        if: always()
+        with:
+          path: ${{ steps.dir.outputs.fuzz }}
+          key: fuzz-${{ matrix.target }}-${{ github.run_id }}
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: failure()
+        with:
+          name: crasher-${{ matrix.target }}
+          path: |
+            internal/canon/testdata/fuzz/${{ matrix.target }}/
+            fuzz.log
+
+  # Statement coverage from everything that runs the binary — parity, both
+  # smokes, the scale smoke — merged with the unit tests. The per-PR floor
+  # (ci.yml) is parity alone on internal/cli; this is the whole picture and
+  # the lines nothing touches. Report only.
+  coverage:
+    permissions:
+      contents: read
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          go-version: "1.26"
+          check-latest: true
+          cache: true
+      - name: Every producer into its own counter directory, then merge
+        env:
+          TMPDIR: ${{ runner.temp }}
+        run: |
+          cov=$RUNNER_TEMP/cov
+          mkdir -p "$cov"/{parity,smoke,scale,unit,binary,all}
+          go build -cover -o khub-cover ./cmd/khub
+          go build -o parity-run ./parity/runner
+          # The runner builds each child's environment from scratch, so
+          # GOCOVERDIR rides in through -bin; every script passes it through.
+          ./parity-run -bin "env GOCOVERDIR=$cov/parity $PWD/khub-cover" -cases parity/cases
+          GOCOVERDIR=$cov/smoke KHUB="$PWD/khub-cover" bash smoke-windows.sh "$RUNNER_TEMP/smoke"
+          GOCOVERDIR=$cov/scale KHUB="$PWD/khub-cover" bash parity/scale/smoke.sh --scale 550 --work "$RUNNER_TEMP/scale"
+          # go test -cover over a package with no test files exits 1, so only
+          # the packages that have them.
+          pkgs=$(go list -f '{{if or .TestGoFiles .XTestGoFiles}}{{.ImportPath}}{{end}}' ./internal/... ./parity/...)
+          # shellcheck disable=SC2086
+          go test -cover -coverpkg=./internal/... $pkgs -args -test.gocoverdir="$cov/unit"
+          go tool covdata merge -i="$cov/parity,$cov/smoke,$cov/scale" -o "$cov/binary"
+          go tool covdata merge -i="$cov/parity,$cov/smoke,$cov/scale,$cov/unit" -o "$cov/all"
+          go tool covdata textfmt -i="$cov/all" -o cover.txt
+          go tool cover -html=cover.txt -o cover.html
+          {
+            echo "### Coverage"
+            echo
+            echo "| package | binary | binary + unit |"
+            echo "|---|---|---|"
+            # Packages with no statements print no percentage; both listings
+            # drop them alike, so the columns stay aligned.
+            paste -d' ' \
+              <(go tool covdata percent -i="$cov/binary" | awk '/coverage: [0-9]/{print $1, $3}') \
+              <(go tool covdata percent -i="$cov/all" | awk '/coverage: [0-9]/{print $3}') \
+              | sed 's|github.com/endgame-build/khub/||' \
+              | awk '{printf "| %s | %s | %s |\n", $1, $2, $3}'
+            echo
+            go tool cover -func=cover.txt | tail -1
+          } >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: coverage
+          path: |
+            cover.txt
+            cover.html
+
+  # The per-PR govulncheck runs only when someone pushes; an advisory
+  # published between pushes is what this one is for.
+  vuln:
+    permissions:
+      contents: read
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          go-version: "1.26"
+          check-latest: true
+          cache: true
+      - run: go run golang.org/x/vuln/cmd/govulncheck@v1.1.4 ./...
+
+  # release.yml runs only on a tag, so a .goreleaser.yml mistake showed up at
+  # release time. A snapshot build proves the six cross-compiles and the
+  # archive layout, and the real artifacts then go through the npm assembler
+  # and launcher smoke that otherwise sees fixture tarballs only.
+  snapshot:
+    permissions:
+      contents: read
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          go-version: "1.26"
+          check-latest: true
+          cache: true
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version: "22"
+      - uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7.2.3
+        with:
+          version: "v2.19.0"
+          args: release --snapshot --clean --skip=publish
+      - name: The npm assembler over the real artifacts
+        run: |
+          mkdir -p "$RUNNER_TEMP/linux"
+          tar xzf dist/khub_linux_amd64.tar.gz -C "$RUNNER_TEMP/linux" khub
+          want=$("$RUNNER_TEMP/linux/khub" --version)
+          echo "snapshot binary prints $want"
+          npm/smoke.sh dist "$want"
+
+  # One open issue while the nightly is red, closed when it is green again.
+  # Only on the schedule: whoever dispatched a run is watching it. No
+  # checkout; gh reads GH_REPO.
+  report:
+    needs: [scale, bench, fuzz, coverage, vuln, snapshot]
+    if: ${{ always() && github.event_name == 'schedule' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      issues: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      RED: ${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}
+      RUN: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+    steps:
+      - name: Open, update or close the tracking issue
+        run: |
+          title="Nightly CI is red"
+          # List and match the exact title: the search API lags, and a label
+          # would have to exist first.
+          n=$(gh issue list --state open --limit 200 --json number,title \
+                --jq ".[] | select(.title == \"$title\") | .number" | head -1)
+          if [ "$RED" = true ]; then
+            body="Nightly failed at $GITHUB_SHA: $RUN"
+            if [ -n "$n" ]; then gh issue comment "$n" --body "$body"
+            else gh issue create --title "$title" --body "$body"; fi
+          elif [ -n "$n" ]; then
+            gh issue close "$n" --comment "Green again at $GITHUB_SHA: $RUN"
+          fi

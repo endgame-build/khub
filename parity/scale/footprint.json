@@ -1,0 +1,336 @@
+{
+  "corpus": {
+    "scale": 300,
+    "seed": 1,
+    "today": "2026-01-15",
+    "preset": "build-hub",
+    "khub_version": "0.30.0",
+    "total": 300,
+    "tree_sha256": "c3767c1bfcbd877bc6111183f431fcb56c3178f3a4d32260b8c8403997f262b2"
+  },
+  "env": [
+    "KHUB_PARITY_NOW=2026-01-15",
+    "COLUMNS=80",
+    "TTY_COMPATIBLE=0",
+    "NO_COLOR=1"
+  ],
+  "cases": [
+    {
+      "label": "status",
+      "argv": [
+        "status"
+      ],
+      "exit": 0,
+      "stdout_bytes": 379,
+      "stderr_bytes": 0,
+      "rows": 0,
+      "sha256": "ba74d3d4a32683a1e36ffb66b0b9d9e91570bc76aed2abdcf254792f1676ab12"
+    },
+    {
+      "label": "schema",
+      "argv": [
+        "schema"
+      ],
+      "exit": 0,
+      "stdout_bytes": 58007,
+      "stderr_bytes": 0,
+      "rows": 0,
+      "sha256": "ee097d5592b2b5bfa005d5eba890609dec89dbcab47d1fb3d4cb03afae6e9081"
+    },
+    {
+      "label": "check",
+      "argv": [
+        "check"
+      ],
+      "exit": 0,
+      "stdout_bytes": 1604,
+      "stderr_bytes": 0,
+      "rows": 0,
+      "sha256": "67c9263ad03f8c5c7c6b3f61bdd906f782ba10e2c55ed4c05be76c8bfaed8dd1"
+    },
+    {
+      "label": "check --strict",
+      "argv": [
+        "check",
+        "--strict"
+      ],
+      "exit": 1,
+      "stdout_bytes": 1604,
+      "stderr_bytes": 0,
+      "rows": 0,
+      "sha256": "dac4434deb855fc521705fadf2720b72a981206d9be6b3e9c006cf37f2dc3dcb"
+    },
+    {
+      "label": "validate (whole corpus)",
+      "argv": [
+        "validate"
+      ],
+      "exit": 0,
+      "stdout_bytes": 69,
+      "stderr_bytes": 0,
+      "rows": 0,
+      "sha256": "c1e41b2f0be83c3b701e26a6337cb5c2e5668f5efba8818e8fcef2d1fc5236a1"
+    },
+    {
+      "label": "validate \u003cone entity\u003e",
+      "argv": [
+        "validate",
+        "requirement/req-refund-tax-filings-before-the-cutoff"
+      ],
+      "exit": 0,
+      "stdout_bytes": 1269,
+      "stderr_bytes": 0,
+      "rows": 0,
+      "sha256": "8d24270a91226714bff92bfaf9019cf61e7617fbf3af402a37eb3ceb6e03fb44"
+    },
+    {
+      "label": "query",
+      "argv": [
+        "query"
+      ],
+      "exit": 0,
+      "stdout_bytes": 75807,
+      "stderr_bytes": 0,
+      "rows": 300,
+      "sha256": "a60f5aa0de8f7e060e2ec56741195213b74af3fb3d84b0c7b7d21a1d370ec338"
+    },
+    {
+      "label": "query --type requirement",
+      "argv": [
+        "query",
+        "--type",
+        "requirement"
+      ],
+      "exit": 0,
+      "stdout_bytes": 39244,
+      "stderr_bytes": 0,
+      "rows": 142,
+      "sha256": "b43ccafe30746b1b75a4584951d2b7645c469ec1d8f232a653315d41a14fab2e"
+    },
+    {
+      "label": "query --orphan",
+      "argv": [
+        "query",
+        "--orphan"
+      ],
+      "exit": 0,
+      "stdout_bytes": 5249,
+      "stderr_bytes": 0,
+      "rows": 19,
+      "sha256": "26c19420900057df7429c57f164a89ea890fff37078c4edefb1112d5486d2860"
+    },
+    {
+      "label": "query --tag",
+      "argv": [
+        "query",
+        "--tag",
+        "platform"
+      ],
+      "exit": 0,
+      "stdout_bytes": 18633,
+      "stderr_bytes": 0,
+      "rows": 73,
+      "sha256": "70dc79ff2bdd1ba9d72af0b9db1245ebc0701ff2837b94b37b75340f14fb441f"
+    },
+    {
+      "label": "search (one hit)",
+      "argv": [
+        "search",
+        "xylotrope"
+      ],
+      "exit": 0,
+      "stdout_bytes": 519,
+      "stderr_bytes": 0,
+      "rows": 1,
+      "sha256": "019819ce8ef470fc039a04b8e916af9a65ee66d50159fdbf77d152254f3534b1"
+    },
+    {
+      "label": "search (many hits)",
+      "argv": [
+        "search",
+        "platform"
+      ],
+      "exit": 0,
+      "stdout_bytes": 2373,
+      "stderr_bytes": 0,
+      "rows": 5,
+      "sha256": "543829f1aa66358ded772886cfb495e5820720601c59fe34bdbabc02dfa24155"
+    },
+    {
+      "label": "search (no hit)",
+      "argv": [
+        "search",
+        "quxzzytl"
+      ],
+      "exit": 0,
+      "stdout_bytes": 3,
+      "stderr_bytes": 150,
+      "rows": 0,
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+    },
+    {
+      "label": "get",
+      "argv": [
+        "get",
+        "req-refund-tax-filings-before-the-cutoff"
+      ],
+      "exit": 0,
+      "stdout_bytes": 794,
+      "stderr_bytes": 0,
+      "rows": 0,
+      "sha256": "db4b4e33997ce70472315a84f19e5bbe5e53c549e091fc51ab1f7d9fb69bcdc5"
+    },
+    {
+      "label": "get --edges",
+      "argv": [
+        "get",
+        "cmp-stripe",
+        "--edges"
+      ],
+      "exit": 0,
+      "stdout_bytes": 578,
+      "stderr_bytes": 0,
+      "rows": 0,
+      "sha256": "093b641d8dd186b38e6628754540b8d5d29b3bbe41ddc8c846bff3cd0c7ae204"
+    },
+    {
+      "label": "get \u003cchain middle\u003e --edges",
+      "argv": [
+        "get",
+        "ad-2025-05-09-consolidate-on-row-level-security-for-the-ledger",
+        "--edges"
+      ],
+      "exit": 0,
+      "stdout_bytes": 2073,
+      "stderr_bytes": 0,
+      "rows": 0,
+      "sha256": "fdcb5a91a44b8f343aaa55b6c97bb1a0730bfce9c6cc5eefcd7d23897f066bc2"
+    },
+    {
+      "label": "neighbors",
+      "argv": [
+        "neighbors",
+        "cmp-ledger-helpers"
+      ],
+      "exit": 0,
+      "stdout_bytes": 2680,
+      "stderr_bytes": 0,
+      "rows": 12,
+      "sha256": "550525a4e72e2d425a771dd8d29f0700e293a8b46c525ca41af1341f9fce86f1"
+    },
+    {
+      "label": "neighbors --depth 12",
+      "argv": [
+        "neighbors",
+        "cmp-ledger-helpers",
+        "--depth",
+        "12"
+      ],
+      "exit": 0,
+      "stdout_bytes": 118174,
+      "stderr_bytes": 0,
+      "rows": 533,
+      "sha256": "c7e51979f01a02f0c6dd90783eb89a246eb542e289367c03df446e0f46a23b55"
+    },
+    {
+      "label": "impact",
+      "argv": [
+        "impact",
+        "cmp-kyc-service"
+      ],
+      "exit": 0,
+      "stdout_bytes": 1126,
+      "stderr_bytes": 0,
+      "rows": 11,
+      "sha256": "ba0fadff729ee0c10c0dd76c8b7d15013bb2e2c8c62a7ddb144b8b9de114f51b"
+    },
+    {
+      "label": "impact --reverse",
+      "argv": [
+        "impact",
+        "cmp-sendgrid",
+        "--reverse"
+      ],
+      "exit": 0,
+      "stdout_bytes": 1485,
+      "stderr_bytes": 0,
+      "rows": 14,
+      "sha256": "fbed62f575fa57c09c187106a9e4638a694e8b4e2fcd8897be5af4653ca0ba03"
+    },
+    {
+      "label": "history",
+      "argv": [
+        "history",
+        "ad-2025-12-21-split-out-signed-webhooks-in-the-settlement-path"
+      ],
+      "exit": 0,
+      "stdout_bytes": 1431,
+      "stderr_bytes": 0,
+      "rows": 6,
+      "sha256": "4f2b48458f1a75779f943f5528a6caba0e1f7872f9b281875e1dcb6cb45e37a5"
+    },
+    {
+      "label": "stale --days 90",
+      "argv": [
+        "stale",
+        "--days",
+        "90"
+      ],
+      "exit": 0,
+      "stdout_bytes": 30769,
+      "stderr_bytes": 0,
+      "rows": 142,
+      "sha256": "c3c17cc16409f0c8d7477132960716a5565e11161702332168d9624bbd0cd845"
+    },
+    {
+      "label": "reindex --dry-run",
+      "argv": [
+        "reindex",
+        "--dry-run"
+      ],
+      "exit": 0,
+      "stdout_bytes": 23,
+      "stderr_bytes": 0,
+      "rows": 0,
+      "sha256": "ea7c47b8f667c0e54ffa9a115895097035a5db7cd3b2b1c3d63b4ede788348f4"
+    },
+    {
+      "label": "upgrade --dry-run",
+      "argv": [
+        "upgrade",
+        "--dry-run",
+        "--no-wire"
+      ],
+      "exit": 0,
+      "stdout_bytes": 426,
+      "stderr_bytes": 0,
+      "rows": 0,
+      "sha256": "8c9e456af1141e7197903521de4d98b1f515203ca9d5126294b8ceb6992cc6af"
+    },
+    {
+      "label": "upgrade",
+      "argv": [
+        "upgrade",
+        "--no-wire"
+      ],
+      "exit": 0,
+      "stdout_bytes": 427,
+      "stderr_bytes": 0,
+      "rows": 0,
+      "sha256": "a89d8b837b62a2d45038c1e0d5ba3c562034b8297fc59b3fd56ded2c0c4e71a9"
+    },
+    {
+      "label": "schema show \u003ctype\u003e",
+      "argv": [
+        "schema",
+        "show",
+        "requirement"
+      ],
+      "exit": 0,
+      "stdout_bytes": 5744,
+      "stderr_bytes": 0,
+      "rows": 0,
+      "sha256": "d4b1eecee2802410c152b9ae4c6b3b39491b16e82089479fba91cf966904ea93"
+    }
+  ]
+}

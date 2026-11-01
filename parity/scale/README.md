@@ -14,8 +14,11 @@ Four pieces, all Go, all stdlib:
 | `corpus/` | the generator — writes a build-hub workspace of 300–2000 entities, every one authored by `khub add`, and its manifest |
 | `gen/` | the generator's command line |
 | `smoke.sh` | 80 assertions over that workspace, every command timed |
-| `bench/` | the read surface over several corpus sizes, reporting how cost grows |
+| `bench/` | the read surface and one write cycle over several corpus sizes, both clocks, reporting how cost grows |
+| `gate/` | the performance rule: bench's JSON against `baseline.json`, pass / fail / invalid |
+| `footprint/` | the bytes every read puts in front of an agent, pinned exactly in `footprint.json` |
 | `manifest/` | the one helper `smoke.sh` needs: a manifest field, a JSON reduction, the clock |
+| `corpus/cases.go` | the one list of read and write cases bench and footprint share, filled from the manifest |
 
 ```bash
 go build -o khub ./cmd/khub                                   # the binary under test
@@ -29,7 +32,10 @@ KHUB=/path/to/other/khub bash parity/scale/smoke.sh           # smoke another bu
 go run ./parity/scale/gen -bin ./khub -work /tmp/x -scale 550 -seed 1 -today 2026-01-15
 go run ./parity/scale/bench -bin ./khub                       # 100/550/2000, corpora cached between runs
 go run ./parity/scale/bench -bin ./khub -scales 100,550       # nearer in
-go run ./parity/scale/bench -bin ./khub -format json
+go run ./parity/scale/bench -bin ./khub -profile gate -format json > bench.json   # what the gate reads
+go run ./parity/scale/gate -baseline parity/scale/baseline.json bench.json        # the rule; -format md for a summary
+go run ./parity/scale/footprint -bin ./khub -work <corpus> -check parity/scale/footprint.json
+go run ./parity/scale/footprint -bin ./khub -work <corpus> -record > parity/scale/footprint.json   # re-record, deliberately
 ```
 
 Nothing here needs Python. The smoke script builds the two helpers with
@@ -101,9 +107,9 @@ that dropped the `-NNN-` ordinal from minted ids would not touch a line of it.
 `smoke.sh` prints a wall clock beside each case, which is enough to notice a
 regression and not enough to answer the question underneath it: is a
 command's cost linear in the corpus, or quadratic and merely still small.
-`bench` runs the read surface over several sizes and fits an exponent between
-the smallest and the largest — `n^1.0` is linear, `n^2.0` is the wall — so the
-answer is a column rather than a hunch.
+`bench` runs the read surface and one write cycle over several sizes and fits
+an exponent between the smallest and the largest — `n^1.0` is linear, `n^2.0`
+is the wall — so the answer is a column rather than a hunch.
 
 It measures out of process, on purpose: khub is one static binary and the
 number a user feels at the shell is the only one there is. Two rows are the
@@ -112,40 +118,117 @@ the ontology and nothing else, so it is the one command whose cost should not
 move with the corpus at all. Everything else should sit above them by about
 what its scan costs.
 
-Corpora are cached under `-cache` (default `$TMPDIR/khub-scale/<scale>`)
-because they are deterministic and generating one is slower than measuring it.
+Two clocks per sample. Wall time is what the user feels. The child's CPU time
+(user + sys) ignores the scheduler contention of a shared runner: measured on
+a loaded machine, wall-time medians swung up to 3.5× between runs of
+unchanged code and missed an injected +80% scan, while the min of eleven CPU
+samples varied 2–8% and caught it. So the table shows wall medians and CPU
+mins, the growth is fitted on CPU min, and the runs are interleaved — every
+repeat visits every scale and every case before the next begins — so a slow
+stretch hits all rows alike instead of one scale.
+
 Every read is run once as a warm-up with its exit code asserted — a command
 that is fast because it errored out is the one measurement mistake this file
-cannot afford — then `-repeat` times (default 5), reporting the median.
+cannot afford — then `-repeat` times (default 5; the gate profile is 11).
 
-Nothing here fails on a threshold. The milliseconds depend on the machine, the
-filesystem and what else is running; the exponent is the part that travels.
+The write cycle runs on a copy of each corpus: `add` a probe, `link` it,
+`link` again (which must report `changed: false`), `edit`, `unlink`,
+`remove`. Afterwards the copy must be byte-identical to the cached corpus,
+which doubles as a write-path oracle at n that no fixture can be: remove
+really removes, nothing is left behind. Every write costs one full scan,
+about what `status` costs, and grows at the same rate as the reads. Write
+wall time is fsync-bound (0.7–8.8 s outliers were seen for a 30–100 ms
+operation on a busy disk) and is never judged.
+
+Corpora are cached under `-cache` (default `$TMPDIR/khub-scale/<scale>`)
+because they are deterministic and generating one is slower than measuring
+it. A cached corpus generated with another scale, seed or day than asked is
+rebuilt; one an older khub wrote is kept and said so (`-regen` rebuilds).
+
+Nothing in `bench` fails on a number. The milliseconds depend on the machine,
+the filesystem and what else is running; the exponent is the part that
+travels, and the rule lives in `gate`.
+
+### The gate
+
+`gate` reads bench's JSON (the `-profile gate` shape: scales 100 and 2000,
+eleven repeats, both clocks) and compares three statistics per command with
+`baseline.json`, every one taken over the min of the samples:
+
+| statistic | what | rule |
+|---|---|---|
+| `cpu_e` | growth exponent of CPU time between the smallest and largest scale | FAIL above 1.15, or above the baseline + 0.10 |
+| `cpu_r` | CPU time at the largest scale over `schema show`'s | FAIL above 1.35× the baseline |
+| `wall_r` | wall time at the largest scale over `--version`'s | FAIL above 2× the baseline; reads only, a backstop for lost parallelism |
+
+The exponent is the cliff detector and the per-command delta beside it sees
+a growth drift; the CPU ratio sees a constant-factor regression the exponent
+never can (an extra full scan leaves the exponent alone). A run whose control
+grew with the corpus, or whose process floor is three times the recorded
+one, is INVALID (exit 2): it measured the machine, not khub. Stated limit: a
+quadratic term still small at n=2000 is invisible at n≤2000.
+
+The baseline is a deliberate commit, like a parity re-record, and it must be
+**recorded on the runner class that gates**: ratios depend on the
+microarchitecture, and even the exponents shift with it: the first run on a
+GitHub runner against a container-recorded baseline put every exponent a
+uniform 0.06–0.12 higher, because the runner's process floor dilutes the small
+scale differently. So a baseline from another machine (the file records goos,
+core count and CPU model) keeps only the absolute exponent ceiling blocking
+and downgrades the per-command delta and both ratios to notes. The nightly's `rebaseline`
+dispatch input runs the bench three times on the runner and uploads a
+baseline recorded from their medians; `gate -record` prints the per-command
+deltas against the previous baseline for the commit message. The committed
+`baseline.json` was recorded in a development container, so on the GitHub
+runner only the ceiling judges until that dispatch has run once.
+
+The gate runs nightly, report-only, until unchanged `main` has shown zero
+FAIL and zero INVALID for three to four weeks; then the `|| true` in
+`nightly.yml` goes and a red gate is routed to the tracking issue. Tolerances
+live in the baseline file, so a change to them is reviewed like any other
+number.
+
+### The footprint
+
+An agent reads khub's JSON into its context, so the size of every answer is a
+cost khub charges on every call. `footprint` runs the read surface against a
+corpus on a pipe with the clock pinned and records, per command, the exit
+code, stdout and stderr bytes, the row count of an array answer and a hash of
+stdout. The bytes are deterministic — byte-identical across runs, workspace
+paths and a fresh regeneration — so `footprint.json` is an exact pin, like a
+parity fixture, recorded at the per-PR smoke scale (300): a tolerance would
+only let ten PRs at +4.9% each add 60% with no review moment. The scale smoke
+checks it between its read and mutation sections; an answer that moved is
+exit 1 with a delta table (bytes, per cent, rows), and re-recording it in the
+commit that grows the answer is the review. The corpus itself is
+fingerprinted, so a generator or preset change reads as "the corpus moved,
+re-record" (exit 2) and never as khub growing.
+
+What it showed when first recorded, at n=550 (bytes/4 is a rough token
+count; this JSON is punctuation-dense, so real tokens run 15–35% higher):
+a bare `query` is 125 KB, about 228 bytes a row, and 460 KB at n=2000; a
+third of each row is the `type` and `slug` keys repeating what `id` carries;
+`schema` is 26 KB at every scale; `check` is 2.4 KB; `get` under 1 KB.
 
 ### What it says today
 
-Measured 100 → 2000 entities on one Apple Silicon laptop, khub 0.22.1 on the
-kb-port branch, median of 5, out of process:
+Measured 100 → 2000 entities on a 4-vCPU container, khub 0.30.0, CPU min of
+11 interleaved runs, out of process:
 
-| | n=100 | n=550 | n=2000 | growth |
-|---|---|---|---|---|
-| `--version` (process floor) | 2.8 ms | 3.4 ms | 3.0 ms | flat |
-| `schema show <type>` | 3.5 ms | 4.2 ms | 3.6 ms | flat |
-| `get`, `query --tag`, `query --orphan`, `neighbors`, `history`, `stale` | ~8 ms | ~25 ms | ~78 ms | `n^0.72`–`n^0.79` |
-| `impact`, `impact --reverse`, `neighbors --depth 12`, `reindex --dry-run` | ~8 ms | ~28 ms | ~88 ms | `n^0.81`–`n^0.82` |
-| `status` | 8.2 ms | 22.8 ms | 88.5 ms | `n^0.79` |
-| `validate` (whole corpus) | 12.5 ms | 37.7 ms | 126.9 ms | `n^0.77` |
-| `check`, `check --strict` | 13.4 ms | 43.9 ms | 164.6 ms | `n^0.84` |
-| `search` | 15 ms | 65 ms | 260 ms | `n^0.95` |
+| | growth (CPU) |
+|---|---|
+| `--version` (process floor), `schema show <type>` | flat |
+| `get`, `query`, `neighbors`, `history`, `stale`, `status` | `n^0.7`–`n^0.85` |
+| `check`, `validate`, `impact`, `reindex --dry-run` | `n^0.75`–`n^0.85` |
+| `search`, one hit or a hundred | about `n^0.75` — no longer the steepest row, as it was in 0.22 |
+| `add`, `link`, `edit`, `unlink`, `remove` | about `n^0.8`, each one full scan |
 
-Everything that reads the corpus is sub-linear in n (the process floor and the
-schema load are a fixed few milliseconds that the small corpus pays too), and
-the graph walks cost about what the scan costs — there is no `in_edges` cliff
-of the kind kb measured at `n^1.65`, because khub's projection carries inverse
-edges. `search` is the steepest row: it builds the FTS5 index in memory per
-call, so it grows with the bytes indexed rather than the entity count.
-
-Run `go run ./parity/scale/bench -bin ./khub` for the current numbers; the
-table in this file is a snapshot, not a contract.
+Everything that touches the corpus is sub-linear in n (the process floor and
+the schema load are a fixed few milliseconds that the small corpus pays too),
+and the graph walks cost about what the scan costs, because khub's projection
+carries inverse edges. Run the bench for the current numbers; `baseline.json`
+holds the recorded exponents and ratios, and the table here is a snapshot,
+not a contract.
 
 ## Determinism
 
@@ -163,17 +246,16 @@ manifest was.
 
 ## What it does not do
 
-Not a gate on time. The timings printed next to each case are there so a
-regression is visible to a human reading the output; nothing fails on a
-threshold, because the number depends on the machine. If you want the trend,
-run the bench.
+Not a gate on time by itself. The timings `smoke.sh` prints are there so a
+regression is visible to a human reading the output; `gate` holds the rule,
+against a recorded baseline, nightly.
 
-Not part of CI per commit, and not run by `go test` or the root `smoke.sh`.
-It takes half a minute and writes a couple of megabytes, which is the wrong
-trade for a per-commit gate and the right one before a release or after
-touching `internal/index`, `internal/graph`, `internal/integrity`,
-`internal/query` or `internal/search`.
+Per commit, only the small end runs: `smoke.sh --scale 300` with the
+footprint check (`go-extras` in `ci.yml`, about sixteen seconds). The 550
+smoke on two OSes, the full bench, the gate and the in-process comparison
+against the last release run in `nightly.yml`. Run the bench by hand after
+touching `index`, `graph`, `integrity`, `query`, `search` or `entity`.
 
 Not a second fixture suite. The parity cases stay the contract for bytes;
-this asserts answers, counts and exit codes, and says nothing about
+this asserts answers, counts, exit codes and sizes, and says nothing about
 formatting.
