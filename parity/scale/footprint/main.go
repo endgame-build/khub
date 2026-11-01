@@ -2,13 +2,14 @@
 //
 // An agent reads khub's JSON into its context, so the size of every answer is
 // a cost khub charges on each call, and nothing measured it. This runs the
-// read surface (parity/scale/corpus.Reads, minus the process floor) against a
-// generated corpus on a pipe, with the clock pinned, and records per command
-// the exit code, stdout and stderr bytes, the row count of an array answer,
-// and a hash of stdout. The bytes are deterministic — byte-identical across
-// runs, workspace paths and a fresh regeneration — so the record is an exact
-// pin, like a parity fixture: a change is re-recorded deliberately, with the
-// delta table this prints in the commit that grows an answer.
+// read surface (parity/scale/corpus.Reads, minus the process floor and the
+// PathBound rows) against a generated corpus on a pipe, with the clock
+// pinned, and records per command the exit code, stdout and stderr bytes,
+// the row count of an array answer, and a hash of stdout. The bytes are
+// deterministic — byte-identical across runs, workspace paths and a fresh
+// regeneration — so the record is an exact pin, like a parity fixture: a
+// change is re-recorded deliberately, with the delta table this prints in the
+// commit that grows an answer.
 //
 //	footprint -bin ./khub -work <corpus> -record > parity/scale/footprint.json
 //	footprint -bin ./khub -work <corpus> -check parity/scale/footprint.json
@@ -66,8 +67,8 @@ type Entry struct {
 }
 
 // What the agent's pipe sees: no terminal, 80 columns for anything that
-// still asks, the corpus's own day.
-var pinned = []string{"COLUMNS=80", "TTY_COMPATIBLE=0", "NO_COLOR=1"}
+// still asks, the corpus's own day in UTC (OKF stamps are UTC instants).
+var pinned = []string{"COLUMNS=80", "TTY_COMPATIBLE=0", "NO_COLOR=1", "TZ=UTC"}
 
 func main() {
 	bin := flag.String("bin", "./khub", "the khub binary to measure")
@@ -115,7 +116,7 @@ func main() {
 	env := append(os.Environ(), got.Env...)
 	subs := corpus.Handles(m)
 	for _, c := range corpus.Reads {
-		if c.Label == corpus.Floor {
+		if c.Label == corpus.Floor || corpus.PathBound[c.Label] {
 			continue
 		}
 		argv := corpus.Fill(c.Argv, subs)

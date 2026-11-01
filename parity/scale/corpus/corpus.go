@@ -156,7 +156,7 @@ type khub struct {
 }
 
 func newKhub(bin, root string, today time.Time) *khub {
-	env := append(os.Environ(), "KHUB_PARITY_NOW="+today.Format("2006-01-02"), "KHUB_ACTOR=khub")
+	env := append(os.Environ(), "KHUB_PARITY_NOW="+today.Format("2006-01-02"), "KHUB_ACTOR=khub", "TZ=UTC")
 	return &khub{bin: bin, root: root, env: env}
 }
 

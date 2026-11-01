@@ -6,13 +6,14 @@
     "preset": "build-hub",
     "khub_version": "0.30.0",
     "total": 300,
-    "tree_sha256": "c3767c1bfcbd877bc6111183f431fcb56c3178f3a4d32260b8c8403997f262b2"
+    "tree_sha256": "2e1ebe741f2c13412ab9e50e1673fa39e7abde07a9f37d29f5cd1bc2d81578e0"
   },
   "env": [
     "KHUB_PARITY_NOW=2026-01-15",
     "COLUMNS=80",
     "TTY_COMPATIBLE=0",
-    "NO_COLOR=1"
+    "NO_COLOR=1",
+    "TZ=UTC"
   ],
   "cases": [
     {
@@ -178,7 +179,7 @@
       "stdout_bytes": 794,
       "stderr_bytes": 0,
       "rows": 0,
-      "sha256": "db4b4e33997ce70472315a84f19e5bbe5e53c549e091fc51ab1f7d9fb69bcdc5"
+      "sha256": "146da2c10026c73dfe2d6234a7d8db2e6de25a5909eeb8e050abe1ab22d31194"
     },
     {
       "label": "get --edges",
@@ -191,7 +192,7 @@
       "stdout_bytes": 578,
       "stderr_bytes": 0,
       "rows": 0,
-      "sha256": "093b641d8dd186b38e6628754540b8d5d29b3bbe41ddc8c846bff3cd0c7ae204"
+      "sha256": "bddf5c28b9f2114d6e3f0738bee280c1b8ac189dec5d921f676ad03699ee3ee0"
     },
     {
       "label": "get \u003cchain middle\u003e --edges",
@@ -204,7 +205,7 @@
       "stdout_bytes": 2073,
       "stderr_bytes": 0,
       "rows": 0,
-      "sha256": "fdcb5a91a44b8f343aaa55b6c97bb1a0730bfce9c6cc5eefcd7d23897f066bc2"
+      "sha256": "b06a1adac4b182568f21f8ec040a9db5eddf6aa771f1bf03f238b96af4bb319c"
     },
     {
       "label": "neighbors",
@@ -293,31 +294,6 @@
       "stderr_bytes": 0,
       "rows": 0,
       "sha256": "ea7c47b8f667c0e54ffa9a115895097035a5db7cd3b2b1c3d63b4ede788348f4"
-    },
-    {
-      "label": "upgrade --dry-run",
-      "argv": [
-        "upgrade",
-        "--dry-run",
-        "--no-wire"
-      ],
-      "exit": 0,
-      "stdout_bytes": 426,
-      "stderr_bytes": 0,
-      "rows": 0,
-      "sha256": "8c9e456af1141e7197903521de4d98b1f515203ca9d5126294b8ceb6992cc6af"
-    },
-    {
-      "label": "upgrade",
-      "argv": [
-        "upgrade",
-        "--no-wire"
-      ],
-      "exit": 0,
-      "stdout_bytes": 427,
-      "stderr_bytes": 0,
-      "rows": 0,
-      "sha256": "a89d8b837b62a2d45038c1e0d5ba3c562034b8297fc59b3fd56ded2c0c4e71a9"
     },
     {
       "label": "schema show \u003ctype\u003e",

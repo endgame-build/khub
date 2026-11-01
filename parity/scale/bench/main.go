@@ -174,7 +174,7 @@ func main() {
 		}
 	}
 
-	env := append(os.Environ(), "KHUB_PARITY_NOW="+today.Format("2006-01-02"), "KHUB_ACTOR=khub")
+	env := append(os.Environ(), "KHUB_PARITY_NOW="+today.Format("2006-01-02"), "KHUB_ACTOR=khub", "TZ=UTC")
 	for _, c := range corpus.Reads {
 		r.labels["reads"] = append(r.labels["reads"], c.Label)
 	}

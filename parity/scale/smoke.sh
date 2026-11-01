@@ -163,7 +163,7 @@ M_LINK_TARGET=$(field probes.link_target)
 M_SEED=$(field generated.seed); M_SCALE=$(field generated.scale); M_TODAY=$(field generated.today)
 # The clock the corpus was written against, so every date-relative answer
 # (stale, status) is judged on the same day the manifest was.
-export KHUB_PARITY_NOW=$M_TODAY KHUB_ACTOR=khub
+export KHUB_PARITY_NOW=$M_TODAY KHUB_ACTOR=khub TZ=UTC
 printf '  ..   %s entities, %s orphan gaps, %s stale past 90 days\n' \
   "$M_TOTAL" "$M_ORPHAN_N" "$M_STALE90"
 

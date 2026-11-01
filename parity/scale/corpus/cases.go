@@ -60,6 +60,11 @@ const (
 	Floor   = "--version (process floor)"
 )
 
+// PathBound names the Reads rows whose answer spells the workspace path
+// relative to the caller, so footprint cannot pin their bytes. Bench still
+// times them.
+var PathBound = map[string]bool{"upgrade --dry-run": true, "upgrade": true}
+
 // Writes is one self-cleaning cycle on a probe entity: every verb a write
 // path has, and a no-op link that must report `changed: false`. `{probe}` is
 // the slug `add` minted, which only the caller knows. The corpus is as it
