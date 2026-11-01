@@ -2,7 +2,7 @@
 
 Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); khub is pre-release.
 
-## [Unreleased]
+## [0.31.0] — 2026-11-01
 
 A khub Markdown entity is now an OKF 0.2 concept as written. The base block
 declares the OKF lifecycle, provenance and trust families, and the attribute
@@ -252,6 +252,11 @@ vocabulary gains nested values. This release breaks existing workspaces, and
 
 ### Notes
 
+- **Reading a 0.31 workspace with 0.30 or older.** An older khub does not
+  know the base `status`, so it refuses build-hub 0.7.0's templates, and
+  `validate` and `check` fail there. Its `reindex` would rewrite the OKF 0.2
+  `index.md` back to 0.1. Upgrade every khub on a team together, then run
+  `khub upgrade` once per workspace.
 - **Reading a 0.30 workspace with an older binary.** A `.khub/ignore` makes
   `check` on 0.29 and earlier report every ignored entity as `misplaced`;
   path-template storage and `id_ordinal` are not understood there either. A
