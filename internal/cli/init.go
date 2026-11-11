@@ -16,6 +16,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/endgame-build/khub/internal/install"
 	"github.com/endgame-build/khub/internal/omap"
 	"github.com/endgame-build/khub/internal/reindex"
 	"github.com/endgame-build/khub/internal/wire"
@@ -25,7 +26,7 @@ import (
 // skillHint is printed after a scaffold and carried as `skill_hint` in the JSON
 // payload, so an agent driving `init --format json` learns the follow-up
 // without parsing prose.
-const skillHint = "npx skills add endgame-build/khub"
+const skillHint = install.SkillsAdd
 
 // skillHintFor aims the follow-up at the workspace that was just scaffolded.
 // `npx skills` installs into the working directory, so a bare hint after
@@ -56,7 +57,7 @@ func shellQuote(path string) string {
 // pluginHint is the same follow-up for Claude Code, where the skills ship in a
 // plugin with the session mod. It is prose only, since a slash command is typed
 // at the Claude Code prompt and no shell runs it.
-const pluginHint = "In Claude Code: /plugin marketplace add endgame-build/khub, then /plugin install khub@khub"
+const pluginHint = "In Claude Code: " + install.MarketplaceAdd + ", then " + install.PluginInstall
 
 // resolvePath is Path.resolve(): absolute, symlinks followed when they exist.
 func resolvePath(path string) string {
@@ -148,7 +149,7 @@ func registerInit(root *cobra.Command) {
 		})
 	cmd.Args = clickArity(2)
 	cmd.Long = cmd.Short + "\n\nA missing PRESET is a usage error; PATH defaults to the working directory." +
-		"\nInstalling the agent skill is a separate step: ``npx skills add endgame-build/khub``."
+		"\nInstalling the agent skill is a separate step: ``" + install.SkillsAdd + "``."
 	cmd.Flags().StringVar(&presetSource, "preset-source", "",
 		"Where to resolve the preset if not packaged with khub.")
 	cmd.Flags().StringVar(&name, "name", "", "Workspace name (default: the target dir name).")
