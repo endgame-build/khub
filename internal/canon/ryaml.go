@@ -594,6 +594,13 @@ func (e *emitter) writeDouble(s string, contIndent int, split bool) {
 					}
 				}
 			}
+			// Deviation from ruamel: a fold without the `\` escape reads back
+			// as one space, so it may stand only where the value has one.
+			// ruamel drops the escape after an escape sequence such as `\\`
+			// too, and the value gains a space there.
+			if fold := max(start, end); fold >= len(runes) || runes[fold] != ' ' {
+				needBackslash = true
+			}
 			data := pySlice(runes, start, end)
 			if needBackslash {
 				data += "\\"

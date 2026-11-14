@@ -14,10 +14,19 @@ implementation — entities live in git, so they must stay diff-stable, and a
 reformat on every write would make every khub commit unreadable. It deviates
 from ruamel only where ruamel corrupts a value: `writePlain` never breaks a
 plain scalar after a run of two or more spaces (the read folds them to one)
-and never wraps a simple key (ruamel's two-line key does not parse), and
-`chooseStyle` never single-quotes a value holding NEL, LS or PS (written raw,
-no reader gets it back), so the T3 gate excludes the 58 rows ruamel writes
-that way and counts the rest.
+and never wraps a simple key (ruamel's two-line key does not parse),
+`writeDouble` keeps the `\` escape on a fold that does not replace a space
+(ruamel drops it after an escape such as `\\`, and the value gains a space),
+and `chooseStyle` never single-quotes a value holding NEL, LS or PS (written
+raw, no reader gets it back), so the T3 gate excludes the 58 rows ruamel
+writes that way and counts the rest.
+
+The reader departs from goccy once. `foldPlain` in `yamlload.go` folds a
+multi-line plain scalar from its source as the spec does: white space around
+each break is dropped and a trailing `# comment` ends the value. goccy keeps
+the white space before each break once a continuation line starts with `-`,
+and keeps the comment. `FuzzStringRoundTrip` holds the property that any
+string outside the known loader gaps reads back equal once emitted.
 
 Two profiles, both pinned:
 
