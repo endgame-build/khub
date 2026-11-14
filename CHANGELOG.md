@@ -26,6 +26,13 @@ Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelo
   error. Quote a bound holding `<` or `>`: the shell reads them as redirects.
   `query --receipt` echoes the bounds in `applied` as `count`, `in_count` and
   `out_count` lists.
+- **`khub recent`** lists the entities touched within a window, newest first
+  (`--days N`, default 7; `--limit N`). It judges the same date `stale` does:
+  `updated`, else the file's last commit, else `created`. Rows carry `id`,
+  `type`, `slug`, `title`, `draft`, `effective_date`, `age` and `source`.
+  `--limit` is `query`'s (0 returns nothing, `-n` drops the last n), and a cut
+  says so in a `note:` line on stderr. The plugin (0.1.6) draws a compact row
+  for it, the note included.
 
 ### Changed
 
@@ -38,6 +45,10 @@ Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelo
   `in_count` or `out_count` is still filtered by its underscore spelling
   (`--in_count 1`). A malformed bound names the clash when the schema declares
   such a field. `add` and `edit` still write those fields.
+- The human view of `stale` (and `recent`) in a workspace without git history
+  now says `No git history; dates come from updated or created only`. It said
+  `using updated field only`, which was wrong: an undated entity falls back to
+  `created`.
 
 ### Fixed
 

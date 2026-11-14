@@ -155,6 +155,11 @@ commands:
   params:
   - '--days'
   - '--format'
+- name: 'recent'
+  params:
+  - '--days'
+  - '--limit'
+  - '--format'
 - name: 'reindex'
   params:
   - '--dry-run'

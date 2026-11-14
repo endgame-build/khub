@@ -34,6 +34,7 @@ Commands:
   validate  Validate entities: khub validate [TARGET] [--strict].
   check  Check the active graph: completeness, orphans, dangling edges, strays, cycles, bodies.
   stale  List entities past the `updated` threshold, oldest first: khub stale [--days N].
+  recent  List entities touched within the window, newest first: khub recent [--days N].
   reindex  Regenerate the OKF index.md from the graph: khub reindex [--dry-run].
   export  Write the workspace as an OKF 0.2 bundle: khub export --okf DIR.
   import  Read an OKF bundle into the workspace as drafts: khub import --okf DIR.
@@ -432,6 +433,22 @@ List entities past the `updated` threshold, oldest first: khub stale [--days N].
 
 Options:
   --days <int>  Staleness threshold in days; default: the workspace's stale_days.
+  --format <str>  text (Rich table on a TTY) or json. [default: text]
+  --help  Show this message and exit.
+
+```
+
+## khub recent
+
+```console
+$ khub recent --help
+Usage: khub recent [OPTIONS]
+
+List entities touched within the window, newest first: khub recent [--days N].
+
+Options:
+  --days <int>  Window in days; an entity at most N days old is recent. [default: 7]
+  --limit <int>  Cap the returned set.
   --format <str>  text (Rich table on a TTY) or json. [default: text]
   --help  Show this message and exit.
 

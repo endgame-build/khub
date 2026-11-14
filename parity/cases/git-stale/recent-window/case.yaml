@@ -1,0 +1,23 @@
+# `khub recent`: the entities touched within --days, newest first, judged on
+# the same effective date as `stale` (updated, else the last commit, else
+# created). The clock is pinned at 2026-01-15; req-old loses `updated` and
+# takes its commit date, 2026-01-05 (age 10).
+steps:
+- argv: ["init", "build-hub", ".", "--no-wire"]
+- argv: ["add", "requirement", "--title", "Old", "--kind", "functional"]
+- argv: ["add", "requirement", "--title", "New", "--kind", "functional"]
+- sh: "perl -pi -e \"s/^updated:.*\\n//\" knowledge/requirements/req-old.md"
+- sh: "git init -q . && git add -A && GIT_AUTHOR_DATE=2026-01-05T10:00:00Z GIT_COMMITTER_DATE=2026-01-05T10:00:00Z git commit -qm seed"
+# Default window, a week: req-old (age 10) is out.
+- argv: ["recent"]
+# A wider window takes it, last.
+- argv: ["recent", "--days", "30", "--format", "json"]
+# --limit cuts after the sort and says on stderr what it dropped.
+- argv: ["recent", "--days", "30", "--limit", "2"]
+# --days 0 is today alone.
+- argv: ["recent", "--days", "0"]
+# --limit is query's: 0 keeps nothing, -1 drops the last row; the note says so.
+- argv: ["recent", "--limit", "0"]
+- argv: ["recent", "--days", "30", "--limit", "-1"]
+# A negative window is a usage error.
+- argv: ["recent", "--days", "-1"]

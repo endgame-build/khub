@@ -1,0 +1,5 @@
+Usage: khub recent [OPTIONS]
+Try 'khub recent --help' for help.
+╭─ Error ──────────────────────────────────────────────────────────────────────╮
+│ Invalid value for '--days': -1 is not in the range x>=0.                     │
+╰──────────────────────────────────────────────────────────────────────────────╯

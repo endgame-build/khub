@@ -65,6 +65,11 @@ var readCalls = map[string][][]string{
 		{"query", "--type", "component", "--limit", "5"},
 		{"query", "--tag", "core", "--limit", "5", "--receipt", "--format", "json"},
 		{"query", "--trust", "unverified"},
+		{"query", "--under", "sys-core", "--via", "system"},
+		{"query", "--under", "cmp-c09", "--via", "depends_on"},
+		{"query", "--under", "ad-2026-01-15-a4", "--via", "superseded"},
+		{"query", "--in-count", ">=1", "--out-count", "0"},
+		{"query", "--count", "depends_on>=1", "--receipt", "--format", "json"},
 	},
 	"search": {
 		{"search", "ledger"},
@@ -95,6 +100,7 @@ var readCalls = map[string][][]string{
 	"validate": {{"validate"}, {"validate", "--strict"}, {"validate", "component/cmp-dangle"}, {"validate", "component"}},
 	"check":    {{"check"}, {"check", "--strict"}},
 	"stale":    {{"stale"}, {"stale", "--days", "1"}},
+	"recent":   {{"recent"}, {"recent", "--days", "10000", "--limit", "12"}},
 	"reindex":  {{"reindex", "--dry-run"}},
 	"export":   {{"export", "--okf", "../bundle", "--dry-run"}},
 	"retrieve": {
@@ -152,6 +158,9 @@ var refusalCalls = [][]string{
 	{"search", "ledger", "--also", "  "},
 	{"get", "--path", "../outside.md"},
 	{"stale", "--days", "x"},
+	{"query", "--under", "sys-core", "--via", "bogus"},
+	{"query", "--count", "bogus>=1"},
+	{"recent", "--days", "-1"},
 }
 
 // mutatingVerbs change the workspace, or serve it, so repeating them proves

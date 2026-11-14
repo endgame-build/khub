@@ -86,7 +86,7 @@ func QueryCounted(root string, filters Filters, now time.Time) ([]Match, int, er
 	}
 	total := len(matches)
 	if filters.Limit != nil {
-		matches = limitMatches(matches, *filters.Limit)
+		matches = Limit(matches, *filters.Limit)
 	}
 	return matches, total, nil
 }
@@ -219,8 +219,10 @@ func Title(meta *omap.Map, slug string) string {
 	return slug
 }
 
-// limitMatches is Python's matches[:limit], including the negative-index form.
-func limitMatches(matches []Match, n int) []Match {
+// Limit is Python's matches[:limit], including the negative-index form: 0
+// keeps nothing and -n drops the last n. `query --limit` and `recent --limit`
+// share it, so the flag means one thing across the read commands.
+func Limit[T any](matches []T, n int) []T {
 	if n < 0 {
 		n += len(matches)
 		if n < 0 {
