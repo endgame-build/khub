@@ -150,7 +150,7 @@ a FAIL.
   runs each fuzz target for 90s with the growing corpus cached between
   nights. A crasher lands under `testdata/fuzz/<target>/` and, committed,
   fails plain `go test` until it is fixed or recorded as a known gap beside
-  the ones already in that package's `fuzz_test.go` (canon's are two
+  the ones already in that package's `fuzz_test.go` (canon's are four
   loader gaps in goccy and one emitter gap that is ruamel's own, reproduced
   byte for byte).
 - **Other versions' workspaces.** `parity/compat/smoke.sh OLD NEW` has an

@@ -269,39 +269,82 @@ func (r *resolver) scalar(n ast.Node) (any, error) {
 		return lit.Value.Value, nil
 	}
 	s := tok.Value
-	if strings.ContainsRune(strings.TrimSpace(tok.Origin), '\n') {
-		s = foldPlain(tok.Origin)
+	if folded, ok := foldPlain(tok.Origin, s); ok {
+		s = folded
 	}
 	return ResolvePlainScalarMode(s, r.mode), nil
 }
 
-// foldPlain folds a multi-line plain scalar from its source lines, as YAML
-// does: each line is trimmed, adjacent lines join with one space, and each
-// blank line between them becomes a newline. goccy's own value keeps the
-// trailing space of a continuation line that starts with `-`, so a value the
-// emitter folded there read back with a doubled space.
-func foldPlain(origin string) string {
-	lines := strings.Split(strings.TrimSpace(origin), "\n")
+// foldPlain folds a multi-line plain scalar from its source text the way the
+// YAML spec does (and PyYAML and ruamel with it): white space around each line
+// break is dropped, a single break folds to one space, and n blank lines keep
+// n newlines. goccy gets this wrong once a continuation line starts with `-`:
+// from there on it keeps the white space before each break, so `khub get`
+// read a value khub itself had wrapped with a doubled space at the fold.
+// It also keeps a trailing `# comment` inside the value.
+//
+// A single-line scalar keeps goccy's value (ok false). So does any source
+// whose folded words are not goccy's words, or their prefix with only a
+// `#` comment after it — the check that the token's Origin holds the scalar
+// and nothing else.
+func foldPlain(origin, value string) (string, bool) {
+	src := strings.ReplaceAll(origin, "\r\n", "\n")
+	src = strings.ReplaceAll(src, "\r", "\n")
+	if !strings.Contains(strings.Trim(src, " \t\n"), "\n") {
+		return "", false
+	}
 	var b strings.Builder
-	blank := 0
-	for i, line := range lines {
-		line = strings.Trim(line, " \t\r")
+	blank, started := 0, false
+	lines := strings.Split(src, "\n")
+	for n, line := range lines {
+		line = strings.Trim(line, " \t")
+		comment := false
+		for i := 0; i < len(line); i++ {
+			if line[i] == '#' && (i == 0 || line[i-1] == ' ' || line[i-1] == '\t') {
+				line, comment = strings.TrimRight(line[:i], " \t"), true
+				break
+			}
+		}
 		switch {
+		case line == "" && !started:
 		case line == "":
 			blank++
-		case i == 0:
-			b.WriteString(line)
 		default:
-			if blank > 0 {
-				b.WriteString(strings.Repeat("\n", blank))
-			} else {
-				b.WriteByte(' ')
+			if started {
+				if blank == 0 {
+					b.WriteByte(' ')
+				} else {
+					b.WriteString(strings.Repeat("\n", blank))
+				}
 			}
 			b.WriteString(line)
-			blank = 0
+			started, blank = true, 0
+		}
+		if comment {
+			// A comment ends a plain scalar. Text on a later line is malformed
+			// (PyYAML rejects it) and goccy kept it in the value; folding it
+			// away would drop it silently, so goccy's value stands.
+			if strings.TrimSpace(strings.Join(lines[n+1:], "")) != "" {
+				return "", false
+			}
+			break
 		}
 	}
-	return b.String()
+	folded := b.String()
+	want, got := strings.Fields(folded), strings.Fields(value)
+	if len(want) == 0 || len(want) > len(got) {
+		return "", false
+	}
+	for i := range want {
+		if want[i] != got[i] {
+			return "", false
+		}
+	}
+	// goccy may only have more words when they are the comment it kept.
+	if len(got) > len(want) && !strings.HasPrefix(got[len(want)], "#") {
+		return "", false
+	}
+	return folded, true
 }
 
 // firstNonPrintable reports the first character PyYAML's Reader would reject.

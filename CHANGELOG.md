@@ -2,6 +2,20 @@
 
 Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); khub is pre-release.
 
+## [Unreleased]
+
+### Fixed
+
+- **A long double-quoted value keeps its text when wrapped.** A value khub
+  wrote double-quoted, folded right after an escaped backslash, read back
+  with an extra space there, so a Windows path gained one. The fold now
+  keeps its `\` escape. A file an older khub already wrote this way holds
+  the space in its bytes; editing the value again rewrites it. Closes #80.
+- **Multi-line plain values read per the YAML spec.** A plain value written
+  across lines, by hand or by khub, folds the way PyYAML and ruamel fold
+  it, so `get` and `search` can return a different value for an existing
+  file: a trailing `# note` is a comment, no longer part of the value.
+
 ## [0.32.0] — 2026-11-14
 
 Retrieval takes fewer calls. `khub retrieve` assembles seeds and their
