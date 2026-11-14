@@ -89,6 +89,7 @@ commands:
   - '--active'
   - '--limit'
   - '--format'
+  - '--receipt'
 - name: 'search'
   params:
   - 'arg:text'
@@ -112,6 +113,7 @@ commands:
   - '--max-bytes'
   - '--no-body'
   - '--format'
+  - '--receipt'
 - name: 'neighbors'
   params:
   - 'arg:id_'

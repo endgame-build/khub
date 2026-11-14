@@ -19,7 +19,7 @@ import (
 func registerSearch(root *cobra.Command) {
 	var typeName, format string
 	var limit int
-	var plain bool
+	var plain, rcpt bool
 	var also []string
 	cmd := newCmd("search {text}", "Full-text search: khub search modernization --type transcript --format json.",
 		"{text}", func(cmd *cobra.Command, args []string) error {
@@ -31,9 +31,10 @@ func registerSearch(root *cobra.Command) {
 				if err != nil {
 					return err
 				}
+				opts := search.Options{
+					Type: optString(cmd, "type", typeName), Limit: limit, Plain: plain, Now: clock.Now()}
 				groups := append([]string{args[0]}, also...)
-				res, err := search.SearchGroups(ws, groups, search.Options{
-					Type: optString(cmd, "type", typeName), Limit: limit, Plain: plain, Now: clock.Now()})
+				res, err := search.SearchGroups(ws, groups, opts)
 				if err != nil {
 					return err
 				}
@@ -88,7 +89,18 @@ func registerSearch(root *cobra.Command) {
 					records = append(records, record)
 					rows = append(rows, []string{h.Type + "/" + h.Slug, h.Title, h.Snippet})
 				}
-				return Emit(records, format, func() {
+				var doc any = records
+				if rcpt {
+					applied := omap.New()
+					applied.Set("text", args[0])
+					applied.Set("also", strList(also))
+					applied.Set("match", strList(res.Matches))
+					applied.Set("plain", plain)
+					applied.Set("type", orNull(opts.Type))
+					applied.Set("limit", limit)
+					doc = withReceipt(applied, res.Total, records)
+				}
+				return Emit(doc, format, func() {
 					if len(rows) == 0 {
 						fmt.Println("No entities match")
 						return
@@ -103,6 +115,7 @@ func registerSearch(root *cobra.Command) {
 	cmd.Flags().BoolVar(&plain, "plain", false, "Treat text as plain words: any may match, prefix-matched, punctuation literal.")
 	cmd.Flags().StringArrayVar(&also, "also", nil, "Another query group, ranked on its own and fused with the rest by reciprocal rank (repeatable).")
 	cmd.Flags().StringVar(&format, "format", "text", "text (Rich table on a TTY), json, or ids.")
+	cmd.Flags().BoolVar(&rcpt, "receipt", false, "Wrap JSON output with the applied query, matched and returned counts, and truncation.")
 	root.AddCommand(cmd)
 }
 

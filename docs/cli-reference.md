@@ -267,6 +267,7 @@ Options:
   --limit <int>  Cap the returned set.
   --trust <str>  Keep entities at this review tier: unverified, machine, or human.
   --format <str>  text (Rich table on a TTY), json, or ids. [default: text]
+  --receipt  Wrap JSON output with the applied filters, matched and returned counts, and truncation.
   --help  Show this message and exit.
 
 ```
@@ -288,6 +289,7 @@ Options:
   --plain  Treat text as plain words: any may match, prefix-matched, punctuation literal.
   --also <str>  Another query group, ranked on its own and fused with the rest by reciprocal rank (repeatable).
   --format <str>  text (Rich table on a TTY), json, or ids. [default: text]
+  --receipt  Wrap JSON output with the applied query, matched and returned counts, and truncation.
   --help  Show this message and exit.
 
 ```

@@ -141,6 +141,32 @@ func TestSearchLimit(t *testing.T) {
 	}
 }
 
+// Result.Matches holds the expression each group ran: raw text as given, the
+// ORed terms under --plain, nothing when --plain found no word to look for,
+// and one entry per distinct group, in sorted order, for a fused search.
+func TestSearchResultEchoesMatches(t *testing.T) {
+	ws := sws(t)
+	for _, tc := range []struct {
+		texts []string
+		plain bool
+		want  []string
+	}{
+		{[]string{"modernization"}, false, []string{"modernization"}},
+		{[]string{"legacy modernization"}, true, []string{`"legacy"* OR "modernization"*`}},
+		{[]string{"!!!"}, true, nil},
+		{[]string{"modernization", "legacy"}, false, []string{"legacy", "modernization"}},
+		{[]string{"legacy", "!!!", "legacy"}, true, []string{`"legacy"*`}},
+	} {
+		res, err := SearchGroups(ws, tc.texts, Options{Limit: 20, Plain: tc.plain})
+		if err != nil {
+			t.Fatalf("SearchGroups(%q): %v", tc.texts, err)
+		}
+		if !reflect.DeepEqual(res.Matches, tc.want) {
+			t.Errorf("SearchGroups(%q, plain %v).Matches = %q, want %q", tc.texts, tc.plain, res.Matches, tc.want)
+		}
+	}
+}
+
 // No match returns an empty collection, never raising (QRY-002).
 func TestSearchEmptyIsSuccess(t *testing.T) {
 	got := mustSearch(t, sws(t), "chrysanthemum", nil, 20)

@@ -120,6 +120,12 @@ func TestSearchGroupsSingleIsSearch(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
+		// Matches echoes the spelling that ran, the sorted-first of the
+		// group; everything else is Search's.
+		if len(got.Matches) != 1 {
+			t.Errorf("SearchGroups(%q).Matches = %q, want one entry", texts, got.Matches)
+		}
+		got.Matches = single.Matches
 		if !reflect.DeepEqual(got, single) {
 			t.Errorf("SearchGroups(%q) differs from Search:\n%+v\n%+v", texts, got, single)
 		}

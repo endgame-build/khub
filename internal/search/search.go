@@ -123,6 +123,12 @@ type Result struct {
 	Malformed int  // files in the workspace the scan could not parse
 	Capped    bool // a plain query held more than MaxPlainTerms words
 	Groups    int  // SearchGroups: the distinct groups that ranked (0 from Search)
+
+	// Matches holds the FTS5 MATCH expression each distinct group ran, in the
+	// order the groups were processed: the text as given, or under Plain the
+	// ORed terms built from it. A Plain group with no words runs nothing and
+	// adds none.
+	Matches []string
 }
 
 // EdgeCount is how many edges one predicate carries at a hit. Only non-zero
@@ -193,6 +199,7 @@ func over(root string, resolved *schema.ResolvedSchema, idx *index.Index, staleD
 		}
 		text = strings.Join(terms, " OR ")
 	}
+	res.Matches = []string{text}
 	capped := opts.Limit
 	if capped < 0 {
 		capped = 0 // a negative LIMIT is "unbounded" in SQLite
@@ -333,6 +340,7 @@ func SearchGroups(root string, texts []string, opts Options) (Result, error) {
 			res.Capped = res.Capped || capped
 			text = strings.Join(terms[g], " OR ")
 		}
+		res.Matches = append(res.Matches, text)
 		if rankings[g], err = match(conn, text, -1, mk); err != nil { // -1: every match
 			return Result{}, err
 		}

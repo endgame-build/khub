@@ -6,6 +6,17 @@ Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelo
 
 ### Added
 
+- **`--receipt` on `query` and `search`.** The JSON output becomes
+  `{"receipt": {...}, "results": [...]}`: the receipt echoes the filters or
+  query the call applied (for `search`, the `--also` groups and the FTS5
+  expression each group ran, which shows what `--plain` built; for `query`,
+  the `--trust` tier too), the match count before `--limit`, the
+  returned count, and whether `--limit` dropped rows. Without the flag the
+  output is unchanged; tables and `--format ids` ignore it.
+- The Claude Code plugin (0.1.5) reads a `--receipt` document's `results`, so
+  the compact row for `query --receipt` or `search --receipt` counts and lists
+  its entities. The `khub` skill mentions the flag.
+
 - **`get --path`.** `khub get --path <file>...` reads each argument as a file
   path, relative to the current directory (as `--body-file` is) or absolute,
   and answers with the entity stored there, the same record `get <id>`
@@ -62,6 +73,10 @@ Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelo
   raw predicate. A source that names the target in several spellings lists
   once per relation, as `neighbors` counts it, and `remove`'s inbound-edge
   count follows the same rule (#79).
+
+- A schema field named `receipt` can no longer be filtered with
+  `query --receipt <value>`: the new option takes precedence, as `query`'s
+  other options already do over a same-named field.
 
 ## [0.31.0] — 2026-11-01
 
