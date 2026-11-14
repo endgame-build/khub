@@ -87,6 +87,8 @@ commands:
   - '--stale'
   - '--draft'
   - '--active'
+  - '--under'
+  - '--via'
   - '--limit'
   - '--format'
   - '--receipt'

@@ -1,0 +1,5 @@
+Usage: khub query [OPTIONS]
+Try 'khub query --help' for help.
+╭─ Error ──────────────────────────────────────────────────────────────────────╮
+│ Invalid value: --via needs --under <id>, the entity to scope to              │
+╰──────────────────────────────────────────────────────────────────────────────╯

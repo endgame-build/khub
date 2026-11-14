@@ -1,7 +1,8 @@
 // query.go ports cli/query_cmd.py: filter entities by frontmatter and derived
 // edges. Like add/edit it accepts arbitrary --<field> value filters, so it
 // parses its own flags; the declared ones (--type, --tag, --has, --missing,
-// --orphan, --stale, --draft/--active, --limit, --format) still bind.
+// --orphan, --stale, --draft/--active, --under/--via, --limit, --format)
+// still bind.
 
 package cli
 
@@ -18,6 +19,7 @@ import (
 func registerQuery(root *cobra.Command) {
 	var (
 		typeName, tag, has, missing, format, trustTier string
+		under, via                                     string
 		orphan, stale, draft, active, rcpt             bool
 		limit                                          int
 	)
@@ -28,6 +30,8 @@ func registerQuery(root *cobra.Command) {
 	cmd.Flags().StringVar(&tag, "tag", "", "Keep entities carrying this tag.")
 	cmd.Flags().StringVar(&has, "has", "", "Keep entities with a resolvable edge for the predicate.")
 	cmd.Flags().StringVar(&missing, "missing", "", "Keep entities lacking a resolvable edge (gap finder).")
+	cmd.Flags().StringVar(&under, "under", "", "Keep entities that reach this entity over --via, any number of hops.")
+	cmd.Flags().StringVar(&via, "via", "", "The relation --under follows up to its parent, or its declared inverse.")
 	cmd.Flags().BoolVar(&orphan, "orphan", false, "Keep only orphan (edge-less) entities.")
 	cmd.Flags().BoolVar(&stale, "stale", false, "Keep only stale entities.")
 	cmd.Flags().BoolVar(&draft, "draft", false, "Isolate drafts.")
@@ -49,6 +53,13 @@ func registerQuery(root *cobra.Command) {
 			if ferr != nil {
 				return ferr
 			}
+			underID, viaPred := optString(cmd, "under", under), optString(cmd, "via", via)
+			if underID != nil && viaPred == nil {
+				return badParameter(cmd.CommandPath(), "", "--under needs --via <predicate>, the relation an entity follows up to its parent")
+			}
+			if viaPred != nil && underID == nil {
+				return badParameter(cmd.CommandPath(), "", "--via needs --under <id>, the entity to scope to")
+			}
 			ws, rerr := resolveRoot()
 			if rerr != nil {
 				return rerr
@@ -65,6 +76,8 @@ func registerQuery(root *cobra.Command) {
 				DraftOnly:  draft,
 				ActiveOnly: active,
 				Limit:      optInt(cmd, "limit", limit),
+				Under:      underID,
+				Via:        viaPred,
 			}
 			matches, matched, qerr := query.QueryCounted(ws, filters, clock.Now())
 			if qerr != nil {
@@ -124,6 +137,8 @@ func queryApplied(f query.Filters) *omap.Map {
 	applied.Set("tag", orNull(f.Tag))
 	applied.Set("has", orNull(f.Has))
 	applied.Set("missing", orNull(f.Missing))
+	applied.Set("under", orNull(f.Under))
+	applied.Set("via", orNull(f.Via))
 	applied.Set("orphan", f.Orphan)
 	applied.Set("stale", f.Stale)
 	applied.Set("draft", f.DraftOnly)

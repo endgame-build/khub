@@ -4,6 +4,24 @@ Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+### Added
+
+- **`query --under <id> --via <predicate>`.** Scopes a query to everything
+  that reaches an entity over a relation, any number of hops: `--under
+  sys-shop --via system` lists the shop's components, and over `depends_on`
+  every transitive dependent. The edge runs from the contained entity to its
+  container; the anchor is excluded, and the other filters AND with it. A
+  declared inverse as `--via` walks a hierarchy stored on the parent:
+  `--under <adr> --via superseded` is every record that ADR replaced.
+  `query --receipt` echoes both in `applied`.
+
+### Changed
+
+- **`query` field filters named `under` or `via`.** A schema field called
+  `under` or `via` can no longer be filtered as `--under <value>` or
+  `--via <value>`: query's own options take precedence over same-named
+  fields, as `--type`, `--tag` and `--limit` already do.
+
 ### Fixed
 
 - **A long double-quoted value keeps its text when wrapped.** A value khub

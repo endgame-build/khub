@@ -167,6 +167,33 @@ func Impact(idx *index.Index, id string, predicate string, reverse bool) ([]Impa
 	return out, nil
 }
 
+// Under returns every node that reaches src over predicate's stored edges,
+// with its hop count: the transitive containment set behind `query --under`.
+// An edge points from the contained entity to its container (a component's
+// `system`), so this is Impact's reverse walk. src is never under itself, even
+// on a cyclic hierarchy.
+func Under(g *Graph, src index.Node, predicate string) map[index.Node]int {
+	depths := shortestPathLengths(predicateAdjacency(g, predicate, true), src)
+	delete(depths, src)
+	return depths
+}
+
+// UnderInverse is Under over a declared inverse: a node is under src when
+// src's stored edge points to it, through any (source type, predicate) pair
+// that declares the inverse. That is a hierarchy stored on the parent (an
+// ADR's `supersedes`, read as `superseded`) walked forward from src.
+func UnderInverse(g *Graph, src index.Node, declares func(sourceType, predicate string) bool) map[index.Node]int {
+	succ := map[index.Node][]index.Node{}
+	for _, e := range g.Edges() {
+		if declares(e.From.Type, e.Predicate) {
+			succ[e.From] = append(succ[e.From], e.To)
+		}
+	}
+	depths := shortestPathLengths(succ, src)
+	delete(depths, src)
+	return depths
+}
+
 // predicateAdjacency is _predicate_digraph collapsed to a successor map, with
 // the reverse view folded in (sub.reverse(copy=False)).
 func predicateAdjacency(g *Graph, predicate string, reverse bool) map[index.Node][]index.Node {
@@ -361,6 +388,12 @@ func RequirePredicate(resolved *schema.ResolvedSchema, predicate string) error {
 	if declared[predicate] {
 		return nil
 	}
+	return UnknownPredicate(predicate, declared)
+}
+
+// UnknownPredicate is the `unknown_predicate` refusal, listing the declared
+// names sorted.
+func UnknownPredicate(predicate string, declared map[string]bool) error {
 	names := make([]string, 0, len(declared))
 	for p := range declared {
 		names = append(names, p)
