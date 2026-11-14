@@ -1,0 +1,31 @@
+# get --path maps a file to the entity stored there, across every layout, and
+# answers as get <id> does. A collection file, a path outside the workspace and
+# a path holding no entity each refuse the whole batch with exit 2.
+steps:
+- argv: ["init", "preset-cells", ".", "--no-wire", "--preset-source", "PRESETSRC"]
+- argv: ["add", "note", "--title", "Alpha"]
+- argv: ["add", "card", "--title", "Beta"]
+- argv: ["add", "dossier", "--title", "Gamma"]
+- argv: ["add", "charter", "--title", "Charter"]
+- argv: ["add", "repo", "--title", "khub"]
+- argv: ["add", "repo", "--title", "parity"]
+- sh: "printf 'scratch\\n' > dossiers/gamma/notes.txt && printf 'loose\\n' > stray.md && printf -- '---\\ntitle: [\\n---\\n' > notes/bad.md && mkdir dossiers/gamma/notes && printf 'scratch\\n' > dossiers/gamma/notes/alpha.md"
+# One record per path, in argument order: a file-layout file (with ./), a json
+# file, a folder entity's directory, a file inside it, the singleton.
+- argv: ["get", "--path", "./notes/alpha.md", "cards/beta.json", "dossiers/gamma", "dossiers/gamma/notes.txt", "charter.md"]
+- argv: ["get", "--path", "notes/alpha.md", "--edges", "--format", "json"]
+- argv: ["get", "--path", "notes/alpha.md", "--format", "raw"]
+- argv: ["get", "--path", "repos.jsonl"]
+- argv: ["get", "--path", "../outside.md"]
+- argv: ["get", "--path", "stray.md"]
+- argv: ["get", "--path", "notes/missing.md"]
+- argv: ["get", "--path", "notes"]
+- argv: ["get", "--path", "notes/bad.md"]
+- argv: ["get", "--path", "notes/alpha.md", "stray.md"]
+# A relative path reads from the working directory, as --body-file does: -C
+# picks the workspace and leaves the base alone, so this is the workspace's
+# notes/alpha.md, not dossiers/gamma/notes/alpha.md. (Paths from a
+# subdirectory are covered in internal/entity/path_test.go; the runner runs
+# every step from the workspace root.)
+- argv: ["-C", "dossiers/gamma", "get", "--path", "notes/alpha.md", "--format", "json"]
+- argv: ["get", "--path", ""]
