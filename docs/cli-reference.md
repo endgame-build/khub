@@ -262,6 +262,9 @@ Options:
   --missing <str>  Keep entities lacking a resolvable edge (gap finder).
   --under <str>  Keep entities that reach this entity over --via, any number of hops.
   --via <str>  The relation --under follows up to its parent, or its declared inverse.
+  --count <str>  Bound the edge count for a relation or inverse: 'depends_on>=2' (repeatable).
+  --in-count <str>  Bound the inbound edge count: '>=5', or 0 for none (repeatable).
+  --out-count <str>  Bound the outbound edge count: 0 finds leaves (repeatable).
   --orphan  Keep only orphan (edge-less) entities.
   --stale  Keep only stale entities.
   --draft  Isolate drafts.

@@ -16,3 +16,4 @@ steps:
 - argv: ["search", "auth", "--receipt", "--format", "ids"]
 - argv: ["search", "api", "--also", "auth", "--also", "!!!", "--plain", "--receipt"]
 - argv: ["query", "--trust", "unverified", "--limit", "1", "--receipt"]
+- argv: ["query", "--under", "cmp-api", "--via", "realized_in", "--count", "realized_in=1", "--in-count", "0", "--out-count", ">=1", "--receipt"]

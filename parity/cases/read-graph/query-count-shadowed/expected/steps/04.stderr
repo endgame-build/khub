@@ -1,0 +1,7 @@
+Usage: khub query [OPTIONS]
+Try 'khub query --help' for help.
+╭─ Error ──────────────────────────────────────────────────────────────────────╮
+│ Invalid value for '--in-count': 'one' is not [<op>]<n>, as in 0 or '>=5'.    │
+│ The op is one of =, !=, <, <=, >, >=; quote a bound that holds < or >. To    │
+│ filter the field 'in_count', write --in_count.                               │
+╰──────────────────────────────────────────────────────────────────────────────╯
