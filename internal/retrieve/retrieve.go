@@ -163,8 +163,8 @@ type Result struct {
 
 // Retrieve runs one retrieval over the workspace at root.
 //
-// An unknown Expand predicate, an unknown Type, or an id that does not
-// resolve is a located error raised before any scan it can be raised before.
+// An unknown Expand predicate is a located error raised before the scan; an
+// unknown Type or an id that does not resolve is one raised after it.
 // An empty result is a success.
 func Retrieve(root string, opts Options) (*Result, error) {
 	resolved, err := introspect.LoadSchema(root)

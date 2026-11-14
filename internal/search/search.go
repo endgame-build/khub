@@ -265,7 +265,8 @@ func prepare(root string, type_ *string) (*schema.ResolvedSchema, *index.Index, 
 	return resolved, idx, staleDays, nil
 }
 
-// checkType is the unknown-type refusal, raised before any scan, same as query.
+// checkType is the unknown-type refusal, same as query. Search raises it
+// before its scan; Over raises it over the index its caller scanned.
 func checkType(root string, resolved *schema.ResolvedSchema, type_ *string) error {
 	if type_ == nil || resolved.Types.Has(*type_) {
 		return nil
@@ -391,8 +392,8 @@ func distinctGroups(texts []string, plain bool) []string {
 	out := make([]string, 0, len(sorted))
 	for _, t := range sorted {
 		key := groupKey(t, plain)
-		if key == "" || seen[key] {
-			continue
+		if (plain && key == "") || seen[key] {
+			continue // a raw blank text stays a group, so MATCH refuses it as Search does
 		}
 		seen[key] = true
 		out = append(out, t)

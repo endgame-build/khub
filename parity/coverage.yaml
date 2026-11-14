@@ -98,6 +98,7 @@ commands:
   - '--plain'
   - '--also'
   - '--format'
+  - '--receipt'
 - name: 'retrieve'
   params:
   - 'arg:text'
@@ -113,7 +114,6 @@ commands:
   - '--max-bytes'
   - '--no-body'
   - '--format'
-  - '--receipt'
 - name: 'neighbors'
   params:
   - 'arg:id_'

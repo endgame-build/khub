@@ -7,6 +7,7 @@ package search
 import (
 	"errors"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/endgame-build/khub/internal/errs"
@@ -100,6 +101,26 @@ func TestFuseOrderIndependentAndKeepsBestRankedRecord(t *testing.T) {
 	}
 	if got := fuse(nil); len(got) != 0 || got == nil {
 		t.Errorf("fuse(nil) = %#v, want an empty, non-nil list", got)
+	}
+}
+
+// A raw blank group is refused as Search refuses it, naming the text as
+// given, alone or beside a real group; it is never dropped.
+func TestSearchGroupsRefusesBlankRawGroup(t *testing.T) {
+	ws := sws(t)
+	for _, tc := range []struct {
+		texts []string
+		quote string
+	}{
+		{[]string{"  "}, "'  '"},
+		{[]string{"modernization", ""}, "''"},
+		{[]string{"", "modernization"}, "''"},
+	} {
+		_, err := SearchGroups(ws, tc.texts, Options{Limit: 20})
+		var located *errs.Located
+		if !errors.As(err, &located) || located.Code != "bad_search_query" || !strings.Contains(located.Error(), tc.quote) {
+			t.Errorf("SearchGroups(%q) = %v, want bad_search_query naming %s", tc.texts, err, tc.quote)
+		}
 	}
 }
 
