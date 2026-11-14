@@ -4,6 +4,52 @@ Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+### Added
+
+- **`query --under <id> --via <predicate>`.** Scopes a query to everything
+  that reaches an entity over a relation, any number of hops: `--under
+  sys-shop --via system` lists the shop's components, and over `depends_on`
+  every transitive dependent. The edge runs from the contained entity to its
+  container; the anchor is excluded, and the other filters AND with it. A
+  declared inverse as `--via` walks a hierarchy stored on the parent:
+  `--under <adr> --via superseded` is every record that ADR replaced.
+  `query --receipt` echoes both in `applied`.
+- **Cardinality filters on `query`.** `--count <relation><op><n>` keeps an
+  entity by how many entities it is joined to under one relation or declared
+  inverse (`--count superseded=0`, `--count 'depends_on>=2'`);
+  `--in-count` and `--out-count` take `<op><n>` (or a bare `n`) over every
+  inbound or outbound edge, so `--out-count 0` finds leaves and
+  `--in-count '>=5'` the hubs. The op is one of `=`, `!=`, `<`, `<=`, `>`,
+  `>=`; each flag repeats and every bound ANDs. The counts read the graph
+  `--has`, `--missing` and `--orphan` read. A name with no edges (an
+  attribute, a typo) refuses as `filter_error`; a malformed bound is a usage
+  error. Quote a bound holding `<` or `>`: the shell reads them as redirects.
+  `query --receipt` echoes the bounds in `applied` as `count`, `in_count` and
+  `out_count` lists.
+- **`khub recent`** lists the entities touched within a window, newest first
+  (`--days N`, default 7; `--limit N`). It judges the same date `stale` does:
+  `updated`, else the file's last commit, else `created`. Rows carry `id`,
+  `type`, `slug`, `title`, `draft`, `effective_date`, `age` and `source`.
+  `--limit` is `query`'s (0 returns nothing, `-n` drops the last n), and a cut
+  says so in a `note:` line on stderr. The plugin (0.1.6) draws a compact row
+  for it, the note included.
+
+### Changed
+
+- **`query` field filters named `under` or `via`.** A schema field called
+  `under` or `via` can no longer be filtered as `--under <value>` or
+  `--via <value>`: query's own options take precedence over same-named
+  fields, as `--type`, `--tag` and `--limit` already do.
+- **`query` reserves `--count`, `--in-count` and `--out-count`.** A field
+  named `count` can no longer be filtered as `query --count <value>`; a field
+  `in_count` or `out_count` is still filtered by its underscore spelling
+  (`--in_count 1`). A malformed bound names the clash when the schema declares
+  such a field. `add` and `edit` still write those fields.
+- The human view of `stale` (and `recent`) in a workspace without git history
+  now says `No git history; dates come from updated or created only`. It said
+  `using updated field only`, which was wrong: an undated entity falls back to
+  `created`.
+
 ### Fixed
 
 - **A long double-quoted value keeps its text when wrapped.** A value khub

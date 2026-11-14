@@ -24,6 +24,9 @@ The schema lives at `.khub/ontology.yaml` (the domain model) with `.khub/policy.
 ## Retrieve
 
 - `khub query --type <t> [--<field> <v>] [--tag <t>] [--has <pred>] [--missing <pred>] [--trust human] --format json` — filter by frontmatter; `--missing` surfaces gaps, `--trust` filters by review tier (`unverified`, `machine`, `human`).
+- `khub query --under <id> --via <pred> --format json` — everything under `<id>`, any number of hops; ANDs with the other filters. A stored `<pred>` points from child to parent (`--via system`); for a hierarchy stored on the parent, pass its declared inverse (`--via superseded`).
+- `khub query --count '<pred>>=2'` / `--in-count '>=5'` / `--out-count 0` — filter by how many edges an entity has (ops `= != < <= > >=`; repeat to AND, e.g. a range). Quote the bound: `>` and `<` are shell redirects.
+- `khub recent [--days N] --format json` — what was touched lately, newest first (default a week); the place to start when picking up where work left off. It dates by `updated`, else the last commit, so an uncommitted hand edit without `updated` does not show.
 - `khub get <id>... --edges --format json` — one ID returns one object; multiple IDs return an all-or-nothing array in argument order, duplicates included. Raw output accepts one ID only. `--edges` lists every inbound edge from another entity as `derived: true`, named by the relation's declared inverse or else `<source type>.<predicate>`. A derived name is a label; filter with the raw predicate (`query --has <predicate>`).
 - `khub get --path <file>... --format json` (khub 0.32.0 and later) — the entity stored in a file, the same record as `get <id>`. Use it on paths from `grep` or any file search, as printed from the current directory, instead of guessing the slug or reading the raw file. A collection file refuses and lists its ids.
 - `khub neighbors <id> --format json` — one-hop adjacency.

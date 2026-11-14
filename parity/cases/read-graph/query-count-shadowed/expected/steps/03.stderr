@@ -1,0 +1,8 @@
+Usage: khub query [OPTIONS]
+Try 'khub query --help' for help.
+╭─ Error ──────────────────────────────────────────────────────────────────────╮
+│ Invalid value for '--count': '3' is not <relation><op><n>, as in             │
+│ depends_on=0 or 'depends_on>=2'. The op is one of =, !=, <, <=, >, >=; quote │
+│ a bound that holds < or >. --count is the edge-count filter, so query cannot │
+│ filter the field 'count'.                                                    │
+╰──────────────────────────────────────────────────────────────────────────────╯

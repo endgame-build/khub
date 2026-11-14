@@ -83,10 +83,15 @@ commands:
   - '--tag'
   - '--has'
   - '--missing'
+  - '--count'
+  - '--in-count'
+  - '--out-count'
   - '--orphan'
   - '--stale'
   - '--draft'
   - '--active'
+  - '--under'
+  - '--via'
   - '--limit'
   - '--format'
   - '--receipt'
@@ -149,6 +154,11 @@ commands:
 - name: 'stale'
   params:
   - '--days'
+  - '--format'
+- name: 'recent'
+  params:
+  - '--days'
+  - '--limit'
   - '--format'
 - name: 'reindex'
   params:
