@@ -31,6 +31,7 @@ test('every spelling of the binary is recognized', () => {
 test('env assignments, -C and a leading cd do not hide the call', () => {
   expect(simple('KHUB_PARITY_NOW=2026-01-15 khub -C ./ws get cmp-search --edges').positional).toEqual(['cmp-search'])
   expect(simple('khub --workspace=/tmp/ws query --type adr').flags).toEqual({ type: 'adr' })
+  expect(simple('khub retrieve --no-body auth --expand depends_on:2').positional).toEqual(['auth'])
   expect(simple('cd docs/ws && khub link ad-1 affects cmp-search').verb).toBe('link')
 })
 

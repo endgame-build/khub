@@ -113,7 +113,7 @@ func Query(root string, filters Filters, now time.Time) ([]Match, error) {
 			Draft:  rtype.IsDraft(meta),
 			Orphan: orphan,
 			Stale:  stale,
-			Title:  title(meta, node.Slug),
+			Title:  Title(meta, node.Slug),
 			Trust:  tier,
 		})
 	}
@@ -123,8 +123,9 @@ func Query(root string, filters Filters, now time.Time) ([]Match, error) {
 	return matches, nil
 }
 
-// title is `str(meta.get("title") or meta.get("name") or slug)`.
-func title(meta *omap.Map, slug string) string {
+// Title is `str(meta.get("title") or meta.get("name") or slug)` — the title a
+// listing record carries; retrieve prints the same one.
+func Title(meta *omap.Map, slug string) string {
 	for _, key := range []string{"title", "name"} {
 		v, _ := meta.Get(key)
 		if values.Truthy(v) {

@@ -1,0 +1,5 @@
+Usage: khub retrieve [OPTIONS] [TEXT]
+Try 'khub retrieve --help' for help.
+╭─ Error ──────────────────────────────────────────────────────────────────────╮
+│ Invalid value: Pass search text or --id, not both                            │
+╰──────────────────────────────────────────────────────────────────────────────╯

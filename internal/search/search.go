@@ -146,12 +146,34 @@ type Options struct {
 // An unknown opts.Type is a located error, same as query. An empty result is a
 // success, not an error (QRY-002).
 func Search(root, text string, opts Options) (Result, error) {
-	type_ := opts.Type
-	resolved, idx, staleDays, err := prepare(root, type_)
+	resolved, idx, staleDays, err := prepare(root, opts.Type)
 	if err != nil {
 		return Result{}, err
 	}
+	return over(root, resolved, idx, staleDays, text, opts)
+}
 
+// Over is Search over an index the caller already scanned — built with
+// bodies (index.BuildWithBodies) and with its strays filtered, exactly the
+// index Search builds for itself. A verb that also walks the graph or reads
+// the entities (retrieve) scans the tree once and hands the index here, so
+// the FTS build, the ranking and the hit annotation have one implementation.
+func Over(root string, idx *index.Index, text string, opts Options) (Result, error) {
+	if err := checkType(root, idx.Resolved, opts.Type); err != nil {
+		return Result{}, err
+	}
+	staleDays, err := workspace.StaleDays(root)
+	if err != nil {
+		return Result{}, err
+	}
+	return over(root, idx.Resolved, idx, staleDays, text, opts)
+}
+
+// over ranks one group over a scanned index: the FTS build, the match, the
+// hit annotation and, under Plain, the match shares.
+func over(root string, resolved *schema.ResolvedSchema, idx *index.Index, staleDays int,
+	text string, opts Options) (Result, error) {
+	type_ := opts.Type
 	conn, err := sqlite3.Open(":memory:")
 	if err != nil {
 		return Result{}, err
@@ -221,16 +243,8 @@ func prepare(root string, type_ *string) (*schema.ResolvedSchema, *index.Index, 
 	if err != nil {
 		return nil, nil, 0, err
 	}
-	if type_ != nil && !resolved.Types.Has(*type_) {
-		preset := "the"
-		if prov, perr := workspace.Provenance(root); perr == nil {
-			if p, _ := prov.Get("preset"); p != nil && p != "" {
-				preset, _ = p.(string)
-			}
-		}
-		known := append([]string{}, resolved.Types.Keys()...)
-		sort.Strings(known)
-		return nil, nil, 0, errs.UnknownType(*type_, preset, known)
+	if err := checkType(root, resolved, type_); err != nil {
+		return nil, nil, 0, err
 	}
 	scanned, err := index.BuildWithBodies(root, resolved)
 	if err != nil {
@@ -242,6 +256,22 @@ func prepare(root string, type_ *string) (*schema.ResolvedSchema, *index.Index, 
 		return nil, nil, 0, err
 	}
 	return resolved, idx, staleDays, nil
+}
+
+// checkType is the unknown-type refusal, raised before any scan, same as query.
+func checkType(root string, resolved *schema.ResolvedSchema, type_ *string) error {
+	if type_ == nil || resolved.Types.Has(*type_) {
+		return nil
+	}
+	preset := "the"
+	if prov, perr := workspace.Provenance(root); perr == nil {
+		if p, _ := prov.Get("preset"); p != nil && p != "" {
+			preset, _ = p.(string)
+		}
+	}
+	known := append([]string{}, resolved.Types.Keys()...)
+	sort.Strings(known)
+	return errs.UnknownType(*type_, preset, known)
 }
 
 // rrfK is the k of reciprocal rank fusion: a hit at rank r (from 1) in one

@@ -200,6 +200,7 @@ test. It gives a workspace at a fixed root and khub answering from the fixtures.
 | `verify` | `id`, `by`, `at`, `commit` |
 | `get` | `id`, `title` or `name` at the top or in `frontmatter`, `edges` |
 | `search` | per row `id`, `title`, the flags, and the stderr `note:` line |
+| `retrieve` | `count`, `omitted.{truncated, insufficient}`, and per entity `id`, `title`, `draft`, `orphan`, `stale` |
 | `neighbors` | per row `id`, `predicate`, `direction` |
 | `impact` | per row `depth` |
 | `history`, `schema types`, `schema edges` | the number of rows |
