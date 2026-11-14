@@ -1,0 +1,1 @@
+{"error": {"code": "bad_search_query", "message": "Invalid search query '(((' (fts5: syntax error near \"\"). Quote phrases: '\"exact phrase\"'"}}

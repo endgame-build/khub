@@ -79,6 +79,23 @@ func TestSearchSection(t *testing.T) {
 	}
 }
 
+// A fused hit names its section as a single-group hit does: SearchGroups
+// shares the marks and locate with Search.
+func TestSearchGroupsSection(t *testing.T) {
+	root := freshWS(t)
+	seedRaw(t, root, "clients/store.md",
+		"---\ntype: client\nname: Store\ncreated: 2026-06-01\n---\n"+
+			"Intro.\n\n# Design\n\n## Locking\n\nWe flock the lockfile.\n")
+	res, err := SearchGroups(root, []string{"lockfile", "flock"}, Options{Limit: 20})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Groups != 2 || len(res.Hits) != 1 ||
+		!reflect.DeepEqual(res.Hits[0].Section, []string{"Design", "Locking"}) {
+		t.Errorf("got groups %d, hits %+v; want one fused hit in [Design Locking]", res.Groups, res.Hits)
+	}
+}
+
 // A phrase longer than the snippet window comes back unmarked; the section
 // is then the snippet's start, inside the phrase. A control character the
 // body holds is never taken for a mark, and the snippet keeps it. A bare
