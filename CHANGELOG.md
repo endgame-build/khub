@@ -2,7 +2,17 @@
 
 Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); khub is pre-release.
 
-## [Unreleased]
+## [0.32.0] — 2026-11-14
+
+Retrieval takes fewer calls. `khub retrieve` assembles seeds and their
+neighbourhood under entity and byte caps in one call, `search --also` fuses
+several queries into one ranking, `get --path` turns a file path into its
+entity, and `--receipt` says what a query or search applied and whether
+`--limit` cut it. `get --edges` now lists every inbound edge. On a
+2,000-entity corpus, one `retrieve` takes a quarter of the time of the
+`search`, `get` and `neighbors` calls it replaces, and one fused search half
+the time of two searches. Existing commands are as fast as in 0.31.0. The
+workspace format is unchanged, so no `khub upgrade` is needed.
 
 ### Added
 
