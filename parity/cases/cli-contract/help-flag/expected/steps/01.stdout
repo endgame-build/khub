@@ -20,6 +20,7 @@ Commands:
   verify  Record a review: khub verify ad-2026-01-15-use-jwt --by human:ilya.
   query  Filter entities: khub query --type opportunity --stage prospect --format json.
   search  Full-text search: khub search modernization --type transcript --format json.
+  retrieve  Assemble context in one call: khub retrieve "auth token" --expand depends_on:2 --max-bytes 20000.
   neighbors  Walk one-hop neighbors: khub neighbors initech-pov [--predicate client --in].
   impact  Compute blast radius: khub impact node-a [--reverse] [--predicate <p>].
   history  Trace supersession lineage: khub history decision-0012 [--limit 3].

@@ -27,6 +27,7 @@ Commands:
   verify  Record a review: khub verify ad-2026-01-15-use-jwt --by human:ilya.
   query  Filter entities: khub query --type opportunity --stage prospect --format json.
   search  Full-text search: khub search modernization --type transcript --format json.
+  retrieve  Assemble context in one call: khub retrieve "auth token" --expand depends_on:2 --max-bytes 20000.
   neighbors  Walk one-hop neighbors: khub neighbors initech-pov [--predicate client --in].
   impact  Compute blast radius: khub impact node-a [--reverse] [--predicate <p>].
   history  Trace supersession lineage: khub history decision-0012 [--limit 3].
@@ -138,10 +139,11 @@ Usage: khub get [OPTIONS] [ID]...
 Read entities' frontmatter and body, optionally with derived edges.
 
 Arguments:
-  ID... <str>  One or more bare slugs or qualified type/slug IDs, in output order.
+  ID... <str>  One or more bare slugs or qualified type/slug IDs (file paths under --path), in output order.
 
 Options:
   --edges  Include stored and derived edges.
+  --path  Read each ID as a file path, relative to the current directory or absolute, and get the entity in it.
   --format <str>  json, table, raw, or text (Rich on a TTY). [default: text]
   --help  Show this message and exit.
 
@@ -265,6 +267,7 @@ Options:
   --limit <int>  Cap the returned set.
   --trust <str>  Keep entities at this review tier: unverified, machine, or human.
   --format <str>  text (Rich table on a TTY), json, or ids. [default: text]
+  --receipt  Wrap JSON output with the applied filters, matched and returned counts, and truncation.
   --help  Show this message and exit.
 
 ```
@@ -284,7 +287,37 @@ Options:
   --type <str>  Restrict to one entity type.
   --limit <int>  Cap the returned set. [default: 20]
   --plain  Treat text as plain words: any may match, prefix-matched, punctuation literal.
+  --also <str>  Another query group, ranked on its own and fused with the rest by reciprocal rank (repeatable).
   --format <str>  text (Rich table on a TTY), json, or ids. [default: text]
+  --receipt  Wrap JSON output with the applied query, matched and returned counts, and truncation.
+  --help  Show this message and exit.
+
+```
+
+## khub retrieve
+
+```console
+$ khub retrieve --help
+Usage: khub retrieve [OPTIONS] [TEXT]
+
+Assemble context in one call: khub retrieve "auth token" --expand depends_on:2 --max-bytes 20000.
+
+Arguments:
+  TEXT <str>  FTS5 MATCH text to seed from (plain words with --plain), or none with --id.
+
+Options:
+  --id <str>  Seed by id instead of a search (repeatable).
+  --type <str>  Restrict the search to one entity type.
+  --plain  Treat TEXT as plain words: any may match, prefix-matched, punctuation literal.
+  --expand <str>  Follow this predicate, to --depth hops or its own (depends_on:2); repeatable. Default: every predicate.
+  --in  Inbound edges only (incl. derived inverses).
+  --out  Outbound (stored) edges only.
+  --depth <int>  Hops to expand from each seed; 0 returns the seeds alone. [default: 1]
+  --limit <int>  Cap the seeds before expansion (default: 20 for a search, every --id).
+  --max-entities <int>  Cap the entities after expansion, periphery first; 0 is unbounded.
+  --max-bytes <int>  Cap the bytes of the JSON document, trimming the same way; 0 is unbounded.
+  --no-body  Leave each entity's body out.
+  --format <str>  text (Rich table on a TTY) or json. [default: text]
   --help  Show this message and exit.
 
 ```

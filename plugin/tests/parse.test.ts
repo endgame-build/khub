@@ -31,7 +31,15 @@ test('every spelling of the binary is recognized', () => {
 test('env assignments, -C and a leading cd do not hide the call', () => {
   expect(simple('KHUB_PARITY_NOW=2026-01-15 khub -C ./ws get cmp-search --edges').positional).toEqual(['cmp-search'])
   expect(simple('khub --workspace=/tmp/ws query --type adr').flags).toEqual({ type: 'adr' })
+  expect(simple('khub retrieve --no-body auth --expand depends_on:2').positional).toEqual(['auth'])
   expect(simple('cd docs/ws && khub link ad-1 affects cmp-search').verb).toBe('link')
+})
+
+test('get --path takes no value: every path is positional', () => {
+  const found = simple('khub get --path notes/a.md cards/b.json --format json')
+  expect(found.positional).toEqual(['notes/a.md', 'cards/b.json'])
+  expect(found.flags).toEqual({ path: true, format: 'json' })
+  expect(simple('khub add doc --path x/y.md').flags).toEqual({ path: 'x/y.md' })
 })
 
 test('the workspace a call names is kept', () => {

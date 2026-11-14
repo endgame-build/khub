@@ -1,6 +1,6 @@
 {
   "name": "khub",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "khub in the session: the khub and setup skills, a band above the prompt with what the session changed, and compact rows for khub calls",
   "author": { "name": "ENDGAME" },
   "types": "./types/index.d.ts",

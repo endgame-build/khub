@@ -4,7 +4,7 @@
     "seed": 1,
     "today": "2026-01-15",
     "preset": "build-hub",
-    "khub_version": "0.30.0",
+    "khub_version": "0.31.0",
     "total": 300,
     "tree_sha256": "04cc4a89df15f7242b8211e45f4c614dafb3d936d735b056fcea54093aedf56d"
   },
@@ -226,10 +226,10 @@
         "--edges"
       ],
       "exit": 0,
-      "stdout_bytes": 578,
+      "stdout_bytes": 1163,
       "stderr_bytes": 0,
       "rows": 0,
-      "sha256": "bddf5c28b9f2114d6e3f0738bee280c1b8ac189dec5d921f676ad03699ee3ee0"
+      "sha256": "3c5efa0c3dbc82516b358800f4c67cb898cd159a58eb43bdacd615a8676c2b55"
     },
     {
       "label": "get \u003cchain middle\u003e --edges",

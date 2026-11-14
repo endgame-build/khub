@@ -2,6 +2,82 @@
 
 Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); khub is pre-release.
 
+## [Unreleased]
+
+### Added
+
+- **`--receipt` on `query` and `search`.** The JSON output becomes
+  `{"receipt": {...}, "results": [...]}`: the receipt echoes the filters or
+  query the call applied (for `search`, the `--also` groups and the FTS5
+  expression each group ran, which shows what `--plain` built; for `query`,
+  the `--trust` tier too), the match count before `--limit`, the
+  returned count, and whether `--limit` dropped rows. Without the flag the
+  output is unchanged; tables and `--format ids` ignore it.
+- The Claude Code plugin (0.1.5) reads a `--receipt` document's `results`, so
+  the compact row for `query --receipt` or `search --receipt` counts and lists
+  its entities. The `khub` skill mentions the flag.
+
+- **`get --path`.** `khub get --path <file>...` reads each argument as a file
+  path, relative to the current directory (as `--body-file` is) or absolute,
+  and answers with the entity stored there, the same record `get <id>`
+  returns. A folder entity's directory and any file under it resolve to that
+  entity. A collection file refuses with its ids (`path_is_collection`), and
+  a path outside the workspace (`path_outside_workspace`) or one that holds
+  no entity (`path_not_entity`, with the reason) refuses the whole batch with
+  exit 2. A symlink inside the workspace is refused as storage refuses one
+  (`unsafe_path`). Closes #82.
+
+- **`khub retrieve`.** One-call bounded context assembly, the read verb an
+  agent otherwise composes from `search`, `get` and `neighbors` while
+  managing its own budget. Seeds are a search (`retrieve "auth token"`, the
+  same MATCH syntax as `search`, `--plain` and `--type` honoured) or ids
+  (`--id`, repeatable), capped by `--limit` before expansion. The expansion
+  is a breadth-first walk over the derived graph, `--expand <predicate>[:<depth>]`
+  per predicate or every predicate to `--depth`, in `--in`/`--out`/both.
+  `--max-entities` and `--max-bytes` trim the periphery first (the deepest,
+  then the greatest `(type, slug)`, then the least relevant seed); the byte
+  cap holds the printed JSON document itself. There is no token budget: a
+  tokenizer is model-specific, bytes are what every caller can measure. The
+  document is `{count, entities, omitted}`: each entity the `get --edges`
+  record with `title`, the lifecycle flags and a `reason` (a seed's score and
+  snippet, or the predicate, direction, source id and depth it was reached
+  by); `omitted` counts what each cap dropped, names the first ids, and says
+  `truncated` and `insufficient` (a cap could not hold the seeds) outright.
+  `--no-body` drops the bodies. The Claude Code plugin (0.1.5) draws a row for
+  it, and the khub skill says when to reach for it.
+
+- **Fused search.** `khub search <text> --also <text>` ranks each text as
+  its own query group and merges the rankings by reciprocal rank fusion
+  (`1 / (60 + rank)` summed over the groups that hit an entity), so an
+  intent and an exact anchor can go in one call, and an entity both reach
+  usually outranks one only a single group ranks first, where one `OR`
+  query lets the common words bury the rare one. `--also` repeats;
+  `--plain` applies per group; `--limit` and the `note:` lines apply to the
+  fused list. A fused record carries `fused` (higher = better; compare rows
+  on it) and `groups` after `score`; `score` and `snippet` there come from
+  the group where the hit ranks best. A repeated group counts once, and a
+  single group is the search it always was, byte for byte.
+
+- **Search hits name their section.** A `khub search` JSON hit whose snippet
+  excerpts the body under a Markdown heading carries `section`, the heading
+  path to the snippet's first match (`["Design", "Write path", "Locking"]`).
+  It is absent for a title or frontmatter match and for a body with no
+  heading above the match. Ranking, `score` and `snippet` are unchanged.
+
+### Changed
+
+- **`get --edges` lists every inbound edge.** It skipped an inbound edge whose
+  relation declares no `inverse`, so it disagreed with `neighbors --in` and
+  `search`'s `edges.in` counts. Such an edge is now listed as `derived: true`,
+  named `<source type>.<predicate>`; that name is a label, so filter with the
+  raw predicate. A source that names the target in several spellings lists
+  once per relation, as `neighbors` counts it, and `remove`'s inbound-edge
+  count follows the same rule (#79).
+
+- A schema field named `receipt` can no longer be filtered with
+  `query --receipt <value>`: the new option takes precedence, as `query`'s
+  other options already do over a same-named field.
+
 ## [0.31.0] — 2026-11-01
 
 A khub Markdown entity is now an OKF 0.2 concept as written. The base block

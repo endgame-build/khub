@@ -52,8 +52,9 @@ row in place of Claude Code's raw drawing.
 | Result | What came back, in one line: `⎿ 12 entities`, or `⎿ + adr/ad-… · draft` after an `add`. |
 | List | Up to five lines of a list result, then `… n more`. |
 
-- A list follows the result line for `query`, `stale`, `search`, `neighbors`, a
-  `get` with several ids, a failed `check` and a `validate` with errors.
+- A list follows the result line for `query`, `stale`, `search`, `retrieve`,
+  `neighbors`, a `get` with several ids, a failed `check` and a `validate` with
+  errors.
 - A list line for an entity holds its id, its title and its flags (`draft`,
   `orphan`, `stale`). A `neighbors` line holds the id, the direction and the
   predicate. A `check` line holds the bucket and the id or path. A `validate`

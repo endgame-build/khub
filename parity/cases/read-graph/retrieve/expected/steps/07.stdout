@@ -1,0 +1,1 @@
+{"id": "requirement/req-auth-required", "type": "requirement", "slug": "req-auth-required", "predicate": "realized_in", "target": "cmp-api", "changed": true}

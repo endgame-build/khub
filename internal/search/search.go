@@ -57,9 +57,14 @@ const (
 	createFTS = "CREATE VIRTUAL TABLE fts USING " +
 		"fts5(title, body, type UNINDEXED, slug UNINDEXED, path UNINDEXED)"
 	insertFTS = "INSERT INTO fts VALUES (?,?,?,?,?)"
-	matchFTS  = "SELECT type, slug, title, rank AS score, " +
-		"snippet(fts, -1, '', '', '…', 12) AS snip, path, rowid " +
-		"FROM fts WHERE fts MATCH ? ORDER BY rank LIMIT ?"
+	// The snippet marks each match with ?3 and ?4, characters no indexed
+	// text holds (pickMarks), and match strips them, so the snippet a hit
+	// reports is what unmarked arguments give. The marks, and the title's
+	// own snippet, are what section reads; neither touches rank.
+	matchFTS = "SELECT type, slug, title, rank AS score, " +
+		"snippet(fts, -1, ?3, ?4, '…', 12) AS snip, path, rowid, " +
+		"snippet(fts, 0, ?3, ?4, '…', 12) " +
+		"FROM fts WHERE fts MATCH ?1 ORDER BY rank LIMIT ?2"
 	countFTS = "SELECT count(*) FROM fts WHERE fts MATCH ?"
 )
 
@@ -78,6 +83,9 @@ type Hit struct {
 	Snippet string
 	Path    string
 	Locator string // "" when not a collection row
+	// Section is the heading path to the snippet when it excerpts the
+	// body's Markdown under a heading; nil otherwise (see section).
+	Section []string
 	Out     []EdgeCount
 	In      []EdgeCount
 	Trust   string // the review tier (trust.Tier)
@@ -88,8 +96,24 @@ type Hit struct {
 	Match      float64
 	TitleMatch float64
 
+	// Fused and Groups are set by SearchGroups for more than one group: the
+	// reciprocal rank fusion sum over the groups that hit the entity (higher
+	// is better), and how many groups hit it.
+	Fused  float64
+	Groups int
+
 	rowid int64
+	// marked is the snippet with its matches marked, and titleMarked the
+	// title's own snippet, marked the same way; section reads both.
+	marked, titleMarked string
+
+	group int // the ranking a fused hit's record comes from (fuse)
+	rank  int // the hit's rank in that ranking, from 1 (fuse)
 }
+
+// marks are the strings snippet() puts around each match: one character
+// each that no indexed text holds, or both "" when every candidate occurs.
+type marks struct{ open, close string }
 
 // Result is one search's hits plus what a caller needs to judge them.
 type Result struct {
@@ -98,6 +122,13 @@ type Result struct {
 	Searched  int  // entities indexed, after the type filter
 	Malformed int  // files in the workspace the scan could not parse
 	Capped    bool // a plain query held more than MaxPlainTerms words
+	Groups    int  // SearchGroups: the distinct groups that ranked (0 from Search)
+
+	// Matches holds the FTS5 MATCH expression each distinct group ran, in the
+	// order the groups were processed: the text as given, or under Plain the
+	// ORed terms built from it. A Plain group with no words runs nothing and
+	// adds none.
+	Matches []string
 }
 
 // EdgeCount is how many edges one predicate carries at a hit. Only non-zero
@@ -121,32 +152,34 @@ type Options struct {
 // An unknown opts.Type is a located error, same as query. An empty result is a
 // success, not an error (QRY-002).
 func Search(root, text string, opts Options) (Result, error) {
-	type_ := opts.Type
-	resolved, err := introspect.LoadSchema(root)
+	resolved, idx, staleDays, err := prepare(root, opts.Type)
 	if err != nil {
 		return Result{}, err
 	}
-	if type_ != nil && !resolved.Types.Has(*type_) { // before the corpus scan
-		preset := "the"
-		if prov, perr := workspace.Provenance(root); perr == nil {
-			if p, _ := prov.Get("preset"); p != nil && p != "" {
-				preset, _ = p.(string)
-			}
-		}
-		known := append([]string{}, resolved.Types.Keys()...)
-		sort.Strings(known)
-		return Result{}, errs.UnknownType(*type_, preset, known)
-	}
-	scanned, err := index.BuildWithBodies(root, resolved)
-	if err != nil {
+	return over(root, resolved, idx, staleDays, text, opts)
+}
+
+// Over is Search over an index the caller already scanned — built with
+// bodies (index.BuildWithBodies) and with its strays filtered, exactly the
+// index Search builds for itself. A verb that also walks the graph or reads
+// the entities (retrieve) scans the tree once and hands the index here, so
+// the FTS build, the ranking and the hit annotation have one implementation.
+func Over(root string, idx *index.Index, text string, opts Options) (Result, error) {
+	if err := checkType(root, idx.Resolved, opts.Type); err != nil {
 		return Result{}, err
 	}
-	idx := index.Filter(scanned, index.StrayNodes(scanned)) // strays are not entities
 	staleDays, err := workspace.StaleDays(root)
 	if err != nil {
 		return Result{}, err
 	}
+	return over(root, idx.Resolved, idx, staleDays, text, opts)
+}
 
+// over ranks one group over a scanned index: the FTS build, the match, the
+// hit annotation and, under Plain, the match shares.
+func over(root string, resolved *schema.ResolvedSchema, idx *index.Index, staleDays int,
+	text string, opts Options) (Result, error) {
+	type_ := opts.Type
 	conn, err := sqlite3.Open(":memory:")
 	if err != nil {
 		return Result{}, err
@@ -154,7 +187,8 @@ func Search(root, text string, opts Options) (Result, error) {
 	defer func() { _ = conn.Close() }() // Python's finally: conn.close() ignores errors
 
 	res := Result{Hits: []Hit{}, Malformed: len(idx.Malformed)}
-	if res.Searched, err = buildFTS(conn, root, idx, type_); err != nil {
+	var mk marks
+	if res.Searched, mk, err = buildFTS(conn, root, idx, type_); err != nil {
 		return Result{}, err
 	}
 	var terms []string
@@ -165,11 +199,12 @@ func Search(root, text string, opts Options) (Result, error) {
 		}
 		text = strings.Join(terms, " OR ")
 	}
+	res.Matches = []string{text}
 	capped := opts.Limit
 	if capped < 0 {
 		capped = 0 // a negative LIMIT is "unbounded" in SQLite
 	}
-	hits, err := match(conn, text, capped)
+	hits, err := match(conn, text, capped, mk)
 	if err != nil {
 		return Result{}, err
 	}
@@ -179,12 +214,7 @@ func Search(root, text string, opts Options) (Result, error) {
 			return Result{}, err
 		}
 	}
-	for i := range hits {
-		rtype, ok := resolved.Types.Get(hits[i].Type)
-		if ok && rtype.Storage.Layout == schema.LayoutCollection {
-			hits[i].Locator = hits[i].Path + "#" + hits[i].Slug
-		}
-	}
+	locate(hits, resolved, idx, mk)
 	if len(hits) > 0 {
 		annotate(hits, idx, opts.Now, staleDays)
 	}
@@ -194,6 +224,249 @@ func Search(root, text string, opts Options) (Result, error) {
 		}
 	}
 	return res, nil
+}
+
+// locate sets each hit's Locator ("path#slug" for a collection row, whose
+// Path is the shared inventory file; "" otherwise) and its Section.
+func locate(hits []Hit, resolved *schema.ResolvedSchema, idx *index.Index, mk marks) {
+	for i := range hits {
+		rtype, ok := resolved.Types.Get(hits[i].Type)
+		if ok && rtype.Storage.Layout == schema.LayoutCollection {
+			hits[i].Locator = hits[i].Path + "#" + hits[i].Slug
+		}
+		node := index.Node{Type: hits[i].Type, Slug: hits[i].Slug}
+		hits[i].Section = section(hits[i], mk,
+			template.StripComments(idx.Body[node]), idx.Meta[node])
+	}
+}
+
+// prepare loads the schema, checks the type filter and scans the corpus:
+// everything a search needs before its FTS table.
+//
+// An unknown type_ is a located error, same as query, raised before the
+// corpus scan.
+func prepare(root string, type_ *string) (*schema.ResolvedSchema, *index.Index, int, error) {
+	resolved, err := introspect.LoadSchema(root)
+	if err != nil {
+		return nil, nil, 0, err
+	}
+	if err := checkType(root, resolved, type_); err != nil {
+		return nil, nil, 0, err
+	}
+	scanned, err := index.BuildWithBodies(root, resolved)
+	if err != nil {
+		return nil, nil, 0, err
+	}
+	idx := index.Filter(scanned, index.StrayNodes(scanned)) // strays are not entities
+	staleDays, err := workspace.StaleDays(root)
+	if err != nil {
+		return nil, nil, 0, err
+	}
+	return resolved, idx, staleDays, nil
+}
+
+// checkType is the unknown-type refusal, same as query. Search raises it
+// before its scan; Over raises it over the index its caller scanned.
+func checkType(root string, resolved *schema.ResolvedSchema, type_ *string) error {
+	if type_ == nil || resolved.Types.Has(*type_) {
+		return nil
+	}
+	preset := "the"
+	if prov, perr := workspace.Provenance(root); perr == nil {
+		if p, _ := prov.Get("preset"); p != nil && p != "" {
+			preset, _ = p.(string)
+		}
+	}
+	known := append([]string{}, resolved.Types.Keys()...)
+	sort.Strings(known)
+	return errs.UnknownType(*type_, preset, known)
+}
+
+// rrfK is the k of reciprocal rank fusion: a hit at rank r (from 1) in one
+// group adds 1/(rrfK + r) to its fused score. 60 is the usual choice: it
+// flattens the top ranks enough that a hit several groups rank moderately
+// outscores one a single group ranks first.
+const rrfK = 60
+
+// SearchGroups ranks each text as its own group, exactly as Search ranks
+// one, and merges the rankings by reciprocal rank fusion (fuse). Every
+// match of every group takes part, so the fusion is never truncated by a
+// per-group depth; opts.Limit cuts the fused list, and Total counts it.
+// Capped reports a plain group cut at MaxPlainTerms; Groups counts the
+// distinct groups that ranked.
+//
+// A repeated group counts once (groupKey says when two texts are one
+// group), and the groups are processed in sorted order, so the order given
+// never shapes the result: not the fused scores, not a tie, not which
+// group's record a hit carries, and not which malformed group is refused.
+// A single distinct group — or, under Plain, a single group with any words
+// — is Search, with Groups set to one.
+func SearchGroups(root string, texts []string, opts Options) (Result, error) {
+	groups := distinctGroups(texts, opts.Plain)
+	if len(groups) <= 1 {
+		text := ""
+		if len(groups) == 1 {
+			text = groups[0]
+		}
+		res, err := Search(root, text, opts)
+		if err == nil {
+			res.Groups = len(groups)
+		}
+		return res, err
+	}
+	type_ := opts.Type
+	resolved, idx, staleDays, err := prepare(root, type_)
+	if err != nil {
+		return Result{}, err
+	}
+
+	conn, err := sqlite3.Open(":memory:")
+	if err != nil {
+		return Result{}, err
+	}
+	defer func() { _ = conn.Close() }()
+
+	res := Result{Hits: []Hit{}, Malformed: len(idx.Malformed)}
+	var mk marks
+	if res.Searched, mk, err = buildFTS(conn, root, idx, type_); err != nil {
+		return Result{}, err
+	}
+	res.Groups = len(groups)
+	rankings := make([][]Hit, len(groups))
+	terms := make([][]string, len(groups))
+	for g, text := range groups {
+		if opts.Plain {
+			var capped bool
+			terms[g], capped = plainTerms(text) // never empty: distinctGroups dropped the wordless
+			res.Capped = res.Capped || capped
+			text = strings.Join(terms[g], " OR ")
+		}
+		res.Matches = append(res.Matches, text)
+		if rankings[g], err = match(conn, text, -1, mk); err != nil { // -1: every match
+			return Result{}, err
+		}
+	}
+	fused := fuse(rankings)
+	res.Total = len(fused)
+	if opts.Limit > 0 {
+		res.Hits = fused[:min(opts.Limit, len(fused))]
+	}
+	hits := res.Hits
+	locate(hits, resolved, idx, mk)
+	if len(hits) > 0 {
+		annotate(hits, idx, opts.Now, staleDays)
+	}
+	if opts.Plain && len(hits) > 0 {
+		// Match and TitleMatch judge a hit against the group its record
+		// comes from, so each group's hits are scored with that group's
+		// words.
+		for g := range groups {
+			var at []int
+			var sub []Hit
+			for i, h := range hits {
+				if h.group == g {
+					at, sub = append(at, i), append(sub, h)
+				}
+			}
+			if len(sub) == 0 {
+				continue
+			}
+			if err := matchShares(conn, sub, terms[g], res.Searched); err != nil {
+				return Result{}, err
+			}
+			for j, i := range at {
+				hits[i].Match, hits[i].TitleMatch = sub[j].Match, sub[j].TitleMatch
+			}
+		}
+	}
+	return res, nil
+}
+
+// distinctGroups is the texts that stand for distinct groups (groupKey),
+// in sorted order; of two texts with one key the sorted-first is kept.
+// Under plain, a text with no words is no group at all.
+func distinctGroups(texts []string, plain bool) []string {
+	sorted := append([]string(nil), texts...)
+	sort.Strings(sorted)
+	seen := map[string]bool{}
+	out := make([]string, 0, len(sorted))
+	for _, t := range sorted {
+		key := groupKey(t, plain)
+		if (plain && key == "") || seen[key] {
+			continue // a raw blank text stays a group, so MATCH refuses it as Search does
+		}
+		seen[key] = true
+		out = append(out, t)
+	}
+	return out
+}
+
+// groupKey says when two texts are one group, which FTS5 would rank
+// identically. A raw text is its words joined by one space, so only the
+// whitespace between them may differ; a plain text is its distinct words
+// lowercased, in order, as plainTerms keeps them, and "" when it has none.
+func groupKey(text string, plain bool) string {
+	if !plain {
+		return strings.Join(strings.Fields(text), " ")
+	}
+	seen := map[string]bool{}
+	var keys []string
+	for _, word := range strings.FieldsFunc(text, notWordRune) {
+		key := strings.ToLower(word)
+		if seen[key] {
+			continue
+		}
+		if len(keys) == MaxPlainTerms {
+			break
+		}
+		seen[key] = true
+		keys = append(keys, key)
+	}
+	return strings.Join(keys, " ")
+}
+
+// fuse merges rankings (each best first) by reciprocal rank fusion: an
+// entity's Fused is the exact sum of 1/(rrfK + rank) over the rankings that
+// hold it, and Groups counts those rankings. The hit returned for an entity
+// is its record from the ranking where it ranks best (the earlier ranking
+// on a tie) — the group that put most into Fused — so Score, Snippet and
+// the rowid are that ranking's, and BM25 values from different queries are
+// never compared. The result is best Fused first; equal Fused breaks on
+// type, then slug.
+func fuse(rankings [][]Hit) []Hit {
+	type key struct{ Type, Slug string }
+	at := map[key]int{}
+	var out []Hit
+	for g, ranking := range rankings {
+		for i, h := range ranking {
+			k := key{h.Type, h.Slug}
+			at_, seen := at[k]
+			h.group, h.rank = g, i+1
+			if !seen {
+				at_ = len(out)
+				at[k] = at_
+				out = append(out, h)
+			} else if h.rank < out[at_].rank {
+				h.Fused, h.Groups = out[at_].Fused, out[at_].Groups
+				out[at_] = h
+			}
+			out[at_].Fused += 1 / float64(rrfK+h.rank)
+			out[at_].Groups++
+		}
+	}
+	sort.SliceStable(out, func(a, b int) bool {
+		if out[a].Fused != out[b].Fused {
+			return out[a].Fused > out[b].Fused
+		}
+		if out[a].Type != out[b].Type {
+			return out[a].Type < out[b].Type
+		}
+		return out[a].Slug < out[b].Slug
+	})
+	if out == nil {
+		out = []Hit{}
+	}
+	return out
 }
 
 // matchShares sets each hit's Match and TitleMatch. A word weighs
@@ -338,26 +611,29 @@ func annotate(hits []Hit, idx *index.Index, now time.Time, staleDays int) {
 // scale. type_ prunes at build time: with exactly one query per in-memory build,
 // skipping the row loop beats a WHERE clause. Titles and bodies come from the
 // scan (index.BuildWithBodies), so no file is read or parsed twice.
-func buildFTS(conn *sqlite3.Conn, root string, idx *index.Index, type_ *string) (int, error) {
+//
+// It also returns the marks match asks snippet() for (pickMarks).
+func buildFTS(conn *sqlite3.Conn, root string, idx *index.Index, type_ *string) (int, marks, error) {
+	var seen [256]bool // every byte any indexed text holds
 	// The Python build either has FTS5 compiled in or it does not; here the
 	// extension is loaded per connection, so a load failure is the same
 	// "no FTS5 in this build" condition and takes the same located error.
 	if err := fts5.Register(conn); err != nil {
-		return 0, errs.FTSUnavailable(sqliteDetail(err))
+		return 0, marks{}, errs.FTSUnavailable(sqliteDetail(err))
 	}
 	if err := conn.Exec(createFTS); err != nil {
-		return 0, errs.FTSUnavailable(sqliteDetail(err))
+		return 0, marks{}, errs.FTSUnavailable(sqliteDetail(err))
 	}
 	if err := conn.Exec(rankFTS()); err != nil {
-		return 0, err
+		return 0, marks{}, err
 	}
 	if err := conn.Exec("BEGIN"); err != nil {
-		return 0, err
+		return 0, marks{}, err
 	}
 	defer func() { _ = conn.Exec("ROLLBACK") }()
 	stmt, _, err := conn.Prepare(insertFTS)
 	if err != nil {
-		return 0, err
+		return 0, marks{}, err
 	}
 	defer func() { _ = stmt.Close() }()
 
@@ -386,14 +662,20 @@ func buildFTS(conn *sqlite3.Conn, root string, idx *index.Index, type_ *string) 
 		// agent finds them. Removed rather than blanked: this text is what
 		// snippet() renders back, and a blanked scaffold's snippet is mostly
 		// empty columns.
-		if err := insertRow(stmt, ftsTitle(meta, node.Slug),
-			canon.FTSBody(meta, template.StripComments(idx.Body[node])),
+		title := ftsTitle(meta, node.Slug)
+		body := canon.FTSBody(meta, template.StripComments(idx.Body[node]))
+		for _, text := range []string{title, body} {
+			for i := 0; i < len(text); i++ {
+				seen[text[i]] = true
+			}
+		}
+		if err := insertRow(stmt, title, body,
 			node.Type, node.Slug, filepath.ToSlash(rel)); err != nil {
-			return 0, err
+			return 0, marks{}, err
 		}
 		rows++
 	}
-	return rows, conn.Exec("COMMIT")
+	return rows, pickMarks(&seen), conn.Exec("COMMIT")
 }
 
 // Column weights for bm25: a word in the title counts titleWeight times a
@@ -464,7 +746,7 @@ func ftsTitle(meta *omap.Map, slug string) string {
 // `ORDER BY rank` is FTS5's optimized bm25 ordering (no per-row recompute);
 // snippet(..., -1, ...) picks the best-matching column, so a title hit excerpts
 // the title and a body hit excerpts the body.
-func match(conn *sqlite3.Conn, text string, limit int) ([]Hit, error) {
+func match(conn *sqlite3.Conn, text string, limit int, mk marks) ([]Hit, error) {
 	stmt, _, err := conn.Prepare(matchFTS)
 	if err != nil {
 		return nil, errs.BadSearchQuery(text, sqliteDetail(err))
@@ -476,16 +758,25 @@ func match(conn *sqlite3.Conn, text string, limit int) ([]Hit, error) {
 	if err := stmt.BindInt(2, limit); err != nil {
 		return nil, err
 	}
+	if err := stmt.BindText(3, mk.open); err != nil {
+		return nil, err
+	}
+	if err := stmt.BindText(4, mk.close); err != nil {
+		return nil, err
+	}
 	hits := []Hit{}
 	for stmt.Step() {
+		marked := stmt.ColumnText(4)
 		hits = append(hits, Hit{
-			Type:    stmt.ColumnText(0),
-			Slug:    stmt.ColumnText(1),
-			Title:   stmt.ColumnText(2),
-			Score:   stmt.ColumnFloat(3),
-			Snippet: stmt.ColumnText(4),
-			Path:    stmt.ColumnText(5),
-			rowid:   stmt.ColumnInt64(6),
+			Type:        stmt.ColumnText(0),
+			Slug:        stmt.ColumnText(1),
+			Title:       stmt.ColumnText(2),
+			Score:       stmt.ColumnFloat(3),
+			Snippet:     mk.strip(marked),
+			Path:        stmt.ColumnText(5),
+			rowid:       stmt.ColumnInt64(6),
+			marked:      marked,
+			titleMarked: stmt.ColumnText(7),
 		})
 	}
 	if err := stmt.Err(); err != nil {
@@ -513,4 +804,152 @@ func sqliteDetail(err error) string {
 		return msg[i+2:]
 	}
 	return msg
+}
+
+// pickMarks chooses the marks from the control characters no indexed
+// text holds, so stripping them restores the snippet byte for byte and a
+// mark in a snippet is always one snippet() put there. Tab, newline,
+// vertical tab, form feed and carriage return are never candidates.
+func pickMarks(seen *[256]bool) marks {
+	var free []string
+	for c := byte(1); c < 0x20 && len(free) < 2; c++ {
+		if (c < '\t' || c > '\r') && !seen[c] {
+			free = append(free, string(rune(c)))
+		}
+	}
+	if len(free) < 2 {
+		return marks{} // no section this search; the snippet is unchanged
+	}
+	return marks{open: free[0], close: free[1]}
+}
+
+func (mk marks) strip(s string) string {
+	if mk.open == "" {
+		return s
+	}
+	return strings.NewReplacer(mk.open, "", mk.close, "").Replace(s)
+}
+
+// section returns the heading path to the text a hit's snippet excerpts:
+// the Markdown ATX headings enclosing the snippet's first marked match,
+// or the snippet's start when it marks none (a phrase longer than the
+// snippet, or cut at its start), outermost first. It is nil when the
+// snippet excerpts the title (a tie goes to the title, as snippet() breaks
+// it), when that point falls in the frontmatter values indexed after the
+// body, or when no heading precedes it.
+//
+// The snippet is placed at its first occurrence in the body: snippet()
+// keeps the earliest of equally good fragments, and identical text scores
+// the same. body is the entity's body as indexed, comments stripped.
+func section(h Hit, mk marks, body string, meta *omap.Map) []string {
+	if mk.open == "" || h.marked == h.titleMarked {
+		return nil
+	}
+	// snippet() adds "…" where it cut the column; drop it to get a
+	// fragment of the column's own text.
+	frag := strings.TrimSuffix(strings.TrimPrefix(h.marked, "…"), "…")
+	rel := 0
+	if at := strings.Index(frag, mk.open); at >= 0 {
+		rel = len(mk.strip(frag[:at]))
+	}
+	col := canon.FTSBody(meta, body)
+	start := strings.Index(col, mk.strip(frag))
+	if start < 0 {
+		return nil
+	}
+	// FTSBody trims the joined text, so the body starts at its first
+	// non-space and the frontmatter values follow it.
+	bodyEnd := min(len(strings.TrimLeftFunc(body, unicode.IsSpace)), len(col))
+	if start+rel >= bodyEnd {
+		return nil
+	}
+	return headingPath(col[:bodyEnd], start+rel)
+}
+
+// headingPath returns the ATX headings that enclose byte offset in a
+// Markdown text, outermost first. A line inside a fenced code block is
+// never a heading. Setext headings (a line underlined by === or ---) are
+// not read: "---" is also a thematic break.
+func headingPath(text string, offset int) []string {
+	type heading struct {
+		level int
+		title string
+	}
+	var stack []heading
+	var fence string // the open fence's run of ` or ~; "" outside a fence
+	for pos := 0; pos <= offset && pos < len(text); {
+		end := strings.IndexByte(text[pos:], '\n')
+		if end < 0 {
+			end = len(text)
+		} else {
+			end += pos
+		}
+		line := strings.TrimRight(text[pos:end], "\r")
+		pos = end + 1
+		indent := len(line) - len(strings.TrimLeft(line, " "))
+		if indent > 3 {
+			continue
+		}
+		trimmed := line[indent:]
+		if run := fenceRun(trimmed); fence != "" {
+			if run != "" && run[0] == fence[0] && len(run) >= len(fence) &&
+				strings.TrimSpace(trimmed[len(run):]) == "" {
+				fence = ""
+			}
+			continue
+		} else if run != "" {
+			fence = run
+			continue
+		}
+		level, title, ok := atxHeading(trimmed)
+		if !ok {
+			continue
+		}
+		for len(stack) > 0 && stack[len(stack)-1].level >= level {
+			stack = stack[:len(stack)-1]
+		}
+		if title != "" { // an empty heading closes the deeper ones but names nothing
+			stack = append(stack, heading{level, title})
+		}
+	}
+	if len(stack) == 0 {
+		return nil
+	}
+	path := make([]string, len(stack))
+	for i, h := range stack {
+		path[i] = h.title
+	}
+	return path
+}
+
+// fenceRun returns the run of three or more backticks or tildes that opens
+// line, or "".
+func fenceRun(line string) string {
+	if line == "" || (line[0] != '`' && line[0] != '~') {
+		return ""
+	}
+	n := len(line) - len(strings.TrimLeft(line, line[:1]))
+	if n < 3 {
+		return ""
+	}
+	return line[:n]
+}
+
+// atxHeading reads "# Title", "## Title ##" and the like: one to six #,
+// then a space or the line's end. The closing run of # is dropped.
+func atxHeading(line string) (level int, title string, ok bool) {
+	level = len(line) - len(strings.TrimLeft(line, "#"))
+	if level < 1 || level > 6 {
+		return 0, "", false
+	}
+	rest := line[level:]
+	if rest != "" && rest[0] != ' ' && rest[0] != '\t' {
+		return 0, "", false
+	}
+	rest = strings.TrimSpace(rest)
+	if closed := strings.TrimRight(rest, "#"); closed != rest &&
+		(closed == "" || strings.HasSuffix(closed, " ") || strings.HasSuffix(closed, "\t")) {
+		rest = strings.TrimSpace(closed)
+	}
+	return level, rest, true
 }

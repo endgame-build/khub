@@ -1,6 +1,6 @@
 ---
 name: khub
-description: Use when working in a khub workspace (a repository with a .khub/ directory) to read or write typed, schema-validated context instead of grepping Markdown. Covers retrieval (query, get, neighbors, impact, history, search) and authoring (add, edit, link, unlink, remove). Discovers the active preset, types, and schema at runtime.
+description: Use when working in a khub workspace (a repository with a .khub/ directory) to read or write typed, schema-validated context instead of grepping Markdown. Covers retrieval (retrieve, query, get, neighbors, impact, history, search) and authoring (add, edit, link, unlink, remove). Discovers the active preset, types, and schema at runtime.
 allowed-tools: Bash
 ---
 
@@ -24,11 +24,13 @@ The schema lives at `.khub/ontology.yaml` (the domain model) with `.khub/policy.
 ## Retrieve
 
 - `khub query --type <t> [--<field> <v>] [--tag <t>] [--has <pred>] [--missing <pred>] [--trust human] --format json` — filter by frontmatter; `--missing` surfaces gaps, `--trust` filters by review tier (`unverified`, `machine`, `human`).
-- `khub get <id>... --edges --format json` — one ID returns one object; multiple IDs return an all-or-nothing array in argument order, duplicates included. Raw output accepts one ID only.
+- `khub get <id>... --edges --format json` — one ID returns one object; multiple IDs return an all-or-nothing array in argument order, duplicates included. Raw output accepts one ID only. `--edges` lists every inbound edge from another entity as `derived: true`, named by the relation's declared inverse or else `<source type>.<predicate>`. A derived name is a label; filter with the raw predicate (`query --has <predicate>`).
+- `khub get --path <file>... --format json` (khub 0.32.0 and later) — the entity stored in a file, the same record as `get <id>`. Use it on paths from `grep` or any file search, as printed from the current directory, instead of guessing the slug or reading the raw file. A collection file refuses and lists its ids.
 - `khub neighbors <id> --format json` — one-hop adjacency.
 - `khub impact <id> --format json` — transitive closure over a predicate (blast radius).
 - `khub history <id> --format json` — a supersession chain.
-- `khub search <text> --format json` — BM25 full-text over titles, bodies, and fields; `--plain` takes words as typed (any may match) instead of FTS5 syntax. Hits carry `draft`/`orphan`/`stale` and per-predicate edge counts.
+- `khub search <text> --format json` — BM25 full-text over titles, bodies, and fields; `--plain` takes words as typed (any may match) instead of FTS5 syntax. Hits carry `draft`/`orphan`/`stale`, per-predicate edge counts, and, for a body match under a Markdown heading, `section`: the heading path to the matched text, so you can read that part of the body. With an intent and an exact anchor, send both as groups in one call (`khub search "auth flow" --also '"ForbiddenError"'`): each is ranked on its own and the rankings are fused by reciprocal rank, so a hit in both usually comes first where one `OR` query would bury the rare word. Compare fused rows on `fused` (higher is better) and read `groups`; `score` and `snippet` there come from one group per row, not the same one.
+- `khub retrieve <text> [--expand <pred>[:<depth>]] [--max-bytes <n>] --format json` — the seeds (a search, or `--id <id>` repeated) with their neighbourhood, as full `get` records, in one call. Reach for it when you would otherwise run `search`, then `get` on the hits, then `neighbors` on each: it returns seeds in rank order followed by what they link to, every record with a `reason` (the seed's score, or the predicate, direction and id it was reached from) and the lifecycle flags. Budget it: `--limit` caps the seeds, `--max-entities` and `--max-bytes` trim the far edge first, `--no-body` keeps the frontmatter and edges only. Read `omitted`: `truncated` means something was cut, `insufficient` means the cap could not hold the seeds themselves — raise the cap, lower `--limit` or pass `--no-body` rather than trusting a clipped answer. Use `search` alone when you only need to find; `get` when you already hold the ids and want nothing around them.
 
 ## Know when to write
 
@@ -160,7 +162,7 @@ not been found yet.
 - Gate before you commit: `khub validate` per entity, `khub check` graph-wide.
 - Run `khub validate --strict` in CI. Capture is never blocked, so a typo'd field name (`--knid`) is written to frontmatter and neither default gate reports it; `--strict` is what turns undeclared keys into a finding.
 - `khub search` and `khub query --has/--missing` both reach attribute values, so find an entity by what it holds (`search python`, `query --type component --missing repo`) rather than listing and filtering yourself.
-- Search before `add` (`khub search --plain "<title>"`) so you do not mint a duplicate. A `note:` line on stderr means the result is truncated, empty or missing unparseable files; follow it (raise `--limit`, switch to `query`/`neighbors`/`get`) rather than rephrasing the same search.
+- Search before `add` (`khub search --plain "<title>"`) so you do not mint a duplicate. A `note:` line on stderr means the result is truncated, empty or missing unparseable files; follow it (raise `--limit`, switch to `query`/`neighbors`/`get`) rather than rephrasing the same search. Add `--receipt` to `query` or `search` when you need the counts as data: the JSON becomes `{receipt, results}`, and `receipt` echoes the applied filters (and the FTS5 expression `--plain` built), `matched` before `--limit`, `returned`, and `truncated`.
 - When sources call an entity by another name, record it: `khub edit <id> aliases "Initech,INTC"`. Every ID you pass then resolves through it, a relation written by alias stores the real slug, and `add` refuses a slug that is already someone's alias.
 
 ## What earns a document

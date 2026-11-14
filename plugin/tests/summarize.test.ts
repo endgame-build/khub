@@ -26,6 +26,8 @@ test('the head names the verb and what the call is about', () => {
   expect(head('khub query --type component --format json')).toBe('khub query component')
   expect(head('khub query --draft')).toBe('khub query')
   expect(head('khub search --plain "regex patterns"')).toBe('khub search "regex patterns"')
+  expect(head('khub retrieve --plain "regex patterns" --no-body')).toBe('khub retrieve "regex patterns"')
+  expect(head('khub retrieve --id cmp-search --depth 2')).toBe('khub retrieve cmp-search')
   expect(head('khub schema show adr --format json')).toBe('khub schema show adr')
   expect(head('khub schema')).toBe('khub schema')
   expect(head(`khub link ${ADR} affects cmp-search`)).toBe(`khub link ${ADR}`)
@@ -143,6 +145,34 @@ test('search shows the top hit, and warns with khub\'s note', () => {
   expect(sayOf('khub search zzzz', []).line).toBe('no hits')
 })
 
+test('retrieve says how much it holds, and warns when a cap cut it', () => {
+  expect(say('khub retrieve --plain search --no-body --format json', F.retrieve_search)).toEqual({
+    head: 'khub retrieve "search"',
+    line: '4 entities',
+    tone: 'plain',
+  })
+  expect(say('khub retrieve --id cmp-search --depth 2 --max-entities 2 --no-body --format json', F.retrieve_trimmed)).toEqual({
+    head: 'khub retrieve cmp-search',
+    line: '2 entities · truncated',
+    tone: 'warn',
+  })
+  expect(sayOf('khub retrieve zzzz', { count: 0, entities: [], omitted: { truncated: false } }).line).toBe('no entities')
+  expect(sayOf('khub retrieve auth --max-bytes 300', { count: 1, entities: [{}], omitted: { truncated: true, insufficient: true } })).toEqual({
+    head: 'khub retrieve "auth"',
+    line: '1 entity · insufficient',
+    tone: 'bad',
+  })
+})
+
+test('a --receipt document reads as its results', () => {
+  const receipt = { query: {}, matched: 3, returned: 2, truncated: true }
+  const doc = { receipt, results: [{ id: 'x/a', title: 'A' }, { id: 'x/b' }] }
+
+  expect(sayOf('khub query --receipt', doc).line).toBe('2 entities')
+  expect(sayOf('khub search api --receipt', doc).line).toBe('2 hits · top x/a')
+  expect(previewOf(classify('khub query --receipt', UNIX) as Simple, doc).rows.map(row => row.text)).toEqual(['x/a', 'x/b'])
+})
+
 test('the walks count what they reached', () => {
   expect(say('khub neighbors cmp-search --format json', F.neighbors_search).line).toBe('3 neighbors · in 1 · out 2')
   expect(say('khub impact cmp-storage --reverse --format json', F.impact_storage).line).toBe('1 affected · depth 1')
@@ -238,6 +268,21 @@ test('a get of several entities lists them, and a get of one lists none', () => 
     { text: 'x/b', note: 'B', flags: [] },
   ])
   expect(list('khub get cmp-search --edges --format json', F.get_search)).toEqual({ rows: [], more: 0 })
+})
+
+test('a retrieval lists its entities with their titles and flags', () => {
+  expect(list('khub retrieve --plain search --no-body --format json', F.retrieve_search)).toEqual({
+    rows: [
+      { text: 'component/cmp-search', note: 'Search', flags: [] },
+      { text: 'component/cmp-storage', note: 'Storage', flags: [] },
+      { text: 'repo/rp-api', note: 'API', flags: [] },
+      { text: 'use-case/uc-find-a-document', note: 'Find a document', flags: [] },
+    ],
+    more: 0,
+  })
+  expect(listOf('khub retrieve x', { count: 1, entities: [{ id: 'adr/a', title: 'A', draft: true }], omitted: {} }).rows).toEqual([
+    { text: 'adr/a', note: 'A', flags: ['draft'] },
+  ])
 })
 
 test('neighbors show the direction and the predicate', () => {

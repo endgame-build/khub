@@ -40,6 +40,7 @@ commands:
   params:
   - 'arg:id_'
   - '--edges'
+  - '--path'
   - '--format'
 - name: 'edit'
   params:
@@ -88,12 +89,30 @@ commands:
   - '--active'
   - '--limit'
   - '--format'
+  - '--receipt'
 - name: 'search'
   params:
   - 'arg:text'
   - '--type'
   - '--limit'
   - '--plain'
+  - '--also'
+  - '--format'
+  - '--receipt'
+- name: 'retrieve'
+  params:
+  - 'arg:text'
+  - '--id'
+  - '--type'
+  - '--plain'
+  - '--expand'
+  - '--in'
+  - '--out'
+  - '--depth'
+  - '--limit'
+  - '--max-entities'
+  - '--max-bytes'
+  - '--no-body'
   - '--format'
 - name: 'neighbors'
   params:
@@ -233,10 +252,14 @@ error_codes:
 # and the legacy shape that could still trip it is deleted with legacy.go.
 - no_preset
 - no_schema_snapshot
+- no_seed
 - no_slug_source
 - no_workspace
 - number_violation
 - os_error
+- path_is_collection
+- path_not_entity
+- path_outside_workspace
 - pattern_violation
 - preset_mismatch
 - raw_linkml_smuggled
