@@ -66,6 +66,15 @@ Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelo
 - **`docs/cli-output-contract.md`.** One page for what a program reading khub
   may rely on: when stdout is JSON, one value per call, the JSON dialect,
   stderr, exit codes and the refusal envelope.
+- **Dead relative links.** `validate` reports a relative link in any Markdown
+  body (inline link, image or reference definition) whose file does not exist
+  as a `body` gap, `dead link '<dest>' (no such file)`. Resolved from the
+  entity's directory and case-exact on every platform; links in fenced or
+  indented code, comments and code spans, external URLs, anchors and
+  root-relative paths are not read, and a link that resolves outside the
+  workspace (directly or through a symlink) is skipped, never probed. A gap
+  never fails the gate, so `validate` output gains rows but no exit code
+  moves. `check` does not report them. Closes #52.
 
 ### Changed
 
