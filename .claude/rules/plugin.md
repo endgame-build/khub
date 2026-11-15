@@ -43,7 +43,8 @@ changes what the model reads.
   hands the pure functions the matching `Flavour` from `hooks/workspace.ts`.
 
 The mod API is early access and moves between Claude Code releases. Everything
-below under "Engine rules" was observed on Claude Code 2.1.288 and 2.1.291.
+below under "Engine rules" was observed on Claude Code 2.1.288, 2.1.291 and
+2.1.325. CI pins 2.1.325.
 
 ## What the mod may not do
 
@@ -108,6 +109,10 @@ below under "Engine rules" was observed on Claude Code 2.1.288 and 2.1.291.
   blocks a tool. In a `.catch`, `next(e)` replays what the call settled to and
   runs nothing twice. The Bash hook's handler also clears the call's row, so a
   row never stays running.
+- **The band holds one row per plugin.** The engine asks each plugin that hooks
+  `AbovePrompt` for its own row and stacks the rows. A mounted band in a test
+  holds every plugin's row, so a test asserts on khub's row, never on the
+  absence of another's. `next(e)` draws no row for khub.
 - **A grouped row draws its result inline, and a standalone row gets a
   `ToolResult` block.** The normal view of a verbose session groups calls, draws
   each as a `ToolUse` row with the result inside it, and raises no `ToolResult`

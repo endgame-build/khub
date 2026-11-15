@@ -6,7 +6,7 @@ import { as, fakeHost, ROOT, settled, START } from './helpers'
 
 const ADD = 'khub add adr --title "Use RE2 patterns" --status accepted'
 const SURFACES = ['terminal', 'desktop'] as const
-const BAND = { hasSurvey: false, isWorking: false, maxRows: 4, bodyColumns: 80, scroll: { offset: 0, bodyRows: 1 }, view: {} }
+const BAND = { hasSurvey: false, isCollapsed: false, isWorking: false, maxRows: 4, bodyColumns: 80, scroll: { offset: 0, bodyRows: 1 }, view: {} }
 const BASELINE = ['--version', 'schema --format json', 'check --format json', 'query --format json']
 const REFRESH = ['check --format json', 'query --format json']
 
@@ -35,7 +35,8 @@ const resultBlock = (id: string, surface: (typeof SURFACES)[number] = 'terminal'
   props: { tool_use_id: id, tool: 'Bash', output: { stdout: '', stderr: '', interrupted: false }, isErrored: false },
 })
 
-// The engine's own drawing, for a row or a band the mod leaves alone.
+// What draws when the mod passes: the engine for a row, and for the band
+// another plugin's row, since each plugin draws its own row there.
 function engine(on: On) {
   on('ui.render', ($, e) => {
     const { Text } = $.ui.resolve(e)
@@ -80,6 +81,7 @@ test('outside a workspace the mod runs nothing and draws nothing', async ($, on)
   expect(host.ran).toEqual([])
   expect(host.statuses).toEqual([])
   expect(await (await $.ui.mount(band())).find({ type: 'Text', text: /^engine drawing$/ })).toBeDefined()
+  expect(await (await $.ui.mount(band())).find({ type: 'Text', text: /^khub$/ })).toBe(undefined)
 })
 
 test('the band shows the preset, the count and the gate, dim, with no bracket', async ($, on) => {
@@ -94,7 +96,6 @@ test('the band shows the preset, the count and the gate, dim, with no bracket', 
     expect((await ui.find({ type: 'Text', text: /^build-hub 0\.7\.0 · 8 entities$/ }))?.props.dimColor).toBe(true)
     expect((await ui.find({ type: 'Text', text: /^ · check ✓$/ }))?.props.dimColor).toBe(true)
     expect(await ui.find({ type: 'Text', text: /^ \[$/ })).toBe(undefined)
-    expect(await ui.find({ type: 'Text', text: /^engine drawing$/ })).toBe(undefined)
     expect(await ui.find({ type: 'Button' })).toBe(undefined)
     await ui.unmount()
   }
@@ -108,6 +109,7 @@ test('while a survey holds the band, it is the engine\'s', async ($, on) => {
   const ui = await $.ui.mount({ ...band(), props: { ...BAND, hasSurvey: true } })
 
   expect(await ui.find({ type: 'Text', text: /^engine drawing$/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /^khub$/ })).toBe(undefined)
 })
 
 test('a khub add runs unchanged, draws a compact row and shows +1 on the band', async ($, on) => {
@@ -494,6 +496,7 @@ test('an older khub is named on the status line and every hook passes', async ($
   expect(host.statuses).toEqual(['needs khub 0.27.0 or newer'])
   expect(host.ran).toEqual(['--version'])
   expect(await (await $.ui.mount(band())).find({ type: 'Text', text: /^engine drawing$/ })).toBeDefined()
+  expect(await (await $.ui.mount(band())).find({ type: 'Text', text: /^khub$/ })).toBe(undefined)
 })
 
 test('a khub updated during the session is picked up at the next turn start', async ($, on) => {

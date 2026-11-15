@@ -382,7 +382,7 @@ jobs:
           node-version: "22"
       # Pinned: the mod API is early access and moves between releases.
       - name: Install Claude Code
-        run: npm install -g @anthropic-ai/claude-code@2.1.291
+        run: npm install -g @anthropic-ai/claude-code@2.1.325
       - name: shellcheck
         run: shellcheck plugin/tools/*.sh
       - name: Marketplace manifest
