@@ -259,15 +259,15 @@ func TestReplaceKeepsOtherEntries(t *testing.T) {
 	if got := storeText(t, root); got != want {
 		t.Fatalf("store:\n%s\nwant:\n%s", got, want)
 	}
-	// The last entry, a flow mapping, replaced, keeps the comment trailing it.
-	if err := os.WriteFile(filepath.Join(root, ".khub", "queries.yaml"), []byte(want+"# end\n"), 0o644); err != nil {
-		t.Fatal(err)
+	// An entry written inline as {…} cannot be spliced in place, so replacing it
+	// refuses and the file keeps every byte.
+	_, err := Save(root, "last", Definition(query.Filters{Tag: str("x")}), true)
+	var located *errs.Located
+	if !errors.As(err, &located) || located.Code != "saved_query_unspliceable" {
+		t.Fatalf("replacing an inline entry: %v", err)
 	}
-	if _, err := Save(root, "last", Definition(query.Filters{Tag: str("x")}), true); err != nil {
-		t.Fatal(err)
-	}
-	if got, w := storeText(t, root), strings.Replace(want, "last: {type: api, limit: 2}  # flow kept\n", "last:\n  tag: x\n", 1)+"# end\n"; got != w {
-		t.Fatalf("store:\n%s\nwant:\n%s", got, w)
+	if got := storeText(t, root); got != want {
+		t.Fatalf("a refused save wrote:\n%s", got)
 	}
 }
 

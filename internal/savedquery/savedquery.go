@@ -291,7 +291,7 @@ func Save(root, name string, def *omap.Map, replace bool) (Outcome, error) {
 			outcome = Replaced
 		}
 		store.Set(name, def)
-		text, err := render(old, store, name, existed)
+		text, err := render(old, store, name)
 		if err != nil {
 			return "", err
 		}
@@ -330,9 +330,10 @@ func read(root string) (string, *omap.Map, error) {
 
 // render writes the store. A missing file is emitted whole. An existing one
 // is spliced so every byte the save need not touch survives: a new name is
-// appended, a replaced definition is re-emitted in place as one entry. A
-// change neither can make safely refuses; nothing is written.
-func render(old string, store *omap.Map, name string, existed bool) (string, error) {
+// appended and a replaced definition is spliced in place. A change the
+// splice cannot make safely (an entry written inline as {…}, an anchor or an
+// alias) refuses; nothing is written.
+func render(old string, store *omap.Map, name string) (string, error) {
 	if old == "" {
 		text, err := canon.DumpRT(store)
 		if err != nil {
@@ -341,9 +342,6 @@ func render(old string, store *omap.Map, name string, existed bool) (string, err
 		return header + text, nil
 	}
 	out, err := canon.SpliceMapping([]byte(old), store, canon.Mode12)
-	if errors.Is(err, canon.ErrNoSplice) && existed {
-		out, err = canon.ReplaceEntry([]byte(old), store, name, canon.Mode12)
-	}
 	if errors.Is(err, canon.ErrNoSplice) {
 		return "", errs.New("saved_query_unspliceable", fmt.Sprintf(
 			"Cannot save query '%s' without rewriting the rest of %s (its layout, an anchor or an alias "+
