@@ -40,6 +40,14 @@ Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelo
   with their evidence instead of merging. A design only; no command changes.
   `docs/build-hub-preset.md` now records a facet id as an `aliases` entry
   (`facet:FUNC-007`) instead of a tag.
+- `docs/ingestion-alignment.md`, the alignment ladder for the planned
+  ingestion path, companion to `docs/ingestion-conflicts.md`: a reference in a
+  source record resolves by exact source id or khub id, an unknown source id
+  gets a draft stub carrying it as an alias, and look-alikes are proposed with
+  stable evidence codes (`title_equal`, `alias_equal`, `title_match`,
+  `text_match`) but never linked. Also sets out the `exact` and `full`
+  alignment modes and the linker numbers the ingestion goldens will measure.
+  A design only; no command changes.
 
 ### Changed
 
