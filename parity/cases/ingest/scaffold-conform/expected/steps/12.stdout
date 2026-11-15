@@ -11,7 +11,7 @@ Extract every record the source supports into the envelope below.
 - Quote the passage a record came from in source. Give confidence from 0 to 1 when a value is uncertain; an uncertain record is captured as a draft.
 - A type that lists body sections takes its prose as Markdown under those ## headings, in that order.
 
-Supplied by khub, never filled: type, created, updated, draft.
+Supplied by khub, never filled: type, created, updated, generated.
 
 ## Envelope
 
@@ -27,12 +27,14 @@ Id: minted by khub as `slug`; never set it.
 
 | field | kind | required | allowed |
 |---|---|---|---|
+| status | text |  | one of draft, stable, deprecated; default stable |
 | author | text |  |  |
 | title | text |  |  |
 | description | text |  |  |
 | resource | text |  |  |
 | tags | list |  |  |
 | aliases | list |  |  |
+| stale_after | datetime |  | matches `\d{4}-\d{2}-\d{2}[Tt]\d{2}:\d{2}:\d{2}(\.\d+)?([Zz]|[+-]\d{2}:\d{2})` |
 | name | text | ✓ |  |
 | industry | text |  |  |
 | crm_id | text |  | matches `^[0-9]+$` |
@@ -41,7 +43,6 @@ Id: minted by khub as `slug`; never set it.
 | relation | to | many | required |
 |---|---|---|---|
 | related | any | ✓ |  |
-| sources | any | ✓ |  |
 | references | any | ✓ |  |
 | depends_on | any | ✓ |  |
 | partner | partnership |  |  |

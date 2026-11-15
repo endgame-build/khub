@@ -12,10 +12,10 @@ steps:
 - argv: ["schema", "conform", "-"]
   stdin: |
     {"entities": [
-      {"type": "adr", "fields": {"title": "Use Postgres", "status": "accepted"},
+      {"type": "adr", "fields": {"title": "Use Postgres", "decision": "accepted"},
        "body": "## Context\n\nWe need a store.\n\n## Consequences\n\nOne more service.\n"},
-      {"type": "adr", "fields": {"title": "Keep SQLite", "status": "proposed"}},
+      {"type": "adr", "fields": {"title": "Keep SQLite", "decision": "proposed"}},
       {"type": "requirement", "fields": {"title": "Settle fast", "kind": "non-functional"}, "body": "Under 300 ms.", "confidence": 0.4},
-      {"type": "adr", "fields": {"title": "Blank body", "status": "accepted"}, "body": "  \n"},
+      {"type": "adr", "fields": {"title": "Blank body", "decision": "accepted"}, "body": "  \n"},
       {"type": "prd", "fields": {"title": "Product"}}
     ]}

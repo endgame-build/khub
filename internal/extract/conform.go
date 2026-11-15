@@ -159,10 +159,14 @@ func conformEntity(
 	for _, key := range ent.Fields.Keys() {
 		value, _ := ent.Fields.Get(key)
 		switch {
+		case key == "draft" && !rtype.Declares(key):
+			// The retired publish flag: add refuses it (draft_retired); the
+			// envelope says `status: draft`, or the add runs with --draft.
+			fail(key, errs.DraftRetired().Message)
 		case supplied[key]:
-			// The contract lists these as khub's own; on add `draft` is a
-			// flag and `created` would date the id, so an extractor setting
-			// one is a contract fault, not a value to judge.
+			// The contract lists these as khub's own; on add `created` would
+			// date the id and `generated` is stamped over, so an extractor
+			// setting one is a contract fault, not a value to judge.
 			fail(key, fmt.Sprintf("'%s' is supplied by khub on write; leave it out of fields", key))
 		case key == "body" && rtype.Storage.Fmt != "md":
 			// The reserved prose key of a json/yaml entity (create refuses it
@@ -181,7 +185,15 @@ func conformEntity(
 				relations.Set(key, append(listOf(relations, key), targets...))
 				continue
 			}
-			if _, isAttr := rtype.Attributes.Get(key); isAttr {
+			if attr, isAttr := rtype.Attributes.Get(key); isAttr {
+				// An object, or a list of them (the OKF `verified`, `sources`
+				// and `usage_window` families), has no command-line spelling:
+				// add refuses it as value_shape, so the contract does not ask
+				// for it and an entry carrying one is a fault, not a value.
+				if attr.HoldsObjects() {
+					fail(key, errs.ValueShape("", key, attr.BaseType == "list").Message)
+					continue
+				}
 				// partition stores a blank declared attribute as null — absent,
 				// so a required one is a gap — never as the '' validate rejects.
 				if s, isStr := value.(string); isStr && strings.TrimSpace(s) == "" {
@@ -198,7 +210,7 @@ func conformEntity(
 	for _, predicate := range relations.Keys() {
 		rel, ok := rtype.Relations.Get(predicate)
 		if !ok {
-			fail(predicate, errs.IllegalPredicate(predicate, ent.Type).Message)
+			fail(predicate, errs.IllegalPredicate(predicate, ent.Type, rtype.Relations.Keys()).Message)
 			continue
 		}
 		resolved := []string{}

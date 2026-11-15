@@ -470,10 +470,10 @@ func TestConformEdges(t *testing.T) {
 func TestConformBodyShape(t *testing.T) {
 	root := wsFor(t, "build-hub")
 	report := conform(t, root, `{"entities": [
-	  {"type": "adr", "fields": {"title": "Use Postgres", "status": "accepted"}, "body": "## Context\n\nx\n\n## Consequences\n\ny\n"},
-	  {"type": "adr", "fields": {"title": "No body", "status": "accepted"}},
-	  {"type": "adr", "fields": {"title": "Full", "status": "accepted"}, "body": "## Context\n\nx\n\n## Decision\n\ny\n\n## Consequences\n\nz\n"},
-	  {"type": "adr", "fields": {"title": "Blank", "status": "accepted"}, "body": "  \n"}
+	  {"type": "adr", "fields": {"title": "Use Postgres", "decision": "accepted"}, "body": "## Context\n\nx\n\n## Consequences\n\ny\n"},
+	  {"type": "adr", "fields": {"title": "No body", "decision": "accepted"}},
+	  {"type": "adr", "fields": {"title": "Full", "decision": "accepted"}, "body": "## Context\n\nx\n\n## Decision\n\ny\n\n## Consequences\n\nz\n"},
+	  {"type": "adr", "fields": {"title": "Blank", "decision": "accepted"}, "body": "  \n"}
 	]}`)
 	e := report.Entities
 	if !e[3].OK || e[3].ID != "adr/ad-"+time.Now().UTC().Format("2006-01-02")+"-blank" {
@@ -523,4 +523,47 @@ func treeOf(t *testing.T, root string) string {
 		t.Fatal(err)
 	}
 	return b.String()
+}
+
+// The OKF 0.2 base fields through conform, each as add treats it: the
+// retired `draft` key is add's draft_retired; an object-valued attribute (a
+// review event list, the `generated` stamp) is a supplied key or add's
+// value_shape, since no command-line value spells a mapping; `status: draft`
+// is a value the extractor may state; and a slug whose file would be an OKF
+// navigation name is add's invalid_slug. The scaffold asks for none of the
+// object-valued families.
+func TestConformMirrorsOKFBaseFields(t *testing.T) {
+	root := seeded(t)
+	report := conform(t, root, `{"entities": [
+	  {"type": "client", "fields": {"name": "Hooli", "draft": true}},
+	  {"type": "client", "fields": {"name": "Umbrella", "verified": [{"by": "human:x", "at": "2026-01-15T00:00:00Z"}]}},
+	  {"type": "client", "fields": {"name": "Soylent", "status": "draft", "generated": {"by": "x"}}},
+	  {"type": "client", "fields": {"name": "Index"}}
+	]}`)
+	e := report.Entities
+	if len(e[0].Errors) != 1 || e[0].Errors[0].Field != "draft" || e[0].Errors[0].Reason != errs.DraftRetired().Message {
+		t.Errorf("draft key: %+v", e[0])
+	}
+	if len(e[1].Errors) != 1 || e[1].Errors[0].Field != "verified" ||
+		e[1].Errors[0].Reason != errs.ValueShape("", "verified", true).Message {
+		t.Errorf("object-valued attribute: %+v", e[1])
+	}
+	if len(e[2].Errors) != 1 || e[2].Errors[0].Field != "generated" ||
+		!strings.Contains(e[2].Errors[0].Reason, "supplied by khub") || e[2].ID != "client/soylent" {
+		t.Errorf("status: draft with a generated stamp: %+v", e[2])
+	}
+	if e[3].ID != "" || len(e[3].Errors) != 1 || e[3].Errors[0].Field != "id" ||
+		e[3].Errors[0].Reason != errs.NavigationSlug("index", "client", "index.md", errs.Minted).Message {
+		t.Errorf("navigation slug: %+v", e[3])
+	}
+	tv := typeNamed(t, scaffold(t, root, "client"), "client")
+	fields, _ := tv.Get("fields")
+	for _, f := range fields.([]any) {
+		name := value(f.(*omap.Map), "name")
+		for _, obj := range []string{"generated", "verified", "sources", "usage_window"} {
+			if name == obj {
+				t.Errorf("object-valued %s listed as a field to fill", obj)
+			}
+		}
+	}
 }

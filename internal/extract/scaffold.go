@@ -109,6 +109,12 @@ func typeContract(root string, rtype *schema.ResolvedType, supplied map[string]b
 			continue
 		}
 		attr, _ := rtype.Attributes.Get(name)
+		if attr.HoldsObjects() {
+			// No command-line spelling, so no add can carry it: the OKF
+			// review and provenance families are khub's to write (verify,
+			// import), never an extractor's to fill.
+			continue
+		}
 		f := omap.New()
 		f.Set("name", attr.Name)
 		f.Set("kind", attr.BaseType)

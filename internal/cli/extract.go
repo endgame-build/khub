@@ -265,7 +265,7 @@ func ruleWords(v any) string {
 	}
 	var parts []string
 	if wc, ok := get(rules, "word_count").(*omap.Map); ok {
-		parts = append(parts, bounds(get(wc, "min"), get(wc, "max"), "words"))
+		parts = append(parts, ruleBounds(get(wc, "min"), get(wc, "max"), "words"))
 	}
 	for _, r := range listAt(rules, "required_text") {
 		parts = append(parts, fmt.Sprintf("must say %v", r))
@@ -279,14 +279,14 @@ func ruleWords(v any) string {
 		if lang := get(cv, "lang"); lang != nil {
 			subject = fmt.Sprintf("%v block(s)", lang)
 		}
-		parts = append(parts, bounds(get(cv, "min"), get(cv, "max"), subject))
+		parts = append(parts, ruleBounds(get(cv, "min"), get(cv, "max"), subject))
 	}
 	return strings.Join(parts, "; ")
 }
 
-// bounds words a min/max pair: "25 to 80 words", "at least 25 words", "at
+// ruleBounds words a min/max pair: "25 to 80 words", "at least 25 words", "at
 // most 80 words".
-func bounds(low, high any, subject string) string {
+func ruleBounds(low, high any, subject string) string {
 	switch {
 	case low != nil && high != nil:
 		return fmt.Sprintf("%v to %v %s", low, high, subject)
