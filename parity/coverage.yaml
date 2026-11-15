@@ -196,6 +196,7 @@ commands:
 - name: 'backfill'
   params:
   - '--type'
+  - '--infer-type'
   - '--dry-run'
 - name: 'wire'
   params:

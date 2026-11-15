@@ -127,6 +127,15 @@ Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelo
   `Would link …`, `Would unlink …`, `Would remove …`, or the write's own no-op
   line. The plugin (0.1.10) draws a dry run as a preview and never counts it
   as a session edit. Closes #59.
+- **`backfill --infer-type`.** A stray whose frontmatter has no `type` is
+  stamped with the one type whose layout holds it, and is then an ordinary
+  entity for `validate` and `check`. It covers `file`, `folder` and `singleton`
+  layouts. A file with no frontmatter, a file starting with a byte-order
+  mark, a file naming another type and a collection row stay strays, and the
+  run lists each with its reason. An authored `type` is never overwritten: a
+  write that would replace a present value refuses with the new code
+  `would_overwrite` (exit 2, `field` names the key). `--dry-run` previews the
+  stamp. The khub skill points agents at it. Closes #78.
 
 ### Changed
 

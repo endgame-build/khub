@@ -40,7 +40,7 @@ Commands:
   import  Read an OKF bundle into the workspace as drafts: khub import --okf DIR.
   viz  Render the typed graph to a self-contained Cytoscape HTML: khub viz [--out F] [--open] [--type T].
   serve  Serve a read-only graph view on loopback: khub serve [--port 7777].
-  backfill  Backfill missing dates and frontmatter: khub backfill [--type T] [--dry-run].
+  backfill  Backfill missing dates and frontmatter: khub backfill [--type T] [--infer-type] [--dry-run].
   wire  Wire the workspace into agent context files (CLAUDE.md gets ``@`` imports of the
 schema layer files; AGENTS.md gets a schema pointer). Bare ``wire`` updates whichever already exist.
   schema  Introspect the active schema.
@@ -549,10 +549,11 @@ Options:
 $ khub backfill --help
 Usage: khub backfill [OPTIONS]
 
-Backfill missing dates and frontmatter: khub backfill [--type T] [--dry-run].
+Backfill missing dates and frontmatter: khub backfill [--type T] [--infer-type] [--dry-run].
 
 Options:
   --type <str>  Add missing per-type frontmatter scaffolding for that type.
+  --infer-type  Stamp type on a stray file from the one layout that holds it (file, folder and singleton layouts). A stray with no frontmatter, another type, or a collection row is left and listed.
   --dry-run  List the entities and fields that would change; write nothing.
   --help  Show this message and exit.
 

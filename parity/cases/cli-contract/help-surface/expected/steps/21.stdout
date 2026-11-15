@@ -1,9 +1,10 @@
 Usage: khub backfill [OPTIONS]
 
-Backfill missing dates and frontmatter: khub backfill [--type T] [--dry-run].
+Backfill missing dates and frontmatter: khub backfill [--type T] [--infer-type] [--dry-run].
 
 Options:
   --type <str>  Add missing per-type frontmatter scaffolding for that type.
+  --infer-type  Stamp type on a stray file from the one layout that holds it (file, folder and singleton layouts). A stray with no frontmatter, another type, or a collection row is left and listed.
   --dry-run  List the entities and fields that would change; write nothing.
   --help  Show this message and exit.
 

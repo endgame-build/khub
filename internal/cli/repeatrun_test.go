@@ -116,6 +116,7 @@ var readCalls = map[string][][]string{
 		{"backfill", "--dry-run"},
 		{"backfill", "--type", "component", "--dry-run"},
 		{"backfill", "--type", "requirement", "--dry-run"},
+		{"backfill", "--infer-type", "--dry-run"},
 	},
 	"wire": {{"wire", "--dry-run", "--target", "both"}},
 	"upgrade": {

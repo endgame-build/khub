@@ -150,6 +150,7 @@ Which codes carry which keys:
 | `strict_unknown_field` | the undeclared key | the type's fields, attributes then relations, in declaration order | nearest field |
 | `draft_retired` | `draft` | | |
 | `flag_shadowed` | the field the flag shadows | | |
+| `would_overwrite` | the key that already holds a value | | |
 | `id_prefix_undecided` | the deciding attribute | its members, in declaration order | |
 | `filter_error`, for an undeclared field or a `--count` name | the undeclared name | the declared fields, or the relations and inverses `--count` takes, sorted | nearest name |
 | `filter_error`, for an unknown trust tier | | the tiers the option takes, lowest first | nearest tier |
