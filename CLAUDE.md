@@ -47,6 +47,7 @@ bash parity/tools/coverage-floor.sh "$PWD/khub-cover" /tmp/cov    # parity with 
 KHUB=$PWD/khub bash parity/scale/smoke.sh --scale 300            # a generated corpus against its own manifest, plus the footprint pin
 bash parity/compat/smoke.sh <old-khub> "$PWD/khub"               # a workspace an older binary wrote survives this one
 go run ./parity/scale/bench -bin ./khub -profile gate -format json > bench.json && go run ./parity/scale/gate -baseline parity/scale/baseline.json bench.json
+go run ./parity/tools/presetdocs                                 # regenerate docs/<preset>-preset.md tables (fresh build)
 ```
 
 CI runs the first block on three OSes per PR (`ci.yml`), the race detector,
@@ -179,5 +180,8 @@ layer files into an engagement's `.khub/` and the templates to
 module root (a `//go:embed` pattern cannot contain `..`, so the embed cannot live
 under `internal/`).
 
-The preset is the source of truth for its schema; planning specs may drift from
-it (see `docs/firm-ops-preset.md`, `docs/build-hub-preset.md`).
+The preset is the source of truth for its schema. The tables in
+`docs/<preset>-preset.md` between `GENERATED` markers are generated from
+`khub schema --format json` (`go run ./parity/tools/presetdocs`, which builds
+khub fresh from the checkout) and CI fails when they drift; the prose around them is hand-written. Every
+preset needs such a doc, and every type a generated section.

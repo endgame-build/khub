@@ -66,6 +66,14 @@ Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelo
   verify only a review that happened, claim a write only on exit 0); and the
   write loop as generate, validate, iterate. Reinstall or update the plugin,
   or rerun `npx skills add endgame-build/khub`, to pick it up.
+- **Preset reference docs are generated.** The version, counts, base block,
+  relation vocabulary and per-type attribute tables in
+  `docs/firm-ops-preset.md` and `docs/build-hub-preset.md` now come from
+  `khub schema --format json` (`go run ./parity/tools/presetdocs`), and CI
+  fails when they drift from the preset. Regenerating corrected the firm-ops
+  page, which had missed the base `aliases` attribute, the required `name` on
+  `opportunity` and the required `title` on five types. A preset with no doc,
+  or a type with no generated section, fails the gate.
 
 ### Fixed
 
