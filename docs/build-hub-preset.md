@@ -62,7 +62,7 @@ knowledge/
 index.md                  # the whole corpus in one file — written by init, refreshed by reindex
 ```
 
-**Slugs are lowercase.** `add --id` slugifies whatever you pass and id resolution is case-sensitive. Minting reads no siblings, so two branches minting the same title collide on one filename instead of numbering past each other. The scheme is in [`schema.md`](schema.md).
+**Slugs are lowercase.** `add --id` slugifies whatever you pass, and lookup tries the exact slug before folding case. Minting reads no siblings, so two branches minting the same title collide on one filename instead of numbering past each other. The scheme is in [`schema.md`](schema.md).
 
 ## The types
 
@@ -112,7 +112,7 @@ Read each predicate as a verb from the entity that stores it: a use case is *per
 
 ## The three walks
 
-- **What breaks for users if this component dies.** `impact cmp-payments --reverse --predicate served_by`: the use cases whose `served_by` names it, then their actors.
+- **What breaks for users if this component dies.** `impact cmp-payments --reverse --predicate served_by`: the use cases whose `served_by` names it; their actors are one `neighbors <uc> --out --predicate actor` away.
 - **What realizes this capability.** The use cases whose `capability` names it, then their `served_by` components. Two hops, never stored: a `component.capabilities` edge would only drift.
 - **What breaks when an external API changes.** `impact api-stripe-charges --reverse --predicate consumes`: the components that consume it; then `impact <cmp> --reverse --predicate served_by` on each for the use cases they serve. Two walks, one per predicate.
 
@@ -249,7 +249,7 @@ event:
 
 ## Narrative roots and the orphan sweep
 
-`prd` and `arc42` declare `orphan: true` in `policy.yaml`. Every stored edge points up the durability ladder and both documents sit above its top, so nothing points at them and they point at nothing; without the flag they would be permanent findings that no authoring could ever close, and `check --strict` could never go green on a correct workspace. The flag is per type, never inferred from `layout: singleton`. See [`schema.md`](schema.md#type-level-gates).
+`prd` and `arc42` declare `orphan: true` in `policy.yaml`. Every stored edge points up the durability ladder and both documents sit above its top, so nothing points at them and they point at nothing; without the flag they would be permanent findings that no authoring could ever close, and `check --strict` could never go green on a correct workspace. The flag is per type, never inferred from `layout: singleton`. See [`schema.md`](schema.md#workspace-gates-policyyaml).
 
 ## kb parity
 

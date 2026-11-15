@@ -12,8 +12,8 @@ If `khub` is not installed (`command not found`), load the `setup` skill first �
 
 ## Decide the next call from the last result
 
-This skill is not a fixed pipeline. Every khub call but `reindex` answers in JSON, and that
-answer decides the next call: an id you did not have, an edge to walk, an `error` naming the
+This skill is not a fixed pipeline. Every khub call but the operator commands (`reindex`, `viz`, `serve`, `backfill`,
+`wire`) answers in JSON, and that answer decides the next call: an id you did not have, an edge to walk, an `error` naming the
 field to fix, a `gaps` entry, a stderr `note:` saying a search was cut short.
 
 - **A closed ask** (one fact, one write, an id you already hold): plan the calls up front,
@@ -35,7 +35,7 @@ Never hardcode a type or a field: the first four rows read the live schema.
 | know whether the schema moved under the data | `khub schema diff --format json` | `pending: true` → entities may predate it. `no_schema_snapshot` means no baseline exists; do not run `schema snapshot` (a write) to answer a read |
 | pick up where work left off | `khub recent [--days N] --format json` | newest first, a week by default. It dates by `updated`, else the last commit, so an uncommitted hand edit without `updated` does not show |
 | read an entity whose id you hold | `khub get <id>... --edges --format json` | `get` an edge's target, or `neighbors` |
-| read the entity a file holds | `khub get --path <file>... --format json` (khub 0.32.0 and later) | the same record as `get <id>`; use it on paths from `grep` instead of guessing the slug. A collection file refuses and lists its ids |
+| read the entity a file holds | `khub get --path <file>... --format json` (khub 0.32.0 and later) | the same record as `get <id>`; use it on paths from `grep`, as printed from the current directory, instead of guessing the slug. A collection file refuses and lists its ids |
 | find entities by a field, tag, edge or review tier | `khub query --type <t> [--<field> <v>] [--tag <t>] [--has/--missing <pred>] [--trust <tier>] --format json` | `get` the rows you need; `--missing` finds gaps, `--trust` takes `unverified`, `machine` or `human`. Filter here rather than listing and filtering yourself |
 | find everything under an entity | `khub query --under <id> --via <pred> --format json` | any number of hops, ANDed with the other filters. A stored `<pred>` points from child to parent (`--via system`); for one stored on the parent, pass its declared inverse (`--via superseded`) |
 | find entities by how many edges they have | `khub query --count '<pred>>=2'` / `--in-count '>=5'` / `--out-count 0` | ops `= != < <= > >=`; repeat to AND, e.g. a range. Quote the bound: `>` and `<` are shell redirects |
@@ -61,8 +61,8 @@ The schema lives at `.khub/ontology.yaml` (the domain model) with `.khub/policy.
 Take the cheapest row of the table that can answer, and step only on a named gap:
 
 1. **Exact** — `get` when you hold an id or a path, `query` when you know a field, tag or
-   edge. Several ids to `get` return an all-or-nothing array in argument order, duplicates
-   included; raw output accepts one id only.
+   edge. One id to `get` returns one object; several return an all-or-nothing array in
+   argument order, duplicates included; raw output accepts one id only.
 2. **Graph** — `neighbors`, `impact`, `history` from an id you hold.
 3. **Lexical** — `search`, BM25 over titles, bodies and fields; FTS5 syntax unless
    `--plain`, which takes words as typed (any may match).
@@ -90,6 +90,7 @@ truncated, empty or missing unparseable files: raise `--limit` or switch to
   frontmatter and edges only. In `omitted`, `truncated` means something was cut and
   `insufficient` means the cap could not hold the seeds themselves: raise the cap, lower
   `--limit` or pass `--no-body` rather than trusting a clipped answer.
+  Use `search` alone when you only need to find, and `get` when you already hold the ids.
 - **Receipts.** Add `--receipt` to `query` or `search` when you need the counts as data: the
   JSON becomes `{receipt, results}`, and `receipt` echoes the applied filters (and the FTS5
   expression `--plain` built), `matched` before `--limit`, `returned`, and `truncated`.
@@ -119,8 +120,8 @@ Every write goes through the CLI — the only path that validates and resolves r
 entity file gets hand-edited anyway, run `khub validate` on it immediately: an unvalidated
 hand-edit is how a workspace acquires a field no default gate will report.
 
-`add` takes relation fields inline (`--client acme-corp`) and rejects a missing target, but
-captures a missing required field for `check` to report. `--draft` on `add` writes
+`add` takes relation fields inline (`--client acme-corp`) and the prose as `--body <text>`;
+it rejects a missing target, but captures a missing required field for `check` to report. `--draft` on `add` writes
 `status: draft`; an entity with no `status` is stable, and `edit <id> status stable`
 publishes a draft. `link`/`unlink` are idempotent and exit 0 either way. `remove --force`
 deletes despite inbound edges. `import` brings a bundle in as drafts; the bundle's own
@@ -140,9 +141,10 @@ deletes despite inbound edges. `import` brings a bundle in as drafts; the bundle
   supersedes the review; reads show it in `trust`, and `khub check --require-verified
   [--tier human]` fails on active entities below the tier.
 - **Exit 0 or it did not happen.** Claim a write only on exit 0 with an `id` in the JSON.
-  Exit 2 is a refusal: read `error.code` and correct the call. Nothing was written unless
-  the code is `write_durability_uncertain`, which means the write published; do not run it
-  again.
+  Exit 2 is a refusal: read `error.code` and correct the call. Nothing was written, with
+  three exceptions: `write_durability_uncertain` means the write published, so do not run
+  it again; `import_write_failed` names the files it could not undo; and
+  `upgrade_recovery_failed` leaves a journal to inspect.
 
 Every content write stamps `generated: {by, at}`: an `add`, or a change to the body, a declared field, `status` or a relation. A bookkeeping-only edit (`tags`, `aliases`, `stale_after`, `author`, `created`) and an edit that changes nothing stamp nothing. Under Claude Code `by` is `agent/claude-code` unless `KHUB_ACTOR` or `--by` says otherwise; pass `--by human:<name>` only when that person wrote the content.
 
@@ -236,7 +238,7 @@ not been found yet.
 
 ## Rules
 
-- Every read AND write emits JSON on a pipe; a table is only for a TTY. `--format json` makes it explicit. `reindex` is the exception: it prints one line of text and takes no `--format`.
+- Every read AND write emits JSON on a pipe; a table is only for a TTY. `--format json` makes it explicit. The operator commands (`reindex`, `viz`, `serve`, `backfill`, `wire`) are the exception: they print prose and take no `--format`.
 - Every existing-workspace mutation is serialized workspace-wide from scan through commit. Never delete `.khub/generated/locks/workspace.lock` while khub may be running.
 - On a failed command, read the located error (field, reason, or unresolved target) and correct the call. Exit 2 reports a refusal or write failure; `write_durability_uncertain` means publication happened, and `upgrade_recovery_failed` requires journal inspection. Exit 1 is a gate (`validate`, `check`) that ran and found the workspace wrong.
 - Run `khub validate --strict` in CI. Capture is never blocked, so a typo'd field name (`--knid`) is written to frontmatter and neither default gate reports it; `--strict` is what turns undeclared keys into a finding.
