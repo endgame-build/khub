@@ -48,6 +48,24 @@ Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelo
   `text_match`) but never linked. Also sets out the `exact` and `full`
   alignment modes and the linker numbers the ingestion goldens will measure.
   A design only; no command changes.
+- **Machine-readable refusals.** The JSON refusal envelope now carries
+  `field`, `expected` and `suggestion` where a refusal has them, so an agent
+  can correct a call without parsing the message: `enum_violation` names the
+  attribute, its members and the nearest one; `lookup_error` and
+  `referential_integrity` suggest the nearest existing id (never the entity
+  being written); `unknown_type`, `filter_error`, `illegal_predicate`,
+  `unknown_predicate`, `strict_unknown_field`, `unknown_preset` and
+  `bad_target` list what is declared and suggest the nearest;
+  `ambiguity_error` lists the qualified ids to choose from; the value
+  refusals (`pattern_violation`, `number_violation`, `date_violation`,
+  `bool_violation`, `value_shape`) and `cardinality_violation`,
+  `empty_relation_value`, `flag_shadowed` and `draft_retired` name the field.
+  A tie is never guessed: equally near ids are listed in `expected` instead.
+  Each key is absent when it does not apply, and messages, prose output and
+  exit codes are unchanged.
+- **`docs/cli-output-contract.md`.** One page for what a program reading khub
+  may rely on: when stdout is JSON, one value per call, the JSON dialect,
+  stderr, exit codes and the refusal envelope.
 
 ### Changed
 

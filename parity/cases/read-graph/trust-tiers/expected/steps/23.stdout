@@ -1,1 +1,1 @@
-{"error": {"code": "filter_error", "message": "No trust tier 'trusted'. Tiers: machine, human"}}
+{"error": {"code": "filter_error", "message": "No trust tier 'trusted'. Tiers: machine, human", "expected": ["machine", "human"]}}

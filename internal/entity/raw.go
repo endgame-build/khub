@@ -322,7 +322,7 @@ func gateRelations(view *index.Index, rtype *schema.ResolvedType, meta *omap.Map
 		for _, v := range asTargetList(raw) {
 			t, err := aliasTarget(view, rel, v)
 			if err == nil {
-				_, err = resolveWriteTarget(rel, t, view, pred, "relation")
+				_, err = resolveWriteTarget(rel, t, view, pred, "relation", nil)
 			}
 			if err != nil {
 				lost = append(lost, v)
