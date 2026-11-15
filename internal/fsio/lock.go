@@ -51,3 +51,19 @@ func Locked[T any](root string, fn func() (T, error)) (result T, err error) {
 	}()
 	return fn()
 }
+
+// CheckLock is the path half of Locked without the lock: the lock directory
+// MkdirAll would make and the lock file OpenPath would reach, refused as
+// Locked refuses them, and nothing created. A dry run calls it so it fails
+// where the write would, before the write's first scan.
+func CheckLock(root string) error {
+	lockPath := WorkspaceLockPath(root)
+	if err := CheckMkdirAll(root, filepath.Dir(lockPath)); err != nil {
+		return err
+	}
+	r, _, err := OpenPath(root, lockPath)
+	if err != nil {
+		return err
+	}
+	return r.Close()
+}

@@ -134,7 +134,7 @@ func verify(root, id, by, at string, publish func(path string) error) (*VerifyRe
 		return nil, err
 	}
 	if rtype.Storage.Layout == schema.LayoutCollection {
-		err = mutateCollection(root, rtype, func(rows *omap.Map) (bool, error) {
+		_, err = mutateCollection(root, rtype, sink{}, func(rows *omap.Map) (bool, error) {
 			row, has := rows.Get(node.Slug)
 			if !has {
 				return false, errs.LookupError(id)
@@ -147,7 +147,7 @@ func verify(root, id, by, at string, publish func(path string) error) (*VerifyRe
 		var body string
 		if meta, body, err = readDoc(root, path); err == nil {
 			record(meta)
-			err = writeDoc(root, path, meta, body)
+			_, err = writeDoc(root, path, sink{}, meta, body)
 		}
 	}
 	if err != nil {

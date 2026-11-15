@@ -132,6 +132,13 @@ var readCalls = map[string][][]string{
 	"schema base":  {{"schema", "base"}, {"schema", "base", "--format", "json"}},
 	"schema edges": {{"schema", "edges"}, {"schema", "edges", "--format", "json"}},
 	"schema diff":  {{"schema", "diff"}, {"schema", "diff", "--format", "json"}},
+	// A dry run writes nothing and takes no lock, so it repeats as a read. The
+	// forced remove previews cmp-c00's inbound edges, a tie of nine or more.
+	"add":    {{"add", "component", "--title", "Fresh", "--kind", "service", "--system", "sys-core", "--dry-run"}},
+	"edit":   {{"edit", "cmp-c00", "kind", "library", "--dry-run"}, {"edit", "cmp-c00", "--dry-run"}},
+	"link":   {{"link", "cmp-c07", "depends_on", "cmp-c00", "--dry-run"}},
+	"unlink": {{"unlink", "cmp-c01", "depends_on", "cmp-c00", "--dry-run"}},
+	"remove": {{"remove", "cmp-c00", "--force", "--dry-run"}},
 }
 
 // metaCalls are help and version, which every command answers apart from the
@@ -161,10 +168,12 @@ var refusalCalls = [][]string{
 	{"query", "--under", "sys-core", "--via", "bogus"},
 	{"query", "--count", "bogus>=1"},
 	{"recent", "--days", "-1"},
+	{"remove", "cmp-c00", "--dry-run"},
 }
 
 // mutatingVerbs change the workspace, or serve it, so repeating them proves
-// nothing about ordering.
+// nothing about ordering. The five write verbs also sit in readCalls, as
+// their dry runs.
 var mutatingVerbs = map[string]bool{
 	"init": true, "add": true, "edit": true, "link": true, "unlink": true,
 	"remove": true, "serve": true, "schema snapshot": true, "verify": true, "import": true,

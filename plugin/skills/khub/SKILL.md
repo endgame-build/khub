@@ -124,7 +124,11 @@ hand-edit is how a workspace acquires a field no default gate will report.
 it rejects a missing target, but captures a missing required field for `check` to report. `--draft` on `add` writes
 `status: draft`; an entity with no `status` is stable, and `edit <id> status stable`
 publishes a draft. `link`/`unlink` are idempotent and exit 0 either way. `remove --force`
-deletes despite inbound edges. `import` brings a bundle in as drafts; the bundle's own
+deletes despite inbound edges. `--dry-run` on any of `add`, `edit`, `link`, `unlink` and
+`remove` previews the write: khub's own refusals on the same exit codes, the record the
+write would print plus `changed` and `"dry_run": true`, and nothing written. A permission or
+disk failure can still fail the real call after a clean dry run. `remove <id> --dry-run`
+lists in `inbound` the edges a `--force` would leave dangling. `import` brings a bundle in as drafts; the bundle's own
 `verified` is kept as `okf_verified` and does not count as a review.
 
 - **Look before you add.** `search --plain "<title>"`, or `query` on the field that would

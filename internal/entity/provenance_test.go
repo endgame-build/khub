@@ -39,14 +39,14 @@ func TestWritesStampGenerated(t *testing.T) {
 	if got := by(); got != "human:ilya" {
 		t.Fatalf("add stamped %v", got)
 	}
-	if _, err := Link(ws, "note/a", "related", "note/b", ""); err != nil {
+	if _, err := Link(ws, "note/a", "related", "note/b", "", false); err != nil {
 		t.Fatal(err)
 	}
 	if got := by(); got != "khub" {
 		t.Fatalf("link stamped %v", got)
 	}
 	before := readFile(t, res.Path)
-	if r, err := Link(ws, "note/a", "related", "note/b", "process:ci"); err != nil || r.Changed {
+	if r, err := Link(ws, "note/a", "related", "note/b", "process:ci", false); err != nil || r.Changed {
 		t.Fatalf("no-op link: %v %v", r, err)
 	}
 	if readFile(t, res.Path) != before {

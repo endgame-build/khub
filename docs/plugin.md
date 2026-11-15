@@ -61,6 +61,9 @@ row in place of Claude Code's raw drawing.
   line holds the id, the field and the reason.
 - The result line of a `search` or a `recent` carries khub's `note:` when it
   printed one, such as rows `--limit` dropped.
+- A write run with `--dry-run` reads as a preview in the plain tone:
+  `⎿ dry run · + adr/ad-…`, or `⎿ dry run · no change` for an `edit` that would
+  move nothing. Its refusal reads `⎿ dry run · ✗ <code>: <message>`.
 - The `json` button returns that compact row to Claude Code's raw drawing.
 - A command made only of khub calls joined by `;` or `&&` draws one compact row
   per call, with the time and the `json` button on the first. A leading
@@ -85,7 +88,7 @@ The baseline is the set of entity ids khub reports when the session starts.
 |---|---|---|
 | `+` added | khub's current ids against the baseline | Every new entity, whoever made it: Claude, a hand edit or a shell command. |
 | `−` removed | khub's current ids against the baseline | Every entity that is gone, whoever removed it. |
-| `~` edited | Claude's own tool calls in the session | A khub `edit`, `link` or `unlink`, and an Edit or Write on an entity file. |
+| `~` edited | Claude's own tool calls in the session | A khub `edit`, `link` or `unlink`, and an Edit or Write on an entity file. A `--dry-run` never counts. |
 
 - An edit made outside Claude's tools does not raise `~`. An entity changed in
   an editor or by a shell script stays out of the edited count.

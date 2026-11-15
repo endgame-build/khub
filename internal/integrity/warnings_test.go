@@ -170,7 +170,7 @@ func TestSessionWarnings(t *testing.T) {
 	if got := sessionLines(t, root, "s1"); len(got) != 0 {
 		t.Fatalf("a fix warned: %v", got)
 	}
-	if _, err := entity.Unlink(root, "half-pov", "owner", "noor", ""); err != nil {
+	if _, err := entity.Unlink(root, "half-pov", "owner", "noor", "", false); err != nil {
 		t.Fatal(err)
 	}
 	if got := sessionLines(t, root, "s1"); len(got) != 1 || got[0] != want {

@@ -126,6 +126,7 @@ Options:
   --body-file <str>  Read the body from a file ('-' for stdin).
   --no-template  Start with an empty body. Refused on a type whose template has a required heading, since the result would fail validate; use --body to supply your own sections.
   --by <str>  Who the write is stamped as in generated.by. Default: KHUB_ACTOR, then agent/claude-code under Claude Code, then khub.
+  --dry-run  Run every check the write runs and print what it would emit; write nothing.
   --format <str>  text or json (emits the written record). [default: text]
   --help  Show this message and exit.
 
@@ -168,6 +169,7 @@ Options:
   --body <str>  Replace the body with this string ('' clears it).
   --body-file <str>  Replace the body from a file ('-' for stdin).
   --by <str>  Who the write is stamped as in generated.by. Default: KHUB_ACTOR, then agent/claude-code under Claude Code, then khub.
+  --dry-run  Run every check the write runs and print what it would emit; write nothing.
   --format <str>  text or json (emits the updated record). [default: text]
   --help  Show this message and exit.
 
@@ -188,6 +190,7 @@ Arguments:
 
 Options:
   --by <str>  Who the write is stamped as in generated.by. Default: KHUB_ACTOR, then agent/claude-code under Claude Code, then khub.
+  --dry-run  Run every check the write runs and print what it would emit; write nothing.
   --format <str>  text or json (emits the edge record). [default: text]
   --help  Show this message and exit.
 
@@ -208,6 +211,7 @@ Arguments:
 
 Options:
   --by <str>  Who the write is stamped as in generated.by. Default: KHUB_ACTOR, then agent/claude-code under Claude Code, then khub.
+  --dry-run  Run every check the write runs and print what it would emit; write nothing.
   --format <str>  text or json (emits the edge record). [default: text]
   --help  Show this message and exit.
 
@@ -226,6 +230,7 @@ Arguments:
 
 Options:
   --force  Delete despite inbound edges (leaves them dangling).
+  --dry-run  Run every check the write runs and print what it would emit; write nothing.
   --format <str>  text or json (emits the removed record). [default: text]
   --help  Show this message and exit.
 
