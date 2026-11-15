@@ -10,6 +10,7 @@ import (
 
 	"github.com/endgame-build/khub/internal/errs"
 	"github.com/endgame-build/khub/internal/introspect"
+	"github.com/endgame-build/khub/internal/schema"
 	"github.com/endgame-build/khub/internal/workspace"
 )
 
@@ -120,7 +121,8 @@ func TestPortableAndAnchored(t *testing.T) {
 // target, an enum, a portable and an unportable pattern, a required relation,
 // an acyclic one with an inverse, a list, a number with a default, a
 // singleton under policy, a name that is an attribute on one type and a
-// relation on another, and a type name that fits no prefixed name.
+// relation on another, a type name that fits no prefixed name, a list with a
+// declared item kind, and an object attribute with its own fields.
 const facetsOntology = `
 version: "1.0.0"
 ontology:
@@ -136,6 +138,12 @@ ontology:
         items: { type: list }
         link:  { type: text }
         when:  { type: date }
+        codes: { type: list, items: { type: text, pattern: '^[a-z]{2}$' } }
+        meta:
+          type: object
+          fields:
+            by: { required: true }
+            n:  { type: number }
       relations:
         about: { to: [note, team.lead], required: true }
         follows: { to: note, acyclic: true, inverse: followed_by }
@@ -203,14 +211,29 @@ func TestMappingFacets(t *testing.T) {
 		// The unportable pattern keeps only the khub: annotation.
 		"sh:maxCount 1 ;\n        khub:pattern \"(?i)ok\" ;\n        khub:type \"text\"",
 		"sh:datatype xsd:decimal ;\n        sh:maxCount 1 ;\n        khub:type \"number\" ;\n        khub:default \"1.5\"^^xsd:decimal",
-		// Nine base slots (type skipped), title overriding in place, then kind, score, code, ref.
-		"sh:name \"items\" ;\n        sh:order 13 ;\n        khub:type \"list\"",
+		// Fourteen base slots (type skipped), title overriding in place, then kind, score, code, ref;
+		// the three base relations precede the type's own.
+		"sh:name \"items\" ;\n        sh:order 18 ;\n        khub:type \"list\"",
 		"khub:acyclic true ;\n        khub:inverse \"followed_by\"",
 		// A date admits a datetime, as validate does.
-		"sh:name \"when\" ;\n        sh:order 15 ;\n        sh:or (\n            [ sh:datatype xsd:date ]\n            [ sh:datatype xsd:dateTime ]\n        ) ;\n        sh:maxCount 1 ;\n        khub:type \"date\"",
+		"sh:name \"when\" ;\n        sh:order 20 ;\n        sh:or (\n            [ sh:datatype xsd:date ]\n            [ sh:datatype xsd:dateTime ]\n        ) ;\n        sh:maxCount 1 ;\n        khub:type \"date\"",
 		// A `to: any` relation under path_refs admits a file node.
-		"sh:name \"cites\" ;\n        sh:order 22 ;\n        sh:nodeKind sh:IRI ;\n        sh:or (\n            [ sh:class khub:Entity ]\n            [ sh:class khub:File ]\n        ) ;\n        sh:minCount 1 ;\n        sh:maxCount 1 ;\n        khub:kind \"any\" ;\n        khub:pathRefs true",
+		"sh:name \"cites\" ;\n        sh:order 28 ;\n        sh:nodeKind sh:IRI ;\n        sh:or (\n            [ sh:class khub:Entity ]\n            [ sh:class khub:File ]\n        ) ;\n        sh:minCount 1 ;\n        sh:maxCount 1 ;\n        khub:kind \"any\" ;\n        khub:pathRefs true",
 		"khub:File a rdfs:Class",
+		// A base object attribute is a blank node shaped by its fields, which mint in the khub: vocabulary.
+		"sh:name \"generated\" ;\n        sh:order 9 ;\n        sh:nodeKind sh:BlankNode ;\n        sh:maxCount 1 ;\n        sh:node [\n            sh:property [\n                sh:path khub:by ;\n                sh:name \"by\" ;\n                sh:order 0 ;\n                sh:datatype xsd:string ;\n                sh:minCount 1 ;\n                sh:maxCount 1 ;\n                khub:type \"text\"\n            ] ;\n            sh:property [\n                sh:path khub:at ;\n                sh:name \"at\" ;\n                sh:order 1 ;\n                sh:datatype xsd:dateTime ;\n                sh:maxCount 1 ;\n                sh:pattern",
+		// A list of objects has no sh:maxCount and says what its items are.
+		"sh:name \"verified\" ;\n        sh:order 10 ;\n        sh:nodeKind sh:BlankNode ;\n        sh:node [",
+		"            ]\n        ] ;\n        khub:type \"list\" ;\n        khub:items \"object\"",
+		// A list with a declared item kind takes that kind's constraints, one literal per item.
+		"sh:name \"codes\" ;\n        sh:order 21 ;\n        sh:datatype xsd:string ;\n        sh:pattern \"^[a-z]{2}$\" ;\n        khub:pattern \"^[a-z]{2}$\" ;\n        khub:type \"list\" ;\n        khub:items \"text\"",
+		// A domain object attribute's fields mint as domain predicates: field:by beside khub:by.
+		"sh:name \"meta\" ;\n        sh:order 22 ;\n        sh:nodeKind sh:BlankNode ;\n        sh:maxCount 1 ;\n        sh:node [\n            sh:property [\n                sh:path field:by ;",
+		"sh:path field:n ;\n                sh:name \"n\" ;\n                sh:order 1 ;\n                sh:datatype xsd:decimal ;\n                sh:maxCount 1 ;\n                khub:type \"number\"",
+		"khub:generated a rdf:Property, owl:ObjectProperty",
+		"khub:by a rdf:Property, owl:DatatypeProperty",
+		"field:meta a rdf:Property, owl:ObjectProperty",
+		"field:by a rdf:Property, owl:DatatypeProperty",
 		// The singleton's policy and storage.
 		"type:charter a rdfs:Class ;\n    rdfs:subClassOf khub:Entity ;\n    rdfs:label \"charter\" ;\n    khub:layout \"singleton\" ;\n    khub:format \"md\" ;\n    khub:path \"charter.md\" ;\n    khub:requiredSingleton true ;\n    khub:orphanExempt true .",
 		"khub:idShape \"nt-YYYY-MM-DD-slug\"",
@@ -264,6 +287,24 @@ func TestEveryDeclarationIsProjected(t *testing.T) {
 			if !strings.Contains(ttl, `sh:name "`+name+`"`) {
 				t.Errorf("%s.%s has no property shape", tn, name)
 			}
+		}
+		for _, an := range rt.Attributes.Keys() {
+			a, _ := rt.Attributes.Get(an)
+			var nested func(prefix string, a *schema.ResolvedAttribute)
+			nested = func(prefix string, a *schema.ResolvedAttribute) {
+				fields := objectFields(a)
+				if fields == nil {
+					return
+				}
+				for _, fn := range fields.Keys() {
+					f, _ := fields.Get(fn)
+					if !strings.Contains(ttl, `sh:name "`+fn+`"`) {
+						t.Errorf("%s.%s.%s has no property shape", tn, prefix, fn)
+					}
+					nested(prefix+"."+fn, f)
+				}
+			}
+			nested(an, a)
 		}
 	}
 }

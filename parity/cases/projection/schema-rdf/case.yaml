@@ -7,9 +7,10 @@
 # the DECLARED kind (a date in a datetime field is midnight, a datetime in a
 # date field keeps its time under the widened date shape, a text field YAML
 # reads back as a boolean is "true", a mapping in a text field is its JSON
-# text), forward edges as object properties, no derived inverse. `--base`
-# moves every minted IRI but the khub: vocabulary. A dry run writes nothing
-# and reports.
+# text, the `generated` stamp and a `verified` event are blank nodes over
+# their declared fields, a draft carries `khub:status "draft"`), forward
+# edges as object properties, no derived inverse. `--base` moves every minted
+# IRI but the khub: vocabulary. A dry run writes nothing and reports.
 steps:
 - argv: ["init", "firm-ops", ".", "--no-wire"]
 - argv: ["add", "person", "--name", "Noor", "--role", "partner"]
@@ -20,6 +21,8 @@ steps:
 - argv: ["add", "client", "--name", "Stamped", "--created", "2026-01-15 10:00:00"]
 - argv: ["add", "client", "--name", "Yes Co", "--industry", "yes"]
 - sh: "printf -- '---\\ntype: client\\nname: Nested\\ncreated: 2026-01-15\\nupdated: 2026-01-15\\nwebsite: {nested: {deep: true}}\\n---\\n' > clients/nested.md"
+- argv: ["add", "client", "--name", "Draft Co", "--draft"]
+- argv: ["verify", "initech", "--by", "human:noor"]
 - argv: ["validate"]
 - argv: ["schema", "rdf", "--dry-run"]
 - sh: "test ! -e .khub/generated/schema.ttl"

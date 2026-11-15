@@ -6,7 +6,7 @@ contract for that file: the vocabulary it uses, how every IRI is minted, what
 each khub construct becomes, what survives the trip losslessly and what rides
 along as an annotation, and the serialization rules that make the bytes a
 function of the schema alone. The firm-ops render the parity runner records
-(`parity/cases/projection/schema-rdf/expected/steps/12.stdout`) is the golden
+(`parity/cases/projection/schema-rdf/expected/steps/14.stdout`) is the golden
 fixture: a change to this page is a change to those bytes, and the other way
 round.
 
@@ -128,13 +128,14 @@ ignores a term it does not know reads every later export correctly.
 | `khub:Entity` | — | `rdfs:Class`; every type is `rdfs:subClassOf` it, and a `to: any` relation targets it |
 | `khub:File` | — | `rdfs:Class`; a workspace file a path reference names, emitted under `--instances` with its `khub:path` |
 | `khub:preset`, `khub:presetVersion`, `khub:workspace` | the ontology | provenance from `.khub/config.yaml` |
-| `khub:requiredScope` | the ontology | always `"active"`: `sh:minCount` is khub's required gate, which `check` enforces on active entities (`draft: false`) only. A validator that wants khub's exact gate restricts its focus nodes to those without `khub:draft true` |
+| `khub:requiredScope` | the ontology | always `"active"`: `sh:minCount` is khub's required gate, which `check` enforces on active entities only — those whose `status` is not `draft`. A validator that wants khub's exact gate restricts its focus nodes to those without `khub:status "draft"` (an absent status reads as the shape's `khub:default`, `stable`) |
 | `khub:layout`, `khub:format`, `khub:path` | a class | storage: `file`/`folder`/`collection`/`singleton`; `md`/`json`/`yaml`/`jsonl`; the storage path, one value per path template on a templated type. On a `khub:File`, `khub:path` is its workspace-relative path |
 | `khub:idShape` | a class | the id a new entity is minted with (`ad-YYYY-MM-DD-slug`); absent on a singleton |
 | `khub:template` | a class | the declared body-template stem |
 | `khub:requiredSingleton`, `khub:orphanExempt` | a class | policy: `required: true` on a singleton; `orphan: true` |
 | `khub:when` | a class | the capture cue, in domain language |
-| `khub:type` | an attribute shape | the khub scalar kind, always: the XSD mapping loses `list`, and `number` would otherwise read as "decimal only" |
+| `khub:type` | an attribute shape | the khub kind, always: the XSD mapping loses `list` and `object`, and `number` would otherwise read as "decimal only" |
+| `khub:items` | a list's attribute shape | the declared kind of the items, when the list declares one |
 | `khub:default` | an attribute shape | the value an absent attribute reads as |
 | `khub:pattern` | an attribute shape | the authoritative RE2 text |
 | `khub:kind` | a relation shape | `typed`, `union` or `any` |
@@ -172,7 +173,7 @@ first, a type's override keeping the base slot, then the type's own.
 sh:property [
     sh:path field:stage ;
     sh:name "stage" ;
-    sh:order 10 ;
+    sh:order 15 ;
     sh:datatype xsd:string ;
     sh:minCount 1 ;
     sh:maxCount 1 ;
@@ -188,7 +189,8 @@ sh:property [
 | `type: date` | `sh:or ( [sh:datatype xsd:date] [sh:datatype xsd:dateTime] )` | `validate` passes a datetime in a date field (one ISO parse gates both kinds), so the shape admits both and an instance keeps its time |
 | `type: datetime` | `sh:datatype xsd:dateTime` | khub writes `2026-01-15 10:00:00`; the literal takes XSD's `T`. A bare date, which `validate` also passes, becomes `T00:00:00` |
 | `type: bool` | `sh:datatype xsd:boolean` | |
-| `type: list` | no `sh:datatype`, no `sh:maxCount` | items are whatever the author wrote; `khub:type "list"` says so |
+| `type: list` | no `sh:maxCount`; the item kind's constraints when `items` declares one, else no `sh:datatype` | one value per item. A list that declares `items` carries that kind's datatype, enum and pattern plus `khub:items "<kind>"`; a list of objects carries the object rendering below with `khub:items "object"`. Without `items`, the items are whatever the author wrote and `khub:type "list"` alone says so |
+| `type: object` | `sh:nodeKind sh:BlankNode`, `sh:node [ sh:property … ]` | the value is a blank node; the nested shape holds one `sh:property` per declared field, each rendered by these same rules with `sh:order` counting from 0 inside the object, so `required: true` on a field is `sh:minCount 1` there. The base block's `generated`, `verified`, `sources` and `usage_window` are these |
 | `required: true` | `sh:minCount 1` | khub's gate for active entities; see `khub:requiredScope` |
 | single-valued (every non-list) | `sh:maxCount 1` | |
 | `enum: [...]` | `sh:in ( ... )` | in declared order |
@@ -218,7 +220,7 @@ the top level; inside a class they are refused). A refused pattern has no
 sh:property [
     sh:path field:engagement ;
     sh:name "engagement" ;
-    sh:order 18 ;
+    sh:order 22 ;
     sh:nodeKind sh:IRI ;
     sh:or (
         [ sh:class type:opportunity ]
@@ -247,14 +249,28 @@ Every relation shape carries `sh:nodeKind sh:IRI`. No `rdfs:domain` or
 intersections, which would be false for a predicate whose targets differ by
 type.
 
+A field declared inside an object attribute mints a predicate like any other
+name, in its owner's namespace: a field of a base attribute (`generated.by`,
+`verified.at`) is khub's own, so it is `khub:by`, `khub:at`; a field of a
+domain object attribute is `field:<name>`. One name is one IRI, shared by
+every shape that declares it, so `khub:by` is the same property under
+`generated` and under a `verified` event, and each nested shape says what it
+holds there. The property declarations say what a predicate carries: a
+literal (`owl:DatatypeProperty`), a node — a relation's target or an object
+attribute's blank node (`owl:ObjectProperty`) — or, when the name does both on
+different shapes, a bare `rdf:Property` with a comment.
+
 ### Entities (`--instances`)
 
 ```turtle
 <urn:khub:workspace/ws/opportunity/initech-pov> a type:opportunity ;
-    khub:draft false ;
     khub:created "2026-01-15"^^xsd:date ;
     khub:updated "2026-01-15"^^xsd:date ;
     khub:tags "pov", "q1" ;
+    khub:generated [
+        khub:by "khub" ;
+        khub:at "2026-01-15T00:00:00Z"^^xsd:dateTime
+    ] ;
     field:name "Initech POV" ;
     field:stage "prospect" ;
     field:client <urn:khub:workspace/ws/client/initech> ;
@@ -273,10 +289,15 @@ a type) — the order every projection walks. Then:
   YAML read back as a boolean; the JSON text of a mapping or list a text field
   holds); `number` is `xsd:decimal`; `bool` is the shorthand; `date` keeps a
   time of day when the value carries one (the shape admits both); `datetime`
-  gives a bare date midnight. A list emits one triple per item, each typed by
-  its own value (a structured item as its JSON text, an `xsd:string`). An
-  absent or null attribute emits nothing; what it reads as is the shape's
-  `khub:default`.
+  gives a bare date midnight. A list emits one triple per item: typed by the
+  declared item kind when the list declares `items`, else by the item's own
+  value (a structured item as its JSON text, an `xsd:string`). An object
+  attribute (`generated`, a `verified` event, a `sources` entry) is a blank
+  node carrying its declared fields that are present, in declaration order,
+  each by these same rules; a key the field block does not declare stays out,
+  as an extension key does. An absent or null attribute emits nothing; what
+  it reads as is the shape's `khub:default` — so an entity that never wrote a
+  `status` carries no `khub:status`, and reads as `stable`.
 - Each **stored forward edge** the graph resolves, in relation declaration
   order, as an object property to the target's IRI. Then, on a type with
   policy `path_refs`, each value of a `to: any` relation that names no entity
@@ -290,19 +311,22 @@ a type) — the order every projection walks. Then:
 - Nothing else: undeclared extension keys, the body, and the slug (the IRI
   carries it) stay out.
 
-Drafts are included, as every khub read includes them; `khub:draft true`
-marks one. A consumer validating with the shapes should expect `sh:minCount`
-violations on drafts, which is what `khub:requiredScope "active"` says.
+Drafts are included, as every khub read includes them; `khub:status "draft"`
+marks one, the one `status` value khub writes to a file. A consumer validating
+with the shapes should expect `sh:minCount` violations on drafts, which is
+what `khub:requiredScope "active"` says.
 
 ## What is lossless, what is annotation
 
 **Lossless over the ontology layer.** Every type, attribute and relation of
 the resolved schema reaches the file with its name, kind, cardinality,
 required flag, enum, pattern, default, targets, `acyclic`, `inverse` and
-`when`, each in declaration order (`sh:order`, and the subject order). A
-reader can rebuild the resolved ontology layer from the shapes and the `khub:`
-annotations alone; `TestEveryDeclarationIsProjected` in `internal/rdf` holds
-that for every name.
+`when`, each in declaration order (`sh:order`, and the subject order); an
+object attribute's fields, and a list's declared item kind, reach it the same
+way inside the nested shape. A reader can rebuild the resolved ontology layer
+from the shapes and the `khub:` annotations alone;
+`TestEveryDeclarationIsProjected` in `internal/rdf` holds that for every name,
+nested ones included.
 
 **SHACL-expressible, and so checkable by any validator:** datatypes, enums,
 portable patterns, required (modulo the draft scope), single-valuedness, target
@@ -314,8 +338,8 @@ parse accepts but XSD's lexical space does not (`1_000` in a number field, an
 ISO week date in a date field), which SHACL reports and khub does not. The
 recorded firm-ops and build-hub renders — a date in a datetime field, a
 datetime in a date field, a text field read back as a boolean, a mapping in a
-text field, a path reference to a plain file — were checked with pySHACL and
-conform.
+text field, a path reference to a plain file, a draft, a `generated` stamp and
+a `verified` event — were checked with pySHACL and conform.
 
 **Annotation only, khub remaining authoritative:** `acyclic`, `inverse`,
 unportable patterns, defaults, the draft scope of `required`, path references,
@@ -361,7 +385,9 @@ diff of `schema.ttl`.
 ## Worked example
 
 From the firm-ops preset with one person, one client, one opportunity and one
-meeting (the parity case). Abridged — the recorded fixture is the whole file.
+meeting (the parity case). Abridged — the recorded fixture is the whole file;
+the base block's `generated`, `verified`, `sources` and `usage_window` shapes,
+nested as the attributes table says, are left out here.
 
 ```turtle
 @prefix khub: <urn:khub:vocab/> .
@@ -408,7 +434,7 @@ shape:meeting a sh:NodeShape ;
     sh:property [
         sh:path field:date ;
         sh:name "date" ;
-        sh:order 9 ;
+        sh:order 14 ;
         sh:datatype xsd:dateTime ;
         sh:minCount 1 ;
         sh:maxCount 1 ;
@@ -417,7 +443,7 @@ shape:meeting a sh:NodeShape ;
     sh:property [
         sh:path field:engagement ;
         sh:name "engagement" ;
-        sh:order 18 ;
+        sh:order 22 ;
         sh:nodeKind sh:IRI ;
         sh:or (
             [ sh:class type:opportunity ]
@@ -430,10 +456,13 @@ shape:meeting a sh:NodeShape ;
     ] .
 
 <urn:khub:workspace/ws/meeting/kickoff-call> a type:meeting ;
-    khub:draft false ;
     khub:created "2026-01-15"^^xsd:date ;
     khub:updated "2026-01-15"^^xsd:date ;
     khub:title "Kickoff \"call\"" ;
+    khub:generated [
+        khub:by "khub" ;
+        khub:at "2026-01-15T00:00:00Z"^^xsd:dateTime
+    ] ;
     field:date "2026-01-15T10:00:00"^^xsd:dateTime ;
     field:call_type "client" ;
     field:source "manual" ;

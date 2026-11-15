@@ -47,19 +47,8 @@ func Instances(doc *Doc, resolved *schema.ResolvedSchema, idx *index.Index, g *g
 			if an == TypeKey {
 				continue
 			}
-			raw, has := meta.Get(an)
-			if !has || raw == nil {
-				continue
-			}
 			a, _ := rtype.Attributes.Get(an)
-			pred := m.fieldIRI(an)
-			if items, isList := raw.([]any); isList {
-				for _, item := range items {
-					s.Add(pred, literal(item, a.BaseType))
-				}
-				continue
-			}
-			s.Add(pred, literal(raw, a.BaseType))
+			m.values(&s.Pairs, meta, a, m.fieldIRI(an), resolved.BaseAttributes.Has(an))
 		}
 		out := g.OutEdges(node)
 		for _, rn := range rtype.Relations.Keys() {
@@ -96,6 +85,52 @@ func Instances(doc *Doc, resolved *schema.ResolvedSchema, idx *index.Index, g *g
 		doc.Subjects = append(doc.Subjects, s)
 	}
 	return count
+}
+
+// values appends one pair per value the attribute holds in meta: a list
+// contributes one pair per item, an absent or null attribute none. base
+// says whether the attribute is the base block's, which decides where the
+// fields of an object it holds mint.
+func (m *mapper) values(pairs *[]Pair, meta *omap.Map, a *schema.ResolvedAttribute, pred IRI, base bool) {
+	raw, has := meta.Get(a.Name)
+	if !has || raw == nil {
+		return
+	}
+	valued := a
+	if a.BaseType == "list" && a.Items != nil {
+		valued = a.Items
+	}
+	if items, isList := raw.([]any); isList && a.BaseType == "list" {
+		for _, item := range items {
+			if item != nil {
+				*pairs = append(*pairs, Pair{Pred: pred, Obj: m.value(item, valued, base)})
+			}
+		}
+		return
+	}
+	*pairs = append(*pairs, Pair{Pred: pred, Obj: m.value(raw, valued, base)})
+}
+
+// value renders one value under its declaration: an object as a blank node
+// carrying its declared fields that are present, in declaration order (an
+// undeclared key stays out, as an extension key does on the entity), any
+// other kind as the literal the declared kind asks for. A value that is not
+// the mapping its kind declares is its string form, so the render never
+// fails on what validate reports.
+func (m *mapper) value(v any, a *schema.ResolvedAttribute, base bool) Term {
+	if a.BaseType != "object" {
+		return literal(v, a.BaseType)
+	}
+	obj, ok := v.(*omap.Map)
+	if !ok || a.Fields == nil {
+		return Str(stringForm(v))
+	}
+	node := Blank{}
+	for _, fn := range a.Fields.Keys() {
+		f, _ := a.Fields.Get(fn)
+		m.values(&node.Pairs, obj, f, m.nestedFieldIRI(base, fn), base)
+	}
+	return node
 }
 
 // targets reads a relation's stored value as the list of targets it names.
@@ -162,7 +197,8 @@ func literal(v any, kind string) Term {
 		}
 		return Typed(xsdDateTimeLexical(s), xsdDateTime)
 	}
-	// A list item, or a kind the schema does not know: typed by the value.
+	// An untyped list item, or a kind the schema does not know: typed by the
+	// value.
 	switch x := v.(type) {
 	case bool:
 		return Bool(x)

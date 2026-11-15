@@ -100,6 +100,8 @@ var (
 	shPattern        = pn("sh", "pattern")
 	shNodeKind       = pn("sh", "nodeKind")
 	shIRI            = pn("sh", "IRI")
+	shBlankNode      = pn("sh", "BlankNode")
+	shNode           = pn("sh", "node")
 	shClass          = pn("sh", "class")
 	shOr             = pn("sh", "or")
 	xsdString        = pn("xsd", "string")
@@ -122,6 +124,7 @@ var (
 	khubOrphanExempt = pn("khub", "orphanExempt")
 	khubWhen         = pn("khub", "when")
 	khubType         = pn("khub", "type")
+	khubItems        = pn("khub", "items")
 	khubDefault      = pn("khub", "default")
 	khubPattern      = pn("khub", "pattern")
 	khubKind         = pn("khub", "kind")
@@ -152,7 +155,8 @@ var vocabulary = []struct {
 	{khubReqSingleton, false, "Policy: a singleton `check` requires to exist."},
 	{khubOrphanExempt, false, "Policy: instances are exempt from the orphan sweep."},
 	{khubWhen, false, "The moment to capture an entity of this type, in domain language."},
-	{khubType, false, "The khub scalar kind of an attribute: text, number, date, datetime, bool or list."},
+	{khubType, false, "The khub kind of an attribute: text, number, date, datetime, bool, list or object."},
+	{khubItems, false, "The declared kind of a list's items; absent when the items are untyped."},
 	{khubDefault, false, "The value an absent attribute reads as."},
 	{khubPattern, false, "The authoritative RE2 pattern; sh:pattern is its portable rendering when one exists."},
 	{khubKind, false, "A relation's target form: typed, union or any."},
@@ -290,48 +294,93 @@ func (m *mapper) class(t *schema.ResolvedType) *Subject {
 	return s
 }
 
-// properties declares each predicate name once, in first-declaration order
-// across the types: a datatype property when every declaration is an
-// attribute, an object property when every one is a relation, and a bare
-// rdf:Property when the name is both on different types (RDFS allows it;
-// each shape says which it is there).
+// nestedFieldIRI is the predicate a field declared inside an object
+// attribute mints. It follows the owner: a field of a base attribute
+// (`generated.by`) is khub's own and lives in the khub: vocabulary; a field
+// of a domain attribute mints as a domain predicate of its name. Either way
+// one name is one IRI, shared by every shape that declares it.
+func (m *mapper) nestedFieldIRI(base bool, name string) IRI {
+	if !base {
+		return m.fieldIRI(name)
+	}
+	if localOK(name) {
+		return pn("khub", name)
+	}
+	return IRI{Full: m.ns.Vocab + segment(name)}
+}
+
+// properties declares each predicate once, in first-declaration order across
+// the types and, under an object attribute, its fields: a datatype property
+// when every declaration carries literals, an object property when every one
+// carries nodes (a relation, an object attribute), and a bare rdf:Property
+// when the name does both on different types (RDFS allows it; each shape
+// says which it is there).
 func (m *mapper) properties() []*Subject {
-	type use struct{ attr, rel bool }
+	type use struct {
+		iri       IRI
+		name      string
+		attr, rel bool // literal-valued attribute; relation
+		object    bool // object-valued attribute
+	}
 	uses := map[string]*use{}
 	var order []string
-	note := func(name string, attr bool) {
-		u, ok := uses[name]
+	note := func(iri IRI, name string, attr, rel bool) {
+		key := iri.String()
+		u, ok := uses[key]
 		if !ok {
-			u = &use{}
-			uses[name] = u
-			order = append(order, name)
+			u = &use{iri: iri, name: name}
+			uses[key] = u
+			order = append(order, key)
 		}
-		if attr {
-			u.attr = true
-		} else {
+		switch {
+		case rel:
 			u.rel = true
+		case attr:
+			u.attr = true
+		default:
+			u.object = true
+		}
+	}
+	var fields func(base bool, attrs *schema.Ordered[*schema.ResolvedAttribute])
+	fields = func(base bool, attrs *schema.Ordered[*schema.ResolvedAttribute]) {
+		for _, fn := range attrs.Keys() {
+			f, _ := attrs.Get(fn)
+			note(m.nestedFieldIRI(base, fn), fn, !f.HoldsObjects(), false)
+			if nested := objectFields(f); nested != nil {
+				fields(base, nested)
+			}
 		}
 	}
 	for _, tn := range m.resolved.Types.Keys() {
 		t, _ := m.resolved.Types.Get(tn)
 		for _, an := range t.Attributes.Keys() {
-			if an != TypeKey {
-				note(an, true)
+			if an == TypeKey {
+				continue
+			}
+			a, _ := t.Attributes.Get(an)
+			note(m.fieldIRI(an), an, !a.HoldsObjects(), false)
+			if nested := objectFields(a); nested != nil {
+				fields(m.resolved.BaseAttributes.Has(an), nested)
 			}
 		}
 		for _, rn := range t.Relations.Keys() {
-			note(rn, false)
+			note(m.fieldIRI(rn), rn, false, true)
 		}
 	}
 	out := make([]*Subject, 0, len(order))
-	for _, name := range order {
-		u := uses[name]
-		s := &Subject{IRI: m.fieldIRI(name)}
+	for _, key := range order {
+		u := uses[key]
+		s := &Subject{IRI: u.iri}
 		s.Add(rdfType, rdfProperty)
 		switch {
 		case u.attr && u.rel:
-			s.Add(rdfsLabel, Str(name))
+			s.Add(rdfsLabel, Str(u.name))
 			s.Add(rdfsComment, Str("An attribute on some types and a relation on others; each shape says which."))
+			out = append(out, s)
+			continue
+		case u.attr && u.object:
+			s.Add(rdfsLabel, Str(u.name))
+			s.Add(rdfsComment, Str("A literal on some shapes and an object on others; each shape says which."))
 			out = append(out, s)
 			continue
 		case u.attr:
@@ -339,10 +388,23 @@ func (m *mapper) properties() []*Subject {
 		default:
 			s.Add(rdfType, owlObjectProp)
 		}
-		s.Add(rdfsLabel, Str(name))
+		s.Add(rdfsLabel, Str(u.name))
 		out = append(out, s)
 	}
 	return out
+}
+
+// objectFields is the field block an attribute's values are shaped by: its
+// own `fields` for an object, its items' for a list of objects, nil
+// otherwise.
+func objectFields(a *schema.ResolvedAttribute) *schema.Ordered[*schema.ResolvedAttribute] {
+	switch {
+	case a.BaseType == "object":
+		return a.Fields
+	case a.BaseType == "list" && a.Items != nil && a.Items.BaseType == "object":
+		return a.Items.Fields
+	}
+	return nil
 }
 
 func (m *mapper) shape(t *schema.ResolvedType) *Subject {
@@ -355,7 +417,7 @@ func (m *mapper) shape(t *schema.ResolvedType) *Subject {
 			continue
 		}
 		a, _ := t.Attributes.Get(an)
-		s.Add(shProperty, m.attributeShape(a, order))
+		s.Add(shProperty, m.attributeShape(a, m.fieldIRI(an), m.resolved.BaseAttributes.Has(an), order))
 		order++
 	}
 	for _, rn := range t.Relations.Keys() {
@@ -366,8 +428,10 @@ func (m *mapper) shape(t *schema.ResolvedType) *Subject {
 	return s
 }
 
-// datatypes maps the khub scalar kinds onto XSD. `list` has no datatype: its
-// items are whatever the author wrote.
+// datatypes maps the khub scalar kinds onto XSD. `list` has no datatype of
+// its own: its items are typed by their declared kind when the list declares
+// one, else they are whatever the author wrote. `object` has none either: its
+// value is a node, shaped by its fields.
 var datatypes = map[string]IRI{
 	"text":     xsdString,
 	"number":   xsdDecimal,
@@ -376,21 +440,29 @@ var datatypes = map[string]IRI{
 	"bool":     xsdBoolean,
 }
 
-func (m *mapper) attributeShape(a *schema.ResolvedAttribute, order int) Blank {
+// attributeShape is one sh:property block. path is the predicate the
+// attribute mints and base says whether the attribute belongs to the base
+// block, which decides the namespace its own fields mint in. An object
+// attribute is a blank node constrained by a nested shape over its fields; a
+// list of objects likewise, one node per item; a list with a declared item
+// kind takes that kind's constraints, one literal per item.
+func (m *mapper) attributeShape(a *schema.ResolvedAttribute, path IRI, base bool, order int) Blank {
 	b := Blank{}
 	add := func(p IRI, o Term) { b.Pairs = append(b.Pairs, Pair{Pred: p, Obj: o}) }
-	add(shPath, m.fieldIRI(a.Name))
+	add(shPath, path)
 	add(shName, Str(a.Name))
 	add(shOrder, Int(order))
-	if a.BaseType == "date" {
-		// khub accepts a datetime in a date field (validate's gate is the one
-		// ISO parse for both kinds), so the shape admits both.
-		add(shOr, List{Items: []Term{
-			Blank{Pairs: []Pair{{Pred: shDatatype, Obj: xsdDate}}},
-			Blank{Pairs: []Pair{{Pred: shDatatype, Obj: xsdDateTime}}},
-		}})
-	} else if dt, ok := datatypes[a.BaseType]; ok {
-		add(shDatatype, dt)
+	// valued is the declaration whose kind types each value: a list's items
+	// when it declares them, else the attribute itself.
+	valued := a
+	if a.BaseType == "list" && a.Items != nil {
+		valued = a.Items
+	}
+	nested := objectFields(a)
+	if nested != nil {
+		add(shNodeKind, shBlankNode)
+	} else {
+		m.scalarConstraints(&b, valued)
 	}
 	if a.Required {
 		add(shMinCount, Int(1))
@@ -398,6 +470,44 @@ func (m *mapper) attributeShape(a *schema.ResolvedAttribute, order int) Blank {
 	if a.BaseType != "list" {
 		add(shMaxCount, Int(1))
 	}
+	if nested != nil {
+		node := Blank{}
+		for i, fn := range nested.Keys() {
+			f, _ := nested.Get(fn)
+			node.Pairs = append(node.Pairs, Pair{Pred: shProperty, Obj: m.attributeShape(f, m.nestedFieldIRI(base, fn), base, i)})
+		}
+		add(shNode, node)
+	} else {
+		m.scalarFacets(&b, valued)
+	}
+	add(khubType, Str(a.BaseType))
+	if valued != a {
+		add(khubItems, Str(valued.BaseType))
+	}
+	if a.Default != nil {
+		add(khubDefault, literal(a.Default, a.BaseType))
+	}
+	return b
+}
+
+// scalarConstraints adds the datatype of a literal-valued attribute: a date
+// admits a datetime, as validate does (one ISO parse gates both kinds).
+func (m *mapper) scalarConstraints(b *Blank, a *schema.ResolvedAttribute) {
+	add := func(p IRI, o Term) { b.Pairs = append(b.Pairs, Pair{Pred: p, Obj: o}) }
+	if a.BaseType == "date" {
+		add(shOr, List{Items: []Term{
+			Blank{Pairs: []Pair{{Pred: shDatatype, Obj: xsdDate}}},
+			Blank{Pairs: []Pair{{Pred: shDatatype, Obj: xsdDateTime}}},
+		}})
+	} else if dt, ok := datatypes[a.BaseType]; ok {
+		add(shDatatype, dt)
+	}
+}
+
+// scalarFacets adds the enum and the pattern of a literal-valued attribute,
+// after the cardinality pairs.
+func (m *mapper) scalarFacets(b *Blank, a *schema.ResolvedAttribute) {
+	add := func(p IRI, o Term) { b.Pairs = append(b.Pairs, Pair{Pred: p, Obj: o}) }
 	if len(a.Enum) > 0 {
 		items := make([]Term, len(a.Enum))
 		for i, e := range a.Enum {
@@ -411,11 +521,6 @@ func (m *mapper) attributeShape(a *schema.ResolvedAttribute, order int) Blank {
 		}
 		add(khubPattern, Str(*a.Pattern))
 	}
-	add(khubType, Str(a.BaseType))
-	if a.Default != nil {
-		add(khubDefault, literal(a.Default, a.BaseType))
-	}
-	return b
 }
 
 func (m *mapper) relationShape(r *schema.ResolvedRelation, order int) Blank {

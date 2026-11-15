@@ -197,6 +197,15 @@ func TestLiteralsFollowTheDeclaredKind(t *testing.T) {
 	if strings.Contains(res.Content, "rdf:JSON") {
 		t.Error("no literal is typed rdf:JSON")
 	}
+	// An object attribute is a blank node over its declared fields, never a
+	// JSON text: the stamp every write leaves, and a review event.
+	stamped := block(res.Content, "<urn:khub:workspace/ws/client/stamped>")
+	if !strings.Contains(stamped, "khub:generated [\n        khub:by \"") || !strings.Contains(stamped, "\"^^xsd:dateTime\n    ] ;") {
+		t.Errorf("generated is not a blank node over its fields:\n%s", stamped)
+	}
+	if strings.Contains(res.Content, `khub:generated "{`) {
+		t.Error("an object attribute was emitted as its JSON text")
+	}
 	for in, want := range map[string]string{
 		"text-true": Str("true").String(), "number": `"3"^^xsd:decimal`, "bool-yes": "true",
 		"bool-bad": `"maybe"^^xsd:boolean`, "date-dt": `"2026-01-15T10:00:00"^^xsd:dateTime`,

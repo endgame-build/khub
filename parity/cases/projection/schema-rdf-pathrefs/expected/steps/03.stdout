@@ -13,7 +13,7 @@
 <urn:khub:ontology/build-hub/> a owl:Ontology ;
     rdfs:label "build-hub" ;
     khub:preset "build-hub" ;
-    khub:presetVersion "0.6.0" ;
+    khub:presetVersion "0.7.0" ;
     khub:workspace "ws" ;
     khub:requiredScope "active" .
 
@@ -60,7 +60,10 @@ khub:when a rdf:Property ;
     rdfs:comment "The moment to capture an entity of this type, in domain language." .
 
 khub:type a rdf:Property ;
-    rdfs:comment "The khub scalar kind of an attribute: text, number, date, datetime, bool or list." .
+    rdfs:comment "The khub kind of an attribute: text, number, date, datetime, bool, list or object." .
+
+khub:items a rdf:Property ;
+    rdfs:comment "The declared kind of a list's items; absent when the items are untyped." .
 
 khub:default a rdf:Property ;
     rdfs:comment "The value an absent attribute reads as." .
@@ -180,8 +183,8 @@ type:repo a rdfs:Class ;
     khub:path "knowledge/repos" ;
     khub:idShape "rp-slug" .
 
-khub:draft a rdf:Property, owl:DatatypeProperty ;
-    rdfs:label "draft" .
+khub:status a rdf:Property, owl:DatatypeProperty ;
+    rdfs:label "status" .
 
 khub:author a rdf:Property, owl:DatatypeProperty ;
     rdfs:label "author" .
@@ -207,11 +210,47 @@ khub:tags a rdf:Property, owl:DatatypeProperty ;
 khub:aliases a rdf:Property, owl:DatatypeProperty ;
     rdfs:label "aliases" .
 
-khub:related a rdf:Property, owl:ObjectProperty ;
-    rdfs:label "related" .
+khub:generated a rdf:Property, owl:ObjectProperty ;
+    rdfs:label "generated" .
+
+khub:by a rdf:Property, owl:DatatypeProperty ;
+    rdfs:label "by" .
+
+khub:at a rdf:Property, owl:DatatypeProperty ;
+    rdfs:label "at" .
+
+khub:verified a rdf:Property, owl:ObjectProperty ;
+    rdfs:label "verified" .
+
+khub:rev a rdf:Property, owl:DatatypeProperty ;
+    rdfs:label "rev" .
+
+khub:stale_after a rdf:Property, owl:DatatypeProperty ;
+    rdfs:label "stale_after" .
 
 khub:sources a rdf:Property, owl:ObjectProperty ;
     rdfs:label "sources" .
+
+khub:id a rdf:Property, owl:DatatypeProperty ;
+    rdfs:label "id" .
+
+khub:usage_count a rdf:Property, owl:DatatypeProperty ;
+    rdfs:label "usage_count" .
+
+khub:last_modified a rdf:Property, owl:DatatypeProperty ;
+    rdfs:label "last_modified" .
+
+khub:usage_window a rdf:Property, owl:ObjectProperty ;
+    rdfs:label "usage_window" .
+
+khub:from a rdf:Property, owl:DatatypeProperty ;
+    rdfs:label "from" .
+
+khub:to a rdf:Property, owl:DatatypeProperty ;
+    rdfs:label "to" .
+
+khub:related a rdf:Property, owl:ObjectProperty ;
+    rdfs:label "related" .
 
 khub:references a rdf:Property, owl:ObjectProperty ;
     rdfs:label "references" .
@@ -246,8 +285,8 @@ field:use_cases a rdf:Property, owl:ObjectProperty ;
 field:realized_in a rdf:Property, owl:ObjectProperty ;
     rdfs:label "realized_in" .
 
-field:status a rdf:Property, owl:DatatypeProperty ;
-    rdfs:label "status" .
+field:decision a rdf:Property, owl:DatatypeProperty ;
+    rdfs:label "decision" .
 
 field:supersedes a rdf:Property, owl:ObjectProperty ;
     rdfs:label "supersedes" .
@@ -283,13 +322,14 @@ field:provider a rdf:Property, owl:ObjectProperty ;
 shape:prd a sh:NodeShape ;
     sh:targetClass type:prd ;
     sh:property [
-        sh:path khub:draft ;
-        sh:name "draft" ;
+        sh:path khub:status ;
+        sh:name "status" ;
         sh:order 0 ;
-        sh:datatype xsd:boolean ;
+        sh:datatype xsd:string ;
         sh:maxCount 1 ;
-        khub:type "bool" ;
-        khub:default false
+        sh:in ( "draft" "stable" "deprecated" ) ;
+        khub:type "text" ;
+        khub:default "stable"
     ] ;
     sh:property [
         sh:path khub:author ;
@@ -360,17 +400,206 @@ shape:prd a sh:NodeShape ;
         khub:type "list"
     ] ;
     sh:property [
-        sh:path khub:related ;
-        sh:name "related" ;
+        sh:path khub:generated ;
+        sh:name "generated" ;
         sh:order 9 ;
-        sh:nodeKind sh:IRI ;
-        sh:class khub:Entity ;
-        khub:kind "any"
+        sh:nodeKind sh:BlankNode ;
+        sh:maxCount 1 ;
+        sh:node [
+            sh:property [
+                sh:path khub:by ;
+                sh:name "by" ;
+                sh:order 0 ;
+                sh:datatype xsd:string ;
+                sh:minCount 1 ;
+                sh:maxCount 1 ;
+                khub:type "text"
+            ] ;
+            sh:property [
+                sh:path khub:at ;
+                sh:name "at" ;
+                sh:order 1 ;
+                sh:datatype xsd:dateTime ;
+                sh:maxCount 1 ;
+                sh:pattern "^([0-9]{4}-[0-9]{2}-[0-9]{2}[Tt][0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]+)?([Zz]|[+-][0-9]{2}:[0-9]{2}))$" ;
+                khub:pattern "\\d{4}-\\d{2}-\\d{2}[Tt]\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?([Zz]|[+-]\\d{2}:\\d{2})" ;
+                khub:type "datetime"
+            ]
+        ] ;
+        khub:type "object"
+    ] ;
+    sh:property [
+        sh:path khub:verified ;
+        sh:name "verified" ;
+        sh:order 10 ;
+        sh:nodeKind sh:BlankNode ;
+        sh:node [
+            sh:property [
+                sh:path khub:by ;
+                sh:name "by" ;
+                sh:order 0 ;
+                sh:datatype xsd:string ;
+                sh:minCount 1 ;
+                sh:maxCount 1 ;
+                khub:type "text"
+            ] ;
+            sh:property [
+                sh:path khub:at ;
+                sh:name "at" ;
+                sh:order 1 ;
+                sh:datatype xsd:dateTime ;
+                sh:maxCount 1 ;
+                sh:pattern "^([0-9]{4}-[0-9]{2}-[0-9]{2}[Tt][0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]+)?([Zz]|[+-][0-9]{2}:[0-9]{2}))$" ;
+                khub:pattern "\\d{4}-\\d{2}-\\d{2}[Tt]\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?([Zz]|[+-]\\d{2}:\\d{2})" ;
+                khub:type "datetime"
+            ] ;
+            sh:property [
+                sh:path khub:rev ;
+                sh:name "rev" ;
+                sh:order 2 ;
+                sh:datatype xsd:string ;
+                sh:maxCount 1 ;
+                khub:type "text"
+            ]
+        ] ;
+        khub:type "list" ;
+        khub:items "object"
+    ] ;
+    sh:property [
+        sh:path khub:stale_after ;
+        sh:name "stale_after" ;
+        sh:order 11 ;
+        sh:datatype xsd:dateTime ;
+        sh:maxCount 1 ;
+        sh:pattern "^([0-9]{4}-[0-9]{2}-[0-9]{2}[Tt][0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]+)?([Zz]|[+-][0-9]{2}:[0-9]{2}))$" ;
+        khub:pattern "\\d{4}-\\d{2}-\\d{2}[Tt]\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?([Zz]|[+-]\\d{2}:\\d{2})" ;
+        khub:type "datetime"
     ] ;
     sh:property [
         sh:path khub:sources ;
         sh:name "sources" ;
-        sh:order 10 ;
+        sh:order 12 ;
+        sh:nodeKind sh:BlankNode ;
+        sh:node [
+            sh:property [
+                sh:path khub:resource ;
+                sh:name "resource" ;
+                sh:order 0 ;
+                sh:datatype xsd:string ;
+                sh:minCount 1 ;
+                sh:maxCount 1 ;
+                khub:type "text"
+            ] ;
+            sh:property [
+                sh:path khub:id ;
+                sh:name "id" ;
+                sh:order 1 ;
+                sh:datatype xsd:string ;
+                sh:maxCount 1 ;
+                khub:type "text"
+            ] ;
+            sh:property [
+                sh:path khub:title ;
+                sh:name "title" ;
+                sh:order 2 ;
+                sh:datatype xsd:string ;
+                sh:maxCount 1 ;
+                khub:type "text"
+            ] ;
+            sh:property [
+                sh:path khub:author ;
+                sh:name "author" ;
+                sh:order 3 ;
+                sh:datatype xsd:string ;
+                sh:maxCount 1 ;
+                khub:type "text"
+            ] ;
+            sh:property [
+                sh:path khub:usage_count ;
+                sh:name "usage_count" ;
+                sh:order 4 ;
+                sh:datatype xsd:decimal ;
+                sh:maxCount 1 ;
+                khub:type "number"
+            ] ;
+            sh:property [
+                sh:path khub:last_modified ;
+                sh:name "last_modified" ;
+                sh:order 5 ;
+                sh:datatype xsd:dateTime ;
+                sh:maxCount 1 ;
+                sh:pattern "^([0-9]{4}-[0-9]{2}-[0-9]{2}[Tt][0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]+)?([Zz]|[+-][0-9]{2}:[0-9]{2}))$" ;
+                khub:pattern "\\d{4}-\\d{2}-\\d{2}[Tt]\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?([Zz]|[+-]\\d{2}:\\d{2})" ;
+                khub:type "datetime"
+            ] ;
+            sh:property [
+                sh:path khub:usage_window ;
+                sh:name "usage_window" ;
+                sh:order 6 ;
+                sh:nodeKind sh:BlankNode ;
+                sh:maxCount 1 ;
+                sh:node [
+                    sh:property [
+                        sh:path khub:from ;
+                        sh:name "from" ;
+                        sh:order 0 ;
+                        sh:datatype xsd:dateTime ;
+                        sh:maxCount 1 ;
+                        sh:pattern "^([0-9]{4}-[0-9]{2}-[0-9]{2}[Tt][0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]+)?([Zz]|[+-][0-9]{2}:[0-9]{2}))$" ;
+                        khub:pattern "\\d{4}-\\d{2}-\\d{2}[Tt]\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?([Zz]|[+-]\\d{2}:\\d{2})" ;
+                        khub:type "datetime"
+                    ] ;
+                    sh:property [
+                        sh:path khub:to ;
+                        sh:name "to" ;
+                        sh:order 1 ;
+                        sh:datatype xsd:dateTime ;
+                        sh:maxCount 1 ;
+                        sh:pattern "^([0-9]{4}-[0-9]{2}-[0-9]{2}[Tt][0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]+)?([Zz]|[+-][0-9]{2}:[0-9]{2}))$" ;
+                        khub:pattern "\\d{4}-\\d{2}-\\d{2}[Tt]\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?([Zz]|[+-]\\d{2}:\\d{2})" ;
+                        khub:type "datetime"
+                    ]
+                ] ;
+                khub:type "object"
+            ]
+        ] ;
+        khub:type "list" ;
+        khub:items "object"
+    ] ;
+    sh:property [
+        sh:path khub:usage_window ;
+        sh:name "usage_window" ;
+        sh:order 13 ;
+        sh:nodeKind sh:BlankNode ;
+        sh:maxCount 1 ;
+        sh:node [
+            sh:property [
+                sh:path khub:from ;
+                sh:name "from" ;
+                sh:order 0 ;
+                sh:datatype xsd:dateTime ;
+                sh:maxCount 1 ;
+                sh:pattern "^([0-9]{4}-[0-9]{2}-[0-9]{2}[Tt][0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]+)?([Zz]|[+-][0-9]{2}:[0-9]{2}))$" ;
+                khub:pattern "\\d{4}-\\d{2}-\\d{2}[Tt]\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?([Zz]|[+-]\\d{2}:\\d{2})" ;
+                khub:type "datetime"
+            ] ;
+            sh:property [
+                sh:path khub:to ;
+                sh:name "to" ;
+                sh:order 1 ;
+                sh:datatype xsd:dateTime ;
+                sh:maxCount 1 ;
+                sh:pattern "^([0-9]{4}-[0-9]{2}-[0-9]{2}[Tt][0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]+)?([Zz]|[+-][0-9]{2}:[0-9]{2}))$" ;
+                khub:pattern "\\d{4}-\\d{2}-\\d{2}[Tt]\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?([Zz]|[+-]\\d{2}:\\d{2})" ;
+                khub:type "datetime"
+            ]
+        ] ;
+        khub:type "object"
+    ] ;
+    sh:property [
+        sh:path khub:related ;
+        sh:name "related" ;
+        sh:order 14 ;
         sh:nodeKind sh:IRI ;
         sh:class khub:Entity ;
         khub:kind "any"
@@ -378,7 +607,7 @@ shape:prd a sh:NodeShape ;
     sh:property [
         sh:path khub:references ;
         sh:name "references" ;
-        sh:order 11 ;
+        sh:order 15 ;
         sh:nodeKind sh:IRI ;
         sh:class khub:Entity ;
         khub:kind "any"
@@ -386,7 +615,7 @@ shape:prd a sh:NodeShape ;
     sh:property [
         sh:path khub:depends_on ;
         sh:name "depends_on" ;
-        sh:order 12 ;
+        sh:order 16 ;
         sh:nodeKind sh:IRI ;
         sh:class khub:Entity ;
         khub:kind "any" ;
@@ -396,13 +625,14 @@ shape:prd a sh:NodeShape ;
 shape:arc42 a sh:NodeShape ;
     sh:targetClass type:arc42 ;
     sh:property [
-        sh:path khub:draft ;
-        sh:name "draft" ;
+        sh:path khub:status ;
+        sh:name "status" ;
         sh:order 0 ;
-        sh:datatype xsd:boolean ;
+        sh:datatype xsd:string ;
         sh:maxCount 1 ;
-        khub:type "bool" ;
-        khub:default false
+        sh:in ( "draft" "stable" "deprecated" ) ;
+        khub:type "text" ;
+        khub:default "stable"
     ] ;
     sh:property [
         sh:path khub:author ;
@@ -473,17 +703,206 @@ shape:arc42 a sh:NodeShape ;
         khub:type "list"
     ] ;
     sh:property [
-        sh:path khub:related ;
-        sh:name "related" ;
+        sh:path khub:generated ;
+        sh:name "generated" ;
         sh:order 9 ;
-        sh:nodeKind sh:IRI ;
-        sh:class khub:Entity ;
-        khub:kind "any"
+        sh:nodeKind sh:BlankNode ;
+        sh:maxCount 1 ;
+        sh:node [
+            sh:property [
+                sh:path khub:by ;
+                sh:name "by" ;
+                sh:order 0 ;
+                sh:datatype xsd:string ;
+                sh:minCount 1 ;
+                sh:maxCount 1 ;
+                khub:type "text"
+            ] ;
+            sh:property [
+                sh:path khub:at ;
+                sh:name "at" ;
+                sh:order 1 ;
+                sh:datatype xsd:dateTime ;
+                sh:maxCount 1 ;
+                sh:pattern "^([0-9]{4}-[0-9]{2}-[0-9]{2}[Tt][0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]+)?([Zz]|[+-][0-9]{2}:[0-9]{2}))$" ;
+                khub:pattern "\\d{4}-\\d{2}-\\d{2}[Tt]\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?([Zz]|[+-]\\d{2}:\\d{2})" ;
+                khub:type "datetime"
+            ]
+        ] ;
+        khub:type "object"
+    ] ;
+    sh:property [
+        sh:path khub:verified ;
+        sh:name "verified" ;
+        sh:order 10 ;
+        sh:nodeKind sh:BlankNode ;
+        sh:node [
+            sh:property [
+                sh:path khub:by ;
+                sh:name "by" ;
+                sh:order 0 ;
+                sh:datatype xsd:string ;
+                sh:minCount 1 ;
+                sh:maxCount 1 ;
+                khub:type "text"
+            ] ;
+            sh:property [
+                sh:path khub:at ;
+                sh:name "at" ;
+                sh:order 1 ;
+                sh:datatype xsd:dateTime ;
+                sh:maxCount 1 ;
+                sh:pattern "^([0-9]{4}-[0-9]{2}-[0-9]{2}[Tt][0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]+)?([Zz]|[+-][0-9]{2}:[0-9]{2}))$" ;
+                khub:pattern "\\d{4}-\\d{2}-\\d{2}[Tt]\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?([Zz]|[+-]\\d{2}:\\d{2})" ;
+                khub:type "datetime"
+            ] ;
+            sh:property [
+                sh:path khub:rev ;
+                sh:name "rev" ;
+                sh:order 2 ;
+                sh:datatype xsd:string ;
+                sh:maxCount 1 ;
+                khub:type "text"
+            ]
+        ] ;
+        khub:type "list" ;
+        khub:items "object"
+    ] ;
+    sh:property [
+        sh:path khub:stale_after ;
+        sh:name "stale_after" ;
+        sh:order 11 ;
+        sh:datatype xsd:dateTime ;
+        sh:maxCount 1 ;
+        sh:pattern "^([0-9]{4}-[0-9]{2}-[0-9]{2}[Tt][0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]+)?([Zz]|[+-][0-9]{2}:[0-9]{2}))$" ;
+        khub:pattern "\\d{4}-\\d{2}-\\d{2}[Tt]\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?([Zz]|[+-]\\d{2}:\\d{2})" ;
+        khub:type "datetime"
     ] ;
     sh:property [
         sh:path khub:sources ;
         sh:name "sources" ;
-        sh:order 10 ;
+        sh:order 12 ;
+        sh:nodeKind sh:BlankNode ;
+        sh:node [
+            sh:property [
+                sh:path khub:resource ;
+                sh:name "resource" ;
+                sh:order 0 ;
+                sh:datatype xsd:string ;
+                sh:minCount 1 ;
+                sh:maxCount 1 ;
+                khub:type "text"
+            ] ;
+            sh:property [
+                sh:path khub:id ;
+                sh:name "id" ;
+                sh:order 1 ;
+                sh:datatype xsd:string ;
+                sh:maxCount 1 ;
+                khub:type "text"
+            ] ;
+            sh:property [
+                sh:path khub:title ;
+                sh:name "title" ;
+                sh:order 2 ;
+                sh:datatype xsd:string ;
+                sh:maxCount 1 ;
+                khub:type "text"
+            ] ;
+            sh:property [
+                sh:path khub:author ;
+                sh:name "author" ;
+                sh:order 3 ;
+                sh:datatype xsd:string ;
+                sh:maxCount 1 ;
+                khub:type "text"
+            ] ;
+            sh:property [
+                sh:path khub:usage_count ;
+                sh:name "usage_count" ;
+                sh:order 4 ;
+                sh:datatype xsd:decimal ;
+                sh:maxCount 1 ;
+                khub:type "number"
+            ] ;
+            sh:property [
+                sh:path khub:last_modified ;
+                sh:name "last_modified" ;
+                sh:order 5 ;
+                sh:datatype xsd:dateTime ;
+                sh:maxCount 1 ;
+                sh:pattern "^([0-9]{4}-[0-9]{2}-[0-9]{2}[Tt][0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]+)?([Zz]|[+-][0-9]{2}:[0-9]{2}))$" ;
+                khub:pattern "\\d{4}-\\d{2}-\\d{2}[Tt]\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?([Zz]|[+-]\\d{2}:\\d{2})" ;
+                khub:type "datetime"
+            ] ;
+            sh:property [
+                sh:path khub:usage_window ;
+                sh:name "usage_window" ;
+                sh:order 6 ;
+                sh:nodeKind sh:BlankNode ;
+                sh:maxCount 1 ;
+                sh:node [
+                    sh:property [
+                        sh:path khub:from ;
+                        sh:name "from" ;
+                        sh:order 0 ;
+                        sh:datatype xsd:dateTime ;
+                        sh:maxCount 1 ;
+                        sh:pattern "^([0-9]{4}-[0-9]{2}-[0-9]{2}[Tt][0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]+)?([Zz]|[+-][0-9]{2}:[0-9]{2}))$" ;
+                        khub:pattern "\\d{4}-\\d{2}-\\d{2}[Tt]\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?([Zz]|[+-]\\d{2}:\\d{2})" ;
+                        khub:type "datetime"
+                    ] ;
+                    sh:property [
+                        sh:path khub:to ;
+                        sh:name "to" ;
+                        sh:order 1 ;
+                        sh:datatype xsd:dateTime ;
+                        sh:maxCount 1 ;
+                        sh:pattern "^([0-9]{4}-[0-9]{2}-[0-9]{2}[Tt][0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]+)?([Zz]|[+-][0-9]{2}:[0-9]{2}))$" ;
+                        khub:pattern "\\d{4}-\\d{2}-\\d{2}[Tt]\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?([Zz]|[+-]\\d{2}:\\d{2})" ;
+                        khub:type "datetime"
+                    ]
+                ] ;
+                khub:type "object"
+            ]
+        ] ;
+        khub:type "list" ;
+        khub:items "object"
+    ] ;
+    sh:property [
+        sh:path khub:usage_window ;
+        sh:name "usage_window" ;
+        sh:order 13 ;
+        sh:nodeKind sh:BlankNode ;
+        sh:maxCount 1 ;
+        sh:node [
+            sh:property [
+                sh:path khub:from ;
+                sh:name "from" ;
+                sh:order 0 ;
+                sh:datatype xsd:dateTime ;
+                sh:maxCount 1 ;
+                sh:pattern "^([0-9]{4}-[0-9]{2}-[0-9]{2}[Tt][0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]+)?([Zz]|[+-][0-9]{2}:[0-9]{2}))$" ;
+                khub:pattern "\\d{4}-\\d{2}-\\d{2}[Tt]\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?([Zz]|[+-]\\d{2}:\\d{2})" ;
+                khub:type "datetime"
+            ] ;
+            sh:property [
+                sh:path khub:to ;
+                sh:name "to" ;
+                sh:order 1 ;
+                sh:datatype xsd:dateTime ;
+                sh:maxCount 1 ;
+                sh:pattern "^([0-9]{4}-[0-9]{2}-[0-9]{2}[Tt][0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]+)?([Zz]|[+-][0-9]{2}:[0-9]{2}))$" ;
+                khub:pattern "\\d{4}-\\d{2}-\\d{2}[Tt]\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?([Zz]|[+-]\\d{2}:\\d{2})" ;
+                khub:type "datetime"
+            ]
+        ] ;
+        khub:type "object"
+    ] ;
+    sh:property [
+        sh:path khub:related ;
+        sh:name "related" ;
+        sh:order 14 ;
         sh:nodeKind sh:IRI ;
         sh:class khub:Entity ;
         khub:kind "any"
@@ -491,7 +910,7 @@ shape:arc42 a sh:NodeShape ;
     sh:property [
         sh:path khub:references ;
         sh:name "references" ;
-        sh:order 11 ;
+        sh:order 15 ;
         sh:nodeKind sh:IRI ;
         sh:class khub:Entity ;
         khub:kind "any"
@@ -499,7 +918,7 @@ shape:arc42 a sh:NodeShape ;
     sh:property [
         sh:path khub:depends_on ;
         sh:name "depends_on" ;
-        sh:order 12 ;
+        sh:order 16 ;
         sh:nodeKind sh:IRI ;
         sh:class khub:Entity ;
         khub:kind "any" ;
@@ -509,13 +928,14 @@ shape:arc42 a sh:NodeShape ;
 shape:capability a sh:NodeShape ;
     sh:targetClass type:capability ;
     sh:property [
-        sh:path khub:draft ;
-        sh:name "draft" ;
+        sh:path khub:status ;
+        sh:name "status" ;
         sh:order 0 ;
-        sh:datatype xsd:boolean ;
+        sh:datatype xsd:string ;
         sh:maxCount 1 ;
-        khub:type "bool" ;
-        khub:default false
+        sh:in ( "draft" "stable" "deprecated" ) ;
+        khub:type "text" ;
+        khub:default "stable"
     ] ;
     sh:property [
         sh:path khub:author ;
@@ -586,17 +1006,206 @@ shape:capability a sh:NodeShape ;
         khub:type "list"
     ] ;
     sh:property [
-        sh:path khub:related ;
-        sh:name "related" ;
+        sh:path khub:generated ;
+        sh:name "generated" ;
         sh:order 9 ;
-        sh:nodeKind sh:IRI ;
-        sh:class khub:Entity ;
-        khub:kind "any"
+        sh:nodeKind sh:BlankNode ;
+        sh:maxCount 1 ;
+        sh:node [
+            sh:property [
+                sh:path khub:by ;
+                sh:name "by" ;
+                sh:order 0 ;
+                sh:datatype xsd:string ;
+                sh:minCount 1 ;
+                sh:maxCount 1 ;
+                khub:type "text"
+            ] ;
+            sh:property [
+                sh:path khub:at ;
+                sh:name "at" ;
+                sh:order 1 ;
+                sh:datatype xsd:dateTime ;
+                sh:maxCount 1 ;
+                sh:pattern "^([0-9]{4}-[0-9]{2}-[0-9]{2}[Tt][0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]+)?([Zz]|[+-][0-9]{2}:[0-9]{2}))$" ;
+                khub:pattern "\\d{4}-\\d{2}-\\d{2}[Tt]\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?([Zz]|[+-]\\d{2}:\\d{2})" ;
+                khub:type "datetime"
+            ]
+        ] ;
+        khub:type "object"
+    ] ;
+    sh:property [
+        sh:path khub:verified ;
+        sh:name "verified" ;
+        sh:order 10 ;
+        sh:nodeKind sh:BlankNode ;
+        sh:node [
+            sh:property [
+                sh:path khub:by ;
+                sh:name "by" ;
+                sh:order 0 ;
+                sh:datatype xsd:string ;
+                sh:minCount 1 ;
+                sh:maxCount 1 ;
+                khub:type "text"
+            ] ;
+            sh:property [
+                sh:path khub:at ;
+                sh:name "at" ;
+                sh:order 1 ;
+                sh:datatype xsd:dateTime ;
+                sh:maxCount 1 ;
+                sh:pattern "^([0-9]{4}-[0-9]{2}-[0-9]{2}[Tt][0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]+)?([Zz]|[+-][0-9]{2}:[0-9]{2}))$" ;
+                khub:pattern "\\d{4}-\\d{2}-\\d{2}[Tt]\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?([Zz]|[+-]\\d{2}:\\d{2})" ;
+                khub:type "datetime"
+            ] ;
+            sh:property [
+                sh:path khub:rev ;
+                sh:name "rev" ;
+                sh:order 2 ;
+                sh:datatype xsd:string ;
+                sh:maxCount 1 ;
+                khub:type "text"
+            ]
+        ] ;
+        khub:type "list" ;
+        khub:items "object"
+    ] ;
+    sh:property [
+        sh:path khub:stale_after ;
+        sh:name "stale_after" ;
+        sh:order 11 ;
+        sh:datatype xsd:dateTime ;
+        sh:maxCount 1 ;
+        sh:pattern "^([0-9]{4}-[0-9]{2}-[0-9]{2}[Tt][0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]+)?([Zz]|[+-][0-9]{2}:[0-9]{2}))$" ;
+        khub:pattern "\\d{4}-\\d{2}-\\d{2}[Tt]\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?([Zz]|[+-]\\d{2}:\\d{2})" ;
+        khub:type "datetime"
     ] ;
     sh:property [
         sh:path khub:sources ;
         sh:name "sources" ;
-        sh:order 10 ;
+        sh:order 12 ;
+        sh:nodeKind sh:BlankNode ;
+        sh:node [
+            sh:property [
+                sh:path khub:resource ;
+                sh:name "resource" ;
+                sh:order 0 ;
+                sh:datatype xsd:string ;
+                sh:minCount 1 ;
+                sh:maxCount 1 ;
+                khub:type "text"
+            ] ;
+            sh:property [
+                sh:path khub:id ;
+                sh:name "id" ;
+                sh:order 1 ;
+                sh:datatype xsd:string ;
+                sh:maxCount 1 ;
+                khub:type "text"
+            ] ;
+            sh:property [
+                sh:path khub:title ;
+                sh:name "title" ;
+                sh:order 2 ;
+                sh:datatype xsd:string ;
+                sh:maxCount 1 ;
+                khub:type "text"
+            ] ;
+            sh:property [
+                sh:path khub:author ;
+                sh:name "author" ;
+                sh:order 3 ;
+                sh:datatype xsd:string ;
+                sh:maxCount 1 ;
+                khub:type "text"
+            ] ;
+            sh:property [
+                sh:path khub:usage_count ;
+                sh:name "usage_count" ;
+                sh:order 4 ;
+                sh:datatype xsd:decimal ;
+                sh:maxCount 1 ;
+                khub:type "number"
+            ] ;
+            sh:property [
+                sh:path khub:last_modified ;
+                sh:name "last_modified" ;
+                sh:order 5 ;
+                sh:datatype xsd:dateTime ;
+                sh:maxCount 1 ;
+                sh:pattern "^([0-9]{4}-[0-9]{2}-[0-9]{2}[Tt][0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]+)?([Zz]|[+-][0-9]{2}:[0-9]{2}))$" ;
+                khub:pattern "\\d{4}-\\d{2}-\\d{2}[Tt]\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?([Zz]|[+-]\\d{2}:\\d{2})" ;
+                khub:type "datetime"
+            ] ;
+            sh:property [
+                sh:path khub:usage_window ;
+                sh:name "usage_window" ;
+                sh:order 6 ;
+                sh:nodeKind sh:BlankNode ;
+                sh:maxCount 1 ;
+                sh:node [
+                    sh:property [
+                        sh:path khub:from ;
+                        sh:name "from" ;
+                        sh:order 0 ;
+                        sh:datatype xsd:dateTime ;
+                        sh:maxCount 1 ;
+                        sh:pattern "^([0-9]{4}-[0-9]{2}-[0-9]{2}[Tt][0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]+)?([Zz]|[+-][0-9]{2}:[0-9]{2}))$" ;
+                        khub:pattern "\\d{4}-\\d{2}-\\d{2}[Tt]\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?([Zz]|[+-]\\d{2}:\\d{2})" ;
+                        khub:type "datetime"
+                    ] ;
+                    sh:property [
+                        sh:path khub:to ;
+                        sh:name "to" ;
+                        sh:order 1 ;
+                        sh:datatype xsd:dateTime ;
+                        sh:maxCount 1 ;
+                        sh:pattern "^([0-9]{4}-[0-9]{2}-[0-9]{2}[Tt][0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]+)?([Zz]|[+-][0-9]{2}:[0-9]{2}))$" ;
+                        khub:pattern "\\d{4}-\\d{2}-\\d{2}[Tt]\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?([Zz]|[+-]\\d{2}:\\d{2})" ;
+                        khub:type "datetime"
+                    ]
+                ] ;
+                khub:type "object"
+            ]
+        ] ;
+        khub:type "list" ;
+        khub:items "object"
+    ] ;
+    sh:property [
+        sh:path khub:usage_window ;
+        sh:name "usage_window" ;
+        sh:order 13 ;
+        sh:nodeKind sh:BlankNode ;
+        sh:maxCount 1 ;
+        sh:node [
+            sh:property [
+                sh:path khub:from ;
+                sh:name "from" ;
+                sh:order 0 ;
+                sh:datatype xsd:dateTime ;
+                sh:maxCount 1 ;
+                sh:pattern "^([0-9]{4}-[0-9]{2}-[0-9]{2}[Tt][0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]+)?([Zz]|[+-][0-9]{2}:[0-9]{2}))$" ;
+                khub:pattern "\\d{4}-\\d{2}-\\d{2}[Tt]\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?([Zz]|[+-]\\d{2}:\\d{2})" ;
+                khub:type "datetime"
+            ] ;
+            sh:property [
+                sh:path khub:to ;
+                sh:name "to" ;
+                sh:order 1 ;
+                sh:datatype xsd:dateTime ;
+                sh:maxCount 1 ;
+                sh:pattern "^([0-9]{4}-[0-9]{2}-[0-9]{2}[Tt][0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]+)?([Zz]|[+-][0-9]{2}:[0-9]{2}))$" ;
+                khub:pattern "\\d{4}-\\d{2}-\\d{2}[Tt]\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?([Zz]|[+-]\\d{2}:\\d{2})" ;
+                khub:type "datetime"
+            ]
+        ] ;
+        khub:type "object"
+    ] ;
+    sh:property [
+        sh:path khub:related ;
+        sh:name "related" ;
+        sh:order 14 ;
         sh:nodeKind sh:IRI ;
         sh:class khub:Entity ;
         khub:kind "any"
@@ -604,7 +1213,7 @@ shape:capability a sh:NodeShape ;
     sh:property [
         sh:path khub:references ;
         sh:name "references" ;
-        sh:order 11 ;
+        sh:order 15 ;
         sh:nodeKind sh:IRI ;
         sh:class khub:Entity ;
         khub:kind "any"
@@ -612,7 +1221,7 @@ shape:capability a sh:NodeShape ;
     sh:property [
         sh:path khub:depends_on ;
         sh:name "depends_on" ;
-        sh:order 12 ;
+        sh:order 16 ;
         sh:nodeKind sh:IRI ;
         sh:class khub:Entity ;
         khub:kind "any" ;
@@ -622,13 +1231,14 @@ shape:capability a sh:NodeShape ;
 shape:actor a sh:NodeShape ;
     sh:targetClass type:actor ;
     sh:property [
-        sh:path khub:draft ;
-        sh:name "draft" ;
+        sh:path khub:status ;
+        sh:name "status" ;
         sh:order 0 ;
-        sh:datatype xsd:boolean ;
+        sh:datatype xsd:string ;
         sh:maxCount 1 ;
-        khub:type "bool" ;
-        khub:default false
+        sh:in ( "draft" "stable" "deprecated" ) ;
+        khub:type "text" ;
+        khub:default "stable"
     ] ;
     sh:property [
         sh:path khub:author ;
@@ -699,17 +1309,206 @@ shape:actor a sh:NodeShape ;
         khub:type "list"
     ] ;
     sh:property [
-        sh:path khub:related ;
-        sh:name "related" ;
+        sh:path khub:generated ;
+        sh:name "generated" ;
         sh:order 9 ;
-        sh:nodeKind sh:IRI ;
-        sh:class khub:Entity ;
-        khub:kind "any"
+        sh:nodeKind sh:BlankNode ;
+        sh:maxCount 1 ;
+        sh:node [
+            sh:property [
+                sh:path khub:by ;
+                sh:name "by" ;
+                sh:order 0 ;
+                sh:datatype xsd:string ;
+                sh:minCount 1 ;
+                sh:maxCount 1 ;
+                khub:type "text"
+            ] ;
+            sh:property [
+                sh:path khub:at ;
+                sh:name "at" ;
+                sh:order 1 ;
+                sh:datatype xsd:dateTime ;
+                sh:maxCount 1 ;
+                sh:pattern "^([0-9]{4}-[0-9]{2}-[0-9]{2}[Tt][0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]+)?([Zz]|[+-][0-9]{2}:[0-9]{2}))$" ;
+                khub:pattern "\\d{4}-\\d{2}-\\d{2}[Tt]\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?([Zz]|[+-]\\d{2}:\\d{2})" ;
+                khub:type "datetime"
+            ]
+        ] ;
+        khub:type "object"
+    ] ;
+    sh:property [
+        sh:path khub:verified ;
+        sh:name "verified" ;
+        sh:order 10 ;
+        sh:nodeKind sh:BlankNode ;
+        sh:node [
+            sh:property [
+                sh:path khub:by ;
+                sh:name "by" ;
+                sh:order 0 ;
+                sh:datatype xsd:string ;
+                sh:minCount 1 ;
+                sh:maxCount 1 ;
+                khub:type "text"
+            ] ;
+            sh:property [
+                sh:path khub:at ;
+                sh:name "at" ;
+                sh:order 1 ;
+                sh:datatype xsd:dateTime ;
+                sh:maxCount 1 ;
+                sh:pattern "^([0-9]{4}-[0-9]{2}-[0-9]{2}[Tt][0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]+)?([Zz]|[+-][0-9]{2}:[0-9]{2}))$" ;
+                khub:pattern "\\d{4}-\\d{2}-\\d{2}[Tt]\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?([Zz]|[+-]\\d{2}:\\d{2})" ;
+                khub:type "datetime"
+            ] ;
+            sh:property [
+                sh:path khub:rev ;
+                sh:name "rev" ;
+                sh:order 2 ;
+                sh:datatype xsd:string ;
+                sh:maxCount 1 ;
+                khub:type "text"
+            ]
+        ] ;
+        khub:type "list" ;
+        khub:items "object"
+    ] ;
+    sh:property [
+        sh:path khub:stale_after ;
+        sh:name "stale_after" ;
+        sh:order 11 ;
+        sh:datatype xsd:dateTime ;
+        sh:maxCount 1 ;
+        sh:pattern "^([0-9]{4}-[0-9]{2}-[0-9]{2}[Tt][0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]+)?([Zz]|[+-][0-9]{2}:[0-9]{2}))$" ;
+        khub:pattern "\\d{4}-\\d{2}-\\d{2}[Tt]\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?([Zz]|[+-]\\d{2}:\\d{2})" ;
+        khub:type "datetime"
     ] ;
     sh:property [
         sh:path khub:sources ;
         sh:name "sources" ;
-        sh:order 10 ;
+        sh:order 12 ;
+        sh:nodeKind sh:BlankNode ;
+        sh:node [
+            sh:property [
+                sh:path khub:resource ;
+                sh:name "resource" ;
+                sh:order 0 ;
+                sh:datatype xsd:string ;
+                sh:minCount 1 ;
+                sh:maxCount 1 ;
+                khub:type "text"
+            ] ;
+            sh:property [
+                sh:path khub:id ;
+                sh:name "id" ;
+                sh:order 1 ;
+                sh:datatype xsd:string ;
+                sh:maxCount 1 ;
+                khub:type "text"
+            ] ;
+            sh:property [
+                sh:path khub:title ;
+                sh:name "title" ;
+                sh:order 2 ;
+                sh:datatype xsd:string ;
+                sh:maxCount 1 ;
+                khub:type "text"
+            ] ;
+            sh:property [
+                sh:path khub:author ;
+                sh:name "author" ;
+                sh:order 3 ;
+                sh:datatype xsd:string ;
+                sh:maxCount 1 ;
+                khub:type "text"
+            ] ;
+            sh:property [
+                sh:path khub:usage_count ;
+                sh:name "usage_count" ;
+                sh:order 4 ;
+                sh:datatype xsd:decimal ;
+                sh:maxCount 1 ;
+                khub:type "number"
+            ] ;
+            sh:property [
+                sh:path khub:last_modified ;
+                sh:name "last_modified" ;
+                sh:order 5 ;
+                sh:datatype xsd:dateTime ;
+                sh:maxCount 1 ;
+                sh:pattern "^([0-9]{4}-[0-9]{2}-[0-9]{2}[Tt][0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]+)?([Zz]|[+-][0-9]{2}:[0-9]{2}))$" ;
+                khub:pattern "\\d{4}-\\d{2}-\\d{2}[Tt]\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?([Zz]|[+-]\\d{2}:\\d{2})" ;
+                khub:type "datetime"
+            ] ;
+            sh:property [
+                sh:path khub:usage_window ;
+                sh:name "usage_window" ;
+                sh:order 6 ;
+                sh:nodeKind sh:BlankNode ;
+                sh:maxCount 1 ;
+                sh:node [
+                    sh:property [
+                        sh:path khub:from ;
+                        sh:name "from" ;
+                        sh:order 0 ;
+                        sh:datatype xsd:dateTime ;
+                        sh:maxCount 1 ;
+                        sh:pattern "^([0-9]{4}-[0-9]{2}-[0-9]{2}[Tt][0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]+)?([Zz]|[+-][0-9]{2}:[0-9]{2}))$" ;
+                        khub:pattern "\\d{4}-\\d{2}-\\d{2}[Tt]\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?([Zz]|[+-]\\d{2}:\\d{2})" ;
+                        khub:type "datetime"
+                    ] ;
+                    sh:property [
+                        sh:path khub:to ;
+                        sh:name "to" ;
+                        sh:order 1 ;
+                        sh:datatype xsd:dateTime ;
+                        sh:maxCount 1 ;
+                        sh:pattern "^([0-9]{4}-[0-9]{2}-[0-9]{2}[Tt][0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]+)?([Zz]|[+-][0-9]{2}:[0-9]{2}))$" ;
+                        khub:pattern "\\d{4}-\\d{2}-\\d{2}[Tt]\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?([Zz]|[+-]\\d{2}:\\d{2})" ;
+                        khub:type "datetime"
+                    ]
+                ] ;
+                khub:type "object"
+            ]
+        ] ;
+        khub:type "list" ;
+        khub:items "object"
+    ] ;
+    sh:property [
+        sh:path khub:usage_window ;
+        sh:name "usage_window" ;
+        sh:order 13 ;
+        sh:nodeKind sh:BlankNode ;
+        sh:maxCount 1 ;
+        sh:node [
+            sh:property [
+                sh:path khub:from ;
+                sh:name "from" ;
+                sh:order 0 ;
+                sh:datatype xsd:dateTime ;
+                sh:maxCount 1 ;
+                sh:pattern "^([0-9]{4}-[0-9]{2}-[0-9]{2}[Tt][0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]+)?([Zz]|[+-][0-9]{2}:[0-9]{2}))$" ;
+                khub:pattern "\\d{4}-\\d{2}-\\d{2}[Tt]\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?([Zz]|[+-]\\d{2}:\\d{2})" ;
+                khub:type "datetime"
+            ] ;
+            sh:property [
+                sh:path khub:to ;
+                sh:name "to" ;
+                sh:order 1 ;
+                sh:datatype xsd:dateTime ;
+                sh:maxCount 1 ;
+                sh:pattern "^([0-9]{4}-[0-9]{2}-[0-9]{2}[Tt][0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]+)?([Zz]|[+-][0-9]{2}:[0-9]{2}))$" ;
+                khub:pattern "\\d{4}-\\d{2}-\\d{2}[Tt]\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?([Zz]|[+-]\\d{2}:\\d{2})" ;
+                khub:type "datetime"
+            ]
+        ] ;
+        khub:type "object"
+    ] ;
+    sh:property [
+        sh:path khub:related ;
+        sh:name "related" ;
+        sh:order 14 ;
         sh:nodeKind sh:IRI ;
         sh:class khub:Entity ;
         khub:kind "any"
@@ -717,7 +1516,7 @@ shape:actor a sh:NodeShape ;
     sh:property [
         sh:path khub:references ;
         sh:name "references" ;
-        sh:order 11 ;
+        sh:order 15 ;
         sh:nodeKind sh:IRI ;
         sh:class khub:Entity ;
         khub:kind "any"
@@ -725,7 +1524,7 @@ shape:actor a sh:NodeShape ;
     sh:property [
         sh:path khub:depends_on ;
         sh:name "depends_on" ;
-        sh:order 12 ;
+        sh:order 16 ;
         sh:nodeKind sh:IRI ;
         sh:class khub:Entity ;
         khub:kind "any" ;
@@ -735,13 +1534,14 @@ shape:actor a sh:NodeShape ;
 shape:use-case a sh:NodeShape ;
     sh:targetClass type:use-case ;
     sh:property [
-        sh:path khub:draft ;
-        sh:name "draft" ;
+        sh:path khub:status ;
+        sh:name "status" ;
         sh:order 0 ;
-        sh:datatype xsd:boolean ;
+        sh:datatype xsd:string ;
         sh:maxCount 1 ;
-        khub:type "bool" ;
-        khub:default false
+        sh:in ( "draft" "stable" "deprecated" ) ;
+        khub:type "text" ;
+        khub:default "stable"
     ] ;
     sh:property [
         sh:path khub:author ;
@@ -812,9 +1612,206 @@ shape:use-case a sh:NodeShape ;
         khub:type "list"
     ] ;
     sh:property [
+        sh:path khub:generated ;
+        sh:name "generated" ;
+        sh:order 9 ;
+        sh:nodeKind sh:BlankNode ;
+        sh:maxCount 1 ;
+        sh:node [
+            sh:property [
+                sh:path khub:by ;
+                sh:name "by" ;
+                sh:order 0 ;
+                sh:datatype xsd:string ;
+                sh:minCount 1 ;
+                sh:maxCount 1 ;
+                khub:type "text"
+            ] ;
+            sh:property [
+                sh:path khub:at ;
+                sh:name "at" ;
+                sh:order 1 ;
+                sh:datatype xsd:dateTime ;
+                sh:maxCount 1 ;
+                sh:pattern "^([0-9]{4}-[0-9]{2}-[0-9]{2}[Tt][0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]+)?([Zz]|[+-][0-9]{2}:[0-9]{2}))$" ;
+                khub:pattern "\\d{4}-\\d{2}-\\d{2}[Tt]\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?([Zz]|[+-]\\d{2}:\\d{2})" ;
+                khub:type "datetime"
+            ]
+        ] ;
+        khub:type "object"
+    ] ;
+    sh:property [
+        sh:path khub:verified ;
+        sh:name "verified" ;
+        sh:order 10 ;
+        sh:nodeKind sh:BlankNode ;
+        sh:node [
+            sh:property [
+                sh:path khub:by ;
+                sh:name "by" ;
+                sh:order 0 ;
+                sh:datatype xsd:string ;
+                sh:minCount 1 ;
+                sh:maxCount 1 ;
+                khub:type "text"
+            ] ;
+            sh:property [
+                sh:path khub:at ;
+                sh:name "at" ;
+                sh:order 1 ;
+                sh:datatype xsd:dateTime ;
+                sh:maxCount 1 ;
+                sh:pattern "^([0-9]{4}-[0-9]{2}-[0-9]{2}[Tt][0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]+)?([Zz]|[+-][0-9]{2}:[0-9]{2}))$" ;
+                khub:pattern "\\d{4}-\\d{2}-\\d{2}[Tt]\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?([Zz]|[+-]\\d{2}:\\d{2})" ;
+                khub:type "datetime"
+            ] ;
+            sh:property [
+                sh:path khub:rev ;
+                sh:name "rev" ;
+                sh:order 2 ;
+                sh:datatype xsd:string ;
+                sh:maxCount 1 ;
+                khub:type "text"
+            ]
+        ] ;
+        khub:type "list" ;
+        khub:items "object"
+    ] ;
+    sh:property [
+        sh:path khub:stale_after ;
+        sh:name "stale_after" ;
+        sh:order 11 ;
+        sh:datatype xsd:dateTime ;
+        sh:maxCount 1 ;
+        sh:pattern "^([0-9]{4}-[0-9]{2}-[0-9]{2}[Tt][0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]+)?([Zz]|[+-][0-9]{2}:[0-9]{2}))$" ;
+        khub:pattern "\\d{4}-\\d{2}-\\d{2}[Tt]\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?([Zz]|[+-]\\d{2}:\\d{2})" ;
+        khub:type "datetime"
+    ] ;
+    sh:property [
+        sh:path khub:sources ;
+        sh:name "sources" ;
+        sh:order 12 ;
+        sh:nodeKind sh:BlankNode ;
+        sh:node [
+            sh:property [
+                sh:path khub:resource ;
+                sh:name "resource" ;
+                sh:order 0 ;
+                sh:datatype xsd:string ;
+                sh:minCount 1 ;
+                sh:maxCount 1 ;
+                khub:type "text"
+            ] ;
+            sh:property [
+                sh:path khub:id ;
+                sh:name "id" ;
+                sh:order 1 ;
+                sh:datatype xsd:string ;
+                sh:maxCount 1 ;
+                khub:type "text"
+            ] ;
+            sh:property [
+                sh:path khub:title ;
+                sh:name "title" ;
+                sh:order 2 ;
+                sh:datatype xsd:string ;
+                sh:maxCount 1 ;
+                khub:type "text"
+            ] ;
+            sh:property [
+                sh:path khub:author ;
+                sh:name "author" ;
+                sh:order 3 ;
+                sh:datatype xsd:string ;
+                sh:maxCount 1 ;
+                khub:type "text"
+            ] ;
+            sh:property [
+                sh:path khub:usage_count ;
+                sh:name "usage_count" ;
+                sh:order 4 ;
+                sh:datatype xsd:decimal ;
+                sh:maxCount 1 ;
+                khub:type "number"
+            ] ;
+            sh:property [
+                sh:path khub:last_modified ;
+                sh:name "last_modified" ;
+                sh:order 5 ;
+                sh:datatype xsd:dateTime ;
+                sh:maxCount 1 ;
+                sh:pattern "^([0-9]{4}-[0-9]{2}-[0-9]{2}[Tt][0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]+)?([Zz]|[+-][0-9]{2}:[0-9]{2}))$" ;
+                khub:pattern "\\d{4}-\\d{2}-\\d{2}[Tt]\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?([Zz]|[+-]\\d{2}:\\d{2})" ;
+                khub:type "datetime"
+            ] ;
+            sh:property [
+                sh:path khub:usage_window ;
+                sh:name "usage_window" ;
+                sh:order 6 ;
+                sh:nodeKind sh:BlankNode ;
+                sh:maxCount 1 ;
+                sh:node [
+                    sh:property [
+                        sh:path khub:from ;
+                        sh:name "from" ;
+                        sh:order 0 ;
+                        sh:datatype xsd:dateTime ;
+                        sh:maxCount 1 ;
+                        sh:pattern "^([0-9]{4}-[0-9]{2}-[0-9]{2}[Tt][0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]+)?([Zz]|[+-][0-9]{2}:[0-9]{2}))$" ;
+                        khub:pattern "\\d{4}-\\d{2}-\\d{2}[Tt]\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?([Zz]|[+-]\\d{2}:\\d{2})" ;
+                        khub:type "datetime"
+                    ] ;
+                    sh:property [
+                        sh:path khub:to ;
+                        sh:name "to" ;
+                        sh:order 1 ;
+                        sh:datatype xsd:dateTime ;
+                        sh:maxCount 1 ;
+                        sh:pattern "^([0-9]{4}-[0-9]{2}-[0-9]{2}[Tt][0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]+)?([Zz]|[+-][0-9]{2}:[0-9]{2}))$" ;
+                        khub:pattern "\\d{4}-\\d{2}-\\d{2}[Tt]\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?([Zz]|[+-]\\d{2}:\\d{2})" ;
+                        khub:type "datetime"
+                    ]
+                ] ;
+                khub:type "object"
+            ]
+        ] ;
+        khub:type "list" ;
+        khub:items "object"
+    ] ;
+    sh:property [
+        sh:path khub:usage_window ;
+        sh:name "usage_window" ;
+        sh:order 13 ;
+        sh:nodeKind sh:BlankNode ;
+        sh:maxCount 1 ;
+        sh:node [
+            sh:property [
+                sh:path khub:from ;
+                sh:name "from" ;
+                sh:order 0 ;
+                sh:datatype xsd:dateTime ;
+                sh:maxCount 1 ;
+                sh:pattern "^([0-9]{4}-[0-9]{2}-[0-9]{2}[Tt][0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]+)?([Zz]|[+-][0-9]{2}:[0-9]{2}))$" ;
+                khub:pattern "\\d{4}-\\d{2}-\\d{2}[Tt]\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?([Zz]|[+-]\\d{2}:\\d{2})" ;
+                khub:type "datetime"
+            ] ;
+            sh:property [
+                sh:path khub:to ;
+                sh:name "to" ;
+                sh:order 1 ;
+                sh:datatype xsd:dateTime ;
+                sh:maxCount 1 ;
+                sh:pattern "^([0-9]{4}-[0-9]{2}-[0-9]{2}[Tt][0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]+)?([Zz]|[+-][0-9]{2}:[0-9]{2}))$" ;
+                khub:pattern "\\d{4}-\\d{2}-\\d{2}[Tt]\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?([Zz]|[+-]\\d{2}:\\d{2})" ;
+                khub:type "datetime"
+            ]
+        ] ;
+        khub:type "object"
+    ] ;
+    sh:property [
         sh:path field:trigger ;
         sh:name "trigger" ;
-        sh:order 9 ;
+        sh:order 14 ;
         sh:datatype xsd:string ;
         sh:minCount 1 ;
         sh:maxCount 1 ;
@@ -824,15 +1821,7 @@ shape:use-case a sh:NodeShape ;
     sh:property [
         sh:path khub:related ;
         sh:name "related" ;
-        sh:order 10 ;
-        sh:nodeKind sh:IRI ;
-        sh:class khub:Entity ;
-        khub:kind "any"
-    ] ;
-    sh:property [
-        sh:path khub:sources ;
-        sh:name "sources" ;
-        sh:order 11 ;
+        sh:order 15 ;
         sh:nodeKind sh:IRI ;
         sh:class khub:Entity ;
         khub:kind "any"
@@ -840,7 +1829,7 @@ shape:use-case a sh:NodeShape ;
     sh:property [
         sh:path khub:references ;
         sh:name "references" ;
-        sh:order 12 ;
+        sh:order 16 ;
         sh:nodeKind sh:IRI ;
         sh:class khub:Entity ;
         khub:kind "any"
@@ -848,7 +1837,7 @@ shape:use-case a sh:NodeShape ;
     sh:property [
         sh:path khub:depends_on ;
         sh:name "depends_on" ;
-        sh:order 13 ;
+        sh:order 17 ;
         sh:nodeKind sh:IRI ;
         sh:class khub:Entity ;
         khub:kind "any" ;
@@ -857,7 +1846,7 @@ shape:use-case a sh:NodeShape ;
     sh:property [
         sh:path field:actor ;
         sh:name "actor" ;
-        sh:order 14 ;
+        sh:order 18 ;
         sh:nodeKind sh:IRI ;
         sh:class type:actor ;
         sh:maxCount 1 ;
@@ -866,7 +1855,7 @@ shape:use-case a sh:NodeShape ;
     sh:property [
         sh:path field:capability ;
         sh:name "capability" ;
-        sh:order 15 ;
+        sh:order 19 ;
         sh:nodeKind sh:IRI ;
         sh:class type:capability ;
         sh:maxCount 1 ;
@@ -875,7 +1864,7 @@ shape:use-case a sh:NodeShape ;
     sh:property [
         sh:path field:served_by ;
         sh:name "served_by" ;
-        sh:order 16 ;
+        sh:order 20 ;
         sh:nodeKind sh:IRI ;
         sh:class type:component ;
         khub:kind "typed" ;
@@ -885,13 +1874,14 @@ shape:use-case a sh:NodeShape ;
 shape:requirement a sh:NodeShape ;
     sh:targetClass type:requirement ;
     sh:property [
-        sh:path khub:draft ;
-        sh:name "draft" ;
+        sh:path khub:status ;
+        sh:name "status" ;
         sh:order 0 ;
-        sh:datatype xsd:boolean ;
+        sh:datatype xsd:string ;
         sh:maxCount 1 ;
-        khub:type "bool" ;
-        khub:default false
+        sh:in ( "draft" "stable" "deprecated" ) ;
+        khub:type "text" ;
+        khub:default "stable"
     ] ;
     sh:property [
         sh:path khub:author ;
@@ -962,9 +1952,206 @@ shape:requirement a sh:NodeShape ;
         khub:type "list"
     ] ;
     sh:property [
+        sh:path khub:generated ;
+        sh:name "generated" ;
+        sh:order 9 ;
+        sh:nodeKind sh:BlankNode ;
+        sh:maxCount 1 ;
+        sh:node [
+            sh:property [
+                sh:path khub:by ;
+                sh:name "by" ;
+                sh:order 0 ;
+                sh:datatype xsd:string ;
+                sh:minCount 1 ;
+                sh:maxCount 1 ;
+                khub:type "text"
+            ] ;
+            sh:property [
+                sh:path khub:at ;
+                sh:name "at" ;
+                sh:order 1 ;
+                sh:datatype xsd:dateTime ;
+                sh:maxCount 1 ;
+                sh:pattern "^([0-9]{4}-[0-9]{2}-[0-9]{2}[Tt][0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]+)?([Zz]|[+-][0-9]{2}:[0-9]{2}))$" ;
+                khub:pattern "\\d{4}-\\d{2}-\\d{2}[Tt]\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?([Zz]|[+-]\\d{2}:\\d{2})" ;
+                khub:type "datetime"
+            ]
+        ] ;
+        khub:type "object"
+    ] ;
+    sh:property [
+        sh:path khub:verified ;
+        sh:name "verified" ;
+        sh:order 10 ;
+        sh:nodeKind sh:BlankNode ;
+        sh:node [
+            sh:property [
+                sh:path khub:by ;
+                sh:name "by" ;
+                sh:order 0 ;
+                sh:datatype xsd:string ;
+                sh:minCount 1 ;
+                sh:maxCount 1 ;
+                khub:type "text"
+            ] ;
+            sh:property [
+                sh:path khub:at ;
+                sh:name "at" ;
+                sh:order 1 ;
+                sh:datatype xsd:dateTime ;
+                sh:maxCount 1 ;
+                sh:pattern "^([0-9]{4}-[0-9]{2}-[0-9]{2}[Tt][0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]+)?([Zz]|[+-][0-9]{2}:[0-9]{2}))$" ;
+                khub:pattern "\\d{4}-\\d{2}-\\d{2}[Tt]\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?([Zz]|[+-]\\d{2}:\\d{2})" ;
+                khub:type "datetime"
+            ] ;
+            sh:property [
+                sh:path khub:rev ;
+                sh:name "rev" ;
+                sh:order 2 ;
+                sh:datatype xsd:string ;
+                sh:maxCount 1 ;
+                khub:type "text"
+            ]
+        ] ;
+        khub:type "list" ;
+        khub:items "object"
+    ] ;
+    sh:property [
+        sh:path khub:stale_after ;
+        sh:name "stale_after" ;
+        sh:order 11 ;
+        sh:datatype xsd:dateTime ;
+        sh:maxCount 1 ;
+        sh:pattern "^([0-9]{4}-[0-9]{2}-[0-9]{2}[Tt][0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]+)?([Zz]|[+-][0-9]{2}:[0-9]{2}))$" ;
+        khub:pattern "\\d{4}-\\d{2}-\\d{2}[Tt]\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?([Zz]|[+-]\\d{2}:\\d{2})" ;
+        khub:type "datetime"
+    ] ;
+    sh:property [
+        sh:path khub:sources ;
+        sh:name "sources" ;
+        sh:order 12 ;
+        sh:nodeKind sh:BlankNode ;
+        sh:node [
+            sh:property [
+                sh:path khub:resource ;
+                sh:name "resource" ;
+                sh:order 0 ;
+                sh:datatype xsd:string ;
+                sh:minCount 1 ;
+                sh:maxCount 1 ;
+                khub:type "text"
+            ] ;
+            sh:property [
+                sh:path khub:id ;
+                sh:name "id" ;
+                sh:order 1 ;
+                sh:datatype xsd:string ;
+                sh:maxCount 1 ;
+                khub:type "text"
+            ] ;
+            sh:property [
+                sh:path khub:title ;
+                sh:name "title" ;
+                sh:order 2 ;
+                sh:datatype xsd:string ;
+                sh:maxCount 1 ;
+                khub:type "text"
+            ] ;
+            sh:property [
+                sh:path khub:author ;
+                sh:name "author" ;
+                sh:order 3 ;
+                sh:datatype xsd:string ;
+                sh:maxCount 1 ;
+                khub:type "text"
+            ] ;
+            sh:property [
+                sh:path khub:usage_count ;
+                sh:name "usage_count" ;
+                sh:order 4 ;
+                sh:datatype xsd:decimal ;
+                sh:maxCount 1 ;
+                khub:type "number"
+            ] ;
+            sh:property [
+                sh:path khub:last_modified ;
+                sh:name "last_modified" ;
+                sh:order 5 ;
+                sh:datatype xsd:dateTime ;
+                sh:maxCount 1 ;
+                sh:pattern "^([0-9]{4}-[0-9]{2}-[0-9]{2}[Tt][0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]+)?([Zz]|[+-][0-9]{2}:[0-9]{2}))$" ;
+                khub:pattern "\\d{4}-\\d{2}-\\d{2}[Tt]\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?([Zz]|[+-]\\d{2}:\\d{2})" ;
+                khub:type "datetime"
+            ] ;
+            sh:property [
+                sh:path khub:usage_window ;
+                sh:name "usage_window" ;
+                sh:order 6 ;
+                sh:nodeKind sh:BlankNode ;
+                sh:maxCount 1 ;
+                sh:node [
+                    sh:property [
+                        sh:path khub:from ;
+                        sh:name "from" ;
+                        sh:order 0 ;
+                        sh:datatype xsd:dateTime ;
+                        sh:maxCount 1 ;
+                        sh:pattern "^([0-9]{4}-[0-9]{2}-[0-9]{2}[Tt][0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]+)?([Zz]|[+-][0-9]{2}:[0-9]{2}))$" ;
+                        khub:pattern "\\d{4}-\\d{2}-\\d{2}[Tt]\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?([Zz]|[+-]\\d{2}:\\d{2})" ;
+                        khub:type "datetime"
+                    ] ;
+                    sh:property [
+                        sh:path khub:to ;
+                        sh:name "to" ;
+                        sh:order 1 ;
+                        sh:datatype xsd:dateTime ;
+                        sh:maxCount 1 ;
+                        sh:pattern "^([0-9]{4}-[0-9]{2}-[0-9]{2}[Tt][0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]+)?([Zz]|[+-][0-9]{2}:[0-9]{2}))$" ;
+                        khub:pattern "\\d{4}-\\d{2}-\\d{2}[Tt]\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?([Zz]|[+-]\\d{2}:\\d{2})" ;
+                        khub:type "datetime"
+                    ]
+                ] ;
+                khub:type "object"
+            ]
+        ] ;
+        khub:type "list" ;
+        khub:items "object"
+    ] ;
+    sh:property [
+        sh:path khub:usage_window ;
+        sh:name "usage_window" ;
+        sh:order 13 ;
+        sh:nodeKind sh:BlankNode ;
+        sh:maxCount 1 ;
+        sh:node [
+            sh:property [
+                sh:path khub:from ;
+                sh:name "from" ;
+                sh:order 0 ;
+                sh:datatype xsd:dateTime ;
+                sh:maxCount 1 ;
+                sh:pattern "^([0-9]{4}-[0-9]{2}-[0-9]{2}[Tt][0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]+)?([Zz]|[+-][0-9]{2}:[0-9]{2}))$" ;
+                khub:pattern "\\d{4}-\\d{2}-\\d{2}[Tt]\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?([Zz]|[+-]\\d{2}:\\d{2})" ;
+                khub:type "datetime"
+            ] ;
+            sh:property [
+                sh:path khub:to ;
+                sh:name "to" ;
+                sh:order 1 ;
+                sh:datatype xsd:dateTime ;
+                sh:maxCount 1 ;
+                sh:pattern "^([0-9]{4}-[0-9]{2}-[0-9]{2}[Tt][0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]+)?([Zz]|[+-][0-9]{2}:[0-9]{2}))$" ;
+                khub:pattern "\\d{4}-\\d{2}-\\d{2}[Tt]\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?([Zz]|[+-]\\d{2}:\\d{2})" ;
+                khub:type "datetime"
+            ]
+        ] ;
+        khub:type "object"
+    ] ;
+    sh:property [
         sh:path field:kind ;
         sh:name "kind" ;
-        sh:order 9 ;
+        sh:order 14 ;
         sh:datatype xsd:string ;
         sh:minCount 1 ;
         sh:maxCount 1 ;
@@ -974,7 +2161,7 @@ shape:requirement a sh:NodeShape ;
     sh:property [
         sh:path field:enforcement ;
         sh:name "enforcement" ;
-        sh:order 10 ;
+        sh:order 15 ;
         sh:datatype xsd:string ;
         sh:maxCount 1 ;
         sh:in ( "ui" "backend" "database" "external" "review" ) ;
@@ -983,15 +2170,7 @@ shape:requirement a sh:NodeShape ;
     sh:property [
         sh:path khub:related ;
         sh:name "related" ;
-        sh:order 11 ;
-        sh:nodeKind sh:IRI ;
-        sh:class khub:Entity ;
-        khub:kind "any"
-    ] ;
-    sh:property [
-        sh:path khub:sources ;
-        sh:name "sources" ;
-        sh:order 12 ;
+        sh:order 16 ;
         sh:nodeKind sh:IRI ;
         sh:class khub:Entity ;
         khub:kind "any"
@@ -999,7 +2178,7 @@ shape:requirement a sh:NodeShape ;
     sh:property [
         sh:path khub:references ;
         sh:name "references" ;
-        sh:order 13 ;
+        sh:order 17 ;
         sh:nodeKind sh:IRI ;
         sh:class khub:Entity ;
         khub:kind "any"
@@ -1007,7 +2186,7 @@ shape:requirement a sh:NodeShape ;
     sh:property [
         sh:path khub:depends_on ;
         sh:name "depends_on" ;
-        sh:order 14 ;
+        sh:order 18 ;
         sh:nodeKind sh:IRI ;
         sh:class khub:Entity ;
         khub:kind "any" ;
@@ -1016,7 +2195,7 @@ shape:requirement a sh:NodeShape ;
     sh:property [
         sh:path field:capabilities ;
         sh:name "capabilities" ;
-        sh:order 15 ;
+        sh:order 19 ;
         sh:nodeKind sh:IRI ;
         sh:class type:capability ;
         khub:kind "typed"
@@ -1024,7 +2203,7 @@ shape:requirement a sh:NodeShape ;
     sh:property [
         sh:path field:use_cases ;
         sh:name "use_cases" ;
-        sh:order 16 ;
+        sh:order 20 ;
         sh:nodeKind sh:IRI ;
         sh:class type:use-case ;
         khub:kind "typed"
@@ -1032,7 +2211,7 @@ shape:requirement a sh:NodeShape ;
     sh:property [
         sh:path field:realized_in ;
         sh:name "realized_in" ;
-        sh:order 17 ;
+        sh:order 21 ;
         sh:nodeKind sh:IRI ;
         sh:class type:component ;
         khub:kind "typed"
@@ -1041,13 +2220,14 @@ shape:requirement a sh:NodeShape ;
 shape:adr a sh:NodeShape ;
     sh:targetClass type:adr ;
     sh:property [
-        sh:path khub:draft ;
-        sh:name "draft" ;
+        sh:path khub:status ;
+        sh:name "status" ;
         sh:order 0 ;
-        sh:datatype xsd:boolean ;
+        sh:datatype xsd:string ;
         sh:maxCount 1 ;
-        khub:type "bool" ;
-        khub:default false
+        sh:in ( "draft" "stable" "deprecated" ) ;
+        khub:type "text" ;
+        khub:default "stable"
     ] ;
     sh:property [
         sh:path khub:author ;
@@ -1118,9 +2298,206 @@ shape:adr a sh:NodeShape ;
         khub:type "list"
     ] ;
     sh:property [
-        sh:path field:status ;
-        sh:name "status" ;
+        sh:path khub:generated ;
+        sh:name "generated" ;
         sh:order 9 ;
+        sh:nodeKind sh:BlankNode ;
+        sh:maxCount 1 ;
+        sh:node [
+            sh:property [
+                sh:path khub:by ;
+                sh:name "by" ;
+                sh:order 0 ;
+                sh:datatype xsd:string ;
+                sh:minCount 1 ;
+                sh:maxCount 1 ;
+                khub:type "text"
+            ] ;
+            sh:property [
+                sh:path khub:at ;
+                sh:name "at" ;
+                sh:order 1 ;
+                sh:datatype xsd:dateTime ;
+                sh:maxCount 1 ;
+                sh:pattern "^([0-9]{4}-[0-9]{2}-[0-9]{2}[Tt][0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]+)?([Zz]|[+-][0-9]{2}:[0-9]{2}))$" ;
+                khub:pattern "\\d{4}-\\d{2}-\\d{2}[Tt]\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?([Zz]|[+-]\\d{2}:\\d{2})" ;
+                khub:type "datetime"
+            ]
+        ] ;
+        khub:type "object"
+    ] ;
+    sh:property [
+        sh:path khub:verified ;
+        sh:name "verified" ;
+        sh:order 10 ;
+        sh:nodeKind sh:BlankNode ;
+        sh:node [
+            sh:property [
+                sh:path khub:by ;
+                sh:name "by" ;
+                sh:order 0 ;
+                sh:datatype xsd:string ;
+                sh:minCount 1 ;
+                sh:maxCount 1 ;
+                khub:type "text"
+            ] ;
+            sh:property [
+                sh:path khub:at ;
+                sh:name "at" ;
+                sh:order 1 ;
+                sh:datatype xsd:dateTime ;
+                sh:maxCount 1 ;
+                sh:pattern "^([0-9]{4}-[0-9]{2}-[0-9]{2}[Tt][0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]+)?([Zz]|[+-][0-9]{2}:[0-9]{2}))$" ;
+                khub:pattern "\\d{4}-\\d{2}-\\d{2}[Tt]\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?([Zz]|[+-]\\d{2}:\\d{2})" ;
+                khub:type "datetime"
+            ] ;
+            sh:property [
+                sh:path khub:rev ;
+                sh:name "rev" ;
+                sh:order 2 ;
+                sh:datatype xsd:string ;
+                sh:maxCount 1 ;
+                khub:type "text"
+            ]
+        ] ;
+        khub:type "list" ;
+        khub:items "object"
+    ] ;
+    sh:property [
+        sh:path khub:stale_after ;
+        sh:name "stale_after" ;
+        sh:order 11 ;
+        sh:datatype xsd:dateTime ;
+        sh:maxCount 1 ;
+        sh:pattern "^([0-9]{4}-[0-9]{2}-[0-9]{2}[Tt][0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]+)?([Zz]|[+-][0-9]{2}:[0-9]{2}))$" ;
+        khub:pattern "\\d{4}-\\d{2}-\\d{2}[Tt]\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?([Zz]|[+-]\\d{2}:\\d{2})" ;
+        khub:type "datetime"
+    ] ;
+    sh:property [
+        sh:path khub:sources ;
+        sh:name "sources" ;
+        sh:order 12 ;
+        sh:nodeKind sh:BlankNode ;
+        sh:node [
+            sh:property [
+                sh:path khub:resource ;
+                sh:name "resource" ;
+                sh:order 0 ;
+                sh:datatype xsd:string ;
+                sh:minCount 1 ;
+                sh:maxCount 1 ;
+                khub:type "text"
+            ] ;
+            sh:property [
+                sh:path khub:id ;
+                sh:name "id" ;
+                sh:order 1 ;
+                sh:datatype xsd:string ;
+                sh:maxCount 1 ;
+                khub:type "text"
+            ] ;
+            sh:property [
+                sh:path khub:title ;
+                sh:name "title" ;
+                sh:order 2 ;
+                sh:datatype xsd:string ;
+                sh:maxCount 1 ;
+                khub:type "text"
+            ] ;
+            sh:property [
+                sh:path khub:author ;
+                sh:name "author" ;
+                sh:order 3 ;
+                sh:datatype xsd:string ;
+                sh:maxCount 1 ;
+                khub:type "text"
+            ] ;
+            sh:property [
+                sh:path khub:usage_count ;
+                sh:name "usage_count" ;
+                sh:order 4 ;
+                sh:datatype xsd:decimal ;
+                sh:maxCount 1 ;
+                khub:type "number"
+            ] ;
+            sh:property [
+                sh:path khub:last_modified ;
+                sh:name "last_modified" ;
+                sh:order 5 ;
+                sh:datatype xsd:dateTime ;
+                sh:maxCount 1 ;
+                sh:pattern "^([0-9]{4}-[0-9]{2}-[0-9]{2}[Tt][0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]+)?([Zz]|[+-][0-9]{2}:[0-9]{2}))$" ;
+                khub:pattern "\\d{4}-\\d{2}-\\d{2}[Tt]\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?([Zz]|[+-]\\d{2}:\\d{2})" ;
+                khub:type "datetime"
+            ] ;
+            sh:property [
+                sh:path khub:usage_window ;
+                sh:name "usage_window" ;
+                sh:order 6 ;
+                sh:nodeKind sh:BlankNode ;
+                sh:maxCount 1 ;
+                sh:node [
+                    sh:property [
+                        sh:path khub:from ;
+                        sh:name "from" ;
+                        sh:order 0 ;
+                        sh:datatype xsd:dateTime ;
+                        sh:maxCount 1 ;
+                        sh:pattern "^([0-9]{4}-[0-9]{2}-[0-9]{2}[Tt][0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]+)?([Zz]|[+-][0-9]{2}:[0-9]{2}))$" ;
+                        khub:pattern "\\d{4}-\\d{2}-\\d{2}[Tt]\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?([Zz]|[+-]\\d{2}:\\d{2})" ;
+                        khub:type "datetime"
+                    ] ;
+                    sh:property [
+                        sh:path khub:to ;
+                        sh:name "to" ;
+                        sh:order 1 ;
+                        sh:datatype xsd:dateTime ;
+                        sh:maxCount 1 ;
+                        sh:pattern "^([0-9]{4}-[0-9]{2}-[0-9]{2}[Tt][0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]+)?([Zz]|[+-][0-9]{2}:[0-9]{2}))$" ;
+                        khub:pattern "\\d{4}-\\d{2}-\\d{2}[Tt]\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?([Zz]|[+-]\\d{2}:\\d{2})" ;
+                        khub:type "datetime"
+                    ]
+                ] ;
+                khub:type "object"
+            ]
+        ] ;
+        khub:type "list" ;
+        khub:items "object"
+    ] ;
+    sh:property [
+        sh:path khub:usage_window ;
+        sh:name "usage_window" ;
+        sh:order 13 ;
+        sh:nodeKind sh:BlankNode ;
+        sh:maxCount 1 ;
+        sh:node [
+            sh:property [
+                sh:path khub:from ;
+                sh:name "from" ;
+                sh:order 0 ;
+                sh:datatype xsd:dateTime ;
+                sh:maxCount 1 ;
+                sh:pattern "^([0-9]{4}-[0-9]{2}-[0-9]{2}[Tt][0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]+)?([Zz]|[+-][0-9]{2}:[0-9]{2}))$" ;
+                khub:pattern "\\d{4}-\\d{2}-\\d{2}[Tt]\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?([Zz]|[+-]\\d{2}:\\d{2})" ;
+                khub:type "datetime"
+            ] ;
+            sh:property [
+                sh:path khub:to ;
+                sh:name "to" ;
+                sh:order 1 ;
+                sh:datatype xsd:dateTime ;
+                sh:maxCount 1 ;
+                sh:pattern "^([0-9]{4}-[0-9]{2}-[0-9]{2}[Tt][0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]+)?([Zz]|[+-][0-9]{2}:[0-9]{2}))$" ;
+                khub:pattern "\\d{4}-\\d{2}-\\d{2}[Tt]\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?([Zz]|[+-]\\d{2}:\\d{2})" ;
+                khub:type "datetime"
+            ]
+        ] ;
+        khub:type "object"
+    ] ;
+    sh:property [
+        sh:path field:decision ;
+        sh:name "decision" ;
+        sh:order 14 ;
         sh:datatype xsd:string ;
         sh:minCount 1 ;
         sh:maxCount 1 ;
@@ -1130,19 +2507,7 @@ shape:adr a sh:NodeShape ;
     sh:property [
         sh:path khub:related ;
         sh:name "related" ;
-        sh:order 10 ;
-        sh:nodeKind sh:IRI ;
-        sh:or (
-            [ sh:class khub:Entity ]
-            [ sh:class khub:File ]
-        ) ;
-        khub:kind "any" ;
-        khub:pathRefs true
-    ] ;
-    sh:property [
-        sh:path khub:sources ;
-        sh:name "sources" ;
-        sh:order 11 ;
+        sh:order 15 ;
         sh:nodeKind sh:IRI ;
         sh:or (
             [ sh:class khub:Entity ]
@@ -1154,7 +2519,7 @@ shape:adr a sh:NodeShape ;
     sh:property [
         sh:path khub:references ;
         sh:name "references" ;
-        sh:order 12 ;
+        sh:order 16 ;
         sh:nodeKind sh:IRI ;
         sh:or (
             [ sh:class khub:Entity ]
@@ -1166,7 +2531,7 @@ shape:adr a sh:NodeShape ;
     sh:property [
         sh:path khub:depends_on ;
         sh:name "depends_on" ;
-        sh:order 13 ;
+        sh:order 17 ;
         sh:nodeKind sh:IRI ;
         sh:or (
             [ sh:class khub:Entity ]
@@ -1179,7 +2544,7 @@ shape:adr a sh:NodeShape ;
     sh:property [
         sh:path field:supersedes ;
         sh:name "supersedes" ;
-        sh:order 14 ;
+        sh:order 18 ;
         sh:nodeKind sh:IRI ;
         sh:class type:adr ;
         sh:maxCount 1 ;
@@ -1191,7 +2556,7 @@ shape:adr a sh:NodeShape ;
     sh:property [
         sh:path field:affects ;
         sh:name "affects" ;
-        sh:order 15 ;
+        sh:order 19 ;
         sh:nodeKind sh:IRI ;
         sh:or (
             [ sh:class khub:Entity ]
@@ -1204,13 +2569,14 @@ shape:adr a sh:NodeShape ;
 shape:system a sh:NodeShape ;
     sh:targetClass type:system ;
     sh:property [
-        sh:path khub:draft ;
-        sh:name "draft" ;
+        sh:path khub:status ;
+        sh:name "status" ;
         sh:order 0 ;
-        sh:datatype xsd:boolean ;
+        sh:datatype xsd:string ;
         sh:maxCount 1 ;
-        khub:type "bool" ;
-        khub:default false
+        sh:in ( "draft" "stable" "deprecated" ) ;
+        khub:type "text" ;
+        khub:default "stable"
     ] ;
     sh:property [
         sh:path khub:author ;
@@ -1281,9 +2647,206 @@ shape:system a sh:NodeShape ;
         khub:type "list"
     ] ;
     sh:property [
+        sh:path khub:generated ;
+        sh:name "generated" ;
+        sh:order 9 ;
+        sh:nodeKind sh:BlankNode ;
+        sh:maxCount 1 ;
+        sh:node [
+            sh:property [
+                sh:path khub:by ;
+                sh:name "by" ;
+                sh:order 0 ;
+                sh:datatype xsd:string ;
+                sh:minCount 1 ;
+                sh:maxCount 1 ;
+                khub:type "text"
+            ] ;
+            sh:property [
+                sh:path khub:at ;
+                sh:name "at" ;
+                sh:order 1 ;
+                sh:datatype xsd:dateTime ;
+                sh:maxCount 1 ;
+                sh:pattern "^([0-9]{4}-[0-9]{2}-[0-9]{2}[Tt][0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]+)?([Zz]|[+-][0-9]{2}:[0-9]{2}))$" ;
+                khub:pattern "\\d{4}-\\d{2}-\\d{2}[Tt]\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?([Zz]|[+-]\\d{2}:\\d{2})" ;
+                khub:type "datetime"
+            ]
+        ] ;
+        khub:type "object"
+    ] ;
+    sh:property [
+        sh:path khub:verified ;
+        sh:name "verified" ;
+        sh:order 10 ;
+        sh:nodeKind sh:BlankNode ;
+        sh:node [
+            sh:property [
+                sh:path khub:by ;
+                sh:name "by" ;
+                sh:order 0 ;
+                sh:datatype xsd:string ;
+                sh:minCount 1 ;
+                sh:maxCount 1 ;
+                khub:type "text"
+            ] ;
+            sh:property [
+                sh:path khub:at ;
+                sh:name "at" ;
+                sh:order 1 ;
+                sh:datatype xsd:dateTime ;
+                sh:maxCount 1 ;
+                sh:pattern "^([0-9]{4}-[0-9]{2}-[0-9]{2}[Tt][0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]+)?([Zz]|[+-][0-9]{2}:[0-9]{2}))$" ;
+                khub:pattern "\\d{4}-\\d{2}-\\d{2}[Tt]\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?([Zz]|[+-]\\d{2}:\\d{2})" ;
+                khub:type "datetime"
+            ] ;
+            sh:property [
+                sh:path khub:rev ;
+                sh:name "rev" ;
+                sh:order 2 ;
+                sh:datatype xsd:string ;
+                sh:maxCount 1 ;
+                khub:type "text"
+            ]
+        ] ;
+        khub:type "list" ;
+        khub:items "object"
+    ] ;
+    sh:property [
+        sh:path khub:stale_after ;
+        sh:name "stale_after" ;
+        sh:order 11 ;
+        sh:datatype xsd:dateTime ;
+        sh:maxCount 1 ;
+        sh:pattern "^([0-9]{4}-[0-9]{2}-[0-9]{2}[Tt][0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]+)?([Zz]|[+-][0-9]{2}:[0-9]{2}))$" ;
+        khub:pattern "\\d{4}-\\d{2}-\\d{2}[Tt]\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?([Zz]|[+-]\\d{2}:\\d{2})" ;
+        khub:type "datetime"
+    ] ;
+    sh:property [
+        sh:path khub:sources ;
+        sh:name "sources" ;
+        sh:order 12 ;
+        sh:nodeKind sh:BlankNode ;
+        sh:node [
+            sh:property [
+                sh:path khub:resource ;
+                sh:name "resource" ;
+                sh:order 0 ;
+                sh:datatype xsd:string ;
+                sh:minCount 1 ;
+                sh:maxCount 1 ;
+                khub:type "text"
+            ] ;
+            sh:property [
+                sh:path khub:id ;
+                sh:name "id" ;
+                sh:order 1 ;
+                sh:datatype xsd:string ;
+                sh:maxCount 1 ;
+                khub:type "text"
+            ] ;
+            sh:property [
+                sh:path khub:title ;
+                sh:name "title" ;
+                sh:order 2 ;
+                sh:datatype xsd:string ;
+                sh:maxCount 1 ;
+                khub:type "text"
+            ] ;
+            sh:property [
+                sh:path khub:author ;
+                sh:name "author" ;
+                sh:order 3 ;
+                sh:datatype xsd:string ;
+                sh:maxCount 1 ;
+                khub:type "text"
+            ] ;
+            sh:property [
+                sh:path khub:usage_count ;
+                sh:name "usage_count" ;
+                sh:order 4 ;
+                sh:datatype xsd:decimal ;
+                sh:maxCount 1 ;
+                khub:type "number"
+            ] ;
+            sh:property [
+                sh:path khub:last_modified ;
+                sh:name "last_modified" ;
+                sh:order 5 ;
+                sh:datatype xsd:dateTime ;
+                sh:maxCount 1 ;
+                sh:pattern "^([0-9]{4}-[0-9]{2}-[0-9]{2}[Tt][0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]+)?([Zz]|[+-][0-9]{2}:[0-9]{2}))$" ;
+                khub:pattern "\\d{4}-\\d{2}-\\d{2}[Tt]\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?([Zz]|[+-]\\d{2}:\\d{2})" ;
+                khub:type "datetime"
+            ] ;
+            sh:property [
+                sh:path khub:usage_window ;
+                sh:name "usage_window" ;
+                sh:order 6 ;
+                sh:nodeKind sh:BlankNode ;
+                sh:maxCount 1 ;
+                sh:node [
+                    sh:property [
+                        sh:path khub:from ;
+                        sh:name "from" ;
+                        sh:order 0 ;
+                        sh:datatype xsd:dateTime ;
+                        sh:maxCount 1 ;
+                        sh:pattern "^([0-9]{4}-[0-9]{2}-[0-9]{2}[Tt][0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]+)?([Zz]|[+-][0-9]{2}:[0-9]{2}))$" ;
+                        khub:pattern "\\d{4}-\\d{2}-\\d{2}[Tt]\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?([Zz]|[+-]\\d{2}:\\d{2})" ;
+                        khub:type "datetime"
+                    ] ;
+                    sh:property [
+                        sh:path khub:to ;
+                        sh:name "to" ;
+                        sh:order 1 ;
+                        sh:datatype xsd:dateTime ;
+                        sh:maxCount 1 ;
+                        sh:pattern "^([0-9]{4}-[0-9]{2}-[0-9]{2}[Tt][0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]+)?([Zz]|[+-][0-9]{2}:[0-9]{2}))$" ;
+                        khub:pattern "\\d{4}-\\d{2}-\\d{2}[Tt]\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?([Zz]|[+-]\\d{2}:\\d{2})" ;
+                        khub:type "datetime"
+                    ]
+                ] ;
+                khub:type "object"
+            ]
+        ] ;
+        khub:type "list" ;
+        khub:items "object"
+    ] ;
+    sh:property [
+        sh:path khub:usage_window ;
+        sh:name "usage_window" ;
+        sh:order 13 ;
+        sh:nodeKind sh:BlankNode ;
+        sh:maxCount 1 ;
+        sh:node [
+            sh:property [
+                sh:path khub:from ;
+                sh:name "from" ;
+                sh:order 0 ;
+                sh:datatype xsd:dateTime ;
+                sh:maxCount 1 ;
+                sh:pattern "^([0-9]{4}-[0-9]{2}-[0-9]{2}[Tt][0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]+)?([Zz]|[+-][0-9]{2}:[0-9]{2}))$" ;
+                khub:pattern "\\d{4}-\\d{2}-\\d{2}[Tt]\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?([Zz]|[+-]\\d{2}:\\d{2})" ;
+                khub:type "datetime"
+            ] ;
+            sh:property [
+                sh:path khub:to ;
+                sh:name "to" ;
+                sh:order 1 ;
+                sh:datatype xsd:dateTime ;
+                sh:maxCount 1 ;
+                sh:pattern "^([0-9]{4}-[0-9]{2}-[0-9]{2}[Tt][0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]+)?([Zz]|[+-][0-9]{2}:[0-9]{2}))$" ;
+                khub:pattern "\\d{4}-\\d{2}-\\d{2}[Tt]\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?([Zz]|[+-]\\d{2}:\\d{2})" ;
+                khub:type "datetime"
+            ]
+        ] ;
+        khub:type "object"
+    ] ;
+    sh:property [
         sh:path field:owner ;
         sh:name "owner" ;
-        sh:order 9 ;
+        sh:order 14 ;
         sh:datatype xsd:string ;
         sh:maxCount 1 ;
         khub:type "text"
@@ -1291,15 +2854,7 @@ shape:system a sh:NodeShape ;
     sh:property [
         sh:path khub:related ;
         sh:name "related" ;
-        sh:order 10 ;
-        sh:nodeKind sh:IRI ;
-        sh:class khub:Entity ;
-        khub:kind "any"
-    ] ;
-    sh:property [
-        sh:path khub:sources ;
-        sh:name "sources" ;
-        sh:order 11 ;
+        sh:order 15 ;
         sh:nodeKind sh:IRI ;
         sh:class khub:Entity ;
         khub:kind "any"
@@ -1307,7 +2862,7 @@ shape:system a sh:NodeShape ;
     sh:property [
         sh:path khub:references ;
         sh:name "references" ;
-        sh:order 12 ;
+        sh:order 16 ;
         sh:nodeKind sh:IRI ;
         sh:class khub:Entity ;
         khub:kind "any"
@@ -1315,7 +2870,7 @@ shape:system a sh:NodeShape ;
     sh:property [
         sh:path khub:depends_on ;
         sh:name "depends_on" ;
-        sh:order 13 ;
+        sh:order 17 ;
         sh:nodeKind sh:IRI ;
         sh:class khub:Entity ;
         khub:kind "any" ;
@@ -1325,13 +2880,14 @@ shape:system a sh:NodeShape ;
 shape:component a sh:NodeShape ;
     sh:targetClass type:component ;
     sh:property [
-        sh:path khub:draft ;
-        sh:name "draft" ;
+        sh:path khub:status ;
+        sh:name "status" ;
         sh:order 0 ;
-        sh:datatype xsd:boolean ;
+        sh:datatype xsd:string ;
         sh:maxCount 1 ;
-        khub:type "bool" ;
-        khub:default false
+        sh:in ( "draft" "stable" "deprecated" ) ;
+        khub:type "text" ;
+        khub:default "stable"
     ] ;
     sh:property [
         sh:path khub:author ;
@@ -1402,9 +2958,206 @@ shape:component a sh:NodeShape ;
         khub:type "list"
     ] ;
     sh:property [
+        sh:path khub:generated ;
+        sh:name "generated" ;
+        sh:order 9 ;
+        sh:nodeKind sh:BlankNode ;
+        sh:maxCount 1 ;
+        sh:node [
+            sh:property [
+                sh:path khub:by ;
+                sh:name "by" ;
+                sh:order 0 ;
+                sh:datatype xsd:string ;
+                sh:minCount 1 ;
+                sh:maxCount 1 ;
+                khub:type "text"
+            ] ;
+            sh:property [
+                sh:path khub:at ;
+                sh:name "at" ;
+                sh:order 1 ;
+                sh:datatype xsd:dateTime ;
+                sh:maxCount 1 ;
+                sh:pattern "^([0-9]{4}-[0-9]{2}-[0-9]{2}[Tt][0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]+)?([Zz]|[+-][0-9]{2}:[0-9]{2}))$" ;
+                khub:pattern "\\d{4}-\\d{2}-\\d{2}[Tt]\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?([Zz]|[+-]\\d{2}:\\d{2})" ;
+                khub:type "datetime"
+            ]
+        ] ;
+        khub:type "object"
+    ] ;
+    sh:property [
+        sh:path khub:verified ;
+        sh:name "verified" ;
+        sh:order 10 ;
+        sh:nodeKind sh:BlankNode ;
+        sh:node [
+            sh:property [
+                sh:path khub:by ;
+                sh:name "by" ;
+                sh:order 0 ;
+                sh:datatype xsd:string ;
+                sh:minCount 1 ;
+                sh:maxCount 1 ;
+                khub:type "text"
+            ] ;
+            sh:property [
+                sh:path khub:at ;
+                sh:name "at" ;
+                sh:order 1 ;
+                sh:datatype xsd:dateTime ;
+                sh:maxCount 1 ;
+                sh:pattern "^([0-9]{4}-[0-9]{2}-[0-9]{2}[Tt][0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]+)?([Zz]|[+-][0-9]{2}:[0-9]{2}))$" ;
+                khub:pattern "\\d{4}-\\d{2}-\\d{2}[Tt]\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?([Zz]|[+-]\\d{2}:\\d{2})" ;
+                khub:type "datetime"
+            ] ;
+            sh:property [
+                sh:path khub:rev ;
+                sh:name "rev" ;
+                sh:order 2 ;
+                sh:datatype xsd:string ;
+                sh:maxCount 1 ;
+                khub:type "text"
+            ]
+        ] ;
+        khub:type "list" ;
+        khub:items "object"
+    ] ;
+    sh:property [
+        sh:path khub:stale_after ;
+        sh:name "stale_after" ;
+        sh:order 11 ;
+        sh:datatype xsd:dateTime ;
+        sh:maxCount 1 ;
+        sh:pattern "^([0-9]{4}-[0-9]{2}-[0-9]{2}[Tt][0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]+)?([Zz]|[+-][0-9]{2}:[0-9]{2}))$" ;
+        khub:pattern "\\d{4}-\\d{2}-\\d{2}[Tt]\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?([Zz]|[+-]\\d{2}:\\d{2})" ;
+        khub:type "datetime"
+    ] ;
+    sh:property [
+        sh:path khub:sources ;
+        sh:name "sources" ;
+        sh:order 12 ;
+        sh:nodeKind sh:BlankNode ;
+        sh:node [
+            sh:property [
+                sh:path khub:resource ;
+                sh:name "resource" ;
+                sh:order 0 ;
+                sh:datatype xsd:string ;
+                sh:minCount 1 ;
+                sh:maxCount 1 ;
+                khub:type "text"
+            ] ;
+            sh:property [
+                sh:path khub:id ;
+                sh:name "id" ;
+                sh:order 1 ;
+                sh:datatype xsd:string ;
+                sh:maxCount 1 ;
+                khub:type "text"
+            ] ;
+            sh:property [
+                sh:path khub:title ;
+                sh:name "title" ;
+                sh:order 2 ;
+                sh:datatype xsd:string ;
+                sh:maxCount 1 ;
+                khub:type "text"
+            ] ;
+            sh:property [
+                sh:path khub:author ;
+                sh:name "author" ;
+                sh:order 3 ;
+                sh:datatype xsd:string ;
+                sh:maxCount 1 ;
+                khub:type "text"
+            ] ;
+            sh:property [
+                sh:path khub:usage_count ;
+                sh:name "usage_count" ;
+                sh:order 4 ;
+                sh:datatype xsd:decimal ;
+                sh:maxCount 1 ;
+                khub:type "number"
+            ] ;
+            sh:property [
+                sh:path khub:last_modified ;
+                sh:name "last_modified" ;
+                sh:order 5 ;
+                sh:datatype xsd:dateTime ;
+                sh:maxCount 1 ;
+                sh:pattern "^([0-9]{4}-[0-9]{2}-[0-9]{2}[Tt][0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]+)?([Zz]|[+-][0-9]{2}:[0-9]{2}))$" ;
+                khub:pattern "\\d{4}-\\d{2}-\\d{2}[Tt]\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?([Zz]|[+-]\\d{2}:\\d{2})" ;
+                khub:type "datetime"
+            ] ;
+            sh:property [
+                sh:path khub:usage_window ;
+                sh:name "usage_window" ;
+                sh:order 6 ;
+                sh:nodeKind sh:BlankNode ;
+                sh:maxCount 1 ;
+                sh:node [
+                    sh:property [
+                        sh:path khub:from ;
+                        sh:name "from" ;
+                        sh:order 0 ;
+                        sh:datatype xsd:dateTime ;
+                        sh:maxCount 1 ;
+                        sh:pattern "^([0-9]{4}-[0-9]{2}-[0-9]{2}[Tt][0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]+)?([Zz]|[+-][0-9]{2}:[0-9]{2}))$" ;
+                        khub:pattern "\\d{4}-\\d{2}-\\d{2}[Tt]\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?([Zz]|[+-]\\d{2}:\\d{2})" ;
+                        khub:type "datetime"
+                    ] ;
+                    sh:property [
+                        sh:path khub:to ;
+                        sh:name "to" ;
+                        sh:order 1 ;
+                        sh:datatype xsd:dateTime ;
+                        sh:maxCount 1 ;
+                        sh:pattern "^([0-9]{4}-[0-9]{2}-[0-9]{2}[Tt][0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]+)?([Zz]|[+-][0-9]{2}:[0-9]{2}))$" ;
+                        khub:pattern "\\d{4}-\\d{2}-\\d{2}[Tt]\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?([Zz]|[+-]\\d{2}:\\d{2})" ;
+                        khub:type "datetime"
+                    ]
+                ] ;
+                khub:type "object"
+            ]
+        ] ;
+        khub:type "list" ;
+        khub:items "object"
+    ] ;
+    sh:property [
+        sh:path khub:usage_window ;
+        sh:name "usage_window" ;
+        sh:order 13 ;
+        sh:nodeKind sh:BlankNode ;
+        sh:maxCount 1 ;
+        sh:node [
+            sh:property [
+                sh:path khub:from ;
+                sh:name "from" ;
+                sh:order 0 ;
+                sh:datatype xsd:dateTime ;
+                sh:maxCount 1 ;
+                sh:pattern "^([0-9]{4}-[0-9]{2}-[0-9]{2}[Tt][0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]+)?([Zz]|[+-][0-9]{2}:[0-9]{2}))$" ;
+                khub:pattern "\\d{4}-\\d{2}-\\d{2}[Tt]\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?([Zz]|[+-]\\d{2}:\\d{2})" ;
+                khub:type "datetime"
+            ] ;
+            sh:property [
+                sh:path khub:to ;
+                sh:name "to" ;
+                sh:order 1 ;
+                sh:datatype xsd:dateTime ;
+                sh:maxCount 1 ;
+                sh:pattern "^([0-9]{4}-[0-9]{2}-[0-9]{2}[Tt][0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]+)?([Zz]|[+-][0-9]{2}:[0-9]{2}))$" ;
+                khub:pattern "\\d{4}-\\d{2}-\\d{2}[Tt]\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?([Zz]|[+-]\\d{2}:\\d{2})" ;
+                khub:type "datetime"
+            ]
+        ] ;
+        khub:type "object"
+    ] ;
+    sh:property [
         sh:path field:kind ;
         sh:name "kind" ;
-        sh:order 9 ;
+        sh:order 14 ;
         sh:datatype xsd:string ;
         sh:minCount 1 ;
         sh:maxCount 1 ;
@@ -1414,7 +3167,7 @@ shape:component a sh:NodeShape ;
     sh:property [
         sh:path field:stack ;
         sh:name "stack" ;
-        sh:order 10 ;
+        sh:order 15 ;
         sh:datatype xsd:string ;
         sh:maxCount 1 ;
         khub:type "text"
@@ -1422,7 +3175,7 @@ shape:component a sh:NodeShape ;
     sh:property [
         sh:path field:owner ;
         sh:name "owner" ;
-        sh:order 11 ;
+        sh:order 16 ;
         sh:datatype xsd:string ;
         sh:maxCount 1 ;
         khub:type "text"
@@ -1430,7 +3183,7 @@ shape:component a sh:NodeShape ;
     sh:property [
         sh:path field:lifecycle ;
         sh:name "lifecycle" ;
-        sh:order 12 ;
+        sh:order 17 ;
         sh:datatype xsd:string ;
         sh:maxCount 1 ;
         sh:in ( "experimental" "production" "deprecated" ) ;
@@ -1439,7 +3192,7 @@ shape:component a sh:NodeShape ;
     sh:property [
         sh:path field:tier ;
         sh:name "tier" ;
-        sh:order 13 ;
+        sh:order 18 ;
         sh:datatype xsd:string ;
         sh:maxCount 1 ;
         sh:in ( "tier-1" "tier-2" "tier-3" ) ;
@@ -1448,14 +3201,346 @@ shape:component a sh:NodeShape ;
     sh:property [
         sh:path khub:related ;
         sh:name "related" ;
-        sh:order 14 ;
+        sh:order 19 ;
         sh:nodeKind sh:IRI ;
         sh:class khub:Entity ;
         khub:kind "any"
     ] ;
     sh:property [
+        sh:path khub:references ;
+        sh:name "references" ;
+        sh:order 20 ;
+        sh:nodeKind sh:IRI ;
+        sh:class khub:Entity ;
+        khub:kind "any"
+    ] ;
+    sh:property [
+        sh:path khub:depends_on ;
+        sh:name "depends_on" ;
+        sh:order 21 ;
+        sh:nodeKind sh:IRI ;
+        sh:class khub:Entity ;
+        khub:kind "any" ;
+        khub:acyclic true
+    ] ;
+    sh:property [
+        sh:path field:system ;
+        sh:name "system" ;
+        sh:order 22 ;
+        sh:nodeKind sh:IRI ;
+        sh:class type:system ;
+        sh:maxCount 1 ;
+        khub:kind "typed"
+    ] ;
+    sh:property [
+        sh:path field:repo ;
+        sh:name "repo" ;
+        sh:order 23 ;
+        sh:nodeKind sh:IRI ;
+        sh:class type:repo ;
+        sh:maxCount 1 ;
+        khub:kind "typed"
+    ] ;
+    sh:property [
+        sh:path field:consumes ;
+        sh:name "consumes" ;
+        sh:order 24 ;
+        sh:nodeKind sh:IRI ;
+        sh:class type:api ;
+        khub:kind "typed" ;
+        khub:inverse "consumed_by"
+    ] .
+
+shape:api a sh:NodeShape ;
+    sh:targetClass type:api ;
+    sh:property [
+        sh:path khub:status ;
+        sh:name "status" ;
+        sh:order 0 ;
+        sh:datatype xsd:string ;
+        sh:maxCount 1 ;
+        sh:in ( "draft" "stable" "deprecated" ) ;
+        khub:type "text" ;
+        khub:default "stable"
+    ] ;
+    sh:property [
+        sh:path khub:author ;
+        sh:name "author" ;
+        sh:order 1 ;
+        sh:datatype xsd:string ;
+        sh:maxCount 1 ;
+        khub:type "text"
+    ] ;
+    sh:property [
+        sh:path khub:created ;
+        sh:name "created" ;
+        sh:order 2 ;
+        sh:or (
+            [ sh:datatype xsd:date ]
+            [ sh:datatype xsd:dateTime ]
+        ) ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        khub:type "date"
+    ] ;
+    sh:property [
+        sh:path khub:updated ;
+        sh:name "updated" ;
+        sh:order 3 ;
+        sh:or (
+            [ sh:datatype xsd:date ]
+            [ sh:datatype xsd:dateTime ]
+        ) ;
+        sh:maxCount 1 ;
+        khub:type "date"
+    ] ;
+    sh:property [
+        sh:path khub:title ;
+        sh:name "title" ;
+        sh:order 4 ;
+        sh:datatype xsd:string ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        khub:type "text"
+    ] ;
+    sh:property [
+        sh:path khub:description ;
+        sh:name "description" ;
+        sh:order 5 ;
+        sh:datatype xsd:string ;
+        sh:maxCount 1 ;
+        khub:type "text"
+    ] ;
+    sh:property [
+        sh:path khub:resource ;
+        sh:name "resource" ;
+        sh:order 6 ;
+        sh:datatype xsd:string ;
+        sh:maxCount 1 ;
+        khub:type "text"
+    ] ;
+    sh:property [
+        sh:path khub:tags ;
+        sh:name "tags" ;
+        sh:order 7 ;
+        khub:type "list"
+    ] ;
+    sh:property [
+        sh:path khub:aliases ;
+        sh:name "aliases" ;
+        sh:order 8 ;
+        khub:type "list"
+    ] ;
+    sh:property [
+        sh:path khub:generated ;
+        sh:name "generated" ;
+        sh:order 9 ;
+        sh:nodeKind sh:BlankNode ;
+        sh:maxCount 1 ;
+        sh:node [
+            sh:property [
+                sh:path khub:by ;
+                sh:name "by" ;
+                sh:order 0 ;
+                sh:datatype xsd:string ;
+                sh:minCount 1 ;
+                sh:maxCount 1 ;
+                khub:type "text"
+            ] ;
+            sh:property [
+                sh:path khub:at ;
+                sh:name "at" ;
+                sh:order 1 ;
+                sh:datatype xsd:dateTime ;
+                sh:maxCount 1 ;
+                sh:pattern "^([0-9]{4}-[0-9]{2}-[0-9]{2}[Tt][0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]+)?([Zz]|[+-][0-9]{2}:[0-9]{2}))$" ;
+                khub:pattern "\\d{4}-\\d{2}-\\d{2}[Tt]\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?([Zz]|[+-]\\d{2}:\\d{2})" ;
+                khub:type "datetime"
+            ]
+        ] ;
+        khub:type "object"
+    ] ;
+    sh:property [
+        sh:path khub:verified ;
+        sh:name "verified" ;
+        sh:order 10 ;
+        sh:nodeKind sh:BlankNode ;
+        sh:node [
+            sh:property [
+                sh:path khub:by ;
+                sh:name "by" ;
+                sh:order 0 ;
+                sh:datatype xsd:string ;
+                sh:minCount 1 ;
+                sh:maxCount 1 ;
+                khub:type "text"
+            ] ;
+            sh:property [
+                sh:path khub:at ;
+                sh:name "at" ;
+                sh:order 1 ;
+                sh:datatype xsd:dateTime ;
+                sh:maxCount 1 ;
+                sh:pattern "^([0-9]{4}-[0-9]{2}-[0-9]{2}[Tt][0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]+)?([Zz]|[+-][0-9]{2}:[0-9]{2}))$" ;
+                khub:pattern "\\d{4}-\\d{2}-\\d{2}[Tt]\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?([Zz]|[+-]\\d{2}:\\d{2})" ;
+                khub:type "datetime"
+            ] ;
+            sh:property [
+                sh:path khub:rev ;
+                sh:name "rev" ;
+                sh:order 2 ;
+                sh:datatype xsd:string ;
+                sh:maxCount 1 ;
+                khub:type "text"
+            ]
+        ] ;
+        khub:type "list" ;
+        khub:items "object"
+    ] ;
+    sh:property [
+        sh:path khub:stale_after ;
+        sh:name "stale_after" ;
+        sh:order 11 ;
+        sh:datatype xsd:dateTime ;
+        sh:maxCount 1 ;
+        sh:pattern "^([0-9]{4}-[0-9]{2}-[0-9]{2}[Tt][0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]+)?([Zz]|[+-][0-9]{2}:[0-9]{2}))$" ;
+        khub:pattern "\\d{4}-\\d{2}-\\d{2}[Tt]\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?([Zz]|[+-]\\d{2}:\\d{2})" ;
+        khub:type "datetime"
+    ] ;
+    sh:property [
         sh:path khub:sources ;
         sh:name "sources" ;
+        sh:order 12 ;
+        sh:nodeKind sh:BlankNode ;
+        sh:node [
+            sh:property [
+                sh:path khub:resource ;
+                sh:name "resource" ;
+                sh:order 0 ;
+                sh:datatype xsd:string ;
+                sh:minCount 1 ;
+                sh:maxCount 1 ;
+                khub:type "text"
+            ] ;
+            sh:property [
+                sh:path khub:id ;
+                sh:name "id" ;
+                sh:order 1 ;
+                sh:datatype xsd:string ;
+                sh:maxCount 1 ;
+                khub:type "text"
+            ] ;
+            sh:property [
+                sh:path khub:title ;
+                sh:name "title" ;
+                sh:order 2 ;
+                sh:datatype xsd:string ;
+                sh:maxCount 1 ;
+                khub:type "text"
+            ] ;
+            sh:property [
+                sh:path khub:author ;
+                sh:name "author" ;
+                sh:order 3 ;
+                sh:datatype xsd:string ;
+                sh:maxCount 1 ;
+                khub:type "text"
+            ] ;
+            sh:property [
+                sh:path khub:usage_count ;
+                sh:name "usage_count" ;
+                sh:order 4 ;
+                sh:datatype xsd:decimal ;
+                sh:maxCount 1 ;
+                khub:type "number"
+            ] ;
+            sh:property [
+                sh:path khub:last_modified ;
+                sh:name "last_modified" ;
+                sh:order 5 ;
+                sh:datatype xsd:dateTime ;
+                sh:maxCount 1 ;
+                sh:pattern "^([0-9]{4}-[0-9]{2}-[0-9]{2}[Tt][0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]+)?([Zz]|[+-][0-9]{2}:[0-9]{2}))$" ;
+                khub:pattern "\\d{4}-\\d{2}-\\d{2}[Tt]\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?([Zz]|[+-]\\d{2}:\\d{2})" ;
+                khub:type "datetime"
+            ] ;
+            sh:property [
+                sh:path khub:usage_window ;
+                sh:name "usage_window" ;
+                sh:order 6 ;
+                sh:nodeKind sh:BlankNode ;
+                sh:maxCount 1 ;
+                sh:node [
+                    sh:property [
+                        sh:path khub:from ;
+                        sh:name "from" ;
+                        sh:order 0 ;
+                        sh:datatype xsd:dateTime ;
+                        sh:maxCount 1 ;
+                        sh:pattern "^([0-9]{4}-[0-9]{2}-[0-9]{2}[Tt][0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]+)?([Zz]|[+-][0-9]{2}:[0-9]{2}))$" ;
+                        khub:pattern "\\d{4}-\\d{2}-\\d{2}[Tt]\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?([Zz]|[+-]\\d{2}:\\d{2})" ;
+                        khub:type "datetime"
+                    ] ;
+                    sh:property [
+                        sh:path khub:to ;
+                        sh:name "to" ;
+                        sh:order 1 ;
+                        sh:datatype xsd:dateTime ;
+                        sh:maxCount 1 ;
+                        sh:pattern "^([0-9]{4}-[0-9]{2}-[0-9]{2}[Tt][0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]+)?([Zz]|[+-][0-9]{2}:[0-9]{2}))$" ;
+                        khub:pattern "\\d{4}-\\d{2}-\\d{2}[Tt]\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?([Zz]|[+-]\\d{2}:\\d{2})" ;
+                        khub:type "datetime"
+                    ]
+                ] ;
+                khub:type "object"
+            ]
+        ] ;
+        khub:type "list" ;
+        khub:items "object"
+    ] ;
+    sh:property [
+        sh:path khub:usage_window ;
+        sh:name "usage_window" ;
+        sh:order 13 ;
+        sh:nodeKind sh:BlankNode ;
+        sh:maxCount 1 ;
+        sh:node [
+            sh:property [
+                sh:path khub:from ;
+                sh:name "from" ;
+                sh:order 0 ;
+                sh:datatype xsd:dateTime ;
+                sh:maxCount 1 ;
+                sh:pattern "^([0-9]{4}-[0-9]{2}-[0-9]{2}[Tt][0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]+)?([Zz]|[+-][0-9]{2}:[0-9]{2}))$" ;
+                khub:pattern "\\d{4}-\\d{2}-\\d{2}[Tt]\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?([Zz]|[+-]\\d{2}:\\d{2})" ;
+                khub:type "datetime"
+            ] ;
+            sh:property [
+                sh:path khub:to ;
+                sh:name "to" ;
+                sh:order 1 ;
+                sh:datatype xsd:dateTime ;
+                sh:maxCount 1 ;
+                sh:pattern "^([0-9]{4}-[0-9]{2}-[0-9]{2}[Tt][0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]+)?([Zz]|[+-][0-9]{2}:[0-9]{2}))$" ;
+                khub:pattern "\\d{4}-\\d{2}-\\d{2}[Tt]\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?([Zz]|[+-]\\d{2}:\\d{2})" ;
+                khub:type "datetime"
+            ]
+        ] ;
+        khub:type "object"
+    ] ;
+    sh:property [
+        sh:path field:kind ;
+        sh:name "kind" ;
+        sh:order 14 ;
+        sh:datatype xsd:string ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        sh:in ( "rest" "graphql" "grpc" "events" "data" ) ;
+        khub:type "text"
+    ] ;
+    sh:property [
+        sh:path khub:related ;
+        sh:name "related" ;
         sh:order 15 ;
         sh:nodeKind sh:IRI ;
         sh:class khub:Entity ;
@@ -1479,169 +3564,9 @@ shape:component a sh:NodeShape ;
         khub:acyclic true
     ] ;
     sh:property [
-        sh:path field:system ;
-        sh:name "system" ;
-        sh:order 18 ;
-        sh:nodeKind sh:IRI ;
-        sh:class type:system ;
-        sh:maxCount 1 ;
-        khub:kind "typed"
-    ] ;
-    sh:property [
-        sh:path field:repo ;
-        sh:name "repo" ;
-        sh:order 19 ;
-        sh:nodeKind sh:IRI ;
-        sh:class type:repo ;
-        sh:maxCount 1 ;
-        khub:kind "typed"
-    ] ;
-    sh:property [
-        sh:path field:consumes ;
-        sh:name "consumes" ;
-        sh:order 20 ;
-        sh:nodeKind sh:IRI ;
-        sh:class type:api ;
-        khub:kind "typed" ;
-        khub:inverse "consumed_by"
-    ] .
-
-shape:api a sh:NodeShape ;
-    sh:targetClass type:api ;
-    sh:property [
-        sh:path khub:draft ;
-        sh:name "draft" ;
-        sh:order 0 ;
-        sh:datatype xsd:boolean ;
-        sh:maxCount 1 ;
-        khub:type "bool" ;
-        khub:default false
-    ] ;
-    sh:property [
-        sh:path khub:author ;
-        sh:name "author" ;
-        sh:order 1 ;
-        sh:datatype xsd:string ;
-        sh:maxCount 1 ;
-        khub:type "text"
-    ] ;
-    sh:property [
-        sh:path khub:created ;
-        sh:name "created" ;
-        sh:order 2 ;
-        sh:or (
-            [ sh:datatype xsd:date ]
-            [ sh:datatype xsd:dateTime ]
-        ) ;
-        sh:minCount 1 ;
-        sh:maxCount 1 ;
-        khub:type "date"
-    ] ;
-    sh:property [
-        sh:path khub:updated ;
-        sh:name "updated" ;
-        sh:order 3 ;
-        sh:or (
-            [ sh:datatype xsd:date ]
-            [ sh:datatype xsd:dateTime ]
-        ) ;
-        sh:maxCount 1 ;
-        khub:type "date"
-    ] ;
-    sh:property [
-        sh:path khub:title ;
-        sh:name "title" ;
-        sh:order 4 ;
-        sh:datatype xsd:string ;
-        sh:minCount 1 ;
-        sh:maxCount 1 ;
-        khub:type "text"
-    ] ;
-    sh:property [
-        sh:path khub:description ;
-        sh:name "description" ;
-        sh:order 5 ;
-        sh:datatype xsd:string ;
-        sh:maxCount 1 ;
-        khub:type "text"
-    ] ;
-    sh:property [
-        sh:path khub:resource ;
-        sh:name "resource" ;
-        sh:order 6 ;
-        sh:datatype xsd:string ;
-        sh:maxCount 1 ;
-        khub:type "text"
-    ] ;
-    sh:property [
-        sh:path khub:tags ;
-        sh:name "tags" ;
-        sh:order 7 ;
-        khub:type "list"
-    ] ;
-    sh:property [
-        sh:path khub:aliases ;
-        sh:name "aliases" ;
-        sh:order 8 ;
-        khub:type "list"
-    ] ;
-    sh:property [
-        sh:path field:kind ;
-        sh:name "kind" ;
-        sh:order 9 ;
-        sh:datatype xsd:string ;
-        sh:minCount 1 ;
-        sh:maxCount 1 ;
-        sh:in ( "rest" "graphql" "grpc" "events" "data" ) ;
-        khub:type "text"
-    ] ;
-    sh:property [
-        sh:path field:status ;
-        sh:name "status" ;
-        sh:order 10 ;
-        sh:datatype xsd:string ;
-        sh:minCount 1 ;
-        sh:maxCount 1 ;
-        sh:in ( "proposed" "active" "deprecated" ) ;
-        khub:type "text"
-    ] ;
-    sh:property [
-        sh:path khub:related ;
-        sh:name "related" ;
-        sh:order 11 ;
-        sh:nodeKind sh:IRI ;
-        sh:class khub:Entity ;
-        khub:kind "any"
-    ] ;
-    sh:property [
-        sh:path khub:sources ;
-        sh:name "sources" ;
-        sh:order 12 ;
-        sh:nodeKind sh:IRI ;
-        sh:class khub:Entity ;
-        khub:kind "any"
-    ] ;
-    sh:property [
-        sh:path khub:references ;
-        sh:name "references" ;
-        sh:order 13 ;
-        sh:nodeKind sh:IRI ;
-        sh:class khub:Entity ;
-        khub:kind "any"
-    ] ;
-    sh:property [
-        sh:path khub:depends_on ;
-        sh:name "depends_on" ;
-        sh:order 14 ;
-        sh:nodeKind sh:IRI ;
-        sh:class khub:Entity ;
-        khub:kind "any" ;
-        khub:acyclic true
-    ] ;
-    sh:property [
         sh:path field:provider ;
         sh:name "provider" ;
-        sh:order 15 ;
+        sh:order 18 ;
         sh:nodeKind sh:IRI ;
         sh:class type:component ;
         sh:minCount 1 ;
@@ -1652,13 +3577,14 @@ shape:api a sh:NodeShape ;
 shape:repo a sh:NodeShape ;
     sh:targetClass type:repo ;
     sh:property [
-        sh:path khub:draft ;
-        sh:name "draft" ;
+        sh:path khub:status ;
+        sh:name "status" ;
         sh:order 0 ;
-        sh:datatype xsd:boolean ;
+        sh:datatype xsd:string ;
         sh:maxCount 1 ;
-        khub:type "bool" ;
-        khub:default false
+        sh:in ( "draft" "stable" "deprecated" ) ;
+        khub:type "text" ;
+        khub:default "stable"
     ] ;
     sh:property [
         sh:path khub:author ;
@@ -1729,9 +3655,206 @@ shape:repo a sh:NodeShape ;
         khub:type "list"
     ] ;
     sh:property [
+        sh:path khub:generated ;
+        sh:name "generated" ;
+        sh:order 9 ;
+        sh:nodeKind sh:BlankNode ;
+        sh:maxCount 1 ;
+        sh:node [
+            sh:property [
+                sh:path khub:by ;
+                sh:name "by" ;
+                sh:order 0 ;
+                sh:datatype xsd:string ;
+                sh:minCount 1 ;
+                sh:maxCount 1 ;
+                khub:type "text"
+            ] ;
+            sh:property [
+                sh:path khub:at ;
+                sh:name "at" ;
+                sh:order 1 ;
+                sh:datatype xsd:dateTime ;
+                sh:maxCount 1 ;
+                sh:pattern "^([0-9]{4}-[0-9]{2}-[0-9]{2}[Tt][0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]+)?([Zz]|[+-][0-9]{2}:[0-9]{2}))$" ;
+                khub:pattern "\\d{4}-\\d{2}-\\d{2}[Tt]\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?([Zz]|[+-]\\d{2}:\\d{2})" ;
+                khub:type "datetime"
+            ]
+        ] ;
+        khub:type "object"
+    ] ;
+    sh:property [
+        sh:path khub:verified ;
+        sh:name "verified" ;
+        sh:order 10 ;
+        sh:nodeKind sh:BlankNode ;
+        sh:node [
+            sh:property [
+                sh:path khub:by ;
+                sh:name "by" ;
+                sh:order 0 ;
+                sh:datatype xsd:string ;
+                sh:minCount 1 ;
+                sh:maxCount 1 ;
+                khub:type "text"
+            ] ;
+            sh:property [
+                sh:path khub:at ;
+                sh:name "at" ;
+                sh:order 1 ;
+                sh:datatype xsd:dateTime ;
+                sh:maxCount 1 ;
+                sh:pattern "^([0-9]{4}-[0-9]{2}-[0-9]{2}[Tt][0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]+)?([Zz]|[+-][0-9]{2}:[0-9]{2}))$" ;
+                khub:pattern "\\d{4}-\\d{2}-\\d{2}[Tt]\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?([Zz]|[+-]\\d{2}:\\d{2})" ;
+                khub:type "datetime"
+            ] ;
+            sh:property [
+                sh:path khub:rev ;
+                sh:name "rev" ;
+                sh:order 2 ;
+                sh:datatype xsd:string ;
+                sh:maxCount 1 ;
+                khub:type "text"
+            ]
+        ] ;
+        khub:type "list" ;
+        khub:items "object"
+    ] ;
+    sh:property [
+        sh:path khub:stale_after ;
+        sh:name "stale_after" ;
+        sh:order 11 ;
+        sh:datatype xsd:dateTime ;
+        sh:maxCount 1 ;
+        sh:pattern "^([0-9]{4}-[0-9]{2}-[0-9]{2}[Tt][0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]+)?([Zz]|[+-][0-9]{2}:[0-9]{2}))$" ;
+        khub:pattern "\\d{4}-\\d{2}-\\d{2}[Tt]\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?([Zz]|[+-]\\d{2}:\\d{2})" ;
+        khub:type "datetime"
+    ] ;
+    sh:property [
+        sh:path khub:sources ;
+        sh:name "sources" ;
+        sh:order 12 ;
+        sh:nodeKind sh:BlankNode ;
+        sh:node [
+            sh:property [
+                sh:path khub:resource ;
+                sh:name "resource" ;
+                sh:order 0 ;
+                sh:datatype xsd:string ;
+                sh:minCount 1 ;
+                sh:maxCount 1 ;
+                khub:type "text"
+            ] ;
+            sh:property [
+                sh:path khub:id ;
+                sh:name "id" ;
+                sh:order 1 ;
+                sh:datatype xsd:string ;
+                sh:maxCount 1 ;
+                khub:type "text"
+            ] ;
+            sh:property [
+                sh:path khub:title ;
+                sh:name "title" ;
+                sh:order 2 ;
+                sh:datatype xsd:string ;
+                sh:maxCount 1 ;
+                khub:type "text"
+            ] ;
+            sh:property [
+                sh:path khub:author ;
+                sh:name "author" ;
+                sh:order 3 ;
+                sh:datatype xsd:string ;
+                sh:maxCount 1 ;
+                khub:type "text"
+            ] ;
+            sh:property [
+                sh:path khub:usage_count ;
+                sh:name "usage_count" ;
+                sh:order 4 ;
+                sh:datatype xsd:decimal ;
+                sh:maxCount 1 ;
+                khub:type "number"
+            ] ;
+            sh:property [
+                sh:path khub:last_modified ;
+                sh:name "last_modified" ;
+                sh:order 5 ;
+                sh:datatype xsd:dateTime ;
+                sh:maxCount 1 ;
+                sh:pattern "^([0-9]{4}-[0-9]{2}-[0-9]{2}[Tt][0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]+)?([Zz]|[+-][0-9]{2}:[0-9]{2}))$" ;
+                khub:pattern "\\d{4}-\\d{2}-\\d{2}[Tt]\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?([Zz]|[+-]\\d{2}:\\d{2})" ;
+                khub:type "datetime"
+            ] ;
+            sh:property [
+                sh:path khub:usage_window ;
+                sh:name "usage_window" ;
+                sh:order 6 ;
+                sh:nodeKind sh:BlankNode ;
+                sh:maxCount 1 ;
+                sh:node [
+                    sh:property [
+                        sh:path khub:from ;
+                        sh:name "from" ;
+                        sh:order 0 ;
+                        sh:datatype xsd:dateTime ;
+                        sh:maxCount 1 ;
+                        sh:pattern "^([0-9]{4}-[0-9]{2}-[0-9]{2}[Tt][0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]+)?([Zz]|[+-][0-9]{2}:[0-9]{2}))$" ;
+                        khub:pattern "\\d{4}-\\d{2}-\\d{2}[Tt]\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?([Zz]|[+-]\\d{2}:\\d{2})" ;
+                        khub:type "datetime"
+                    ] ;
+                    sh:property [
+                        sh:path khub:to ;
+                        sh:name "to" ;
+                        sh:order 1 ;
+                        sh:datatype xsd:dateTime ;
+                        sh:maxCount 1 ;
+                        sh:pattern "^([0-9]{4}-[0-9]{2}-[0-9]{2}[Tt][0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]+)?([Zz]|[+-][0-9]{2}:[0-9]{2}))$" ;
+                        khub:pattern "\\d{4}-\\d{2}-\\d{2}[Tt]\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?([Zz]|[+-]\\d{2}:\\d{2})" ;
+                        khub:type "datetime"
+                    ]
+                ] ;
+                khub:type "object"
+            ]
+        ] ;
+        khub:type "list" ;
+        khub:items "object"
+    ] ;
+    sh:property [
+        sh:path khub:usage_window ;
+        sh:name "usage_window" ;
+        sh:order 13 ;
+        sh:nodeKind sh:BlankNode ;
+        sh:maxCount 1 ;
+        sh:node [
+            sh:property [
+                sh:path khub:from ;
+                sh:name "from" ;
+                sh:order 0 ;
+                sh:datatype xsd:dateTime ;
+                sh:maxCount 1 ;
+                sh:pattern "^([0-9]{4}-[0-9]{2}-[0-9]{2}[Tt][0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]+)?([Zz]|[+-][0-9]{2}:[0-9]{2}))$" ;
+                khub:pattern "\\d{4}-\\d{2}-\\d{2}[Tt]\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?([Zz]|[+-]\\d{2}:\\d{2})" ;
+                khub:type "datetime"
+            ] ;
+            sh:property [
+                sh:path khub:to ;
+                sh:name "to" ;
+                sh:order 1 ;
+                sh:datatype xsd:dateTime ;
+                sh:maxCount 1 ;
+                sh:pattern "^([0-9]{4}-[0-9]{2}-[0-9]{2}[Tt][0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]+)?([Zz]|[+-][0-9]{2}:[0-9]{2}))$" ;
+                khub:pattern "\\d{4}-\\d{2}-\\d{2}[Tt]\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?([Zz]|[+-]\\d{2}:\\d{2})" ;
+                khub:type "datetime"
+            ]
+        ] ;
+        khub:type "object"
+    ] ;
+    sh:property [
         sh:path field:repo ;
         sh:name "repo" ;
-        sh:order 9 ;
+        sh:order 14 ;
         sh:datatype xsd:string ;
         sh:minCount 1 ;
         sh:maxCount 1 ;
@@ -1740,27 +3863,9 @@ shape:repo a sh:NodeShape ;
         khub:type "text"
     ] ;
     sh:property [
-        sh:path field:status ;
-        sh:name "status" ;
-        sh:order 10 ;
-        sh:datatype xsd:string ;
-        sh:minCount 1 ;
-        sh:maxCount 1 ;
-        sh:in ( "active" "archived" ) ;
-        khub:type "text"
-    ] ;
-    sh:property [
         sh:path khub:related ;
         sh:name "related" ;
-        sh:order 11 ;
-        sh:nodeKind sh:IRI ;
-        sh:class khub:Entity ;
-        khub:kind "any"
-    ] ;
-    sh:property [
-        sh:path khub:sources ;
-        sh:name "sources" ;
-        sh:order 12 ;
+        sh:order 15 ;
         sh:nodeKind sh:IRI ;
         sh:class khub:Entity ;
         khub:kind "any"
@@ -1768,7 +3873,7 @@ shape:repo a sh:NodeShape ;
     sh:property [
         sh:path khub:references ;
         sh:name "references" ;
-        sh:order 13 ;
+        sh:order 16 ;
         sh:nodeKind sh:IRI ;
         sh:class khub:Entity ;
         khub:kind "any"
@@ -1776,7 +3881,7 @@ shape:repo a sh:NodeShape ;
     sh:property [
         sh:path khub:depends_on ;
         sh:name "depends_on" ;
-        sh:order 14 ;
+        sh:order 17 ;
         sh:nodeKind sh:IRI ;
         sh:class khub:Entity ;
         khub:kind "any" ;
@@ -1784,23 +3889,24 @@ shape:repo a sh:NodeShape ;
     ] .
 
 <urn:khub:workspace/ws/prd/prd> a type:prd ;
-    khub:draft false ;
     khub:created "2026-01-15"^^xsd:date ;
     khub:updated "2026-01-15"^^xsd:date ;
     khub:title "PRD" .
 
 <urn:khub:workspace/ws/arc42/arc42> a type:arc42 ;
-    khub:draft false ;
     khub:created "2026-01-15"^^xsd:date ;
     khub:updated "2026-01-15"^^xsd:date ;
     khub:title "Architecture" .
 
 <urn:khub:workspace/ws/adr/ad-2026-01-15-use-the-guide> a type:adr ;
-    khub:draft false ;
     khub:created "2026-01-15"^^xsd:date ;
     khub:updated "2026-01-15"^^xsd:date ;
     khub:title "Use the guide" ;
-    field:status "accepted" ;
+    khub:generated [
+        khub:by "khub" ;
+        khub:at "2026-01-15T00:00:00Z"^^xsd:dateTime
+    ] ;
+    field:decision "accepted" ;
     field:affects <urn:khub:workspace/ws/file/guide.md> .
 
 <urn:khub:workspace/ws/file/guide.md> a khub:File ;

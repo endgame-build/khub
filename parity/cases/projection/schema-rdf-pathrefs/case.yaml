@@ -7,7 +7,7 @@
 steps:
 - argv: ["init", "build-hub", ".", "--no-wire"]
 - sh: "printf '# A guide\\n' > guide.md && printf '  adr:\\n    path_refs: true\\n' >> .khub/policy.yaml"
-- argv: ["add", "adr", "--title", "Use the guide", "--status", "accepted", "--affects", "guide.md"]
+- argv: ["add", "adr", "--title", "Use the guide", "--decision", "accepted", "--affects", "guide.md"]
 - argv: ["schema", "rdf", "--out", "-", "--instances"]
 - argv: ["schema", "rdf", "--base", "http://x"]
 - argv: ["schema", "rdf", "--base", "rel/path", "--format", "json"]
