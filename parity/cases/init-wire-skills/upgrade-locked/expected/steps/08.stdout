@@ -1,0 +1,1 @@
+{"error": {"code": "locks_unreadable", "message": "Cannot read the schema locks in .khub/policy.yaml, so the upgrade was not applied; fix the file so upgrade can tell which locked elements it would remove. .khub/policy.yaml: [1:9] could not find flow mapping end token '}'\n>  1 | policy: {ritual: {locked: true}\n               ^\n"}}

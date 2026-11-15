@@ -136,6 +136,16 @@ Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelo
   write that would replace a present value refuses with the new code
   `would_overwrite` (exit 2, `field` names the key). `--dry-run` previews the
   stamp. The khub skill points agents at it. Closes #78.
+- **Locked types and predicates.** Policy `locked: true` and
+  `locked_relations: [<predicate>, …]` mark load-bearing schema elements.
+  `khub upgrade` refuses a schema that removes one (`locked_removed`, exit 2,
+  dry run included, nothing written; `expected` lists the `--unlock` values)
+  unless the run passes `--unlock <type>` or `--unlock <type>.<predicate>`
+  for each. A current schema that does not resolve keeps its locks; one too
+  broken to read them from is `locks_unreadable`. A lock the workspace added
+  is carried across upgrades like any other per-type policy key. The khub and
+  setup skills tell an agent that `--unlock` is the workspace owner's
+  decision, to ask for rather than pass on its own. Closes #13.
 
 ### Changed
 

@@ -195,6 +195,10 @@ type ResolvedType struct {
 	When *string
 	// See TypeDecl.Waivers: per-entity check-finding waivers, authored order.
 	Waivers []Waiver
+	// See TypeDecl.Locked / LockedRelations: what `khub upgrade` refuses to
+	// drop unless unlocked.
+	Locked          bool
+	LockedRelations []string
 }
 
 // WaivableFindings is the `check` buckets a policy `waive` entry may name, in

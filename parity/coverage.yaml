@@ -21,6 +21,7 @@ commands:
   - '--dry-run'
   - '--no-schema'
   - '--no-wire'
+  - '--unlock'
   - '--format'
 - name: 'status'
   params:
@@ -260,6 +261,8 @@ error_codes:
 - invalid_schema
 - invalid_slug
 - invalid_snapshot
+- locked_removed
+- locks_unreadable
 - lookup_error
 - malformed_entity
 - malformed_projection

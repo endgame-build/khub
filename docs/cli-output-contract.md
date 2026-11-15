@@ -163,6 +163,7 @@ Which codes carry which keys:
 | `unknown_type` | | the declared types, sorted | nearest type |
 | `unknown_preset` | | the shipped presets, sorted | nearest preset |
 | `bad_target` | | `claude`, `agents`, `both` | nearest target |
+| `locked_removed` | | every locked element the upgrade removes, `type` or `type.predicate`, in the current schema's declaration order: the `--unlock` values the run takes | |
 
 Every other code carries `code` and `message` only. A later release may add a
 key to a code that has none today. A program should read the keys it knows and
