@@ -44,7 +44,7 @@ func TestChecksRefuseLikeTheWritesAndWriteNothing(t *testing.T) {
 		t.Fatal(err)
 	}
 	// A file where a directory must go.
-	if err := CheckMkdirAll(root, filepath.Join(existing, "sub")); !errors.Is(err, syscall.ENOTDIR) {
+	if err := CheckMkdirAll(root, filepath.Join(existing, "sub")); !errors.Is(err, NotADirectory) {
 		t.Fatalf("mkdir through a file: %v", err)
 	}
 	if err := CheckRemove(root, filepath.Join(root, "ghost.md")); !errors.Is(err, fs.ErrNotExist) {

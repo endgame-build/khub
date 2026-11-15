@@ -34,7 +34,7 @@ func CheckMkdirAll(root, path string) error {
 			// os.Root.MkdirAll then fails opening that file as a directory.
 			if i > 0 {
 				if above, serr := r.Stat(prev); serr == nil && !above.IsDir() {
-					return &fs.PathError{Op: "openat", Path: prev, Err: syscall.ENOTDIR}
+					return &fs.PathError{Op: "openat", Path: prev, Err: NotADirectory}
 				}
 			}
 			return nil
