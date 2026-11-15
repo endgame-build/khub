@@ -44,6 +44,7 @@ const repeatRuns = 5
 // lists to the command tree, so a new command needs a decision here.
 var readCalls = map[string][][]string{
 	"status": {{"status"}},
+	"doctor": {{"doctor"}},
 	"get": {
 		{"get", "cmp-c04", "cmp-c06", "ad-2026-01-15-a2"},
 		{"get", "cmp-c00", "--edges"},

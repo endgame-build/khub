@@ -177,6 +177,22 @@ Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelo
   `unknown_saved_query` (with the saved names as `expected` and the nearest
   as `suggestion`), `invalid_saved_query` (`field` names the key). The plugin
   draws a compact row for `run`. Closes #31.
+- **`khub doctor`.** A self-diagnosis of what every other command assumes: a
+  workspace, git and its history, a schema that resolves, a readable
+  provenance stamp in `.khub/config.yaml` naming a preset `upgrade` can find
+  at a version no newer than this binary ships, a workspace lock a write can
+  take, storage shaped (and, on macOS and Linux, writable at its top) the way
+  each type's layout reads it, and a workspace every file of which `check`
+  can read. Each check reports `ok`, `warn`, `fail` or `skip` with a code and
+  a message, as JSON on a pipe like every read. It exits 0 when nothing
+  fails (a warning does not), 1 when a check fails, and 2 only for a usage
+  error; a missing workspace is a failed check (exit 1), where every other
+  command refuses it with exit 2. On macOS and Linux doctor writes nothing:
+  it asks the kernel whether a write would be allowed. On Windows the lock
+  check creates and removes one probe file inside `.khub/generated/`, and
+  skips when that directory does not exist. The khub skill tells the agent
+  to run `khub doctor` when a failure's own error does not explain it.
+  Closes #41.
 
 ### Changed
 

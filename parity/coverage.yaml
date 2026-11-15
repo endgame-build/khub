@@ -26,6 +26,9 @@ commands:
 - name: 'status'
   params:
   - '--format'
+- name: 'doctor'
+  params:
+  - '--format'
 - name: 'add'
   params:
   - '--by'

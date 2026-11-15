@@ -34,7 +34,7 @@ present only when one is close. The envelope, the codes that carry each key,
 and the stdout, stderr and exit-code rules every command follows are in
 [`cli-output-contract.md`](./cli-output-contract.md). A usage error (an unknown
 flag, a missing argument) is also exit 2 and stays plain text. Exit 1 is reserved for a
-gate that ran and failed (`validate`, `check`, `reindex --check`): there the workspace is what is
+gate that ran and failed (`validate`, `check`, `reindex --check`, `doctor`): there the workspace is what is
 wrong, not the call, and the report names what to fix.
 
 A workspace whose `.khub/config.yaml` is gone refuses every command that reads
@@ -148,6 +148,37 @@ One gap per dead path per entity (`gone.md`, `./gone.md` and `sub/../gone.md` ar
 | `khub schema snapshot` | `--format` | record the current resolved schema at `.khub/schema.applied.yaml` as the baseline `schema diff` compares against, replacing any earlier one. The file is tracked in git and records the resolved form, not the layer files: per type its storage, id scheme, `required`/`orphan`, template, and every attribute and relation with its facets. Derived inverses, provenance, `when` and a policy `retention` rule are left out, since none of them decides validity — so `schema diff` does not show a retention change. `init` and `upgrade` never write it, so a preset upgrade shows up as pending. Returns `{path, types}` |
 | `khub schema diff` | `--format` | the schema changes since the snapshot: `{pending, changes: [{op, path, from, to}]}`, `op` one of `added`/`removed`/`changed`, `path` dotted (`types.component.attributes.lifecycle.enum`). Key order is not a change. Exits 0 whether or not changes are pending; `pending` says which. With no snapshot it refuses (`no_schema_snapshot`, exit 2) and names `khub schema snapshot`; an unreadable one refuses with `invalid_snapshot` |
 | `khub status` | `--format` | counts per type, draft vs active, orphan and stale counts, the expired count apart from stale (`expired`: past an authored `stale_after`), the review tiers (`trust: {unverified, machine, human}`), and OKF 0.2 conformance: `okf_conformant` and `okf_nonconformant`, the sorted workspace-relative paths that break it (text prints `not OKF-conformant: <path>` per file after the table). The tree is every `.md` file below the root except under hidden directories (`.khub/`, `.git/`, `.claude/`), vendored trees (`node_modules`, `.venv`, `venv`, `__pycache__`, `.kb`), `.khub/ignore` paths and symlinks, the same tree `check`'s misplaced walk reads, and minus the root `CLAUDE.md` and `AGENTS.md` that `khub wire` writes, which are khub's own wiring like `.khub/`. A concept needs parseable frontmatter with a non-empty `type`, so a `README.md` or a `docs/` page without one is listed. An `index.md` carries no frontmatter, except the root one, which may carry `okf_version` alone, and holds only headings and list entries. A `log.md` carries no frontmatter, and its `##` headings are ISO dates. Broken links and strays never count |
+| `khub doctor` | `--format` | diagnose the workspace itself, not its entities: git, schema, provenance, lock, storage layout, and whether `check` can read it all. Writes nothing on macOS and Linux; see [Diagnosing the workspace](#diagnosing-the-workspace) |
+
+### Diagnosing the workspace
+
+`validate` and `check` judge the entities of a workspace that works. `khub doctor` judges whether it works: run it first when other commands fail in ways their own output does not explain (an `os_error`, a `schema_error`, an `internal_path_error`). It runs seven checks, in this order:
+
+| Check | Fails when | Warns when |
+|---|---|---|
+| `workspace` | no `.khub/` at or above the working directory (or `-C`), or the workspace is refused (a OneDrive-synced folder on Windows) | — |
+| `git` | `git` cannot be started, or runs but `git --version` fails (`git_unavailable`): `stale`, `recent` and `backfill` need it | the workspace is not a git repository (`not_a_git_repository`), or its repository has no commit (`no_git_history`): dates are not derived from git until it has one |
+| `schema` | the three layer files do not parse or resolve (the loader's own code: `schema_error`, `invalid_schema`, …) | — |
+| `provenance` | `.khub/config.yaml` is missing (`config_missing`, the refusal every command that reads it gives), or does not parse, or its `stale_days` is not a number (`provenance_unreadable`) | it records no `preset` or `version` (`provenance_incomplete`); its preset is one `upgrade` cannot find, in the recorded `source` or the presets this binary ships (`unknown_preset`, upgrade's own refusal); its version is newer than the one this binary ships (`provenance_newer`: upgrade khub first) |
+| `lock` | a write could not create or open `.khub/generated/locks/workspace.lock` (`lock_unwritable`) | — |
+| `layout` | per type, one row each: a directory its storage path runs through, or the storage root itself, exists in the wrong shape — a file where a directory belongs, a directory where a singleton or collection file belongs (`layout_mismatch`); a write could not create an entry at the top of the type's storage (`storage_unwritable`); or the type's scan stops on a symlink or a permission error (`layout_mismatch`, or the refusal's own code such as `unsafe_path`) | — |
+| `read` | `check`'s whole read — every entity, the stray and template sweeps, and the misplaced-file walk over the workspace — stops on an error (`read_error`, or the error's own code). Its findings are not doctor's: run `check` for those | — |
+
+A check that cannot run reports `skip`: with no workspace every later check skips; with no schema `layout` and `read` skip; with a failed `layout`, `read` skips. A missing storage path is an empty type, not a finding.
+
+**What doctor writes.** On macOS and Linux, nothing: whether a write would be allowed is asked of the kernel (`faccessat` with the effective user and group, the same answer a write gets), and an existing lock file is opened for writing and closed, never locked, so a running writer neither blocks doctor nor is blocked by it. On Windows that question cannot see the ACLs that deny a write, so when the lock file does not exist yet doctor creates one probe file in `.khub/generated/` or below it (gitignored) and removes it at once; when `.khub/generated/` does not exist either, the `lock` check is `skip`. Storage writability is not checked on Windows.
+
+**What doctor does not see.** Write access below the top of a type's storage (inside a folder-layout entity's directory, or a templated type's subdirectories), and individual entity files a write would replace. A write that fails there still reports the `os_error` naming the path.
+
+JSON: `{workspace, passed, checks: [{name, status, code, message}]}`. `workspace` is the root, or `null` when none was found; `status` is `ok`, `warn`, `fail` or `skip`; `code` is `null` on `ok` and `skip`. Text prints one `<status>  <name>  <message>` line per check, with a multi-line message (a YAML parse error's pointer) cut to its first line, then `Doctor passed`, `Doctor passed with N warnings` or `Doctor failed: N failed checks`.
+
+Exit codes follow the rest of the CLI, with one deliberate difference:
+
+- **0** — nothing failed. Warnings may be present; the workspace works, read them before relying on `stale`, `recent` or `upgrade`.
+- **1** — a check failed. The workspace is what is wrong: fix what each `fail` row names (run `khub init <preset>`, install git, repair the schema or `config.yaml`, restore write access, move the misshapen path aside), then run `doctor` again.
+- **2** — a usage error (an unknown flag, an extra argument). Correct the call.
+
+The difference: every other command refuses outside a workspace with `no_workspace` and exit 2 — the call was wrong. `doctor` reports the same `no_workspace` code as a failed `workspace` row, exit 1, because the question it answers is what is wrong with the workspace, and its absence is the answer. Doctor never refuses for the workspace's sake.
 
 ## Author
 
