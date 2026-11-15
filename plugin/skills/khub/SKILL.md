@@ -148,6 +148,14 @@ deletes despite inbound edges. `import` brings a bundle in as drafts; the bundle
 
 Every content write stamps `generated: {by, at}`: an `add`, or a change to the body, a declared field, `status` or a relation. A bookkeeping-only edit (`tags`, `aliases`, `stale_after`, `author`, `created`) and an edit that changes nothing stamp nothing. Under Claude Code `by` is `agent/claude-code` unless `KHUB_ACTOR` or `--by` says otherwise; pass `--by human:<name>` only when that person wrote the content.
 
+A write may print `warning: <id> › <rule>: <message>` lines on stderr: `check` findings
+this session has not seen yet, the workspace's existing debt on your first write and only
+what changed after that, at most 20 and then a count. The write still succeeded. Fix a
+warning your change caused; the rest is debt to mention, not to chase. Parallel writes
+share the session, so a warning may land on a different call than the one that caused it.
+They do not replace the check step of the loop. Claude Code names the session for you; any
+other agent sets `KHUB_SESSION` to one value for all its calls to get them.
+
 ## Generate, validate, iterate
 
 1. **Generate.** `khub add <type> --title "..." …` mints the id (`schema show <type>` names
@@ -166,7 +174,16 @@ Every content write stamps `generated: {by, at}`: an `add`, or a change to the b
    attributes — and `validate` again if you did.
 5. **Check.** `khub check`. **Errors** mean the workspace is broken: fix them, looping back
    to `validate`. **Gaps** (`incomplete`, orphans, `thin`) are legal but unfinished: fix
-   the ones your change caused.
+   the ones your change caused. `retention` lists entities past their type's retention
+   rule: candidates for removal that a human decides on. Never delete one on your own.
+   `waived` lists findings a person accepted in `.khub/policy.yaml`, each with its reason;
+   leave them be. A `stale_waivers` row is a waiver that no longer matches anything — say
+   so. Never add a waiver to turn `check` green: a waiver is a person's decision.
+   `khub check --mentions --format json` also lists, under `mentions`, entities a body names
+   with no edge behind them. Prose is not a relation: `link` the ones the text really
+   relates to, using one of the row's `predicates`, and leave the rest. The predicates are
+   the mentioning entity's own; when the precise edge belongs to the entity named, link
+   from that side instead (`khub schema show <type>` lists its relations).
 6. `khub reindex` if you added, removed or re-linked anything; a stale `index.md` sends the
    next reader to a file that moved.
 
@@ -185,8 +202,11 @@ edge.
   (`body_shape`), or a template that does not parse (`field: template`). Fix before you
   finish.
 - **`gaps`** with `field: body` — `body_rule`. A section rule is unmet: thin prose, a
-  forbidden phrase, a missing code block. Legal, and it fails no gate. Fix the ones your
-  change caused; leave the ones that were already there.
+  forbidden phrase, a missing code block. Or `dead link '<dest>' (no such file)`: a
+  relative link in any Markdown body whose file is not there, checked from the entity's
+  own directory and case-exact; a link that leaves the workspace is not checked. Legal,
+  and it fails no gate. Fix the ones your change caused; leave the ones that were already
+  there.
 - **`body` and `lenses`** — no finding at all. Word counts per section, and the review
   questions the type declares, filtered to this entity's frontmatter (a lens may apply only
   to one `kind` or `status`). khub computes and asks; the judgement is yours.

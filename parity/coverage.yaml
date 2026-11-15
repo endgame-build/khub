@@ -150,6 +150,7 @@ commands:
   - '--strict'
   - '--require-verified'
   - '--tier'
+  - '--mentions'
   - '--format'
 - name: 'stale'
   params:

@@ -42,7 +42,7 @@ becoming frustrated and losing interest entirely" (Westerinen & Tauber, *Ontolog
 Development by Domain Experts (Without Using the "O" Word)*, Applied Ontology, IOS
 Press). khub's schema is the
 rendering that fits how the expert works; any RDF/OWL projection is derived from it
-and never the authoring surface. The schema is split into three layer files — `ontology.yaml` (the domain: per-type `attributes`, `relations`, `when`), `policy.yaml` (this workspace's gates: `required`, `orphan`) and `storage.yaml` (`layout`/`format`/`path`/`id_prefix`/`template`) — merging at load time into one resolved contract. The `base` block (`type`, `status`, `author`, `created`/`updated`, `tags`, the OKF fields and families, the `any → any` edges) is khub's own plumbing and ships EMBEDDED in the binary, supplied to every resolve and never copied into a workspace; an authored `ontology.base` is rejected outright — the base is not an authoring surface. A type declares only its domain delta and overrides a base attribute by redeclaring it. The split is what makes the ontology projectable: `ontology.yaml` carries purely the domain, which is what an RDF/SHACL export reads.
+and never the authoring surface. The schema is split into three layer files — `ontology.yaml` (the domain: per-type `attributes`, `relations`, `when`), `policy.yaml` (this workspace's gates: `required`, `orphan`, `retention`, `waive`) and `storage.yaml` (`layout`/`format`/`path`/`id_prefix`/`template`) — merging at load time into one resolved contract. The `base` block (`type`, `status`, `author`, `created`/`updated`, `tags`, the OKF fields and families, the `any → any` edges) is khub's own plumbing and ships EMBEDDED in the binary, supplied to every resolve and never copied into a workspace; an authored `ontology.base` is rejected outright — the base is not an authoring surface. A type declares only its domain delta and overrides a base attribute by redeclaring it. The split is what makes the ontology projectable: `ontology.yaml` carries purely the domain, which is what an RDF/SHACL export reads.
 
 ```yaml
 # core/ontology.yaml  (embedded in the binary — supplied to every resolve, never copied)
@@ -94,7 +94,7 @@ Go, shipped as a single static binary. It was a Python console script through 0.
 1. **Markdown is truth.** One entity equals one file in git. Audit, diff, PR review, and portability come for free.
 2. **The graph is a derived projection,** rebuilt from the Markdown on demand. No graph database is ever the source of truth. Git-derived dates (`khub stale`) are read the same way.
 3. **The schema is the contract.** Surfaces introspect the schema at runtime and never hardcode per-type knowledge.
-4. **Relations are authoritative, from two sources.** A relation feeds the graph from an explicit role-named field the schema marks as an edge (the field name is the predicate, the value is the target), or from the derived inverse of such a field. Forward fields are stored single-sided on one entity; inverse edges are computed, never stored. (Deriving a parent edge from nested placement is not yet supported; a parent relation is an explicit edge.) Inline body links are navigational only.
+4. **Relations are authoritative, from two sources.** A relation feeds the graph from an explicit role-named field the schema marks as an edge (the field name is the predicate, the value is the target), or from the derived inverse of such a field. Forward fields are stored single-sided on one entity; inverse edges are computed, never stored. (Deriving a parent edge from nested placement is not yet supported; a parent relation is an explicit edge.) Inline body links are navigational only; `check --mentions` suggests the edges a body names but no relation carries, and writes none.
 5. **Structural integrity is not semantic truth.** khub guarantees an entity is well-formed and every relation resolves; it does not guarantee an assertion is correct. A schema-legal but false write validates. The backstop is attributable git history and `git revert`.
 
 ### Authoring and Integrity
@@ -135,7 +135,7 @@ engagement-repo/
   .khub/
     config.yaml        # workspace config: preset provenance, command defaults
     ontology.yaml      # the domain: types, attributes, relations, capture cues
-    policy.yaml        # workspace gates: required singletons, orphan exemptions
+    policy.yaml        # workspace gates: required singletons, orphan exemptions, retention, waivers
     storage.yaml       # layouts, inventory paths, id prefixes, template links
     generated/         # stable workspace lock and upgrade recovery journals, gitignored
   …                    # the entity tree, wherever storage.yaml puts each type

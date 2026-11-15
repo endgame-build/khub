@@ -390,3 +390,36 @@ func BodyRules(t *BodyTemplate, body string) []Complaint {
 	}
 	return out
 }
+
+// MaskTemplateHeadings blanks, in every H2 heading of text, the heading text
+// a section of t declares — the scaffolding `add` seeded, not something the
+// author wrote. Only the declared prefix is blanked (a heading matches its
+// section by prefix, as align reads it), so words an author added after it
+// stay. Length- and newline-preserving, like Prose; a nil t masks nothing.
+func MaskTemplateHeadings(t *BodyTemplate, text string) string {
+	if t == nil || len(t.Sections) == 0 {
+		return text
+	}
+	var buf []byte
+	for _, h := range H2Spans(text) {
+		for _, s := range t.Sections {
+			if s.Heading == "" || !strings.HasPrefix(h.Heading, s.Heading) {
+				continue
+			}
+			lineStart := strings.LastIndexByte(text[:h.Start], '\n') + 1
+			k := strings.Index(text[lineStart:h.Start], s.Heading)
+			if k < 0 {
+				break
+			}
+			if buf == nil {
+				buf = []byte(text)
+			}
+			blankBytes(buf, lineStart, lineStart+k+len(s.Heading))
+			break
+		}
+	}
+	if buf == nil {
+		return text
+	}
+	return string(buf)
+}

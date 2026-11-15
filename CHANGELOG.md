@@ -66,8 +66,60 @@ Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelo
 - **`docs/cli-output-contract.md`.** One page for what a program reading khub
   may rely on: when stdout is JSON, one value per call, the JSON dialect,
   stderr, exit codes and the refusal envelope.
+- **Dead relative links.** `validate` reports a relative link in any Markdown
+  body (inline link, image or reference definition) whose file does not exist
+  as a `body` gap, `dead link '<dest>' (no such file)`. Resolved from the
+  entity's directory and case-exact on every platform; links in fenced or
+  indented code, comments and code spans, external URLs, anchors and
+  root-relative paths are not read, and a link that resolves outside the
+  workspace (directly or through a symlink) is skipped, never probed. A gap
+  never fails the gate, so `validate` output gains rows but no exit code
+  moves. `check` does not report them. Closes #52.
+- **`check --mentions`.** An opt-in audit: an entity whose body prose names
+  another entity (by title, name, alias or slug; fenced code, HTML comments and
+  template headings are skipped) with no edge between the two is
+  listed under a new last key, `mentions`, with the predicates that could link
+  it. Suggestions only — nothing is written, `passed` and the exit code never
+  move, and without the flag the payload is unchanged. Plugin 0.1.9 counts
+  `mentions` as informational. Closes #39.
+- **Write warnings per session.** In a session (`KHUB_SESSION`, or Claude
+  Code's `CLAUDE_CODE_SESSION_ID` when that is unset), `add`, `edit`, `link`,
+  `unlink` and `remove` print each gating `check` finding the session has not
+  been shown as a stderr line, `warning: <id> › <rule>: <message>`: the
+  standing debt on the first write, only what changed after that. Advisory:
+  stdout, exit codes and the gates are unchanged, and with no session nothing
+  is printed. `KHUB_SESSION=` turns it off. A write prints at most 20 warnings
+  and then a count, escapes control characters in workspace text, and costs
+  one `check` scan run outside the workspace lock. `verify`, `import`,
+  `backfill`, `wire` and `upgrade` do not warn. Session records untouched for
+  30 days are pruned. Closes #55.
+- **Retention policy.** Policy `retention: { days: N, no_outbound: true }`
+  is a type's end-of-life rule. `check` lists every entity of the type whose
+  `updated` (else `created`) date is more than `N` days old in a new
+  `retention` bucket, `{id, type, slug, date, age_days}`; with `no_outbound`,
+  only one that also has no outbound edge. Unlike `stale`, no git date is
+  read: bump `updated` to keep an entity. The bucket is informational, like
+  `thin`: it never fails the gate, `--strict` included, and khub deletes
+  nothing. It is not `expired`, which reads an entity's own `stale_after`.
+  `schema show --format json` prints the rule. Closes #21.
+- **Check waivers.** Policy `waive` accepts one entity's `incomplete`,
+  `orphans`, `dangling`, `body_shape` or `thin` finding, with a required
+  reason. `check` moves a waived finding out of its bucket into a new
+  `waived` list, with the reason and the finding itself, and it no longer
+  counts against `passed`. A waiver that matches no finding is listed under
+  the new `stale_waivers` bucket (with a `cause`) and fails the gate, so
+  waivers cannot rot; an `incomplete` waiver on a draft is dormant, so a draft
+  toggle never moves the gate. `khub upgrade` keeps `waive` blocks, as it
+  keeps every per-type policy key the shipped file lacks. Closes #38.
 
 ### Changed
+
+- `check --format json` always carries the `retention` key, after
+  `superseded_verifications`. The plugin counts it as informational (plugin
+  0.1.9).
+- `check --format json` always carries `stale_waivers`, just before `strict`,
+  and `waived`, after `retention`. The plugin counts `waived` as
+  informational; `stale_waivers` fails the gate.
 
 - **`query` field filters named `under` or `via`.** A schema field called
   `under` or `via` can no longer be filtered as `--under <value>` or

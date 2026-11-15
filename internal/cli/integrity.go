@@ -57,7 +57,7 @@ func registerValidate(root *cobra.Command) {
 
 func registerCheck(root *cobra.Command) {
 	var format string
-	var strict, stale, requireVerified bool
+	var strict, stale, requireVerified, mentions bool
 	var tier string
 	cmd := newCmd("check", "Check the active graph: completeness, orphans, dangling edges, strays, cycles, bodies.",
 		"", func(cmd *cobra.Command, args []string) error {
@@ -66,7 +66,8 @@ func registerCheck(root *cobra.Command) {
 				if err != nil {
 					return err
 				}
-				report, err := integrity.Check(ws, strict, clock.Now())
+				report, err := integrity.CheckWith(ws,
+					integrity.CheckOptions{Strict: strict, Mentions: mentions}, clock.Now())
 				if err != nil {
 					return err
 				}
@@ -96,6 +97,8 @@ func registerCheck(root *cobra.Command) {
 	cmd.Flags().BoolVar(&stale, "stale", false, "Fail the gate on active entities whose stale_after has passed.")
 	cmd.Flags().BoolVar(&requireVerified, "require-verified", false, "Fail the gate on active entities below --tier.")
 	cmd.Flags().StringVar(&tier, "tier", trust.Machine, "The review tier --require-verified asks for: machine or human.")
+	cmd.Flags().BoolVar(&mentions, "mentions", false,
+		"Also suggest edges for entities a body names but no relation links (informational; never written).")
 	cmd.Flags().StringVar(&format, "format", "text", "text (Rich on a TTY) or json.")
 	root.AddCommand(cmd)
 }
@@ -201,26 +204,14 @@ func checkPayload(report *integrity.CheckReport) *omap.Map {
 
 	incomplete := make([]any, 0, len(report.Incomplete))
 	for _, i := range report.Incomplete {
-		record := omap.New()
-		record.Set("id", i.ID())
-		record.Set("type", i.Type)
-		record.Set("slug", i.Slug)
-		record.Set("missing_fields", strList(i.MissingFields))
-		record.Set("missing_relations", strList(i.MissingRelations))
-		incomplete = append(incomplete, record)
+		incomplete = append(incomplete, incompleteRecord(i))
 	}
 	payload.Set("incomplete", incomplete)
 	payload.Set("orphans", strList(report.Orphans))
 
 	dangling := make([]any, 0, len(report.Dangling))
 	for _, d := range report.Dangling {
-		record := omap.New()
-		record.Set("id", d.ID())
-		record.Set("type", d.Type)
-		record.Set("slug", d.Slug)
-		record.Set("predicate", d.Predicate)
-		record.Set("target", d.Target)
-		dangling = append(dangling, record)
+		dangling = append(dangling, danglingRecord(d))
 	}
 	payload.Set("dangling", dangling)
 	payload.Set("strays", strList(report.Strays))
@@ -299,6 +290,20 @@ func checkPayload(report *integrity.CheckReport) *omap.Map {
 		shadowed = append(shadowed, record)
 	}
 	payload.Set("flag_shadowed", shadowed)
+	// Policy waivers that matched no finding: they fail the gate, so a waiver
+	// cannot outlive the finding it was written for.
+	stale := make([]any, 0, len(report.StaleWaivers))
+	for _, w := range report.StaleWaivers {
+		record := omap.New()
+		record.Set("id", w.ID())
+		record.Set("type", w.Type)
+		record.Set("slug", w.Slug)
+		record.Set("finding", w.Finding)
+		record.Set("reason", w.Reason)
+		record.Set("cause", w.Cause)
+		stale = append(stale, record)
+	}
+	payload.Set("stale_waivers", stale)
 	// Say which gate ran: `orphans` populated with passed=true means default mode.
 	payload.Set("strict", report.Strict)
 	// Last, after `strict`: the buckets that never affect `passed`. A body
@@ -317,7 +322,99 @@ func checkPayload(report *integrity.CheckReport) *omap.Map {
 		superseded = append(superseded, record)
 	}
 	payload.Set("superseded_verifications", superseded)
+	// Entities past their type's policy `retention` rule: candidates for
+	// removal, which khub reports and never acts on.
+	retention := make([]any, 0, len(report.Retention))
+	for _, e := range report.Retention {
+		record := omap.New()
+		record.Set("id", e.ID())
+		record.Set("type", e.Type)
+		record.Set("slug", e.Slug)
+		record.Set("date", e.Date)
+		record.Set("age_days", e.AgeDays)
+		retention = append(retention, record)
+	}
+	payload.Set("retention", retention)
+	// Findings a policy waiver accepts, each with the bucket it left, the
+	// waiver's reason, and the finding as that bucket would have held it.
+	waived := make([]any, 0, len(report.Waived))
+	for _, w := range report.Waived {
+		record := omap.New()
+		record.Set("id", w.ID())
+		record.Set("type", w.Type)
+		record.Set("slug", w.Slug)
+		record.Set("finding", w.Finding)
+		record.Set("reason", w.Reason)
+		record.Set("record", waivedDetail(w.Detail))
+		waived = append(waived, record)
+	}
+	payload.Set("waived", waived)
+	// Only when asked for: suggestions, not findings, so they never affect
+	// `passed` and stay out of the default payload.
+	if report.MentionsRun {
+		mentions := make([]any, 0, len(report.Mentions))
+		for _, m := range report.Mentions {
+			record := omap.New()
+			record.Set("id", m.ID())
+			record.Set("type", m.Type)
+			record.Set("slug", m.Slug)
+			record.Set("target", m.Target)
+			record.Set("text", m.Text)
+			record.Set("predicates", strList(m.Predicates))
+			mentions = append(mentions, record)
+		}
+		payload.Set("mentions", mentions)
+	}
 	return payload
+}
+
+func incompleteRecord(i integrity.Incomplete) *omap.Map {
+	record := omap.New()
+	record.Set("id", i.ID())
+	record.Set("type", i.Type)
+	record.Set("slug", i.Slug)
+	record.Set("missing_fields", strList(i.MissingFields))
+	record.Set("missing_relations", strList(i.MissingRelations))
+	return record
+}
+
+func danglingRecord(d integrity.Dangling) *omap.Map {
+	record := omap.New()
+	record.Set("id", d.ID())
+	record.Set("type", d.Type)
+	record.Set("slug", d.Slug)
+	record.Set("predicate", d.Predicate)
+	record.Set("target", d.Target)
+	return record
+}
+
+// waivedDetail renders a waived finding exactly as its own bucket would.
+func waivedDetail(detail any) any {
+	switch d := detail.(type) {
+	case integrity.Incomplete:
+		return incompleteRecord(d)
+	case integrity.Dangling:
+		return danglingRecord(d)
+	case integrity.FieldError:
+		return findingRecords([]integrity.FieldError{d}, false)[0]
+	default:
+		return detail // an orphan: its qualified id
+	}
+}
+
+// waivedLine is a waived finding's text line: the bucket, what it says, and
+// the waiver's reason.
+func waivedLine(w integrity.Waived) string {
+	what := ""
+	switch d := w.Detail.(type) {
+	case integrity.Incomplete:
+		what = ": missing " + strings.Join(append(append([]string{}, d.MissingFields...), d.MissingRelations...), ", ")
+	case integrity.Dangling:
+		what = fmt.Sprintf(": %s -> '%s'", d.Predicate, d.Target)
+	case integrity.FieldError:
+		what = ": " + d.Reason
+	}
+	return fmt.Sprintf("waived %s %s%s (reason: %s)", w.Finding, w.ID(), what, w.Reason)
 }
 
 // shadowReason says why a shadowed field is a defect, for check and validate.
@@ -364,6 +461,13 @@ func checkHuman(report *integrity.CheckReport) {
 			fmt.Printf("thin %s: %s (informational)\n", th.ID(), th.Reason)
 		}
 		printSuperseded(report, " (informational)")
+		printRetention(report)
+		for _, w := range report.Waived {
+			fmt.Println(waivedLine(w))
+		}
+		for _, m := range report.Mentions {
+			fmt.Printf("%s (informational)\n", mentionLine(m))
+		}
 		fmt.Println("Graph check passed")
 		return
 	}
@@ -415,6 +519,13 @@ func checkHuman(report *integrity.CheckReport) {
 	for _, f := range report.FlagShadowed {
 		fmt.Printf("flag_shadowed %s.%s: %s\n", f.Type, f.Field, shadowReason(f))
 	}
+	for _, w := range report.StaleWaivers {
+		why := "matches no finding"
+		if w.Cause == integrity.StaleOrphanExempt {
+			why = fmt.Sprintf("type '%s' declares orphan: true, so it never has an orphan", w.Type)
+		}
+		fmt.Printf("stale waiver %s %s: %s — remove it from policy.yaml\n", w.Finding, w.ID(), why)
+	}
 	for _, f := range report.BelowGate() {
 		fmt.Printf("below tier %s: trust %s, %s asked for\n", f.ID(), f.Trust, report.TierGate)
 	}
@@ -440,6 +551,29 @@ func checkHuman(report *integrity.CheckReport) {
 		fmt.Printf("thin %s: %s\n", th.ID(), th.Reason)
 	}
 	printSuperseded(report, "")
+	printRetention(report)
+	for _, w := range report.Waived {
+		fmt.Println(waivedLine(w))
+	}
+	for _, m := range report.Mentions {
+		fmt.Println(mentionLine(m))
+	}
+}
+
+// mentionLine is one mention suggestion as text: what the body says, the
+// entity it names, and the predicates that could link it.
+func mentionLine(m integrity.Mention) string {
+	return fmt.Sprintf("mention %s: '%s' names %s with no edge (link as %s)",
+		m.ID(), m.Text, m.Target, strings.Join(m.Predicates, ", "))
+}
+
+// printRetention prints the retention bucket, marked informational on both
+// paths: the gate never fails because of it.
+func printRetention(report *integrity.CheckReport) {
+	for _, e := range report.Retention {
+		fmt.Printf("retention %s: dated %s, %d days old, past its type's retention (informational)\n",
+			e.ID(), e.Date, e.AgeDays)
+	}
 }
 
 func printSuperseded(report *integrity.CheckReport, note string) {

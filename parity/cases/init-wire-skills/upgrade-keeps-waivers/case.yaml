@@ -1,0 +1,13 @@
+# upgrade keeps the workspace's own per-type policy keys, and a `waive` block
+# is one the shipped policy.yaml never carries, so it is kept and reported in
+# `carried`. Every other edit (here, a comment) is replaced as before, and the
+# edited file collects a .bak. After the upgrade the waiver still applies, and
+# a second run replaces nothing.
+steps:
+- argv: ["init", "build-hub", ".", "--no-wire"]
+- argv: ["add", "component", "--title", "Island", "--kind", "external"]
+- sh: "printf '  # accepted findings\\n  component:\\n    waive:\\n      cmp-island:\\n        orphans: External system we only consume.\\n' >> .khub/policy.yaml"
+- argv: ["check", "--strict", "--format", "json"]
+- argv: ["upgrade", "--no-wire", "--format", "json"]
+- argv: ["check", "--strict", "--format", "json"]
+- argv: ["upgrade", "--no-wire", "--format", "json"]

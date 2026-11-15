@@ -52,7 +52,7 @@ case "${4:-}" in --forward) FORWARD=1 ;; esac
 REPO=$(cd "$(dirname "$0")/../.." && pwd)
 PRESETSRC="$REPO/parity/corpus"
 
-export KHUB_PARITY_NOW=2026-01-15
+export KHUB_PARITY_NOW=2026-01-15 KHUB_SESSION=''
 export GIT_AUTHOR_NAME=Parity GIT_AUTHOR_EMAIL=parity@example.com
 export GIT_COMMITTER_NAME=Parity GIT_COMMITTER_EMAIL=parity@example.com
 export GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_SYSTEM=/dev/null

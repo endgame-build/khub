@@ -1,0 +1,9 @@
+# Without KHUB_SESSION, Claude Code's CLAUDE_CODE_SESSION_ID names the session,
+# so an agent there gets write warnings without asking for them.
+env:
+  CLAUDE_CODE_SESSION_ID: c1
+steps:
+- argv: ["init", "firm-ops", ".", "--no-wire"]
+- sh: "printf -- \"---\\ntype: person\\nname: Ann\\ncreated: 2026-01-15\\n---\\n\" > identity/team/ann.md"
+- argv: ["add", "client", "--name", "Initech Corp"]
+- argv: ["add", "person", "--name", "Pat"]

@@ -161,3 +161,27 @@ storage:
 		t.Error("client.Orphan = true, want false (default: swept like anything else)")
 	}
 }
+
+// A policy `retention` rule resolves onto its type; a type without one has
+// none, so `check` sweeps only the types that asked.
+func TestRetentionResolves(t *testing.T) {
+	schema := resolveWithCore(t, `
+ontology:
+  entities:
+    meeting: {}
+    note: {}
+policy:
+  meeting: { retention: { days: 90, no_outbound: true } }
+  note: { retention: { days: 7 } }
+`)
+	got := typeOf(t, schema, "meeting").Retention
+	if got == nil || got.Days != 90 || !got.NoOutbound {
+		t.Errorf("meeting retention = %+v, want {90 true}", got)
+	}
+	if note := typeOf(t, schema, "note").Retention; note == nil || note.Days != 7 || note.NoOutbound {
+		t.Errorf("note retention = %+v, want {7 false}", note)
+	}
+	if r := typeOf(t, resolveWithCore(t, "ontology:\n  entities:\n    meeting: {}\n"), "meeting").Retention; r != nil {
+		t.Errorf("undeclared retention = %+v, want nil", r)
+	}
+}

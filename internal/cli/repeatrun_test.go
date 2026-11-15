@@ -98,7 +98,7 @@ var readCalls = map[string][][]string{
 		{"history", "ad-2026-01-15-a3", "--predicate", "supersedes"},
 	},
 	"validate": {{"validate"}, {"validate", "--strict"}, {"validate", "component/cmp-dangle"}, {"validate", "component"}},
-	"check":    {{"check"}, {"check", "--strict"}},
+	"check":    {{"check"}, {"check", "--strict"}, {"check", "--mentions"}},
 	"stale":    {{"stale"}, {"stale", "--days", "1"}},
 	"recent":   {{"recent"}, {"recent", "--days", "10000", "--limit", "12"}},
 	"reindex":  {{"reindex", "--dry-run"}},

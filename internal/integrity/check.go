@@ -67,6 +67,20 @@ type Misplaced struct {
 	Expected string
 }
 
+// RetentionHit is one entity past its type's retention rule: its effective date
+// (`updated`, else `created`) is more than the rule's days old and, under
+// `no_outbound`, it has no outbound edge. A candidate for removal, reported and
+// never acted on.
+type RetentionHit struct {
+	Type    string
+	Slug    string
+	Date    string // the effective date, YYYY-MM-DD
+	AgeDays int
+}
+
+// ID is RetentionHit.id.
+func (e RetentionHit) ID() string { return e.Type + "/" + e.Slug }
+
 // AliasConflict is one alias that names more than one entity: two or more
 // entities declare it, or it is some other entity's slug. Either way an ID
 // lookup through it is ambiguous or silently lands on the slug's owner.
@@ -151,10 +165,69 @@ type CheckReport struct {
 	// Review events whose recorded `rev` no longer matches the content: the
 	// review saw an earlier version. Informational, like Thin.
 	Superseded []SupersededVerification
+	// Entities past their type's policy `retention` rule. Informational —
+	// never consulted by Passed, `--strict` included: the clock alone moves an
+	// entity into this bucket, and a gate that turns red with no change to the
+	// workspace would fail every CI run on the day a meeting turns N days old.
+	Retention []RetentionHit
 	// Schema fields that share a name with a write verb's own flag, so that
 	// verb can never set them. The CLI fills it (it owns the flags); a schema
 	// defect, so it fails the gate.
 	FlagShadowed []FlagShadow
+	// Body mentions with no edge behind them, filled only when the audit was
+	// asked for (MentionsRun). Suggestions, never findings: never consulted
+	// by Passed, `--strict` included.
+	Mentions    []Mention
+	MentionsRun bool
+	// Findings a policy `waive` entry accepts, moved out of their bucket and
+	// kept visible here with the reason. Never consulted by Passed.
+	Waived []Waived
+	// Waivers no finding matched — the finding was fixed, the entity renamed
+	// or removed, or the waiver mistyped. Fails the gate, so a waiver cannot
+	// rot into a standing exemption for whatever later reappears.
+	StaleWaivers []StaleWaiver
+}
+
+// Waived is one finding a policy waiver accepts. Finding names the bucket it
+// was moved out of; Detail is the finding itself, as that bucket holds it
+// (Incomplete, Dangling, FieldError, or an orphan's qualified id).
+type Waived struct {
+	Type    string
+	Slug    string
+	Finding string
+	Reason  string
+	Detail  any
+}
+
+// ID is Waived.id.
+func (w Waived) ID() string { return w.Type + "/" + w.Slug }
+
+// StaleWaiver is a policy waiver that matched no finding. Cause says why:
+// StaleNoMatch, or StaleOrphanExempt for an `orphans` waiver on a type that
+// declares `orphan: true` and so never has one.
+type StaleWaiver struct {
+	Type    string
+	Slug    string
+	Finding string
+	Reason  string
+	Cause   string
+}
+
+// StaleWaiver causes.
+const (
+	StaleNoMatch      = "no_match"
+	StaleOrphanExempt = "orphan_exempt"
+)
+
+// ID is StaleWaiver.id.
+func (w StaleWaiver) ID() string { return w.Type + "/" + w.Slug }
+
+// CheckOptions selects check's opt-in passes.
+type CheckOptions struct {
+	// Strict fails the gate on orphans too.
+	Strict bool
+	// Mentions runs the body-mention audit (see mentions.go).
+	Mentions bool
 }
 
 // FlagShadow is one field a write verb's flag shadows: Commands are the verbs
@@ -201,7 +274,8 @@ func (r *CheckReport) Passed() bool {
 		len(r.MissingSingletons) == 0 &&
 		len(r.DraftRequiredSingletons) == 0 &&
 		len(r.Misplaced) == 0 &&
-		len(r.AliasConflicts) == 0
+		len(r.AliasConflicts) == 0 &&
+		len(r.StaleWaivers) == 0
 }
 
 // Check is integrity.check: walk the active subgraph for completeness,
@@ -213,6 +287,12 @@ func (r *CheckReport) Passed() bool {
 // A file that could not be parsed is a malformed entry, not a node, and fails
 // the check.
 func Check(root string, strict bool, now time.Time) (*CheckReport, error) {
+	return CheckWith(root, CheckOptions{Strict: strict}, now)
+}
+
+// CheckWith is Check with the opt-in passes selectable.
+func CheckWith(root string, opts CheckOptions, now time.Time) (*CheckReport, error) {
+	strict := opts.Strict
 	resolved, err := introspect.LoadSchema(root)
 	if err != nil {
 		return nil, err
@@ -334,7 +414,13 @@ func Check(root string, strict bool, now time.Time) (*CheckReport, error) {
 	// Bodies, over every valid node of every templated type — the same pass
 	// validate runs, whole-workspace.
 	body := bodyFindings(root, resolved, valid, nil)
-	return &CheckReport{
+	var mentions []Mention
+	if opts.Mentions {
+		mentions = mentionSuggestions(resolved, valid, g, entityNodes, body.templates)
+	}
+	report := &CheckReport{
+		Mentions:                mentions,
+		MentionsRun:             opts.Mentions,
 		TemplateInvalid:         body.templateInvalid,
 		BodyShape:               body.shape,
 		Thin:                    body.gaps,
@@ -356,7 +442,125 @@ func Check(root string, strict bool, now time.Time) (*CheckReport, error) {
 		Expired:                 expiredEntities(resolved, valid, entityNodes, now),
 		BelowTier:               tiers(resolved, valid, entityNodes),
 		Superseded:              supersededVerifications(resolved, valid, entityNodes),
-	}, nil
+		Retention:               retentionHits(resolved, valid, g, entityNodes, now),
+	}
+	applyWaivers(resolved, valid, report)
+	return report, nil
+}
+
+// applyWaivers moves every finding a policy `waive` entry names out of its
+// bucket into Waived, and reports each waiver that matched nothing as stale.
+//
+// A waiver covers its whole bucket for that entity: every dangling edge it
+// holds, every body finding. Matching runs regardless of --strict — an orphan
+// is an orphan whether or not the gate counts it, so its waiver is never
+// stale for want of the flag.
+//
+// An `incomplete` waiver on an entity that is present but a draft is dormant:
+// neither matched nor stale. Drafts are exempt from required-completeness, so
+// the finding cannot arise while the entity is unpublished — and a draft
+// toggle alone must not move the gate, in either direction: drafting the
+// entity would otherwise fail check on a stale waiver, and deleting the
+// waiver to clear that would fail it again on re-publish. `incomplete` is the
+// only waivable bucket that skips drafts; orphans, dangling edges and body
+// findings are reported for drafts too.
+func applyWaivers(resolved *schema.ResolvedSchema, valid *index.Index, r *CheckReport) {
+	type key struct{ typ, slug, finding string }
+	reasons := map[key]string{}
+	for _, tname := range resolved.Types.Keys() {
+		rtype, _ := resolved.Types.Get(tname)
+		for _, w := range rtype.Waivers {
+			reasons[key{tname, w.Slug, w.Finding}] = w.Reason
+		}
+	}
+	r.Waived = []Waived{}
+	r.StaleWaivers = []StaleWaiver{}
+	if len(reasons) == 0 {
+		return
+	}
+	matched := map[key]bool{}
+	// waive reports whether the finding is waived, recording it if so.
+	waive := func(finding, typ, slug string, detail any) bool {
+		k := key{typ, slug, finding}
+		reason, ok := reasons[k]
+		if !ok {
+			return false
+		}
+		matched[k] = true
+		r.Waived = append(r.Waived, Waived{Type: typ, Slug: slug, Finding: finding, Reason: reason, Detail: detail})
+		return true
+	}
+	// In the order check emits the buckets (schema.WaivableFindings).
+	r.Incomplete = keep(r.Incomplete, func(i Incomplete) bool { return !waive("incomplete", i.Type, i.Slug, i) })
+	r.Orphans = keep(r.Orphans, func(id string) bool {
+		typ, slug, _ := strings.Cut(id, "/")
+		return !waive("orphans", typ, slug, id)
+	})
+	r.Dangling = keep(r.Dangling, func(d Dangling) bool { return !waive("dangling", d.Type, d.Slug, d) })
+	r.BodyShape = keep(r.BodyShape, func(e FieldError) bool { return !waive("body_shape", e.Type, e.Slug, e) })
+	r.Thin = keep(r.Thin, func(e FieldError) bool { return !waive("thin", e.Type, e.Slug, e) })
+
+	// Ontology declaration order, then the order the waivers were written.
+	for _, tname := range resolved.Types.Keys() {
+		rtype, _ := resolved.Types.Get(tname)
+		for _, w := range rtype.Waivers {
+			if matched[key{tname, w.Slug, w.Finding}] {
+				continue
+			}
+			node := index.Node{Type: tname, Slug: w.Slug}
+			if w.Finding == "incomplete" && valid.Nodes[node] && rtype.IsDraft(valid.Meta[node]) {
+				continue // dormant while the entity is a draft
+			}
+			cause := StaleNoMatch
+			if w.Finding == "orphans" && rtype.Orphan {
+				cause = StaleOrphanExempt
+			}
+			r.StaleWaivers = append(r.StaleWaivers,
+				StaleWaiver{Type: tname, Slug: w.Slug, Finding: w.Finding, Reason: w.Reason, Cause: cause})
+		}
+	}
+}
+
+// keep returns the items pred accepts, in order, never nil.
+func keep[T any](items []T, pred func(T) bool) []T {
+	out := make([]T, 0, len(items))
+	for _, it := range items {
+		if pred(it) {
+			out = append(out, it)
+		}
+	}
+	return out
+}
+
+// retentionHits sweeps every type declaring a policy `retention` rule. Drafts
+// count, as they do for the orphan sweep: an abandoned draft is the likeliest
+// end-of-life candidate of all. The date is `updated`, else `created`, the
+// first that parses (project.Age); an entity with neither is never reported.
+//
+// What counts as outbound for `no_outbound` is the graph's out-degree: a
+// stored edge that resolves, to any entity, a draft included, or a path
+// reference to an entity's file. A derived inverse is not stored on this
+// entity and does not count; a self-loop is dropped from the graph; a dangling
+// value or a path reference to a non-entity file is no edge.
+func retentionHits(resolved *schema.ResolvedSchema, valid *index.Index, g *graph.Graph,
+	nodes []index.Node, now time.Time) []RetentionHit {
+	out := []RetentionHit{}
+	for _, n := range nodes {
+		rtype, _ := resolved.Types.Get(n.Type)
+		rule := rtype.Retention
+		if rule == nil {
+			continue
+		}
+		date, age, ok := project.Age(valid.Meta[n], now)
+		if !ok || age <= rule.Days {
+			continue
+		}
+		if rule.NoOutbound && g.OutDegree(n) > 0 {
+			continue
+		}
+		out = append(out, RetentionHit{Type: n.Type, Slug: n.Slug, Date: date.Format("2006-01-02"), AgeDays: age})
+	}
+	return out
 }
 
 // supersededVerifications lists every review event that saw an earlier

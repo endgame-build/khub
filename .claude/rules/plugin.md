@@ -218,7 +218,9 @@ test. It gives a workspace at a fixed root and khub answering from the fixtures.
 Rows of `query`, `get`, `search` and `neighbors` end with `trust`, and
 `status` carries `expired` and `trust` counts and the `okf_nonconformant`
 paths; the mod reads none of them, so they need no `MIN_KHUB` bump. `check`'s `superseded_verifications` never fails
-the gate and is listed in `INFORMATIONAL`. `expired` appears only under
+the gate and is listed in `INFORMATIONAL`, and so are `retention`, `waived` and
+`mentions`, the last present only under `check --mentions`. `stale_waivers`
+fails the gate and is not listed. `expired` appears only under
 `check --stale` and `below_tier` only under `check --require-verified`; both
 fail the gate, so neither is in `INFORMATIONAL`. A `flag_shadowed` finding's
 `id` is `<type>/*`.

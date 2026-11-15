@@ -4,7 +4,7 @@
     "seed": 1,
     "today": "2026-01-15",
     "preset": "build-hub",
-    "khub_version": "0.31.0",
+    "khub_version": "0.32.0",
     "total": 300,
     "tree_sha256": "04cc4a89df15f7242b8211e45f4c614dafb3d936d735b056fcea54093aedf56d"
   },
@@ -44,10 +44,10 @@
         "check"
       ],
       "exit": 0,
-      "stdout_bytes": 4069,
+      "stdout_bytes": 4121,
       "stderr_bytes": 0,
       "rows": 0,
-      "sha256": "d2201af2b9c5484916e868a9f3c8a09e32da3f6ba9cc3fd80653215672a0e71f"
+      "sha256": "9fc75c72775124cff5d5d68191800d16520a3925b8d45ac05db10841f930b474"
     },
     {
       "label": "check --strict",
@@ -56,10 +56,10 @@
         "--strict"
       ],
       "exit": 1,
-      "stdout_bytes": 4069,
+      "stdout_bytes": 4121,
       "stderr_bytes": 0,
       "rows": 0,
-      "sha256": "3ef683cda5bba92f7e6aa320f88202ed0764b3a1397bdd55d38eb4861a57e610"
+      "sha256": "aa56d32a655b5f3cd5ff0abbc92bc3eb1e4655b16ef8214a859e9637edf7e6f7"
     },
     {
       "label": "check --stale",
@@ -68,10 +68,10 @@
         "--stale"
       ],
       "exit": 1,
-      "stdout_bytes": 5694,
+      "stdout_bytes": 5746,
       "stderr_bytes": 0,
       "rows": 0,
-      "sha256": "2521262c548746e2cdf01a9535f46b774b49652c9be9d19e047fde6a397d1206"
+      "sha256": "6aa7ee63d20b92adec3c2fbe310bdae5c50ea5df200dfa6dbba0a8f86dead692"
     },
     {
       "label": "check --require-verified",
@@ -80,10 +80,10 @@
         "--require-verified"
       ],
       "exit": 1,
-      "stdout_bytes": 35908,
+      "stdout_bytes": 35960,
       "stderr_bytes": 0,
       "rows": 0,
-      "sha256": "f2b961fef41687cad4f88b0a00535ce7cee2108ccf53cf18419a18c4db683e20"
+      "sha256": "00b6c33f64a882d275a0d7711ce9596534c8831d1714fa6f2d67769b6d2d3bfa"
     },
     {
       "label": "validate (whole corpus)",
