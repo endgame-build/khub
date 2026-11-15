@@ -88,9 +88,85 @@ func aliasOwner(idx *index.Index, alias string, keep func(index.Node) bool) (own
 func resolveAlias(idx *index.Index, alias, id string, keep func(index.Node) bool) (index.Node, error) {
 	owner, found, err := aliasOwner(idx, alias, keep)
 	if err == nil && !found {
-		err = errs.LookupError(id)
+		// Every node, not keep's: a qualified miss is as likely the type as the
+		// slug, and keep holds the lookup to the type the caller named.
+		err = errs.LookupError(id).Near(nearestNode(idx, id, func(index.Node) bool { return true }))
 	}
 	return owner, err
+}
+
+// nearestNode is the id of the one node among those keep accepts that is
+// nearest want (errs.Nearest's budget), or, when several are equally near, ""
+// and their qualified ids, sorted: a tie is not a guess khub makes.
+//
+// A bare want is matched against slugs. A qualified want first looks for its
+// slug under another type, since the likeliest miss there is the type (`get
+// api/cmp-search` when cmp-search is a component), and where several types hold
+// it the spelt type picks the nearest; with no such slug, it is matched against
+// every qualified id, which also catches a misspelt type. The answer
+// keeps the caller's shape unless the bare slug would be ambiguous, so it
+// always resolves to exactly the node suggested.
+func nearestNode(idx *index.Index, want string, keep func(index.Node) bool) (string, []string) {
+	var nodes []index.Node
+	if i := strings.Index(want, "/"); i >= 0 {
+		for _, n := range idx.Order {
+			if keep(n) && foldEqual(n.Slug, want[i+1:]) && n.ID() != want {
+				nodes = append(nodes, n)
+			}
+		}
+		if len(nodes) > 1 {
+			// The slug under several other types: the spelt type decides, if
+			// it is near one of them; otherwise every one is listed.
+			ids := make([]string, len(nodes))
+			for k, n := range nodes {
+				ids[k] = n.ID()
+			}
+			if near := errs.NearestAll(want, ids); len(near) == 1 {
+				nodes = []index.Node{nodes[near[0]]}
+			}
+		}
+		if len(nodes) > 0 {
+			return pickNode(idx, nodes, true)
+		}
+	}
+	qualified := strings.Contains(want, "/")
+	var forms []string
+	var all []index.Node
+	for _, n := range idx.Order {
+		if !keep(n) {
+			continue
+		}
+		form := n.Slug
+		if qualified {
+			form = n.ID()
+		}
+		forms = append(forms, form)
+		all = append(all, n)
+	}
+	for _, i := range errs.NearestAll(want, forms) {
+		nodes = append(nodes, all[i])
+	}
+	return pickNode(idx, nodes, qualified)
+}
+
+// pickNode is nearestNode's answer over its nearest nodes: the one node's id
+// in the caller's shape, or the qualified ids of a tie.
+func pickNode(idx *index.Index, nodes []index.Node, qualified bool) (string, []string) {
+	switch len(nodes) {
+	case 0:
+		return "", nil
+	case 1:
+		if n := nodes[0]; qualified || len(idx.TypesBySlug[n.Slug]) > 1 {
+			return n.ID(), nil
+		}
+		return nodes[0].Slug, nil
+	}
+	ids := make([]string, len(nodes))
+	for i, n := range nodes {
+		ids[i] = n.ID()
+	}
+	sort.Strings(ids)
+	return "", ids
 }
 
 // aliasTarget rewrites a write-time relation value that names an entity only
@@ -187,16 +263,23 @@ func canonicalTarget(target string, matches map[index.Node]bool) string {
 // resolveWriteTarget is the nodes a write-time relation value resolves to,
 // gated for the write verbs. An unresolvable target hard-fails (referential
 // integrity); a bare slug that hits more than one node must be qualified as
-// `type/slug`. Returns the match set so link can spot a self-edge.
+// `type/slug`. Returns the match set so link can spot a self-edge. self is the
+// entity being written, nil for one not yet created: a refusal never suggests
+// it, since that retry would only meet self_link.
 func resolveWriteTarget(
-	rel *schema.ResolvedRelation, target string, idx *index.Index, predicate, noun string,
+	rel *schema.ResolvedRelation, target string, idx *index.Index, predicate, noun string, self *index.Node,
 ) (map[index.Node]bool, error) {
 	matches := idx.ResolveTarget(rel, target)
 	if len(matches) == 0 && idx.ResolvesToFile(rel, target) {
 		return matches, nil
 	}
 	if len(matches) == 0 {
-		return nil, errs.ReferentialIntegrity(strings.Join(rel.Targets, "/"), target, predicate, noun)
+		keep := func(n index.Node) bool {
+			return (self == nil || n != *self) &&
+				(rel.Kind == schema.KindAny || slices.Contains(rel.Targets, n.Type))
+		}
+		return nil, errs.ReferentialIntegrity(strings.Join(rel.Targets, "/"), target, predicate, noun).
+			Near(nearestNode(idx, target, keep))
 	}
 	if !strings.Contains(target, "/") && len(matches) > 1 {
 		candidates := make([]string, 0, len(matches))

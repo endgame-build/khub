@@ -240,7 +240,7 @@ not been found yet.
 
 - Every read AND write emits JSON on a pipe; a table is only for a TTY. `--format json` makes it explicit. The operator commands (`reindex`, `viz`, `serve`, `backfill`, `wire`) are the exception: they print prose and take no `--format`.
 - Every existing-workspace mutation is serialized workspace-wide from scan through commit. Never delete `.khub/generated/locks/workspace.lock` while khub may be running.
-- On a failed command, read the located error (field, reason, or unresolved target) and correct the call. Exit 2 reports a refusal or write failure; `write_durability_uncertain` means publication happened, and `upgrade_recovery_failed` requires journal inspection. Exit 1 is a gate (`validate`, `check`) that ran and found the workspace wrong.
+- On a failed command, read the located error and correct the call. The JSON `error` carries `code` and `message`, and where they apply `field` (the attribute or relation at fault), `expected` (the values allowed) and `suggestion` (the nearest one: retry with it when it is what you meant). Exit 2 reports a refusal or write failure; `write_durability_uncertain` means publication happened, and `upgrade_recovery_failed` requires journal inspection. Exit 1 is a gate (`validate`, `check`) that ran and found the workspace wrong.
 - Run `khub validate --strict` in CI. Capture is never blocked, so a typo'd field name (`--knid`) is written to frontmatter and neither default gate reports it; `--strict` is what turns undeclared keys into a finding.
 - When sources call an entity by another name, record it: `khub edit <id> aliases "Initech,INTC"`. Every ID you pass then resolves through it, a relation written by alias stores the real slug, and `add` refuses a slug that is already someone's alias.
 

@@ -1,0 +1,1 @@
+{"error": {"code": "lookup_error", "message": "No entity 'cmp-serch' found", "expected": ["component/cmp-search", "component/cmp-serch2", "system/cmp-search"]}}
