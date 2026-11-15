@@ -74,6 +74,7 @@ func TestFindingsFollowPassed(t *testing.T) {
 		"expired":                   {StaleGate: true, Expired: []string{"adr/a"}},
 		"below_tier":                {TierGate: "human", BelowTier: []TierFinding{{Type: "adr", Slug: "a", Trust: "machine"}}},
 		"flag_shadowed":             {FlagShadowed: []FlagShadow{{Type: "adr", Field: "body", Commands: []string{"add"}}}},
+		"stale_waivers":             {StaleWaivers: []StaleWaiver{{Type: "adr", Slug: "a", Finding: "orphans", Cause: StaleNoMatch}}},
 	}
 	for rule, report := range gating {
 		if report.Passed() {
@@ -92,6 +93,7 @@ func TestFindingsFollowPassed(t *testing.T) {
 		"expired without --stale":  {Expired: []string{"adr/a"}},
 		"tiers without the gate":   {BelowTier: []TierFinding{{Type: "adr", Slug: "a", Trust: "unverified"}}},
 		"superseded":               {Superseded: []SupersededVerification{{Type: "adr", Slug: "a"}}},
+		"waived":                   {Waived: []Waived{{Type: "adr", Slug: "a", Finding: "orphans", Reason: "kept", Detail: "adr/a"}}},
 	}
 	for name, report := range informational {
 		if !report.Passed() {

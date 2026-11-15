@@ -7,7 +7,7 @@ A schema is authored in khub's own YAML vocabulary, split across three layer fil
 | File | Layer | Carries |
 |---|---|---|
 | `ontology.yaml` | the domain | per-type `attributes`, `relations`, `when` |
-| `policy.yaml` | this workspace's gates | `required`, `orphan`, `path_refs`, `retention` |
+| `policy.yaml` | this workspace's gates | `required`, `orphan`, `path_refs`, `retention`, `waive` |
 | `storage.yaml` | where bytes land | `layout`, `path`, `format`, `id_prefix`, `id_date`, `id_ordinal`, `template` |
 
 `khub init` copies a preset's three files into `.khub/`; you edit them directly, and they carry no runtime tie to the hub. The three reunite at load time into one resolved contract every command reads — the layers merge on their **top-level keys** (`ontology:` / `policy:` / `storage:`), never on filenames, so one file carrying all three blocks resolves identically (useful for fixtures; three files is the canonical layout). Ontology declares which types exist; policy and storage only annotate them, and an entry for a type ontology never declared is a resolve error. See [`concepts.md`](concepts.md) for why the schema is the contract.
@@ -141,6 +141,18 @@ Per type, keyed by the type's name — what `check` demands of it in *this* work
   policy:
     meeting: { retention: { days: 90, no_outbound: true } }   # a meeting that recorded nothing, after a quarter
   ```
+- `waive` — per-entity exemptions from `check`, each with the reason it is accepted. Keyed by the entity's slug, then by the `check` bucket it waives: `incomplete`, `orphans`, `dangling`, `body_shape` or `thin` — the findings that belong to one entity. A reason is required and may not be blank; any other bucket, a reason that is not a string, an entity naming no bucket (`x: {}` or `x:`), or an empty key (a plain `null:` or `~:`) is an `invalid_schema` refusal. Quote a slug YAML would read as something else — `'2024':`, `'0x10':`, `'true':` — or it is read as a number or boolean and turned back into text (`0x10:` is the slug `16`), and the waiver comes back stale.
+
+  ```yaml
+  policy:
+    component:
+      waive:
+        cmp-legacy-billing:
+          orphans: Retired; kept as the audit trail of the 2025 migration.
+          dangling: Its owner team was dissolved; the edge is history.
+  ```
+
+  A waived finding is never hidden: it leaves its bucket, stops counting against `passed` (`--strict` included), and is listed under `waived` with the reason and the finding itself. A waiver covers its whole bucket for that entity — every dangling edge it holds, every body finding — so name the narrowest bucket that fits. A waiver that matches no finding is listed under `stale_waivers` — in ontology declaration order, then the order the waivers are written — and **fails** the gate: fix the finding and the waiver must go too, so an exemption cannot outlive what it was written for, and the file stays the list of what is deliberately accepted. Its `cause` is `no_match`, or `orphan_exempt` for an `orphans` waiver on a type declaring `orphan: true`. One exception keeps a draft toggle from moving the gate: an `incomplete` waiver on an entity that is present but `status: draft` is dormant — neither waived nor stale — since drafts are exempt from completeness; it applies again when the entity is published. `khub upgrade` keeps every `waive` block for each type the new ontology still declares, as it keeps every per-type key the shipped `policy.yaml` lacks. `waive` is `orphan: true` at entity granularity, and it changes `check` only — `query --orphan`, `status` and `validate` still report what they see. Findings with no single owning entity (strays, misplaced files, cycles, alias conflicts, the template and singleton buckets) cannot be waived.
 
 ## Capture cues (`when`)
 

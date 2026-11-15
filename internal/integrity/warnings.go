@@ -121,6 +121,9 @@ func (r *CheckReport) Findings() []Finding {
 	for _, f := range r.BelowGate() {
 		add(f.ID(), "below_tier", "trust "+f.Trust+", "+r.TierGate+" asked for")
 	}
+	for _, w := range r.StaleWaivers {
+		add(w.ID(), "stale_waivers", "waiver for "+w.Finding+" matches no finding; remove it from policy.yaml")
+	}
 	for _, f := range r.FlagShadowed {
 		add(f.Type+"/*", "flag_shadowed",
 			"--"+f.Field+" is a flag of "+strings.Join(f.Commands, " and ")+", so it never sets field '"+f.Field+"'")

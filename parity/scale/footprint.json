@@ -44,10 +44,10 @@
         "check"
       ],
       "exit": 0,
-      "stdout_bytes": 4086,
+      "stdout_bytes": 4121,
       "stderr_bytes": 0,
       "rows": 0,
-      "sha256": "4246e5b6629f5746324f7112ab2ed4a34179ab30f156a1dee9090b80516efded"
+      "sha256": "9fc75c72775124cff5d5d68191800d16520a3925b8d45ac05db10841f930b474"
     },
     {
       "label": "check --strict",
@@ -56,10 +56,10 @@
         "--strict"
       ],
       "exit": 1,
-      "stdout_bytes": 4086,
+      "stdout_bytes": 4121,
       "stderr_bytes": 0,
       "rows": 0,
-      "sha256": "20c0605da6317fd3b101fe7c599445bf2f01e3bb36a196a67fefa01701d90367"
+      "sha256": "aa56d32a655b5f3cd5ff0abbc92bc3eb1e4655b16ef8214a859e9637edf7e6f7"
     },
     {
       "label": "check --stale",
@@ -68,10 +68,10 @@
         "--stale"
       ],
       "exit": 1,
-      "stdout_bytes": 5711,
+      "stdout_bytes": 5746,
       "stderr_bytes": 0,
       "rows": 0,
-      "sha256": "9e04dc13c3f8fac4e70257b1338495926bca16d2dc94440d8d5fd0b2964d9566"
+      "sha256": "6aa7ee63d20b92adec3c2fbe310bdae5c50ea5df200dfa6dbba0a8f86dead692"
     },
     {
       "label": "check --require-verified",
@@ -80,10 +80,10 @@
         "--require-verified"
       ],
       "exit": 1,
-      "stdout_bytes": 35925,
+      "stdout_bytes": 35960,
       "stderr_bytes": 0,
       "rows": 0,
-      "sha256": "70a6f190bc4bcee02aa7c72c816476848551c5888de20e2f123ecffeba0399a6"
+      "sha256": "00b6c33f64a882d275a0d7711ce9596534c8831d1714fa6f2d67769b6d2d3bfa"
     },
     {
       "label": "validate (whole corpus)",

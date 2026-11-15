@@ -215,6 +215,9 @@ test('status, validate and check report their counts', () => {
   expect(sayOf('khub check --strict', { passed: false, strict: true, orphans: ['x/a', 'x/b'], thin: [{}], retention: [{}] }).line).toBe(
     'failed · orphans 2',
   )
+  expect(
+    sayOf('khub check', { passed: false, stale_waivers: [{ id: 'x/gone' }], waived: [{ id: 'x/a' }, { id: 'x/b' }] }).line,
+  ).toBe('failed · stale_waivers 1')
   // `--mentions` suggestions never fail the gate, so a failed check does not count them.
   expect(
     sayOf('khub check --mentions', { passed: false, strict: false, strays: ['a.md'], mentions: [{ id: 'x/a' }] }).line,

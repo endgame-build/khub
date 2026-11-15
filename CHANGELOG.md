@@ -102,12 +102,24 @@ Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelo
   `thin`: it never fails the gate, `--strict` included, and khub deletes
   nothing. It is not `expired`, which reads an entity's own `stale_after`.
   `schema show --format json` prints the rule. Closes #21.
+- **Check waivers.** Policy `waive` accepts one entity's `incomplete`,
+  `orphans`, `dangling`, `body_shape` or `thin` finding, with a required
+  reason. `check` moves a waived finding out of its bucket into a new
+  `waived` list, with the reason and the finding itself, and it no longer
+  counts against `passed`. A waiver that matches no finding is listed under
+  the new `stale_waivers` bucket (with a `cause`) and fails the gate, so
+  waivers cannot rot; an `incomplete` waiver on a draft is dormant, so a draft
+  toggle never moves the gate. `khub upgrade` keeps `waive` blocks, as it
+  keeps every per-type policy key the shipped file lacks. Closes #38.
 
 ### Changed
 
 - `check --format json` always carries the `retention` key, after
   `superseded_verifications`. The plugin counts it as informational (plugin
   0.1.9).
+- `check --format json` always carries `stale_waivers`, just before `strict`,
+  and `waived`, after `retention`. The plugin counts `waived` as
+  informational; `stale_waivers` fails the gate.
 
 - **`query` field filters named `under` or `via`.** A schema field called
   `under` or `via` can no longer be filtered as `--under <value>` or

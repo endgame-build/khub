@@ -176,6 +176,9 @@ other agent sets `KHUB_SESSION` to one value for all its calls to get them.
    to `validate`. **Gaps** (`incomplete`, orphans, `thin`) are legal but unfinished: fix
    the ones your change caused. `retention` lists entities past their type's retention
    rule: candidates for removal that a human decides on. Never delete one on your own.
+   `waived` lists findings a person accepted in `.khub/policy.yaml`, each with its reason;
+   leave them be. A `stale_waivers` row is a waiver that no longer matches anything — say
+   so. Never add a waiver to turn `check` green: a waiver is a person's decision.
    `khub check --mentions --format json` also lists, under `mentions`, entities a body names
    with no edge behind them. Prose is not a relation: `link` the ones the text really
    relates to, using one of the row's `predicates`, and leave the rest. The predicates are
