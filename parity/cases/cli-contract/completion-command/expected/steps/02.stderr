@@ -1,0 +1,6 @@
+Usage: khub completion [OPTIONS] SHELL
+Try 'khub completion --help' for help.
+╭─ Error ──────────────────────────────────────────────────────────────────────╮
+│ Invalid value for 'SHELL': 'tcsh' is not one of 'bash', 'zsh', 'fish',       │
+│ 'powershell'.                                                                │
+╰──────────────────────────────────────────────────────────────────────────────╯

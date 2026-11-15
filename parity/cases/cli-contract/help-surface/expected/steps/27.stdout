@@ -1,0 +1,12 @@
+Usage: khub completion [OPTIONS] SHELL
+
+Print a shell completion script: khub completion bash|zsh|fish|powershell.
+
+Load it for this session with `source <(khub completion zsh)`, or write it to the shell's completion directory to keep it. Candidates come from the binary at TAB time.
+
+Arguments:
+  SHELL <str>  bash, zsh, fish, or powershell. [required]
+
+Options:
+  --help  Show this message and exit.
+

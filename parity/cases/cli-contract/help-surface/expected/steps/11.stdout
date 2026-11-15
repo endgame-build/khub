@@ -20,5 +20,7 @@ Options:
   --trust <str>  Keep entities at this review tier: unverified, machine, or human.
   --format <str>  text (Rich table on a TTY), json, or ids. [default: text]
   --receipt  Wrap JSON output with the applied filters, matched and returned counts, and truncation.
+  --save-as <str>  Also save these filters under a name for `khub run <name>`.
+  --replace  Let --save-as overwrite a different saved query of that name.
   --help  Show this message and exit.
 

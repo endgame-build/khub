@@ -44,6 +44,7 @@ const repeatRuns = 5
 // lists to the command tree, so a new command needs a decision here.
 var readCalls = map[string][][]string{
 	"status": {{"status"}},
+	"doctor": {{"doctor"}},
 	"get": {
 		{"get", "cmp-c04", "cmp-c06", "ad-2026-01-15-a2"},
 		{"get", "cmp-c00", "--edges"},
@@ -70,6 +71,11 @@ var readCalls = map[string][][]string{
 		{"query", "--under", "ad-2026-01-15-a4", "--via", "superseded"},
 		{"query", "--in-count", ">=1", "--out-count", "0"},
 		{"query", "--count", "depends_on>=1", "--receipt", "--format", "json"},
+	},
+	"run": {
+		{"run", "core"},
+		{"run", "core", "--format", "ids"},
+		{"run", "wide", "--receipt", "--format", "json"},
 	},
 	"search": {
 		{"search", "ledger"},
@@ -101,7 +107,7 @@ var readCalls = map[string][][]string{
 	"check":    {{"check"}, {"check", "--strict"}, {"check", "--mentions"}},
 	"stale":    {{"stale"}, {"stale", "--days", "1"}},
 	"recent":   {{"recent"}, {"recent", "--days", "10000", "--limit", "12"}},
-	"reindex":  {{"reindex", "--dry-run"}},
+	"reindex":  {{"reindex", "--dry-run"}, {"reindex", "--check"}},
 	"export":   {{"export", "--okf", "../bundle", "--dry-run"}},
 	"retrieve": {
 		{"retrieve", "ledger"},
@@ -111,7 +117,10 @@ var readCalls = map[string][][]string{
 		{"retrieve", "ledger", "--max-entities", "9", "--format", "json"},
 	},
 	// viz writes its page outside the workspace; the test compares the page.
-	"viz": {{"viz", "--out", "%VIZ%"}, {"viz", "--out", "%VIZ%", "--type", "component"}},
+	"viz": {
+		{"viz", "--out", "%VIZ%"}, {"viz", "--out", "%VIZ%", "--type", "component"},
+		{"viz", "--out", "%VIZ%", "--aspect", "schema"}, {"viz", "--out", "%VIZ%", "--aspect", "both", "--type", "component"},
+	},
 	"backfill": {
 		{"backfill", "--dry-run"},
 		{"backfill", "--type", "component", "--dry-run"},
@@ -124,7 +133,9 @@ var readCalls = map[string][][]string{
 		{"upgrade", "--dry-run", "--no-schema"},
 		{"upgrade", "--dry-run", "--no-wire", "--format", "json"},
 	},
-	"schema":       {{"schema"}, {"schema", "--format", "json"}},
+	"schema": {{"schema"}, {"schema", "--format", "json"}},
+	// completion reads no workspace; the script is the bytes compared.
+	"completion":   {{"completion", "bash"}, {"completion", "zsh"}, {"completion", "fish"}, {"completion", "powershell"}},
 	"schema types": {{"schema", "types"}, {"schema", "types", "--format", "json"}},
 	"schema show": {
 		{"schema", "show", "component"}, {"schema", "show", "adr"},
@@ -170,6 +181,7 @@ var refusalCalls = [][]string{
 	{"query", "--count", "bogus>=1"},
 	{"recent", "--days", "-1"},
 	{"remove", "cmp-c00", "--dry-run"},
+	{"run", "nope"},
 }
 
 // mutatingVerbs change the workspace, or serve it, so repeating them proves
@@ -357,6 +369,10 @@ func repeatWorkspace(t *testing.T, self string) string {
 		[]string{"link", "cmp-c09", "related", "cmp-c03"},
 	)
 	steps = append(steps, []string{"schema", "snapshot"})
+	// Saved queries for `run`: each pairs with the query it replays.
+	for _, saved := range savedQueries {
+		steps = append(steps, append(append([]string{"query"}, saved.flags...), "--save-as", saved.name))
+	}
 	for _, step := range steps {
 		if r := runCLI(t, self, ws, false, step...); r.code != 0 {
 			t.Fatalf("setup khub %v:\n%s", step, r)
@@ -421,6 +437,34 @@ func repeatWorkspace(t *testing.T, self string) string {
 		}
 	}
 	return ws
+}
+
+// savedQueries are the queries repeatWorkspace saves, with the flags each was
+// saved from. TestReadVerbsRepeatByteIdentical holds each `run` to the query.
+var savedQueries = []struct {
+	name  string
+	flags []string
+}{
+	{"core", []string{"--type", "component", "--tag", "core", "--limit", "5"}},
+	{"wide", []string{"--under", "sys-core", "--via", "system", "--in-count", ">=1",
+		"--count", "depends_on>=1", "--out-count", "!=9", "--trust", "unverified", "--active"}},
+}
+
+// checkRunMatchesQuery holds `run <name>` to the query it was saved from,
+// byte for byte, in both output modes and with the output flags run takes.
+func checkRunMatchesQuery(t *testing.T, self, ws string) {
+	for _, saved := range savedQueries {
+		for _, extra := range [][]string{nil, {"--format", "ids"}, {"--receipt", "--format", "json"}} {
+			for _, human := range []bool{false, true} {
+				run := runCLI(t, self, ws, human, append([]string{"run", saved.name}, extra...)...)
+				query := runCLI(t, self, ws, human, append(append([]string{"query"}, saved.flags...), extra...)...)
+				if run.code != 0 || run.String() != query.String() {
+					t.Errorf("run %s %v (human %v) differs from its query:\n%s\nquery:\n%s",
+						saved.name, extra, human, run, query)
+				}
+			}
+		}
+	}
 }
 
 // treeDigest hashes every file under root except git's own store, so the test
@@ -514,6 +558,8 @@ func TestReadVerbsRepeatByteIdentical(t *testing.T) {
 			}
 		}
 	})
+
+	t.Run("run equals query", func(t *testing.T) { checkRunMatchesQuery(t, self, ws) })
 
 	after := treeDigest(t, ws)
 	for path, sum := range after {

@@ -199,7 +199,7 @@ test. It gives a workspace at a fixed root and khub answering from the fixtures.
 | `--version` | the version number in the printed text |
 | `schema` | `provenance.{preset, version}`, `types[].{name, layout, format, path}` |
 | `check` | `passed`, `strict`, every array-valued bucket, and `id`, `path` or `alias` of a finding |
-| `query`, `stale` | per row `id`, `title`, `draft`, `orphan`, `stale` |
+| `query`, `run`, `stale` | per row `id`, `title`, `draft`, `orphan`, `stale` |
 | `recent` | per row `id`, `title`, `draft`, and the stderr `note:` line |
 | `add`, `edit`, `remove` | `id`, `draft`, and an `edit` dry run's `changed` |
 | `link`, `unlink` | `id`, `slug`, `predicate`, `target`, `changed` |
@@ -207,7 +207,7 @@ test. It gives a workspace at a fixed root and khub answering from the fixtures.
 | `get` | `id`, `title` or `name` at the top or in `frontmatter`, `edges` |
 | `search` | per row `id`, `title`, the flags, and the stderr `note:` line |
 | `retrieve` | `count`, `omitted.{truncated, insufficient}`, and per entity `id`, `title`, `draft`, `orphan`, `stale` |
-| `query --receipt`, `search --receipt` | `receipt` and `results`; the rows are read from `results` |
+| `query --receipt`, `run --receipt`, `search --receipt` | `receipt` and `results`; the rows are read from `results` |
 | `neighbors` | per row `id`, `predicate`, `direction` |
 | `impact` | per row `depth` |
 | `history`, `schema types`, `schema edges` | the number of rows |

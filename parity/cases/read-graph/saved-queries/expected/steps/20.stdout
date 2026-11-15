@@ -1,0 +1,1 @@
+{"error": {"code": "saved_query_unspliceable", "message": "Cannot save query 'aliased' without rewriting the rest of .khub/queries.yaml (its layout, an anchor or an alias stands in the way); nothing was written. Edit the file by hand"}}
