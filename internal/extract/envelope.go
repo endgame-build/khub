@@ -14,7 +14,9 @@ package extract
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
+	"io"
 	"strings"
 
 	"github.com/endgame-build/khub/internal/canon"
@@ -57,7 +59,7 @@ func ParseEnvelope(data []byte) (*Envelope, error) {
 	}
 	doc, err := canon.DecodeOrderedJSONStrict(data)
 	if err != nil {
-		return nil, invalid(notJSON(err))
+		return nil, invalid(notJSON(data, err))
 	}
 	top, ok := doc.(*omap.Map)
 	if !ok {
@@ -80,11 +82,16 @@ func ParseEnvelope(data []byte) (*Envelope, error) {
 }
 
 // notJSON words a decode failure in khub's own text: the byte a syntax error
-// stopped at (a document that ends early is one, at its last byte), else
-// canon's own message (a duplicate key, trailing content, nesting too deep).
-func notJSON(err error) string {
+// stopped at, else canon's own message (a duplicate key, trailing content,
+// nesting too deep). A document that ends early stops at its last byte; the
+// stream decoder reports that as a syntax error on one Go release and as a
+// bare EOF on another, so the offset is taken from the input, not the error.
+func notJSON(data []byte, err error) string {
 	if offset, ok := canon.JSONSyntaxOffset(err); ok {
 		return fmt.Sprintf("Envelope is not valid JSON at byte %d", offset)
+	}
+	if errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) {
+		return fmt.Sprintf("Envelope is not valid JSON at byte %d", len(data))
 	}
 	return "Envelope is not valid JSON: " + err.Error()
 }
