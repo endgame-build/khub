@@ -13,7 +13,7 @@ If `khub` is not installed (`command not found`), load the `setup` skill first â
 ## Decide the next call from the last result
 
 This skill is not a fixed pipeline. Every khub call but the operator commands (`reindex`, `viz`, `serve`, `backfill`,
-`wire`) answers in JSON, and that answer decides the next call: an id you did not have, an edge to walk, an `error` naming the
+`wire`, `completion`) answers in JSON, and that answer decides the next call: an id you did not have, an edge to walk, an `error` naming the
 field to fix, a `gaps` entry, a stderr `note:` saying a search was cut short.
 
 - **A closed ask** (one fact, one write, an id you already hold): plan the calls up front,
@@ -266,7 +266,7 @@ not been found yet.
 
 ## Rules
 
-- Every read AND write emits JSON on a pipe; a table is only for a TTY. `--format json` makes it explicit. The operator commands (`reindex`, `viz`, `serve`, `backfill`, `wire`) are the exception: they print prose and take no `--format`.
+- Every read AND write emits JSON on a pipe; a table is only for a TTY. `--format json` makes it explicit. The operator commands (`reindex`, `viz`, `serve`, `backfill`, `wire`) are the exception: they print prose and take no `--format`. `completion <shell>` prints a shell script.
 - Every existing-workspace mutation is serialized workspace-wide from scan through commit. Never delete `.khub/generated/locks/workspace.lock` while khub may be running.
 - On a failed command, read the located error and correct the call. The JSON `error` carries `code` and `message`, and where they apply `field` (the attribute or relation at fault), `expected` (the values allowed) and `suggestion` (the nearest one: retry with it when it is what you meant). Exit 2 reports a refusal or write failure; `write_durability_uncertain` means publication happened, and `upgrade_recovery_failed` requires journal inspection. `locked_removed` means an upgrade would drop a type or predicate the schema locks: `--unlock` is the workspace owner's call, so ask before passing it. Exit 1 is a gate (`validate`, `check`) that ran and found the workspace wrong.
 - Run `khub validate --strict` in CI. Capture is never blocked, so a typo'd field name (`--knid`) is written to frontmatter and neither default gate reports it; `--strict` is what turns undeclared keys into a finding.

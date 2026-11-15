@@ -155,6 +155,15 @@ Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelo
   with `--dry-run` is a usage error. Both read `index.md` with universal
   newlines, so a CRLF checkout of a current index is current. The plugin
   (0.1.11) counts `reindex --check` as a read. Closes #67.
+- **`khub completion <bash|zsh|fish|powershell>`.** Prints a shell completion
+  script. At TAB time the script asks the binary itself (`khub __complete`), so
+  it completes the commands, subcommands and options the installed khub has,
+  the closed value sets (`--format`, `wire --target`, `query --trust`,
+  `check --tier`, `init`'s presets), and paths only where a value is a path
+  (`-C`, `--body-file`, `export --okf`, `import --okf`, `import --type-map`).
+  Workspace values (types, ids) are not completed. bash needs 4.1+ with
+  bash-completion. `completion` was a usage error until now;
+  `--install-completion` still is. Closes #46.
 
 ### Changed
 

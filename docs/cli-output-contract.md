@@ -23,6 +23,7 @@ Exceptions, each of which the caller opts into or which is a human command:
 | The entity's file bytes, or its row | `get <id> --format raw` |
 | A text tree | `impact --format tree` |
 | Prose | the operator commands `reindex`, `viz`, `backfill` and `wire`, which take no `--format`. A refusal from one of them is still the JSON envelope on a pipe. `serve` runs only on a terminal; on a pipe it prints only the `serve_needs_tty` refusal |
+| A shell script | `completion <shell>`, which takes no `--format`. The hidden `__complete` it calls at TAB time prints cobra's line protocol (candidates, then `:<directive>`) |
 | The version number alone | `--version` |
 | Help text | `--help` |
 

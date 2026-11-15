@@ -12,6 +12,11 @@ only exits. An advisory line a caller must see whatever the format (search's
 dropped-rows and thin-result note) goes through `Note`, to stderr, before
 `Emit`.
 
+The one exception is cobra's hidden `__complete`, which the scripts from
+`khub completion` call at TAB time: a fixed text protocol (candidates, then
+`:<directive>`) written by cobra outside `Emit`, with no `--format`, reading no
+workspace. Its completers live in `completion.go` and stay workspace-free.
+
 - `WantJSON = --format json || !IsTTY()` — agents get machine output without
   knowing the flag exists. Do not narrow it.
 - `IsTTY()` precedence is `TTY_COMPATIBLE` → `FORCE_COLOR` → real isatty.

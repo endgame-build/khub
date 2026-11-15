@@ -124,7 +124,9 @@ var readCalls = map[string][][]string{
 		{"upgrade", "--dry-run", "--no-schema"},
 		{"upgrade", "--dry-run", "--no-wire", "--format", "json"},
 	},
-	"schema":       {{"schema"}, {"schema", "--format", "json"}},
+	"schema": {{"schema"}, {"schema", "--format", "json"}},
+	// completion reads no workspace; the script is the bytes compared.
+	"completion":   {{"completion", "bash"}, {"completion", "zsh"}, {"completion", "fish"}, {"completion", "powershell"}},
 	"schema types": {{"schema", "types"}, {"schema", "types", "--format", "json"}},
 	"schema show": {
 		{"schema", "show", "component"}, {"schema", "show", "adr"},
