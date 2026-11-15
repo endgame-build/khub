@@ -121,10 +121,19 @@ func seedWS() (string, error) {
 		}); err != nil {
 			return "", err
 		}
+		// A review event: `verified[].at` is a datetime inside a list of
+		// objects, and `generated.at` one inside an object; both must come
+		// back as the scalars `add` and `verify` wrote.
+		if _, err := entity.Verify(root, name+"/rich-"+name, "human:reviewer", "", nil); err != nil {
+			return "", err
+		}
 		// A body with no trailing newline: md gets one from `add`, every
 		// other format stores it bare, and a round trip must give it back bare.
+		// It is a draft with an authored expiry, so `status` and a top-level
+		// datetime cross a migration too.
 		if _, err := entity.Create(root, name, entity.CreateOpts{
-			Fields: fields("title", "Bare "+name), Body: "No newline.", ID: "bare-" + name,
+			Fields: fields("title", "Bare "+name, "status", "draft", "stale_after", "2027-01-01T00:00:00Z"),
+			Body:   "No newline.", ID: "bare-" + name,
 		}); err != nil {
 			return "", err
 		}
@@ -497,12 +506,12 @@ func TestRefusals(t *testing.T) {
 	add(t, root, "note", entity.CreateOpts{Fields: fields("title", "Bodied", "body", "x"), UseTemplate: true})
 	refuses(t, try("note", layout.Target{Format: "json"}), "migrate_lossy")
 	refuses(t, try("note", layout.Target{Layout: "collection", Format: "yaml"}), "migrate_lossy")
-	if _, err := entity.Delete(root, "note/bodied", true); err != nil {
+	if _, err := entity.Delete(root, "note/bodied", true, false); err != nil {
 		t.Fatal(err)
 	}
 	add(t, root, "note", entity.CreateOpts{Fields: fields("title", "Slugged", "slug", "other"), UseTemplate: true})
 	refuses(t, try("note", layout.Target{Layout: "collection", Format: "yaml"}), "migrate_lossy")
-	if _, err := entity.Delete(root, "note/slugged", true); err != nil {
+	if _, err := entity.Delete(root, "note/slugged", true, false); err != nil {
 		t.Fatal(err)
 	}
 	add(t, root, "repo", entity.CreateOpts{Fields: fields("title", "Con"), ID: "con"})
@@ -586,7 +595,7 @@ func TestTemplatedSource(t *testing.T) {
 func TestCommentBearingSourceKeepsItsValues(t *testing.T) {
 	root := newWS(t)
 	hand := filepath.Join(root, "notes", "hand.md")
-	if err := os.WriteFile(hand, []byte("---\n# kept?\ntype: note\ntitle: Hand\ncreated: 2026-01-02\ndraft: false\n---\nBody.\n"), 0o644); err != nil {
+	if err := os.WriteFile(hand, []byte("---\n# kept?\ntype: note\ntitle: Hand\ncreated: 2026-01-02\nstatus: stable\n---\nBody.\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	want := view(t, root, "note")
@@ -596,7 +605,7 @@ func TestCommentBearingSourceKeepsItsValues(t *testing.T) {
 		t.Fatalf("values changed:\n%v\nwant\n%v", got, want)
 	}
 	back, _ := os.ReadFile(hand)
-	if string(back) != "---\ntype: note\ntitle: Hand\ncreated: 2026-01-02\ndraft: false\n---\nBody.\n" {
+	if string(back) != "---\ntype: note\ntitle: Hand\ncreated: 2026-01-02\nstatus: stable\n---\nBody.\n" {
 		t.Fatalf("hand.md after the round trip:\n%s", back)
 	}
 }
@@ -632,20 +641,19 @@ func TestAltitudeDivergenceRefuses(t *testing.T) {
 	root := newWS(t)
 	scalars := filepath.Join(root, "notes", "scalars.md")
 	if err := os.WriteFile(scalars, []byte("---\ntype: note\ncreated: 2026-01-15\ntitle: Scalars\n"+
-		"y: yes\ndraft: yes\noct: 010\nsexa: 1:30\ntilde: ~\nexp: 1e3\ninf: .inf\nnested:\n  deep: .nan\n---\n"), 0o644); err != nil {
+		"y: yes\noct: 010\nsexa: 1:30\ntilde: ~\nexp: 1e3\ninf: .inf\nnested:\n  deep: .nan\n---\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	err := layoutErr(root, "note", layout.Target{Format: "json"})
 	refuses(t, err, "migrate_lossy")
 	for _, want := range []string{
 		"note/scalars: y reads true to the graph (YAML 1.1) but 'yes' to the editor (YAML 1.2)",
-		"note/scalars: draft reads true to the graph",
 		"note/scalars: oct reads 8 to the graph (YAML 1.1) but 10 to the editor",
 		"note/scalars: sexa reads 90 to the graph (YAML 1.1) but '1:30' to the editor",
 		"note/scalars: exp reads '1e3' to the graph (YAML 1.1) but 1000.0 to the editor",
 		"note/scalars: inf is .inf, which json cannot carry",
 		"note/scalars: nested.deep is .nan, which json cannot carry",
-		"7 value(s)",
+		"6 value(s)",
 	} {
 		if !strings.Contains(err.Error(), want) {
 			t.Fatalf("message lacks %q:\n%s", want, err)
@@ -657,7 +665,7 @@ func TestAltitudeDivergenceRefuses(t *testing.T) {
 	// Into a yaml collection the floats are fine; the altitude split is not.
 	err = layoutErr(root, "note", layout.Target{Layout: "collection", Format: "yaml"})
 	refuses(t, err, "migrate_lossy")
-	if strings.Contains(err.Error(), "inf") || !strings.Contains(err.Error(), "5 value(s)") {
+	if strings.Contains(err.Error(), "inf") || !strings.Contains(err.Error(), "4 value(s)") {
 		t.Fatalf("yaml destination:\n%s", err)
 	}
 	// A same-format move copies bytes, so nothing is read at all.

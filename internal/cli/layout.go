@@ -11,6 +11,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/endgame-build/khub/internal/clock"
 	"github.com/endgame-build/khub/internal/layout"
 	"github.com/endgame-build/khub/internal/omap"
 )
@@ -82,7 +83,7 @@ func layoutMigrate(typeName string, target layout.Target, execute bool, format s
 		return err
 	}
 	var indexStep tail[string]
-	opt := layout.Options{Execute: execute}
+	opt := layout.Options{Execute: execute, Now: clock.Now()}
 	if execute {
 		// Held: the library runs the tail inside its own lock after the
 		// commit, so it must not lock again (fsio.Locked is not re-entrant).

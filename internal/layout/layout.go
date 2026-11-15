@@ -62,12 +62,15 @@ type Target struct {
 }
 
 // Options controls execution. Without Execute the plan is computed and
-// nothing is written or locked. Tails runs after a real migration has
-// published, still under the workspace lock, so the index tail sees the tree
-// the migration committed; the callee must use reindex.ReindexHeld, because
-// fsio.Locked is not re-entrant. Tails are non-fatal.
+// nothing is written or locked. Now is the clock `check` judges expiry by
+// when the plan compares the candidate's findings with the live tree's.
+// Tails runs after a real migration has published, still under the workspace
+// lock, so the index tail sees the tree the migration committed; the callee
+// must use reindex.ReindexHeld, because fsio.Locked is not re-entrant. Tails
+// are non-fatal.
 type Options struct {
 	Execute bool
+	Now     time.Time
 	Tails   func(root string)
 }
 
@@ -111,10 +114,10 @@ const StorageYAML = ".khub/storage.yaml"
 // — the dry run's plan is a preview, never the input of the write.
 func Migrate(root, typeName string, target Target, opt Options) (*Plan, error) {
 	if !opt.Execute {
-		return plan(root, typeName, target)
+		return plan(root, typeName, target, opt.Now)
 	}
 	return fsio.Locked(root, func() (*Plan, error) {
-		p, err := plan(root, typeName, target)
+		p, err := plan(root, typeName, target, opt.Now)
 		if err != nil {
 			return nil, err
 		}
@@ -160,7 +163,7 @@ var (
 	formats = []string{"md", "json", "yaml", "jsonl"}
 )
 
-func plan(root, typeName string, target Target) (*Plan, error) {
+func plan(root, typeName string, target Target, now time.Time) (*Plan, error) {
 	resolved, err := introspect.LoadSchema(root)
 	if err != nil {
 		return nil, err
@@ -329,7 +332,7 @@ func plan(root, typeName string, target Target) (*Plan, error) {
 		return nil, err
 	}
 	p.changes = append(append(creates, storageChange), p.changes...)
-	if err := validateCandidate(root, resolved, p); err != nil {
+	if err := validateCandidate(root, resolved, p, now); err != nil {
 		return nil, err
 	}
 	return p, nil
@@ -602,9 +605,11 @@ func readSource(root string, rtype *schema.ResolvedType, idx *index.Index, node 
 // reshape is the entity's meta as the destination stores it: `type` opens a
 // file and leaves a row (the collection's binding supplies it); a row's
 // redundant `slug` goes; a value the destination cannot carry is named in
-// lossy; and a declared date read back from json's strings becomes a date
-// again on the way to md or yaml, so a round trip reproduces the file it
-// started from.
+// lossy; and a declared date or datetime read back from json's strings
+// becomes a date again on the way to md or yaml (restoreInstants), so a round
+// trip reproduces the file it started from. Nothing else moves: `status`,
+// `generated`, `verified` and every other base field cross as they are, since
+// a migration is not a write that stamps.
 func reshape(rtype *schema.ResolvedType, slug string, meta *omap.Map, from, to Storage, lossy *[]string) (*omap.Map, error) {
 	out := omap.New()
 	if to.Layout != schema.LayoutCollection {
@@ -632,17 +637,66 @@ func reshape(rtype *schema.ResolvedType, slug string, meta *omap.Map, from, to S
 	if textual(from.Format) && !textual(to.Format) {
 		for _, name := range rtype.Attributes.Keys() {
 			attr, _ := rtype.Attributes.Get(name)
-			v, has := out.Get(name)
-			s, isStr := v.(string)
-			if !has || !isStr || attr.BaseType != "date" {
-				continue
-			}
-			if _, err := time.Parse("2006-01-02", s); err == nil && len(s) == 10 {
-				out.Set(name, canon.Date{ISO: s})
+			if v, has := out.Get(name); has {
+				out.Set(name, restoreInstants(attr, v))
 			}
 		}
 	}
 	return out, nil
+}
+
+// restoreInstants is v with every string a declared `date` or `datetime`
+// attribute holds — at the top, inside an object's fields, or in a list's
+// items — read back as the scalar an md or yaml file stores: json carries
+// `created: "2026-01-15"` and `generated.at: "2026-01-14T23:00:00Z"` as
+// strings, and the way back gives them their plain spelling, as `add` writes
+// them. Only a string both altitudes read as that scalar is restored, so the
+// graph reads the same value before and after; anything else stays a string.
+func restoreInstants(attr *schema.ResolvedAttribute, v any) any {
+	switch attr.BaseType {
+	case "date", "datetime":
+		s, isStr := v.(string)
+		if !isStr {
+			return v
+		}
+		edit := canon.ResolvePlainScalarMode(s, canon.Mode12)
+		if !canon.Equal(edit, canon.ResolvePlainScalarMode(s, canon.Mode11)) {
+			return v
+		}
+		switch edit.(type) {
+		case canon.Date:
+			if attr.BaseType == "date" {
+				return edit
+			}
+		case canon.DateTime:
+			if attr.BaseType == "datetime" {
+				return edit
+			}
+		}
+		return v
+	case "object":
+		m, ok := v.(*omap.Map)
+		if !ok || attr.Fields == nil {
+			return v
+		}
+		for _, name := range attr.Fields.Keys() {
+			field, _ := attr.Fields.Get(name)
+			if fv, has := m.Get(name); has {
+				m.Set(name, restoreInstants(field, fv))
+			}
+		}
+		return m
+	case "list":
+		items, ok := v.([]any)
+		if !ok || attr.Items == nil {
+			return v
+		}
+		for i := range items {
+			items[i] = restoreInstants(attr.Items, items[i])
+		}
+		return items
+	}
+	return v
 }
 
 // textual reports a format that carries dates as strings.
@@ -842,7 +896,7 @@ func leadingComments(text string) string {
 // `validate` reports no error it did not already report, and `check` gains
 // no finding in a bucket that fails it. Resolver refusals pass through as
 // they are; the rest is migrate_invalid, or migrate_check for a finding.
-func validateCandidate(root string, resolved *schema.ResolvedSchema, p *Plan) error {
+func validateCandidate(root string, resolved *schema.ResolvedSchema, p *Plan, now time.Time) error {
 	cand, _, _, cleanup, err := workspace.Candidate(root, resolved)
 	if err != nil {
 		return err
@@ -918,11 +972,11 @@ func validateCandidate(root string, resolved *schema.ResolvedSchema, p *Plan) er
 	if len(fresh) > 0 {
 		return invalid(fmt.Sprintf("`khub validate` would report %d new error(s) — %s", len(fresh), joinShown(fresh)))
 	}
-	liveCheck, err := integrity.Check(root, false)
+	liveCheck, err := integrity.Check(root, false, now)
 	if err != nil {
 		return err
 	}
-	candCheck, err := integrity.Check(cand, false)
+	candCheck, err := integrity.Check(cand, false, now)
 	if err != nil {
 		return err
 	}
@@ -946,7 +1000,8 @@ func validateCandidate(root string, resolved *schema.ResolvedSchema, p *Plan) er
 
 // checkFindings renders every gating finding of a check report as
 // "<bucket>: <item>", the buckets Passed consults, in its order. Orphans and
-// the informational buckets are left out: a move changes no edge.
+// the informational buckets are left out: a move changes no edge. The list
+// mirrors CheckReport.Passed in internal/integrity/check.go.
 func checkFindings(r *integrity.CheckReport) []string {
 	var out []string
 	add := func(bucket, item string) { out = append(out, bucket+": "+item) }
@@ -988,6 +1043,20 @@ func checkFindings(r *integrity.CheckReport) []string {
 	}
 	for _, a := range r.AliasConflicts {
 		add("alias_conflicts", a.Alias)
+	}
+	if r.StaleGate {
+		for _, s := range r.Expired {
+			add("expired", s)
+		}
+	}
+	for _, f := range r.BelowGate() {
+		add("below_tier", f.ID()+" "+f.Trust)
+	}
+	for _, f := range r.FlagShadowed {
+		add("flag_shadowed", f.Type+" "+f.Field)
+	}
+	for _, w := range r.StaleWaivers {
+		add("stale_waivers", w.ID()+" "+w.Finding)
 	}
 	return out
 }
