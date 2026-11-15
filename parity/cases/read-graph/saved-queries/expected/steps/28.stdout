@@ -1,0 +1,1 @@
+{"error": {"code": "invalid_saved_query", "message": "Saved query 'bounds' in .khub/queries.yaml: 'count' must be a list of <relation><op><n> strings", "field": "count"}}

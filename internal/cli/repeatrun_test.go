@@ -71,6 +71,11 @@ var readCalls = map[string][][]string{
 		{"query", "--in-count", ">=1", "--out-count", "0"},
 		{"query", "--count", "depends_on>=1", "--receipt", "--format", "json"},
 	},
+	"run": {
+		{"run", "core"},
+		{"run", "core", "--format", "ids"},
+		{"run", "wide", "--receipt", "--format", "json"},
+	},
 	"search": {
 		{"search", "ledger"},
 		{"search", "ledger OR shard", "--limit", "5"},
@@ -172,6 +177,7 @@ var refusalCalls = [][]string{
 	{"query", "--count", "bogus>=1"},
 	{"recent", "--days", "-1"},
 	{"remove", "cmp-c00", "--dry-run"},
+	{"run", "nope"},
 }
 
 // mutatingVerbs change the workspace, or serve it, so repeating them proves
@@ -359,6 +365,10 @@ func repeatWorkspace(t *testing.T, self string) string {
 		[]string{"link", "cmp-c09", "related", "cmp-c03"},
 	)
 	steps = append(steps, []string{"schema", "snapshot"})
+	// Saved queries for `run`: each pairs with the query it replays.
+	for _, saved := range savedQueries {
+		steps = append(steps, append(append([]string{"query"}, saved.flags...), "--save-as", saved.name))
+	}
 	for _, step := range steps {
 		if r := runCLI(t, self, ws, false, step...); r.code != 0 {
 			t.Fatalf("setup khub %v:\n%s", step, r)
@@ -423,6 +433,34 @@ func repeatWorkspace(t *testing.T, self string) string {
 		}
 	}
 	return ws
+}
+
+// savedQueries are the queries repeatWorkspace saves, with the flags each was
+// saved from. TestReadVerbsRepeatByteIdentical holds each `run` to the query.
+var savedQueries = []struct {
+	name  string
+	flags []string
+}{
+	{"core", []string{"--type", "component", "--tag", "core", "--limit", "5"}},
+	{"wide", []string{"--under", "sys-core", "--via", "system", "--in-count", ">=1",
+		"--count", "depends_on>=1", "--out-count", "!=9", "--trust", "unverified", "--active"}},
+}
+
+// checkRunMatchesQuery holds `run <name>` to the query it was saved from,
+// byte for byte, in both output modes and with the output flags run takes.
+func checkRunMatchesQuery(t *testing.T, self, ws string) {
+	for _, saved := range savedQueries {
+		for _, extra := range [][]string{nil, {"--format", "ids"}, {"--receipt", "--format", "json"}} {
+			for _, human := range []bool{false, true} {
+				run := runCLI(t, self, ws, human, append([]string{"run", saved.name}, extra...)...)
+				query := runCLI(t, self, ws, human, append(append([]string{"query"}, saved.flags...), extra...)...)
+				if run.code != 0 || run.String() != query.String() {
+					t.Errorf("run %s %v (human %v) differs from its query:\n%s\nquery:\n%s",
+						saved.name, extra, human, run, query)
+				}
+			}
+		}
+	}
 }
 
 // treeDigest hashes every file under root except git's own store, so the test
@@ -516,6 +554,8 @@ func TestReadVerbsRepeatByteIdentical(t *testing.T) {
 			}
 		}
 	})
+
+	t.Run("run equals query", func(t *testing.T) { checkRunMatchesQuery(t, self, ws) })
 
 	after := treeDigest(t, ws)
 	for path, sum := range after {

@@ -38,6 +38,7 @@ const BOOLEAN_FLAGS = new Set([
 // `get --path` cannot join the shared set: its paths are positional.
 const VERB_BOOLEAN_FLAGS: Record<string, Set<string>> = {
   get: new Set(['path']),
+  query: new Set(['replace']),
   reindex: new Set(['check']),
 }
 const WRITES = new Set(['add', 'edit', 'link', 'unlink', 'remove'])

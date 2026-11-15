@@ -164,6 +164,19 @@ Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelo
   Workspace values (types, ids) are not completed. bash needs 4.1+ with
   bash-completion. `completion` was a usage error until now;
   `--install-completion` still is. Closes #46.
+- **Saved queries.** `khub query … --save-as <name>` saves the query's filters
+  to `.khub/queries.yaml` (tracked in git, hand-editable) and `khub run <name>`
+  replays them with the same output, byte for byte. Every query filter saves,
+  `--under`/`--via`, the count bounds and `--trust` included; `--format` and
+  `--receipt` belong to each run, and `run` takes both. A different
+  definition under a taken name refuses (`saved_query_exists`) until
+  `--replace`; saving the same one again is a no-op. A save splices the file
+  as `edit` splices frontmatter, so comments on the rest of the file survive;
+  one that cannot refuses (`saved_query_unspliceable`). New refusal codes:
+  `invalid_query_name`, `saved_query_exists`, `saved_query_unspliceable`,
+  `unknown_saved_query` (with the saved names as `expected` and the nearest
+  as `suggestion`), `invalid_saved_query` (`field` names the key). The plugin
+  draws a compact row for `run`. Closes #31.
 
 ### Changed
 

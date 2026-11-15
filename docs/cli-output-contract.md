@@ -165,6 +165,8 @@ Which codes carry which keys:
 | `unknown_preset` | | the shipped presets, sorted | nearest preset |
 | `bad_target` | | `claude`, `agents`, `both` | nearest target |
 | `locked_removed` | | every locked element the upgrade removes, `type` or `type.predicate`, in the current schema's declaration order: the `--unlock` values the run takes | |
+| `unknown_saved_query`, when `.khub/queries.yaml` holds any | | the saved query names, in file order | nearest name |
+| `invalid_saved_query`, for a value in one definition | the definition key | | |
 
 Every other code carries `code` and `message` only. A later release may add a
 key to a code that has none today. A program should read the keys it knows and

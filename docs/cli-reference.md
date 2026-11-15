@@ -26,6 +26,7 @@ Commands:
   remove  Remove an entity, guarded by inbound edges: khub remove old-fragment [--force].
   verify  Record a review: khub verify ad-2026-01-15-use-jwt --by human:ilya.
   query  Filter entities: khub query --type opportunity --stage prospect --format json.
+  run  Run a saved query: khub run open-prospects --format json.
   search  Full-text search: khub search modernization --type transcript --format json.
   retrieve  Assemble context in one call: khub retrieve "auth token" --expand depends_on:2 --max-bytes 20000.
   neighbors  Walk one-hop neighbors: khub neighbors initech-pov [--predicate client --in].
@@ -279,6 +280,26 @@ Options:
   --active  Exclude drafts.
   --limit <int>  Cap the returned set.
   --trust <str>  Keep entities at this review tier: unverified, machine, or human.
+  --format <str>  text (Rich table on a TTY), json, or ids. [default: text]
+  --receipt  Wrap JSON output with the applied filters, matched and returned counts, and truncation.
+  --save-as <str>  Also save these filters under a name for `khub run <name>`.
+  --replace  Let --save-as overwrite a different saved query of that name.
+  --help  Show this message and exit.
+
+```
+
+## khub run
+
+```console
+$ khub run --help
+Usage: khub run [OPTIONS] {name}
+
+Run a saved query: khub run open-prospects --format json.
+
+Arguments:
+  name <str>  A name saved with khub query --save-as. [required]
+
+Options:
   --format <str>  text (Rich table on a TTY), json, or ids. [default: text]
   --receipt  Wrap JSON output with the applied filters, matched and returned counts, and truncation.
   --help  Show this message and exit.

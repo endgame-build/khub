@@ -1,0 +1,1 @@
+{"error": {"code": "saved_query_exists", "message": "A saved query 'external' already exists in .khub/queries.yaml with a different definition. Pass --replace to overwrite it, or save under another name"}}
