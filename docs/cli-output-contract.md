@@ -89,7 +89,7 @@ stderr as a log.
 | Code | Meaning | What the caller does next |
 |---|---|---|
 | `0` | Success. For `validate` and `check`, the gate passed, perhaps with gaps that never fail it. | Continue. |
-| `1` | A gate ran and failed (`validate`, `check`). The workspace is wrong, not the call. stdout holds the full report. | Fix what the report names, then run the gate again. |
+| `1` | A gate ran and failed (`validate`, `check`, `reindex --check`). The workspace is wrong, not the call. stdout holds the full report (for `reindex --check`, the diff). | Fix what the report names, then run the gate again. |
 | `2` | Refused: a usage error, a call the schema forbids, a workspace or schema that cannot be read, or an OS error. Nothing was written. | Correct the call or the configuration and retry. In JSON mode, `error.code` says which. |
 
 A broken schema is already exit 2, before any entity is examined. So a CI job

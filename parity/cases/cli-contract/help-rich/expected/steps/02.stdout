@@ -48,7 +48,7 @@
 │ recent     List entities touched within the window, newest first: khub       │
 │            recent [--days N].                                                │
 │ reindex    Regenerate the OKF index.md from the graph: khub reindex          │
-│            [--dry-run].                                                      │
+│            [--dry-run | --check].                                            │
 │ export     Write the workspace as an OKF 0.2 bundle: khub export --okf DIR.  │
 │ import     Read an OKF bundle into the workspace as drafts: khub import      │
 │            --okf DIR.                                                        │

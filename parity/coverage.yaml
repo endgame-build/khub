@@ -170,6 +170,7 @@ commands:
 - name: 'reindex'
   params:
   - '--dry-run'
+  - '--check'
 - name: 'export'
   params:
   - '--okf'

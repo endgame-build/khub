@@ -36,7 +36,10 @@ const BOOLEAN_FLAGS = new Set([
 ])
 // A verb's own boolean flags. `add <type> --path <value>` may set a field named path, so
 // `get --path` cannot join the shared set: its paths are positional.
-const VERB_BOOLEAN_FLAGS: Record<string, Set<string>> = { get: new Set(['path']) }
+const VERB_BOOLEAN_FLAGS: Record<string, Set<string>> = {
+  get: new Set(['path']),
+  reindex: new Set(['check']),
+}
 const WRITES = new Set(['add', 'edit', 'link', 'unlink', 'remove'])
 const OPERATORS = new Set(['backfill', 'init', 'reindex', 'upgrade', 'wire'])
 const SCHEMA_VIEWS = new Set(['base', 'diff', 'edges', 'show', 'snapshot', 'types'])
@@ -297,7 +300,7 @@ function khubCall(words: string[], binary: RegExp): Simple | null {
 }
 
 // Reads the khub calls off the text of a command the tokenizer could not follow. It keeps
-// each verb, and whether `--force` or `--dry-run` follows it.
+// each verb, and whether `--force`, `--dry-run` or `--check` follows it.
 function scan(command: string, flavour: Flavour): Simple[] {
   const calls = command.matchAll(scanOf(flavour))
 
@@ -307,6 +310,7 @@ function scan(command: string, flavour: Flavour): Simple[] {
     return call(match[1] as string, {
       ...(rest.includes('--force') ? { force: true as const } : {}),
       ...(rest.includes('--dry-run') ? { 'dry-run': true as const } : {}),
+      ...(/--check(?![\w-])/.test(rest) ? { check: true as const } : {}),
     })
   })
 }
@@ -374,9 +378,12 @@ export const isWrite = (found: Simple) => WRITES.has(found.verb)
 // Tells whether a call asked for a preview. A dry run of any verb writes nothing.
 export const isDryRun = (found: Simple) => isOn(found.flags['dry-run'])
 
+// Tells whether a call is the `reindex --check` gate, which writes nothing.
+const isIndexCheck = (found: Simple) => found.verb === 'reindex' && isOn(found.flags.check)
+
 // Tells whether a call changes entities, the schema, the index or the agent files.
 export const mutates = (found: Simple) =>
-  ((isWrite(found) || OPERATORS.has(found.verb)) && !isDryRun(found)) ||
+  ((isWrite(found) || OPERATORS.has(found.verb)) && !isDryRun(found) && !isIndexCheck(found)) ||
   (found.verb === 'schema' && found.sub === 'snapshot')
 
 // Returns what a `khub edit` call changed, as `<field> <value>` pairs. A body is named,

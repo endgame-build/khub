@@ -35,7 +35,7 @@ Commands:
   check  Check the active graph: completeness, orphans, dangling edges, strays, cycles, bodies.
   stale  List entities past the `updated` threshold, oldest first: khub stale [--days N].
   recent  List entities touched within the window, newest first: khub recent [--days N].
-  reindex  Regenerate the OKF index.md from the graph: khub reindex [--dry-run].
+  reindex  Regenerate the OKF index.md from the graph: khub reindex [--dry-run | --check].
   export  Write the workspace as an OKF 0.2 bundle: khub export --okf DIR.
   import  Read an OKF bundle into the workspace as drafts: khub import --okf DIR.
   viz  Render the typed graph to a self-contained Cytoscape HTML: khub viz [--out F] [--open] [--type T].
@@ -467,10 +467,11 @@ Options:
 $ khub reindex --help
 Usage: khub reindex [OPTIONS]
 
-Regenerate the OKF index.md from the graph: khub reindex [--dry-run].
+Regenerate the OKF index.md from the graph: khub reindex [--dry-run | --check].
 
 Options:
   --dry-run  Print the diff against the current index.md and write nothing.
+  --check  Exit 1 if index.md is missing or stale, printing the diff; write nothing.
   --help  Show this message and exit.
 
 ```

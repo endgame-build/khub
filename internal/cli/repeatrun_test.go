@@ -101,7 +101,7 @@ var readCalls = map[string][][]string{
 	"check":    {{"check"}, {"check", "--strict"}, {"check", "--mentions"}},
 	"stale":    {{"stale"}, {"stale", "--days", "1"}},
 	"recent":   {{"recent"}, {"recent", "--days", "10000", "--limit", "12"}},
-	"reindex":  {{"reindex", "--dry-run"}},
+	"reindex":  {{"reindex", "--dry-run"}, {"reindex", "--check"}},
 	"export":   {{"export", "--okf", "../bundle", "--dry-run"}},
 	"retrieve": {
 		{"retrieve", "ledger"},

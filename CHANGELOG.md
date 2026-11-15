@@ -146,6 +146,15 @@ Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelo
   is carried across upgrades like any other per-type policy key. The khub and
   setup skills tell an agent that `--unlock` is the workspace owner's
   decision, to ask for rather than pass on its own. Closes #13.
+- **`khub reindex --check`.** A drift gate for `index.md`, for CI or a
+  pre-commit hook. It writes nothing, prints `index.md is up to date` and
+  exits 0 when the file matches the graph, and otherwise prints the diff,
+  names `khub reindex` on stderr and exits 1, a missing `index.md` included.
+  It refuses (exit 2) whatever `reindex` refuses: an unparseable entity file,
+  and an `index.md` that is a symlink, a directory or unreadable. Passing it
+  with `--dry-run` is a usage error. Both read `index.md` with universal
+  newlines, so a CRLF checkout of a current index is current. The plugin
+  (0.1.11) counts `reindex --check` as a read. Closes #67.
 
 ### Changed
 

@@ -145,6 +145,11 @@ test('a subshell or an open quote is read off the text', () => {
     kind: 'compound',
     calls: [{ kind: 'simple', verb: 'upgrade', sub: null, workspace: null, positional: [], flags: { 'dry-run': true } }],
   })
+  expect(classify('(cd ws && khub reindex --check)', UNIX)).toEqual({
+    kind: 'compound',
+    calls: [{ kind: 'simple', verb: 'reindex', sub: null, workspace: null, positional: [], flags: { check: true } }],
+  })
+  expect(callsOf(classify('(cd ws && khub reindex --check)', UNIX)).some(mutates)).toBe(false)
   expect(verbs('khub add adr --title "open')).toEqual(['add'])
   expect(verbs('(./bin/khub add adr --title x; khub check)')).toEqual(['add', 'check'])
   expect(classify('(echo khub)', UNIX).kind).toBe('none')
@@ -179,6 +184,9 @@ test('a call that changes the workspace is told from a read', () => {
   for (const write of ['add adr --title x', 'edit x kind y', 'link x p y', 'unlink x p y', 'remove x --force']) {
     expect(mutates(simple(`khub ${write} --dry-run`))).toBe(false)
   }
+  expect(mutates(simple('khub reindex --check'))).toBe(false)
+  expect(mutates(simple('khub -C ./ws reindex --check'))).toBe(false)
+  expect(mutates(simple('khub reindex --check=false'))).toBe(true)
   expect(mutates(simple('khub schema snapshot'))).toBe(true)
   expect(mutates(simple('khub get x'))).toBe(false)
 })
