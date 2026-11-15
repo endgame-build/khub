@@ -4,6 +4,23 @@ Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [0.33.0] — 2026-11-15
+
+khub tells an agent more and lets it try a write first. A refusal now carries
+`field`, `expected` and `suggestion`, so a misspelt kind, id or predicate comes
+back with the value to use, and `docs/cli-output-contract.md` sets out the
+whole output contract. Every write verb takes `--dry-run`. `check` gains
+retention rules, per-entity waivers and, under `--mentions`, link suggestions
+from body text, and `validate` reports dead relative links. In a Claude Code
+session each write warns about the gating findings it has not shown yet; that
+costs one `check` per write (an `edit` on 550 entities takes about 90 ms
+instead of 40 ms), and `KHUB_SESSION=` turns it off. `query` filters by what sits under an entity (`--under`) and by edge counts
+(`--count`). New commands: `khub recent`, `khub doctor`, `khub completion`,
+saved queries (`query --save-as`, `khub run`), `reindex --check`, and
+`viz`/`serve --aspect`. A locked type or predicate
+survives `upgrade` unless `--unlock` names it. The workspace format is
+unchanged, so no `khub upgrade` is needed.
+
 ### Added
 
 - **`query --under <id> --via <predicate>`.** Scopes a query to everything
