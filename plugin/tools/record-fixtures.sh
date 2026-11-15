@@ -17,7 +17,7 @@ trap 'rm -rf "$TMP"' EXIT
 
 (cd "$REPO" && go build -o "$TMP/khub" ./cmd/khub)
 
-export KHUB_PARITY_NOW=2026-01-15 KHUB_ACTOR=khub TZ=UTC
+export KHUB_PARITY_NOW=2026-01-15 KHUB_ACTOR=khub KHUB_SESSION='' TZ=UTC
 WS="$TMP/ws"
 BODY="$TMP/fixtures.body"
 ADR=ad-2026-01-15-use-re2-patterns

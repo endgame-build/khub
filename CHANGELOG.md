@@ -82,6 +82,17 @@ Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelo
   it. Suggestions only — nothing is written, `passed` and the exit code never
   move, and without the flag the payload is unchanged. Plugin 0.1.9 counts
   `mentions` as informational. Closes #39.
+- **Write warnings per session.** In a session (`KHUB_SESSION`, or Claude
+  Code's `CLAUDE_CODE_SESSION_ID` when that is unset), `add`, `edit`, `link`,
+  `unlink` and `remove` print each gating `check` finding the session has not
+  been shown as a stderr line, `warning: <id> › <rule>: <message>`: the
+  standing debt on the first write, only what changed after that. Advisory:
+  stdout, exit codes and the gates are unchanged, and with no session nothing
+  is printed. `KHUB_SESSION=` turns it off. A write prints at most 20 warnings
+  and then a count, escapes control characters in workspace text, and costs
+  one `check` scan run outside the workspace lock. `verify`, `import`,
+  `backfill`, `wire` and `upgrade` do not warn. Session records untouched for
+  30 days are pruned. Closes #55.
 
 ### Changed
 

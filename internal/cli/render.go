@@ -59,6 +59,10 @@ func Emit(data any, fmt_ string, human func()) error {
 // stdout is piped through `head`.
 func Note(message string) { fmt.Fprintln(os.Stderr, "note: "+message) }
 
+// Warn prints one write warning to stderr, as Note prints a note: in JSON and
+// human modes alike, before Emit.
+func Warn(message string) { fmt.Fprintln(os.Stderr, "warning: "+message) }
+
 // ExitError carries the process exit code through the command return path.
 type ExitError struct{ Code int }
 

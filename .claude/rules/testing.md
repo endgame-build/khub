@@ -37,7 +37,11 @@ scaffolding. The ladder is `--by`, then `KHUB_ACTOR`, then `CLAUDECODE` set
 `CLAUDECODE` is set in any Claude Code shell, so every recorder and smoke script
 pins `KHUB_ACTOR=khub` above it (the runner's `baseEnv`, `smoke*.sh`,
 `record-fixtures.sh`, `parity/scale`); a Go test that asserts a stamp pins it
-in `TestMain`.
+in `TestMain`. The same shells export `CLAUDE_CODE_SESSION_ID`, which turns on
+the write warnings (`docs/cli.md`, "Write warnings"), so each of those scripts
+and `parity/compat/smoke.sh` also pins `KHUB_SESSION=` (off). The runner's
+`baseEnv` carries no session at all; a case that tests the warnings sets one
+in its `env:`.
 
 Trap: the runner pins `COLUMNS=80` **and** pty winsize 80 — two width code
 paths agree only because both constants are 80.

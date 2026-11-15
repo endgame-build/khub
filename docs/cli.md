@@ -85,6 +85,28 @@ Schema storage paths must be workspace-relative, normalized, outside `.khub`, an
 
 A single malformed entity file (a broken frontmatter fence, unparseable YAML) no longer crashes the read commands. `validate` reports it as an error and `check` reports it as a `malformed` entry (text and JSON), and the rest of the workspace still resolves.
 
+### Write warnings (per session)
+
+In a session, a successful write verb (`add`, `edit`, `link`, `unlink`, `remove`) also runs `check` and prints each gating finding the session has not been shown yet, one stderr line per finding, before its result and in every format:
+
+```text
+warning: <id> › <rule>: <message>
+```
+
+`<rule>` is the `check --format json` bucket that holds the finding (`incomplete`, `dangling`, `strays`, `misplaced`, `cycles`, `alias_conflicts`, …), and `<id>` is the entity id, or the path, type or alias the finding is about. So the first write of a session surfaces the workspace's standing debt, and a later one only what changed: a finding whose message moved, or one that was fixed and came back, is new again. Only findings that fail default `check` are reported, `flag_shadowed` included; orphans, `thin`, `superseded_verifications`, `expired`, `below_tier` and drafted optional singletons are not.
+
+`<id>` and `<message>` carry workspace text, so a control character in them is escaped (`\x1b`, `\u0085`): a file name cannot forge a second warning line or send an escape sequence to the terminal.
+
+A write prints at most 20 warnings, then one line counting the rest: `warning: … and 380 more; run khub check`. All of them are recorded as shown, so a session's first write over a long backlog stays short, and `check` lists the whole set.
+
+The warnings are advisory. They never change a write's stdout, its exit code or what it writes to the workspace, and `validate` and `check` stay the gates. A refused write prints none. Only the entity write verbs warn; `verify`, `import`, `backfill`, `wire`, `upgrade`, `init` and `reindex` do not.
+
+Writes in one session that run at the same time share one record: whichever finishes its `check` first reports what is new, including another call's finding, and the others print nothing for it. Run `check` after a batch of parallel writes rather than reading the warnings per call.
+
+The cost is one `check` per write: the scan runs after the write's lock is released, so it never holds up another writer, but the write itself takes that much longer (on a 550-entity workspace an `edit` went from about 40 ms to about 90 ms). A bulk import turns the warnings off with `KHUB_SESSION=`.
+
+The session is `KHUB_SESSION`; when that is unset, Claude Code's `CLAUDE_CODE_SESSION_ID`. Any other agent or script sets `KHUB_SESSION` to a value that stays the same across its calls. `KHUB_SESSION=` (set, empty) turns the warnings off. With no session, a write prints exactly what it always has. What each session has been shown is kept under `.khub/generated/sessions/`, which is gitignored; deleting it makes every session start over, and a record no write has touched for 30 days is pruned.
+
 ### Entity formats
 
 A type stores its entities as `md` (the default: YAML frontmatter + prose body), `json`, or `yaml`, per-type schema config (`format:` next to `layout:`/`path:`). A json/yaml entity is a single mapping: pure metadata, with prose carried in a reserved `body` field. `--body`/`--body-file` write it, `get` returns it as the body, an empty body writes no key, and the key never appears in `frontmatter` output or query filters. `search` indexes every entity over its body plus every scalar string field, in all formats. `gjson` is not supported; the schema rejects it.

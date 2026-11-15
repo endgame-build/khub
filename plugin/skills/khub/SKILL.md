@@ -148,6 +148,14 @@ deletes despite inbound edges. `import` brings a bundle in as drafts; the bundle
 
 Every content write stamps `generated: {by, at}`: an `add`, or a change to the body, a declared field, `status` or a relation. A bookkeeping-only edit (`tags`, `aliases`, `stale_after`, `author`, `created`) and an edit that changes nothing stamp nothing. Under Claude Code `by` is `agent/claude-code` unless `KHUB_ACTOR` or `--by` says otherwise; pass `--by human:<name>` only when that person wrote the content.
 
+A write may print `warning: <id> › <rule>: <message>` lines on stderr: `check` findings
+this session has not seen yet, the workspace's existing debt on your first write and only
+what changed after that, at most 20 and then a count. The write still succeeded. Fix a
+warning your change caused; the rest is debt to mention, not to chase. Parallel writes
+share the session, so a warning may land on a different call than the one that caused it.
+They do not replace the check step of the loop. Claude Code names the session for you; any
+other agent sets `KHUB_SESSION` to one value for all its calls to get them.
+
 ## Generate, validate, iterate
 
 1. **Generate.** `khub add <type> --title "..." …` mints the id (`schema show <type>` names
