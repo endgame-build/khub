@@ -17,7 +17,7 @@ k() { "$DIR/bin/khub" -C "$DIR/ws" "$@"; }
 
 if [[ ! -d "$DIR/ws/.khub" ]]; then
   "$DIR/bin/khub" init build-hub "$DIR/ws" >/dev/null
-  k add repo --title "API" --repo endgame/api --status active >/dev/null
+  k add repo --title "API" --repo endgame/api >/dev/null
   k add component --title "Storage" --kind service --owner team-platform >/dev/null
   k add component --title "Search" --kind service --owner team-platform --lifecycle production \
     --tier tier-1 --repo rp-api --depends_on cmp-storage >/dev/null

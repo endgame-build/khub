@@ -12,7 +12,7 @@ const LAUNCHER = `${ROOT}\\node_modules\\@endgame-build\\khub\\bin\\khub.js`
 const START = { cwd: `${ROOT}\\docs`, surface: 'terminal' as const, isInteractive: true }
 const BASELINE = ['--version', 'schema --format json', 'check --format json', 'query --format json']
 const REFRESH = ['check --format json', 'query --format json']
-const BAND = { hasSurvey: false, isWorking: false, maxRows: 4, bodyColumns: 80, scroll: { offset: 0, bodyRows: 1 }, view: {} }
+const BAND = { hasSurvey: false, isCollapsed: false, isWorking: false, maxRows: 4, bodyColumns: 80, scroll: { offset: 0, bodyRows: 1 }, view: {} }
 
 const bash = (stdout: string) => ({ result: { stdout, stderr: '', interrupted: false } })
 const band = { plugin: 'khub', surface: 'terminal' as const, component: 'AbovePrompt' as const, props: BAND }
