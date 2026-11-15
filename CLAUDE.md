@@ -47,6 +47,7 @@ bash parity/tools/coverage-floor.sh "$PWD/khub-cover" /tmp/cov    # parity with 
 KHUB=$PWD/khub bash parity/scale/smoke.sh --scale 300            # a generated corpus against its own manifest, plus the footprint pin
 bash parity/compat/smoke.sh <old-khub> "$PWD/khub"               # a workspace an older binary wrote survives this one
 go run ./parity/scale/bench -bin ./khub -profile gate -format json > bench.json && go run ./parity/scale/gate -baseline parity/scale/baseline.json bench.json
+go run ./parity/tools/presetdocs                                 # regenerate docs/<preset>-preset.md tables (fresh build)
 ```
 
 CI runs the first block on three OSes per PR (`ci.yml`), the race detector,
@@ -147,9 +148,9 @@ comes back, with zero per-type code and no logic of its own. See
   `.khub/generated/locks/workspace.lock` covers scan, validation, and commit for
   every existing-workspace mutation. Keep lock files while a process may hold them. Publication uses
   unique sibling temporaries, preserves permissions, and refuses unsafe paths and symlinks.
-- **Storage is per-type config**: `layout` (file / folder / collection) × `format`
-  (md / json / yaml; collections take json / jsonl / yaml). Non-md entities carry
-  prose in a reserved `body` field. Collections use the same workspace lock and
+- **Storage is per-type config**: `layout` × `format`, declared in `storage.yaml`
+  (the layouts and path templates: `docs/schema.md`; formats and collections:
+  `docs/cli.md`). Non-md entities carry prose in a reserved `body` field. Collections use the same workspace lock and
   atomic publication as every other mutation; `.khub/generated/` is gitignored.
 
 Each invariant has a sentinel fixture under `parity/cases/invariants/`.
@@ -179,5 +180,8 @@ layer files into an engagement's `.khub/` and the templates to
 module root (a `//go:embed` pattern cannot contain `..`, so the embed cannot live
 under `internal/`).
 
-The preset is the source of truth for its schema; planning specs may drift from
-it (see `docs/firm-ops-preset.md`, `docs/build-hub-preset.md`).
+The preset is the source of truth for its schema. The tables in
+`docs/<preset>-preset.md` between `GENERATED` markers are generated from
+`khub schema --format json` (`go run ./parity/tools/presetdocs`, which builds
+khub fresh from the checkout) and CI fails when they drift; the prose around them is hand-written. Every
+preset needs such a doc, and every type a generated section.

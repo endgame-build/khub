@@ -17,6 +17,7 @@ environment is the easiest way to get it, e.g.
 | `gen_cli_reference.sh` | Regenerates `docs/cli-reference.md` from the built binary | `KHUB=./khub` |
 | `okf_validate.py` | Runs the OKF reference parser (`document.py`) over an exported bundle: every concept parses, has a `type` and normalizes `verified`; only the root `index.md` has frontmatter. CI's `okf-reference` job runs it informationally through `okf_reference.sh`, against `document.py` pinned to a knowledge-catalog commit | needs `pyyaml` and the reference `document.py`: `uv run --with pyyaml==6.0.3 python parity/tools/okf_validate.py <bundle> <dir holding document.py>` |
 | `okf_reference.sh` | Builds a firm-ops and a build-hub workspace with a few linked and reviewed entities, exports each with `khub export --okf`, and runs `okf_validate.py` over both bundles | `uv` and the reference `document.py`: `parity/tools/okf_reference.sh <khub binary> <dir holding document.py>` |
+| `presetdocs/` | Regenerates the `GENERATED` regions of `docs/<preset>-preset.md` from `khub schema --format json`; fails on a preset with no doc or a type with no generated section | `go run ./parity/tools/presetdocs` builds khub fresh from the checkout (`-bin` uses a given binary, which must be built from this checkout; `-check` writes nothing) |
 
 The scale fixture is not here: `parity/scale/` is Go (generator, timed smoke,
 growth bench over a ~550-entity corpus) and needs only the toolchain — see its

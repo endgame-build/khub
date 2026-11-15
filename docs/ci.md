@@ -33,6 +33,7 @@ is the one step that overrides it, in `go-extras`.
 | Coverage map | every command, flag, error code, format and mode reaches a recorded fixture, and the binary offers nothing the map does not list | `-coverage parity/coverage.yaml -subset-of` |
 | CLI smoke | `smoke-windows.sh`: all of `smoke.sh` (every verb over both presets, exit codes asserted; eight writers on one collection file in three formats; edit idempotence; NFC and NFD titles; one OKF chain of review, trust, supersede, expiry, the draft lifecycle, export and import into a fresh workspace), then git-dated stale and backfill, line endings, serve's TTY refusal | bash, every OS |
 | CLI reference is current | `docs/cli-reference.md` regenerates unchanged from the binary's help | regenerate, `git diff --exit-code` |
+| Preset reference docs are current | the GENERATED tables in `docs/<preset>-preset.md` regenerate unchanged from `khub schema --format json`; a preset with no doc or a type with no generated section fails | `go run ./parity/tools/presetdocs -bin`, `git diff --exit-code docs/` |
 | YAML round-trip gate | the emitter reproduces ruamel byte for byte: T1c round trip, T2 surgical edit, T3 emitter differential in both profiles, with counts that fail closed | `parity/yamlgate` |
 
 ### `ci.yml` · `go-extras` — ubuntu, beside the matrix

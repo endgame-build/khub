@@ -22,7 +22,7 @@ A relation is a role-named field the schema marks as an edge. The field name is 
 
 ## validate vs check
 
-This is the distinction that trips people up. `validate` is per-entity: is this one entity well-formed against the schema, and do its relations resolve? A missing required field does not fail validate, and it never blocks the write; capture is never blocked. `check` is graph-wide over the active (non-draft) subgraph: it enforces required-completeness and reports active-but-incomplete entities, plus orphans, dangling edges, stray files, cycles, and missing required singletons. Write freely; gate with check.
+This is the distinction that trips people up. `validate` is per-entity: is this one entity well-formed against the schema, and do its relations resolve? A missing required field does not fail validate, and it never blocks the write; capture is never blocked. `check` is graph-wide over the active (non-draft) subgraph: it enforces required-completeness and reports active-but-incomplete entities, plus whatever else is wrong with the graph as a whole — [`cli.md`](cli.md#reading-check-output) lists every finding and which ones fail the gate. Write freely; gate with check.
 
 Body structure follows the same split: a type's template (`.khub/templates/<type>.yaml`) is both the scaffold `add`/`init` seed a body from and the contract `validate` holds it to — required section headings in order, extras allowed, capture never blocked.
 

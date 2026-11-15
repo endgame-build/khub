@@ -33,6 +33,21 @@ Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelo
   `--limit` is `query`'s (0 returns nothing, `-n` drops the last n), and a cut
   says so in a `note:` line on stderr. The plugin (0.1.6) draws a compact row
   for it, the note included.
+- `docs/ingestion-conflicts.md`, the conflict policy for the planned
+  ingestion path: a re-run never silently overwrites a value in a published
+  entity, reports each disagreement (entity, field, ours, theirs, source)
+  under a named strategy (`manual` by default), and proposes identity matches
+  with their evidence instead of merging. A design only; no command changes.
+  `docs/build-hub-preset.md` now records a facet id as an `aliases` entry
+  (`facet:FUNC-007`) instead of a tag.
+- `docs/ingestion-alignment.md`, the alignment ladder for the planned
+  ingestion path, companion to `docs/ingestion-conflicts.md`: a reference in a
+  source record resolves by exact source id or khub id, an unknown source id
+  gets a draft stub carrying it as an alias, and look-alikes are proposed with
+  stable evidence codes (`title_equal`, `alias_equal`, `title_match`,
+  `text_match`) but never linked. Also sets out the `exact` and `full`
+  alignment modes and the linker numbers the ingestion goldens will measure.
+  A design only; no command changes.
 
 ### Changed
 
@@ -49,6 +64,31 @@ Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelo
   now says `No git history; dates come from updated or created only`. It said
   `using updated field only`, which was wrong: an undated entity falls back to
   `created`.
+- The `setup` skill (plugin 0.1.7) says when setup is done: `khub status
+  --format json` and `khub check` answer from the workspace. It ends with a
+  fixed report for the user, collects its prohibitions in one never-do list,
+  and says when the plugin's band shows. Step 1 states that with the per-repo
+  install `khub …` runs as `npx @endgame-build/khub …`. Before, step 2 ran a
+  bare `khub` that a dev-dependency install does not put on the `PATH`.
+- The `khub` skill no longer says `status --format json` names the active
+  preset; `schema --format json` does, under `provenance`.
+- The `khub` agent skill is decision guidance, not a fixed pipeline: a table
+  of which verb answers which question and what to call next from its
+  answer; retrieval exact first (`get`, `query`), then the graph
+  (`neighbors`, `impact`, `history`), then `search`, then the body, stepping
+  only on a named gap; a write convention (search before `add`, `edit` over a
+  second entity, inferred facts as `--draft`, never overwrite a human's value,
+  verify only a review that happened, claim a write only on exit 0); and the
+  write loop as generate, validate, iterate. Reinstall or update the plugin,
+  or rerun `npx skills add endgame-build/khub`, to pick it up.
+- **Preset reference docs are generated.** The version, counts, base block,
+  relation vocabulary and per-type attribute tables in
+  `docs/firm-ops-preset.md` and `docs/build-hub-preset.md` now come from
+  `khub schema --format json` (`go run ./parity/tools/presetdocs`), and CI
+  fails when they drift from the preset. Regenerating corrected the firm-ops
+  page, which had missed the base `aliases` attribute, the required `name` on
+  `opportunity` and the required `title` on five types. A preset with no doc,
+  or a type with no generated section, fails the gate.
 
 ### Fixed
 

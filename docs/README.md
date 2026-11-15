@@ -24,6 +24,8 @@ khub's docs, organized by [Diátaxis](https://diataxis.fr): learning, tasks, ref
 
 - [Concepts](concepts.md) — the mental model in seven ideas: Markdown is truth, the derived graph, validate vs check, and more.
 - [Design memo](design-memo.md) — the five-layer engine, technology choices, and the invariants every change preserves.
+- [Ingestion conflicts](ingestion-conflicts.md) — the policy a future importer follows when the source and the workspace disagree: never silently overwrite a published value, never merge two entities on its own. A design; nothing ships yet.
+- [Ingestion alignment](ingestion-alignment.md) — how a future importer resolves the references a source makes: exact rungs that link, stubs for unknown source ids, and look-alike candidates that are only ever proposed. A design; nothing ships yet.
 
 ---
 

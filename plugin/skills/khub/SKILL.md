@@ -1,6 +1,6 @@
 ---
 name: khub
-description: Use when working in a khub workspace (a repository with a .khub/ directory) to read or write typed, schema-validated context instead of grepping Markdown. Covers retrieval (retrieve, query, get, neighbors, impact, history, search) and authoring (add, edit, link, unlink, remove). Discovers the active preset, types, and schema at runtime.
+description: Use when working in a khub workspace (a repository with a .khub/ directory) to read or write typed, schema-validated context instead of grepping Markdown. Says which verb answers which question (retrieve, query, get, neighbors, impact, history, search; add, edit, link, unlink, remove; validate, check), how to retrieve exact-first, and how to loop write, validate, fix. Discovers the active preset, types, and schema at runtime.
 allowed-tools: Bash
 ---
 
@@ -10,30 +10,90 @@ khub gives you typed, validated, queryable context held as Markdown in git. In a
 
 If `khub` is not installed (`command not found`), load the `setup` skill first — it installs the CLI and sets up the project.
 
-## Discover the ontology first
+## Decide the next call from the last result
 
-Never hardcode a type or a field. Read the live schema:
+This skill is not a fixed pipeline. Every khub call but the operator commands (`reindex`, `viz`, `serve`, `backfill`,
+`wire`) answers in JSON, and that answer decides the next call: an id you did not have, an edge to walk, an `error` naming the
+field to fix, a `gaps` entry, a stderr `note:` saying a search was cut short.
 
-- `khub status --format json` — counts per type, draft/active (`status: draft` is a draft), and the active preset.
-- `khub schema --format json` — every type with its fields, enums, required flags, and relations.
-- `khub schema show <type> --format json` — one type's shape; build an `add`/`edit` from it.
-- `khub schema diff --format json` — schema changes since the last `khub schema snapshot`; `pending: true` means existing entities may predate the current schema.
+- **A closed ask** (one fact, one write, an id you already hold): plan the calls up front,
+  run them, confirm from the result.
+- **An open ask** ("what do we know about X", "is this safe to change"): loop. Before each
+  call, name the gap in one line ("what `<id>` depends on is unresolved"). If you cannot
+  name one, stop and answer from what you have. Never re-run a call reworded, and never
+  re-plan from scratch.
+
+## Which verb
+
+Never hardcode a type or a field: the first four rows read the live schema.
+
+| You want to… | Call | Next, depending on the answer |
+|---|---|---|
+| know what the workspace holds | `khub status --format json` | counts per type, draft/active (`status: draft` is a draft), orphan, stale and expired; `schema` for the types behind them |
+| know every type, field, enum and relation | `khub schema --format json` | `provenance` names the active preset and its version; `schema show <type>` before writing one |
+| know one type's shape before a write | `khub schema show <type> --format json` | build `add`/`edit` from it |
+| know whether the schema moved under the data | `khub schema diff --format json` | `pending: true` → entities may predate it. `no_schema_snapshot` means no baseline exists; do not run `schema snapshot` (a write) to answer a read |
+| pick up where work left off | `khub recent [--days N] --format json` | newest first, a week by default. It dates by `updated`, else the last commit, so an uncommitted hand edit without `updated` does not show |
+| read an entity whose id you hold | `khub get <id>... --edges --format json` | `get` an edge's target, or `neighbors` |
+| read the entity a file holds | `khub get --path <file>... --format json` (khub 0.32.0 and later) | the same record as `get <id>`; use it on paths from `grep`, as printed from the current directory, instead of guessing the slug. A collection file refuses and lists its ids |
+| find entities by a field, tag, edge or review tier | `khub query --type <t> [--<field> <v>] [--tag <t>] [--has/--missing <pred>] [--trust <tier>] --format json` | `get` the rows you need; `--missing` finds gaps, `--trust` takes `unverified`, `machine` or `human`. Filter here rather than listing and filtering yourself |
+| find everything under an entity | `khub query --under <id> --via <pred> --format json` | any number of hops, ANDed with the other filters. A stored `<pred>` points from child to parent (`--via system`); for one stored on the parent, pass its declared inverse (`--via superseded`) |
+| find entities by how many edges they have | `khub query --count '<pred>>=2'` / `--in-count '>=5'` / `--out-count 0` | ops `= != < <= > >=`; repeat to AND, e.g. a range. Quote the bound: `>` and `<` are shell redirects |
+| see what is one hop away | `khub neighbors <id> [--predicate <p>] [--in/--out] --format json` | `get` the neighbor that answers |
+| see what breaks if this changes | `khub impact <id> --reverse [--predicate <p>] --format json` | `get` the rows at the depth that matters. Without `--reverse` it walks what this reaches; the predicate defaults to `depends_on` |
+| trace a supersession chain | `khub history <newest-id> --format json` | it walks back from the record you name, so name the newest. What replaced an old record: `neighbors <id> --in --predicate <supersession predicate>` |
+| find something by its words | `khub search <text> [--type <t>] [--plain] [--also <text>] --format json` | `get` the hit; follow a stderr `note:` |
+| gather the context around a topic in one call | `khub retrieve <text> [--expand <pred>[:<depth>]] [--max-bytes <n>] --format json` | read `omitted` before trusting the answer |
+| record a fact no entity holds yet | `khub add <type> --title "…" [--draft] --format json` | `validate <type>/<slug>` |
+| change a field, or the body | `khub edit <id> <field> <v> --format json` | `validate <type>/<slug>` |
+| connect or disconnect two entities | `khub link` / `khub unlink <id> <predicate> <target> --format json` | `changed: false` was a no-op |
+| delete an entity | `khub remove <id> --format json` | refused while something points at it: `neighbors <id> --in` |
+| read in an external OKF bundle | `khub import --okf <bundle> [--type-map <file>] --format json` | read `skipped` and `unresolved` |
+| record that someone reviewed an entity | `khub verify <id> --by <actor> --format json` | see **Write** for who may be named |
+| check one entity you wrote | `khub validate <type>/<slug> --format json` | fix what `errors` names, then `validate` again |
+| check the whole graph before you finish | `khub check --format json` | fix the findings your change caused |
+| refresh the generated `index.md` | `khub reindex` (human text, no `--format`) | — |
 
 The schema lives at `.khub/ontology.yaml` (the domain model) with `.khub/policy.yaml` and `.khub/storage.yaml` beside it; the active preset (`firm-ops` or `build-hub`; `build-lite` is an alias that `init` resolves and records as `build-hub`) is recorded in `.khub/config.yaml`. `khub wire` links the schema into the agent context files (`CLAUDE.md`, `AGENTS.md`), so the ontology may already be in your context.
 
-## Retrieve
+## Retrieve: exact first, then the graph, then text
 
-- `khub query --type <t> [--<field> <v>] [--tag <t>] [--has <pred>] [--missing <pred>] [--trust human] --format json` — filter by frontmatter; `--missing` surfaces gaps, `--trust` filters by review tier (`unverified`, `machine`, `human`).
-- `khub query --under <id> --via <pred> --format json` — everything under `<id>`, any number of hops; ANDs with the other filters. A stored `<pred>` points from child to parent (`--via system`); for a hierarchy stored on the parent, pass its declared inverse (`--via superseded`).
-- `khub query --count '<pred>>=2'` / `--in-count '>=5'` / `--out-count 0` — filter by how many edges an entity has (ops `= != < <= > >=`; repeat to AND, e.g. a range). Quote the bound: `>` and `<` are shell redirects.
-- `khub recent [--days N] --format json` — what was touched lately, newest first (default a week); the place to start when picking up where work left off. It dates by `updated`, else the last commit, so an uncommitted hand edit without `updated` does not show.
-- `khub get <id>... --edges --format json` — one ID returns one object; multiple IDs return an all-or-nothing array in argument order, duplicates included. Raw output accepts one ID only. `--edges` lists every inbound edge from another entity as `derived: true`, named by the relation's declared inverse or else `<source type>.<predicate>`. A derived name is a label; filter with the raw predicate (`query --has <predicate>`).
-- `khub get --path <file>... --format json` (khub 0.32.0 and later) — the entity stored in a file, the same record as `get <id>`. Use it on paths from `grep` or any file search, as printed from the current directory, instead of guessing the slug or reading the raw file. A collection file refuses and lists its ids.
-- `khub neighbors <id> --format json` — one-hop adjacency.
-- `khub impact <id> --format json` — transitive closure over a predicate (blast radius).
-- `khub history <id> --format json` — a supersession chain.
-- `khub search <text> --format json` — BM25 full-text over titles, bodies, and fields; `--plain` takes words as typed (any may match) instead of FTS5 syntax. Hits carry `draft`/`orphan`/`stale`, per-predicate edge counts, and, for a body match under a Markdown heading, `section`: the heading path to the matched text, so you can read that part of the body. With an intent and an exact anchor, send both as groups in one call (`khub search "auth flow" --also '"ForbiddenError"'`): each is ranked on its own and the rankings are fused by reciprocal rank, so a hit in both usually comes first where one `OR` query would bury the rare word. Compare fused rows on `fused` (higher is better) and read `groups`; `score` and `snippet` there come from one group per row, not the same one.
-- `khub retrieve <text> [--expand <pred>[:<depth>]] [--max-bytes <n>] --format json` — the seeds (a search, or `--id <id>` repeated) with their neighbourhood, as full `get` records, in one call. Reach for it when you would otherwise run `search`, then `get` on the hits, then `neighbors` on each: it returns seeds in rank order followed by what they link to, every record with a `reason` (the seed's score, or the predicate, direction and id it was reached from) and the lifecycle flags. Budget it: `--limit` caps the seeds, `--max-entities` and `--max-bytes` trim the far edge first, `--no-body` keeps the frontmatter and edges only. Read `omitted`: `truncated` means something was cut, `insufficient` means the cap could not hold the seeds themselves — raise the cap, lower `--limit` or pass `--no-body` rather than trusting a clipped answer. Use `search` alone when you only need to find; `get` when you already hold the ids and want nothing around them.
+Take the cheapest row of the table that can answer, and step only on a named gap:
+
+1. **Exact** — `get` when you hold an id or a path, `query` when you know a field, tag or
+   edge. One id to `get` returns one object; several return an all-or-nothing array in
+   argument order, duplicates included; raw output accepts one id only.
+2. **Graph** — `neighbors`, `impact`, `history` from an id you hold.
+3. **Lexical** — `search`, BM25 over titles, bodies and fields; FTS5 syntax unless
+   `--plain`, which takes words as typed (any may match).
+4. **Body** — only when the answer is in the prose; `get` returns it.
+
+A search hit is an id, so the next call is exact again. A stderr `note:` means the result is
+truncated, empty or missing unparseable files: raise `--limit` or switch to
+`query`/`neighbors`/`get`, rather than rephrasing the search.
+
+- **Edges.** `get --edges` lists every inbound edge from another entity as `derived: true`,
+  named by the relation's declared inverse or else `<source type>.<predicate>`. A derived
+  name is a label; filter with the raw predicate (`query --has <predicate>`).
+- **Search hits** carry `draft`/`orphan`/`stale`, per-predicate edge counts, and, for a
+  body match under a Markdown heading, `section`: the heading path to the matched text.
+  With an intent and an exact anchor, send both as groups in one call
+  (`khub search "auth flow" --also '"ForbiddenError"'`): each is ranked on its own and the
+  rankings are fused by reciprocal rank, so a hit in both usually comes first where one
+  `OR` query would bury the rare word. Compare fused rows on `fused` (higher is better) and
+  read `groups`; `score` and `snippet` there come from one group per row.
+- **`retrieve`** stands in for `search`, then `get` on the hits, then `neighbors` on each.
+  It returns the seeds (a search, or `--id <id>` repeated) in rank order followed by what
+  they link to, as full `get` records, each with a `reason` (the seed's score, or the
+  predicate, direction and id it was reached from). `--limit` caps the seeds,
+  `--max-entities` and `--max-bytes` trim the far edge first, `--no-body` keeps the
+  frontmatter and edges only. In `omitted`, `truncated` means something was cut and
+  `insufficient` means the cap could not hold the seeds themselves: raise the cap, lower
+  `--limit` or pass `--no-body` rather than trusting a clipped answer.
+  Use `search` alone when you only need to find, and `get` when you already hold the ids.
+- **Receipts.** Add `--receipt` to `query` or `search` when you need the counts as data: the
+  JSON becomes `{receipt, results}`, and `receipt` echoes the applied filters (and the FTS5
+  expression `--plain` built), `matched` before `--limit`, `returned`, and `truncated`.
 
 ## Know when to write
 
@@ -60,35 +120,55 @@ Every write goes through the CLI — the only path that validates and resolves r
 entity file gets hand-edited anyway, run `khub validate` on it immediately: an unvalidated
 hand-edit is how a workspace acquires a field no default gate will report.
 
-- `khub add <type> --<field> <v> [--body <text>] [--draft] --format json` — mint an entity. Set relation fields inline (`--client acme-corp`). A relation to a missing target is rejected; a missing required field is captured anyway and reported later by `khub check`.
-- `khub edit <id> <field> <v> --format json` — change a field; `edit <id> status stable` publishes a draft. `--draft` on `add` writes `status: draft`; an entity with no `status` is stable.
-- `khub link <id> <predicate> <target>` / `khub unlink <id> <predicate> <target> --format json` — relations, idempotent. Read `changed` to tell a write from a no-op; both exit 0.
-- `khub import --okf <bundle> [--type-map <file>] --format json` — read an external OKF bundle in as drafts; read `skipped` for every concept that did not land and `unresolved` for relation values kept aside in `okf_unresolved`. The bundle's own `verified` is kept as `okf_verified` and does not count as a review.
-- `khub remove <id> --format json` — delete; refuses while an inbound edge resolves to it unless `--force`.
-- `khub verify <id> --by <actor> --format json` — record that someone reviewed an entity. Use it only when a review actually happened, and name who did it: `human:<name>` for a person who confirmed the content, `process:<name>` for a check that ran. Never verify as `human:` on your own say-so. A later content or status edit supersedes the review; reads show it in `trust`, and `khub check --require-verified [--tier human]` fails on active entities below the tier.
+`add` takes relation fields inline (`--client acme-corp`) and the prose as `--body <text>`;
+it rejects a missing target, but captures a missing required field for `check` to report. `--draft` on `add` writes
+`status: draft`; an entity with no `status` is stable, and `edit <id> status stable`
+publishes a draft. `link`/`unlink` are idempotent and exit 0 either way. `remove --force`
+deletes despite inbound edges. `import` brings a bundle in as drafts; the bundle's own
+`verified` is kept as `okf_verified` and does not count as a review.
+
+- **Look before you add.** `search --plain "<title>"`, or `query` on the field that would
+  match. If it exists, `edit` or `link` it: a second entity for the same thing splits the
+  edges that should meet.
+- **Inferred is `--draft`.** A fact you inferred, guessed or read off an untrusted source
+  lands with `--draft`. Drafts stay out of the active graph and out of `check`'s
+  completeness gate until a human publishes one with `edit <id> status stable`.
+- **Never overwrite a human's value with your inference.** Leave it, and report the
+  conflict. Mint a separate draft only when your evidence is a different kind of record.
+- **Verify only a review that happened.** `verify --by` names who reviewed:
+  `human:<name>` for a person who confirmed the content, `process:<name>` for a check that
+  ran. Never verify as `human:` on your own say-so. A later content or status edit
+  supersedes the review; reads show it in `trust`, and `khub check --require-verified
+  [--tier human]` fails on active entities below the tier.
+- **Exit 0 or it did not happen.** Claim a write only on exit 0 with an `id` in the JSON.
+  Exit 2 is a refusal: read `error.code` and correct the call. Nothing was written, with
+  three exceptions: `write_durability_uncertain` means the write published, so do not run
+  it again; `import_write_failed` names the files it could not undo; and
+  `upgrade_recovery_failed` leaves a journal to inspect.
 
 Every content write stamps `generated: {by, at}`: an `add`, or a change to the body, a declared field, `status` or a relation. A bookkeeping-only edit (`tags`, `aliases`, `stale_after`, `author`, `created`) and an edit that changes nothing stamp nothing. Under Claude Code `by` is `agent/claude-code` unless `KHUB_ACTOR` or `--by` says otherwise; pass `--by human:<name>` only when that person wrote the content.
 
-## The loop
+## Generate, validate, iterate
 
-1. `khub add <type> --title "..." …` — it mints the id (`khub schema show <type>` names the
-   shape: the type's prefix, a date where the type declares one, then the slugified title),
-   writes the frontmatter, and seeds the body from the type's template with a hint comment
-   under each heading. The id is the handle from here on; there is no shorter form of it.
-2. Open the file and write the prose. Replace the hint comments; keep the `##` headings and
-   their order. A heading you have nothing to say under may be deleted if the template
-   declares it `optional` — an empty one helps nobody.
-3. `khub validate <type>/<slug> --format json` — the file you just wrote, on its own. Cheap,
-   and it names the one thing that is wrong. Read all four keys: `errors` (broken), `gaps`
-   (unfinished), `body` (word counts per section) and `lenses` (the review questions the
-   type declares). See **Reviewing a body**.
-4. `khub link` every relation. Edit frontmatter by hand only for plain attributes — and
-   `validate` again if you did.
-5. `khub check`. **Errors** mean the workspace is broken — fix them before you finish.
-   **Gaps** (`incomplete`, orphans, `thin`) mean legal but unfinished; fix the ones your
-   change caused.
-6. `khub reindex` if you added, removed or re-linked anything. `index.md` is generated, and
-   a stale one sends the next reader to a file that moved.
+1. **Generate.** `khub add <type> --title "..." …` mints the id (`schema show <type>` names
+   the shape: the type's prefix, a date where the type declares one, then the slugified
+   title), writes the frontmatter, and seeds the body from the type's template with a hint
+   comment under each heading. The id is the handle from here on. Write the prose into the
+   file: replace the hint comments, keep the `##` headings and their order, and delete a
+   heading only if the template declares it `optional`.
+2. **Validate.** `khub validate <type>/<slug> --format json`, the file you wrote, on its own.
+   Read all four keys: `errors` (broken), `gaps` (unfinished), `body` (word counts per
+   section) and `lenses` (the type's review questions). See **Reviewing a body**.
+3. **Iterate.** Fix exactly what an `errors` entry, or a `gaps` entry your change caused,
+   names; then `validate` again. Stop when `errors` is empty and the remaining `gaps`
+   predate you. Do not rewrite what `validate` did not flag.
+4. **Connect.** `khub link` every relation. Edit frontmatter by hand only for plain
+   attributes — and `validate` again if you did.
+5. **Check.** `khub check`. **Errors** mean the workspace is broken: fix them, looping back
+   to `validate`. **Gaps** (`incomplete`, orphans, `thin`) are legal but unfinished: fix
+   the ones your change caused.
+6. `khub reindex` if you added, removed or re-linked anything; a stale `index.md` sends the
+   next reader to a file that moved.
 
 `validate` is the per-entity subset: well-formedness, the schema, whether the ids it names
 resolve, and the body against its template. `check` adds what only exists across the whole
@@ -158,14 +238,10 @@ not been found yet.
 
 ## Rules
 
-- Every read AND write emits JSON on a pipe; a table is only for a TTY. `--format json` makes it explicit.
+- Every read AND write emits JSON on a pipe; a table is only for a TTY. `--format json` makes it explicit. The operator commands (`reindex`, `viz`, `serve`, `backfill`, `wire`) are the exception: they print prose and take no `--format`.
 - Every existing-workspace mutation is serialized workspace-wide from scan through commit. Never delete `.khub/generated/locks/workspace.lock` while khub may be running.
-- Build every write from `khub schema show`, never from a hardcoded shape.
 - On a failed command, read the located error (field, reason, or unresolved target) and correct the call. Exit 2 reports a refusal or write failure; `write_durability_uncertain` means publication happened, and `upgrade_recovery_failed` requires journal inspection. Exit 1 is a gate (`validate`, `check`) that ran and found the workspace wrong.
-- Gate before you commit: `khub validate` per entity, `khub check` graph-wide.
 - Run `khub validate --strict` in CI. Capture is never blocked, so a typo'd field name (`--knid`) is written to frontmatter and neither default gate reports it; `--strict` is what turns undeclared keys into a finding.
-- `khub search` and `khub query --has/--missing` both reach attribute values, so find an entity by what it holds (`search python`, `query --type component --missing repo`) rather than listing and filtering yourself.
-- Search before `add` (`khub search --plain "<title>"`) so you do not mint a duplicate. A `note:` line on stderr means the result is truncated, empty or missing unparseable files; follow it (raise `--limit`, switch to `query`/`neighbors`/`get`) rather than rephrasing the same search. Add `--receipt` to `query` or `search` when you need the counts as data: the JSON becomes `{receipt, results}`, and `receipt` echoes the applied filters (and the FTS5 expression `--plain` built), `matched` before `--limit`, `returned`, and `truncated`.
 - When sources call an entity by another name, record it: `khub edit <id> aliases "Initech,INTC"`. Every ID you pass then resolves through it, a relation written by alias stores the real slug, and `add` refuses a slug that is already someone's alias.
 
 ## What earns a document
