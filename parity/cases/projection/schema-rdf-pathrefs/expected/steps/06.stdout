@@ -1,0 +1,1 @@
+{"error": {"code": "invalid_out", "message": "Output path . is a directory; --out names the file to write"}}

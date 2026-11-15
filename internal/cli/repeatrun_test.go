@@ -133,6 +133,13 @@ var readCalls = map[string][][]string{
 	"schema base":  {{"schema", "base"}, {"schema", "base", "--format", "json"}},
 	"schema edges": {{"schema", "edges"}, {"schema", "edges", "--format", "json"}},
 	"schema diff":  {{"schema", "diff"}, {"schema", "diff", "--format", "json"}},
+	// `--out -` prints the document and a dry run reports; neither writes
+	// or takes the lock.
+	"schema rdf": {
+		{"schema", "rdf", "--out", "-"},
+		{"schema", "rdf", "--out", "-", "--instances"},
+		{"schema", "rdf", "--dry-run", "--instances", "--format", "json"},
+	},
 	// A dry run writes nothing and takes no lock, so it repeats as a read. The
 	// forced remove previews cmp-c00's inbound edges, a tie of nine or more.
 	"add":    {{"add", "component", "--title", "Fresh", "--kind", "service", "--system", "sys-core", "--dry-run"}},
