@@ -9,6 +9,8 @@ allowed-tools: Bash
 
 Install the khub CLI on this machine, then set up the current project so any agent reasons in its ontology.
 
+**Done when** khub answers from the workspace: `khub status --format json`, run inside it, prints its counts, and `khub check` runs to a verdict. A `khub init` that prints success is not the end; step 3 is.
+
 ## 1. Install the CLI
 
 khub is a single static binary distributed through npm as
@@ -22,9 +24,8 @@ npx @endgame-build/khub --version
 
 If the project already pins khub in `package.json`, just `npm ci` (or
 `npm install`) and use `npx @endgame-build/khub`. Always write the full
-scoped name: the unscoped npm name `khub` is an unrelated package, and npx
-downloads and runs it wherever the local install is missing. For a
-machine-global install instead:
+scoped name (see the never-do list below). For a machine-global install
+instead:
 
 ```bash
 npm install -g @endgame-build/khub
@@ -33,9 +34,11 @@ npm install -g @endgame-build/khub
 npm is the only install channel; khub needs Node on the machine (the binary
 itself has no runtime dependency once installed).
 
-If the install fails, report the error and stop; install nothing partial, and
-never write registry or credential configuration yourself — that is the
-human's call.
+If the install fails, report the error and stop.
+
+The rest of this skill writes `khub …`. With the per-repo install, run that as
+`npx @endgame-build/khub …`: a dev dependency puts no `khub` on the `PATH`, so a
+bare `khub` fails there. With a global install, run it as `khub …`.
 
 ## 2. Set up the project
 
@@ -43,6 +46,7 @@ human's call.
 
 ```bash
 khub init firm-ops ./my-hub && cd my-hub
+# per-repo install: npx @endgame-build/khub init firm-ops ./my-hub && cd my-hub
 ```
 
 The agent skills ship apart from the CLI. You are reading one, so this agent has them. For the other agents on the project:
@@ -67,7 +71,7 @@ claude plugin marketplace update khub
 claude plugin update khub@khub
 ```
 
-**Workspace already present** (a cloned engagement repo)? Do not re-scaffold; just wire it:
+**Workspace already present** (a cloned engagement repo)? Do not re-scaffold; wire it:
 
 ```bash
 khub wire
@@ -94,8 +98,51 @@ does not. An `upgrade_recovery_failed` error names a retained journal under
 outright — the catch-all goes FIRST, opencode takes the last match:
 
 ```json
-{ "permission": { "bash": { "*": "ask", "khub *": "allow" } } }
+{ "permission": { "bash": { "*": "ask", "khub *": "allow", "npx @endgame-build/khub *": "allow" } } }
 ```
+
+## 3. Prove it works
+
+From inside the workspace:
+
+```bash
+khub status --format json   # counts per type; a fresh preset shows its seeded singletons, or zero
+khub check                  # exits 0 (passed) or 1 (findings); either is a working setup
+```
+
+Exit 2, an `error.code` in the JSON, or `command not found` means the setup is not done: fix the cause (wrong directory, missing install, bare `khub` after a dev-dependency install) and run both again.
+
+The khub plugin's band above the prompt is for the user to see; you cannot, so do not wait on it. It shows the workspace's total only when two things hold:
+
+- Claude Code was started at the workspace or inside it. The plugin finds `.khub/` from the directory the session started in and does not follow a `cd`, so a workspace that `init` created in a subdirectory gets no band until a session starts there.
+- khub is reachable from the workspace root: installed under `<workspace>/node_modules`, installed globally on the `PATH`, or named by the plugin's `binary` setting. A dev dependency installed in a parent directory is none of these.
+
+A plugin installed or updated during an open session loads after `/reload-plugins` or in a new session. Say in the report whether the user should expect the band.
+
+## 4. Report back
+
+End with one message to the user in this shape:
+
+```text
+khub is set up.
+- Workspace: <absolute path of the directory holding .khub/>
+- Preset: <name and version from `khub schema --format json` provenance>
+- khub: <version>, installed <per-repo dev dependency | globally>; run it as <`npx @endgame-build/khub` | `khub`>
+- Verified: `khub status` total <n>; `khub check` <passed | n findings>
+- Claude Code band: <expect it with total <n> when Claude Code starts in <workspace> | not expected, because <reason>; to get it, <fix>>
+- Other agents: `npx skills add endgame-build/khub` (Claude Code: `/plugin marketplace add endgame-build/khub`, then `/plugin install khub@khub`)
+- Try next: `khub query`, then `khub add <type> …` for a first entity
+- Unusual: <anything that surprised you — a warning, a skipped step, an old skill folder left to delete — or "nothing">
+```
+
+## Never do
+
+- Never re-run `khub init` in a directory that already has `.khub/` at or above it. Run `khub wire`, or `khub upgrade` after a version bump.
+- Never install or run the unscoped npm name `khub`. It is an unrelated package, and npx downloads and runs it wherever the local install is missing. Always write `@endgame-build/khub`.
+- Never write registry, token or credential configuration (`.npmrc`, registry or token environment variables) yourself. That is the human's call.
+- Never leave a partial install behind. If a step fails, report the error and stop.
+- Never report the setup done before the commands in step 3 answer.
+- Never edit the managed block `wire` writes into `CLAUDE.md` or `AGENTS.md`. Re-run `khub wire`; it rewrites the block in place.
 
 ## Next
 

@@ -49,6 +49,14 @@ Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelo
   now says `No git history; dates come from updated or created only`. It said
   `using updated field only`, which was wrong: an undated entity falls back to
   `created`.
+- The `setup` skill (plugin 0.1.7) says when setup is done: `khub status
+  --format json` and `khub check` answer from the workspace. It ends with a
+  fixed report for the user, collects its prohibitions in one never-do list,
+  and says when the plugin's band shows. Step 1 states that with the per-repo
+  install `khub …` runs as `npx @endgame-build/khub …`. Before, step 2 ran a
+  bare `khub` that a dev-dependency install does not put on the `PATH`.
+- The `khub` skill no longer says `status --format json` names the active
+  preset; `schema --format json` does, under `provenance`.
 
 ### Fixed
 
