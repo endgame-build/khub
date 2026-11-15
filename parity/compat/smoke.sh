@@ -225,7 +225,7 @@ backward() {
   # backups named == backups present
   local named present
   named=$(printf '%s' "$report" | jq -r '.config[]|select(.backup!=null)|.backup' | sort)
-  present=$(find .khub -name '*.bak' -printf '%P\n' | sed 's|^|.khub/|' | sort)
+  present=$(find .khub -name '*.bak' | sort)
   [ "$named" = "$present" ] && pass ".bak set == config[].backup" || fail ".bak set != config[].backup" "named=[$named] present=[$present]"
   # the backup holds the OLD bytes
   tail -c 8 .khub/storage.yaml.bak | grep -q '# mine' && pass "backup carries the edit" || fail "backup lacks the edit"
