@@ -193,6 +193,20 @@ Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelo
   skips when that directory does not exist. The khub skill tells the agent
   to run `khub doctor` when a failure's own error does not explain it.
   Closes #41.
+- **`viz --aspect instances|schema|both`.** `instances` is today's entity
+  graph and stays the default, byte for byte. `schema` draws the resolved
+  ontology from the schema alone: a box per declared type listing its
+  attributes with UML multiplicity, an `any` box for the base block, and an
+  edge per declared relation labelled with its multiplicity, solid when
+  required and dashed when optional. `both` draws the two together, the types
+  above the entities that realize them, joined by dotted instance-of edges.
+  `--type` narrows every aspect to the type's outbound frontier. Closes #61.
+- **`serve --aspect`** opens the page on the matching view through
+  `?aspect=` on the printed URL. The page gains a **Both** view: the graph
+  view's entities with their types boxed above them, under the same focus,
+  depth and predicate filters. The server is unchanged: read-only, GET and
+  HEAD only, the same Host-header guard. `khub completion` offers the three
+  aspects for both flags.
 
 ### Changed
 

@@ -37,6 +37,8 @@ steps:
 - argv: ["__complete", "init", ""]
 - argv: ["__complete", "query", "--trust", ""]
 - argv: ["__complete", "check", "--tier", ""]
+- argv: ["__complete", "viz", "--aspect", ""]
+- argv: ["__complete", "serve", "--aspect", ""]
 # Workspace-defined values offer nothing and no files.
 - argv: ["__complete", "get", ""]
 - argv: ["__complete", "schema", "show", ""]

@@ -22,6 +22,7 @@ import (
 
 	"github.com/endgame-build/khub/internal/presets"
 	"github.com/endgame-build/khub/internal/trust"
+	"github.com/endgame-build/khub/internal/viz"
 )
 
 // completionShells is the closed set, in the order help and errors list it.
@@ -105,9 +106,11 @@ var defaultFormatValues = []string{"text", "json"}
 
 // optionValues are the closed sets of the other options that have one.
 var optionValues = map[string][]string{
-	"khub wire --target": {"claude", "agents", "both"},
-	"khub query --trust": trust.Tiers,
-	"khub check --tier":  {trust.Machine, trust.Human},
+	"khub wire --target":  {"claude", "agents", "both"},
+	"khub query --trust":  trust.Tiers,
+	"khub check --tier":   {trust.Machine, trust.Human},
+	"khub viz --aspect":   viz.Aspects,
+	"khub serve --aspect": viz.Aspects,
 }
 
 // pathOptions are the options whose value is a path: a file (Default) or a

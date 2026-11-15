@@ -40,8 +40,8 @@ Commands:
   reindex  Regenerate the OKF index.md from the graph: khub reindex [--dry-run | --check].
   export  Write the workspace as an OKF 0.2 bundle: khub export --okf DIR.
   import  Read an OKF bundle into the workspace as drafts: khub import --okf DIR.
-  viz  Render the typed graph to a self-contained Cytoscape HTML: khub viz [--out F] [--open] [--type T].
-  serve  Serve a read-only graph view on loopback: khub serve [--port 7777].
+  viz  Render the typed graph to a self-contained Cytoscape HTML: khub viz [--out F] [--open] [--type T] [--aspect A].
+  serve  Serve a read-only graph view on loopback: khub serve [--port 7777] [--aspect A].
   backfill  Backfill missing dates and frontmatter: khub backfill [--type T] [--infer-type] [--dry-run].
   wire  Wire the workspace into agent context files (CLAUDE.md gets ``@`` imports of the
 schema layer files; AGENTS.md gets a schema pointer). Bare ``wire`` updates whichever already exist.
@@ -558,12 +558,13 @@ Options:
 $ khub viz --help
 Usage: khub viz [OPTIONS]
 
-Render the typed graph to a self-contained Cytoscape HTML: khub viz [--out F] [--open] [--type T].
+Render the typed graph to a self-contained Cytoscape HTML: khub viz [--out F] [--open] [--type T] [--aspect A].
 
 Options:
   --out <str>  Output path for the HTML (default viz.html). [default: viz.html]
   --open  Open the written file in the default browser.
   --type <str>  Render only that type and its incident edges.
+  --aspect <str>  What to draw: instances (the entities), schema (the types and their relations), or both. [default: instances]
   --help  Show this message and exit.
 
 ```
@@ -574,10 +575,11 @@ Options:
 $ khub serve --help
 Usage: khub serve [OPTIONS]
 
-Serve a read-only graph view on loopback: khub serve [--port 7777].
+Serve a read-only graph view on loopback: khub serve [--port 7777] [--aspect A].
 
 Options:
   --port <int>  Port to bind on 127.0.0.1; 0 takes an ephemeral one. [default: 7777]
+  --aspect <str>  View to open on: instances, schema, or both. Default: the schema view.
   --help  Show this message and exit.
 
 ```

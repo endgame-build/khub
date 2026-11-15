@@ -117,7 +117,10 @@ var readCalls = map[string][][]string{
 		{"retrieve", "ledger", "--max-entities", "9", "--format", "json"},
 	},
 	// viz writes its page outside the workspace; the test compares the page.
-	"viz": {{"viz", "--out", "%VIZ%"}, {"viz", "--out", "%VIZ%", "--type", "component"}},
+	"viz": {
+		{"viz", "--out", "%VIZ%"}, {"viz", "--out", "%VIZ%", "--type", "component"},
+		{"viz", "--out", "%VIZ%", "--aspect", "schema"}, {"viz", "--out", "%VIZ%", "--aspect", "both", "--type", "component"},
+	},
 	"backfill": {
 		{"backfill", "--dry-run"},
 		{"backfill", "--type", "component", "--dry-run"},
