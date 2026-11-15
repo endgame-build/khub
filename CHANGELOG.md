@@ -33,6 +33,13 @@ Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelo
   `--limit` is `query`'s (0 returns nothing, `-n` drops the last n), and a cut
   says so in a `note:` line on stderr. The plugin (0.1.6) draws a compact row
   for it, the note included.
+- `docs/ingestion-conflicts.md`, the conflict policy for the planned
+  ingestion path: a re-run never silently overwrites a value in a published
+  entity, reports each disagreement (entity, field, ours, theirs, source)
+  under a named strategy (`manual` by default), and proposes identity matches
+  with their evidence instead of merging. A design only; no command changes.
+  `docs/build-hub-preset.md` now records a facet id as an `aliases` entry
+  (`facet:FUNC-007`) instead of a tag.
 
 ### Changed
 
