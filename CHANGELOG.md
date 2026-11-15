@@ -57,6 +57,15 @@ Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelo
   bare `khub` that a dev-dependency install does not put on the `PATH`.
 - The `khub` skill no longer says `status --format json` names the active
   preset; `schema --format json` does, under `provenance`.
+- The `khub` agent skill is decision guidance, not a fixed pipeline: a table
+  of which verb answers which question and what to call next from its
+  answer; retrieval exact first (`get`, `query`), then the graph
+  (`neighbors`, `impact`, `history`), then `search`, then the body, stepping
+  only on a named gap; a write convention (search before `add`, `edit` over a
+  second entity, inferred facts as `--draft`, never overwrite a human's value,
+  verify only a review that happened, claim a write only on exit 0); and the
+  write loop as generate, validate, iterate. Reinstall or update the plugin,
+  or rerun `npx skills add endgame-build/khub`, to pick it up.
 
 ### Fixed
 
