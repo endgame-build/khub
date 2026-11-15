@@ -31,7 +31,7 @@ type Segment = { words: string[]; ops: string[] }
 
 const NONE: Parsed = { kind: 'none' }
 const BOOLEAN_FLAGS = new Set([
-  'active', 'draft', 'dry-run', 'edges', 'force', 'help', 'in', 'no-body', 'no-schema',
+  'active', 'draft', 'dry-run', 'edges', 'execute', 'force', 'help', 'in', 'no-body', 'no-schema',
   'no-template', 'no-wire', 'open', 'orphan', 'out', 'plain', 'reverse', 'stale', 'strict',
 ])
 // A verb's own boolean flags. `add <type> --path <value>` may set a field named path, so
@@ -263,7 +263,7 @@ function khubCall(words: string[], binary: RegExp): Simple | null {
 
   const found: Simple = { ...call(verb), workspace }
 
-  if (verb === 'schema' && SCHEMA_VIEWS.has(words[i] ?? '')) {
+  if ((verb === 'schema' && SCHEMA_VIEWS.has(words[i] ?? '')) || (verb === 'layout' && words[i] === 'migrate')) {
     found.sub = words[i] as string
     i += 1
   }
@@ -374,10 +374,12 @@ export const isWrite = (found: Simple) => WRITES.has(found.verb)
 // Tells whether a call asked for a preview. A dry run of any verb writes nothing.
 export const isDryRun = (found: Simple) => isOn(found.flags['dry-run'])
 
-// Tells whether a call changes entities, the schema, the index or the agent files.
+// Tells whether a call changes entities, the schema, the index or the agent files. A
+// `layout migrate` is a dry run until `--execute`.
 export const mutates = (found: Simple) =>
   ((isWrite(found) || OPERATORS.has(found.verb)) && !isDryRun(found)) ||
-  (found.verb === 'schema' && found.sub === 'snapshot')
+  (found.verb === 'schema' && found.sub === 'snapshot') ||
+  (found.verb === 'layout' && found.sub === 'migrate' && isOn(found.flags['execute']))
 
 // Returns what a `khub edit` call changed, as `<field> <value>` pairs. A body is named,
 // never quoted.
