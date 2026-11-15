@@ -57,7 +57,7 @@ func registerValidate(root *cobra.Command) {
 
 func registerCheck(root *cobra.Command) {
 	var format string
-	var strict, stale, requireVerified bool
+	var strict, stale, requireVerified, mentions bool
 	var tier string
 	cmd := newCmd("check", "Check the active graph: completeness, orphans, dangling edges, strays, cycles, bodies.",
 		"", func(cmd *cobra.Command, args []string) error {
@@ -66,7 +66,8 @@ func registerCheck(root *cobra.Command) {
 				if err != nil {
 					return err
 				}
-				report, err := integrity.Check(ws, strict, clock.Now())
+				report, err := integrity.CheckWith(ws,
+					integrity.CheckOptions{Strict: strict, Mentions: mentions}, clock.Now())
 				if err != nil {
 					return err
 				}
@@ -96,6 +97,8 @@ func registerCheck(root *cobra.Command) {
 	cmd.Flags().BoolVar(&stale, "stale", false, "Fail the gate on active entities whose stale_after has passed.")
 	cmd.Flags().BoolVar(&requireVerified, "require-verified", false, "Fail the gate on active entities below --tier.")
 	cmd.Flags().StringVar(&tier, "tier", trust.Machine, "The review tier --require-verified asks for: machine or human.")
+	cmd.Flags().BoolVar(&mentions, "mentions", false,
+		"Also suggest edges for entities a body names but no relation links (informational; never written).")
 	cmd.Flags().StringVar(&format, "format", "text", "text (Rich on a TTY) or json.")
 	root.AddCommand(cmd)
 }
@@ -317,6 +320,22 @@ func checkPayload(report *integrity.CheckReport) *omap.Map {
 		superseded = append(superseded, record)
 	}
 	payload.Set("superseded_verifications", superseded)
+	// Only when asked for: suggestions, not findings, so they never affect
+	// `passed` and stay out of the default payload.
+	if report.MentionsRun {
+		mentions := make([]any, 0, len(report.Mentions))
+		for _, m := range report.Mentions {
+			record := omap.New()
+			record.Set("id", m.ID())
+			record.Set("type", m.Type)
+			record.Set("slug", m.Slug)
+			record.Set("target", m.Target)
+			record.Set("text", m.Text)
+			record.Set("predicates", strList(m.Predicates))
+			mentions = append(mentions, record)
+		}
+		payload.Set("mentions", mentions)
+	}
 	return payload
 }
 
@@ -364,6 +383,9 @@ func checkHuman(report *integrity.CheckReport) {
 			fmt.Printf("thin %s: %s (informational)\n", th.ID(), th.Reason)
 		}
 		printSuperseded(report, " (informational)")
+		for _, m := range report.Mentions {
+			fmt.Printf("%s (informational)\n", mentionLine(m))
+		}
 		fmt.Println("Graph check passed")
 		return
 	}
@@ -440,6 +462,16 @@ func checkHuman(report *integrity.CheckReport) {
 		fmt.Printf("thin %s: %s\n", th.ID(), th.Reason)
 	}
 	printSuperseded(report, "")
+	for _, m := range report.Mentions {
+		fmt.Println(mentionLine(m))
+	}
+}
+
+// mentionLine is one mention suggestion as text: what the body says, the
+// entity it names, and the predicates that could link it.
+func mentionLine(m integrity.Mention) string {
+	return fmt.Sprintf("mention %s: '%s' names %s with no edge (link as %s)",
+		m.ID(), m.Text, m.Target, strings.Join(m.Predicates, ", "))
 }
 
 func printSuperseded(report *integrity.CheckReport, note string) {

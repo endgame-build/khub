@@ -167,6 +167,11 @@ Every content write stamps `generated: {by, at}`: an `add`, or a change to the b
 5. **Check.** `khub check`. **Errors** mean the workspace is broken: fix them, looping back
    to `validate`. **Gaps** (`incomplete`, orphans, `thin`) are legal but unfinished: fix
    the ones your change caused.
+   `khub check --mentions --format json` also lists, under `mentions`, entities a body names
+   with no edge behind them. Prose is not a relation: `link` the ones the text really
+   relates to, using one of the row's `predicates`, and leave the rest. The predicates are
+   the mentioning entity's own; when the precise edge belongs to the entity named, link
+   from that side instead (`khub schema show <type>` lists its relations).
 6. `khub reindex` if you added, removed or re-linked anything; a stale `index.md` sends the
    next reader to a file that moved.
 

@@ -190,6 +190,17 @@ func (g *Graph) InEdges(n index.Node) []Edge {
 	return out
 }
 
+// Linked reports whether any edge joins u and v, in either direction.
+func (g *Graph) Linked(u, v index.Node) bool {
+	if a := g.succ[u]; a != nil && len(a.keys[v]) > 0 {
+		return true
+	}
+	if a := g.succ[v]; a != nil && len(a.keys[u]) > 0 {
+		return true
+	}
+	return false
+}
+
 // OutDegree is G.out_degree(n): parallel edges count separately.
 func (g *Graph) OutDegree(n index.Node) int { return degree(g.succ[n]) }
 

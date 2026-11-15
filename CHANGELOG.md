@@ -75,6 +75,13 @@ Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelo
   workspace (directly or through a symlink) is skipped, never probed. A gap
   never fails the gate, so `validate` output gains rows but no exit code
   moves. `check` does not report them. Closes #52.
+- **`check --mentions`.** An opt-in audit: an entity whose body prose names
+  another entity (by title, name, alias or slug; fenced code, HTML comments and
+  template headings are skipped) with no edge between the two is
+  listed under a new last key, `mentions`, with the predicates that could link
+  it. Suggestions only — nothing is written, `passed` and the exit code never
+  move, and without the flag the payload is unchanged. Plugin 0.1.9 counts
+  `mentions` as informational. Closes #39.
 
 ### Changed
 
