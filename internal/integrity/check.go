@@ -67,6 +67,20 @@ type Misplaced struct {
 	Expected string
 }
 
+// RetentionHit is one entity past its type's retention rule: its effective date
+// (`updated`, else `created`) is more than the rule's days old and, under
+// `no_outbound`, it has no outbound edge. A candidate for removal, reported and
+// never acted on.
+type RetentionHit struct {
+	Type    string
+	Slug    string
+	Date    string // the effective date, YYYY-MM-DD
+	AgeDays int
+}
+
+// ID is RetentionHit.id.
+func (e RetentionHit) ID() string { return e.Type + "/" + e.Slug }
+
 // AliasConflict is one alias that names more than one entity: two or more
 // entities declare it, or it is some other entity's slug. Either way an ID
 // lookup through it is ambiguous or silently lands on the slug's owner.
@@ -151,6 +165,11 @@ type CheckReport struct {
 	// Review events whose recorded `rev` no longer matches the content: the
 	// review saw an earlier version. Informational, like Thin.
 	Superseded []SupersededVerification
+	// Entities past their type's policy `retention` rule. Informational —
+	// never consulted by Passed, `--strict` included: the clock alone moves an
+	// entity into this bucket, and a gate that turns red with no change to the
+	// workspace would fail every CI run on the day a meeting turns N days old.
+	Retention []RetentionHit
 	// Schema fields that share a name with a write verb's own flag, so that
 	// verb can never set them. The CLI fills it (it owns the flags); a schema
 	// defect, so it fails the gate.
@@ -381,7 +400,39 @@ func CheckWith(root string, opts CheckOptions, now time.Time) (*CheckReport, err
 		Expired:                 expiredEntities(resolved, valid, entityNodes, now),
 		BelowTier:               tiers(resolved, valid, entityNodes),
 		Superseded:              supersededVerifications(resolved, valid, entityNodes),
+		Retention:               retentionHits(resolved, valid, g, entityNodes, now),
 	}, nil
+}
+
+// retentionHits sweeps every type declaring a policy `retention` rule. Drafts
+// count, as they do for the orphan sweep: an abandoned draft is the likeliest
+// end-of-life candidate of all. The date is `updated`, else `created`, the
+// first that parses (project.Age); an entity with neither is never reported.
+//
+// What counts as outbound for `no_outbound` is the graph's out-degree: a
+// stored edge that resolves, to any entity, a draft included, or a path
+// reference to an entity's file. A derived inverse is not stored on this
+// entity and does not count; a self-loop is dropped from the graph; a dangling
+// value or a path reference to a non-entity file is no edge.
+func retentionHits(resolved *schema.ResolvedSchema, valid *index.Index, g *graph.Graph,
+	nodes []index.Node, now time.Time) []RetentionHit {
+	out := []RetentionHit{}
+	for _, n := range nodes {
+		rtype, _ := resolved.Types.Get(n.Type)
+		rule := rtype.Retention
+		if rule == nil {
+			continue
+		}
+		date, age, ok := project.Age(valid.Meta[n], now)
+		if !ok || age <= rule.Days {
+			continue
+		}
+		if rule.NoOutbound && g.OutDegree(n) > 0 {
+			continue
+		}
+		out = append(out, RetentionHit{Type: n.Type, Slug: n.Slug, Date: date.Format("2006-01-02"), AgeDays: age})
+	}
+	return out
 }
 
 // supersededVerifications lists every review event that saw an earlier

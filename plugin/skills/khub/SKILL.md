@@ -174,7 +174,8 @@ other agent sets `KHUB_SESSION` to one value for all its calls to get them.
    attributes — and `validate` again if you did.
 5. **Check.** `khub check`. **Errors** mean the workspace is broken: fix them, looping back
    to `validate`. **Gaps** (`incomplete`, orphans, `thin`) are legal but unfinished: fix
-   the ones your change caused.
+   the ones your change caused. `retention` lists entities past their type's retention
+   rule: candidates for removal that a human decides on. Never delete one on your own.
    `khub check --mentions --format json` also lists, under `mentions`, entities a body names
    with no edge behind them. Prose is not a relation: `link` the ones the text really
    relates to, using one of the row's `predicates`, and leave the rest. The predicates are

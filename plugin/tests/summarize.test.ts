@@ -212,7 +212,7 @@ test('status, validate and check report their counts', () => {
     line: 'failed · dangling 1',
     tone: 'bad',
   })
-  expect(sayOf('khub check --strict', { passed: false, strict: true, orphans: ['x/a', 'x/b'], thin: [{}] }).line).toBe(
+  expect(sayOf('khub check --strict', { passed: false, strict: true, orphans: ['x/a', 'x/b'], thin: [{}], retention: [{}] }).line).toBe(
     'failed · orphans 2',
   )
   // `--mentions` suggestions never fail the gate, so a failed check does not count them.

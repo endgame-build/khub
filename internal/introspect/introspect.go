@@ -335,6 +335,14 @@ func typeView(resolved *schema.ResolvedSchema, rtype *schema.ResolvedType) *omap
 	v.Set("id_shape", nullIfEmpty(rtype.IDShape()))
 	v.Set("required", rtype.Required)
 	v.Set("orphan", rtype.Orphan)
+	// Only when declared, like `path_refs`: a schema with no retention rule
+	// reads exactly as it did before the policy key existed.
+	if r := rtype.Retention; r != nil {
+		rv := omap.New()
+		rv.Set("days", r.Days)
+		rv.Set("no_outbound", r.NoOutbound)
+		v.Set("retention", rv)
+	}
 	v.Set("when", strPtr(rtype.When))
 	fields := []any{}
 	for _, name := range rtype.Attributes.Keys() {

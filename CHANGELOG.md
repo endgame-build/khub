@@ -93,8 +93,21 @@ Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelo
   one `check` scan run outside the workspace lock. `verify`, `import`,
   `backfill`, `wire` and `upgrade` do not warn. Session records untouched for
   30 days are pruned. Closes #55.
+- **Retention policy.** Policy `retention: { days: N, no_outbound: true }`
+  is a type's end-of-life rule. `check` lists every entity of the type whose
+  `updated` (else `created`) date is more than `N` days old in a new
+  `retention` bucket, `{id, type, slug, date, age_days}`; with `no_outbound`,
+  only one that also has no outbound edge. Unlike `stale`, no git date is
+  read: bump `updated` to keep an entity. The bucket is informational, like
+  `thin`: it never fails the gate, `--strict` included, and khub deletes
+  nothing. It is not `expired`, which reads an entity's own `stale_after`.
+  `schema show --format json` prints the rule. Closes #21.
 
 ### Changed
+
+- `check --format json` always carries the `retention` key, after
+  `superseded_verifications`. The plugin counts it as informational (plugin
+  0.1.9).
 
 - **`query` field filters named `under` or `via`.** A schema field called
   `under` or `via` can no longer be filtered as `--under <value>` or

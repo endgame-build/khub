@@ -320,6 +320,19 @@ func checkPayload(report *integrity.CheckReport) *omap.Map {
 		superseded = append(superseded, record)
 	}
 	payload.Set("superseded_verifications", superseded)
+	// Entities past their type's policy `retention` rule: candidates for
+	// removal, which khub reports and never acts on.
+	retention := make([]any, 0, len(report.Retention))
+	for _, e := range report.Retention {
+		record := omap.New()
+		record.Set("id", e.ID())
+		record.Set("type", e.Type)
+		record.Set("slug", e.Slug)
+		record.Set("date", e.Date)
+		record.Set("age_days", e.AgeDays)
+		retention = append(retention, record)
+	}
+	payload.Set("retention", retention)
 	// Only when asked for: suggestions, not findings, so they never affect
 	// `passed` and stay out of the default payload.
 	if report.MentionsRun {
@@ -383,6 +396,7 @@ func checkHuman(report *integrity.CheckReport) {
 			fmt.Printf("thin %s: %s (informational)\n", th.ID(), th.Reason)
 		}
 		printSuperseded(report, " (informational)")
+		printRetention(report)
 		for _, m := range report.Mentions {
 			fmt.Printf("%s (informational)\n", mentionLine(m))
 		}
@@ -462,6 +476,7 @@ func checkHuman(report *integrity.CheckReport) {
 		fmt.Printf("thin %s: %s\n", th.ID(), th.Reason)
 	}
 	printSuperseded(report, "")
+	printRetention(report)
 	for _, m := range report.Mentions {
 		fmt.Println(mentionLine(m))
 	}
@@ -472,6 +487,15 @@ func checkHuman(report *integrity.CheckReport) {
 func mentionLine(m integrity.Mention) string {
 	return fmt.Sprintf("mention %s: '%s' names %s with no edge (link as %s)",
 		m.ID(), m.Text, m.Target, strings.Join(m.Predicates, ", "))
+}
+
+// printRetention prints the retention bucket, marked informational on both
+// paths: the gate never fails because of it.
+func printRetention(report *integrity.CheckReport) {
+	for _, e := range report.Retention {
+		fmt.Printf("retention %s: dated %s, %d days old, past its type's retention (informational)\n",
+			e.ID(), e.Date, e.AgeDays)
+	}
 }
 
 func printSuperseded(report *integrity.CheckReport, note string) {

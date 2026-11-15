@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"sort"
 	"testing"
+	"time"
 
 	"github.com/endgame-build/khub/internal/canon"
 	"github.com/endgame-build/khub/internal/clock"
@@ -182,12 +183,21 @@ func mustValidate(t *testing.T, root string, target *string, strict bool) *Valid
 
 func mustCheck(t *testing.T, root string, strict bool) *CheckReport {
 	t.Helper()
-	report, err := Check(root, strict, clock.Now())
+	return mustCheckAt(t, root, strict, clock.Now())
+}
+
+// mustCheckAt is mustCheck on a given day, for the date-relative buckets.
+func mustCheckAt(t *testing.T, root string, strict bool, now time.Time) *CheckReport {
+	t.Helper()
+	report, err := Check(root, strict, now)
 	if err != nil {
 		t.Fatalf("check: %v", err)
 	}
 	return report
 }
+
+// testNow is the day the retention tests measure ages against.
+var testNow = time.Date(2026, 1, 15, 0, 0, 0, 0, time.UTC)
 
 // errorKeys renders the (id, field) pairs the Python rows assert on.
 func errorKeys(report *ValidateReport) map[[2]string]string {
