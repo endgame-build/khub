@@ -1,0 +1,4 @@
+#0 project: source: 'pigeon' is not a valid source (referral, outbound, inbound, partner, event, existing-client)
+#0 project: owner -> 'nobody' unresolved: No person 'nobody' to satisfy relation 'owner'
+#0 project: - missing owner
+Conformed 2 entities; 1 conformant, score 0.500

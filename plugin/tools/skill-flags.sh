@@ -41,7 +41,7 @@ for file in "$@"; do
     case "$verb" in -*) continue ;; esac    # a bare global flag, no verb
     sub=""
     if [ "$verb" = schema ]; then
-      case "${2:-}" in show|diff|snapshot|types|edges|base) sub="$2" ;; esac
+      case "${2:-}" in show|diff|snapshot|types|edges|base|scaffold|conform) sub="$2" ;; esac
     fi
     # shellcheck disable=SC2086  # $sub is one word or empty
     help="$("$BIN" "$verb" $sub --help 2>&1 || true)"

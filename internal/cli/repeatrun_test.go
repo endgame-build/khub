@@ -133,6 +133,15 @@ var readCalls = map[string][][]string{
 	"schema base":  {{"schema", "base"}, {"schema", "base", "--format", "json"}},
 	"schema edges": {{"schema", "edges"}, {"schema", "edges", "--format", "json"}},
 	"schema diff":  {{"schema", "diff"}, {"schema", "diff", "--format", "json"}},
+	"schema scaffold": {
+		{"schema", "scaffold"}, {"schema", "scaffold", "--format", "json"},
+		{"schema", "scaffold", "--type", "component", "--type", "adr", "--format", "markdown"},
+	},
+	// conform writes nothing and takes no lock; the envelope is a file the
+	// workspace holds outside every layout. Its entries exercise every verdict
+	// over ties: the twelve-way `twin` ambiguity, an unresolved target, a
+	// gap, and an id an earlier entry minted.
+	"schema conform": {{"schema", "conform", "envelope.json"}, {"schema", "conform", "envelope.json", "--format", "json"}},
 	// A dry run writes nothing and takes no lock, so it repeats as a read. The
 	// forced remove previews cmp-c00's inbound edges, a tie of nine or more.
 	"add":    {{"add", "component", "--title", "Fresh", "--kind", "service", "--system", "sys-core", "--dry-run"}},
@@ -162,6 +171,8 @@ var refusalCalls = [][]string{
 	{"history", "ad-2026-01-15-a4", "--predicate", "bogus"},
 	{"backfill", "--type", "bogus", "--dry-run"},
 	{"schema", "show", "bogus"},
+	{"schema", "scaffold", "--type", "bogus"},
+	{"schema", "conform", "missing.json"},
 	{"search", "AND ("},
 	{"search", "ledger", "--also", "  "},
 	{"get", "--path", "../outside.md"},
@@ -392,6 +403,13 @@ func repeatWorkspace(t *testing.T, self string) string {
 		"knowledge/components/cmp-older.md": "---\ntype: component\ncreated: 2024-01-01\n" +
 			"title: Older\nkind: library\n---\n",
 	}
+	hand["envelope.json"] = `{"entities": [
+  {"type": "component", "fields": {"title": "Ledger", "kind": "service"}, "relations": {"system": "sys-core", "depends_on": ["cmp-c00", "twin", "cmp-ghost"]}},
+  {"type": "component", "fields": {"title": "Ledger", "kind": "nope"}},
+  {"type": "requirement", "fields": {"title": "R9", "kind": "functional"}, "relations": {"realized_in": ["cmp-ledger", "cmp-c01"]}, "confidence": 0.5},
+  {"type": "adr", "fields": {"title": "Index"}, "relations": {"affects": ["twin"]}}
+]}
+`
 	for i := 1; i <= 9; i++ {
 		hand[fmt.Sprintf("knowledge/components/cmp-stale-%d.md", i)] = "---\ntype: component\n" +
 			"created: 2024-01-01\nupdated: 2024-01-01\n" + fmt.Sprintf("title: Stale %d\n", i) + "---\n"
