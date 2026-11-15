@@ -111,6 +111,41 @@ Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelo
   waivers cannot rot; an `incomplete` waiver on a draft is dormant, so a draft
   toggle never moves the gate. `khub upgrade` keeps `waive` blocks, as it
   keeps every per-type policy key the shipped file lacks. Closes #38.
+- **`--dry-run` on `add`, `edit`, `link`, `unlink` and `remove`.** A dry run
+  runs every check the write runs (schema, referential integrity, slug and
+  alias gates, the inbound-edge guard, the collection re-render and the
+  storage path and lock path refusals) and refuses where the write would, on
+  the same exit code. A filesystem failure the OS reports only when the write
+  publishes (permissions, a full disk, a concurrent writer) can still differ:
+  a dry run that exits 0 does not promise the write will. It takes no lock,
+  stamps no `generated`, prints no session warnings and writes nothing. On
+  success it prints the record the write would print, plus `changed`
+  (whether the write would move a byte on disk; `link` and `unlink` already
+  carry it) and `"dry_run": true`, one shape across the five verbs.
+  `remove --dry-run` also lists `inbound`, the edges a `--force` would leave
+  dangling. Text output reads `Would create …`, `Would update …`,
+  `Would link …`, `Would unlink …`, `Would remove …`, or the write's own no-op
+  line. The plugin (0.1.10) draws a dry run as a preview and never counts it
+  as a session edit. Closes #59.
+- **`backfill --infer-type`.** A stray whose frontmatter has no `type` is
+  stamped with the one type whose layout holds it, and is then an ordinary
+  entity for `validate` and `check`. It covers `file`, `folder` and `singleton`
+  layouts. A file with no frontmatter, a file starting with a byte-order
+  mark, a file naming another type and a collection row stay strays, and the
+  run lists each with its reason. An authored `type` is never overwritten: a
+  write that would replace a present value refuses with the new code
+  `would_overwrite` (exit 2, `field` names the key). `--dry-run` previews the
+  stamp. The khub skill points agents at it. Closes #78.
+- **Locked types and predicates.** Policy `locked: true` and
+  `locked_relations: [<predicate>, …]` mark load-bearing schema elements.
+  `khub upgrade` refuses a schema that removes one (`locked_removed`, exit 2,
+  dry run included, nothing written; `expected` lists the `--unlock` values)
+  unless the run passes `--unlock <type>` or `--unlock <type>.<predicate>`
+  for each. A current schema that does not resolve keeps its locks; one too
+  broken to read them from is `locks_unreadable`. A lock the workspace added
+  is carried across upgrades like any other per-type policy key. The khub and
+  setup skills tell an agent that `--unlock` is the workspace owner's
+  decision, to ask for rather than pass on its own. Closes #13.
 
 ### Changed
 
@@ -120,6 +155,11 @@ Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelo
 - `check --format json` always carries `stale_waivers`, just before `strict`,
   and `waived`, after `retention`. The plugin counts `waived` as
   informational; `stale_waivers` fails the gate.
+- **`--dry-run` is now an option of `add` and `edit`,** so it wins over a
+  schema field named `dry_run`, as `--draft`, `--strict` and `--format`
+  already win over theirs: `--dry-run yes` used to set that field and is now a
+  usage error (exit 2). Set such a field with `--dry_run <value>` or
+  positionally (`edit <id> dry_run <value>`).
 
 - **`query` field filters named `under` or `via`.** A schema field called
   `under` or `via` can no longer be filtered as `--under <value>` or

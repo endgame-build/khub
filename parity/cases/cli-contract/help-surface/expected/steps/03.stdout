@@ -8,6 +8,7 @@ Options:
   --dry-run  Preview core and tail outcomes without changing the workspace.
   --no-schema  Keep this workspace's .khub/ files — schema and templates — as they are; report what the shipped ontology has that they do not.
   --no-wire  Skip re-wiring CLAUDE.md and AGENTS.md.
+  --unlock <str>  Let the upgrade remove a locked type, or a locked predicate as type.predicate; repeatable.
   --format <str>  text confirmation (default); json emits every step's outcome. [default: text]
   --help  Show this message and exit.
 

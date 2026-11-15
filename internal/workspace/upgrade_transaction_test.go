@@ -349,3 +349,127 @@ func TestUpgradeRefusesAnUnreadableFile(t *testing.T) {
 		t.Fatal("a refused upgrade changed config.yaml")
 	}
 }
+
+// A preset that locks memo and memo.cites refuses the release that drops
+// them: dry run and real run alike, writing nothing, until both are named in
+// Unlock. A bare predicate, a wrongly qualified one or a miscased type unlocks
+// nothing, and unlocking only the type leaves its locked predicate in the way.
+func TestUpgradeRefusesRemovingLockedElements(t *testing.T) {
+	src := presetSource(t)
+	writeFile(t, filepath.Join(src, "note", "ontology.yaml"), "version: '10.0.0'\nontology:\n  entities:\n    note:\n      attributes:\n        body: {type: text}\n    memo:\n      relations:\n        cites: {to: note, many: true}\n")
+	writeFile(t, filepath.Join(src, "note", "storage.yaml"), "storage:\n  note: {layout: file, path: notes}\n  memo: {layout: file, path: memos}\n")
+	writeFile(t, filepath.Join(src, "note", "policy.yaml"), "policy:\n  memo: {locked: true, locked_relations: [cites]}\n")
+	root := filepath.Join(t.TempDir(), "ws")
+	mustInit(t, "note", root, InitOptions{PresetSource: src})
+	before, err := os.ReadFile(filepath.Join(root, ".khub", "ontology.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	writeFile(t, filepath.Join(src, "note", "ontology.yaml"), notePresetOntology)
+	writeFile(t, filepath.Join(src, "note", "storage.yaml"), notePresetStorage)
+	writeFile(t, filepath.Join(src, "note", "policy.yaml"), "policy: {}\n")
+
+	for _, opt := range []UpgradeOptions{{DryRun: true}, {}, {Unlock: []string{"cites", "note.cites", "Memo"}}} {
+		refused := located(t, func() error { _, err := Upgrade(root, opt); return err }())
+		if refused.Code != "locked_removed" || !strings.Contains(refused.Message, "memo, memo.cites") {
+			t.Fatalf("%+v: %v", opt, refused)
+		}
+	}
+	partial := located(t, func() error { _, err := Upgrade(root, UpgradeOptions{Unlock: []string{"memo"}}); return err }())
+	if partial.Code != "locked_removed" || !strings.Contains(partial.Message, "elements: memo.cites.") ||
+		!strings.Contains(partial.Message, "rerun it with --unlock memo --unlock memo.cites to") {
+		t.Fatalf("type unlock alone: %v", partial)
+	}
+	after, _ := os.ReadFile(filepath.Join(root, ".khub", "ontology.yaml"))
+	if !bytes.Equal(before, after) {
+		t.Fatal("refused upgrade wrote the ontology")
+	}
+	result := mustUpgrade(t, root, UpgradeOptions{Unlock: []string{"memo", "memo.cites"}})
+	if !reflect.DeepEqual(result.RemovedTypes, []string{"memo"}) {
+		t.Fatalf("removed = %v", result.RemovedTypes)
+	}
+}
+
+// A predicate the new release keeps passes even when it is no longer locked;
+// only removal is held.
+func TestUpgradePassesLockedElementsItKeeps(t *testing.T) {
+	src := presetSource(t)
+	writeFile(t, filepath.Join(src, "note", "ontology.yaml"), "version: '10.0.0'\nontology:\n  entities:\n    note:\n      relations:\n        cites: {to: note}\n")
+	writeFile(t, filepath.Join(src, "note", "policy.yaml"), "policy:\n  note: {locked: true, locked_relations: [cites]}\n")
+	root := filepath.Join(t.TempDir(), "ws")
+	mustInit(t, "note", root, InitOptions{PresetSource: src})
+	writeFile(t, filepath.Join(src, "note", "policy.yaml"), "policy: {}\n")
+	mustUpgrade(t, root, UpgradeOptions{})
+}
+
+// A current schema that does not resolve keeps its locks: the reviewer's
+// repro locks a base edge (`related`), which makes the schema a schema_error,
+// and the locks are read from the raw layer files instead of switching off.
+func TestUpgradeHoldsLocksOfAnUnloadableSchema(t *testing.T) {
+	src := presetSource(t)
+	writeFile(t, filepath.Join(src, "note", "ontology.yaml"), "version: '10.0.0'\nontology:\n  entities:\n    note:\n      relations:\n        cites: {to: note}\n    memo:\n      relations:\n        refs: {to: note}\n")
+	writeFile(t, filepath.Join(src, "note", "storage.yaml"), "storage:\n  note: {layout: file, path: notes}\n  memo: {layout: file, path: memos}\n")
+	root := filepath.Join(t.TempDir(), "ws")
+	mustInit(t, "note", root, InitOptions{PresetSource: src})
+	writeFile(t, filepath.Join(root, ".khub", "policy.yaml"),
+		"policy:\n  note: {locked: true, locked_relations: [cites, related]}\n  memo: {locked: true, locked_relations: [refs, refs]}\n")
+	writeFile(t, filepath.Join(src, "note", "ontology.yaml"), notePresetOntology)
+	writeFile(t, filepath.Join(src, "note", "storage.yaml"), notePresetStorage)
+	refused := located(t, func() error { _, err := Upgrade(root, UpgradeOptions{DryRun: true}); return err }())
+	if refused.Code != "locked_removed" || !strings.Contains(refused.Message, "elements: note.cites, memo, memo.refs.") {
+		t.Fatalf("unloadable schema: %v", refused)
+	}
+	result := mustUpgrade(t, root, UpgradeOptions{Unlock: []string{"note.cites", "memo", "memo.refs"}})
+	if len(result.RemovedTypes) != 0 { // the current schema did not load, so nothing to compare
+		t.Fatalf("removed = %v", result.RemovedTypes)
+	}
+}
+
+// A layer file that does not parse and mentions a lock refuses: what it locks
+// cannot be known. One that mentions none is replaced, as before.
+func TestUpgradeRefusesUnreadableLocks(t *testing.T) {
+	src := presetSource(t)
+	root := filepath.Join(t.TempDir(), "ws")
+	mustInit(t, "note", root, InitOptions{PresetSource: src})
+	writeFile(t, filepath.Join(root, ".khub", "policy.yaml"), "policy: {note: {locked: true}\n")
+	refused := located(t, func() error { _, err := Upgrade(root, UpgradeOptions{}); return err }())
+	if refused.Code != "locks_unreadable" || refused.Target != ".khub/policy.yaml" {
+		t.Fatalf("err = %v", refused)
+	}
+	writeFile(t, filepath.Join(root, ".khub", "policy.yaml"), "policy: {note: {orphan: true}\n")
+	mustUpgrade(t, root, UpgradeOptions{})
+}
+
+// A lock the workspace authored on a type the release keeps is a per-type
+// policy key the shipped file lacks, so upgrade carries it and it holds the
+// next upgrade too. Unlocking a predicate the release drops lets the carried
+// locked_relations go with it: the key no longer resolves, so it is dropped.
+func TestUpgradeCarriesAWorkspaceLock(t *testing.T) {
+	src := presetSource(t)
+	writeFile(t, filepath.Join(src, "note", "ontology.yaml"), "version: '10.0.0'\nontology:\n  entities:\n    note:\n      relations:\n        cites: {to: note}\n")
+	root := filepath.Join(t.TempDir(), "ws")
+	mustInit(t, "note", root, InitOptions{PresetSource: src})
+	writeFile(t, filepath.Join(root, ".khub", "policy.yaml"), "policy:\n  note: {locked: true, locked_relations: [cites]}\n")
+	writeFile(t, filepath.Join(src, "note", "ontology.yaml"), "version: '11.0.0'\nontology:\n  entities:\n    note:\n      relations:\n        cites: {to: note}\n")
+	mustUpgrade(t, root, UpgradeOptions{})
+	kept, err := introspect.LoadSchema(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if note, _ := kept.Types.Get("note"); !note.Locked || !reflect.DeepEqual(note.LockedRelations, []string{"cites"}) {
+		t.Fatalf("carried lock = %v %v", note.Locked, note.LockedRelations)
+	}
+	writeFile(t, filepath.Join(src, "note", "ontology.yaml"), notePresetOntology)
+	refused := located(t, func() error { _, err := Upgrade(root, UpgradeOptions{}); return err }())
+	if refused.Code != "locked_removed" || !strings.Contains(refused.Message, "elements: note.cites.") {
+		t.Fatalf("carried lock did not hold: %v", refused)
+	}
+	mustUpgrade(t, root, UpgradeOptions{Unlock: []string{"note.cites"}})
+	after, err := introspect.LoadSchema(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if note, _ := after.Types.Get("note"); !note.Locked || len(note.LockedRelations) != 0 {
+		t.Fatalf("after unlock = %v %v", note.Locked, note.LockedRelations)
+	}
+}

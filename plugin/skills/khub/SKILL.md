@@ -124,7 +124,11 @@ hand-edit is how a workspace acquires a field no default gate will report.
 it rejects a missing target, but captures a missing required field for `check` to report. `--draft` on `add` writes
 `status: draft`; an entity with no `status` is stable, and `edit <id> status stable`
 publishes a draft. `link`/`unlink` are idempotent and exit 0 either way. `remove --force`
-deletes despite inbound edges. `import` brings a bundle in as drafts; the bundle's own
+deletes despite inbound edges. `--dry-run` on any of `add`, `edit`, `link`, `unlink` and
+`remove` previews the write: khub's own refusals on the same exit codes, the record the
+write would print plus `changed` and `"dry_run": true`, and nothing written. A permission or
+disk failure can still fail the real call after a clean dry run. `remove <id> --dry-run`
+lists in `inbound` the edges a `--force` would leave dangling. `import` brings a bundle in as drafts; the bundle's own
 `verified` is kept as `okf_verified` and does not count as a review.
 
 - **Look before you add.** `search --plain "<title>"`, or `query` on the field that would
@@ -194,6 +198,10 @@ different things: on `check` it fails on orphans too; on `validate` and `add`/`e
 closes the schema so a typo like `realised_in` is rejected instead of silently producing no
 edge.
 
+A stray whose only fault is a missing `type:` is repaired by `khub backfill --infer-type`
+(preview with `--dry-run`): it stamps the type the file's layout holds and lists every stray
+it left, with the reason.
+
 ## Reviewing a body
 
 `validate` reports three things about the prose, and they are not the same kind of thing:
@@ -260,7 +268,7 @@ not been found yet.
 
 - Every read AND write emits JSON on a pipe; a table is only for a TTY. `--format json` makes it explicit. The operator commands (`reindex`, `viz`, `serve`, `backfill`, `wire`) are the exception: they print prose and take no `--format`.
 - Every existing-workspace mutation is serialized workspace-wide from scan through commit. Never delete `.khub/generated/locks/workspace.lock` while khub may be running.
-- On a failed command, read the located error and correct the call. The JSON `error` carries `code` and `message`, and where they apply `field` (the attribute or relation at fault), `expected` (the values allowed) and `suggestion` (the nearest one: retry with it when it is what you meant). Exit 2 reports a refusal or write failure; `write_durability_uncertain` means publication happened, and `upgrade_recovery_failed` requires journal inspection. Exit 1 is a gate (`validate`, `check`) that ran and found the workspace wrong.
+- On a failed command, read the located error and correct the call. The JSON `error` carries `code` and `message`, and where they apply `field` (the attribute or relation at fault), `expected` (the values allowed) and `suggestion` (the nearest one: retry with it when it is what you meant). Exit 2 reports a refusal or write failure; `write_durability_uncertain` means publication happened, and `upgrade_recovery_failed` requires journal inspection. `locked_removed` means an upgrade would drop a type or predicate the schema locks: `--unlock` is the workspace owner's call, so ask before passing it. Exit 1 is a gate (`validate`, `check`) that ran and found the workspace wrong.
 - Run `khub validate --strict` in CI. Capture is never blocked, so a typo'd field name (`--knid`) is written to frontmatter and neither default gate reports it; `--strict` is what turns undeclared keys into a finding.
 - When sources call an entity by another name, record it: `khub edit <id> aliases "Initech,INTC"`. Every ID you pass then resolves through it, a relation written by alias stores the real slug, and `add` refuses a slug that is already someone's alias.
 

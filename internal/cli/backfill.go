@@ -15,15 +15,15 @@ import (
 
 func registerBackfill(root *cobra.Command) {
 	var typeName string
-	var dryRun bool
-	cmd := newCmd("backfill", "Backfill missing dates and frontmatter: khub backfill [--type T] [--dry-run].",
+	var dryRun, inferType bool
+	cmd := newCmd("backfill", "Backfill missing dates and frontmatter: khub backfill [--type T] [--infer-type] [--dry-run].",
 		"", func(cmd *cobra.Command, args []string) error {
 			return Guard("text", func() error {
 				ws, err := resolveRoot()
 				if err != nil {
 					return err
 				}
-				report, err := backfill.Backfill(ws, optString(cmd, "type", typeName), dryRun)
+				report, err := backfill.Backfill(ws, optString(cmd, "type", typeName), inferType, dryRun)
 				if err != nil {
 					return err
 				}
@@ -34,6 +34,8 @@ func registerBackfill(root *cobra.Command) {
 	cmd.Args = clickArity(0)
 	cmd.Flags().StringVar(&typeName, "type", "",
 		"Add missing per-type frontmatter scaffolding for that type.")
+	cmd.Flags().BoolVar(&inferType, "infer-type", false,
+		"Stamp type on a stray file from the one layout that holds it (file, folder and singleton layouts). A stray with no frontmatter, another type, or a collection row is left and listed.")
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false,
 		"List the entities and fields that would change; write nothing.")
 	root.AddCommand(cmd)
@@ -50,6 +52,7 @@ func backfillEmit(report *backfill.BackfillReport) {
 			fmt.Println("No changes")
 		}
 		emitSkipped(report) // a preview that omits the skip is not a preview
+		emitStrays(report)
 		return
 	}
 	if !report.GitAvailable {
@@ -62,7 +65,24 @@ func backfillEmit(report *backfill.BackfillReport) {
 	if n := report.ScaffoldedEntities(); n > 0 {
 		fmt.Printf("Scaffolded frontmatter on %d entities\n", n)
 	}
+	if report.InferType {
+		n := report.StampedEntities()
+		noun := "strays"
+		if n == 1 {
+			noun = "stray"
+		}
+		fmt.Printf("Stamped type on %d %s\n", n, noun)
+	}
 	emitSkipped(report)
+	emitStrays(report)
+}
+
+// emitStrays lists the strays --infer-type could not stamp, so the run says
+// what `check` will still report and why.
+func emitStrays(report *backfill.BackfillReport) {
+	for _, s := range report.Strays {
+		fmt.Printf("Left stray %s: %s\n", s.Path, s.Reason)
+	}
 }
 
 // emitSkipped is the collection-skip line — printed by both the real run and

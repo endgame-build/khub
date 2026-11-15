@@ -87,6 +87,9 @@ rec retrieve_trimmed retrieve --id cmp-search --depth 2 --max-entities 2 --no-bo
 rec get_missing get nope --format json
 rec remove_refused remove cmp-search --format json
 rec reindex_dry reindex --dry-run
+rec add_dry add adr --title "Use RE2 patterns" --decision accepted --dry-run --format json
+rec edit_dry edit cmp-search lifecycle production --dry-run --format json
+rec unlink_dry unlink cmp-search depends_on cmp-storage --dry-run --format json
 
 # A decision, linked.
 rec add_adr add adr --title "Use RE2 patterns" --decision accepted --format json

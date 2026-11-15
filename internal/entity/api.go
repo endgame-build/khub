@@ -19,13 +19,15 @@ type CreateResult struct {
 	Locator string // "" when not a collection row
 }
 
-// UpdateResult is the outcome of an edit.
+// UpdateResult is the outcome of an edit. Changed is whether the stored bytes
+// moved; an edit that sets what is already there changes nothing.
 type UpdateResult struct {
 	Type    string
 	Slug    string
 	Path    string
 	Draft   bool
 	Locator string
+	Changed bool
 }
 
 // LinkResult is the outcome of a link/unlink. Changed is false when the edge
@@ -86,6 +88,7 @@ type CreateOpts struct {
 	Strict      bool
 	UseTemplate bool   // false = --no-template
 	Actor       string // --by; "" walks the Actor ladder
+	DryRun      bool   // run every check, take no lock, write nothing
 }
 
 // UpdateOpts carries update's keyword arguments. Body is nil to leave the body
@@ -95,6 +98,7 @@ type UpdateOpts struct {
 	Body   *string
 	Strict bool
 	Actor  string // --by; "" walks the Actor ladder
+	DryRun bool   // run every check, take no lock, write nothing
 }
 
 // EntityPath is the file backing one entity — for a collection type, the

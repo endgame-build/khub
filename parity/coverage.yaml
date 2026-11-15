@@ -21,6 +21,7 @@ commands:
   - '--dry-run'
   - '--no-schema'
   - '--no-wire'
+  - '--unlock'
   - '--format'
 - name: 'status'
   params:
@@ -35,6 +36,7 @@ commands:
   - '--body'
   - '--body-file'
   - '--no-template'
+  - '--dry-run'
   - '--format'
 - name: 'get'
   params:
@@ -49,6 +51,7 @@ commands:
   - '--strict'
   - '--body'
   - '--body-file'
+  - '--dry-run'
   - '--format'
 - name: 'verify'
   params:
@@ -63,6 +66,7 @@ commands:
   - 'arg:id_'
   - 'arg:predicate'
   - 'arg:target'
+  - '--dry-run'
   - '--format'
 - name: 'unlink'
   params:
@@ -70,11 +74,13 @@ commands:
   - 'arg:id_'
   - 'arg:predicate'
   - 'arg:target'
+  - '--dry-run'
   - '--format'
 - name: 'remove'
   params:
   - 'arg:id_'
   - '--force'
+  - '--dry-run'
   - '--format'
 - name: 'query'
   params:
@@ -191,6 +197,7 @@ commands:
 - name: 'backfill'
   params:
   - '--type'
+  - '--infer-type'
   - '--dry-run'
 - name: 'wire'
   params:
@@ -254,6 +261,8 @@ error_codes:
 - invalid_schema
 - invalid_slug
 - invalid_snapshot
+- locked_removed
+- locks_unreadable
 - lookup_error
 - malformed_entity
 - malformed_projection

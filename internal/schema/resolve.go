@@ -603,6 +603,13 @@ func resolveType(name string, decl *TypeDecl, base *BaseBlock, declared map[stri
 		rr, _ := relations.Get(rn)
 		rr.ByPath = decl.PathRefs
 	}
+	for _, rn := range decl.LockedRelations {
+		if !decl.Relations.Has(rn) {
+			return nil, errs.New("schema_error", fmt.Sprintf(
+				"%s.locked_relations names '%s', which is not a relation %s declares",
+				name, rn, name))
+		}
+	}
 	storage := StorageConfig{Layout: decl.Layout, Path: decl.Path, Fmt: decl.Format, Templates: decl.Templates}
 	return &ResolvedType{
 		Name:        name,
@@ -619,6 +626,9 @@ func resolveType(name string, decl *TypeDecl, base *BaseBlock, declared map[stri
 		TemplateOff: decl.TemplateOff,
 		When:        decl.When,
 		Waivers:     decl.Waivers,
+
+		Locked:          decl.Locked,
+		LockedRelations: decl.LockedRelations,
 	}, nil
 }
 

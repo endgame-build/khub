@@ -160,6 +160,12 @@ type TypeDecl struct {
 	// Policy `waive`: per-entity check-finding waivers, each with its reason,
 	// in authored order. See Waiver.
 	Waivers []Waiver
+	// Policy `locked: true`: the type is load-bearing, and `khub upgrade`
+	// refuses a schema that drops it unless the run names it in --unlock.
+	Locked bool
+	// Policy `locked_relations`: the type's own predicates held the same way,
+	// in authored order. Resolve refuses a name the type does not declare.
+	LockedRelations []string
 	// The declared template stem (.khub/templates/<name>.yaml). nil = the
 	// standing convention (the type's own name); see TemplateOff for the
 	// explicit opt-out. A NAME, never a path: templates live in one directory,
@@ -550,7 +556,15 @@ func applyPolicyDecl(m *omap.Map, td *TypeDecl, loc []string, c *vocabCollector)
 		td.Retention = buildRetentionDecl(rv, at(loc, "retention"), c)
 	}
 	td.Waivers = takeWaivers(m, loc, c)
-	addExtras(m, loc, c, "required", "orphan", "path_refs", "retention", "waive")
+	td.Locked = takeBool(m, "locked", loc, c)
+	if lv, has := m.Get("locked_relations"); has && lv != nil {
+		for _, rn := range takeStrList(lv, at(loc, "locked_relations"), c) {
+			if !slices.Contains(td.LockedRelations, rn) {
+				td.LockedRelations = append(td.LockedRelations, rn)
+			}
+		}
+	}
+	addExtras(m, loc, c, "required", "orphan", "path_refs", "retention", "waive", "locked", "locked_relations")
 }
 
 // takeWaivers reads policy `waive`: a mapping of slug to a mapping of check

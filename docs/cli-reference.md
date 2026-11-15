@@ -40,7 +40,7 @@ Commands:
   import  Read an OKF bundle into the workspace as drafts: khub import --okf DIR.
   viz  Render the typed graph to a self-contained Cytoscape HTML: khub viz [--out F] [--open] [--type T].
   serve  Serve a read-only graph view on loopback: khub serve [--port 7777].
-  backfill  Backfill missing dates and frontmatter: khub backfill [--type T] [--dry-run].
+  backfill  Backfill missing dates and frontmatter: khub backfill [--type T] [--infer-type] [--dry-run].
   wire  Wire the workspace into agent context files (CLAUDE.md gets ``@`` imports of the
 schema layer files; AGENTS.md gets a schema pointer). Bare ``wire`` updates whichever already exist.
   schema  Introspect the active schema.
@@ -86,6 +86,7 @@ Options:
   --dry-run  Preview core and tail outcomes without changing the workspace.
   --no-schema  Keep this workspace's .khub/ files — schema and templates — as they are; report what the shipped ontology has that they do not.
   --no-wire  Skip re-wiring CLAUDE.md and AGENTS.md.
+  --unlock <str>  Let the upgrade remove a locked type, or a locked predicate as type.predicate; repeatable.
   --format <str>  text confirmation (default); json emits every step's outcome. [default: text]
   --help  Show this message and exit.
 
@@ -126,6 +127,7 @@ Options:
   --body-file <str>  Read the body from a file ('-' for stdin).
   --no-template  Start with an empty body. Refused on a type whose template has a required heading, since the result would fail validate; use --body to supply your own sections.
   --by <str>  Who the write is stamped as in generated.by. Default: KHUB_ACTOR, then agent/claude-code under Claude Code, then khub.
+  --dry-run  Run every check the write runs and print what it would emit; write nothing.
   --format <str>  text or json (emits the written record). [default: text]
   --help  Show this message and exit.
 
@@ -168,6 +170,7 @@ Options:
   --body <str>  Replace the body with this string ('' clears it).
   --body-file <str>  Replace the body from a file ('-' for stdin).
   --by <str>  Who the write is stamped as in generated.by. Default: KHUB_ACTOR, then agent/claude-code under Claude Code, then khub.
+  --dry-run  Run every check the write runs and print what it would emit; write nothing.
   --format <str>  text or json (emits the updated record). [default: text]
   --help  Show this message and exit.
 
@@ -188,6 +191,7 @@ Arguments:
 
 Options:
   --by <str>  Who the write is stamped as in generated.by. Default: KHUB_ACTOR, then agent/claude-code under Claude Code, then khub.
+  --dry-run  Run every check the write runs and print what it would emit; write nothing.
   --format <str>  text or json (emits the edge record). [default: text]
   --help  Show this message and exit.
 
@@ -208,6 +212,7 @@ Arguments:
 
 Options:
   --by <str>  Who the write is stamped as in generated.by. Default: KHUB_ACTOR, then agent/claude-code under Claude Code, then khub.
+  --dry-run  Run every check the write runs and print what it would emit; write nothing.
   --format <str>  text or json (emits the edge record). [default: text]
   --help  Show this message and exit.
 
@@ -226,6 +231,7 @@ Arguments:
 
 Options:
   --force  Delete despite inbound edges (leaves them dangling).
+  --dry-run  Run every check the write runs and print what it would emit; write nothing.
   --format <str>  text or json (emits the removed record). [default: text]
   --help  Show this message and exit.
 
@@ -544,10 +550,11 @@ Options:
 $ khub backfill --help
 Usage: khub backfill [OPTIONS]
 
-Backfill missing dates and frontmatter: khub backfill [--type T] [--dry-run].
+Backfill missing dates and frontmatter: khub backfill [--type T] [--infer-type] [--dry-run].
 
 Options:
   --type <str>  Add missing per-type frontmatter scaffolding for that type.
+  --infer-type  Stamp type on a stray file from the one layout that holds it (file, folder and singleton layouts). A stray with no frontmatter, another type, or a collection row is left and listed.
   --dry-run  List the entities and fields that would change; write nothing.
   --help  Show this message and exit.
 
