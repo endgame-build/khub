@@ -121,7 +121,7 @@ apart:
 `ok` is false on `errors` or `unresolved`; `id` is the qualified id `add`
 would write (null when it cannot); `confidence` echoes the entry's number;
 the summary's `score` is conformant over entities. Exit 1 when any entry
-fails, 2 for an unreadable envelope or an undeclared type. Nothing is
+fails, an undeclared type included, 2 for an unreadable envelope. Nothing is
 written and no lock is taken. What `validate` reports as gaps after the
 write — body rules, dead links, actor and footnote gaps — is not evaluated
 here.

@@ -21,8 +21,8 @@ Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelo
   unresolved ones reported rather than guessed (naming the envelope entry
   that would mint one), the body against the template, and the required
   fields the record would leave empty as gaps that never fail the gate.
-  Exit 1 when an entity does not conform, 2 for an unreadable envelope
-  (`invalid_envelope`) or an undeclared type.
+  Exit 1 when an entity does not conform (an undeclared type is that
+  entity's error), 2 for an unreadable envelope (`invalid_envelope`).
   The pipeline is in `docs/ingestion.md`; the khub skill (plugin 0.1.12)
   routes a document-to-entities ask through it. The alignment ladder and the
   conflict policy stay design notes (`docs/ingestion-alignment.md`,

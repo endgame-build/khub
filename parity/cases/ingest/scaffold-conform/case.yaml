@@ -5,8 +5,9 @@
 # named by an alias, resolved the way every write resolves it), an enum
 # violation (an error), a missing required relation (a gap — capture is never
 # blocked, so it never fails the gate), and an unresolved target (reported,
-# never guessed). The gate exits 1. An unknown type, an unreadable envelope
-# and an unknown --type are refusals (exit 2) in their own steps.
+# never guessed). The gate exits 1. An entry of an unknown type is that
+# entry's error (exit 1); an unreadable envelope and an unknown --type are
+# refusals (exit 2) in their own steps.
 #
 # The second envelope is the id half: conform mints the id add would write
 # with the write path's own code, so every refusal add raises before writing

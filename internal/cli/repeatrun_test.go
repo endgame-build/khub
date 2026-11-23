@@ -151,7 +151,7 @@ var readCalls = map[string][][]string{
 	// conform writes nothing and takes no lock; the envelope is a file the
 	// workspace holds outside every layout. Its entries exercise every verdict
 	// over ties: the twelve-way `twin` ambiguity, an unresolved target, a
-	// gap, and an id an earlier entry minted.
+	// gap, an id an earlier entry minted, and an undeclared type.
 	"schema conform": {{"schema", "conform", "envelope.json"}, {"schema", "conform", "envelope.json", "--format", "json"}},
 	// A dry run writes nothing and takes no lock, so it repeats as a read. The
 	// forced remove previews cmp-c00's inbound edges, a tie of nine or more.
@@ -425,7 +425,8 @@ func repeatWorkspace(t *testing.T, self string) string {
   {"type": "component", "fields": {"title": "Ledger", "kind": "service"}, "relations": {"system": "sys-core", "depends_on": ["cmp-c00", "twin", "cmp-ghost"]}},
   {"type": "component", "fields": {"title": "Ledger", "kind": "nope"}},
   {"type": "requirement", "fields": {"title": "R9", "kind": "functional"}, "relations": {"realized_in": ["cmp-ledger", "cmp-c01"]}, "confidence": 0.5},
-  {"type": "adr", "fields": {"title": "Index"}, "relations": {"affects": ["twin"]}}
+  {"type": "adr", "fields": {"title": "Index"}, "relations": {"affects": ["twin"]}},
+  {"type": "widget", "fields": {"title": "Undeclared"}}
 ]}
 `
 	for i := 1; i <= 9; i++ {

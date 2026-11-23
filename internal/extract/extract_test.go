@@ -446,18 +446,18 @@ func TestConformResolvesEarlierEntries(t *testing.T) {
 	}
 }
 
-// An unknown type refuses the whole call; an empty envelope conforms with
-// score 1; the score rounds through three decimals.
+// An unknown type is that entry's error and the rest are judged; an empty
+// envelope conforms with score 1; the score rounds through three decimals.
 func TestConformEdges(t *testing.T) {
 	root := seeded(t)
-	env, _ := ParseEnvelope([]byte(`{"entities": [{"type": "client", "fields": {"name": "A"}}, {"type": "widget"}]}`))
-	_, err := Conform(root, env)
-	var located *errs.Located
-	if !errors.As(err, &located) || located.Code != "unknown_type" {
-		t.Fatalf("want unknown_type, got %v", err)
+	mixed := conform(t, root, `{"entities": [{"type": "widget", "fields": {"name": "W"}}, {"type": "client", "fields": {"name": "A"}}]}`)
+	widget := mixed.Entities[0]
+	if widget.OK || widget.ID != "" || len(widget.Errors) != 1 || widget.Errors[0].Field != "type" ||
+		!strings.HasPrefix(widget.Errors[0].Reason, "No type 'widget' in the firm-ops schema. Known types:") {
+		t.Errorf("unknown type: %+v", widget)
 	}
-	if !strings.Contains(located.Message, "No type 'widget' in the firm-ops schema. Known types:") {
-		t.Errorf("message = %s", located.Message)
+	if !mixed.Entities[1].OK || mixed.Conformant != 1 || mixed.Score != 0.5 {
+		t.Errorf("the rest is judged: %+v, %d conformant, score %v", mixed.Entities[1], mixed.Conformant, mixed.Score)
 	}
 	empty := conform(t, root, `{"entities": []}`)
 	if !empty.OK() || empty.Score != 1 || empty.ScoreText() != "1.000" {

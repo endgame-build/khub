@@ -71,22 +71,17 @@ func (r *Report) OK() bool { return r.Conformant == len(r.Entities) }
 func (r *Report) ScoreText() string { return strconv.FormatFloat(r.Score, 'f', 3, 64) }
 
 // Conform judges env against the workspace at root. An entity naming a type
-// the schema does not declare refuses the whole call (`unknown_type`): the
-// contract was not read, so no score would mean anything. Nothing is written
-// and no lock is taken.
+// the schema does not declare is that entity's error under field `type`, with
+// the unknown_type message, and the rest are judged: the record is refused,
+// not the envelope. Nothing is written and no lock is taken.
 func Conform(root string, env *Envelope) (*Report, error) {
 	resolved, err := introspect.LoadSchema(root)
 	if err != nil {
 		return nil, err
 	}
-	for _, ent := range env.Entities {
-		if !resolved.Types.Has(ent.Type) {
-			prov, perr := workspace.Provenance(root)
-			if perr != nil {
-				return nil, perr
-			}
-			return nil, unknownType(ent.Type, prov, resolved)
-		}
+	prov, err := workspace.Provenance(root)
+	if err != nil {
+		return nil, err
 	}
 	idx, err := index.Build(root, resolved)
 	if err != nil {
@@ -99,8 +94,13 @@ func Conform(root string, env *Envelope) (*Report, error) {
 	report := &Report{Entities: make([]EntityReport, 0, len(env.Entities))}
 	minted := &mintedIDs{first: map[index.Node]int{}}
 	for i, ent := range env.Entities {
-		rtype, _ := resolved.Types.Get(ent.Type)
-		er := conformEntity(i, ent, rtype, idx, templates, supplied, minted)
+		var er EntityReport
+		if rtype, ok := resolved.Types.Get(ent.Type); ok {
+			er = conformEntity(i, ent, rtype, idx, templates, supplied, minted)
+		} else {
+			er = undeclaredEntity(i, ent, unknownType(ent.Type, prov, resolved))
+			minted.ids = append(minted.ids, nil)
+		}
 		minted.oks = append(minted.oks, er.OK)
 		if er.OK {
 			report.Conformant++
@@ -109,6 +109,18 @@ func Conform(root string, env *Envelope) (*Report, error) {
 	}
 	report.Score = score(report.Conformant, len(report.Entities))
 	return report, nil
+}
+
+// undeclaredEntity is the verdict on an entry whose type the schema does not
+// declare: one error under `type`, nothing else judged, no id.
+func undeclaredEntity(i int, ent Extracted, refusal *errs.Located) EntityReport {
+	return EntityReport{
+		Index: i, Type: ent.Type,
+		Errors:     []integrity.FieldError{{Type: ent.Type, Field: "type", Reason: refusal.Message}},
+		Gaps:       []string{},
+		Unresolved: []Unresolved{},
+		Confidence: ent.Confidence,
+	}
 }
 
 // score is conformant/entities rounded half up to three decimals, 1 when
@@ -375,7 +387,7 @@ func reasonOf(err error) string {
 // unknownType is the unknown_type refusal both verbs raise: the declared
 // types, sorted, and the workspace's preset, "the" when the config records
 // none — what `schema show` prints.
-func unknownType(name string, prov *omap.Map, resolved *schema.ResolvedSchema) error {
+func unknownType(name string, prov *omap.Map, resolved *schema.ResolvedSchema) *errs.Located {
 	preset := "the"
 	if p, ok := prov.Get("preset"); ok {
 		if s, isStr := p.(string); isStr && strings.TrimSpace(s) != "" {
