@@ -7,11 +7,11 @@ Extract every record the source supports into the envelope below.
 - Fill a field only when the source states it. Leave a field out rather than guess: never invent a value, never write an empty string.
 - An enum field takes exactly one of its listed values; a pattern field must match its pattern; a many relation takes a list, a single one takes one target.
 - A relation target is the id or an alias of an entity the workspace already holds. khub resolves it exactly and reports what it cannot, never linking by resemblance; never invent an id or guess one from a name.
-- Never set the fields listed as supplied; khub writes them.
+- Never set the fields listed as supplied: khub writes them, and the add that captures a record sets its status and author.
 - Quote the passage a record came from in source. Give confidence from 0 to 1 when a value is uncertain.
 - A type that lists body sections takes its prose as Markdown under those ## headings, in that order.
 
-Supplied by khub, never filled: type, created, updated, generated.
+Supplied by khub, never filled: type, created, updated, generated, status, author.
 
 ## Envelope
 
@@ -27,8 +27,6 @@ Id: minted by khub as `slug`; never set it.
 
 | field | kind | required | allowed |
 |---|---|---|---|
-| status | text |  | one of draft, stable, deprecated; default stable |
-| author | text |  |  |
 | title | text |  |  |
 | description | text |  |  |
 | resource | text |  |  |
@@ -55,8 +53,6 @@ Id: minted by khub as `slug`; never set it.
 
 | field | kind | required | allowed |
 |---|---|---|---|
-| status | text |  | one of draft, stable, deprecated; default stable |
-| author | text |  |  |
 | title | text | ✓ |  |
 | description | text |  |  |
 | resource | text |  |  |

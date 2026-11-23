@@ -108,7 +108,8 @@ func TestScaffoldWalksTheResolvedSchema(t *testing.T) {
 		t.Errorf("provenance preset = %v", p)
 	}
 	env := value(view, "envelope").(*omap.Map)
-	if got := strs(value(env, "supplied")); strings.Join(got, ",") != strings.Join(entity.WriteSupplied(), ",") {
+	wantSupplied := strings.Join(append(entity.WriteSupplied(), "status", "author"), ",")
+	if got := strs(value(env, "supplied")); strings.Join(got, ",") != wantSupplied {
 		t.Errorf("supplied = %v", got)
 	}
 	if rules := strs(value(env, "rules")); len(rules) != len(Rules) {
@@ -540,10 +541,10 @@ func treeOf(t *testing.T, root string) string {
 // The OKF 0.2 base fields through conform, each as add treats it: the
 // retired `draft` key is add's draft_retired; an object-valued attribute (a
 // review event list, the `generated` stamp) is a supplied key or add's
-// value_shape, since no command-line value spells a mapping; `status: draft`
-// is a value the extractor may state; and a slug whose file would be an OKF
-// navigation name is add's invalid_slug. The scaffold asks for none of the
-// object-valued families.
+// value_shape, since no command-line value spells a mapping; `status` and
+// `author` are ingestion's to set on capture; and a slug whose file would be
+// an OKF navigation name is add's invalid_slug. The scaffold asks for none of
+// the object-valued families, nor for status or author.
 func TestConformMirrorsOKFBaseFields(t *testing.T) {
 	root := seeded(t)
 	report := conform(t, root, `{"entities": [
@@ -560,9 +561,11 @@ func TestConformMirrorsOKFBaseFields(t *testing.T) {
 		e[1].Errors[0].Reason != errs.ValueShape("", "verified", true).Message {
 		t.Errorf("object-valued attribute: %+v", e[1])
 	}
-	if len(e[2].Errors) != 1 || e[2].Errors[0].Field != "generated" ||
-		!strings.Contains(e[2].Errors[0].Reason, "supplied by khub") || e[2].ID != "client/soylent" {
-		t.Errorf("status: draft with a generated stamp: %+v", e[2])
+	if len(e[2].Errors) != 2 || e[2].Errors[0].Field != "status" ||
+		!strings.Contains(e[2].Errors[0].Reason, "add it with --draft and --author") ||
+		e[2].Errors[1].Field != "generated" || !strings.Contains(e[2].Errors[1].Reason, "supplied by khub") ||
+		e[2].ID != "client/soylent" {
+		t.Errorf("status and a generated stamp: %+v", e[2])
 	}
 	if e[3].ID != "" || len(e[3].Errors) != 1 || e[3].Errors[0].Field != "id" ||
 		e[3].Errors[0].Reason != errs.NavigationSlug("index", "client", "index.md", errs.Minted).Message {
@@ -572,9 +575,9 @@ func TestConformMirrorsOKFBaseFields(t *testing.T) {
 	fields, _ := tv.Get("fields")
 	for _, f := range fields.([]any) {
 		name := value(f.(*omap.Map), "name")
-		for _, obj := range []string{"generated", "verified", "sources", "usage_window"} {
+		for _, obj := range []string{"generated", "verified", "sources", "usage_window", "status", "author"} {
 			if name == obj {
-				t.Errorf("object-valued %s listed as a field to fill", obj)
+				t.Errorf("%s listed as a field to fill", obj)
 			}
 		}
 	}

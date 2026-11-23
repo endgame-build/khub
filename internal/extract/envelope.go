@@ -10,8 +10,8 @@
 // Everything is walked from the resolved schema. No domain type, field or
 // predicate is named in this package. The names it does carry are base
 // plumbing the write path checks for every type: entity.WriteSupplied (what
-// create writes itself), and `type`, the retired `draft` and the reserved
-// `body` of a json or yaml entity.
+// create writes itself), the status and author ingestion sets, and `type`,
+// the retired `draft` and the reserved `body` of a json or yaml entity.
 package extract
 
 import (

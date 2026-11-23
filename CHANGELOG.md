@@ -17,10 +17,12 @@ Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelo
   writing: the same field verdicts `validate` gives, the id `add` would
   mint with every refusal it raises before writing (no slug source, a
   taken or reserved slug, an existing singleton, a duplicate inside the
-  envelope), relation targets resolved by slug then alias with the
-  unresolved ones reported rather than guessed (naming the envelope entry
-  that would mint one), the body against the template, and the required
-  fields the record would leave empty as gaps that never fail the gate.
+  envelope), relation targets resolved by slug then alias, or to an earlier
+  conformant entry of the envelope, with the unresolved ones reported rather
+  than guessed, the body against the template, and the required fields the
+  record would leave empty as gaps that never fail the gate. `status` and
+  `author` are not the extractor's to fill: every ingested entry is added as
+  a draft with `--author` naming the source.
   Exit 1 when an entity does not conform (an undeclared type is that
   entity's error), 2 for an unreadable envelope (`invalid_envelope`).
   The pipeline is in `docs/ingestion.md`; the khub skill (plugin 0.1.12)

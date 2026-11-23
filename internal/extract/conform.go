@@ -167,9 +167,12 @@ func conformEntity(
 		value, _ := ent.Fields.Get(key)
 		switch {
 		case key == "draft" && !rtype.Declares(key):
-			// The retired publish flag: add refuses it (draft_retired); the
-			// envelope says `status: draft`, or the add runs with --draft.
+			// The retired publish flag: add refuses it (draft_retired). An
+			// ingested entry is added with --draft.
 			fail(key, errs.DraftRetired().Message)
+		case slices.Contains(ingestionOwned, key):
+			fail(key, fmt.Sprintf("'%s' is set when the entry is captured "+
+				"(add it with --draft and --author naming the source); leave it out of fields", key))
 		case supplied[key]:
 			// The contract lists these as khub's own; on add `created` would
 			// date the id and `generated` is stamped over, so an extractor
@@ -399,13 +402,23 @@ func unknownType(name string, prov *omap.Map, resolved *schema.ResolvedSchema) *
 	return errs.UnknownType(name, preset, known)
 }
 
-// suppliedSet is entity.WriteSupplied as a lookup.
+// ingestionOwned names the base attributes ingestion sets on a created record
+// (docs/ingestion-conflicts.md, "Fields ingestion owns"): `status`, since an
+// ingested entity is a draft, and `author`, the source. The add that captures
+// an entry sets them with --draft and --author.
+var ingestionOwned = []string{"status", "author"}
+
+// supplied is every field an extractor never fills: what create writes
+// itself, then what ingestion sets.
+func supplied() []string { return append(entity.WriteSupplied(), ingestionOwned...) }
+
+// suppliedSet is supplied as a lookup.
 func suppliedSet() map[string]bool {
-	supplied := map[string]bool{}
-	for _, name := range entity.WriteSupplied() {
-		supplied[name] = true
+	set := map[string]bool{}
+	for _, name := range supplied() {
+		set[name] = true
 	}
-	return supplied
+	return set
 }
 
 func listOf(m *omap.Map, key string) []string {

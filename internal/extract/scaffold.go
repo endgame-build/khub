@@ -6,13 +6,12 @@ package extract
 // and cardinality; the body sections a templated type expects — plus the
 // envelope the extractor returns and the rules that go with it. The derived
 // inverses are left out: an extractor fills stored edges, and the base
-// attributes create writes itself are listed as supplied rather than asked
-// for.
+// attributes create writes itself, with the status and author ingestion sets,
+// are listed as supplied rather than asked for.
 
 import (
 	"slices"
 
-	"github.com/endgame-build/khub/internal/entity"
 	"github.com/endgame-build/khub/internal/omap"
 	"github.com/endgame-build/khub/internal/schema"
 	"github.com/endgame-build/khub/internal/template"
@@ -26,7 +25,7 @@ var Rules = []string{
 	"Fill a field only when the source states it. Leave a field out rather than guess: never invent a value, never write an empty string.",
 	"An enum field takes exactly one of its listed values; a pattern field must match its pattern; a many relation takes a list, a single one takes one target.",
 	"A relation target is the id or an alias of an entity the workspace already holds. khub resolves it exactly and reports what it cannot, never linking by resemblance; never invent an id or guess one from a name.",
-	"Never set the fields listed as supplied; khub writes them.",
+	"Never set the fields listed as supplied: khub writes them, and the add that captures a record sets its status and author.",
 	"Quote the passage a record came from in source. Give confidence from 0 to 1 when a value is uncertain.",
 	"A type that lists body sections takes its prose as Markdown under those ## headings, in that order.",
 }
@@ -80,7 +79,7 @@ func envelopeBlock() *omap.Map {
 
 	block := omap.New()
 	block.Set("shape", shape)
-	block.Set("supplied", toAnyList(entity.WriteSupplied()))
+	block.Set("supplied", toAnyList(supplied()))
 	block.Set("rules", toAnyList(Rules))
 	return block
 }

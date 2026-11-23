@@ -30,6 +30,7 @@ default and required flag; its stored relations with their target types and
 cardinality (no derived inverse — an extractor fills stored edges); and, for a
 templated type, the body sections with their hints. The base fields `add`
 writes itself (`type`, `created`, `updated`, and the OKF `generated` stamp)
+and the two ingestion sets on capture (`status` and `author`)
 are listed as `supplied` rather than asked for, and the base fields that hold
 objects (`generated`, `verified`, `sources`, `usage_window`) are left out:
 `add` has no spelling for them, and a review event or a provenance record is
@@ -130,11 +131,10 @@ here.
 
 Each conformant entry becomes one `khub add <type> --<field> <value> …
 --body-file <file>` call, in envelope order so an entry a later one names
-exists first, and `--draft` when its gaps are non-empty or its confidence is
-low. Provenance follows what
+exists first, and always with `--draft` and `--author` naming the source:
 [ingestion-conflicts.md](ingestion-conflicts.md#fields-ingestion-owns)
-writes on a created record: `--author` naming the source, and the entity a
-draft until a person publishes it. The quoted `source` passage and the
+creates every ingested record as a draft with `author` naming the source,
+and the entity stays a draft until a person publishes it. The quoted `source` passage and the
 confidence go in the body (the convention: quote `source` at the top of the
 body, under the first heading or as its own paragraph) or in an extension
 field of your own. `sources`, the OKF provenance list, has no `add` spelling
