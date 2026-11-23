@@ -408,29 +408,41 @@ func TestConformMintsTheID(t *testing.T) {
 	}
 }
 
-// A target that names an earlier entry's would-be id stays unresolved — the
-// workspace is what targets resolve against — and the reason names the entry,
-// read off the same minting, by bare slug or qualified id, case-folded.
-func TestConformNamesEarlierEntries(t *testing.T) {
+// A target that names an earlier entry's would-be id resolves to it when that
+// entry conforms, since add in envelope order writes it first. By bare slug or
+// qualified id, case-folded; a wrong-typed one does not. An earlier entry
+// that fails leaves the target unresolved, naming it. A later entry is never
+// a target: it does not exist yet when this one is added. An earlier entry's
+// target counts toward a single-valued relation's cardinality.
+func TestConformResolvesEarlierEntries(t *testing.T) {
 	root := seeded(t)
 	report := conform(t, root, `{"entities": [
 	  {"type": "client", "fields": {"name": "Globex Corp"}},
 	  {"type": "project", "fields": {"title": "T"}, "relations": {"client": "GLOBEX-CORP", "owner": "noor"}},
 	  {"type": "project", "fields": {"title": "U"}, "relations": {"client": "client/globex-corp", "owner": "globex-corp"}},
+	  {"type": "client", "fields": {"name": "Broken"}, "relations": {"bogus": "x"}},
+	  {"type": "project", "fields": {"title": "V"}, "relations": {"client": "broken", "owner": "noor"}},
+	  {"type": "project", "fields": {"title": "W"}, "relations": {"client": "later", "owner": "noor"}},
 	  {"type": "client", "fields": {"name": "Later"}},
-	  {"type": "project", "fields": {"title": "V"}, "relations": {"client": "later", "owner": "noor"}}
+	  {"type": "project", "fields": {"title": "X"}, "relations": {"client": ["globex-corp", "initech"], "owner": "noor"}}
 	]}`)
 	e := report.Entities
-	suffix := "; envelope entry #0 mints client/globex-corp, add it first"
-	if e[1].OK || len(e[1].Unresolved) != 1 || e[1].Unresolved[0].Reason != "No client 'GLOBEX-CORP' to satisfy relation 'client'"+suffix {
+	if !e[1].OK || len(e[1].Gaps) != 0 {
 		t.Errorf("bare slug, case-folded: %+v", e[1])
 	}
-	if len(e[2].Unresolved) != 2 || !strings.HasSuffix(e[2].Unresolved[0].Reason, suffix) ||
-		strings.Contains(e[2].Unresolved[1].Reason, "envelope entry") {
-		t.Errorf("qualified id names; a wrong-typed one does not: %+v", e[2].Unresolved)
+	if e[2].OK || len(e[2].Unresolved) != 1 || e[2].Unresolved[0].Predicate != "owner" ||
+		strings.Contains(e[2].Unresolved[0].Reason, "envelope entry") {
+		t.Errorf("qualified id resolves; a wrong-typed one does not: %+v", e[2])
 	}
-	if !strings.HasSuffix(e[4].Unresolved[0].Reason, "#3 mints client/later, add it first") {
-		t.Errorf("later entry: %+v", e[4].Unresolved)
+	if e[3].OK || e[4].OK || len(e[4].Unresolved) != 1 ||
+		!strings.HasSuffix(e[4].Unresolved[0].Reason, "; envelope entry #3 mints client/broken, which does not conform") {
+		t.Errorf("failing earlier entry: %+v / %+v", e[3], e[4])
+	}
+	if e[5].OK || len(e[5].Unresolved) != 1 || strings.Contains(e[5].Unresolved[0].Reason, "envelope entry") {
+		t.Errorf("later entry: %+v", e[5])
+	}
+	if e[7].OK || len(e[7].Errors) != 1 || e[7].Errors[0].Reason != "single-valued relation has multiple values" {
+		t.Errorf("an envelope target counts toward cardinality: %+v", e[7])
 	}
 }
 

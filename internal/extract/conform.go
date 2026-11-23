@@ -101,6 +101,7 @@ func Conform(root string, env *Envelope) (*Report, error) {
 	for i, ent := range env.Entities {
 		rtype, _ := resolved.Types.Get(ent.Type)
 		er := conformEntity(i, ent, rtype, idx, templates, supplied, minted)
+		minted.oks = append(minted.oks, er.OK)
 		if er.OK {
 			report.Conformant++
 		}
@@ -123,11 +124,13 @@ func score(conformant, total int) float64 {
 // second entry minting an id an earlier one already claimed is reported
 // against that entry — a property of the envelope alone, decided by the same
 // minting add runs — and an unresolved target that names an earlier entry's
-// would-be id can say so by index. ids is in entry order, a nil for an entry
-// that minted nothing.
+// would-be id resolves to it when that entry conforms. ids and oks are in
+// entry order: ids holds a nil for an entry that minted nothing, oks each
+// entry's verdict.
 type mintedIDs struct {
 	first map[index.Node]int
 	ids   []*index.Node
+	oks   []bool
 }
 
 func conformEntity(
@@ -199,6 +202,7 @@ func conformEntity(
 		raw, _ := ent.Relations.Get(predicate)
 		relations.Set(predicate, append(listOf(relations, predicate), raw.([]string)...))
 	}
+	linked := map[string]bool{} // relations an earlier entry satisfies
 	for _, predicate := range relations.Keys() {
 		rel, ok := rtype.Relations.Get(predicate)
 		if !ok {
@@ -206,16 +210,24 @@ func conformEntity(
 			continue
 		}
 		resolved := []string{}
+		// Targets an earlier entry mints: the edge add writes once that entry
+		// is added, so they count toward cardinality and completeness but stay
+		// out of FieldFindings, which checks against the workspace.
+		fromEnvelope := map[index.Node]bool{}
 		for _, target := range listOf(relations, predicate) {
 			value, err := entity.ResolveWriteValue(idx, rel, predicate, target)
 			if err != nil {
 				reason := reasonOf(err)
-				// Targets resolve against the workspace only. One that names
-				// an earlier entry's would-be id is still unresolved — adding
-				// that entry first is what resolves it — and the reason says
-				// which entry, read off the same minting, never guessed.
+				// A target the workspace lacks may name an earlier entry's
+				// would-be id. Run in envelope order, add writes that entry
+				// first, so the target resolves when the entry conforms. A later
+				// entry does not exist yet when this one is added.
 				if j, node, ok := minted.names(rel, target); ok {
-					reason = fmt.Sprintf("%s; envelope entry #%d mints %s, add it first", reason, j, node.ID())
+					if minted.oks[j] {
+						fromEnvelope[node] = true
+						continue
+					}
+					reason = fmt.Sprintf("%s; envelope entry #%d mints %s, which does not conform", reason, j, node.ID())
 				}
 				er.Unresolved = append(er.Unresolved, Unresolved{predicate, target, reason})
 				continue
@@ -223,6 +235,12 @@ func conformEntity(
 			resolved = append(resolved, value)
 		}
 		resolved = entity.UniqueTargets(idx, rel, resolved)
+		if len(fromEnvelope) > 0 {
+			linked[predicate] = true
+			if !rel.Many && len(resolved)+len(fromEnvelope) > 1 && len(resolved) <= 1 {
+				fail(predicate, "single-valued relation has multiple values") // FieldFindings' wording
+			}
+		}
 		switch {
 		case len(resolved) == 0:
 			// Nothing resolved: the record would carry no edge here, which the
@@ -282,7 +300,7 @@ func conformEntity(
 	}
 	for _, predicate := range rtype.Relations.Keys() {
 		rel, _ := rtype.Relations.Get(predicate)
-		if rel.Required && !values.Present(metaGet(meta, predicate)) {
+		if rel.Required && !linked[predicate] && !values.Present(metaGet(meta, predicate)) {
 			er.Gaps = append(er.Gaps, predicate)
 		}
 	}

@@ -109,10 +109,9 @@ apart:
   with the refusal `add` would raise. Reported, never guessed: the stub and
   likeness rungs that come after the exact ones are the
   [alignment ladder](ingestion-alignment.md), and it never auto-merges.
-  Targets resolve against the workspace only, so an entry naming an earlier
-  entry of the same envelope is unresolved too; the reason then names that
-  entry (`envelope entry #0 mints client/globex, add it first`), read off the
-  same deterministic minting.
+  A target naming an earlier entry of the same envelope resolves when that
+  entry conforms, since the `add`s run in envelope order; a later entry is
+  never a target ([`cli.md`](cli.md#payload-shapes) has the rule).
 - **`gaps`** — the required fields and relations the written record would
   leave empty. Capture is never blocked, so a gap fails nothing; the entry
   lands as active-but-incomplete for `check` to report, or as a draft. The
