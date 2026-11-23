@@ -1,0 +1,10 @@
+# doctor diagnoses the workspace itself. With no workspace it reports a failed
+# check (exit 1), never a refusal. A fresh workspace outside git passes with a
+# not_a_git_repository warning; once committed it passes clean. An extra argument is a usage error.
+steps:
+- argv: ["doctor"]
+- argv: ["init", "build-hub", ".", "--no-wire"]
+- argv: ["doctor"]
+- sh: "git init -q . && git add -A && GIT_AUTHOR_DATE=2026-01-01T10:00:00Z GIT_COMMITTER_DATE=2026-01-01T10:00:00Z git commit -qm seed"
+- argv: ["doctor", "--format", "json"]
+- argv: ["doctor", "extra"]

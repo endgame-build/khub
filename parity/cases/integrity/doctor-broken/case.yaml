@@ -1,0 +1,12 @@
+# Each break doctor names, and what it leaves for later checks: a storage
+# path of the wrong shape (one row per type), a provenance stamp with no
+# version (a warning), no config.yaml at all, and a schema that does not
+# parse, which skips the layout check. doctor writes nothing.
+steps:
+- argv: ["init", "build-hub", ".", "--no-wire"]
+- sh: "rm -rf knowledge/requirements knowledge/components && touch knowledge/requirements knowledge/components && perl -ni -e 'print unless /^version:/' .khub/config.yaml"
+- argv: ["doctor"]
+- sh: "rm .khub/config.yaml"
+- argv: ["doctor"]
+- sh: "printf 'types: [\\n' > .khub/ontology.yaml"
+- argv: ["doctor"]

@@ -87,6 +87,45 @@ export function setOverlay(elements) {
   return added.map(function (ele) { return ele.id(); });
 }
 
+// overlayPositions reads where the overlay's nodes sit, keyed by id, so a
+// rebuilt overlay can be put back without a layout.
+export function overlayPositions() {
+  var saved = new Map();
+  cy.nodes('.sch').forEach(function (n) {
+    var p = n.position();
+    saved.set(n.id(), { x: p.x, y: p.y });
+  });
+  return saved;
+}
+
+// restoreOverlay puts each overlay node back where it was. A node that was not
+// there before (a type box a filter change brought in) goes on the boxes' row,
+// above the mean of the visible entities realizing it — or, with none, at the
+// row's right end. Called after showOnly, so `.off` is already settled.
+export function restoreOverlay(saved) {
+  var top = Infinity, right = -Infinity;
+  saved.forEach(function (p) {
+    if (p.y < top) top = p.y;
+    if (p.x > right) right = p.x;
+  });
+  cy.batch(function () {
+    cy.nodes('.sch').forEach(function (n) {
+      var p = saved.get(n.id());
+      if (p) { n.position(p); return; }
+      var members = n.incomers('edge.instof').sources().not('.off');
+      var x = right + 160;
+      if (members.length) {
+        x = 0;
+        members.forEach(function (m) { x += m.position('x'); });
+        x /= members.length;
+      } else {
+        right = x;
+      }
+      n.position({ x: x, y: top });
+    });
+  });
+}
+
 export function runLayout(spec) {
   // Always the visible collection, never cy.layout(): the core-level call
   // operates on ALL elements including the hidden ones.
@@ -111,6 +150,14 @@ export function runLayout(spec) {
     opts.name = 'circle';
     opts.spacingFactor = 1.1;
     opts.avoidOverlap = true;
+  } else if (spec.name === 'both') {
+    // Layered, with the type boxes as the roots: every entity hangs one
+    // instance-of edge below its type, which is what puts the classes above
+    // the objects that realize them.
+    opts.name = 'breadthfirst';
+    opts.roots = eles.nodes('.sch');
+    opts.avoidOverlap = true;
+    opts.spacingFactor = 1.2;
   } else if (spec.name === 'grid') {
     opts.avoidOverlap = true;
     opts.condense = false;
@@ -301,6 +348,16 @@ export function buildStyle(types, colors, ink) {
       }
     },
     { selector: 'edge.sch.required', style: { 'line-style': 'solid' } },
+    // The combined view's realization edge, entity to type: UML's dotted line,
+    // faint, because there is one per entity and the declared relations above
+    // are the structure worth reading.
+    {
+      selector: 'edge.sch.instof',
+      style: {
+        'line-style': 'dotted', 'curve-style': 'straight', 'opacity': 0.3,
+        'target-arrow-shape': 'triangle-backcurve', 'label': ''
+      }
+    },
     // A derived inverse is real ontology — khub computes it at read time from
     // the forward edge — so it is drawn, but distinctly: nobody authors it.
     { selector: 'edge.sch.derived', style: { 'line-style': 'dotted', 'target-arrow-shape': 'vee' } },

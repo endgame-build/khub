@@ -1,0 +1,24 @@
+# `viz --aspect`: instances (the default, byte-identical to a bare `viz`),
+# schema (the resolved ontology: one box per declared type plus `any`, one
+# edge per declared relation), and both (the two plus an instance-of edge per
+# entity). --type narrows each aspect to the type's outbound frontier. A value
+# outside the set is a usage error before the workspace is read; `serve`
+# shares the check, and answers it ahead of its TTY gate.
+#
+# Every serve step here refuses — see cli-contract/serve-refusals before adding
+# one, and keep this case in the default `mode: pipe`.
+steps:
+- argv: ["init", "build-hub", ".", "--no-wire"]
+- argv: ["add", "component", "--title", "A", "--kind", "service"]
+- argv: ["add", "component", "--title", "B", "--kind", "service"]
+- argv: ["link", "cmp-a", "depends_on", "cmp-b"]
+- argv: ["viz", "--aspect", "instances", "--out", "instances.html"]
+- argv: ["viz", "--out", "default.html"]
+- argv: ["viz", "--aspect", "schema", "--out", "schema.html"]
+- argv: ["viz", "--aspect", "both", "--out", "both.html"]
+- argv: ["viz", "--aspect", "schema", "--type", "component", "--out", "schema-component.html"]
+- argv: ["viz", "--aspect", "both", "--type", "component", "--out", "both-component.html"]
+- argv: ["viz", "--aspect", "schema", "--type", "bogus"]
+- argv: ["viz", "--aspect", "nope"]
+- argv: ["serve", "--aspect", "nope"]
+- argv: ["serve", "--aspect", "both"]

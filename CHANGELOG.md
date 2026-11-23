@@ -29,8 +29,28 @@ Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelo
   leaves `status` as it is. `storage.yaml` keeps
   every other byte: the type's entry is spliced in place, CRLF included.
   `khub layout` lists where every type lands.
-- The Claude Code plugin (0.1.11) reads `khub layout migrate --execute` as a
+- The Claude Code plugin (0.1.12) reads `khub layout migrate --execute` as a
   write, so the band refreshes after a migration.
+
+## [0.33.0] — 2026-11-15
+
+khub tells an agent more and lets it try a write first. A refusal now carries
+`field`, `expected` and `suggestion`, so a misspelt kind, id or predicate comes
+back with the value to use, and `docs/cli-output-contract.md` sets out the
+whole output contract. Every write verb takes `--dry-run`. `check` gains
+retention rules, per-entity waivers and, under `--mentions`, link suggestions
+from body text, and `validate` reports dead relative links. In a Claude Code
+session each write warns about the gating findings it has not shown yet; that
+costs one `check` per write (an `edit` on 550 entities takes about 90 ms
+instead of 40 ms), and `KHUB_SESSION=` turns it off. `query` filters by what sits under an entity (`--under`) and by edge counts
+(`--count`). New commands: `khub recent`, `khub doctor`, `khub completion`,
+saved queries (`query --save-as`, `khub run`), `reindex --check`, and
+`viz`/`serve --aspect`. A locked type or predicate
+survives `upgrade` unless `--unlock` names it. The workspace format is
+unchanged, so no `khub upgrade` is needed.
+
+### Added
+
 - **`query --under <id> --via <predicate>`.** Scopes a query to everything
   that reaches an entity over a relation, any number of hops: `--under
   sys-shop --via system` lists the shop's components, and over `depends_on`
@@ -171,6 +191,67 @@ Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelo
   is carried across upgrades like any other per-type policy key. The khub and
   setup skills tell an agent that `--unlock` is the workspace owner's
   decision, to ask for rather than pass on its own. Closes #13.
+- **`khub reindex --check`.** A drift gate for `index.md`, for CI or a
+  pre-commit hook. It writes nothing, prints `index.md is up to date` and
+  exits 0 when the file matches the graph, and otherwise prints the diff,
+  names `khub reindex` on stderr and exits 1, a missing `index.md` included.
+  It refuses (exit 2) whatever `reindex` refuses: an unparseable entity file,
+  and an `index.md` that is a symlink, a directory or unreadable. Passing it
+  with `--dry-run` is a usage error. Both read `index.md` with universal
+  newlines, so a CRLF checkout of a current index is current. The plugin
+  (0.1.11) counts `reindex --check` as a read. Closes #67.
+- **`khub completion <bash|zsh|fish|powershell>`.** Prints a shell completion
+  script. At TAB time the script asks the binary itself (`khub __complete`), so
+  it completes the commands, subcommands and options the installed khub has,
+  the closed value sets (`--format`, `wire --target`, `query --trust`,
+  `check --tier`, `init`'s presets), and paths only where a value is a path
+  (`-C`, `--body-file`, `export --okf`, `import --okf`, `import --type-map`).
+  Workspace values (types, ids) are not completed. bash needs 4.1+ with
+  bash-completion. `completion` was a usage error until now;
+  `--install-completion` still is. Closes #46.
+- **Saved queries.** `khub query … --save-as <name>` saves the query's filters
+  to `.khub/queries.yaml` (tracked in git, hand-editable) and `khub run <name>`
+  replays them with the same output, byte for byte. Every query filter saves,
+  `--under`/`--via`, the count bounds and `--trust` included; `--format` and
+  `--receipt` belong to each run, and `run` takes both. A different
+  definition under a taken name refuses (`saved_query_exists`) until
+  `--replace`; saving the same one again is a no-op. A save splices the file
+  as `edit` splices frontmatter, so comments on the rest of the file survive;
+  one that cannot refuses (`saved_query_unspliceable`). New refusal codes:
+  `invalid_query_name`, `saved_query_exists`, `saved_query_unspliceable`,
+  `unknown_saved_query` (with the saved names as `expected` and the nearest
+  as `suggestion`), `invalid_saved_query` (`field` names the key). The plugin
+  draws a compact row for `run`. Closes #31.
+- **`khub doctor`.** A self-diagnosis of what every other command assumes: a
+  workspace, git and its history, a schema that resolves, a readable
+  provenance stamp in `.khub/config.yaml` naming a preset `upgrade` can find
+  at a version no newer than this binary ships, a workspace lock a write can
+  take, storage shaped (and, on macOS and Linux, writable at its top) the way
+  each type's layout reads it, and a workspace every file of which `check`
+  can read. Each check reports `ok`, `warn`, `fail` or `skip` with a code and
+  a message, as JSON on a pipe like every read. It exits 0 when nothing
+  fails (a warning does not), 1 when a check fails, and 2 only for a usage
+  error; a missing workspace is a failed check (exit 1), where every other
+  command refuses it with exit 2. On macOS and Linux doctor writes nothing:
+  it asks the kernel whether a write would be allowed. On Windows the lock
+  check creates and removes one probe file inside `.khub/generated/`, and
+  skips when that directory does not exist. The khub skill tells the agent
+  to run `khub doctor` when a failure's own error does not explain it.
+  Closes #41.
+- **`viz --aspect instances|schema|both`.** `instances` is today's entity
+  graph and stays the default, byte for byte. `schema` draws the resolved
+  ontology from the schema alone: a box per declared type listing its
+  attributes with UML multiplicity, an `any` box for the base block, and an
+  edge per declared relation labelled with its multiplicity, solid when
+  required and dashed when optional. `both` draws the two together, the types
+  above the entities that realize them, joined by dotted instance-of edges.
+  `--type` narrows every aspect to the type's outbound frontier. Closes #61.
+- **`serve --aspect`** opens the page on the matching view through
+  `?aspect=` on the printed URL. The page gains a **Both** view: the graph
+  view's entities with their types boxed above them, under the same focus,
+  depth and predicate filters. The server is unchanged: read-only, GET and
+  HEAD only, the same Host-header guard. `khub completion` offers the three
+  aspects for both flags.
 
 ### Changed
 

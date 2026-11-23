@@ -13,7 +13,7 @@ If `khub` is not installed (`command not found`), load the `setup` skill first â
 ## Decide the next call from the last result
 
 This skill is not a fixed pipeline. Every khub call but the operator commands (`reindex`, `viz`, `serve`, `backfill`,
-`wire`) answers in JSON, and that answer decides the next call: an id you did not have, an edge to walk, an `error` naming the
+`wire`, `completion`) answers in JSON, and that answer decides the next call: an id you did not have, an edge to walk, an `error` naming the
 field to fix, a `gaps` entry, a stderr `note:` saying a search was cut short.
 
 - **A closed ask** (one fact, one write, an id you already hold): plan the calls up front,
@@ -39,6 +39,7 @@ Never hardcode a type or a field: the first four rows read the live schema.
 | find entities by a field, tag, edge or review tier | `khub query --type <t> [--<field> <v>] [--tag <t>] [--has/--missing <pred>] [--trust <tier>] --format json` | `get` the rows you need; `--missing` finds gaps, `--trust` takes `unverified`, `machine` or `human`. Filter here rather than listing and filtering yourself |
 | find everything under an entity | `khub query --under <id> --via <pred> --format json` | any number of hops, ANDed with the other filters. A stored `<pred>` points from child to parent (`--via system`); for one stored on the parent, pass its declared inverse (`--via superseded`) |
 | find entities by how many edges they have | `khub query --count '<pred>>=2'` / `--in-count '>=5'` / `--out-count 0` | ops `= != < <= > >=`; repeat to AND, e.g. a range. Quote the bound: `>` and `<` are shell redirects |
+| rerun a query someone saved | `khub run <name> --format json` | the rows `query` gives with the saved filters; an unknown name lists the saved ones. Save one with `khub query â€¦ --save-as <name>`, a write to `.khub/queries.yaml`; a taken name with a different definition refuses until `--replace` |
 | see what is one hop away | `khub neighbors <id> [--predicate <p>] [--in/--out] --format json` | `get` the neighbor that answers |
 | see what breaks if this changes | `khub impact <id> --reverse [--predicate <p>] --format json` | `get` the rows at the depth that matters. Without `--reverse` it walks what this reaches; the predicate defaults to `depends_on` |
 | trace a supersession chain | `khub history <newest-id> --format json` | it walks back from the record you name, so name the newest. What replaced an old record: `neighbors <id> --in --predicate <supersession predicate>` |
@@ -266,9 +267,10 @@ not been found yet.
 
 ## Rules
 
-- Every read AND write emits JSON on a pipe; a table is only for a TTY. `--format json` makes it explicit. The operator commands (`reindex`, `viz`, `serve`, `backfill`, `wire`) are the exception: they print prose and take no `--format`.
+- Every read AND write emits JSON on a pipe; a table is only for a TTY. `--format json` makes it explicit. The operator commands (`reindex`, `viz`, `serve`, `backfill`, `wire`) are the exception: they print prose and take no `--format`. `completion <shell>` prints a shell script.
 - Every existing-workspace mutation is serialized workspace-wide from scan through commit. Never delete `.khub/generated/locks/workspace.lock` while khub may be running.
-- On a failed command, read the located error and correct the call. The JSON `error` carries `code` and `message`, and where they apply `field` (the attribute or relation at fault), `expected` (the values allowed) and `suggestion` (the nearest one: retry with it when it is what you meant). Exit 2 reports a refusal or write failure; `write_durability_uncertain` means publication happened, and `upgrade_recovery_failed` requires journal inspection. `locked_removed` means an upgrade would drop a type or predicate the schema locks: `--unlock` is the workspace owner's call, so ask before passing it. Exit 1 is a gate (`validate`, `check`) that ran and found the workspace wrong.
+- On a failed command, read the located error and correct the call. The JSON `error` carries `code` and `message`, and where they apply `field` (the attribute or relation at fault), `expected` (the values allowed) and `suggestion` (the nearest one: retry with it when it is what you meant). Exit 2 reports a refusal or write failure; `write_durability_uncertain` means publication happened, and `upgrade_recovery_failed` requires journal inspection. `locked_removed` means an upgrade would drop a type or predicate the schema locks: `--unlock` is the workspace owner's call, so ask before passing it. Exit 1 is a gate (`validate`, `check`, `reindex --check`, `doctor`) that ran and found the workspace wrong.
+- When khub fails in a way its error does not explain (an `os_error`, `schema_error` or `internal_path_error` you cannot place, or every command failing at once), run `khub doctor --format json`. It checks git, the schema, `.khub/config.yaml`, the workspace lock, each type's storage shape and whether `check` can read every file, and fixes nothing; fix each `fail` row it names. Exit 0 means nothing failed (warnings may remain), 1 means a check failed, including when there is no workspace. It does not see write access inside a type's storage directory, so a write that still fails there names its path in its own error.
 - Run `khub validate --strict` in CI. Capture is never blocked, so a typo'd field name (`--knid`) is written to frontmatter and neither default gate reports it; `--strict` is what turns undeclared keys into a finding.
 - When sources call an entity by another name, record it: `khub edit <id> aliases "Initech,INTC"`. Every ID you pass then resolves through it, a relation written by alias stores the real slug, and `add` refuses a slug that is already someone's alias.
 

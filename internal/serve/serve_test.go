@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"net"
 	"net/http"
@@ -132,6 +133,38 @@ func TestPageCarriesCSP(t *testing.T) {
 	}
 	if resp.Header.Get("X-Content-Type-Options") != "nosniff" {
 		t.Error("page missing nosniff")
+	}
+}
+
+// `khub serve --aspect` prints the URL with ?aspect=, and the page reads it
+// client-side. The server must answer that URL with the page itself — same
+// bytes, same headers — whatever the value, malformed escapes included.
+func TestAspectQueryServesThePage(t *testing.T) {
+	srv := httptest.NewServer(Handler(t.TempDir()))
+	defer srv.Close()
+
+	get := func(path string) (*http.Response, string) {
+		t.Helper()
+		resp, err := http.Get(srv.URL + path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer resp.Body.Close()
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return resp, string(body)
+	}
+	_, want := get("/")
+	for _, path := range []string{"/?aspect=both", "/?aspect=schema", "/?aspect=instances", "/?aspect=%E0", "/?aspect=bogus"} {
+		resp, body := get(path)
+		if resp.StatusCode != http.StatusOK || body != want {
+			t.Errorf("GET %s = %d with %d bytes, want the page (%d bytes)", path, resp.StatusCode, len(body), len(want))
+		}
+		if resp.Header.Get("Content-Security-Policy") == "" {
+			t.Errorf("GET %s lost the CSP", path)
+		}
 	}
 }
 

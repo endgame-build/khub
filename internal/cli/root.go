@@ -44,6 +44,9 @@ func Execute(argv []string) int {
 		_ = usageBox(root, "Missing command.")
 		return 2
 	}
+	if isCompletionRequest(rest) {
+		rest = prepareCompletionRequest(root, rest)
+	}
 	root.SetArgs(rest)
 	cmd, err := root.ExecuteC()
 	if err == nil {
@@ -202,10 +205,13 @@ func newRoot() *cobra.Command {
 		return usageBox(cmd, clickFlagMessage(cmd, err))
 	})
 	root.SilenceUsage = true
-	// Typer builds the app with add_completion=False, so khub has no
-	// completion surface at all: `khub completion` and --install-completion
-	// must both be usage errors. Cobra adds `completion` by default.
+	// Typer built the app with add_completion=False, so --install-completion
+	// stays a usage error. `khub completion SHELL` is khub's own command
+	// (completion.go); cobra's default group, with its per-shell subcommands,
+	// is never added.
 	root.CompletionOptions.DisableDefaultCmd = true
+	// At TAB time `khub -C <dir>` completes directories, as the option takes.
+	_ = root.MarkFlagDirname("workspace")
 	// Click has no `help` COMMAND either — `khub help` is "No such command
 	// 'help'.", exit 2. A help command whose Use is empty has the empty name,
 	// so cobra's InitDefaultHelpCmd finds one already set and never mints the
@@ -219,6 +225,7 @@ func newRoot() *cobra.Command {
 	registerInit(root)
 	registerUpgrade(root)
 	registerStatus(root)
+	registerDoctor(root)
 	registerAdd(root)
 	registerGet(root)
 	registerEdit(root)
@@ -227,6 +234,7 @@ func newRoot() *cobra.Command {
 	registerRemove(root)
 	registerVerify(root)
 	registerQuery(root)
+	registerRun(root)
 	registerSearch(root)
 	registerRetrieve(root)
 	registerNeighbors(root)
@@ -245,7 +253,9 @@ func newRoot() *cobra.Command {
 	registerWire(root)
 	registerSchema(root)
 	registerLayout(root)
+	registerCompletion(root)
 	dropHelpShorthand(root) // after every registration, so subcommands are covered
+	wireCompletions(root)
 	return root
 }
 

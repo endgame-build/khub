@@ -18,6 +18,7 @@ Commands:
   init  Scaffold a workspace from a preset and wire it into the agent context files.
   upgrade  Refresh an existing workspace: the shipped schema and templates, new scaffolds, the wire block.
   status  Summarize the workspace: counts, draft/active, orphan/stale, OKF conformance.
+  doctor  Diagnose the workspace: git, schema, provenance, lock, storage layout.
   add  Create an entity: khub add opportunity --client initech --owner noor --stage prospect.
   get  Read entities' frontmatter and body, optionally with derived edges.
   edit  Edit an entity: khub edit initech-deal stage proposal-sent  (or --field value).
@@ -26,6 +27,7 @@ Commands:
   remove  Remove an entity, guarded by inbound edges: khub remove old-fragment [--force].
   verify  Record a review: khub verify ad-2026-01-15-use-jwt --by human:ilya.
   query  Filter entities: khub query --type opportunity --stage prospect --format json.
+  run  Run a saved query: khub run open-prospects --format json.
   search  Full-text search: khub search modernization --type transcript --format json.
   retrieve  Assemble context in one call: khub retrieve "auth token" --expand depends_on:2 --max-bytes 20000.
   neighbors  Walk one-hop neighbors: khub neighbors initech-pov [--predicate client --in].
@@ -35,16 +37,17 @@ Commands:
   check  Check the active graph: completeness, orphans, dangling edges, strays, cycles, bodies.
   stale  List entities past the `updated` threshold, oldest first: khub stale [--days N].
   recent  List entities touched within the window, newest first: khub recent [--days N].
-  reindex  Regenerate the OKF index.md from the graph: khub reindex [--dry-run].
+  reindex  Regenerate the OKF index.md from the graph: khub reindex [--dry-run | --check].
   export  Write the workspace as an OKF 0.2 bundle: khub export --okf DIR.
   import  Read an OKF bundle into the workspace as drafts: khub import --okf DIR.
-  viz  Render the typed graph to a self-contained Cytoscape HTML: khub viz [--out F] [--open] [--type T].
-  serve  Serve a read-only graph view on loopback: khub serve [--port 7777].
+  viz  Render the typed graph to a self-contained Cytoscape HTML: khub viz [--out F] [--open] [--type T] [--aspect A].
+  serve  Serve a read-only graph view on loopback: khub serve [--port 7777] [--aspect A].
   backfill  Backfill missing dates and frontmatter: khub backfill [--type T] [--infer-type] [--dry-run].
   wire  Wire the workspace into agent context files (CLAUDE.md gets ``@`` imports of the
 schema layer files; AGENTS.md gets a schema pointer). Bare ``wire`` updates whichever already exist.
   schema  Introspect the active schema.
   layout  Show where each type's entities land: khub layout [migrate].
+  completion  Print a shell completion script: khub completion bash|zsh|fish|powershell.
 
 ```
 
@@ -103,6 +106,20 @@ Summarize the workspace: counts, draft/active, orphan/stale, OKF conformance.
 
 Options:
   --format <str>  text (Rich table on a TTY) or json. [default: text]
+  --help  Show this message and exit.
+
+```
+
+## khub doctor
+
+```console
+$ khub doctor --help
+Usage: khub doctor [OPTIONS]
+
+Diagnose the workspace: git, schema, provenance, lock, storage layout.
+
+Options:
+  --format <str>  text (on a TTY) or json. [default: text]
   --help  Show this message and exit.
 
 ```
@@ -279,6 +296,26 @@ Options:
   --active  Exclude drafts.
   --limit <int>  Cap the returned set.
   --trust <str>  Keep entities at this review tier: unverified, machine, or human.
+  --format <str>  text (Rich table on a TTY), json, or ids. [default: text]
+  --receipt  Wrap JSON output with the applied filters, matched and returned counts, and truncation.
+  --save-as <str>  Also save these filters under a name for `khub run <name>`.
+  --replace  Let --save-as overwrite a different saved query of that name.
+  --help  Show this message and exit.
+
+```
+
+## khub run
+
+```console
+$ khub run --help
+Usage: khub run [OPTIONS] {name}
+
+Run a saved query: khub run open-prospects --format json.
+
+Arguments:
+  name <str>  A name saved with khub query --save-as. [required]
+
+Options:
   --format <str>  text (Rich table on a TTY), json, or ids. [default: text]
   --receipt  Wrap JSON output with the applied filters, matched and returned counts, and truncation.
   --help  Show this message and exit.
@@ -468,10 +505,11 @@ Options:
 $ khub reindex --help
 Usage: khub reindex [OPTIONS]
 
-Regenerate the OKF index.md from the graph: khub reindex [--dry-run].
+Regenerate the OKF index.md from the graph: khub reindex [--dry-run | --check].
 
 Options:
   --dry-run  Print the diff against the current index.md and write nothing.
+  --check  Exit 1 if index.md is missing or stale, printing the diff; write nothing.
   --help  Show this message and exit.
 
 ```
@@ -521,12 +559,13 @@ Options:
 $ khub viz --help
 Usage: khub viz [OPTIONS]
 
-Render the typed graph to a self-contained Cytoscape HTML: khub viz [--out F] [--open] [--type T].
+Render the typed graph to a self-contained Cytoscape HTML: khub viz [--out F] [--open] [--type T] [--aspect A].
 
 Options:
   --out <str>  Output path for the HTML (default viz.html). [default: viz.html]
   --open  Open the written file in the default browser.
   --type <str>  Render only that type and its incident edges.
+  --aspect <str>  What to draw: instances (the entities), schema (the types and their relations), or both. [default: instances]
   --help  Show this message and exit.
 
 ```
@@ -537,10 +576,11 @@ Options:
 $ khub serve --help
 Usage: khub serve [OPTIONS]
 
-Serve a read-only graph view on loopback: khub serve [--port 7777].
+Serve a read-only graph view on loopback: khub serve [--port 7777] [--aspect A].
 
 Options:
   --port <int>  Port to bind on 127.0.0.1; 0 takes an ephemeral one. [default: 7777]
+  --aspect <str>  View to open on: instances, schema, or both. Default: the schema view.
   --help  Show this message and exit.
 
 ```
@@ -722,6 +762,24 @@ Options:
   --path <str>  Destination directory or collection file (default: the current path, with the extension a collection needs).
   --execute  Perform the migration (default: dry run).
   --format <str>  text (default) or json (emits the plan and what ran). [default: text]
+  --help  Show this message and exit.
+
+```
+
+## khub completion
+
+```console
+$ khub completion --help
+Usage: khub completion [OPTIONS] SHELL
+
+Print a shell completion script: khub completion bash|zsh|fish|powershell.
+
+Load it for this session with `source <(khub completion zsh)`, or write it to the shell's completion directory to keep it. Candidates come from the binary at TAB time.
+
+Arguments:
+  SHELL <str>  bash, zsh, fish, or powershell. [required]
+
+Options:
   --help  Show this message and exit.
 
 ```
