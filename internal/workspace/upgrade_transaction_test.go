@@ -480,6 +480,9 @@ func TestPublishChangesRollsBackARemoval(t *testing.T) {
 	root := t.TempDir()
 	writeFile(t, filepath.Join(root, "notes", "gone.md"), "keep me\n")
 	writeFile(t, filepath.Join(root, "outside.md"), "edited outside\n")
+	if err := os.Chmod(filepath.Join(root, "notes", "gone.md"), 0o600); err != nil {
+		t.Fatal(err)
+	}
 	gone, err := ReadFileState(root, filepath.Join("notes", "gone.md"))
 	if err != nil {
 		t.Fatal(err)
@@ -495,6 +498,9 @@ func TestPublishChangesRollsBackARemoval(t *testing.T) {
 	}
 	if got := readFile(t, filepath.Join(root, "notes", "gone.md")); got != "keep me\n" {
 		t.Fatalf("removed file not restored: %q", got)
+	}
+	if info, err := os.Stat(filepath.Join(root, "notes", "gone.md")); err != nil || runtime.GOOS != "windows" && info.Mode().Perm() != 0o600 {
+		t.Fatalf("removed file's mode not restored: %v %v", info.Mode(), err)
 	}
 	journals, _ := filepath.Glob(filepath.Join(root, ".khub", "generated", "migrate-*"))
 	if len(journals) != 1 {

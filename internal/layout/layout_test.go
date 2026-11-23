@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 	"sync"
@@ -804,5 +805,57 @@ func TestStorageEntryKeyOrder(t *testing.T) {
 	got, _ := os.ReadFile(storagePath)
 	if !strings.Contains(string(got), "  note:\n    layout: folder\n    format: md\n    path: notes\n    id_prefix: nt\n  card:") {
 		t.Fatalf("storage.yaml:\n%s", got)
+	}
+}
+
+// A migrated file keeps its source's mode, a new collection file takes the
+// narrowest of its sources', and a collection source whose comments a format
+// change drops is listed as rewritten.
+func TestMovesKeepModesAndListCollectionRewrites(t *testing.T) {
+	root := newWS(t)
+	notes, _ := filepath.Glob(filepath.Join(root, "notes", "*.md"))
+	if len(notes) == 0 {
+		t.Fatal("no notes seeded")
+	}
+	for _, f := range notes {
+		if err := os.Chmod(f, 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	mode := func(rel string) os.FileMode {
+		info, err := os.Stat(filepath.Join(root, rel))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return info.Mode().Perm()
+	}
+	migrate(t, root, "note", layout.Target{Layout: "collection", Format: "jsonl"})
+	_, _, coll := storageOf(t, root, "note")
+	if runtime.GOOS != "windows" && mode(coll) != 0o600 {
+		t.Fatalf("collection mode = %v", mode(coll))
+	}
+	migrate(t, root, "note", layout.Target{Layout: "file", Format: "md"})
+	back, _ := filepath.Glob(filepath.Join(root, "notes", "*.md"))
+	for _, f := range back {
+		rel, _ := filepath.Rel(root, f)
+		if runtime.GOOS != "windows" && mode(rel) != 0o600 {
+			t.Fatalf("%s mode = %v", rel, mode(rel))
+		}
+	}
+
+	_, _, vendors := storageOf(t, root, "vendor")
+	data, err := os.ReadFile(filepath.Join(root, vendors))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, vendors), append([]byte("# hand comment\n"), data...), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	dry, err := layout.Migrate(root, "vendor", layout.Target{Format: "json", Path: "vendors.json"}, layout.Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Join(dry.Rewritten, " ") != filepath.ToSlash(vendors) {
+		t.Fatalf("rewritten = %v", dry.Rewritten)
 	}
 }

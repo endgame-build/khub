@@ -433,9 +433,15 @@ func PublishChanges(root string, changes []FileChange, dirs []string, journal Jo
 				failed = append(failed, filepath.ToSlash(w.Path))
 				continue
 			}
-			if w.Before == nil {
+			switch {
+			case w.Before == nil:
 				err = fsio.Remove(root, filepath.Join(root, w.Path), false)
-			} else {
+			case w.After == nil:
+				// A removed file comes back new, so its mode is set again.
+				if err = fsio.AtomicWriteIn(root, filepath.Join(root, w.Path), w.Before.Data); err == nil {
+					err = fsio.ChmodIn(root, filepath.Join(root, w.Path), w.Before.Mode)
+				}
+			default:
 				err = fsio.AtomicWriteIn(root, filepath.Join(root, w.Path), w.Before.Data)
 			}
 			if err != nil {

@@ -27,6 +27,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -121,8 +122,16 @@ func Migrate(root, typeName string, target Target, opt Options) (*Plan, error) {
 		if err != nil {
 			return nil, err
 		}
+		modes := createdModes(p.changes)
 		if err := workspace.PublishChanges(root, p.changes, p.dirs, Journal); err != nil {
 			return nil, err
+		}
+		// ponytail: a crash between publication and here leaves the new files
+		// at the default mode; the journal is already gone by then.
+		for _, c := range modes {
+			if err := fsio.ChmodIn(root, filepath.Join(root, c.Path), c.After.Mode); err != nil {
+				return nil, err
+			}
 		}
 		p.Executed = true
 		dropEmptied(root, p.emptied)
@@ -158,9 +167,11 @@ func describe(rtype *schema.ResolvedType) Storage {
 	return Storage{Layout: rtype.Storage.Layout, Format: rtype.Storage.Fmt, Path: rtype.StorageShape()}
 }
 
+// Layouts and Formats are the values --layout and --to-format take, in the
+// order a refusal and TAB completion list them.
 var (
-	layouts = []string{schema.LayoutFile, schema.LayoutFolder, schema.LayoutCollection}
-	formats = []string{"md", "json", "yaml", "jsonl"}
+	Layouts = []string{schema.LayoutFile, schema.LayoutFolder, schema.LayoutCollection}
+	Formats = []string{"md", "json", "yaml", "jsonl"}
 )
 
 func plan(root, typeName string, target Target, now time.Time) (*Plan, error) {
@@ -234,6 +245,7 @@ func plan(root, typeName string, target Target, now time.Time) (*Plan, error) {
 	var creates []workspace.FileChange
 	var lossy []string
 	removed := map[string]bool{}
+	var collMode fs.FileMode // the narrowest source mode, for a new collection file
 	for _, node := range p.entities {
 		meta, body, before, rel, err := readSource(root, rtype, idx, node)
 		if err != nil {
@@ -244,7 +256,14 @@ func plan(root, typeName string, target Target, now time.Time) (*Plan, error) {
 			p.Remove = append(p.Remove, rel)
 			p.changes = append(p.changes, workspace.FileChange{Path: filepath.FromSlash(rel), Before: before})
 			p.emptied = appendEmptied(p.emptied, rel, rtype)
+			if !perItem && rewritesCollection(before.Data, from.Format) {
+				p.Rewritten = append(p.Rewritten, rel)
+			}
 		}
+		if collMode == 0 {
+			collMode = before.Mode
+		}
+		collMode &= before.Mode
 		if perItem && absent(meta, "updated") {
 			p.StaleReset++
 		}
@@ -254,7 +273,7 @@ func plan(root, typeName string, target Target, now time.Time) (*Plan, error) {
 				typeName, node.Slug, to.Layout, node.Slug))
 		}
 		if verbatim {
-			change, err := destination(root, rtype, destRel(to, node.Slug), before.Data, to)
+			change, err := destination(root, rtype, destRel(to, node.Slug), before.Data, to, before.Mode)
 			if err != nil {
 				return nil, err
 			}
@@ -289,7 +308,7 @@ func plan(root, typeName string, target Target, now time.Time) (*Plan, error) {
 		if err != nil {
 			return nil, err
 		}
-		change, err := destination(root, rtype, destRel(to, node.Slug), []byte(text), to)
+		change, err := destination(root, rtype, destRel(to, node.Slug), []byte(text), to, before.Mode)
 		if err != nil {
 			return nil, err
 		}
@@ -306,7 +325,7 @@ func plan(root, typeName string, target Target, now time.Time) (*Plan, error) {
 		if err != nil {
 			return nil, err
 		}
-		change, err := destination(root, rtype, to.Path, []byte(text), to)
+		change, err := destination(root, rtype, to.Path, []byte(text), to, collMode)
 		if err != nil {
 			return nil, err
 		}
@@ -351,6 +370,17 @@ func refuseJournal(root string) error {
 	return errs.New("migrate_journal_present", fmt.Sprintf(
 		"Refusing to plan a migration: an earlier run left its journal at %s (manifest.yaml lists the originals and "+
 			"replacements it staged). Restore or finish that move by hand, then remove the directory", filepath.ToSlash(dir)))
+}
+
+// rewritesCollection reports a collection file whose bytes a format change
+// does not reproduce on the way back: comments, quoting, style.
+func rewritesCollection(data []byte, format string) bool {
+	rows, err := canon.LoadCollection(canon.NormalizeNewlines(string(data)), format)
+	if err != nil {
+		return true
+	}
+	text, err := canon.DumpCollection(rows, format)
+	return err != nil || text != string(data)
 }
 
 // absent is `meta.get(key) is None`, as `stale` reads it.
@@ -452,16 +482,20 @@ func repr(v any) string {
 func resolveTarget(rtype *schema.ResolvedType, target Target) (Storage, error) {
 	to := Storage{Layout: rtype.Storage.Layout, Format: rtype.Storage.Fmt}
 	if target.Layout != "" {
-		if !contains(layouts, target.Layout) {
-			return to, errs.New("migrate_target", fmt.Sprintf(
-				"--layout must be one of %s, got '%s'", strings.Join(layouts, ", "), target.Layout))
+		if !slices.Contains(Layouts, target.Layout) {
+			e := errs.New("migrate_target", fmt.Sprintf(
+				"--layout must be one of %s, got '%s'", strings.Join(Layouts, ", "), target.Layout))
+			e.Expected, e.Suggestion = Layouts, errs.Nearest(target.Layout, Layouts)
+			return to, e
 		}
 		to.Layout = target.Layout
 	}
 	if target.Format != "" {
-		if !contains(formats, target.Format) {
-			return to, errs.New("migrate_target", fmt.Sprintf(
-				"--to-format must be one of %s, got '%s'", strings.Join(formats, ", "), target.Format))
+		if !slices.Contains(Formats, target.Format) {
+			e := errs.New("migrate_target", fmt.Sprintf(
+				"--to-format must be one of %s, got '%s'", strings.Join(Formats, ", "), target.Format))
+			e.Expected, e.Suggestion = Formats, errs.Nearest(target.Format, Formats)
+			return to, e
 		}
 		to.Format = target.Format
 	}
@@ -717,7 +751,8 @@ func destRel(to Storage, slug string) string {
 // taken only when it already holds these bytes or is an empty collection
 // file; anything else is refused, since a migration never overwrites what it
 // did not produce. An ignored path is refused too: no scan would read it back.
-func destination(root string, rtype *schema.ResolvedType, rel string, data []byte, to Storage) (workspace.FileChange, error) {
+// A new file takes mode, the permissions of the source it is made from.
+func destination(root string, rtype *schema.ResolvedType, rel string, data []byte, to Storage, mode fs.FileMode) (workspace.FileChange, error) {
 	if ignore := currentIgnore(root); ignore.Ignored(rel, false) {
 		return workspace.FileChange{}, errs.New("migrate_target", fmt.Sprintf(
 			"Refusing to migrate '%s' to %s: .khub/ignore excludes that path, so no scan would read it; "+
@@ -727,7 +762,7 @@ func destination(root string, rtype *schema.ResolvedType, rel string, data []byt
 	if err != nil {
 		return workspace.FileChange{}, err
 	}
-	change := workspace.FileChange{Path: filepath.FromSlash(rel), After: &workspace.FileState{Data: data, Mode: 0o644}}
+	change := workspace.FileChange{Path: filepath.FromSlash(rel), After: &workspace.FileState{Data: data, Mode: mode}}
 	if existing == nil {
 		return change, nil
 	}
@@ -744,6 +779,19 @@ func destination(root string, rtype *schema.ResolvedType, rel string, data []byt
 	change.Before = existing
 	change.After.Mode = existing.Mode
 	return change, nil
+}
+
+// createdModes is the files a plan creates, other than storage.yaml, with the
+// modes their sources had. Publication creates files at the default mode, so
+// these are set once it has committed.
+func createdModes(changes []workspace.FileChange) []workspace.FileChange {
+	var out []workspace.FileChange
+	for _, c := range changes {
+		if c.Before == nil && c.After != nil && c.Path != filepath.FromSlash(StorageYAML) {
+			out = append(out, workspace.FileChange{Path: c.Path, After: &workspace.FileState{Mode: c.After.Mode}})
+		}
+	}
+	return out
 }
 
 // currentIgnore reads the workspace's ignore list; an unreadable one ignores
@@ -767,7 +815,7 @@ func newDirs(root string, dirs []string, dir string) []string {
 		missing = append(missing, d)
 	}
 	for i := len(missing) - 1; i >= 0; i-- {
-		if !contains(dirs, missing[i]) {
+		if !slices.Contains(dirs, missing[i]) {
 			dirs = append(dirs, missing[i])
 		}
 	}
@@ -778,10 +826,10 @@ func newDirs(root string, dirs []string, dir string) []string {
 // to and including the type's storage root, deepest first.
 func appendEmptied(emptied []string, rel string, rtype *schema.ResolvedType) []string {
 	for d := path.Dir(rel); d != "." && d != "/"; d = path.Dir(d) {
-		if !contains(emptied, d) {
+		if !slices.Contains(emptied, d) {
 			emptied = append(emptied, d)
 		}
-		if !inRoots(rtype, d) || contains(rtype.StorageRoots(), d) {
+		if !inRoots(rtype, d) || slices.Contains(rtype.StorageRoots(), d) {
 			break
 		}
 	}
@@ -799,8 +847,8 @@ func dropEmptied(root string, emptied []string) {
 }
 
 // storageEntry is the change that records the destination in storage.yaml:
-// the type's entry opens with layout, format and path (format kept when the
-// entry declared one, written when the destination is off the md default),
+// the type's entry opens with layout, format and path (format written when
+// the destination is off the md default, or kept when the entry spelled md),
 // keeps its other keys after them, and the file keeps every other byte
 // through canon.SpliceEntry. A CRLF file is spliced as LF and given its line
 // ending back. A document the splice cannot address is re-emitted whole
@@ -833,11 +881,14 @@ func storageEntry(root, typeName string, to Storage) (workspace.FileChange, erro
 	}
 	entry := omap.New()
 	entry.Set("layout", to.Layout)
-	declared := false
+	// md is the default: it is written only where the entry already spelled
+	// it, so a round trip through another format restores the entry.
+	declaredMD := false
 	if current != nil {
-		_, declared = current.Get("format")
+		f, _ := current.Get("format")
+		declaredMD = f == "md"
 	}
-	if declared || to.Format != "md" {
+	if declaredMD || to.Format != "md" {
 		entry.Set("format", to.Format)
 	}
 	entry.Set("path", to.Path)
@@ -1070,13 +1121,4 @@ func joinShown(items []string) string {
 		shown = shown[:3]
 	}
 	return strings.Join(shown, "; ") + more
-}
-
-func contains(ss []string, s string) bool {
-	for _, x := range ss {
-		if x == s {
-			return true
-		}
-	}
-	return false
 }

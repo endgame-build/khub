@@ -1,1 +1,1 @@
-{"error": {"code": "migrate_target", "message": "--layout must be one of file, folder, collection, got 'heap'"}}
+{"error": {"code": "migrate_target", "message": "--layout must be one of file, folder, collection, got 'heap'", "expected": ["file", "folder", "collection"]}}
