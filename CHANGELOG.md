@@ -4,6 +4,15 @@ Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+### Changed
+
+- **Shorter usage errors for a bad flag value.** pflag 1.1.0 rewords the
+  usage error for an integer or boolean flag given a value it cannot parse.
+  `--port not-a-number` now reads `must be an integer` instead of
+  `strconv.ParseInt: parsing "not-a-number": invalid syntax`, an integer too
+  large for the flag reads the same, and `--strict=maybe` reads `must be true
+  or false`. The exit code stays 2 and the error stays on stderr.
+
 ## [0.33.0] — 2026-11-15
 
 khub tells an agent more and lets it try a write first. A refusal now carries
