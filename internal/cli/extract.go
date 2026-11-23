@@ -17,6 +17,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/endgame-build/khub/internal/canon"
+	"github.com/endgame-build/khub/internal/errs"
 	"github.com/endgame-build/khub/internal/extract"
 	"github.com/endgame-build/khub/internal/omap"
 	"github.com/endgame-build/khub/internal/workspace"
@@ -115,7 +116,7 @@ func scaffoldMarkdown(view *omap.Map) string {
 					allowed = append(allowed, fmt.Sprintf("default %s", pyValue(d)))
 				}
 				fmt.Fprintf(&b, "| %v | %v | %s | %s |\n", get(fv, "name"), get(fv, "kind"),
-					checkMark(get(fv, "required")), strings.Join(allowed, "; "))
+					checkMark(get(fv, "required")), cell(strings.Join(allowed, "; ")))
 			}
 			b.WriteString("\n")
 		}
@@ -128,7 +129,7 @@ func scaffoldMarkdown(view *omap.Map) string {
 				if p, _ := get(rv, "path_refs").(bool); p {
 					to += ", or a workspace file path"
 				}
-				fmt.Fprintf(&b, "| %v | %s | %s | %s |\n", get(rv, "name"), to,
+				fmt.Fprintf(&b, "| %v | %s | %s | %s |\n", get(rv, "name"), cell(to),
 					checkMark(get(rv, "many")), checkMark(get(rv, "required")))
 			}
 			b.WriteString("\n")
@@ -145,7 +146,7 @@ func scaffoldMarkdown(view *omap.Map) string {
 				for _, s := range sections {
 					sv := s.(*omap.Map)
 					line := fmt.Sprintf("- ## %v", get(sv, "heading"))
-					if b, _ := get(sv, "optional").(bool); b {
+					if optional, _ := get(sv, "optional").(bool); optional {
 						line += " (optional)"
 					}
 					if hint := get(sv, "hint"); hint != nil {
@@ -171,7 +172,7 @@ func schemaConform(file, format string) error {
 	}
 	var raw []byte
 	if file == "-" {
-		raw, err = io.ReadAll(os.Stdin)
+		raw, err = readStdinText()
 	} else {
 		var text string
 		text, err = canon.ReadText(file)
@@ -312,4 +313,25 @@ func mapAt(m *omap.Map, key string) *omap.Map {
 func listAt(m *omap.Map, key string) []any {
 	v, _ := get(m, key).([]any)
 	return v
+}
+
+// cell escapes a table cell's pipes, so a pattern such as `a|b` stays in its
+// column.
+func cell(s string) string { return strings.ReplaceAll(s, "|", `\|`) }
+
+// readStdinText reads an envelope from stdin under the cap a file read takes
+// (canon.MaxTextBytes), holding no more than the cap in memory.
+func readStdinText() ([]byte, error) {
+	raw, err := io.ReadAll(io.LimitReader(os.Stdin, canon.MaxTextBytes+1))
+	if err != nil {
+		return nil, err
+	}
+	if len(raw) > canon.MaxTextBytes {
+		rest, err := io.Copy(io.Discard, os.Stdin)
+		if err != nil {
+			return nil, err
+		}
+		return nil, errs.TextTooLarge("stdin", len(raw)+int(rest), canon.MaxTextBytes)
+	}
+	return []byte(canon.NormalizeNewlines(string(raw))), nil
 }

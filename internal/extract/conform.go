@@ -13,6 +13,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -26,6 +27,7 @@ import (
 	"github.com/endgame-build/khub/internal/schema"
 	"github.com/endgame-build/khub/internal/template"
 	"github.com/endgame-build/khub/internal/values"
+	"github.com/endgame-build/khub/internal/workspace"
 )
 
 // Unresolved is one relation target the workspace holds no entity for, with
@@ -79,13 +81,11 @@ func Conform(root string, env *Envelope) (*Report, error) {
 	}
 	for _, ent := range env.Entities {
 		if !resolved.Types.Has(ent.Type) {
-			preset, perr := presetName(root)
+			prov, perr := workspace.Provenance(root)
 			if perr != nil {
 				return nil, perr
 			}
-			known := append([]string{}, resolved.Types.Keys()...)
-			sort.Strings(known)
-			return nil, errs.UnknownType(ent.Type, preset, known)
+			return nil, unknownType(ent.Type, prov, resolved)
 		}
 	}
 	idx, err := index.Build(root, resolved)
@@ -95,10 +95,7 @@ func Conform(root string, env *Envelope) (*Report, error) {
 	idx = index.Filter(idx, index.StrayNodes(idx))
 
 	templates := newTemplateCache(root)
-	supplied := map[string]bool{}
-	for _, name := range entity.WriteSupplied() {
-		supplied[name] = true
-	}
+	supplied := suppliedSet()
 	report := &Report{Entities: make([]EntityReport, 0, len(env.Entities))}
 	minted := &mintedIDs{first: map[index.Node]int{}}
 	for i, ent := range env.Entities {
@@ -113,18 +110,13 @@ func Conform(root string, env *Envelope) (*Report, error) {
 	return report, nil
 }
 
-// score is conformant/entities rounded to three decimals, 1 when there are
-// no entities. Rounded through strconv so the JSON number and the text agree.
+// score is conformant/entities rounded half up to three decimals, 1 when
+// there are no entities. The JSON number and ScoreText print the same digits.
 func score(conformant, total int) float64 {
 	if total == 0 {
 		return 1
 	}
-	rounded, err := strconv.ParseFloat(
-		strconv.FormatFloat(float64(conformant)/float64(total), 'f', 3, 64), 64)
-	if err != nil {
-		return math.NaN() // unreachable: a formatted float parses
-	}
-	return rounded
+	return math.Round(1000*float64(conformant)/float64(total)) / 1000
 }
 
 // mintedIDs is the (type, slug) set the envelope mints as it is read, so a
@@ -315,7 +307,7 @@ func (m *mintedIDs) names(rel *schema.ResolvedRelation, target string) (int, ind
 		if typeName != "" && index.Casefold(typeName) != index.Casefold(node.Type) {
 			continue
 		}
-		if rel.Kind != schema.KindAny && !contains(rel.Targets, node.Type) {
+		if rel.Kind != schema.KindAny && !slices.Contains(rel.Targets, node.Type) {
 			continue
 		}
 		if index.Casefold(node.Slug) == want {
@@ -362,19 +354,28 @@ func reasonOf(err error) string {
 	return err.Error()
 }
 
-// presetName is the workspace's preset for the unknown-type message, "the"
-// when the config records none — what `schema show` prints.
-func presetName(root string) (string, error) {
-	prov, err := workspaceProvenance(root)
-	if err != nil {
-		return "", err
-	}
+// unknownType is the unknown_type refusal both verbs raise: the declared
+// types, sorted, and the workspace's preset, "the" when the config records
+// none — what `schema show` prints.
+func unknownType(name string, prov *omap.Map, resolved *schema.ResolvedSchema) error {
+	preset := "the"
 	if p, ok := prov.Get("preset"); ok {
 		if s, isStr := p.(string); isStr && strings.TrimSpace(s) != "" {
-			return s, nil
+			preset = s
 		}
 	}
-	return "the", nil
+	known := append([]string{}, resolved.Types.Keys()...)
+	sort.Strings(known)
+	return errs.UnknownType(name, preset, known)
+}
+
+// suppliedSet is entity.WriteSupplied as a lookup.
+func suppliedSet() map[string]bool {
+	supplied := map[string]bool{}
+	for _, name := range entity.WriteSupplied() {
+		supplied[name] = true
+	}
+	return supplied
 }
 
 func listOf(m *omap.Map, key string) []string {

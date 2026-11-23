@@ -10,14 +10,12 @@ package extract
 // for.
 
 import (
-	"sort"
+	"slices"
 
 	"github.com/endgame-build/khub/internal/entity"
-	"github.com/endgame-build/khub/internal/errs"
 	"github.com/endgame-build/khub/internal/omap"
 	"github.com/endgame-build/khub/internal/schema"
 	"github.com/endgame-build/khub/internal/template"
-	"github.com/endgame-build/khub/internal/workspace"
 )
 
 // Rules are the instruction block every scaffold carries, schema-generic:
@@ -27,9 +25,9 @@ var Rules = []string{
 	"Use only the types listed, spelled exactly; put each extracted record in entities with its type.",
 	"Fill a field only when the source states it. Leave a field out rather than guess: never invent a value, never write an empty string.",
 	"An enum field takes exactly one of its listed values; a pattern field must match its pattern; a many relation takes a list, a single one takes one target.",
-	"A relation target is the id or a known alias of an entity the workspace already holds, or the name the source uses. khub resolves it and reports what it cannot; never invent an id.",
+	"A relation target is the id or an alias of an entity the workspace already holds. khub resolves it exactly and reports what it cannot, never linking by resemblance; never invent an id or guess one from a name.",
 	"Never set the fields listed as supplied; khub writes them.",
-	"Quote the passage a record came from in source. Give confidence from 0 to 1 when a value is uncertain; an uncertain record is captured as a draft.",
+	"Quote the passage a record came from in source. Give confidence from 0 to 1 when a value is uncertain.",
 	"A type that lists body sections takes its prose as Markdown under those ## headings, in that order.",
 }
 
@@ -43,17 +41,9 @@ func Scaffold(root string, resolved *schema.ResolvedSchema, prov *omap.Map, only
 		names = []string{}
 		for _, name := range only {
 			if !resolved.Types.Has(name) {
-				preset := "the"
-				if p, ok := prov.Get("preset"); ok {
-					if s, isStr := p.(string); isStr && s != "" {
-						preset = s
-					}
-				}
-				known := append([]string{}, resolved.Types.Keys()...)
-				sort.Strings(known)
-				return nil, errs.UnknownType(name, preset, known)
+				return nil, unknownType(name, prov, resolved)
 			}
-			if !contains(names, name) {
+			if !slices.Contains(names, name) {
 				names = append(names, name)
 			}
 		}
@@ -61,10 +51,7 @@ func Scaffold(root string, resolved *schema.ResolvedSchema, prov *omap.Map, only
 	out := omap.New()
 	out.Set("provenance", prov)
 	out.Set("envelope", envelopeBlock())
-	supplied := map[string]bool{}
-	for _, name := range entity.WriteSupplied() {
-		supplied[name] = true
-	}
+	supplied := suppliedSet()
 	types := []any{}
 	for _, name := range names {
 		rtype, _ := resolved.Types.Get(name)
@@ -230,9 +217,6 @@ func intPtr(p *int) any {
 	}
 	return int64(*p)
 }
-
-// workspaceProvenance is the preset and version the workspace records.
-func workspaceProvenance(root string) (*omap.Map, error) { return workspace.Provenance(root) }
 
 func nullable(p *string) any {
 	if p == nil {

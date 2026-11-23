@@ -18,6 +18,8 @@ func TestParseEnvelopeRefusesShapeFaults(t *testing.T) {
 		{"top not object", `[]`, "must be a JSON object with an 'entities' list"},
 		{"entities missing", `{"records": []}`, "must be a JSON object with an 'entities' list"},
 		{"entities not list", `{"entities": {}}`, "must be a JSON object with an 'entities' list"},
+		{"top key unknown", `{"entities": [], "extra": 1}`, "Envelope has an unknown key 'extra'; it takes 'entities' only"},
+		{"number out of range", `{"entities": [{"type": "client", "confidence": 1e400}]}`, "Envelope is not valid JSON: the number 1e400 is out of range"},
 		{"entity not object", `{"entities": [1]}`, "Entity #0 is not a JSON object"},
 		{"unknown key", `{"entities": [{"type": "client"}, {"type": "client", "fieldz": {}}]}`,
 			"Entity #1 has an unknown key 'fieldz'; an entity takes type, fields, relations, body, source, confidence"},

@@ -567,3 +567,16 @@ func TestConformMirrorsOKFBaseFields(t *testing.T) {
 		}
 	}
 }
+
+// The score rounds half up: 1 of 16 is 0.0625, printed as 0.063.
+func TestScoreRoundsHalfUp(t *testing.T) {
+	for _, c := range []struct {
+		conformant, total int
+		want              string
+	}{{1, 16, "0.063"}, {1, 3, "0.333"}, {2, 3, "0.667"}, {0, 5, "0.000"}, {0, 0, "1.000"}} {
+		r := &Report{Score: score(c.conformant, c.total)}
+		if got := r.ScoreText(); got != c.want {
+			t.Errorf("score(%d, %d) = %s, want %s", c.conformant, c.total, got, c.want)
+		}
+	}
+}

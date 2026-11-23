@@ -7,9 +7,11 @@
 // policy are design notes, not shipped here: conform resolves a relation
 // target the way every write does and reports what it cannot, never guessing.
 //
-// Everything is walked from the resolved schema. No type, field or predicate
-// is named in this package; the one list of field names it carries is
-// entity.WriteSupplied, the base plumbing create writes itself.
+// Everything is walked from the resolved schema. No domain type, field or
+// predicate is named in this package. The names it does carry are base
+// plumbing the write path checks for every type: entity.WriteSupplied (what
+// create writes itself), and `type`, the retired `draft` and the reserved
+// `body` of a json or yaml entity.
 package extract
 
 import (
@@ -17,6 +19,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/endgame-build/khub/internal/canon"
@@ -70,6 +74,11 @@ func ParseEnvelope(data []byte) (*Envelope, error) {
 	if !has || !isList {
 		return nil, invalid("Envelope must be a JSON object with an 'entities' list")
 	}
+	for _, key := range top.Keys() {
+		if key != "entities" {
+			return nil, invalid(fmt.Sprintf("Envelope has an unknown key '%s'; it takes 'entities' only", key))
+		}
+	}
 	env := &Envelope{Entities: make([]Extracted, 0, len(list))}
 	for i, item := range list {
 		ent, err := parseEntity(i, item)
@@ -86,12 +95,17 @@ func ParseEnvelope(data []byte) (*Envelope, error) {
 // nesting too deep). A document that ends early stops at its last byte; the
 // stream decoder reports that as a syntax error on one Go release and as a
 // bare EOF on another, so the offset is taken from the input, not the error.
+// A number past float64 is named rather than quoting strconv.
 func notJSON(data []byte, err error) string {
 	if offset, ok := canon.JSONSyntaxOffset(err); ok {
 		return fmt.Sprintf("Envelope is not valid JSON at byte %d", offset)
 	}
 	if errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) {
 		return fmt.Sprintf("Envelope is not valid JSON at byte %d", len(data))
+	}
+	var num *strconv.NumError
+	if errors.As(err, &num) {
+		return fmt.Sprintf("Envelope is not valid JSON: the number %s is out of range", num.Num)
 	}
 	return "Envelope is not valid JSON: " + err.Error()
 }
@@ -102,7 +116,7 @@ func parseEntity(i int, item any) (Extracted, error) {
 		return Extracted{}, invalid(fmt.Sprintf("Entity #%d is not a JSON object", i))
 	}
 	for _, key := range obj.Keys() {
-		if !contains(entityKeys, key) {
+		if !slices.Contains(entityKeys, key) {
 			return Extracted{}, invalid(fmt.Sprintf(
 				"Entity #%d has an unknown key '%s'; an entity takes %s",
 				i, key, strings.Join(entityKeys, ", ")))
@@ -210,13 +224,4 @@ func jsonNumber(v any) (float64, bool) {
 
 func invalid(message string) *errs.Located {
 	return errs.New("invalid_envelope", message)
-}
-
-func contains(ss []string, s string) bool {
-	for _, x := range ss {
-		if x == s {
-			return true
-		}
-	}
-	return false
 }

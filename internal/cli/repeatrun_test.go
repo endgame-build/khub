@@ -184,6 +184,7 @@ var refusalCalls = [][]string{
 	{"schema", "show", "bogus"},
 	{"schema", "scaffold", "--type", "bogus"},
 	{"schema", "conform", "missing.json"},
+	{"schema", "conform", "bad-envelope.json"},
 	{"search", "AND ("},
 	{"search", "ledger", "--also", "  "},
 	{"get", "--path", "../outside.md"},
@@ -419,6 +420,7 @@ func repeatWorkspace(t *testing.T, self string) string {
 		"knowledge/components/cmp-older.md": "---\ntype: component\ncreated: 2024-01-01\n" +
 			"title: Older\nkind: library\n---\n",
 	}
+	hand["bad-envelope.json"] = `{"entities": [{"type": "component", "extra": 1}]}`
 	hand["envelope.json"] = `{"entities": [
   {"type": "component", "fields": {"title": "Ledger", "kind": "service"}, "relations": {"system": "sys-core", "depends_on": ["cmp-c00", "twin", "cmp-ghost"]}},
   {"type": "component", "fields": {"title": "Ledger", "kind": "nope"}},
