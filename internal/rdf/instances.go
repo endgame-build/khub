@@ -59,18 +59,23 @@ func Instances(doc *Doc, resolved *schema.ResolvedSchema, idx *index.Index, g *g
 					s.Add(pred, m.entityIRI(e.To))
 				}
 			}
-			// A path reference to a plain file satisfies the relation without
-			// an edge in the graph; the file is a node of its own here.
+			// Two stored values satisfy the relation without an edge in the
+			// graph: a self-reference, which `check` counts but the graph
+			// drops, and a path reference to a plain file, a node of its own
+			// here.
 			raw, _ := meta.Get(rn)
 			for _, target := range targets(raw) {
-				if len(idx.ResolveTarget(rel, target)) > 0 {
+				if hits := idx.ResolveTarget(rel, target); len(hits) > 0 {
+					if len(hits) == 1 && hits[node] {
+						s.Add(pred, m.entityIRI(node))
+					}
 					continue
 				}
-				if rel, ok := idx.FileRef(rel, target); ok {
-					s.Add(pred, m.fileIRI(rel))
-					if !seen[rel] {
-						seen[rel] = true
-						files = append(files, rel)
+				if path, ok := idx.FileRef(rel, target); ok {
+					s.Add(pred, m.fileIRI(path))
+					if !seen[path] {
+						seen[path] = true
+						files = append(files, path)
 					}
 				}
 			}

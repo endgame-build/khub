@@ -3,7 +3,8 @@
 # the workspace namespace and the shape admits one, so the file's own shapes
 # hold. Then the refusals: a `--base` without a scheme or without a closing
 # separator (`invalid_base`), a `--out` naming a directory (`invalid_out`),
-# and a relative `--out` that would leave the workspace (`unsafe_path`).
+# a relative `--out` that would leave the workspace and one naming a khub
+# schema file (`unsafe_path`).
 steps:
 - argv: ["init", "build-hub", ".", "--no-wire"]
 - sh: "printf '# A guide\\n' > guide.md && printf '  adr:\\n    path_refs: true\\n' >> .khub/policy.yaml"
@@ -14,3 +15,4 @@ steps:
 - argv: ["schema", "rdf", "--out", "."]
 - argv: ["schema", "rdf", "--out", "knowledge", "--format", "json"]
 - argv: ["schema", "rdf", "--out", "../escape.ttl"]
+- argv: ["schema", "rdf", "--out", ".khub/ontology.yaml", "--format", "json"]

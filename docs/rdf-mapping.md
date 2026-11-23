@@ -77,9 +77,9 @@ consumer reads `khub:acyclic` the same way from every export.
 | entity | `<base>workspace/<name>/<type>/<slug>` | `urn:khub:workspace/ws/client/initech` |
 | referenced file | `<base>workspace/<name>/file/<path>` | `urn:khub:workspace/ws/file/docs/guide.md` |
 
-`--base` must be absolute (it starts with a scheme) and end in `/`, `#` or
-`:`, so the layout appends to it cleanly; anything else is refused
-(`invalid_base`, exit 2) rather than minted into a relative or corrupted IRI.
+`--base` must be absolute and end in `/`, `#` or `:`, so the layout appends
+to it cleanly rather than minting a relative or corrupted IRI; the refusal is
+in [`cli.md`](cli.md#workspace).
 
 `<key>` is the preset name recorded in `.khub/config.yaml`, falling back to
 the workspace name when no preset is recorded. Keying the vocabulary by preset
@@ -129,10 +129,14 @@ ignores a term it does not know reads every later export correctly.
 | `khub:File` | — | `rdfs:Class`; a workspace file a path reference names, emitted under `--instances` with its `khub:path` |
 | `khub:preset`, `khub:presetVersion`, `khub:workspace` | the ontology | provenance from `.khub/config.yaml` |
 | `khub:requiredScope` | the ontology | always `"active"`: `sh:minCount` is khub's required gate, which `check` enforces on active entities only — those whose `status` is not `draft`. A validator that wants khub's exact gate restricts its focus nodes to those without `khub:status "draft"` (an absent status reads as the shape's `khub:default`, `stable`) |
+| `khub:requiredTargetScope` | the ontology | always `"active"`: a required relation counts only active targets, so a draft target never satisfies it. `sh:class` accepts a draft target, so SHACL passes an entity whose required relation names only drafts, which `check` reports as incomplete |
 | `khub:layout`, `khub:format`, `khub:path` | a class | storage: `file`/`folder`/`collection`/`singleton`; `md`/`json`/`yaml`/`jsonl`; the storage path, one value per path template on a templated type. On a `khub:File`, `khub:path` is its workspace-relative path |
 | `khub:idShape` | a class | the id a new entity is minted with (`ad-YYYY-MM-DD-slug`); absent on a singleton |
 | `khub:template` | a class | the declared body-template stem |
 | `khub:requiredSingleton`, `khub:orphanExempt` | a class | policy: `required: true` on a singleton; `orphan: true` |
+| `khub:locked` | a class, a relation shape | policy: `locked: true` on the type; the predicate is in the type's `locked_relations`. `khub upgrade` refuses a schema that drops it |
+| `khub:retentionDays`, `khub:retentionNoOutbound` | a class | policy `retention`: `days`, and `no_outbound` when it is `true` |
+| `khub:waiver` | a class | policy `waive`: one blank node per waived finding, in authored order, holding `khub:waivedEntity` (the slug), `khub:waivedFinding` (the `check` bucket) and `khub:waiverReason` |
 | `khub:when` | a class | the capture cue, in domain language |
 | `khub:type` | an attribute shape | the khub kind, always: the XSD mapping loses `list` and `object`, and `number` would otherwise read as "decimal only" |
 | `khub:items` | a list's attribute shape | the declared kind of the items, when the list declares one |
@@ -159,8 +163,8 @@ type:opportunity a rdfs:Class ;
 ```
 
 A type is a class and a node shape. `khub:idShape`, `khub:template`,
-`khub:requiredSingleton` and `khub:orphanExempt` appear only when they say
-something.
+`khub:requiredSingleton`, `khub:orphanExempt`, `khub:locked`, the retention
+pair and `khub:waiver` appear only when they say something.
 
 ### Attributes
 
@@ -193,7 +197,7 @@ sh:property [
 | `type: object` | `sh:nodeKind sh:BlankNode`, `sh:node [ sh:property … ]` | the value is a blank node; the nested shape holds one `sh:property` per declared field, each rendered by these same rules with `sh:order` counting from 0 inside the object, so `required: true` on a field is `sh:minCount 1` there. The base block's `generated`, `verified`, `sources` and `usage_window` are these |
 | `required: true` | `sh:minCount 1` | khub's gate for active entities; see `khub:requiredScope` |
 | single-valued (every non-list) | `sh:maxCount 1` | |
-| `enum: [...]` | `sh:in ( ... )` | in declared order |
+| `enum: [...]` | `sh:in ( ... )` | in declared order, each item typed by the attribute's kind as an instance value is (`"1"^^xsd:decimal` in a number enum), so `sh:in` compares like with like |
 | `pattern:` | `sh:pattern` when portable, `khub:pattern` always | below |
 | `default:` | `khub:default <literal>` | annotation; SHACL has no default |
 
@@ -208,10 +212,11 @@ octal escapes, `\Q…\E`, POSIX `[:class:]`, one-letter `\pL`, scripts such as
 `\p{Greek}` (XPath knows general categories only), `-[` class subtraction, and
 a backslash before any character outside XPath's `SingleCharEsc` set
 (`\n \r \t \\ \| \. \? \* \+ \( \) \{ \} \$ \- \[ \] \^`), so `\/` and `\#`
-are refused — and rewrites the three shorthands whose meaning differs: RE2's
-`\d`, `\w` and `\s` are ASCII where XPath's are Unicode, so `[0-9]`,
-`[A-Za-z0-9_]` and `[\t\n\f\r ]` go out in their place (`\D \W \S` likewise at
-the top level; inside a class they are refused). A refused pattern has no
+are refused — and rewrites what differs in meaning: RE2's `\d`, `\w` and
+`\s` are ASCII where XPath's are Unicode, so `[0-9]`, `[A-Za-z0-9_]` and
+`[\t\n\f\r ]` go out in their place (`\D \W \S` likewise at the top level;
+inside a class they are refused), and RE2's `.` admits `\r` where XPath's does
+not, so a `.` outside a class goes out as `[^\n]`. A refused pattern has no
 `sh:pattern`; `khub:pattern` always carries the RE2 text and is authoritative.
 
 ### Relations
@@ -243,6 +248,7 @@ sh:property [
 | `acyclic: true` | `khub:acyclic true` | annotation; SHACL core cannot express acyclicity |
 | `inverse: <name>` | `khub:inverse "<name>"` | annotation, never `owl:inverseOf`: khub stores one side and derives the other at read time, and an OWL inverse would license a reasoner to assert triples khub never wrote |
 | policy `path_refs` | `khub:pathRefs true` | annotation |
+| policy `locked_relations` | `khub:locked true` | annotation, on each listed predicate's shape |
 
 Every relation shape carries `sh:nodeKind sh:IRI`. No `rdfs:domain` or
 `rdfs:range` is written on the shared predicates: RDFS reads them as global
@@ -305,8 +311,9 @@ a type) — the order every projection walks. Then:
   the file is emitted once, after the entities, as `a khub:File` with its
   `khub:path`. `check` accepts such a value, so the ABox carries it. A value
   naming nothing — dangling — emits no triple, and `check` reports it. A
-  self-reference (`related: [self]`) is not an edge of the derived graph and
-  emits nothing. **Derived inverses are not emitted**: the graph is derived,
+  self-reference (`related: [self]`) is not an edge of the derived graph, but
+  `check` counts it toward a required relation, so it is emitted too, after
+  the type's edges for that predicate. **Derived inverses are not emitted**: the graph is derived,
   and a consumer with the forward edges derives them the same way khub does.
 - Nothing else: undeclared extension keys, the body, and the slug (the IRI
   carries it) stay out.
@@ -316,17 +323,22 @@ marks one, the one `status` value khub writes to a file. A consumer validating
 with the shapes should expect `sh:minCount` violations on drafts, which is
 what `khub:requiredScope "active"` says.
 
-## What is lossless, what is annotation
+## The khub profile: what is lossless, what is annotation
+
+The **khub profile** is the subset of a khub schema that survives the trip
+without loss: the ontology layer, as this section lists it. Everything outside
+it rides as an annotation or is not projected.
 
 **Lossless over the ontology layer.** Every type, attribute and relation of
 the resolved schema reaches the file with its name, kind, cardinality,
 required flag, enum, pattern, default, targets, `acyclic`, `inverse` and
 `when`, each in declaration order (`sh:order`, and the subject order); an
 object attribute's fields, and a list's declared item kind, reach it the same
-way inside the nested shape. A reader can rebuild the resolved ontology layer
-from the shapes and the `khub:` annotations alone;
-`TestEveryDeclarationIsProjected` in `internal/rdf` holds that for every name,
-nested ones included.
+way inside the nested shape, so the shapes and the `khub:` annotations hold
+what a reader needs to rebuild the resolved ontology layer. No reader is
+shipped. `TestEveryDeclarationIsProjected` in `internal/rdf` checks that every
+name, nested ones included, reaches a property shape, and `TestMappingFacets`
+checks the rendering of each facet.
 
 **SHACL-expressible, and so checkable by any validator:** datatypes, enums,
 portable patterns, required (modulo the draft scope), single-valuedness, target
@@ -339,16 +351,19 @@ ISO week date in a date field), which SHACL reports and khub does not. The
 recorded firm-ops and build-hub renders — a date in a datetime field, a
 datetime in a date field, a text field read back as a boolean, a mapping in a
 text field, a path reference to a plain file, a draft, a `generated` stamp and
-a `verified` event — were checked with pySHACL and conform.
+a `verified` event — were checked with pySHACL by hand and conform. No test
+runs a SHACL validator: none exists in Go, and CI runs no Python.
 
 **Annotation only, khub remaining authoritative:** `acyclic`, `inverse`,
-unportable patterns, defaults, the draft scope of `required`, path references,
-and everything in the storage and policy layers. None of these has a faithful
+unportable patterns, defaults, the draft scope of `required` and of a required
+relation's targets, path references, and the storage and policy layers. None of these has a faithful
 SHACL or OWL rendering, and a lossy one would mislead a validator; the
 annotation says what khub enforces and the binary enforces it.
 
-**Not projected:** entity bodies, extension keys, the `.khub/ignore` list, and
-khub's own version (it would move every export on every release for no
+**Not projected:** entity bodies, extension keys, the `.khub/ignore` list, the
+value-to-prefix map of a by-value `id_prefix` (`khub:idShape` lists the
+prefixes only), an explicit `template: false` (it reads as no template
+declared), and khub's own version (it would move every export on every release for no
 information). Aliases are projected as the `khub:aliases` list, never as
 `owl:sameAs`: an alias is a lookup name, not an identity claim.
 
@@ -400,7 +415,8 @@ nested as the attributes table says, are left out here.
     khub:preset "firm-ops" ;
     khub:presetVersion "0.3.0" ;
     khub:workspace "ws" ;
-    khub:requiredScope "active" .
+    khub:requiredScope "active" ;
+    khub:requiredTargetScope "active" .
 
 type:meeting a rdfs:Class ;
     rdfs:subClassOf khub:Entity ;
@@ -479,9 +495,8 @@ its property is untyped and its two shapes disagree, legitimately.
 
 Point any RDF tool at `.khub/generated/schema.ttl`; regenerate it after a
 schema change (it is gitignored, and nothing regenerates it automatically).
-`--out` moves it: a relative path is against the workspace root and must stay
-inside it (`unsafe_path` otherwise), an absolute path may leave it, and a
-path naming a directory is refused (`invalid_out`).
+`--out` moves it; where it may write is in
+[`cli.md`](cli.md#workspace).
 Validate entities with the same file as data and shapes graph:
 `pyshacl -s schema.ttl schema.ttl` after `khub schema rdf --instances`.
 Join two workspaces of one preset by loading both `--instances` exports: the

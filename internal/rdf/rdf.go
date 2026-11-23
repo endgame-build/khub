@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/endgame-build/khub/internal/errs"
 	"github.com/endgame-build/khub/internal/fsio"
@@ -141,12 +142,26 @@ func load(root string, resolved *schema.ResolvedSchema) (*index.Index, *graph.Gr
 	return idx, graph.BuildGraph(idx), nil
 }
 
+// khubOwned reports whether a workspace-relative path lies in .khub/ outside
+// .khub/generated/, or in the lock directory: the schema layers, the
+// templates, the saved queries and the workspace lock, which a Turtle file
+// must never replace.
+func khubOwned(rel string) bool {
+	// Folded, so a case-insensitive filesystem cannot spell its way past.
+	parts := strings.Split(strings.ToLower(filepath.ToSlash(rel)), "/")
+	if parts[0] != ".khub" {
+		return false
+	}
+	return len(parts) < 3 || parts[1] != "generated" || parts[2] == "locks"
+}
+
 // write publishes the document. A relative --out is against the workspace
 // root and must stay inside it (`unsafe_path` otherwise); the write is then
 // confined to the root, symlinks and escapes refused as for every entity
-// write. An absolute --out may leave the workspace — an explicit export,
-// confined to its own directory the way fsio.AtomicWrite confines one. A
-// path naming a directory refuses before anything is created.
+// write, and khub's own files under .khub/ are refused. An absolute --out
+// may leave the workspace — an explicit export, confined to its own
+// directory the way fsio.AtomicWrite confines one. A path naming a directory
+// refuses before anything is created.
 func write(root, out string, data []byte) error {
 	if out == "" {
 		out = DefaultOut
@@ -164,6 +179,10 @@ func write(root, out string, data []byte) error {
 	if !inside && !filepath.IsAbs(out) {
 		return errs.New("unsafe_path", fmt.Sprintf("Path %s is outside workspace %s; a relative --out stays inside it, pass an absolute path to write elsewhere",
 			filepath.ToSlash(out), filepath.ToSlash(root)))
+	}
+	if inside && khubOwned(rel) {
+		return errs.New("unsafe_path", fmt.Sprintf("Path %s is one of khub's own files; --out writes under .khub/generated/ or outside .khub/",
+			filepath.ToSlash(out)))
 	}
 	if info, serr := os.Lstat(path); serr == nil && info.IsDir() {
 		return errs.New("invalid_out", fmt.Sprintf("Output path %s is a directory; --out names the file to write", filepath.ToSlash(out)))

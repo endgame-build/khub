@@ -36,6 +36,23 @@ func TestVocabularyAndBaseNamesAreDisjoint(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// A field nested under a base object attribute (generated.by) mints in
+	// khub: too.
+	baseNames := map[string]bool{}
+	var walk func(attrs *schema.Ordered[*schema.ResolvedAttribute])
+	walk = func(attrs *schema.Ordered[*schema.ResolvedAttribute]) {
+		for _, n := range attrs.Keys() {
+			baseNames[n] = true
+			a, _ := attrs.Get(n)
+			if nested := objectFields(a); nested != nil {
+				walk(nested)
+			}
+		}
+	}
+	walk(resolved.BaseAttributes)
+	for _, n := range resolved.BaseRelations.Keys() {
+		baseNames[n] = true
+	}
 	for _, v := range vocabulary {
 		local := strings.TrimPrefix(v.term.Prefixed, "khub:")
 		// The discriminator maps to rdf:type and mints nothing, so khub:type
@@ -43,7 +60,7 @@ func TestVocabularyAndBaseNamesAreDisjoint(t *testing.T) {
 		if local == TypeKey {
 			continue
 		}
-		if resolved.BaseAttributes.Has(local) || resolved.BaseRelations.Has(local) {
+		if baseNames[local] {
 			t.Errorf("base block declares %q, which collides with the vocabulary term khub:%s", local, local)
 		}
 	}
@@ -85,6 +102,8 @@ func TestPortableAndAnchored(t *testing.T) {
 		`\w+\W`:       `[A-Za-z0-9_]+[^A-Za-z0-9_]`,
 		`[\d\w]`:      `[0-9A-Za-z0-9_]`,
 		`\S\D`:        "[^\\t\\n\\r\f ][^0-9]",
+		// RE2's dot admits \r, XPath's does not; inside a class a dot is literal.
+		`a.b[.]`: `a[^\n]b[.]`,
 	}
 	for in, want := range portable {
 		got, ok := PortablePattern(in)
@@ -122,7 +141,8 @@ func TestPortableAndAnchored(t *testing.T) {
 // an acyclic one with an inverse, a list, a number with a default, a
 // singleton under policy, a name that is an attribute on one type and a
 // relation on another, a type name that fits no prefixed name, a list with a
-// declared item kind, and an object attribute with its own fields.
+// declared item kind, an object attribute with its own fields, and the
+// upgrade lock, a retention rule and a waiver under policy.
 const facetsOntology = `
 version: "1.0.0"
 ontology:
@@ -151,6 +171,7 @@ ontology:
     team.lead:
       attributes:
         name: { type: text, required: true }
+        rank: { type: number, enum: ["1", "2"] }
       relations:
         link: { to: note, many: true }
     charter:
@@ -161,7 +182,13 @@ ontology:
 const facetsPolicy = `
 policy:
   charter: { required: true, orphan: true }
-  note: { path_refs: true }
+  note:
+    path_refs: true
+    locked: true
+    locked_relations: [follows]
+    retention: { days: 90, no_outbound: true }
+    waive:
+      n1: { orphans: "kept \"on purpose\"" }
 `
 
 const facetsStorage = `
@@ -207,6 +234,8 @@ func TestMappingFacets(t *testing.T) {
 		// The union edge is sh:or over the targets; the odd type name goes out as a full IRI.
 		"sh:or (\n            [ sh:class type:note ]\n            [ sh:class <urn:khub:ontology/facets/type/team.lead> ]\n        ) ;\n        sh:minCount 1 ;\n        sh:maxCount 1 ;\n        khub:kind \"union\" ;\n        khub:pathRefs true",
 		`sh:in ( "memo" "todo" )`,
+		// A non-text enum is typed by its kind, as the instance values are.
+		`sh:in ( "1"^^xsd:decimal "2"^^xsd:decimal )`,
 		"sh:pattern \"^[a-z]{2}$\" ;\n        khub:pattern \"^[a-z]{2}$\"",
 		// The unportable pattern keeps only the khub: annotation.
 		"sh:maxCount 1 ;\n        khub:pattern \"(?i)ok\" ;\n        khub:type \"text\"",
@@ -237,6 +266,9 @@ func TestMappingFacets(t *testing.T) {
 		// The singleton's policy and storage.
 		"type:charter a rdfs:Class ;\n    rdfs:subClassOf khub:Entity ;\n    rdfs:label \"charter\" ;\n    khub:layout \"singleton\" ;\n    khub:format \"md\" ;\n    khub:path \"charter.md\" ;\n    khub:requiredSingleton true ;\n    khub:orphanExempt true .",
 		"khub:idShape \"nt-YYYY-MM-DD-slug\"",
+		// The lock, the retention rule and the waiver ride on the class; a locked predicate on its shape.
+		"khub:locked true ;\n    khub:retentionDays 90 ;\n    khub:retentionNoOutbound true ;\n    khub:waiver [\n        khub:waivedEntity \"n1\" ;\n        khub:waivedFinding \"orphans\" ;\n        khub:waiverReason \"kept \\\"on purpose\\\"\"\n    ] .",
+		"khub:inverse \"followed_by\" ;\n        khub:pathRefs true ;\n        khub:locked true\n    ]",
 		"khub:when \"capture it\"",
 		`<urn:khub:ontology/facets/type/team.lead> a rdfs:Class`,
 		"khub:layout \"collection\" ;\n    khub:format \"yaml\" ;\n    khub:path \"leads.yaml\"",
@@ -245,7 +277,7 @@ func TestMappingFacets(t *testing.T) {
 		"field:kind a rdf:Property, owl:DatatypeProperty",
 		"field:about a rdf:Property, owl:ObjectProperty",
 		"khub:title a rdf:Property, owl:DatatypeProperty",
-		"<urn:khub:ontology/facets/> a owl:Ontology ;\n    rdfs:label \"facets\" ;\n    khub:preset \"facets\" ;\n    khub:presetVersion \"1.0.0\" ;\n    khub:workspace \"lab\"",
+		"<urn:khub:ontology/facets/> a owl:Ontology ;\n    rdfs:label \"facets\" ;\n    khub:preset \"facets\" ;\n    khub:presetVersion \"1.0.0\" ;\n    khub:workspace \"lab\" ;\n    khub:requiredScope \"active\" ;\n    khub:requiredTargetScope \"active\" .",
 	} {
 		if !strings.Contains(ttl, want) {
 			t.Errorf("render lacks:\n%s\n--- render\n%s", want, ttl)

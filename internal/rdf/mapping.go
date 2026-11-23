@@ -10,6 +10,7 @@ package rdf
 import (
 	"fmt"
 	"regexp"
+	"slices"
 	"strings"
 
 	"github.com/endgame-build/khub/internal/errs"
@@ -115,6 +116,7 @@ var (
 	khubPresetVer    = pn("khub", "presetVersion")
 	khubWorkspace    = pn("khub", "workspace")
 	khubRequiredScop = pn("khub", "requiredScope")
+	khubTargetScope  = pn("khub", "requiredTargetScope")
 	khubLayout       = pn("khub", "layout")
 	khubFormat       = pn("khub", "format")
 	khubPath         = pn("khub", "path")
@@ -122,6 +124,13 @@ var (
 	khubTemplate     = pn("khub", "template")
 	khubReqSingleton = pn("khub", "requiredSingleton")
 	khubOrphanExempt = pn("khub", "orphanExempt")
+	khubLocked       = pn("khub", "locked")
+	khubRetentionDay = pn("khub", "retentionDays")
+	khubRetentionOut = pn("khub", "retentionNoOutbound")
+	khubWaiver       = pn("khub", "waiver")
+	khubWaivedEntity = pn("khub", "waivedEntity")
+	khubWaivedFind   = pn("khub", "waivedFinding")
+	khubWaiverReason = pn("khub", "waiverReason")
 	khubWhen         = pn("khub", "when")
 	khubType         = pn("khub", "type")
 	khubItems        = pn("khub", "items")
@@ -147,6 +156,7 @@ var vocabulary = []struct {
 	{khubPresetVer, false, "On the ontology: that preset's version."},
 	{khubWorkspace, false, "On the ontology: the workspace this export was rendered from."},
 	{khubRequiredScop, false, "On the ontology: sh:minCount is khub's required gate, enforced on this subset of entities (drafts are exempt)."},
+	{khubTargetScope, false, "On the ontology: a required relation counts only targets in this subset (a draft target never satisfies it)."},
 	{khubLayout, false, "Storage: file, folder, collection or singleton."},
 	{khubFormat, false, "Storage: md, json, yaml or jsonl."},
 	{khubPath, false, "Storage: where the type's entities live, one value per path template; on a khub:File, its workspace-relative path."},
@@ -154,6 +164,13 @@ var vocabulary = []struct {
 	{khubTemplate, false, "Storage: the body template stem the type declares."},
 	{khubReqSingleton, false, "Policy: a singleton `check` requires to exist."},
 	{khubOrphanExempt, false, "Policy: instances are exempt from the orphan sweep."},
+	{khubLocked, false, "Policy: `khub upgrade` refuses a schema that drops this type, or this relation on a relation shape, unless unlocked."},
+	{khubRetentionDay, false, "Policy: `check` lists an entity of this type whose date is older than this many days."},
+	{khubRetentionOut, false, "Policy: the retention rule lists only entities with no outbound edge."},
+	{khubWaiver, false, "Policy: one `check` finding waived for one entity of this type; a node holding the three terms below."},
+	{khubWaivedEntity, false, "On a waiver: the slug of the entity it covers."},
+	{khubWaivedFind, false, "On a waiver: the `check` bucket it waives."},
+	{khubWaiverReason, false, "On a waiver: why the finding is accepted."},
 	{khubWhen, false, "The moment to capture an entity of this type, in domain language."},
 	{khubType, false, "The khub kind of an attribute: text, number, date, datetime, bool, list or object."},
 	{khubItems, false, "The declared kind of a list's items; absent when the items are untyped."},
@@ -192,6 +209,7 @@ func Schema(resolved *schema.ResolvedSchema, ns Namespaces, prov Provenance) *Do
 	ont.Add(khubPresetVer, Str(prov.Version))
 	ont.Add(khubWorkspace, Str(prov.Workspace))
 	ont.Add(khubRequiredScop, Str("active"))
+	ont.Add(khubTargetScope, Str("active"))
 	doc.Subjects = append(doc.Subjects, ont)
 
 	for _, v := range vocabulary {
@@ -290,6 +308,22 @@ func (m *mapper) class(t *schema.ResolvedType) *Subject {
 	}
 	if t.Orphan {
 		s.Add(khubOrphanExempt, Bool(true))
+	}
+	if t.Locked {
+		s.Add(khubLocked, Bool(true))
+	}
+	if t.Retention != nil {
+		s.Add(khubRetentionDay, Int(t.Retention.Days))
+		if t.Retention.NoOutbound {
+			s.Add(khubRetentionOut, Bool(true))
+		}
+	}
+	for _, w := range t.Waivers {
+		s.Add(khubWaiver, Blank{Pairs: []Pair{
+			{Pred: khubWaivedEntity, Obj: Str(w.Slug)},
+			{Pred: khubWaivedFind, Obj: Str(w.Finding)},
+			{Pred: khubWaiverReason, Obj: Str(w.Reason)},
+		}})
 	}
 	return s
 }
@@ -422,7 +456,7 @@ func (m *mapper) shape(t *schema.ResolvedType) *Subject {
 	}
 	for _, rn := range t.Relations.Keys() {
 		r, _ := t.Relations.Get(rn)
-		s.Add(shProperty, m.relationShape(r, order))
+		s.Add(shProperty, m.relationShape(r, slices.Contains(t.LockedRelations, rn), order))
 		order++
 	}
 	return s
@@ -511,7 +545,9 @@ func (m *mapper) scalarFacets(b *Blank, a *schema.ResolvedAttribute) {
 	if len(a.Enum) > 0 {
 		items := make([]Term, len(a.Enum))
 		for i, e := range a.Enum {
-			items[i] = Str(e)
+			// Typed by the kind, as an instance's value is, so sh:in compares
+			// like with like.
+			items[i] = literal(e, a.BaseType)
 		}
 		add(shIn, List{Items: items})
 	}
@@ -523,7 +559,7 @@ func (m *mapper) scalarFacets(b *Blank, a *schema.ResolvedAttribute) {
 	}
 }
 
-func (m *mapper) relationShape(r *schema.ResolvedRelation, order int) Blank {
+func (m *mapper) relationShape(r *schema.ResolvedRelation, locked bool, order int) Blank {
 	b := Blank{}
 	add := func(p IRI, o Term) { b.Pairs = append(b.Pairs, Pair{Pred: p, Obj: o}) }
 	add(shPath, m.fieldIRI(r.Predicate))
@@ -565,6 +601,9 @@ func (m *mapper) relationShape(r *schema.ResolvedRelation, order int) Blank {
 	if r.ByPath {
 		add(khubPathRefs, Bool(true))
 	}
+	if locked {
+		add(khubLocked, Bool(true))
+	}
 	return b
 }
 
@@ -603,6 +642,11 @@ func PortablePattern(p string) (string, bool) {
 	inClass := false
 	for i := 0; i < len(p); i++ {
 		c := p[i]
+		if c == '.' && !inClass {
+			// RE2's dot excludes \n alone; XPath's also excludes \r.
+			b.WriteString(`[^\n]`)
+			continue
+		}
 		if c != '\\' {
 			b.WriteByte(c)
 			switch c {
@@ -622,6 +666,7 @@ func PortablePattern(p string) (string, bool) {
 		case strings.IndexByte(xpathSingleCharEsc, n) >= 0:
 			b.WriteByte('\\')
 			b.WriteByte(n)
+		// XPath has no \f escape, so the form feed goes out raw.
 		case n == 'd' || n == 'w' || n == 's':
 			body := map[byte]string{'d': "0-9", 'w': "A-Za-z0-9_", 's': "\\t\\n\\r\f "}[n]
 			if inClass {

@@ -1,0 +1,1 @@
+{"error": {"code": "unsafe_path", "message": "Path .khub/ontology.yaml is one of khub's own files; --out writes under .khub/generated/ or outside .khub/"}}

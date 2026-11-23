@@ -234,6 +234,25 @@ func TestLiteralsFollowTheDeclaredKind(t *testing.T) {
 	}
 }
 
+// A self-reference satisfies a relation for `check` but is no edge of the
+// graph; the ABox emits the stored value so a required one keeps its
+// minCount.
+func TestSelfReferenceIsEmitted(t *testing.T) {
+	root := firmOpsWS(t)
+	loop := "---\ntype: client\nname: Loop\ncreated: 2026-01-15\nrelated: [loop, initech]\n---\n"
+	if err := os.WriteFile(filepath.Join(root, "clients", "loop.md"), []byte(loop), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	res, err := Project(root, Options{Out: Stdout, Instances: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "khub:related <urn:khub:workspace/ws/client/initech>, <urn:khub:workspace/ws/client/loop> ."
+	if got := block(res.Content, "<urn:khub:workspace/ws/client/loop>"); !strings.Contains(got, want) {
+		t.Errorf("self-reference missing, want %q in\n%s", want, got)
+	}
+}
+
 // A path reference to a plain file satisfies a `to: any` relation under
 // path_refs without an edge in the graph; the ABox emits the file as a
 // khub:File node so the shape's minCount holds.
@@ -273,6 +292,11 @@ func TestOutAndBaseRefusals(t *testing.T) {
 		{Options{Out: "clients"}, "invalid_out"},
 		{Options{Out: Stdout, Base: "http://x"}, "invalid_base"},
 		{Options{DryRun: true, Base: "rel/path"}, "invalid_base"},
+		// khub's own files: the schema layers, the lock, any case.
+		{Options{Out: ".khub/ontology.yaml"}, "unsafe_path"},
+		{Options{Out: ".khub/generated/locks/workspace.lock"}, "unsafe_path"},
+		{Options{Out: ".KHUB/policy.yaml"}, "unsafe_path"},
+		{Options{Out: filepath.Join(root, ".khub", "config.yaml")}, "unsafe_path"},
 	} {
 		_, err := Project(root, c.opt)
 		var located *errs.Located
@@ -282,6 +306,9 @@ func TestOutAndBaseRefusals(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(root, "..", "escape.ttl")); err == nil {
 		t.Error("a relative --out climbed out of the workspace")
+	}
+	if text, err := os.ReadFile(filepath.Join(root, ".khub", "ontology.yaml")); err != nil || strings.Contains(string(text), "@prefix") {
+		t.Errorf("the ontology was replaced (err %v)", err)
 	}
 }
 

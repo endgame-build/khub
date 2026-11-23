@@ -15,7 +15,8 @@
     khub:preset "firm-ops" ;
     khub:presetVersion "0.3.0" ;
     khub:workspace "ws" ;
-    khub:requiredScope "active" .
+    khub:requiredScope "active" ;
+    khub:requiredTargetScope "active" .
 
 khub:Entity a rdfs:Class ;
     rdfs:comment "Every khub entity. Each type is a subclass." .
@@ -34,6 +35,9 @@ khub:workspace a rdf:Property ;
 
 khub:requiredScope a rdf:Property ;
     rdfs:comment "On the ontology: sh:minCount is khub's required gate, enforced on this subset of entities (drafts are exempt)." .
+
+khub:requiredTargetScope a rdf:Property ;
+    rdfs:comment "On the ontology: a required relation counts only targets in this subset (a draft target never satisfies it)." .
 
 khub:layout a rdf:Property ;
     rdfs:comment "Storage: file, folder, collection or singleton." .
@@ -55,6 +59,27 @@ khub:requiredSingleton a rdf:Property ;
 
 khub:orphanExempt a rdf:Property ;
     rdfs:comment "Policy: instances are exempt from the orphan sweep." .
+
+khub:locked a rdf:Property ;
+    rdfs:comment "Policy: `khub upgrade` refuses a schema that drops this type, or this relation on a relation shape, unless unlocked." .
+
+khub:retentionDays a rdf:Property ;
+    rdfs:comment "Policy: `check` lists an entity of this type whose date is older than this many days." .
+
+khub:retentionNoOutbound a rdf:Property ;
+    rdfs:comment "Policy: the retention rule lists only entities with no outbound edge." .
+
+khub:waiver a rdf:Property ;
+    rdfs:comment "Policy: one `check` finding waived for one entity of this type; a node holding the three terms below." .
+
+khub:waivedEntity a rdf:Property ;
+    rdfs:comment "On a waiver: the slug of the entity it covers." .
+
+khub:waivedFinding a rdf:Property ;
+    rdfs:comment "On a waiver: the `check` bucket it waives." .
+
+khub:waiverReason a rdf:Property ;
+    rdfs:comment "On a waiver: why the finding is accepted." .
 
 khub:when a rdf:Property ;
     rdfs:comment "The moment to capture an entity of this type, in domain language." .
