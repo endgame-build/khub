@@ -1,0 +1,10 @@
+--- index.md
++++ index.md
+@@ -8,3 +8,7 @@
+ # arc42
+ 
+ * [Architecture](knowledge/arc42.md)
++
++# requirement
++
++* [Alpha](knowledge/requirements/req-alpha.md)

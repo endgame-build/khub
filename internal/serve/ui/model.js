@@ -349,7 +349,12 @@ export function sortRows(rows, sort) {
 // point at anything, and drawing that by expansion would put an edge from its
 // source to every type — for depends_on, every type to every type. One node
 // says the same thing and stays readable.
-export var SCHEMA_ANY = 'schema:*';
+//
+// `schema-any`, not `schema:*`: a type box is `schema:<name>`, and the loader
+// accepts a type named `*`, whose box then took this id — cy.add drops the
+// duplicate and the base relations landed on that type. No `schema:<name>`
+// can equal this one. viz.SchemaAny is the same id.
+export var SCHEMA_ANY = 'schema-any';
 
 // schemaId keeps ontology nodes in their own namespace, distinct from an
 // entity's `type/slug`. A collision throws inside cy.add, mid-render, with
@@ -445,4 +450,51 @@ function countUses(used, from, predicate, to) {
     total += n;
   });
   return total;
+}
+
+// buildBothGraph is the combined view's overlay: the ontology cut down to the
+// types of the entities on screen, plus one instance-of edge from each entity
+// to its type box — the UML picture of a class above the objects that realize
+// it. `sch` is buildSchemaGraph's output, so predicate filters and the
+// required/derived/unused notation carry over unchanged.
+//
+// Only the types present are boxed: the combined view is scoped by the same
+// focus and depth as the graph view, and a box nothing on screen realizes is
+// the schema view's job. A relation is kept when it leaves a kept box and lands
+// on one (or on `any`); the base relations leave `any` itself, so they are the
+// schema view's to draw.
+export function buildBothGraph(sch, nodeIds) {
+  var keep = new Set();
+  nodeIds.forEach(function (id) { keep.add(schemaId(typeOf(id))); });
+  var edges = sch.edges.filter(function (e) {
+    return keep.has(e.data.source) && (keep.has(e.data.target) || e.data.target === SCHEMA_ANY);
+  });
+  var boxes = new Set(keep);
+  if (edges.some(function (e) { return e.data.target === SCHEMA_ANY; })) boxes.add(SCHEMA_ANY);
+  var nodes = sch.nodes.filter(function (n) { return boxes.has(n.data.id); });
+  nodeIds.forEach(function (id) {
+    edges.push({
+      // `label` is empty rather than absent: every edge.sch style reads it.
+      data: { id: 'instof:' + id, source: id, target: schemaId(typeOf(id)), label: '', instanceOf: true },
+      classes: 'sch instof'
+    });
+  });
+  return { nodes: nodes, edges: edges };
+}
+
+// ASPECT_VIEWS maps `khub serve --aspect` (which arrives as ?aspect= on the
+// printed URL) to the view the page lands on. The CLI's vocabulary is viz's;
+// the page's is its own, and this is the one place they meet.
+var ASPECT_VIEWS = { schema: 'schema', instances: 'graph', both: 'both' };
+
+// aspectView reads the landing view from a location.search string. An absent
+// or unknown value is null, and the page keeps its own default.
+//
+// URLSearchParams, not decodeURIComponent: it decodes a malformed escape
+// (`%E0`) to U+FFFD instead of throwing, and a throw here would land inside
+// boot and leave the page unmounted over a typo in the address bar.
+export function aspectView(search) {
+  var name = new URLSearchParams(search || '').get('aspect');
+  if (name === null) return null;
+  return Object.prototype.hasOwnProperty.call(ASPECT_VIEWS, name) ? ASPECT_VIEWS[name] : null;
 }

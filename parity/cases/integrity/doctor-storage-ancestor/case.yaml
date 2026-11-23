@@ -1,0 +1,7 @@
+# A file where a storage path's parent directory belongs: doctor names that
+# path as the mismatch (a scan reports the same fault as an
+# internal_path_error), and skips the read check until the layout is fixed.
+steps:
+- argv: ["init", "firm-ops", ".", "--no-wire"]
+- sh: "rm -rf identity && touch identity"
+- argv: ["doctor"]

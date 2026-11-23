@@ -1,0 +1,17 @@
+--- index.md
++++ index.md
+@@ -0,0 +1,14 @@
++---
++okf_version: '0.2'
++---
++# prd
++
++* [PRD](knowledge/prd.md)
++
++# arc42
++
++* [Architecture](knowledge/arc42.md)
++
++# requirement
++
++* [Alpha](knowledge/requirements/req-alpha.md)

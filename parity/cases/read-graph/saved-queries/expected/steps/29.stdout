@@ -1,0 +1,1 @@
+{"error": {"code": "invalid_saved_query", "message": "Saved query 'lone' in .khub/queries.yaml: 'via' must be set with 'under' and 'via' together", "field": "via"}}

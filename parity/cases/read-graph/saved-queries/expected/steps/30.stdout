@@ -1,0 +1,1 @@
+{"error": {"code": "unknown_saved_query", "message": "No saved query 'scopd' in .khub/queries.yaml. Saved queries: external, broken, infra, gone, aliased, alias-of, scoped, dropped, bounds, lone", "expected": ["external", "broken", "infra", "gone", "aliased", "alias-of", "scoped", "dropped", "bounds", "lone"], "suggestion": "scoped"}}

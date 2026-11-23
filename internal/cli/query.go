@@ -2,7 +2,9 @@
 // edges. Like add/edit it accepts arbitrary --<field> value filters, so it
 // parses its own flags; the declared ones (--type, --tag, --has, --missing,
 // --count, --in-count, --out-count, --orphan, --stale, --draft/--active,
-// --under/--via, --limit, --format) still bind.
+// --under/--via, --trust, --limit, --format, --receipt, --save-as, --replace)
+// still bind. `khub run <name>` replays a saved filter set through the same
+// query and the same output.
 
 package cli
 
@@ -15,13 +17,14 @@ import (
 	"github.com/endgame-build/khub/internal/clock"
 	"github.com/endgame-build/khub/internal/omap"
 	"github.com/endgame-build/khub/internal/query"
+	"github.com/endgame-build/khub/internal/savedquery"
 )
 
 func registerQuery(root *cobra.Command) {
 	var (
 		typeName, tag, has, missing, format, trustTier string
-		under, via                                     string
-		orphan, stale, draft, active, rcpt             bool
+		under, via, saveAs                             string
+		orphan, stale, draft, active, rcpt, replace    bool
 		limit                                          int
 		counts, inCounts, outCounts                    []string
 	)
@@ -45,6 +48,8 @@ func registerQuery(root *cobra.Command) {
 	cmd.Flags().StringVar(&trustTier, "trust", "", "Keep entities at this review tier: unverified, machine, or human.")
 	cmd.Flags().StringVar(&format, "format", "text", "text (Rich table on a TTY), json, or ids.")
 	cmd.Flags().BoolVar(&rcpt, "receipt", false, "Wrap JSON output with the applied filters, matched and returned counts, and truncation.")
+	cmd.Flags().StringVar(&saveAs, "save-as", "", "Also save these filters under a name for `khub run <name>`.")
+	cmd.Flags().BoolVar(&replace, "replace", false, "Let --save-as overwrite a different saved query of that name.")
 	cmd.RunE = func(cmd *cobra.Command, args []string) error {
 		_, extra, err := splitDynamic(cmd, args, 0)
 		if err != nil {
@@ -69,6 +74,9 @@ func registerQuery(root *cobra.Command) {
 			if cerr != nil {
 				return cerr
 			}
+			if replace && !cmd.Flags().Changed("save-as") {
+				return clickUsageErr(cmd.CommandPath(), "", "--replace needs --save-as <name>")
+			}
 			ws, rerr := resolveRoot()
 			if rerr != nil {
 				return rerr
@@ -91,48 +99,77 @@ func registerQuery(root *cobra.Command) {
 				Under:      underID,
 				Via:        viaPred,
 			}
+			// The query runs first, so a filter set it refuses is never saved.
 			matches, matched, qerr := query.QueryCounted(ws, filters, clock.Now())
 			if qerr != nil {
 				return qerr
 			}
-			if format == "ids" { // bare ids for piping — independent of TTY detection
-				for _, m := range matches {
-					fmt.Println(m.Slug)
+			if cmd.Flags().Changed("save-as") {
+				outcome, serr := savedquery.Save(ws, saveAs, savedquery.Definition(filters), replace)
+				if serr != nil {
+					return serr
 				}
-				return nil
+				Note(saveNote(outcome, saveAs))
 			}
-			records := make([]any, 0, len(matches))
-			rows := [][]string{}
-			for _, m := range matches {
-				record := omap.New()
-				record.Set("id", m.Type+"/"+m.Slug)
-				record.Set("type", m.Type)
-				record.Set("slug", m.Slug)
-				record.Set("title", m.Title)
-				record.Set("draft", m.Draft)
-				record.Set("orphan", m.Orphan)
-				record.Set("stale", m.Stale)
-				record.Set("trust", m.Trust)
-				records = append(records, record)
-				rows = append(rows, []string{
-					m.Type + "/" + m.Slug, m.Type, m.Title,
-					pyBool(m.Draft), pyBool(m.Orphan), pyBool(m.Stale), m.Trust,
-				})
-			}
-			var doc any = records
-			if rcpt {
-				doc = withReceipt(queryApplied(filters), matched, records)
-			}
-			return Emit(doc, format, func() {
-				if len(rows) == 0 {
-					fmt.Println("No entities match")
-					return
-				}
-				printTable("query", []string{"id", "type", "title", "draft", "orphan", "stale", "trust"}, rows)
-			})
+			return emitMatches(filters, matches, matched, rcpt, format)
 		})
 	}
 	root.AddCommand(cmd)
+}
+
+// emitMatches renders query rows: bare slugs under --format ids, records (in
+// the --receipt envelope when asked) on the JSON gate, the table on a TTY.
+// `query` and `run` share it, so a saved query answers exactly as the query
+// it was saved from.
+func emitMatches(filters query.Filters, matches []query.Match, matched int, rcpt bool, format string) error {
+	if format == "ids" { // bare ids for piping — independent of TTY detection
+		for _, m := range matches {
+			fmt.Println(m.Slug)
+		}
+		return nil
+	}
+	records := make([]any, 0, len(matches))
+	rows := [][]string{}
+	for _, m := range matches {
+		record := omap.New()
+		record.Set("id", m.Type+"/"+m.Slug)
+		record.Set("type", m.Type)
+		record.Set("slug", m.Slug)
+		record.Set("title", m.Title)
+		record.Set("draft", m.Draft)
+		record.Set("orphan", m.Orphan)
+		record.Set("stale", m.Stale)
+		record.Set("trust", m.Trust)
+		records = append(records, record)
+		rows = append(rows, []string{
+			m.Type + "/" + m.Slug, m.Type, m.Title,
+			pyBool(m.Draft), pyBool(m.Orphan), pyBool(m.Stale), m.Trust,
+		})
+	}
+	var doc any = records
+	if rcpt {
+		doc = withReceipt(queryApplied(filters), matched, records)
+	}
+	return Emit(doc, format, func() {
+		if len(rows) == 0 {
+			fmt.Println("No entities match")
+			return
+		}
+		printTable("query", []string{"id", "type", "title", "draft", "orphan", "stale", "trust"}, rows)
+	})
+}
+
+// saveNote is the stderr line a save leaves, whatever the format: the rows on
+// stdout stay exactly what `khub run <name>` prints.
+func saveNote(outcome savedquery.Outcome, name string) string {
+	switch outcome {
+	case savedquery.Replaced:
+		return fmt.Sprintf("replaced saved query '%s' in %s", name, savedquery.File)
+	case savedquery.Unchanged:
+		return fmt.Sprintf("saved query '%s' already in %s, unchanged", name, savedquery.File)
+	default:
+		return fmt.Sprintf("saved query '%s' in %s; replay it with `khub run %s`", name, savedquery.File, name)
+	}
 }
 
 // queryApplied echoes the filter set a query ran, every key present: an

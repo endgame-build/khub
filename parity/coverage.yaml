@@ -26,6 +26,9 @@ commands:
 - name: 'status'
   params:
   - '--format'
+- name: 'doctor'
+  params:
+  - '--format'
 - name: 'add'
   params:
   - '--by'
@@ -101,6 +104,12 @@ commands:
   - '--limit'
   - '--format'
   - '--receipt'
+  - '--save-as'
+  - '--replace'
+- name: 'run'
+  params:
+  - 'arg:name'
+  - '--format'
 - name: 'search'
   params:
   - 'arg:text'
@@ -170,6 +179,7 @@ commands:
 - name: 'reindex'
   params:
   - '--dry-run'
+  - '--check'
 - name: 'export'
   params:
   - '--okf'
@@ -188,12 +198,14 @@ commands:
   - '--out'
   - '--open'
   - '--type'
+  - '--aspect'
 # serve blocks until interrupted, so every fixture step is one of its refusals
 # (cli-contract/serve-refusals). --port is reached there; the port bind itself
 # is not, because the TTY gate fires before Listen — see TestListenRefusesBusyPort.
 - name: 'serve'
   params:
   - '--port'
+  - '--aspect'
 - name: 'backfill'
   params:
   - '--type'
@@ -233,6 +245,9 @@ commands:
   params:
   - 'arg:file'
   - '--format'
+- name: 'completion'
+  params:
+  - 'arg:shell'
 error_codes:
 - alias_taken
 - ambiguity_error
@@ -267,6 +282,8 @@ error_codes:
 - inbound_edge_refusal
 - internal_path_error
 - invalid_envelope
+- invalid_query_name
+- invalid_saved_query
 - invalid_schema
 - invalid_slug
 - invalid_snapshot
@@ -293,6 +310,8 @@ error_codes:
 - preset_mismatch
 - raw_linkml_smuggled
 - referential_integrity
+- saved_query_exists
+- saved_query_unspliceable
 - schema_error
 - self_link
 - singleton_exists
@@ -306,6 +325,7 @@ error_codes:
 - unknown_predicate
 - unknown_preset
 - unknown_relation_target
+- unknown_saved_query
 - unknown_type
 - value_shape
 format_specials:

@@ -52,7 +52,7 @@ row in place of Claude Code's raw drawing.
 | Result | What came back, in one line: `⎿ 12 entities`, or `⎿ + adr/ad-… · draft` after an `add`. |
 | List | Up to five lines of a list result, then `… n more`. |
 
-- A list follows the result line for `query`, `stale`, `recent`, `search`,
+- A list follows the result line for `query`, `run`, `stale`, `recent`, `search`,
   `retrieve`, `neighbors`, a `get` with several ids, a failed `check` and a
   `validate` with errors.
 - A list line for an entity holds its id, its title and its flags (`draft`,
