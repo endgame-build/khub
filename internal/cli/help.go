@@ -836,6 +836,9 @@ var helpArguments = map[string][]helpArg{
 	"khub remove": {
 		{name: "ID", metavar: "<str>", help: "A bare slug, or type/slug on ambiguity."},
 	},
+	"khub run": {
+		{name: "name", metavar: "<str>", required: true, help: "A name saved with khub query --save-as."},
+	},
 	"khub search": {
 		{name: "text", metavar: "<str>", required: true,
 			help: `FTS5 MATCH text: terms, "phrases", OR, NEAR, prefix*. Plain words with --plain.`},
@@ -858,6 +861,9 @@ var helpArguments = map[string][]helpArg{
 	},
 	"khub schema show": {
 		{name: "type", metavar: "<str>", required: true, help: "Type name."},
+	},
+	"khub completion": {
+		{name: "SHELL", metavar: "<str>", required: true, help: "bash, zsh, fish, or powershell."},
 	},
 }
 

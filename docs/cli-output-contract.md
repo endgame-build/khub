@@ -23,6 +23,7 @@ Exceptions, each of which the caller opts into or which is a human command:
 | The entity's file bytes, or its row | `get <id> --format raw` |
 | A text tree | `impact --format tree` |
 | Prose | the operator commands `reindex`, `viz`, `backfill` and `wire`, which take no `--format`. A refusal from one of them is still the JSON envelope on a pipe. `serve` runs only on a terminal; on a pipe it prints only the `serve_needs_tty` refusal |
+| A shell script | `completion <shell>`, which takes no `--format`. The hidden `__complete` it calls at TAB time prints cobra's line protocol (candidates, then `:<directive>`) |
 | The version number alone | `--version` |
 | Help text | `--help` |
 
@@ -89,7 +90,7 @@ stderr as a log.
 | Code | Meaning | What the caller does next |
 |---|---|---|
 | `0` | Success. For `validate` and `check`, the gate passed, perhaps with gaps that never fail it. | Continue. |
-| `1` | A gate ran and failed (`validate`, `check`). The workspace is wrong, not the call. stdout holds the full report. | Fix what the report names, then run the gate again. |
+| `1` | A gate ran and failed (`validate`, `check`, `reindex --check`, `doctor`). The workspace is wrong, not the call. stdout holds the full report (for `reindex --check`, the diff). `doctor` reports a missing workspace this way too, as a failed `workspace` check with the code `no_workspace`, where every other command refuses it with exit 2. | Fix what the report names, then run the gate again. |
 | `2` | Refused: a usage error, a call the schema forbids, a workspace or schema that cannot be read, or an OS error. Nothing was written. | Correct the call or the configuration and retry. In JSON mode, `error.code` says which. |
 
 A broken schema is already exit 2, before any entity is examined. So a CI job
@@ -164,6 +165,8 @@ Which codes carry which keys:
 | `unknown_preset` | | the shipped presets, sorted | nearest preset |
 | `bad_target` | | `claude`, `agents`, `both` | nearest target |
 | `locked_removed` | | every locked element the upgrade removes, `type` or `type.predicate`, in the current schema's declaration order: the `--unlock` values the run takes | |
+| `unknown_saved_query`, when `.khub/queries.yaml` holds any | | the saved query names, in file order | nearest name |
+| `invalid_saved_query`, for a value in one definition | the definition key | | |
 
 Every other code carries `code` and `message` only. A later release may add a
 key to a code that has none today. A program should read the keys it knows and

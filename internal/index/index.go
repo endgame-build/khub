@@ -181,6 +181,21 @@ func BuildWithBodies(root string, resolved *schema.ResolvedSchema) (*Index, erro
 	return build(root, resolved, true)
 }
 
+// ScanOne scans one declared type exactly as Build does — the templated
+// walk or the storage-path scan, `.khub/ignore` applied — and returns only
+// the error that would abort Build. A malformed file is not an error here,
+// as it is not one for Build. `khub doctor` reads it per type, so it can
+// name every type whose storage stops a scan rather than the first.
+func ScanOne(root string, resolved *schema.ResolvedSchema, rtype *schema.ResolvedType) error {
+	var err error
+	if rtype.Templated() {
+		_, _, _, err = scanTemplated(root, rtype, resolved.Ignore)
+	} else {
+		_, _, err = scanType(root, rtype, map[string]*omap.Map{}, resolved.Ignore)
+	}
+	return err
+}
+
 // Duplicate is a templated file whose slug another file of its type holds.
 type Duplicate struct {
 	Path, Type, Holder string // workspace-relative, slash-separated

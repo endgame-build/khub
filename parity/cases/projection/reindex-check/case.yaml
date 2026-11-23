@@ -1,0 +1,16 @@
+steps:
+- argv: ["init", "build-hub", ".", "--no-wire"]
+- argv: ["reindex", "--check"]
+- argv: ["add", "requirement", "--title", "Alpha", "--kind", "functional"]
+- argv: ["reindex", "--check"]
+- argv: ["reindex", "--check", "--dry-run"]
+- argv: ["reindex"]
+- argv: ["reindex", "--check"]
+- sh: "rm index.md"
+- argv: ["reindex", "--check"]
+- sh: "printf -- \"---\\nbroken: [\\n---\\n\" > knowledge/requirements/bad.md"
+- argv: ["reindex", "--check"]
+- sh: "rm knowledge/requirements/bad.md"
+- argv: ["reindex"]
+- sh: "perl -pi -e 's/\\n/\\r\\n/' index.md"
+- argv: ["reindex", "--check"]
