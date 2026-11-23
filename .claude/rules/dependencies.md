@@ -13,6 +13,11 @@
 - **gonum** links a handful of leaf packages, no `mat`/BLAS; it is used only
   for strongly connected components.
 - **ncruces/go-sqlite3** is `wasm2go`-translated Go: no wazero, no CGO.
+- **santhosh-tekuri/jsonschema/v6** is test-only: `internal/schema`'s tests
+  judge the emitted layer JSON Schema and every probe with a real draft-07
+  validator, which also checks the file against the draft-07 meta-schema. It
+  never reaches the binary. Its own tests pull `dlclark/regexp2` into
+  `go.sum`; khub imports neither that nor its ECMA mode.
 - **golang.org/x/text** is pure Go. `cases` folds case for lookup;
   `unicode/norm` composes names (NFC) before lookup folds them; and slug
   minting decomposes (NFD), drops the combining marks with `runes` and
