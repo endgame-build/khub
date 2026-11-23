@@ -1,159 +1,107 @@
-# Ingestion: schema-constrained extraction
+# Ingest a document with an extractor
 
 khub turns a source document into entities in two halves, with the extractor
-between them outside khub. khub ships the contract and the checker; it never
-calls a model, sends nothing outward, and makes no network call. The
-extractor is whoever reads the source: an agent given the contract as its
-prompt, a script, a person.
+between them outside khub. khub ships the contract and the checker. It never
+calls a model, sends nothing outward and makes no network call. The extractor
+is whoever reads the source: an agent given the contract as its prompt, a
+script, or a person.
 
-```
+```text
 khub schema scaffold ──▶ extractor (outside khub) ──▶ khub schema conform ──▶ khub add
    the contract            fills the envelope          scores, writes nothing    one draft per entry
 ```
 
-This is the shipped half of ingestion. The two design notes beside it,
-[ingestion-conflicts.md](ingestion-conflicts.md) (what a re-run does when the
-source and the workspace disagree) and
-[ingestion-alignment.md](ingestion-alignment.md) (how a reference a source
-makes lands on an entity), describe the importer that does not exist yet.
-Nothing here contradicts them: identity is never guessed, an unresolved
-target is reported, a gap never blocks capture, and an ingested entity is a
-draft with `author` naming the source. The command contract — flags, payloads,
-error codes — is in [`cli.md`](cli.md#workspace) and its
-[payload shapes](cli.md#payload-shapes); this page is the walk through it.
+Every flag, payload field, error code and exit code of the two commands is
+specified in [`cli.md`](cli.md#workspace) (the `schema scaffold` and `schema
+conform` rows) and under [Payload shapes](cli.md#payload-shapes). This page
+walks the pipeline once and says why each step is shaped the way it is.
 
-## 1. The contract — `khub schema scaffold`
+## 1. Hand the extractor the contract
 
-The resolved schema, rendered as what an extractor needs and nothing else:
-each type's `when` cue and id shape; its fields with kind, enum, pattern,
-default and required flag; its stored relations with their target types and
-cardinality (no derived inverse — an extractor fills stored edges); and, for a
-templated type, the body sections with their hints. The base fields `add`
-writes itself (`type`, `created`, `updated`, and the OKF `generated` stamp)
-and the two ingestion sets on capture (`status` and `author`)
-are listed as `supplied` rather than asked for, and the base fields that hold
-objects (`generated`, `verified`, `sources`, `usage_window`) are left out:
-`add` has no spelling for them, and a review event or a provenance record is
-khub's to write (`verify`, `import`), never an extractor's to fill. Every row
-is walked from `ResolvedSchema`; no type or field is named in the code, so a
-schema edit changes the contract with no surface change.
-
-`--format json` is the machine form; `--format markdown` prints the same
-contract as a Markdown prompt — the rules, the envelope, one section per
-type with its tables and body sections — on any stream, for an agent to
-paste in front of the source (on a TTY the default `text` prints the same
-prompt). `--type` narrows it to the types a source could plausibly hold. A
-relation that may name a workspace file (policy `path_refs`) says so, and
-each body section carries the rules `validate` would otherwise report as a
-gap after the write (word counts, required and forbidden text, code
-blocks), so the extractor can satisfy them before it.
-
-The rules the prompt carries are fixed and schema-generic: use only the
-listed types; fill a field only when the source states it and leave it out
-rather than guess; an enum takes one listed value; a relation target is the
-id or alias of an entity the workspace holds, or the name the source uses,
-and khub resolves it — never invent an id; quote the passage in `source` and
-give `confidence` when unsure.
-
-## 2. The envelope
-
-What the extractor returns, pinned in [`cli.md`](cli.md#payload-shapes):
-
-```json
-{"entities": [
-  {"type": "project",
-   "fields": {"title": "Initech PoV", "active": true},
-   "relations": {"client": ["Initech"], "owner": "noor"},
-   "body": "## Context\n…",
-   "source": "Agreed on the kickoff call, p. 2",
-   "confidence": 0.9}
-]}
+```bash
+khub schema scaffold --type client --type project --format markdown > prompt.md
 ```
 
-`fields` holds attribute values as JSON gave them, judged as the kinds they
-are (a bool is `true`, not `"yes"`); a declared predicate among them is read
-as a relation, the same statement `--<predicate>` makes on `add`. A supplied
-key among them is an error, as is the retired `draft` (`status: draft` is the
-publish flag now) and an object-valued attribute — each the refusal `add`
-would give. `relations` maps a predicate to one target or a list. `body`,
-`source` and `confidence` (a number from 0 to 1) are optional. Anything else
-is a shape fault, refused as `invalid_envelope` with the entity's index: the
-extractor's output is the call, and a call that cannot be read is corrected,
-not scored.
+The scaffold is the resolved schema rendered as what an extractor needs: each
+type's fields and stored relations, its id shape, its body sections, the
+envelope to return, and a fixed set of rules. Narrow it with `--type` to the
+types the source could hold. The prompt goes in front of the source.
 
-## 3. The check — `khub schema conform`
+Everything in it is walked from the resolved schema, so a schema edit changes
+the contract with no code change. The fields khub or the capture step writes
+are listed as supplied and never asked for. That covers the dates, the
+`generated` stamp, `status` and `author`. The object-valued OKF families
+(`verified`, `sources`) are left out as well, because a review event or a
+provenance record is khub's to write, never an extractor's to fill.
 
-Each entry is judged as `add` then `validate` would judge the written file,
-through the same code: the per-field validator (`integrity.FieldFindings` —
-kind, enum, pattern, cardinality), the write path's relation resolution
-(`entity.ResolveWriteValue` — exact slug, then alias, qualified when a bare
-slug would be ambiguous; the first two rungs of the
-[reference ladder](ingestion-alignment.md#the-reference-ladder), and nothing
-past them), the id the write path would mint with every refusal it raises
-before writing (`entity.PlanSlug` — no slug source, an over-long, reserved or
-navigation-name slug, a slug or alias the workspace holds, an existing
-singleton), and the body-shape finding against the type's template. There
-is no second validator, and where `add` is lenient conform mirrors it: a
-blank `""` attribute reads as `null`, a blank body is no body.
+## 2. Check what came back
 
-The report keeps three things apart, the way `validate` and `check` keep them
-apart:
+```bash
+khub schema conform envelope.json --format json
+```
 
-- **`errors`** — the record is malformed: an off-enum value, a pattern miss, a
-  wrong kind, a surplus target on a single-valued relation, an undeclared
-  predicate, a supplied key, a body missing a required heading — or its id
-  cannot be written (field `id`): nothing to mint from, an over-long or
-  reserved slug, a slug or alias the workspace already holds, a singleton
-  that exists, or a second entry in the same envelope minting an id an
-  earlier one claimed. `add` would refuse or `validate` would fail.
-- **`unresolved`** — a relation target the workspace holds no entity for,
-  with the refusal `add` would raise. Reported, never guessed: the stub and
-  likeness rungs that come after the exact ones are the
-  [alignment ladder](ingestion-alignment.md), and it never auto-merges.
-  A target naming an earlier entry of the same envelope resolves when that
-  entry conforms, since the `add`s run in envelope order; a later entry is
-  never a target ([`cli.md`](cli.md#payload-shapes) has the rule).
-- **`gaps`** — the required fields and relations the written record would
-  leave empty. Capture is never blocked, so a gap fails nothing; the entry
-  lands as active-but-incomplete for `check` to report, or as a draft. The
-  one exception is the type's slug source (`name`, then `title`): `add`
-  cannot mint an id without it, so its absence is an `id` error.
+conform judges each entry as `add` and then `validate` would judge the file,
+through the same code. It uses the same field validator, the same relation
+resolution and the same id minting with every refusal `add` raises before it
+writes. There is no second validator to drift from the first. The report keeps
+three things apart, the way `validate` and `check` keep them apart:
 
-`ok` is false on `errors` or `unresolved`; `id` is the qualified id `add`
-would write (null when it cannot); `confidence` echoes the entry's number;
-the summary's `score` is conformant over entities. Exit 1 when any entry
-fails, an undeclared type included, 2 for an unreadable envelope. Nothing is
-written and no lock is taken. What `validate` reports as gaps after the
-write — body rules, dead links, actor and footnote gaps — is not evaluated
-here.
+- **errors** are what `add` would refuse or `validate` would fail, the id
+  included;
+- **unresolved** targets are the ones no entity answers to;
+- **gaps** are the required fields the written record would leave empty.
 
-## 4. Capture — `khub add`
+A gap never fails the gate, because capture is never blocked. Fix every error
+and every unresolved target, and run conform again until it exits 0.
 
-Each conformant entry becomes one `khub add <type> --<field> <value> …
---body-file <file>` call, in envelope order so an entry a later one names
-exists first, and always with `--draft` and `--author` naming the source:
-[ingestion-conflicts.md](ingestion-conflicts.md#fields-ingestion-owns)
-creates every ingested record as a draft with `author` naming the source,
-and the entity stays a draft until a person publishes it. The quoted `source` passage and the
-confidence go in the body (the convention: quote `source` at the top of the
-body, under the first heading or as its own paragraph) or in an extension
-field of your own. `sources`, the OKF provenance list, has no `add` spelling
-today. A draft is the containment for injected content — `check` is the
-human review point before it is published. A minted id that collides with an
-entity the workspace already holds is reported by conform (`slug_taken`,
-`alias_taken`); whether that entity is the same thing is the
-[slug-collision rung](ingestion-conflicts.md#identity) of the identity
-ladder, not conform's question.
+## 3. Capture each entry as a draft
 
-## Not shipped here
+Each conformant entry becomes one `khub add <type> --<field> <value> …` call,
+in envelope order, always with `--draft` and `--author` naming the source:
 
-- **The importer** of the two design notes: the alignment ladder past its
-  exact rungs (stubs, likeness candidates with evidence; #62) and the
-  conflict policy for a re-run (strategies, the conflict report; #29).
-  conform stops at "unresolved" and judges one envelope against the
+```bash
+khub add client --name "Globex" --draft --author "facet:kickoff-notes" \
+  --aliases "facet:CLI-007" --body-file globex.md
+```
+
+- **Order.** A target that names an earlier entry resolves to it, because
+  that entry is added first. A later entry cannot be a target, so list the
+  entries a record points at before it.
+- **Draft and author.** [ingestion-conflicts.md](ingestion-conflicts.md#fields-ingestion-owns)
+  creates every ingested record as a draft with `author` naming the source.
+  The draft is the containment for content an attacker may have influenced,
+  and `check` is the human review point before a person publishes it.
+- **The source id.** When the source has record ids, add each one as an alias
+  spelled `<system>:<id>`. That alias is how the planned importer matches the
+  record when the source is read again
+  ([Identity](ingestion-conflicts.md#identity)), and a later reference to it
+  resolves through the alias.
+- **Provenance.** Quote the `source` passage at the top of the body, under the
+  first heading or as its own paragraph. The OKF `sources` list has no `add`
+  spelling today.
+
+## Where this sits against the design notes
+
+[ingestion-conflicts.md](ingestion-conflicts.md) and
+[ingestion-alignment.md](ingestion-alignment.md) describe an importer that
+does not exist yet. This pipeline keeps their rules. Identity is never
+guessed: conform resolves a target only by the exact rungs of the
+[reference ladder](ingestion-alignment.md#the-reference-ladder) (slug, then
+alias) and reports anything else as unresolved, never matching by
+resemblance. A gap never blocks capture, and every ingested entity is a
+draft.
+
+It stops short of the importer in four places:
+
+- No stubs and no likeness candidates. Those are the ladder's later rungs.
+- No conflict policy for a re-run. Each run judges one envelope against the
   workspace as it is.
-- **OKF bundle ingest** (#9): `import --okf` is the consume path for an
-  external bundle. conform is strict by design: it judges against the
-  workspace's own schema.
-- A `--draft-plan` that prints the `add` commands: shell quoting of bodies
-  and values makes it bigger than it looks; left for a later issue.
+- No second pass. A reference to a later record in the same source resolves
+  in the importer's second pass, but here it does not, because `add` refuses a
+  target that does not exist yet.
+- When a minted id collides with an entity the workspace holds, conform
+  reports the collision as `add` would. It does not decide whether that
+  entity is the same thing, which is the
+  [slug-collision rung](ingestion-conflicts.md#identity).
+
+OKF bundles have their own consume path, `khub import --okf`.
