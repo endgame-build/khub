@@ -1,12 +1,12 @@
 # firm-ops/ontology.yaml — the domain model of the khub firm-ops preset: the
 # operating graph of a consulting and delivery firm.
 #
-# 9 entity types; 10 firm-ops relation predicates (+ the 4 universal edges
-# inherited from core: related / sources / references / depends_on) = 14 total.
-# Described in docs/firm-ops-preset.md. The base block (type, draft, author,
-# created, updated, title, description, resource, tags + the universal edges)
-# is embedded in the binary since the ontology/policy/storage split — never
-# copied here.
+# 9 entity types; 10 firm-ops relation predicates (+ the 3 universal edges
+# inherited from core: related / references / depends_on) = 13 total.
+# Described in docs/firm-ops-preset.md. The base block (type, status, author,
+# created, updated, title, description, resource, tags, aliases, the OKF
+# provenance and trust fields + the universal edges) is embedded in the binary
+# since the ontology/policy/storage split — never copied here.
 #
 # Authoring decisions worth review:
 #  - One enum per (type, field): `stage` and `source` differ across types; each
@@ -24,7 +24,7 @@
 #    the fragment; `author` stays the free-text base field.
 #  - meeting.engagement is an explicit union edge (opportunity | project |
 #    partnership); meetings, transcripts and fragments are flat, not nested.
-#  - Universal edges (related/sources/references/depends_on) are NOT redeclared
+#  - Universal edges (related/references/depends_on) are NOT redeclared
 #    here — they come from core and are available on every type.
 #  - `created`: core makes it required, but imported meetings and transcripts
 #    often carry no `created` field, so those two types override it to optional
@@ -123,7 +123,7 @@ ontology:
         confidence:  { type: number }
       relations:
         owner: { to: person, required: true }   # the writer owns the fragment (edge -> person), not `author`
-      # related / sources are the universal core edges (inherited, not redeclared)
+      # related / references are the universal core edges (inherited, not redeclared)
 
     # ---------------------------------------------------------------- outcomes
     case-study:

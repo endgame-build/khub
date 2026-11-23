@@ -11,7 +11,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"time"
 
 	"github.com/spf13/cobra"
 
@@ -19,18 +18,6 @@ import (
 	"github.com/endgame-build/khub/internal/errs"
 	"github.com/endgame-build/khub/internal/omap"
 )
-
-// today is date.today() at the CLI's one clock seam. KHUB_PARITY_NOW — the env
-// var the parity recorder pins Python's clock with — overrides it.
-func today() time.Time {
-	if pinned := os.Getenv("KHUB_PARITY_NOW"); pinned != "" {
-		if d, err := time.ParseInLocation("2006-01-02", pinned, time.UTC); err == nil {
-			return d
-		}
-	}
-	n := time.Now()
-	return time.Date(n.Year(), n.Month(), n.Day(), 0, 0, 0, 0, time.UTC)
-}
 
 // relPath is Path.relative_to(root) as the records print it: forward slashes,
 // no leading "./".
@@ -389,4 +376,29 @@ func tailError(err error) string {
 		return located.Message
 	}
 	return err.Error()
+}
+
+// orNull is an optional flag's value as JSON: null when the caller left the
+// flag out.
+func orNull[T any](p *T) any {
+	if p == nil {
+		return nil
+	}
+	return *p
+}
+
+// withReceipt is the `--receipt` envelope around a read's records: what the
+// call applied, how many entities matched before --limit, how many came back,
+// and whether --limit dropped any. The receipt comes first so a reader learns
+// what the call did before it reads the rows.
+func withReceipt(applied *omap.Map, matched int, records []any) *omap.Map {
+	receipt := omap.New()
+	receipt.Set("query", applied)
+	receipt.Set("matched", matched)
+	receipt.Set("returned", len(records))
+	receipt.Set("truncated", len(records) < matched)
+	doc := omap.New()
+	doc.Set("receipt", receipt)
+	doc.Set("results", records)
+	return doc
 }

@@ -140,13 +140,128 @@ func pyParseFloat(s string) (float64, bool) {
 func isDigit(ch rune) bool { return ch >= '0' && ch <= '9' }
 
 // IsDateish mirrors is_dateish: Python 3.11 date/datetime.fromisoformat over
-// str(value). Dates and datetimes pass as-is.
+// str(value). A loaded date or datetime passes when it names a real day and
+// time. An OKF datetime passes too, with a lowercase `t` or `z` that
+// fromisoformat refuses but the OKF pattern allows.
 func IsDateish(v any) bool {
-	switch v.(type) {
-	case canon.Date, canon.DateTime:
+	switch x := v.(type) {
+	case canon.Date:
+		return onCalendar(x.ISO)
+	case canon.DateTime:
+		return onCalendar(x.ISO)
+	}
+	if _, ok := OKFInstant(v); ok {
 		return true
 	}
 	return isoParses(Str(v))
+}
+
+// The date and time of a YAML timestamp; the zone is not checked.
+var timestampParts = regexp.MustCompile(`^(\d{4})-(\d{1,2})-(\d{1,2})(?:(?:[Tt]|[ \t]+)(\d{1,2}):(\d{2}):(\d{2}))?`)
+
+// onCalendar reports whether a loaded timestamp names a real day and time.
+// The YAML timestamp pattern admits an unquoted 2026-13-45, which the loader
+// keeps as a date; Python's constructor raised on it.
+func onCalendar(iso string) bool {
+	m := timestampParts.FindStringSubmatch(iso)
+	if m == nil {
+		return true
+	}
+	n := make([]int, len(m))
+	for i := 1; i < len(m); i++ {
+		n[i], _ = strconv.Atoi(m[i])
+	}
+	year, month, day := n[1], n[2], n[3]
+	if month < 1 || month > 12 || day < 1 || day > time.Date(year, time.Month(month)+1, 0, 0, 0, 0, 0, time.UTC).Day() {
+		return false
+	}
+	return m[4] == "" || (n[4] < 24 && n[5] < 60 && n[6] < 60)
+}
+
+// Instant reads a loaded datetime as an instant: ISO 8601 with a `T` or a
+// space, and an offset; a value without one reads as UTC.
+func Instant(v any) (time.Time, bool) {
+	var s string
+	switch x := v.(type) {
+	case canon.DateTime:
+		s = x.ISO
+	case string:
+		s = x
+	default:
+		return time.Time{}, false
+	}
+	for _, layout := range []string{time.RFC3339Nano, "2006-01-02 15:04:05.999999999Z07:00",
+		"2006-01-02T15:04:05.999999999", "2006-01-02 15:04:05.999999999"} {
+		if t, err := time.ParseInLocation(layout, s, time.UTC); err == nil {
+			return t, true
+		}
+	}
+	return time.Time{}, false
+}
+
+// okfDateTime is OKF's datetime (SPEC §5): ISO 8601 with a `T` and an
+// explicit offset, either letter in either case. The base block's pattern is
+// the same rule.
+var okfDateTime = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}[Tt]\d{2}:\d{2}:\d{2}(\.\d+)?([Zz]|[+-]\d{2}:\d{2})$`)
+
+// OKFInstant reads an OKF datetime. A value without a `T` or without an
+// offset is no instant, however Instant would read it.
+func OKFInstant(v any) (time.Time, bool) {
+	var s string
+	switch x := v.(type) {
+	case canon.DateTime:
+		s = x.ISO
+	case string:
+		s = x
+	}
+	if !okfDateTime.MatchString(s) {
+		return time.Time{}, false
+	}
+	t, err := time.Parse(time.RFC3339Nano, strings.ToUpper(s))
+	return t, err == nil
+}
+
+// Lifecycle values of the base `status`.
+const (
+	StatusDraft      = "draft"
+	StatusStable     = "stable"
+	StatusDeprecated = "deprecated"
+)
+
+// EffectiveStatus is the one lifecycle reading of an entity. A truthy legacy
+// `draft` flag reads as draft whatever the status says, so a 0.30.0 draft
+// stays unpublished until `khub upgrade` migrates it and is never published by
+// accident. Otherwise a written lifecycle value decides, and anything else
+// reads as the base default, stable. ownsDraft says the type declares a
+// `draft` field of its own, which is never the publish flag.
+func EffectiveStatus(meta *omap.Map, ownsDraft bool) string {
+	if legacy, _ := meta.Get("draft"); !ownsDraft && AsBool(legacy) {
+		return StatusDraft
+	}
+	v, _ := meta.Get("status")
+	switch s, _ := v.(string); s {
+	case StatusDraft, StatusStable, StatusDeprecated:
+		return s
+	}
+	return StatusStable
+}
+
+// IsDraftOf reports whether an entity is unpublished.
+func IsDraftOf(meta *omap.Map, ownsDraft bool) bool {
+	return EffectiveStatus(meta, ownsDraft) == StatusDraft
+}
+
+// Items reads a value as a list: nil is none, a list itself, and any other
+// value one item.
+func Items(v any) []any {
+	switch x := v.(type) {
+	case nil:
+		return nil
+	case []any:
+		return x
+	default:
+		return []any{x}
+	}
 }
 
 // Str mirrors Python str() for the value shapes khub holds.

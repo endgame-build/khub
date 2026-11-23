@@ -4,11 +4,13 @@
  Read entities' frontmatter and body, optionally with derived edges.            
                                                                                 
 ╭─ Arguments ──────────────────────────────────────────────────────────────────╮
-│   ID...      <str>  One or more bare slugs or qualified type/slug IDs, in    │
-│                     output order.                                            │
+│   ID...      <str>  One or more bare slugs or qualified type/slug IDs (file  │
+│                     paths under --path), in output order.                    │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 ╭─ Options ────────────────────────────────────────────────────────────────────╮
 │ --edges                Include stored and derived edges.                     │
+│ --path                 Read each ID as a file path, relative to the current  │
+│                        directory or absolute, and get the entity in it.      │
 │ --format        <str>  json, table, raw, or text (Rich on a TTY).            │
 │                        [default: text]                                       │
 │ --help                 Show this message and exit.                           │

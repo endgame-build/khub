@@ -818,7 +818,7 @@ var helpArguments = map[string][]helpArg{
 		{name: "TYPE", metavar: "<str>", help: "The entity type to create."},
 	},
 	"khub get": {
-		{name: "ID...", metavar: "<str>", help: "One or more bare slugs or qualified type/slug IDs, in output order."},
+		{name: "ID...", metavar: "<str>", help: "One or more bare slugs or qualified type/slug IDs (file paths under --path), in output order."},
 	},
 	"khub edit": {
 		{name: "ID", metavar: "<str>", help: "A bare slug, or type/slug on ambiguity."},
@@ -836,9 +836,16 @@ var helpArguments = map[string][]helpArg{
 	"khub remove": {
 		{name: "ID", metavar: "<str>", help: "A bare slug, or type/slug on ambiguity."},
 	},
+	"khub run": {
+		{name: "name", metavar: "<str>", required: true, help: "A name saved with khub query --save-as."},
+	},
 	"khub search": {
 		{name: "text", metavar: "<str>", required: true,
 			help: `FTS5 MATCH text: terms, "phrases", OR, NEAR, prefix*. Plain words with --plain.`},
+	},
+	"khub retrieve": {
+		{name: "TEXT", metavar: "<str>",
+			help: `FTS5 MATCH text to seed from (plain words with --plain), or none with --id.`},
 	},
 	"khub neighbors": {
 		{name: "ID", metavar: "<str>", required: true, help: "A bare slug, or type/slug on ambiguity."},
@@ -854,6 +861,9 @@ var helpArguments = map[string][]helpArg{
 	},
 	"khub schema show": {
 		{name: "type", metavar: "<str>", required: true, help: "Type name."},
+	},
+	"khub completion": {
+		{name: "SHELL", metavar: "<str>", required: true, help: "bash, zsh, fish, or powershell."},
 	},
 }
 

@@ -1,0 +1,36 @@
+# `trust` is derived on every read from the live `verified` events: an event
+# holds while its `rev` matches the content, and a `human:` event wins. It
+# rides last on query, get and search rows; `query --trust` filters by it;
+# `status` counts each tier; and `check` lists every review whose content has
+# changed since as `superseded_verifications`, informational, never failing
+# the gate. A tag edit leaves a review standing; a body or status edit
+# supersedes it. `neighbors` rows end with `trust` too. `check
+# --require-verified` fails on active entities below `--tier` (default
+# machine) and lists them in `below_tier`; without the flag `--tier` changes
+# nothing and the bucket is absent.
+steps:
+- argv: ["init", "build-hub", ".", "--no-wire"]
+- argv: ["add", "requirement", "--title", "Reviewed", "--kind", "functional", "--body", "Holds."]
+- argv: ["add", "requirement", "--title", "Checked", "--kind", "functional", "--body", "Holds too."]
+- argv: ["add", "requirement", "--title", "Changed", "--kind", "functional", "--body", "Before."]
+- argv: ["verify", "req-reviewed", "--by", "human:ilya"]
+- argv: ["verify", "req-checked", "--by", "process:ci"]
+- argv: ["verify", "req-changed", "--by", "human:ilya"]
+- argv: ["edit", "req-reviewed", "tags", "audited"]
+- argv: ["edit", "req-changed", "--body", "After."]
+- argv: ["query", "--type", "requirement", "--format", "json"]
+- argv: ["query", "--trust", "human", "--format", "json"]
+- argv: ["query", "--trust", "machine", "--format", "json"]
+- argv: ["query", "--trust", "trusted", "--format", "json"]
+- argv: ["get", "req-changed", "--format", "json"]
+- argv: ["search", "holds", "--format", "json"]
+- argv: ["status", "--format", "json"]
+- argv: ["check", "--format", "json"]
+- argv: ["link", "req-changed", "related", "req-reviewed"]
+- argv: ["neighbors", "req-changed", "--format", "json"]
+- argv: ["check", "--require-verified", "--format", "json"]
+- argv: ["check", "--require-verified", "--tier", "human", "--format", "json"]
+- argv: ["check", "--tier", "human", "--format", "json"]
+- argv: ["check", "--require-verified", "--tier", "trusted", "--format", "json"]
+- argv: ["edit", "req-reviewed", "status", "deprecated"]
+- argv: ["query", "--trust", "human", "--format", "json"]

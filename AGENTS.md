@@ -107,19 +107,20 @@ push it into the schema or the generic core path.
 - **`validate` vs `check` are distinct gates.** `validate` = per-entity
   well-formedness + referential integrity over *present* declared fields (missing
   required does NOT block capture). `check` = graph-wide over the active
-  (`draft: false`) subgraph: required-completeness, orphans, dangling edges,
+  (not `status: draft`) subgraph: required-completeness, orphans, dangling edges,
   strays, cycles. Don't collapse them.
-- **`draft` is a manual publish flag**, never derived from completeness. No verb
-  auto-promotes/demotes.
+- **`status: draft` is a manual publish flag**, never derived from completeness.
+  An absent status reads as `stable` and is never written; read rows keep a
+  derived `draft` flag. No verb auto-promotes/demotes.
 - **Capture is never blocked.** Referential integrity hard-fails on write; a
   missing required field just leaves the entity incomplete for `check` to report.
 - **Writes are workspace-serialized and atomic.** One stable
   `.khub/generated/locks/workspace.lock` covers scan, validation, and commit for
   every existing-workspace mutation. Keep lock files while a process may hold them. Publication uses
   unique sibling temporaries, preserves permissions, and refuses unsafe paths and symlinks.
-- **Storage is per-type config**: `layout` (file / folder / collection) × `format`
-  (md / json / yaml; collections take json / jsonl / yaml). Non-md entities carry
-  prose in a reserved `body` field. Collections use the same workspace lock and
+- **Storage is per-type config**: `layout` × `format`, declared in `storage.yaml`
+  (the layouts and path templates: `docs/schema.md`; formats and collections:
+  `docs/cli.md`). Non-md entities carry prose in a reserved `body` field. Collections use the same workspace lock and
   atomic publication as every other mutation; `.khub/generated/` is gitignored.
 
 Each invariant has a sentinel fixture under `parity/cases/invariants/`.
@@ -130,7 +131,9 @@ Each invariant has a sentinel fixture under `parity/cases/invariants/`.
 (round-trip at width 80, safe at width 4096) — and its 1.1-vs-1.2 scalar
 resolution split. This is a property of **khub's file format**, not a leftover of
 the Python implementation: entities must stay diff-stable for git and readable by
-anything else that touches them.
+anything else that touches them. It deviates where ruamel would corrupt a value:
+a plain scalar never breaks after a run of spaces, a simple key never wraps,
+and a value holding NEL, LS or PS is double-quoted rather than single-quoted.
 
 `parity/yamlgate` is the standing regression for it (`go run ./parity/yamlgate
 parity/corpus`), and `parity/tools/gen_*_cases.py` regenerate its corpora.
@@ -147,5 +150,9 @@ layer files into an engagement's `.khub/` and the templates to
 module root (a `//go:embed` pattern cannot contain `..`, so the embed cannot live
 under `internal/`).
 
-The preset is the source of truth for its schema; planning specs may drift from
-it (see `docs/firm-ops-preset.md`, `docs/build-hub-preset.md`).
+The preset is the source of truth for its schema. The tables in
+`docs/<preset>-preset.md` between `GENERATED` markers are generated from
+`khub schema --format json` (`go run ./parity/tools/presetdocs`, which builds
+khub fresh from the checkout) and CI fails when they drift; the prose around
+them is hand-written. Every preset needs such a doc, and every type a
+generated section.

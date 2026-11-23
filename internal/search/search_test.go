@@ -141,6 +141,32 @@ func TestSearchLimit(t *testing.T) {
 	}
 }
 
+// Result.Matches holds the expression each group ran: raw text as given, the
+// ORed terms under --plain, nothing when --plain found no word to look for,
+// and one entry per distinct group, in sorted order, for a fused search.
+func TestSearchResultEchoesMatches(t *testing.T) {
+	ws := sws(t)
+	for _, tc := range []struct {
+		texts []string
+		plain bool
+		want  []string
+	}{
+		{[]string{"modernization"}, false, []string{"modernization"}},
+		{[]string{"legacy modernization"}, true, []string{`"legacy"* OR "modernization"*`}},
+		{[]string{"!!!"}, true, nil},
+		{[]string{"modernization", "legacy"}, false, []string{"legacy", "modernization"}},
+		{[]string{"legacy", "!!!", "legacy"}, true, []string{`"legacy"*`}},
+	} {
+		res, err := SearchGroups(ws, tc.texts, Options{Limit: 20, Plain: tc.plain})
+		if err != nil {
+			t.Fatalf("SearchGroups(%q): %v", tc.texts, err)
+		}
+		if !reflect.DeepEqual(res.Matches, tc.want) {
+			t.Errorf("SearchGroups(%q, plain %v).Matches = %q, want %q", tc.texts, tc.plain, res.Matches, tc.want)
+		}
+	}
+}
+
 // No match returns an empty collection, never raising (QRY-002).
 func TestSearchEmptyIsSuccess(t *testing.T) {
 	got := mustSearch(t, sws(t), "chrysanthemum", nil, 20)
@@ -345,7 +371,7 @@ func TestSearchHitsCarryFlagsAndEdgeCounts(t *testing.T) {
 	seedRaw(t, ws, "knowledge/requirements/req-a.md",
 		"---\ntype: requirement\ntitle: Gateway auth\nrealized_in: [cmp-api]\n---\n")
 	seedRaw(t, ws, "knowledge/requirements/req-b.md",
-		"---\ntype: requirement\ntitle: Gateway limits\ndraft: true\nrealized_in: [cmp-api]\n---\n")
+		"---\ntype: requirement\ntitle: Gateway limits\nstatus: draft\nrealized_in: [cmp-api]\n---\n")
 	seedRaw(t, ws, "knowledge/requirements/req-lone.md",
 		"---\ntype: requirement\ntitle: Gateway lone\n---\n")
 	now := time.Date(2026, 1, 15, 0, 0, 0, 0, time.UTC)
@@ -382,7 +408,7 @@ func TestSearchHitsCarryFlagsAndEdgeCounts(t *testing.T) {
 func TestSearchFlagsAgreeWithQuery(t *testing.T) {
 	ws := relevanceWS(t)
 	seedRaw(t, ws, "knowledge/components/cmp-stale-probe.md",
-		"---\ntype: component\ntitle: Probe\ndraft: true\nupdated: 2024-01-01\n---\nprobe\n")
+		"---\ntype: component\ntitle: Probe\nstatus: draft\nupdated: 2024-01-01\n---\nprobe\n")
 	now := time.Date(2026, 1, 15, 0, 0, 0, 0, time.UTC)
 	matches, err := query.Query(ws, query.Filters{}, now)
 	if err != nil {

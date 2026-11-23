@@ -6,10 +6,10 @@
 steps:
 - argv: ["init", "build-hub", ".", "--no-wire"]
 - argv: ["schema", "show", "adr", "--format", "json"]
-- argv: ["add", "adr", "--title", "Use JWT", "--status", "accepted"]
-- argv: ["add", "adr", "--title", "Use JWT", "--status", "accepted"]
+- argv: ["add", "adr", "--title", "Use JWT", "--decision", "accepted"]
+- argv: ["add", "adr", "--title", "Use JWT", "--decision", "accepted"]
 - argv: ["add", "component"]
-- argv: ["add", "adr", "--title", "Old", "--status", "accepted"]
+- argv: ["add", "adr", "--title", "Old", "--decision", "accepted"]
 - argv: ["add", "component", "--title", "API", "--kind", "service"]
 - sh: "mv knowledge/decisions/ad-2026-01-15-old.md knowledge/decisions/ad-001-old.md && mv knowledge/components/cmp-api.md knowledge/components/cmp-001-api.md"
 - argv: ["validate"]

@@ -79,10 +79,12 @@ func keysOf(m *omap.Map) []string {
 // Re-uses the shared predicates so the write gate accepts exactly the BOOLISH
 // set validate accepts — 'banana' is rejected here, not silently stored as
 // False.
-func toBool(raw string) (bool, error) {
+func toBool(raw, field string) (bool, error) {
 	if !values.IsBool(raw) {
-		return false, errs.New("bool_violation", fmt.Sprintf(
+		e := errs.New("bool_violation", fmt.Sprintf(
 			"'%s' is not a valid boolean (true/false, yes/no, 1/0, on/off)", raw))
+		e.Field = field
+		return false, e
 	}
 	return values.AsBool(raw), nil
 }

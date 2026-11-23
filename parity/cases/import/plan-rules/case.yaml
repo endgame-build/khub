@@ -1,0 +1,28 @@
+# import plans every concept to a fixed point before it writes. The deal names
+# two clients on single-valued `client`, so it is refused
+# (`cardinality_violation`); the project's `origin_opportunity` names the deal,
+# so once the deal is out it is quarantined in `okf_unresolved` like any other
+# value nothing answers to, and the project still lands. A concept already
+# carrying a key import must write is refused (`quarantine_taken`, naming the
+# key): `okf_type` when its OKF type maps to another name, `okf_unresolved`
+# when a value is unresolved. In build-hub, where an id is minted around the
+# stem, a stem another entity already answers to is not added to `aliases`
+# and is reported as `alias_dropped`.
+steps:
+- argv: ["init", "firm-ops", "hub", "--no-wire"]
+- argv: ["init", "build-hub", "bh", "--no-wire"]
+- sh: |
+    mkdir -p bundle/clients bundle/people bundle/deals bundle/projects bh-bundle/components
+    printf -- '---\ntype: client\nname: Acme\n---\n' > bundle/clients/acme.md
+    printf -- '---\ntype: client\nname: Globex\n---\n' > bundle/clients/globex.md
+    printf -- '---\ntype: Client\nname: Typed\nokf_type: mine\n---\n' > bundle/clients/typed.md
+    printf -- '---\ntype: client\nname: Ghosted\npartner: ghost\nokf_unresolved: mine\n---\n' > bundle/clients/ghosted.md
+    printf -- '---\ntype: person\nname: Noor\nrole: partner\n---\n' > bundle/people/noor.md
+    printf -- '---\ntype: opportunity\nname: Deal\nstage: prospect\nowner: noor\nclient:\n- acme\n- globex\n---\n' > bundle/deals/deal.md
+    printf -- '---\ntype: project\nname: Build\nclient: acme\nowner: noor\norigin_opportunity: deal\n---\n' > bundle/projects/build.md
+    printf -- '---\ntype: component\ntitle: Storage\nkind: service\naliases:\n- search\n---\n' > bh/knowledge/components/cmp-storage.md
+    printf -- '---\ntype: component\ntitle: Search\nkind: service\n---\n' > bh-bundle/components/search.md
+    printf -- '---\ntype: component\ntitle: Queue\nkind: service\n---\n' > bh-bundle/components/queue.md
+- argv: ["-C", "hub", "import", "--okf", "bundle", "--format", "json"]
+- argv: ["-C", "hub", "get", "project/build", "--format", "raw"]
+- argv: ["-C", "bh", "import", "--okf", "bh-bundle", "--format", "json"]

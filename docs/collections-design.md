@@ -49,9 +49,9 @@ locator (`clients.jsonl#acme`) instead of a bare path.
 
 Rows may carry the reserved `body` field, the same mapping the per-entity
 json/yaml formats shipped (popped to the body on read, placed back on write).
-`search` indexes it via `formats.fts_body`; OKF export materializes a row as
-one md concept with the row's fields as frontmatter and the `body` field as the
-concept body.
+`search` indexes it via `formats.fts_body`; `khub export --okf` materializes a
+row as one md concept at `<collection path without its extension>/<slug>.md`,
+with the row's fields as frontmatter and the `body` field as the concept body.
 
 ## Writes
 
@@ -86,9 +86,10 @@ upgrade when a real corpus hits a 500-row file with one typo.
 
 ## Git attribution
 
-- **`stale`**: a row is judged on its own `updated` only; the file's commit
-  date is never attributed to a row (it would make rows never-stale: a lie, not
-  an approximation). A row with no `updated` is skipped, as today.
+- **`stale` and `recent`**: a row is judged on its own `updated`, else its
+  `created`; the file's commit date is never attributed to a row (it would make
+  rows never-stale: a lie, not an approximation). A row with neither is
+  skipped.
 - **`backfill`**: skips collection types and reports the skip; row-level date
   attribution (first/last commit in which the row's value changed) is planned
   but not yet implemented: it needs the per-rev row diff sketched below.

@@ -76,7 +76,15 @@ func encodeJSON(b *strings.Builder, v any, ensureASCII bool, indent, depth int) 
 	case BigInt:
 		b.WriteString(x.Literal)
 	case float64:
-		b.WriteString(PyFloatRepr(x))
+		// Inf and NaN have no JSON token. They reach here only from a
+		// hand-written `.inf`/`.nan` scalar (`add`/`edit` refuse them as
+		// numbers), so they go out as the YAML spelling in a string: valid
+		// JSON on every read path, and the value is still legible.
+		if lit, ok := YAMLFloatLiteral(x); ok {
+			encodeJSONString(b, lit, ensureASCII)
+		} else {
+			b.WriteString(PyFloatRepr(x))
+		}
 	case Date:
 		encodeJSONString(b, x.ISO, ensureASCII)
 	case DateTime:

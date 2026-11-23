@@ -50,12 +50,15 @@ func LayerJSONSchema() *omap.Map {
 		"An attribute declaration. Every facet is optional; an override inherits the ones it leaves out.",
 		attributeKeys, props{
 			"type": nullable(enumOf(scalarTypes,
-				"The scalar type. Default text; may be left out when enum is given or on an override.")),
+				"The value type. Default text; may be left out when enum is given or on an override.")),
 			"required": nullable(ref("bool", "Whether check demands a value on an active entity.")),
 			"default":  desc("The field's default value."),
 			"enum":     nullable(listOf(str(""), "The allowed values.")),
 			"pattern": nullable(str(
 				"A Go RE2 regex the whole value must match, anchored at both ends and case-sensitive.")),
+			"fields": mapOf(ref("attribute"),
+				"An object's keys, each declared like an attribute. Type object only."),
+			"items": ref("attribute", "The element of a list, declared like an attribute. Type list only."),
 		}))
 	defs.Set("relation", object(
 		"A relation declaration. The key it sits under is the predicate.",
@@ -76,7 +79,24 @@ func LayerJSONSchema() *omap.Map {
 				"When true, an entity of this type with no edges is never reported as an orphan."),
 			"path_refs": ref("bool",
 				"When true, this type's relation values may name a workspace file by its path."),
+			"retention": ref("retention",
+				"The end-of-life rule check reports against. khub never deletes an entity."),
+			"waive": nullable(propertyNames(mapOf(ref("waiver"),
+				"Accepted check findings, keyed by the slug of an entity of this type."),
+				pattern(desc(""), nonBlank))),
+			"locked": ref("bool",
+				"When true, khub upgrade refuses a schema that drops this type unless --unlock names it."),
+			"locked_relations": nullable(listOf(str(""),
+				"This type's own predicates that khub upgrade holds the same way.")),
 		}))
+	defs.Set("retention", object(
+		"Report an entity whose updated date, else created, is more than days old.",
+		retentionKeys, props{
+			"days": minimum(typed("integer", "Age in days past which check reports the entity."), 1),
+			"no_outbound": ref("bool",
+				"When true, report only an entity that also has no outbound edge."),
+		}, "days"))
+	defs.Set("waiver", waiver())
 	defs.Set("storage", object(
 		"Where and how one type's bytes land. An entry must state its layout.",
 		storageTypeKeys, props{
@@ -183,6 +203,38 @@ func desc(description string) *omap.Map {
 func str(description string) *omap.Map {
 	m := desc(description)
 	m.Set("type", "string")
+	return m
+}
+
+// nonBlank matches a string strings.TrimSpace leaves non-empty: one character
+// outside unicode.IsSpace's set, spelled out so an ECMA engine reads the same.
+const nonBlank = "[^\t\n\v\f\r \u0085   -     　]"
+
+// waiver is one waive entry: the findings accepted on one entity, each with
+// its non-blank reason.
+func waiver() *omap.Map {
+	p := props{}
+	for _, f := range WaivableFindings {
+		p[f] = pattern(str("Why this finding is accepted."), nonBlank)
+	}
+	m := object("The check findings accepted on one entity, each with its reason.", WaivableFindings, p)
+	m.Set("minProperties", 1)
+	return m
+}
+
+func typed(typ, description string) *omap.Map {
+	m := desc(description)
+	m.Set("type", typ)
+	return m
+}
+
+func minimum(m *omap.Map, n int) *omap.Map {
+	m.Set("minimum", n)
+	return m
+}
+
+func propertyNames(m, names *omap.Map) *omap.Map {
+	m.Set("propertyNames", names)
 	return m
 }
 

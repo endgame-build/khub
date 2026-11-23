@@ -7,6 +7,7 @@ steps:
 - argv: ["get", "req-draft-one", "--format", "json"]
 - argv: ["check"]
 - argv: ["edit", "req-draft-one", "draft", "false"]
+- argv: ["edit", "req-draft-one", "status", "stable"]
 - argv: ["get", "req-draft-one", "--format", "json"]
 - argv: ["query", "--draft"]
 - argv: ["query", "--active"]

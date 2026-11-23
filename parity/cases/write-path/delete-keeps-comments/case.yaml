@@ -1,0 +1,20 @@
+# The write paths that delete a key splice the deletion out by its lines, so
+# hand-written comments survive: `unlink` that empties a predicate drops the
+# relation's lines from md frontmatter, `edit --body ''` drops a yaml
+# collection row's `body`, and `remove` cuts a whole row. A deleted pair takes
+# its own lines and the comments inside them; a comment line above it stays.
+# The edited row gains `updated` and `generated`, appended into the row with
+# every comment kept. The collection's bytes are shown by copying the file
+# into a note's body and reading that note raw (an sh step's output is not
+# recorded).
+steps:
+- argv: ["init", "preset-cells", ".", "--no-wire", "--preset-source", "PRESETSRC"]
+- sh: |
+    printf -- '---\n# header comment\ntype: note\ntitle: A   # keep this\ncreated: 2026-01-15\nrelated:\n- acme   # the one vendor\n---\nBody.\n' > notes/a.md
+    printf -- '# vendors, kept by hand\nacme:\n  type: vendor\n  title: Acme   # inline on a row\n  created: 2026-01-15\n  body: row prose\n# between rows\nglobex:\n  type: vendor\n  title: Globex   # leaving\n  created: 2026-01-15\ninitech:\n  type: vendor\n  title: Initech\n  created: 2026-01-15   # last field\n# trailing note\n' > vendors.yaml
+- argv: ["unlink", "note/a", "related", "acme", "--format", "json"]
+- argv: ["edit", "vendor/acme", "--body", "", "--format", "json"]
+- argv: ["remove", "vendor/globex", "--format", "json"]
+- argv: ["get", "note/a", "--format", "raw"]
+- sh: "{ printf -- '---\\ntype: note\\ntitle: Snapshot\\ncreated: 2026-01-15\\n---\\n'; cat vendors.yaml; } > notes/snapshot.md"
+- argv: ["get", "note/snapshot", "--format", "raw"]

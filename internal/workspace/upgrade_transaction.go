@@ -15,6 +15,7 @@ import (
 	"github.com/endgame-build/khub/internal/errs"
 	"github.com/endgame-build/khub/internal/fsio"
 	"github.com/endgame-build/khub/internal/introspect"
+	"github.com/endgame-build/khub/internal/migrate"
 	"github.com/endgame-build/khub/internal/omap"
 	"github.com/endgame-build/khub/internal/schema"
 	"github.com/endgame-build/khub/internal/template"
@@ -54,6 +55,14 @@ func prepareUpgrade(root string, opt UpgradeOptions) (*UpgradeResult, error) {
 	// Replacement upgrades can repair invalid current schemas. --no-schema
 	// still validates the preserved schema when preparing the candidate below.
 	old, _ := introspect.LoadSchema(root)
+	// A current schema that does not resolve still holds its locks: read them
+	// from the raw layer files, so one error cannot switch every lock off.
+	locks := old
+	if locks == nil && !opt.NoSchema {
+		if locks, err = rawLocks(root); err != nil {
+			return nil, err
+		}
+	}
 	candidate, err := os.MkdirTemp("", "khub-upgrade-")
 	if err != nil {
 		return nil, err
@@ -93,6 +102,24 @@ func prepareUpgrade(root string, opt UpgradeOptions) (*UpgradeResult, error) {
 			}
 		}
 	}
+	// Refused before the entity migration and before anything is published,
+	// and on a dry run too: the preview answers what the real run would.
+	if locks != nil {
+		if blocked, all := lockedRemovals(locks, resolved, opt.Unlock); len(blocked) > 0 {
+			return nil, errs.LockedRemoved(blocked, all)
+		}
+	}
+	// Entity rewrites land in the candidate, so upgradeDiff stages them with
+	// the schema files: one journal, one rollback, one dry run. migrate takes
+	// no lock, and nothing may lock the candidate before the diff.
+	migrated, err := migrate.Run(candidate, func(_, path string, data []byte) error {
+		return os.WriteFile(path, data, 0o666) // a private temporary copy: no sync needed
+	})
+	if err != nil {
+		return nil, err
+	}
+	result.Migrated = migrated.Migrated
+	result.MigrationConflicts = migrated.Conflicts
 	writes, newDirs, err := upgradeDiff(candidate, before, dirs)
 	if err != nil {
 		return nil, err
@@ -133,6 +160,10 @@ func copyUpgradeWorkspace(root, dest string, old *schema.ResolvedSchema) (map[st
 	dirs := map[string]bool{}
 	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
+			// A directory the walk cannot list refuses like a file it cannot read.
+			if rel, rerr := filepath.Rel(root, path); rerr == nil && errors.Is(err, fs.ErrPermission) {
+				return errs.UpgradeUnreadable(filepath.ToSlash(rel))
+			}
 			return err
 		}
 		rel, err := filepath.Rel(root, path)
@@ -168,6 +199,12 @@ func copyUpgradeWorkspace(root, dest string, old *schema.ResolvedSchema) (map[st
 			return nil
 		}
 		f, err := readUpgradeFile(root, rel)
+		if errors.Is(err, fs.ErrPermission) {
+			// The candidate must hold every file, or it would validate a
+			// workspace that is not the real one. Refuse before anything is
+			// written, naming the file.
+			return errs.UpgradeUnreadable(filepath.ToSlash(rel))
+		}
 		if err != nil {
 			return err
 		}

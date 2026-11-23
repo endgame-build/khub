@@ -1,22 +1,24 @@
  status
-┏━━━━━━━━━━━━━━━━┳━━━━━━━┓
-┃ type           │ count ┃
-┡━━━━━━━━━━━━━━━━╇━━━━━━━┩
-│ prd            │ 1     │
-│ arc42          │ 1     │
-│ capability     │ 0     │
-│ actor          │ 0     │
-│ use-case       │ 0     │
-│ requirement    │ 1     │
-│ adr            │ 0     │
-│ system         │ 0     │
-│ component      │ 1     │
-│ api            │ 0     │
-│ repo           │ 0     │
-│ draft / active │ 0 / 4 │
-│ orphan         │ 0     │
-│ stale          │ 0     │
-│ stray          │ 0     │
-│ malformed      │ 0     │
-│ OKF-conformant │ yes   │
-└────────────────┴───────┘
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━┓
+┃ type                         │ count     ┃
+┡━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━┩
+│ prd                          │ 1         │
+│ arc42                        │ 1         │
+│ capability                   │ 0         │
+│ actor                        │ 0         │
+│ use-case                     │ 0         │
+│ requirement                  │ 1         │
+│ adr                          │ 0         │
+│ system                       │ 0         │
+│ component                    │ 1         │
+│ api                          │ 0         │
+│ repo                         │ 0         │
+│ draft / active               │ 0 / 4     │
+│ orphan                       │ 0         │
+│ stale                        │ 0         │
+│ expired                      │ 0         │
+│ unverified / machine / human │ 4 / 0 / 0 │
+│ stray                        │ 0         │
+│ malformed                    │ 0         │
+│ OKF-conformant               │ yes       │
+└──────────────────────────────┴───────────┘

@@ -12,6 +12,11 @@ only exits. An advisory line a caller must see whatever the format (search's
 dropped-rows and thin-result note) goes through `Note`, to stderr, before
 `Emit`.
 
+The one exception is cobra's hidden `__complete`, which the scripts from
+`khub completion` call at TAB time: a fixed text protocol (candidates, then
+`:<directive>`) written by cobra outside `Emit`, with no `--format`, reading no
+workspace. Its completers live in `completion.go` and stay workspace-free.
+
 - `WantJSON = --format json || !IsTTY()` — agents get machine output without
   knowing the flag exists. Do not narrow it.
 - `IsTTY()` precedence is `TTY_COMPATIBLE` → `FORCE_COLOR` → real isatty.
@@ -24,7 +29,7 @@ dropped-rows and thin-result note) goes through `Note`, to stderr, before
   what darwin does. The Windows parity leg is the check.
 - EPIPE is not a failure (`khub schema | head`); `Guard` passes it through and
   `main.go` disables the SIGPIPE kill so the write error is visible at all.
-- Exit codes: 0 success · 1 a gate failed (`validate`/`check`) · 2 a refusal
+- Exit codes: 0 success · 1 a gate failed (`validate`/`check`/`reindex --check`/`doctor`) · 2 a refusal
   or a usage error — every `Located` failure, envelope unchanged. The split is
   what an agent does next: on 2 the call was wrong and nothing was written,
   correct it; on 1 the workspace is wrong, fix it. New codes only with a
@@ -47,9 +52,11 @@ agent forever. Never introduce a prompt, pager, or stdin-blocking confirmation.
 
 ## Output for agents
 
-Keep right: `query` returns minimal records (`id,type,slug,title,draft,orphan,stale`)
-with `get` as the full fetch; `validate` vs `check` stay distinct; capture is
-never blocked. When adding surface: verbosity costs agent *accuracy*, not just
+Keep right: `query` returns minimal records
+(`id,type,slug,title,draft,orphan,stale,trust`) with `get` as the full fetch;
+`trust` is derived on read and rides last, and no lifecycle `status` joins the
+rows (`draft` is derived from it); `validate` vs `check` stay distinct; capture
+is never blocked. When adding surface: verbosity costs agent *accuracy*, not just
 tokens — prefer stable fields and codes over prose; errors an agent can hit on
 a write should name the corrective call (as `TargetNotEmpty` does).
 

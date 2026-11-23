@@ -4,7 +4,7 @@
 // time in milliseconds (macOS ships bash 3.2, which has no EPOCHREALTIME).
 //
 //	manifest <file> <dotted.path>       one field: scalars bare, arrays space-joined, objects canonical
-//	manifest -json <op> [arg] < payload  len | slugs | reach <slug> | field <key> | count <key> | canon
+//	manifest -json <op> [arg] < payload  len | slugs | reach <slug> | field <key> | count <key> | counttrue <key>.<field> | canon
 //	manifest -utf8 <dir>                 the number of *.md files under dir that are not valid UTF-8
 //	manifest -now                        milliseconds since the epoch
 package main
@@ -168,6 +168,19 @@ func reduce(payload any, op string, args []string) string {
 			die(fmt.Errorf("count: payload is not an object"))
 		}
 		return strconv.Itoa(len(array(obj[arg()])))
+	case "counttrue":
+		key, field, ok := strings.Cut(arg(), ".")
+		obj, isObj := payload.(map[string]any)
+		if !ok || !isObj {
+			die(fmt.Errorf("counttrue: want <key>.<field> over an object"))
+		}
+		n := 0
+		for _, item := range array(obj[key]) {
+			if row, isRow := item.(map[string]any); isRow && row[field] == true {
+				n++
+			}
+		}
+		return strconv.Itoa(n)
 	case "canon":
 		return canon(payload)
 	}

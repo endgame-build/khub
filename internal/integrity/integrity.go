@@ -4,7 +4,7 @@
 //   - validate.go — per-entity well-formedness over PRESENT declared fields
 //     plus referential integrity. A missing required field is NOT a validate
 //     error.
-//   - check.go — graph-wide over the ACTIVE (draft:false) subgraph:
+//   - check.go — graph-wide over the ACTIVE (not status: draft) subgraph:
 //     required-completeness, orphans, dangling edges, strays, misplaced files,
 //     malformed files, cycles, singleton gaps.
 //

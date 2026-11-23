@@ -6,7 +6,9 @@
 package workspace
 
 import (
+	"errors"
 	"fmt"
+	"io/fs"
 	"math"
 	"os"
 	"path/filepath"
@@ -17,6 +19,7 @@ import (
 	"github.com/endgame-build/khub/internal/errs"
 	"github.com/endgame-build/khub/internal/fsio"
 	"github.com/endgame-build/khub/internal/omap"
+	"github.com/endgame-build/khub/internal/presets"
 )
 
 // DefaultStaleDays is workspace.py DEFAULT_STALE_DAYS: the staleness threshold
@@ -53,7 +56,7 @@ func FindWorkspace(start string) (string, error) {
 // from .khub/config.yaml, as the two-key ordered record the schema/status
 // views embed verbatim ({"preset": ..., "version": ...}; key order is the
 // JSON contract). Missing or null values read as "". A missing config.yaml
-// errors like Python's FileNotFoundError (the CLI os_error boundary).
+// is config_missing.
 func Provenance(root string) (*omap.Map, error) {
 	cfg, err := loadConfig(root)
 	if err != nil {
@@ -104,9 +107,13 @@ func StaleDays(root string) (int, error) {
 }
 
 // loadConfig reads and parses .khub/config.yaml — resolve.load_yaml applied
-// to the config path, including the `data or {}` falsy-to-empty collapse.
+// to the config path, including the `data or {}` falsy-to-empty collapse. A
+// missing file is the config_missing refusal.
 func loadConfig(root string) (*omap.Map, error) {
 	data, err := fsio.ReadFile(root, filepath.Join(root, ".khub", "config.yaml"))
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil, errs.ConfigMissing()
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -222,4 +229,26 @@ func staleDaysInt(raw any) (int, error) {
 	default:
 		return 0, fmt.Errorf("invalid stale_days value of type %T", raw)
 	}
+}
+
+// ShippedVersion is the version of the preset recorded in config.yaml as
+// `upgrade` would read it: from the recorded `source`, else the presets
+// embedded in the binary, under the canonical name. An unknown preset is
+// the unknown_preset error upgrade refuses with.
+func ShippedVersion(root, preset string) (string, error) {
+	sourceDir, err := PresetSource(root)
+	if err != nil {
+		return "", err
+	}
+	source := presets.Source(sourceDir)
+	name := presets.Canonical(preset, source)
+	schemaPath, err := presets.Resolve(name, source)
+	if err != nil {
+		return "", err
+	}
+	merged, err := flatten(name, source, schemaPath)
+	if err != nil {
+		return "", err
+	}
+	return merged.Version, nil
 }

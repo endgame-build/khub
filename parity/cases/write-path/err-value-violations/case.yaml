@@ -3,5 +3,6 @@ steps:
 - argv: ["add", "account", "--title", "A", "--amount", "not-a-number"]
 - argv: ["add", "account", "--title", "A", "--due", "not-a-date"]
 - argv: ["add", "account", "--title", "A", "--amount", "0.8", "--due", "2026-02-01", "--format", "json"]
-- argv: ["edit", "account/a", "draft", "not-a-bool"]
+- sh: "printf '        paid: { type: bool }\\n' >> .khub/ontology.yaml"
+- argv: ["edit", "account/a", "paid", "not-a-bool"]
 - argv: ["edit", "account/a", "body", "reserved-on-non-md"]

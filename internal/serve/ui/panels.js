@@ -236,13 +236,17 @@ function declaredType(inspect, model) {
   if (d.fields && d.fields.length) {
     parts.push(el('div', { class: 'cap' }, 'Fields'));
     var fcard = el('div', { class: 'card' });
-    d.fields.forEach(function (f) {
+    // A nested field is indented under its parent: `generated.by`, `verified[]`.
+    var addField = function (f, name, depth) {
       var bits = [f.type];
       if (f.required) bits.push('required');
       if (f.enum) bits.push(f.enum.join(' | '));
       if (f.pattern) bits.push('pattern');
-      fcard.appendChild(kv(f.name, bits.join(' · ')));
-    });
+      fcard.appendChild(kv('\u00a0\u00a0'.repeat(depth) + name, bits.join(' · ')));
+      (f.fields || []).forEach(function (s) { addField(s, name + '.' + s.name, depth + 1); });
+      if (f.items) addField(f.items, name + '[]', depth + 1);
+    };
+    d.fields.forEach(function (f) { addField(f, f.name, 0); });
     parts.push(fcard);
   }
 

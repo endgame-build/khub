@@ -1,0 +1,1 @@
+{"count": 1, "errors": [{"id": "memo/*", "type": "memo", "slug": "*", "field": "by", "reason": "--by is a flag of `khub add` and `khub edit`, so `--by <value>` never sets field 'by' (only `khub edit <id> by <value>` does); rename the field in the schema"}], "gaps": [], "body": null, "lenses": []}

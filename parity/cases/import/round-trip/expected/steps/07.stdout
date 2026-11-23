@@ -1,0 +1,14 @@
+---
+type: opportunity
+name: Initech deal
+stage: prospect
+client: initech
+owner: noor
+created: 2026-01-15
+updated: 2026-01-15
+status: draft
+generated:
+  by: khub
+  at: 2026-01-15T00:00:00Z
+---
+A first conversation.

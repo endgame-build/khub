@@ -21,12 +21,17 @@ commands:
   - '--dry-run'
   - '--no-schema'
   - '--no-wire'
+  - '--unlock'
   - '--format'
 - name: 'status'
   params:
   - '--format'
+- name: 'doctor'
+  params:
+  - '--format'
 - name: 'add'
   params:
+  - '--by'
   - 'arg:type_'
   - '--id'
   - '--draft'
@@ -34,47 +39,76 @@ commands:
   - '--body'
   - '--body-file'
   - '--no-template'
+  - '--dry-run'
   - '--format'
 - name: 'get'
   params:
   - 'arg:id_'
   - '--edges'
+  - '--path'
   - '--format'
 - name: 'edit'
   params:
+  - '--by'
   - 'arg:id_'
   - '--strict'
   - '--body'
   - '--body-file'
+  - '--dry-run'
+  - '--format'
+- name: 'verify'
+  params:
+  - 'arg:id_'
+  - '--by'
+  - '--at'
+  - '--commit'
   - '--format'
 - name: 'link'
   params:
+  - '--by'
   - 'arg:id_'
   - 'arg:predicate'
   - 'arg:target'
+  - '--dry-run'
   - '--format'
 - name: 'unlink'
   params:
+  - '--by'
   - 'arg:id_'
   - 'arg:predicate'
   - 'arg:target'
+  - '--dry-run'
   - '--format'
 - name: 'remove'
   params:
   - 'arg:id_'
   - '--force'
+  - '--dry-run'
   - '--format'
 - name: 'query'
   params:
+  - '--trust'
   - '--type'
   - '--tag'
   - '--has'
   - '--missing'
+  - '--count'
+  - '--in-count'
+  - '--out-count'
   - '--orphan'
   - '--stale'
   - '--draft'
   - '--active'
+  - '--under'
+  - '--via'
   - '--limit'
+  - '--format'
+  - '--receipt'
+  - '--save-as'
+  - '--replace'
+- name: 'run'
+  params:
+  - 'arg:name'
   - '--format'
 - name: 'search'
   params:
@@ -82,6 +116,23 @@ commands:
   - '--type'
   - '--limit'
   - '--plain'
+  - '--also'
+  - '--format'
+  - '--receipt'
+- name: 'retrieve'
+  params:
+  - 'arg:text'
+  - '--id'
+  - '--type'
+  - '--plain'
+  - '--expand'
+  - '--in'
+  - '--out'
+  - '--depth'
+  - '--limit'
+  - '--max-entities'
+  - '--max-bytes'
+  - '--no-body'
   - '--format'
 - name: 'neighbors'
   params:
@@ -110,29 +161,55 @@ commands:
   - '--format'
 - name: 'check'
   params:
+  - '--stale'
   - '--strict'
+  - '--require-verified'
+  - '--tier'
+  - '--mentions'
   - '--format'
 - name: 'stale'
   params:
   - '--days'
   - '--format'
+- name: 'recent'
+  params:
+  - '--days'
+  - '--limit'
+  - '--format'
 - name: 'reindex'
   params:
   - '--dry-run'
+  - '--check'
+- name: 'export'
+  params:
+  - '--okf'
+  - '--force'
+  - '--dry-run'
+  - '--format'
+- name: 'import'
+  params:
+  - '--okf'
+  - '--type-map'
+  - '--by'
+  - '--dry-run'
+  - '--format'
 - name: 'viz'
   params:
   - '--out'
   - '--open'
   - '--type'
+  - '--aspect'
 # serve blocks until interrupted, so every fixture step is one of its refusals
 # (cli-contract/serve-refusals). --port is reached there; the port bind itself
 # is not, because the TTY gate fires before Listen — see TestListenRefusesBusyPort.
 - name: 'serve'
   params:
   - '--port'
+  - '--aspect'
 - name: 'backfill'
   params:
   - '--type'
+  - '--infer-type'
   - '--dry-run'
 - name: 'wire'
   params:
@@ -163,45 +240,72 @@ commands:
 - name: 'schema jsonschema'
   params:
   - '--format'
+- name: 'completion'
+  params:
+  - 'arg:shell'
 error_codes:
 - alias_taken
 - ambiguity_error
 - bad_search_query
 - bad_target
-- collection_path_collision
 - body_field_reserved
 - bool_violation
 - cardinality_violation
+- clock_pin_invalid
+- collection_path_collision
+- commit_refused
+- config_missing
 - date_violation
+- draft_retired
 - duplicate_type
 - empty_preset
 - empty_relation_value
 - enum_violation
+- export_target_not_bundle
+- export_target_not_directory
+- export_target_not_empty
+- export_target_overlaps
+- export_target_unsafe
 - filter_error
+- flag_shadowed
 - fts_unavailable
 - id_prefix_undecided
 - illegal_predicate
-- internal_path_error
+- import_bundle_overlaps
+- import_bundle_unreadable
+- import_type_map_invalid
 - inbound_edge_refusal
+- internal_path_error
+- invalid_query_name
+- invalid_saved_query
 - invalid_schema
-- invalid_snapshot
 - invalid_slug
+- invalid_snapshot
+- locked_removed
+- locks_unreadable
 - lookup_error
 - malformed_entity
 - malformed_projection
+- status_draft_conflict
 # missing_base: unreachable through the CLI since the ontology/policy/storage
 # split — LoadSchema always supplies the embedded base as the layered fallback,
 # and the legacy shape that could still trip it is deleted with legacy.go.
 - no_preset
 - no_schema_snapshot
+- no_seed
 - no_slug_source
 - no_workspace
 - number_violation
 - os_error
+- path_is_collection
+- path_not_entity
+- path_outside_workspace
 - pattern_violation
 - preset_mismatch
 - raw_linkml_smuggled
 - referential_integrity
+- saved_query_exists
+- saved_query_unspliceable
 - schema_error
 - self_link
 - singleton_exists
@@ -215,7 +319,9 @@ error_codes:
 - unknown_predicate
 - unknown_preset
 - unknown_relation_target
+- unknown_saved_query
 - unknown_type
+- value_shape
 format_specials:
 - json
 - ids

@@ -7,8 +7,13 @@ package project
 // stored (WS-006/WS-008).
 
 import (
+	"slices"
+	"strings"
 	"testing"
 	"time"
+
+	"github.com/endgame-build/khub/internal/canon"
+	"github.com/endgame-build/khub/internal/omap"
 )
 
 var now = time.Date(2026, 6, 24, 0, 0, 0, 0, time.UTC)
@@ -23,7 +28,7 @@ func seeded(t *testing.T) string {
 	seed(t, ws, "identity/team/noor.md", kv{"type", "person"}, kv{"name", "Noor"},
 		kv{"role", "manager"}, kv{"created", date("2026-06-01")}) // referenced
 	seed(t, ws, "identity/team/nobody.md", kv{"type", "person"}, kv{"name", "Nobody"},
-		kv{"role", "consultant"}, kv{"draft", true}, kv{"created", date("2026-06-01")}) // orphan + draft
+		kv{"role", "consultant"}, kv{"status", "draft"}, kv{"created", date("2026-06-01")}) // orphan + draft
 	seed(t, ws, "opportunities/acme-pov/_index.md", kv{"type", "opportunity"},
 		kv{"stage", "prospect"}, kv{"created", date("2026-06-20")}, kv{"updated", date("2026-06-20")},
 		kv{"client", "acme"}, kv{"owner", "noor"}) // has edges
@@ -100,16 +105,17 @@ func TestOKFConformantWhenRefsResolve(t *testing.T) {
 	}
 }
 
-// TS-WS-003-U04: a dangling relation target breaks OKF conformance.
-func TestOKFBrokenWhenRefDangles(t *testing.T) {
+// A dangling relation target is a broken link, which OKF 0.2 §11 says never
+// breaks conformance.
+func TestOKFKeptWhenRefDangles(t *testing.T) {
 	ws := freshWS(t)
 	seed(t, ws, "identity/team/noor.md", kv{"type", "person"}, kv{"name", "Noor"},
 		kv{"role", "manager"}, kv{"created", date("2026-06-01")})
 	seed(t, ws, "opportunities/ghosted/_index.md", kv{"type", "opportunity"},
 		kv{"stage", "prospect"}, kv{"created", date("2026-06-20")}, kv{"updated", date("2026-06-20")},
 		kv{"client", "missing-client"}, kv{"owner", "noor"}) // client target does not exist
-	if p := mustProject(t, ws, 90); p.OKFConformant {
-		t.Fatal("a dangling typed edge must break OKF")
+	if p := mustProject(t, ws, 90); !p.OKFConformant {
+		t.Fatalf("a dangling typed edge broke OKF: %v", p.OKFNonconformant)
 	}
 }
 
@@ -139,16 +145,17 @@ func TestCrossTypeSlugCollisionKeepsNodesDistinct(t *testing.T) {
 	}
 }
 
-// A typed `client` edge pointing at a person slug does not resolve → OKF false.
-func TestTypedEdgeToWrongTypeBreaksOKF(t *testing.T) {
+// A typed `client` edge pointing at a person slug does not resolve, which is a
+// broken link and keeps OKF.
+func TestTypedEdgeToWrongTypeKeepsOKF(t *testing.T) {
 	ws := freshWS(t)
 	seed(t, ws, "identity/team/noor.md", kv{"type", "person"}, kv{"name", "Noor"},
 		kv{"role", "manager"}, kv{"created", date("2026-06-01")})
 	seed(t, ws, "opportunities/op/_index.md", kv{"type", "opportunity"}, kv{"stage", "prospect"},
 		kv{"created", date("2026-06-01")}, kv{"updated", date("2026-06-01")},
 		kv{"client", "noor"}, kv{"owner", "noor"})
-	if p := mustProject(t, ws, 90); p.OKFConformant {
-		t.Fatal("(client, noor) is not a node; only (person, noor) is")
+	if p := mustProject(t, ws, 90); !p.OKFConformant {
+		t.Fatalf("a broken link broke OKF: %v", p.OKFNonconformant)
 	}
 }
 
@@ -183,17 +190,17 @@ func TestMalformedDateCountsAsStale(t *testing.T) {
 	}
 }
 
-// A stray (internal `type` mismatching its layout) leaves the entity counts and
-// breaks OKF conformance.
-func TestStraysAreCountedSeparatelyAndBreakOKF(t *testing.T) {
+// A stray (internal `type` mismatching its layout) leaves the entity counts,
+// but it still carries a type, so OKF holds.
+func TestStraysAreCountedSeparatelyAndKeepOKF(t *testing.T) {
 	ws := freshWS(t)
 	seed(t, ws, "clients/acme.md", kv{"type", "client"}, kv{"name", "Acme"},
 		kv{"created", date("2026-06-01")}, kv{"updated", date("2026-06-01")})
 	seed(t, ws, "clients/impostor.md", kv{"type", "person"}, kv{"name", "Impostor"},
 		kv{"created", date("2026-06-01")})
 	p := mustProject(t, ws, 90)
-	if p.Stray != 1 || p.Total != 1 || p.OKFConformant {
-		t.Fatalf("stray=%d total=%d okf=%v", p.Stray, p.Total, p.OKFConformant)
+	if p.Stray != 1 || p.Total != 1 || !p.OKFConformant {
+		t.Fatalf("stray=%d total=%d okf=%v", p.Stray, p.Total, p.OKFNonconformant)
 	}
 }
 
@@ -207,8 +214,8 @@ func TestMalformedFilesAreCountedSeparatelyAndBreakOKF(t *testing.T) {
 		kv{"created", date("2026-06-01")}, kv{"updated", date("2026-06-01")})
 	seedRaw(t, ws, "clients/broken.md", "---\ntype: client\nunclosed: [\n---\n")
 	p := mustProject(t, ws, 90)
-	if p.Malformed != 1 || p.Total != 1 || p.OKFConformant {
-		t.Fatalf("malformed=%d total=%d okf=%v", p.Malformed, p.Total, p.OKFConformant)
+	if p.Malformed != 1 || p.Total != 1 || !slices.Equal(p.OKFNonconformant, []string{"clients/broken.md"}) {
+		t.Fatalf("malformed=%d total=%d okf=%v", p.Malformed, p.Total, p.OKFNonconformant)
 	}
 }
 
@@ -221,9 +228,10 @@ func TestUnterminatedFenceIsAStrayNotMalformed(t *testing.T) {
 		kv{"created", date("2026-06-01")}, kv{"updated", date("2026-06-01")})
 	seedRaw(t, ws, "clients/broken.md", "---\ntype: client\nunclosed: [\n")
 	p := mustProject(t, ws, 90)
-	if p.Stray != 1 || p.Malformed != 0 || p.Total != 1 || p.OKFConformant {
+	if p.Stray != 1 || p.Malformed != 0 || p.Total != 1 ||
+		!slices.Equal(p.OKFNonconformant, []string{"clients/broken.md"}) {
 		t.Fatalf("stray=%d malformed=%d total=%d okf=%v",
-			p.Stray, p.Malformed, p.Total, p.OKFConformant)
+			p.Stray, p.Malformed, p.Total, p.OKFNonconformant)
 	}
 }
 
@@ -318,5 +326,88 @@ func TestIsStale(t *testing.T) {
 	future := now.AddDate(0, 0, 5).Format("2006-01-02")
 	if IsStale(meta(kv{"updated", future}), now, 90, nil) {
 		t.Fatal("a future date is not stale")
+	}
+}
+
+// stale_after is an authored expiry: at or after it the entity is stale,
+// whatever its age, and Expired says so apart from AgeStale.
+func TestStaleAfterExpires(t *testing.T) {
+	at := func(s string) time.Time {
+		v, err := time.Parse(time.RFC3339, s)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return v
+	}
+	meta := omap.New()
+	meta.Set("updated", canon.Date{ISO: "2026-01-14"})
+	meta.Set("stale_after", canon.DateTime{ISO: "2026-01-15T12:00:00Z"})
+	for _, c := range []struct {
+		now     string
+		expired bool
+	}{
+		{"2026-01-15T11:59:59Z", false},
+		{"2026-01-15T12:00:00Z", true},
+		{"2026-01-16T00:00:00+05:00", true},
+	} {
+		now := at(c.now)
+		if got := Expired(meta, now); got != c.expired {
+			t.Errorf("%s: Expired = %v", c.now, got)
+		}
+		if AgeStale(meta, now, 90, nil) || IsStale(meta, now, 90, nil) != c.expired {
+			t.Errorf("%s: AgeStale/IsStale disagree with the expiry", c.now)
+		}
+	}
+	meta.Set("stale_after", "soon")
+	if Expired(meta, at("2030-01-01T00:00:00Z")) {
+		t.Error("an unparseable stale_after expired")
+	}
+}
+
+// OKF 0.2 §11 over the whole Markdown tree: every concept needs a `type`,
+// index.md follows §8 (frontmatter only at the root, only okf_version) and
+// log.md follows §9 (ISO date headings). Hidden directories, vendored trees and
+// .khub/ignore paths are outside the tree, and so are the root agent files
+// `khub wire` writes; the same names deeper down are concepts like any other.
+func TestOKFNonconformantNamesEveryFile(t *testing.T) {
+	ws := freshWS(t)
+	files := map[string]string{
+		"README.md":               "# Readme\n",
+		"CLAUDE.md":               "# Wired\n",
+		"AGENTS.md":               "# Wired\n",
+		"docs/CLAUDE.md":          "# Not wire's\n",
+		"notes/typed.md":          "---\ntype: note\n---\nBody.\n",
+		"notes/blank-type.md":     "---\ntype: ''\n---\n",
+		"index.md":                "---\nokf_version: '0.2'\n---\n# client\n\n* [Acme](clients/acme.md) - a client\n  * related → [B](b.md)\n",
+		"notes/index.md":          "* [Typed](typed.md)\n",
+		"notes/sub/index.md":      "---\nokf_version: '0.2'\n---\n",
+		"other/index.md":          "Some prose.\n",
+		"extra/index.md":          "---\nokf_version: '0.2'\ntitle: x\n---\n",
+		"log.md":                  "# Log\n\n## 2026-05-22\n* **Update**: prose.\n",
+		"notes/log.md":            "## May\n",
+		".claude/skills/SKILL.md": "---\nname: x\n---\n",
+		"node_modules/pkg/a.md":   "no frontmatter\n",
+		"examples/loose.md":       "no frontmatter\n",
+	}
+	for rel, text := range files {
+		seedRaw(t, ws, rel, text)
+	}
+	seedRaw(t, ws, ".khub/ignore", "examples/\n")
+	p := mustProject(t, ws, 90)
+	want := []string{
+		"README.md", "docs/CLAUDE.md", "extra/index.md", "notes/blank-type.md", "notes/log.md", "notes/sub/index.md", "other/index.md",
+	}
+	if p.OKFConformant || !slices.Equal(p.OKFNonconformant, want) {
+		t.Fatalf("nonconformant = %v, want %v", p.OKFNonconformant, want)
+	}
+}
+
+// A Markdown file too large to read is listed, not a reason for status to fail.
+func TestOKFListsAnOversizedFile(t *testing.T) {
+	ws := freshWS(t)
+	seedRaw(t, ws, "notes/huge.md", "---\ntype: note\n---\n"+strings.Repeat("x", canon.MaxTextBytes))
+	p := mustProject(t, ws, 90)
+	if !slices.Equal(p.OKFNonconformant, []string{"notes/huge.md"}) {
+		t.Fatalf("nonconformant = %v", p.OKFNonconformant)
 	}
 }

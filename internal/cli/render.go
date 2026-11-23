@@ -13,6 +13,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/endgame-build/khub/internal/canon"
+	"github.com/endgame-build/khub/internal/clock"
 	"github.com/endgame-build/khub/internal/errs"
 	"github.com/endgame-build/khub/internal/omap"
 )
@@ -58,6 +59,10 @@ func Emit(data any, fmt_ string, human func()) error {
 // stdout is piped through `head`.
 func Note(message string) { fmt.Fprintln(os.Stderr, "note: "+message) }
 
+// Warn prints one write warning to stderr, as Note prints a note: in JSON and
+// human modes alike, before Emit.
+func Warn(message string) { fmt.Fprintln(os.Stderr, "warning: "+message) }
+
 // ExitError carries the process exit code through the command return path.
 type ExitError struct{ Code int }
 
@@ -74,25 +79,51 @@ func (e *ExitError) Error() string { return fmt.Sprintf("exit %d", e.Code) }
 // is wrong, not the call. Usage errors share 2 because they are the same
 // answer to the same question.
 func Fail(message, code, fmt_ string) error {
+	return FailLocated(&errs.Located{Code: code, Message: message}, fmt_)
+}
+
+// FailLocated is Fail for a Located error, carrying its machine fields into
+// the envelope: `{"error": {"code", "message", "field"?, "expected"?,
+// "suggestion"?}}`, in that order. A field the error does not set is absent,
+// never null, so a refusal with nothing to add is the bare {code, message}
+// pair. Prose mode prints the message alone; the extras are for machines.
+func FailLocated(e *errs.Located, fmt_ string) error {
 	if WantJSON(fmt_) {
 		env := omap.New()
 		inner := omap.New()
-		inner.Set("code", code)
-		inner.Set("message", message)
+		inner.Set("code", e.Code)
+		inner.Set("message", e.Message)
+		if e.Field != "" {
+			inner.Set("field", e.Field)
+		}
+		if len(e.Expected) > 0 {
+			expected := make([]any, len(e.Expected))
+			for i, v := range e.Expected {
+				expected[i] = v
+			}
+			inner.Set("expected", expected)
+		}
+		if e.Suggestion != "" {
+			inner.Set("suggestion", e.Suggestion)
+		}
 		env.Set("error", inner)
 		doc, _ := canon.EncodeCLI(env)
 		fmt.Println(doc)
 	} else {
-		fmt.Fprintln(os.Stderr, message)
+		fmt.Fprintln(os.Stderr, e.Message)
 	}
 	return &ExitError{Code: 2}
 }
 
 // Guard is the single error boundary: a Located error renders via Fail; an
 // OS error renders as os_error with Python's "{TypeName}: {err}" shape;
-// EPIPE passes through untouched (khub schema | head is not an error).
+// EPIPE passes through untouched (khub schema | head is not an error). An
+// unparseable KHUB_PARITY_NOW refuses before fn runs, so before any write.
 func Guard(fmt_ string, fn func() error) error {
-	err := fn()
+	err := clock.Check()
+	if err == nil {
+		err = fn()
+	}
 	if err == nil {
 		return nil
 	}
@@ -102,7 +133,7 @@ func Guard(fmt_ string, fn func() error) error {
 	}
 	var located *errs.Located
 	if errors.As(err, &located) {
-		return Fail(located.Message, located.Code, fmt_)
+		return FailLocated(located, fmt_)
 	}
 	var usage *errs.Usage
 	if errors.As(err, &usage) {
@@ -127,6 +158,23 @@ func Guard(fmt_ string, fn func() error) error {
 		return Fail(osErrorMessage(err), "os_error", fmt_)
 	}
 	return err
+}
+
+// describeErr renders an error as Guard would, without failing: the code and
+// message of a Located error, or the message of an OS error with the caller's
+// code (doctor reports an OS error under the check that met it). ok is false
+// for an error Guard would not dress.
+func describeErr(err error) (code, message string, ok bool) {
+	var located *errs.Located
+	switch {
+	case errors.As(err, &located):
+		return located.Code, located.Message, true
+	case isPathConstructionBug(err):
+		return "", pathBugMessage(err), true
+	case isOSError(err):
+		return "", osErrorMessage(err), true
+	}
+	return "", "", false
 }
 
 // isPathConstructionBug reports errno values that mean khub assembled a path

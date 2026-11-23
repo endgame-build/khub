@@ -66,23 +66,23 @@ func TestCheckDraftTargetDoesNotSatisfy(t *testing.T) {
 	}
 }
 
-// Fix #5 (scan hardening): draft reads via as_bool — `draft: "false"` is
-// PUBLISHED, `draft: yes` is a draft.
-func TestCheckDraftStringReadsViaAsBool(t *testing.T) {
+// Only `status: draft` is a draft: a retired `draft: yes` key publishes
+// nothing and drafts nothing, and `status: stable` is published.
+func TestCheckDraftIsStatusDraft(t *testing.T) {
 	root := freshWS(t)
 	seed(t, root, "clients/c.md", kv{"type", "client"}, kv{"name", "C"},
 		kv{"created", "2026-06-01"}, kv{"updated", "2026-06-01"})
 	seed(t, root, "projects/pub/_index.md", kv{"type", "project"}, kv{"client", "c"},
-		kv{"draft", "false"}, kv{"created", "2026-06-01"}, kv{"updated", "2026-06-01"})
+		kv{"status", "stable"}, kv{"created", "2026-06-01"}, kv{"updated", "2026-06-01"})
 	seed(t, root, "projects/hidden/_index.md", kv{"type", "project"}, kv{"client", "c"},
-		kv{"draft", "yes"}, kv{"created", "2026-06-01"}, kv{"updated", "2026-06-01"})
+		kv{"status", "draft"}, kv{"created", "2026-06-01"}, kv{"updated", "2026-06-01"})
 
 	incomplete := incompleteByID(mustCheck(t, root, false))
 	if _, ok := incomplete["project/pub"]; !ok {
-		t.Error(`draft: "false" was treated as a draft`)
+		t.Error("status: stable was treated as a draft")
 	}
 	if _, ok := incomplete["project/hidden"]; ok {
-		t.Error("draft: yes was treated as published")
+		t.Error("status: draft was treated as published")
 	}
 }
 
@@ -92,7 +92,7 @@ func gapsWS(t *testing.T) string {
 	t.Helper()
 	root := cleanWS(t)
 	create(t, root, "person", "orphan-person", "name", "Orphan", "role", "consultant")
-	if _, err := entity.Delete(root, "client/initech", true); err != nil {
+	if _, err := entity.Delete(root, "client/initech", true, false); err != nil {
 		t.Fatalf("delete: %v", err)
 	}
 	writeRaw(t, root, "clients/notes.md", "loose notes, not an entity\n")
@@ -207,7 +207,7 @@ func TestCheckSelfLoopIsACycle(t *testing.T) {
 func TestCheckSupersedesCycle(t *testing.T) {
 	root := wsFor(t, "build-hub")
 	for _, id := range []string{"ad-1", "ad-2", "ad-3"} {
-		create(t, root, "adr", id, "title", strings.ToUpper(id), "status", "accepted")
+		create(t, root, "adr", id, "title", strings.ToUpper(id), "decision", "accepted")
 	}
 	link(t, root, "ad-3", "supersedes", "ad-2")
 	link(t, root, "ad-2", "supersedes", "ad-1")
@@ -231,7 +231,7 @@ func TestCheckSupersedesCycle(t *testing.T) {
 func TestCheckSelfSupersessionIsReported(t *testing.T) {
 	root := wsFor(t, "build-hub")
 	seed(t, root, "knowledge/decisions/solo.md",
-		kv{"type", "adr"}, kv{"title", "Solo"}, kv{"status", "accepted"},
+		kv{"type", "adr"}, kv{"title", "Solo"}, kv{"decision", "accepted"},
 		kv{"supersedes", "solo"}, kv{"created", "2026-01-01"})
 
 	found := false
@@ -346,7 +346,7 @@ func TestOrphanFlaggedTypesAreExempt(t *testing.T) {
 // active-but-incomplete, which names the field the orphan line never did.
 func TestOrphanFlaggedTypeStillReportsCompleteness(t *testing.T) {
 	root := wsFor(t, "build-hub")
-	writeRaw(t, root, "knowledge/prd.md", "---\ntype: prd\ncreated: 2026-06-01\ndraft: false\n---\n")
+	writeRaw(t, root, "knowledge/prd.md", "---\ntype: prd\ncreated: 2026-06-01\n---\n")
 
 	incomplete := incompleteByID(mustCheck(t, root, false))
 	got, ok := incomplete["prd/prd"]
@@ -397,7 +397,7 @@ func TestDraftRequiredSingletonFailsAndIsNotMissing(t *testing.T) {
 		t.Fatalf("draft_required_singletons = %v on a published workspace", got)
 	}
 
-	update(t, root, "prd", "draft", "true")
+	update(t, root, "prd", "status", "draft")
 	drafted := mustCheck(t, root, false)
 	if !reflect.DeepEqual(drafted.DraftSingletons, []string{"prd"}) {
 		t.Errorf("draft_singletons = %v", drafted.DraftSingletons)
@@ -412,8 +412,8 @@ func TestDraftRequiredSingletonFailsAndIsNotMissing(t *testing.T) {
 		t.Error("a drafted required singleton passed the gate")
 	}
 
-	update(t, root, "prd", "draft", "false")
-	if _, err := entity.Delete(root, "prd", false); err != nil {
+	update(t, root, "prd", "status", "stable")
+	if _, err := entity.Delete(root, "prd", false, false); err != nil {
 		t.Fatalf("delete prd: %v", err)
 	}
 	absent := mustCheck(t, root, false)
@@ -429,7 +429,7 @@ func TestDraftRequiredSingletonFailsAndIsNotMissing(t *testing.T) {
 // nowhere let `check` pass while the workspace had quietly lost a document.
 func TestDraftOptionalSingletonIsInformational(t *testing.T) {
 	root := wsFor(t, "build-hub") // arc42 is a singleton, but not required
-	update(t, root, "arc42", "draft", "true")
+	update(t, root, "arc42", "status", "draft")
 
 	report := mustCheck(t, root, false)
 	if !reflect.DeepEqual(report.DraftSingletons, []string{"arc42"}) {
@@ -464,7 +464,7 @@ func TestCheckReportsMalformedAndFails(t *testing.T) {
 // edges into it are suppressed and counted rather than burying the real error.
 func TestMalformedCollectionSuppressesDerivativeDangles(t *testing.T) {
 	root := collectionWS(t)
-	create(t, root, "repo", "svc-a", "repo", "acme/a", "status", "active")
+	create(t, root, "repo", "svc-a", "repo", "acme/a")
 	create(t, root, "component", "cmp-api", "title", "API", "kind", "service", "repo", "svc-a")
 
 	if before := mustCheck(t, root, false); len(before.Dangling) != 0 {
@@ -587,5 +587,122 @@ func TestMisplacedExpectedUsesStorageRelpathForPathlessTypes(t *testing.T) {
 	}}
 	if got := mustCheck(t, root, false).Misplaced; !reflect.DeepEqual(got, want) {
 		t.Fatalf("misplaced = %+v, want %+v", got, want)
+	}
+}
+
+// Policy `retention`: an entity whose effective date (`updated`, else
+// `created`) is more than `days` old is a retention hit; under `no_outbound`
+// only one with no outbound edge. Undated entities, types with no rule and the exact
+// boundary day are never reported, and the bucket never fails the gate.
+func TestRetentionReportsHits(t *testing.T) {
+	root := cleanWS(t)
+	writeRaw(t, root, ".khub/policy.yaml",
+		"policy:\n  meeting: { retention: { days: 30, no_outbound: true } }\n")
+	seed(t, root, "meetings/lonely.md", kv{"type", "meeting"}, kv{"title", "Lonely"},
+		kv{"created", "2025-11-01"})
+	seed(t, root, "meetings/linked.md", kv{"type", "meeting"}, kv{"title", "Linked"},
+		kv{"created", "2025-11-01"}, kv{"engagement", "initech-pov"})
+	seed(t, root, "meetings/boundary.md", kv{"type", "meeting"}, kv{"title", "Boundary"},
+		kv{"created", "2025-12-16"})
+	seed(t, root, "meetings/touched.md", kv{"type", "meeting"}, kv{"title", "Touched"},
+		kv{"created", "2025-01-01"}, kv{"updated", "2026-01-10"})
+	seed(t, root, "meetings/undated.md", kv{"type", "meeting"}, kv{"title", "Undated"})
+	seed(t, root, "clients/ancient.md", kv{"type", "client"}, kv{"name", "Ancient"},
+		kv{"created", "2020-01-01"})
+
+	report := mustCheckAt(t, root, false, testNow)
+	want := []RetentionHit{{Type: "meeting", Slug: "lonely", Date: "2025-11-01", AgeDays: 75}}
+	if !reflect.DeepEqual(report.Retention, want) {
+		t.Fatalf("retention = %+v, want %+v", report.Retention, want)
+	}
+
+	// Without no_outbound, a linked meeting ages out too.
+	writeRaw(t, root, ".khub/policy.yaml", "policy:\n  meeting: { retention: { days: 30 } }\n")
+	var ids []string
+	for _, e := range mustCheckAt(t, root, false, testNow).Retention {
+		ids = append(ids, e.ID())
+	}
+	if !reflect.DeepEqual(ids, []string{"meeting/linked", "meeting/lonely"}) {
+		t.Errorf("retention = %v, want [meeting/linked meeting/lonely]", ids)
+	}
+}
+
+// Retention is informational under both gates: the clock alone moves an entity
+// into it, so it must never turn `check` red.
+func TestRetentionNeverGates(t *testing.T) {
+	for _, strict := range []bool{false, true} {
+		r := &CheckReport{Strict: strict, Retention: []RetentionHit{{Type: "meeting", Slug: "old"}}}
+		if !r.Passed() {
+			t.Errorf("strict=%v: a retention hit failed the gate", strict)
+		}
+	}
+}
+
+func retentionIDs(r *CheckReport) []string {
+	ids := []string{}
+	for _, e := range r.Retention {
+		ids = append(ids, e.ID())
+	}
+	return ids
+}
+
+// An `updated` that will not parse — date-shaped but impossible, or empty —
+// falls back to `created` rather than hiding the entity from retention.
+func TestRetentionFallsBackPastAnUnparseableUpdated(t *testing.T) {
+	root := cleanWS(t)
+	writeRaw(t, root, ".khub/policy.yaml", "policy:\n  meeting: { retention: { days: 30 } }\n")
+	writeRaw(t, root, "meetings/bad-stamp.md",
+		"---\ntype: meeting\ntitle: Bad\ncreated: 2025-11-01\nupdated: 2025-13-45\n---\n")
+	writeRaw(t, root, "meetings/empty-stamp.md",
+		"---\ntype: meeting\ntitle: Empty\ncreated: 2025-11-01\nupdated: ''\n---\n")
+	writeRaw(t, root, "meetings/no-fallback.md",
+		"---\ntype: meeting\ntitle: None\nupdated: 2025-13-45\n---\n")
+
+	report := mustCheckAt(t, root, false, testNow)
+	want := []RetentionHit{
+		{Type: "meeting", Slug: "bad-stamp", Date: "2025-11-01", AgeDays: 75},
+		{Type: "meeting", Slug: "empty-stamp", Date: "2025-11-01", AgeDays: 75},
+	}
+	if !reflect.DeepEqual(report.Retention, want) {
+		t.Fatalf("retention = %+v, want %+v", report.Retention, want)
+	}
+}
+
+// What `no_outbound` counts: an inbound edge (whose inverse is derived, never
+// stored here) is not outbound, and neither is a self-loop; an edge to a draft
+// is.
+func TestRetentionNoOutboundCountsStoredEdgesOnly(t *testing.T) {
+	root := cleanWS(t)
+	writeRaw(t, root, ".khub/policy.yaml",
+		"policy:\n  meeting: { retention: { days: 30, no_outbound: true } }\n")
+	seed(t, root, "meetings/inbound-only.md", kv{"type", "meeting"}, kv{"title", "In"},
+		kv{"created", "2025-11-01"})
+	seed(t, root, "clients/pointer.md", kv{"type", "client"}, kv{"name", "Pointer"},
+		kv{"created", "2026-01-01"}, kv{"related", []any{"meeting/inbound-only"}})
+	seed(t, root, "meetings/self-loop.md", kv{"type", "meeting"}, kv{"title", "Self"},
+		kv{"created", "2025-11-01"}, kv{"related", []any{"meeting/self-loop"}})
+	seed(t, root, "clients/pending.md", kv{"type", "client"}, kv{"name", "Pending"},
+		kv{"created", "2026-01-01"}, kv{"draft", true})
+	seed(t, root, "meetings/to-draft.md", kv{"type", "meeting"}, kv{"title", "To draft"},
+		kv{"created", "2025-11-01"}, kv{"related", []any{"client/pending"}})
+
+	got := retentionIDs(mustCheckAt(t, root, false, testNow))
+	want := []string{"meeting/inbound-only", "meeting/self-loop"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("retention = %v, want %v", got, want)
+	}
+}
+
+// A collection row ages like any entity: its own `created` dates it.
+func TestRetentionSweepsCollectionRows(t *testing.T) {
+	root := collectionWS(t)
+	writeRaw(t, root, ".khub/policy.yaml", "policy:\n  repo: { retention: { days: 30 } }\n")
+	writeRaw(t, root, "knowledge/architecture/repos.yaml",
+		"old-row:\n  repo: acme/old\n  status: archived\n  created: 2025-11-01\n"+
+			"new-row:\n  repo: acme/new\n  status: active\n  created: 2026-01-10\n")
+
+	got := retentionIDs(mustCheckAt(t, root, false, testNow))
+	if !reflect.DeepEqual(got, []string{"repo/old-row"}) {
+		t.Fatalf("retention = %v, want [repo/old-row]", got)
 	}
 }

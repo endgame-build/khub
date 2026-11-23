@@ -211,7 +211,7 @@ func TestCollectionEditIsRowLocal(t *testing.T) {
 	}
 
 	textBefore := readFile(t, file)
-	noop, err := Unlink(ws, "acme", "related", "demo")
+	noop, err := Unlink(ws, "acme", "related", "demo", "", false)
 	requireNoError(t, err)
 	if noop.Changed {
 		t.Fatal("the no-op unlink reported a change")
@@ -235,15 +235,15 @@ func TestCollectionRemoveRowOnly(t *testing.T) {
 		Fields: fields("title", "X", "repo", "endgame-build/x"), UseTemplate: true})
 	requireNoError(t, err)
 
-	_, err = Link(ws, "demo", "code", "repo/acme")
+	_, err = Link(ws, "demo", "code", "repo/acme", "", false)
 	requireNoError(t, err)
 
-	refused, err := Delete(ws, "repo/acme", false)
+	refused, err := Delete(ws, "repo/acme", false, false)
 	requireNoError(t, err)
 	if refused.Removed || len(refused.Inbound) != 1 {
 		t.Fatalf("removed=%v inbound=%d", refused.Removed, len(refused.Inbound))
 	}
-	removed, err := Delete(ws, "repo/acme", true)
+	removed, err := Delete(ws, "repo/acme", true, false)
 	requireNoError(t, err)
 	if !removed.Removed {
 		t.Fatal("--force did not remove the row")
@@ -284,8 +284,11 @@ func TestCollectionWriteTakesTheSidecarLock(t *testing.T) {
 	if _, statErr := os.Stat(lock); statErr != nil {
 		t.Fatalf("no lock sidecar at %s: %v", lock, statErr)
 	}
-	if _, statErr := os.Stat(filepath.Join(ws, "repo.jsonl.tmp")); statErr == nil {
-		t.Fatal("the atomic swap left its temp sibling behind")
+	// Publication writes a unique .khub-write-* sibling and renames it over
+	// the file; a leftover means the swap did not complete.
+	left, _ := filepath.Glob(filepath.Join(ws, ".khub-write-*"))
+	if len(left) > 0 {
+		t.Fatalf("the atomic swap left its temp sibling behind: %v", left)
 	}
 }
 

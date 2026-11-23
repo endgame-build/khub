@@ -42,17 +42,21 @@ becoming frustrated and losing interest entirely" (Westerinen & Tauber, *Ontolog
 Development by Domain Experts (Without Using the "O" Word)*, Applied Ontology, IOS
 Press). khub's schema is the
 rendering that fits how the expert works; any RDF/OWL projection is derived from it
-and never the authoring surface. The schema is split into three layer files — `ontology.yaml` (the domain: per-type `attributes`, `relations`, `when`), `policy.yaml` (this workspace's gates: `required`, `orphan`) and `storage.yaml` (`layout`/`format`/`path`/`id_prefix`/`template`) — merging at load time into one resolved contract. The `base` block (`type`, `draft`, `author`, `created`/`updated`, `tags`, the OKF fields, the `any → any` edges) is khub's own plumbing and ships EMBEDDED in the binary, supplied to every resolve and never copied into a workspace; an authored `ontology.base` is rejected outright — the base is not an authoring surface. A type declares only its domain delta and overrides a base attribute by redeclaring it. The split is what makes the ontology projectable: `ontology.yaml` carries purely the domain, which is what an RDF/SHACL export reads.
+and never the authoring surface. The schema is split into three layer files — `ontology.yaml` (the domain: per-type `attributes`, `relations`, `when`), `policy.yaml` (this workspace's gates: `required`, `orphan`, `retention`, `waive`) and `storage.yaml` (`layout`/`format`/`path`/`id_prefix`/`template`) — merging at load time into one resolved contract. The `base` block (`type`, `status`, `author`, `created`/`updated`, `tags`, the OKF fields and families, the `any → any` edges) is khub's own plumbing and ships EMBEDDED in the binary, supplied to every resolve and never copied into a workspace; an authored `ontology.base` is rejected outright — the base is not an authoring surface. A type declares only its domain delta and overrides a base attribute by redeclaring it. The split is what makes the ontology projectable: `ontology.yaml` carries purely the domain, which is what an RDF/SHACL export reads.
 
 ```yaml
 # core/ontology.yaml  (embedded in the binary — supplied to every resolve, never copied)
 ontology:
   base:
-    attributes: { type: {required: true}, draft: {type: bool, default: false},
+    attributes: { type: {required: true}, status: {enum: [draft, stable, deprecated], default: stable},
                   author: {}, created: {type: date, required: true}, updated: {type: date},
-                  title: {}, description: {}, resource: {}, tags: {type: list} }
-    relations:  { related: {to: any, many: true}, sources: {to: any, many: true},
-                  references: {to: any, many: true}, depends_on: {to: any, many: true, acyclic: true} }
+                  title: {}, description: {}, resource: {}, tags: {type: list}, aliases: {type: list},
+                  generated: {type: object, fields: {by: {required: true}, at: {type: datetime}}},
+                  verified: {type: list, items: {type: object, fields: {by: {required: true}, at: {type: datetime}, rev: {}}}},
+                  stale_after: {type: datetime}, sources: {type: list, items: {type: object, fields: {resource: {required: true}, …}}},
+                  usage_window: {type: object, fields: {from: {type: datetime}, to: {type: datetime}}} }
+    relations:  { related: {to: any, many: true}, references: {to: any, many: true},
+                  depends_on: {to: any, many: true, acyclic: true} }
 
 # firm-ops/ontology.yaml — purely the domain
 ontology:
@@ -90,32 +94,22 @@ Go, shipped as a single static binary. It was a Python console script through 0.
 1. **Markdown is truth.** One entity equals one file in git. Audit, diff, PR review, and portability come for free.
 2. **The graph is a derived projection,** rebuilt from the Markdown on demand. No graph database is ever the source of truth. Git-derived dates (`khub stale`) are read the same way.
 3. **The schema is the contract.** Surfaces introspect the schema at runtime and never hardcode per-type knowledge.
-4. **Relations are authoritative, from two sources.** A relation feeds the graph from an explicit role-named field the schema marks as an edge (the field name is the predicate, the value is the target), or from the derived inverse of such a field. Forward fields are stored single-sided on one entity; inverse edges are computed, never stored. (Deriving a parent edge from nested placement is not yet supported; a parent relation is an explicit edge.) Inline body links are navigational only.
+4. **Relations are authoritative, from two sources.** A relation feeds the graph from an explicit role-named field the schema marks as an edge (the field name is the predicate, the value is the target), or from the derived inverse of such a field. Forward fields are stored single-sided on one entity; inverse edges are computed, never stored. (Deriving a parent edge from nested placement is not yet supported; a parent relation is an explicit edge.) Inline body links are navigational only; `check --mentions` suggests the edges a body names but no relation carries, and writes none.
 5. **Structural integrity is not semantic truth.** khub guarantees an entity is well-formed and every relation resolves; it does not guarantee an assertion is correct. A schema-legal but false write validates. The backstop is attributable git history and `git revert`.
 
 ### Authoring and Integrity
 
-- **Identity.** Each entity's **id is its slug**: one bare, human-readable token (`auth`, `initech-pov`) that names the file or folder on disk and identifies the node in the graph. No type prefix. Uniqueness is per type, `(type, slug)`, with the file path as the globally-unique key; a within-type collision is refused (`slug_taken`) rather than suffixed, because minting reads no siblings — an id is a function of the schema and the entity's own fields, nothing else on disk. Typed relations resolve by their schema-known target type (`lives_in: api`); polymorphic (`any`-typed) relations take a bare slug too, qualified as `type/slug` only when a slug is ambiguous across types. An entity may declare other names in `aliases`: every ID lookup falls back to them once the slug misses, a write target named by one is stored as the real slug, and `check` fails an alias that names two entities. An external identifier rides along as a non-authoritative `source_id` alias (the ingestion path). A preset may also declare integration routing keys (e.g. a notes-tool folder id) as first-class attributes; the `source_id` alias is specifically for an external system's record id. Renaming a slug is not yet supported.
-- **Storage layout is per-type config.** A type stores its entities as individual files or as a single-file collection. A preset sets the layout per type; an engagement can override it.
-
-  Inventory as files (one entity per file):
-  - `[inventory_name]/[item_name]/[slug].[md|json|jsonl|gjson|yaml]`
-  - `[inventory_name]/[item_name]/_index.[md|json|jsonl|gjson|yaml]`
-  - `[inventory_name]/[item_name].[md|json|jsonl|gjson|yaml]`
-
-  Inventory as a single file (collection):
-  - `[inventory_name].[json|jsonl|gjson|yaml]`
-  - `[inventory_name]/[inventory_name].[json|jsonl|gjson|yaml]`
-  - `[inventory_name]/_index.[json|jsonl|gjson|yaml]`
-
-  An inventory sits at the workspace root. (Nesting an inventory under a parent item's folder, and deriving the parent edge from that placement, is not yet supported; the parent relation is an explicit frontmatter edge.)
+- **Identity.** Each entity's **id is its slug**: one bare, human-readable token (`auth`, `initech-pov`) that names the file or folder on disk and identifies the node in the graph. No type prefix. Uniqueness is per type, `(type, slug)`, with the file path as the globally-unique key; a within-type collision is refused rather than suffixed, because minting reads no siblings — an id is a function of the schema and the entity's own fields, nothing else on disk. Typed relations resolve by their schema-known target type (`lives_in: api`); polymorphic (`any`-typed) relations take a bare slug too, qualified as `type/slug` only when a slug is ambiguous across types. An entity may declare other names in `aliases`: every ID lookup falls back to them once the slug misses, a write target named by one is stored as the real slug, and `check` fails an alias that names two entities. An external identifier rides along as a non-authoritative `source_id` alias (the ingestion path; [ingestion-conflicts.md](ingestion-conflicts.md) is its conflict and identity policy, designed, not yet built). A preset may also declare integration routing keys (e.g. a notes-tool folder id) as first-class attributes; the `source_id` alias is specifically for an external system's record id. Renaming a slug is not yet supported.
+- **Storage layout is per-type config.** A type stores its entities as individual files or as a single-file collection. A preset sets the layout per type; an engagement can override it. Where bytes land is storage, not ontology, so moving an inventory is a `storage.yaml` edit plus a file move, which leaves the domain — and anything projected from it — untouched. How to declare layouts and path templates is in [`schema.md`](schema.md#storage-config-storageyaml); the on-disk contract for entity formats and collections is in [`cli.md`](cli.md#entity-formats), with the collection row model in [`collections-design.md`](collections-design.md). Placement never derives an edge: a parent relation is an explicit frontmatter edge, even where a path template nests a child under its parent's directory.
 - **Write rules.** Referential integrity hard-fails on write: a relation to a non-existent target is rejected. A missing required field or relation does not block capture: the entity is still written; completeness is enforced later by `check`.
-- **Lifecycle.** Every entity carries a boolean `draft` flag (`draft: true|false`, default `false`), a manual publish switch the author sets. `add` writes `draft: false` by default, `--draft` marks an entity unpublished, and `edit <id> draft true|false` toggles it; no verb auto-promotes or auto-demotes. Completeness is computed from the schema and enforced by `check`, never inferred from this flag, so a published entity can be incomplete (`check` reports it active-but-incomplete) and a draft can be complete. A draft is unpublished: excluded from required-completeness, and it never satisfies another entity's required relation.
-- **Standard fields.** Beyond `type` and the `draft` flag, an entity may carry OKF's optional `title`, `description`, and `resource` (the canonical URI of the underlying asset, khub's link-out), plus `author` (the writer, person or agent), `tags`, and `created`/`updated`. Per-type fields and relations come from the schema. The firm-ops preset adds `owner` (→ person) as its own accountability edge, distinct from the core `author`.
-- **The integrity loop** keeps the graph clean without manual policing. Draft status, orphan, and stale are core projection properties: every read includes drafts in scope and carries each entity's `stale`/`orphan` flag by default; `check`/`stale` gate on the same computation. The acceptance signals:
-  - `khub validate`: per-entity well-formedness against the schema, plus referential integrity.
-  - `khub check`: graph-wide over the active (`draft: false`) subgraph. Relations resolve, required-completeness holds for `active` entities (computed from the schema; an active-but-incomplete entity is reported), a `draft` does not satisfy a required relation, no orphans (entities with no inbound or outbound relation), no dangling edges, and no stray files (a file inside a type's layout that is not a valid entity of that type; reference docs outside the type layouts are skipped).
-  - `khub stale`: entities whose `updated` is past a threshold; dates backfilled from `git log`.
+- **Lifecycle.** Every entity carries the OKF `status` (`draft | stable | deprecated`, default `stable`). `status: draft` is a manual publish switch the author sets. `add` writes no status by default, `--draft` writes `status: draft`, and `edit <id> status draft|stable` moves it ([`cli.md`](cli.md#author)); an absent status reads as `stable` and is never written, and no verb auto-promotes or auto-demotes. A truthy legacy `draft` reads as draft whatever `status` says until `khub upgrade` migrates it, so a 0.30.0 draft is never published by accident. `deprecated` carries no gate meaning. Read rows keep a derived `draft` flag. Completeness is computed from the schema and enforced by `check`, never inferred from this flag, so a published entity can be incomplete (`check` reports it active-but-incomplete) and a draft can be complete. A draft is unpublished: excluded from required-completeness, and it never satisfies another entity's required relation.
+- **Standard fields.** Beyond `type` and `status`, an entity may carry OKF's optional `title`, `description`, and `resource` (the canonical URI of the underlying asset, khub's link-out), plus `author` (the creator, set once), `tags`, `aliases` and `created`/`updated`, and the OKF provenance and trust families: `generated` (`{by, at}`, the last writer), `verified` (review events), `stale_after`, `sources` (what the concept was derived from, as metadata, never an edge) and `usage_window`. Per-type fields and relations come from the schema. The firm-ops preset adds `owner` (→ person) as its own accountability edge, distinct from the core `author`.
+- **The integrity loop** keeps the graph clean without manual policing. Draft status, orphan, and stale are core projection properties: every read includes drafts in scope and carries each entity's `stale`/`orphan` flag by default; `check`/`stale` gate on the same computation, so what a read shows is what the gate sees. The acceptance signals are three gates at three altitudes:
+  - `khub validate`: one entity at a time — is it well-formed, and do its relations resolve.
+  - `khub check`: the whole active (not `status: draft`) subgraph — completeness, connectivity and placement. Its findings, and which of them fail the gate, are listed in [`cli.md`](cli.md#reading-check-output).
+  - `khub stale`: time — entities whose `updated` is past a threshold, dates read from `git log`.
+- **Two stalenesses, kept apart.** Age staleness is inferred: the `updated` date (or git's last commit) is older than `stale_days`. Expiry is authored: `stale_after` says "this holds until then", and from that instant the entity is stale whatever its age. Reads carry one `stale` flag that either sets, `khub stale` names which in each row's `reason` (`age` or `expired`), `status` counts `stale` and `expired` separately and never sums them, and `check --stale` makes active expired entities fail the gate on request. No verb computes `stale_after` from an interval, for the same reason none auto-promotes a draft.
+- **Provenance and trust.** Every write that changes an entity's content (body, declared fields, `status`, relations) stamps `generated: {by, at}`, the last writer. `by` comes from `--by`, then `KHUB_ACTOR`, then `agent/claude-code` under Claude Code, then `khub`, and never from git identity: an agent in someone's shell would otherwise be stamped as them. Repair verbs never stamp. A review is a `verified` event `{by, at, rev}` that `khub verify` appends; `rev` hashes the content the reviewer saw, so a later content or status edit supersedes the review and a bookkeeping edit (tags, aliases, `stale_after`) does not. The tier (`unverified`, `machine`, `human`) is derived on every read from the live events and never stored. An event counts only with a conventional actor and an OKF datetime `at`; one without a `rev` always holds (OKF §5.3). A `verified` entry is a claim; `verify --commit` adds a signed git commit as the proof.
 
 ### Command Surface
 
@@ -123,36 +117,12 @@ The CLI is a thin, schema-introspecting adapter over the core library's verbs: c
 
 **One input path, no prompts.** Every value arrives as a flag or an argument; a missing one is a usage error (exit 2). There is no wizard and no interactive confirmation: an agent cannot answer a prompt.
 
-| Group | Command | Does |
-|-------|---------|------|
-| Workspace | `khub init <preset>` | scaffold a workspace from a preset |
-| | `khub schema [types \| show <type> \| edges]` | introspect the active schema: types, fields, enums, edges, required relations |
-| | `khub status` | counts per type, draft vs active, orphan and stale counts, OKF-conformance flag |
-| Author | `khub add <type> [--field v …]` | mint a slug, write a well-formed entity (active by default; `--draft` to mark unpublished) |
-| | `khub get <id>` | print an entity: frontmatter and body |
-| | `khub edit <id> <field> <value>` | edit a field, bump `updated`, re-validate |
-| | `khub link <id> <predicate> <target>` | add a schema-checked relation: legal predicate, target resolves, cardinality holds |
-| | `khub unlink <id> <predicate> <target>` | remove a relation |
-| | `khub remove <id>` | delete an entity; refuse when an inbound edge still resolves to it |
-| Query | `khub query [--type --<field> …]` | filter entities by frontmatter |
-| | `khub neighbors <id> [--predicate p] [--in\|--out]` | one-hop edges in either direction |
-| | `khub impact <id> [--predicate p]` | blast radius: transitive closure over an edge |
-| | `khub history <id>` | supersession chain and edit history |
-| | `khub path <from> <to>` | shortest path between two entities *(planned)* |
-| | `khub search <text>` | full-text search (FTS5, in-memory per invocation) |
-| Integrity | `khub validate [path]` | per-entity well-formedness and referential integrity (default: whole workspace) |
-| | `khub check` | graph-wide: relations resolve, required relations complete, no orphans, no stray files, no edge cycles |
-| | `khub stale [--days N]` | entities past an `updated` threshold; dates backfilled from `git log` |
-| Projection | `khub reindex` | regenerate the OKF `index.md` navigation from the graph |
-| | `khub backfill [--type T]` | add missing frontmatter and dates from `git log` |
-| | `khub viz` | self-contained Cytoscape HTML over the typed graph |
-| | `khub serve` | the same graph live over loopback HTTP, read-only, rebuilt per request |
-| | `khub build` | materialize the SQLite projection *(planned)* |
-| | `khub export --okf [path]` | render the workspace to a conformant OKF bundle *(planned)* |
-| | `khub diff-preset` | drift against the canonical preset, and promote-back *(planned)* |
-| | `khub rename <id> <new-slug>` | rename a slug and rewrite inbound references *(planned)* |
+The shipped commands, their flags, output shapes and exit codes are specified in [`cli.md`](cli.md); this memo does not restate them. Four verbs are planned and not yet shipped:
 
-*Verbs marked *(planned)* are not yet shipped; see [`cli.md`](cli.md) for the live surface.*
+- `khub path <from> <to>` — the shortest path between two entities.
+- `khub build` — materialize the SQLite projection. Derived like every projection, so deleting it loses nothing.
+- `khub diff-preset` — drift against the canonical preset, and promote-back (see [Deployment Model](#deployment-model-seeded-fork)).
+- `khub rename <id> <new-slug>` — rename a slug and rewrite inbound references.
 
 ## Deployment Model: Seeded Fork
 
@@ -163,17 +133,15 @@ The hub repo (this repo) holds the engine, the canonical presets and the skills.
 ```
 engagement-repo/
   .khub/
-    config.yaml        # workspace config: preset provenance + version, source, command defaults (format, stale_days)
+    config.yaml        # workspace config: preset provenance, command defaults
     ontology.yaml      # the domain: types, attributes, relations, capture cues
-    policy.yaml        # workspace gates: required singletons, orphan exemptions
+    policy.yaml        # workspace gates: required singletons, orphan exemptions, retention, waivers
     storage.yaml       # layouts, inventory paths, id prefixes, template links
     generated/         # stable workspace lock and upgrade recovery journals, gitignored
-  clients/             # entity type folders live at the workspace root, one per type,
-  projects/            #   each laid out per the type's storage config (see Authoring and
-    <slug>/_index.md   #   Integrity): flat `clients/{slug}.md` or folder `projects/{slug}/_index.md`
-  meetings/            # flat-layout type: one file per slug
-  identity/team/       # person nodes; identity/ also holds untyped reference markdown
+  …                    # the entity tree, wherever storage.yaml puts each type
 ```
+
+The tree is illustrative: where each type's entities land is that type's storage config, specified in [`schema.md`](schema.md#storage-config-storageyaml).
 
 Each schema file stamps provenance (`# khub-preset: engineering@1.0.0`). The engagement owns the three layer files outright: editing them (add a type in ontology, change an enum, move a type's inventory in storage) is the entire override mechanism, with no runtime tie to the hub — only the base block arrives from the binary, and it is not authorable: a type overrides a base attribute by redeclaring it. Pulling a preset improvement down, or promoting an override back up, is a planned sync mechanism: a layered git-subtree merge (the preset as a subtree plus an overrides patch), with `diff-preset` reporting the delta. Flattening is the current model; layering is the planned path.
 
@@ -185,4 +153,6 @@ khub records durable requirements, decisions, architecture, and specs. Live deli
 
 ## OKF
 
-**OKF (Open Knowledge Format)** is the vendor-neutral substrate khub speaks: a git tree of `.md` concepts with a required `type`, cross-links, `index.md`, `log.md`. khub's Markdown entities are conformant OKF concepts, so khub is an OKF implementation and extension: it adds a typed schema, typed relations, a `draft` flag, and the graph. Extra serialization formats and collections are khub's own; `khub reindex` writes the OKF `index.md`.
+**OKF (Open Knowledge Format)** is the vendor-neutral substrate khub speaks: a git tree of `.md` concepts with a required `type`, cross-links, `index.md`, `log.md`. khub targets OKF 0.2. A workspace is conformant (§11) when every `.md` file in its tree, meaning everything below the root outside hidden directories, vendored trees and `.khub/ignore`, has parseable frontmatter with a non-empty `type`, and every `index.md` and `log.md` keeps its reserved shape. The root agent files `khub wire` writes are khub's own wiring and sit outside the tree like `.khub/`, so a freshly wired workspace is conformant. Broken links never count. `khub status` reports the flag and names every file that breaks it, so the flag is never a bare no. khub's Markdown entities are conformant OKF concepts, so khub is an OKF implementation and extension: it adds a typed schema, typed relations and the graph, and it reads the OKF families (`status`, `generated`, `verified`, `stale_after`, `sources`, `usage_window`) as declared base attributes. It writes `generated` on every content change, appends `verified` through `khub verify` with one extension (`rev`, the content revision a review saw), and derives a trust tier from them on every read. `index.md` and `log.md` are navigation at any depth, never entities. Extra serialization formats and collections are khub's own; `khub reindex` writes the OKF `index.md`.
+
+khub reads OKF in two modes. **Its own workspace is strict**: the schema is the contract, an unknown type is an error, and `validate` and `check` behave as documented. **An external bundle is read permissively** (`khub import --okf`, OKF §11's consumer side): a concept lands as a draft in the type its OKF `type` maps to, its frontmatter kept as written, unknown keys and key order included; an unknown type with no mapping, a document with no frontmatter and a broken link are reported, never fatal. What the bundle asserts is quarantined, not trusted: its `verified` moves to `okf_verified`, kept verbatim and never counted, so the concept reads `unverified` until someone here reviews it, and a relation value no entity answers to moves to `okf_unresolved`, so the write path's referential-integrity rule holds for import too. `generated` stays, as the producer's provenance claim. Identity follows the workspace: the id is minted by the type's scheme around the concept's file stem, as `add` mints one, and the stem is kept in `aliases`, so a lookup or a link by the old name resolves; an id is never guessed, suffixed or merged with an existing entity, and nothing is written back to the bundle. `khub export --okf` is the other direction, and the two round-trip: export's `# Related` section reads back into relations.

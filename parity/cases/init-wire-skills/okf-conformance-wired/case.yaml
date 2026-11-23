@@ -1,0 +1,9 @@
+# OKF 0.2 conformance (`status`) covers every .md file in the tree. The root
+# CLAUDE.md and AGENTS.md that `khub wire` writes are khub's own wiring and
+# never count, so a freshly wired workspace is conformant. A README.md without
+# a `type` is a concept like any other and is named in okf_nonconformant.
+steps:
+- argv: ["init", "build-hub", "."]
+- argv: ["status", "--format", "json"]
+- sh: "printf '# Readme\\n' > README.md"
+- argv: ["status", "--format", "json"]

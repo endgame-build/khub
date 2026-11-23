@@ -19,13 +19,15 @@ type CreateResult struct {
 	Locator string // "" when not a collection row
 }
 
-// UpdateResult is the outcome of an edit.
+// UpdateResult is the outcome of an edit. Changed is whether the stored bytes
+// moved; an edit that sets what is already there changes nothing.
 type UpdateResult struct {
 	Type    string
 	Slug    string
 	Path    string
 	Draft   bool
 	Locator string
+	Changed bool
 }
 
 // LinkResult is the outcome of a link/unlink. Changed is false when the edge
@@ -74,6 +76,7 @@ type EntityView struct {
 	Raw     string
 	Edges   []Edge // nil unless --edges was requested
 	Locator string
+	Trust   string // the review tier (trust.Tier), derived on read
 }
 
 // CreateOpts carries create's keyword arguments.
@@ -83,7 +86,9 @@ type CreateOpts struct {
 	Draft       bool
 	Body        string
 	Strict      bool
-	UseTemplate bool // false = --no-template
+	UseTemplate bool   // false = --no-template
+	Actor       string // --by; "" walks the Actor ladder
+	DryRun      bool   // run every check, take no lock, write nothing
 }
 
 // UpdateOpts carries update's keyword arguments. Body is nil to leave the body
@@ -92,6 +97,8 @@ type UpdateOpts struct {
 	Fields *omap.Map
 	Body   *string
 	Strict bool
+	Actor  string // --by; "" walks the Actor ladder
+	DryRun bool   // run every check, take no lock, write nothing
 }
 
 // EntityPath is the file backing one entity — for a collection type, the
@@ -103,6 +110,21 @@ func EntityPath(root string, idx *index.Index, node index.Node) string {
 // ResolveID resolves a bare or qualified id against the index, honoring the
 // case-folding rule and raising on ambiguity.
 func ResolveID(idx *index.Index, id string) (index.Node, error) { return resolveID(idx, id) }
+
+// View reads one entity of an index the caller already scanned — the record
+// `get` prints, with its stored and derived edges when edges is set. The
+// index must have its strays filtered, as every read verb's has, so a derived
+// edge never comes from a file that is not an entity.
+func View(root string, idx *index.Index, node index.Node, edges bool) (*EntityView, error) {
+	view, err := getView(root, idx, node)
+	if err != nil {
+		return nil, err
+	}
+	if edges {
+		view.Edges = entityEdges(idx, idx.Resolved, node, view.Meta)
+	}
+	return view, nil
+}
 
 // Slugify mints a slug from free text (Python slugify).
 func Slugify(text string) string { return slugify(text) }

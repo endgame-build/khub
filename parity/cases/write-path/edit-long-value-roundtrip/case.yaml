@@ -1,0 +1,17 @@
+# Issue #80: a long value the emitter wraps reads back unchanged. Each edit
+# lands on one of the three folds that used to add or drop a space: a
+# double-quoted fold after `\\`, a plain fold before a line starting with `-`,
+# and a plain fold after two spaces. `get --format raw` shows the stored bytes,
+# `get --format json` the value read back.
+steps:
+- argv: ["init", "build-hub", ".", "--no-wire"]
+- argv: ["add", "actor", "--title", "Ops"]
+- argv: ["edit", "act-ops", "description", "`A` declares five raw `<Reference><HintPath>..\\..\\..\\..\\vendor\\Example\\...\\bin\\Debug\\netstandard2.0\\*.dll</HintPath>` items that duplicate its package references and point at another repository's"]
+- argv: ["get", "act-ops", "--format", "raw"]
+- argv: ["get", "act-ops", "--format", "json"]
+- argv: ["edit", "act-ops", "description", "The default build target runs `dotnet test Example.Tests.csproj --filter \"TestCategory = Smoke Tests\"`, and any failure fails the build. The other UI fixtures and the whole API project are built but never run by the checked-in build."]
+- argv: ["get", "act-ops", "--format", "raw"]
+- argv: ["get", "act-ops", "--format", "json"]
+- argv: ["edit", "act-ops", "description", "it's  C:\\one\\two\\three\\four\\five\\six\\seven\\eight\\nine\\ten\\eleven\\twelve\\thirteen\\fourteen\\fifteen\\sixteen\\file.txt"]
+- argv: ["get", "act-ops", "--format", "raw"]
+- argv: ["get", "act-ops", "--format", "json"]

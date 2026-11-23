@@ -28,6 +28,12 @@ jobs:
     # required check until it has been green for a while.
     runs-on: ${{ matrix.os }}
     continue-on-error: ${{ matrix.os == 'windows-latest' }}
+    timeout-minutes: 20
+    # What .goreleaser.yml ships: one static binary. Left unset, the runners'
+    # C compilers make every gate below test a cgo, dynamically linked khub
+    # instead. The race detector is the one step that needs cgo (go-extras).
+    env:
+      CGO_ENABLED: "0"
     # bash on every OS: Git Bash on Windows, so one spelling of every step
     # serves all three. On ubuntu and macos this differs from the implicit
     # `bash -e {0}` only by pipefail, and only the YAML gate (already
@@ -60,7 +66,7 @@ jobs:
       - name: No internal names ship
         run: |
           ! git grep -nIiE 'claude\.ai/code/session|/Users/|~/Sites|npm\.pkg\.github\.com|orgs/endgame-build' -- . ':!.github/workflows/ci.yml'
-      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version: "1.26"
           check-latest: true
@@ -183,17 +189,14 @@ jobs:
           # -subset-of also asserts the binary offers no command the coverage
           # table does not know about (cobra ships `completion` by default).
           ./parity-run${{ matrix.exe }} -coverage parity/coverage.yaml -cases parity/cases -subset-of "$PWD/khub${{ matrix.exe }}"
-      # The fixtures prove the core; this proves the binary end to end — every
-      # command over both build presets, with exit codes asserted.
+      # The fixtures prove the core; this proves the binary end to end.
+      # smoke-windows.sh runs all of smoke.sh — every command over both build
+      # presets, exit codes asserted — then what Windows is likeliest to break
+      # and the other two should not: native paths (cygpath legs skip
+      # elsewhere), git-dated stale and backfill, the lock under concurrent
+      # writers, line endings, and serve's TTY refusal. On every OS, so those
+      # cases are held by the blocking legs and not only the experimental one.
       - name: CLI smoke
-        if: matrix.os != 'windows-latest'
-        run: bash smoke.sh
-      # The Windows smoke runs all of smoke.sh against khub.exe, then what
-      # Windows is likeliest to break: native C:\ paths, git-dated stale and
-      # backfill, the lock under concurrent writers, line endings, and
-      # serve's TTY refusal.
-      - name: CLI smoke (Windows)
-        if: matrix.os == 'windows-latest'
         run: bash smoke-windows.sh
       # Replaces the Typer doc generator, which read the Python app's
       # decorators. This regenerates from what the binary prints, so the
@@ -204,6 +207,14 @@ jobs:
         run: |
           KHUB=./khub${{ matrix.exe }} bash parity/tools/gen_cli_reference.sh
           git diff --exit-code docs/cli-reference.md
+      # The same for the preset reference pages: the tables between GENERATED
+      # markers in docs/<preset>-preset.md come from `khub schema --format json`
+      # against a workspace seeded from each preset. A preset without a doc, or
+      # a type without a generated section, fails the tool itself.
+      - name: Preset reference docs are current
+        run: |
+          go run ./parity/tools/presetdocs -bin ./khub${{ matrix.exe }}
+          git diff --exit-code docs/
       # The M0 YAML gate is a standing regression, not a one-off: the emitter
       # must keep reproducing ruamel byte-for-byte, because that is khub's
       # on-disk format and not an artifact of the retired implementation.
@@ -219,6 +230,10 @@ jobs:
           test "$files" -ge 130 || { echo "corpus shrank to $files files"; exit 1; }
           grep -qE "^t1c: ok=$files diff=0 error=0 skip=0$" gate.txt
           grep -qE "^t2: ok=[0-9]+ diff=0 error=0" gate.txt
+          grep -qE "^t4: ok=[0-9]+ diff=0 error=0" gate.txt
+          grep -qE "^t5: ok=[0-9]+ diff=0 error=0" gate.txt
+          grep -qE "^t6: ok=[0-9]+ diff=0 error=0" gate.txt
+          grep -qE "^t7: ok=[0-9]+ diff=0 error=0" gate.txt
           emit=$(go run ./parity/yamlgate/emit | tail -1)
           echo "$emit"
           # "T3: rt N/M  safe P/Q" — every case must pass on both profiles.
@@ -237,16 +252,79 @@ jobs:
             exit 1
           fi
 
+  # The per-PR checks that need neither macOS nor Windows, run beside the
+  # matrix so the critical path does not grow: the race detector, a shuffled
+  # unit run, the scale smoke at 300 entities and the binary coverage floor.
+  # Each is its own named step so it can be made a required check alone.
+  go-extras:
+    permissions:
+      contents: read
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash
+    env:
+      CGO_ENABLED: "0"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: "1.26"
+          check-latest: true
+          cache: true
+      # The one step that needs cgo: the detector's runtime is C. ./... rather
+      # than ./internal/... because parity/runner's pty drain goroutines live
+      # outside it. -cpu 4 so index.each() really fans out under the detector
+      # on any runner size. The cross-process lock tests are invisible to it
+      # by design; they stay what they are.
+      - name: Race detector
+        env:
+          CGO_ENABLED: "1"
+        run: go test -race -cpu 4 ./...
+      # Order dependence and leaked package state (the sync.Once caches). The
+      # seed is random per run, so a real dependence surfaces on some
+      # unrelated PR; Go prints the seed on failure and it replays.
+      - name: Shuffled, twice
+        run: |
+          go test -shuffle=on -count=2 ./... \
+            || { echo "replay with: go test -shuffle=<seed printed above> -run <test> <pkg>"; exit 1; }
+      - name: Build
+        run: |
+          go build -o khub ./cmd/khub
+          go build -cover -o khub-cover ./cmd/khub
+      # A corpus the size of a real project's, generated by khub add and
+      # asserted against the generator's own manifest (parity/scale/README.md).
+      # Full mode: the regenerate-and-diff pass is the only per-PR check that
+      # a map order leaks into written bytes at n. Unconditional, because a
+      # path filter would need a third-party action or leave a required check
+      # pending, to save about fifteen seconds.
+      - name: Scale smoke (300 entities)
+        env:
+          TMPDIR: ${{ runner.temp }}
+        run: KHUB="$PWD/khub" bash parity/scale/smoke.sh --scale 300 --work "$RUNNER_TEMP/scale"
+      # The parity suite again, instrumented: the merged profile is
+      # deterministic, so internal/cli must stay above parity/coverage-floor.txt.
+      - name: Binary coverage floor
+        run: bash parity/tools/coverage-floor.sh "$PWD/khub-cover" "$RUNNER_TEMP/cov"
+
   # The npm package is khub's only distribution channel. This job lints the
   # scripts that assemble it and smoke-tests the result end to end.
   npm-package:
     permissions:
       contents: read
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # Every shell script CI runs: the npm assembler and its smoke, the three
+      # root smokes, and the parity drivers (coverage floor, scale, compat).
+      # plugin/tools/*.sh are linted in the plugin job beside their tests.
       - name: shellcheck
-        run: shellcheck npm/build-packages.sh npm/smoke.sh
+        run: |
+          shellcheck npm/build-packages.sh npm/smoke.sh smoke.sh smoke-windows.sh \
+            parity/tools/coverage-floor.sh parity/tools/gen_cli_reference.sh \
+            parity/scale/smoke.sh parity/scale/benchcmp.sh parity/compat/smoke.sh
       - name: POSIX sh syntax
         run: |
           sh -n npm/build-packages.sh
@@ -262,24 +340,57 @@ jobs:
       - name: Assembly smoke over fixture tarballs
         run: npm/smoke.sh
 
+  # A foreign OKF 0.2 parser reads khub's export: the reference
+  # implementation's document.py at a pinned commit of
+  # GoogleCloudPlatform/knowledge-catalog. Informational, so a red run here
+  # never fails CI; khub's own fixtures pin the bundle bytes.
+  okf-reference:
+    permissions:
+      contents: read
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    env:
+      KNOWLEDGE_CATALOG_SHA: 62432a095456147ee71e70ac6e4dc0d2dea3ac30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: "1.26"
+          check-latest: true
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          version: "0.13.1"
+      - name: shellcheck
+        run: shellcheck parity/tools/okf_reference.sh
+      - name: Build khub
+        run: go build -o "$RUNNER_TEMP/khub" ./cmd/khub
+      - name: Fetch the reference parser
+        run: |
+          mkdir -p "$RUNNER_TEMP/okf"
+          curl -fsSL -o "$RUNNER_TEMP/okf/document.py" \
+            "https://raw.githubusercontent.com/GoogleCloudPlatform/knowledge-catalog/$KNOWLEDGE_CATALOG_SHA/okf/src/reference_agent/bundle/document.py"
+      - name: Export firm-ops and build-hub, then validate each bundle
+        run: parity/tools/okf_reference.sh "$RUNNER_TEMP/khub" "$RUNNER_TEMP/okf"
+
   # The Claude Code plugin under plugin/, and the marketplace manifest at the root.
   # Neither command needs credentials or the network once Claude Code is installed.
   plugin:
     permissions:
       contents: read
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version: "1.26"
           check-latest: true
-      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: "22"
       # Pinned: the mod API is early access and moves between releases.
       - name: Install Claude Code
-        run: npm install -g @anthropic-ai/claude-code@2.1.291
+        run: npm install -g @anthropic-ai/claude-code@2.1.325
       - name: shellcheck
         run: shellcheck plugin/tools/*.sh
       - name: Marketplace manifest
@@ -293,3 +404,31 @@ jobs:
           git diff --exit-code plugin/tests/fixtures.ts
       - name: Plugin tests
         run: claude plugin test plugin
+      # The skill text's standing cost, in exact bytes and chars against
+      # plugin/budget.json; parity pins the wire block by hash, this is the
+      # number beside the hash. Grow a budget with --write in the same commit.
+      - name: Static budgets
+        run: bash plugin/tools/budget.sh
+      # The skills are prose about the CLI. Every backticked `khub …` they
+      # name must be a call the built binary accepts, field flags read from
+      # the live schema of both presets. The wired block is khub's own prose
+      # about its own flags, so it is checked the same way.
+      - name: Skills name real flags
+        env:
+          KHUB_PARITY_NOW: "2026-01-15"
+        run: |
+          go build -o khub ./cmd/khub
+          ./khub init build-hub "$RUNNER_TEMP/bh" >/dev/null
+          ./khub init firm-ops "$RUNNER_TEMP/fo" >/dev/null
+          bash plugin/tools/skill-flags.sh ./khub "$RUNNER_TEMP/bh" "$RUNNER_TEMP/fo" -- \
+            plugin/skills/khub/SKILL.md plugin/skills/setup/SKILL.md "$RUNNER_TEMP/bh/CLAUDE.md"
+      # What Claude Code projects the plugin to cost per session: an estimate
+      # (about bytes/3), offline, report only.
+      - name: Projected token cost
+        run: |
+          {
+            echo "### Projected token cost"
+            echo '```'
+            claude --plugin-dir plugin plugin details khub
+            echo '```'
+          } | tee -a "$GITHUB_STEP_SUMMARY"

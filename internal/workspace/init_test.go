@@ -808,7 +808,7 @@ func TestGoldenEmptyPresetWritesNothing(t *testing.T) {
 func presetVersion(preset string) string {
 	switch presets.Canonical(preset, presets.Embedded()) {
 	case "build-hub":
-		return "0.6.0"
+		return "0.7.0"
 	case "firm-ops":
 		return "0.3.0"
 	}

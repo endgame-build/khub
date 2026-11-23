@@ -418,13 +418,15 @@ func TestPresetSourceResolvesRelativeToTheWorkspace(t *testing.T) {
 	}
 }
 
-func TestEntityHashesSkipsTheRootIndex(t *testing.T) {
-	// index.md at the root is a projection the CLI writes as an init tail; a
-	// force re-init must not read it as a corpus seeded over. A nested
-	// index.md is an ordinary entity-suffixed file.
+func TestEntityHashesSkipsNavigationFiles(t *testing.T) {
+	// index.md and log.md are OKF navigation at any depth; a force re-init
+	// must not read them as a corpus seeded over. Any other entity-suffixed
+	// file counts.
 	dir := t.TempDir()
 	writeFile(t, filepath.Join(dir, "index.md"), "---\nokf_version: '0.1'\n---\n# Index\n")
 	writeFile(t, filepath.Join(dir, "notes", "index.md"), "---\ntype: note\n---\n")
+	writeFile(t, filepath.Join(dir, "notes", "log.md"), "# Log\n")
+	writeFile(t, filepath.Join(dir, "notes", "a.md"), "---\ntype: note\n---\n")
 	got, err := entityHashes(dir)
 	if err != nil {
 		t.Fatal(err)
@@ -432,7 +434,33 @@ func TestEntityHashesSkipsTheRootIndex(t *testing.T) {
 	if len(got) != 1 {
 		t.Fatalf("hashes = %v", got)
 	}
-	if _, ok := got["notes/index.md"]; !ok {
+	if _, ok := got["notes/a.md"]; !ok {
 		t.Errorf("hashes = %v", got)
+	}
+}
+
+// The entity migration runs in the candidate, so a dry run reports it without
+// touching the file and the real upgrade publishes it with the schema files.
+func TestUpgradeMigratesEntitiesThroughTheCandidate(t *testing.T) {
+	ws := filepath.Join(t.TempDir(), "ws")
+	mustInit(t, "note", ws, InitOptions{PresetSource: presetSource(t)})
+	path := filepath.Join(ws, "notes", "a.md")
+	legacy := "---\ntype: note\ntitle: A  # keep\ndraft: true\n---\nBody.\n"
+	writeFile(t, path, legacy)
+
+	dry := mustUpgrade(t, ws, UpgradeOptions{DryRun: true})
+	if len(dry.Migrated) != 1 || dry.Migrated[0].ID != "note/a" || dry.Migrated[0].Path != "notes/a.md" {
+		t.Fatalf("dry run migrated = %+v", dry.Migrated)
+	}
+	if got := readFile(t, path); got != legacy {
+		t.Fatalf("dry run wrote the entity:\n%s", got)
+	}
+
+	mustUpgrade(t, ws, UpgradeOptions{})
+	if got, want := readFile(t, path), "---\ntype: note\ntitle: A  # keep\nstatus: draft\n---\nBody.\n"; got != want {
+		t.Fatalf("\n got: %q\nwant: %q", got, want)
+	}
+	if again := mustUpgrade(t, ws, UpgradeOptions{}); len(again.Migrated) != 0 || len(again.MigrationConflicts) != 0 {
+		t.Fatalf("second upgrade migrated %+v", again)
 	}
 }

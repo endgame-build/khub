@@ -14,7 +14,7 @@ other session it draws nothing.
 ## What it shows
 
 ```text
-khub  build-hub 0.6.0 · 146 entities [+2 −1 ~3] · 3 draft · check ✓
+khub  build-hub 0.7.0 · 146 entities [+2 −1 ~3] · 3 draft · check ✓
 
 ● khub query adr 38 ms json
   ⎿ 12 entities
@@ -32,10 +32,10 @@ The band is one line above the prompt.
 
 | Part | Meaning |
 |---|---|
-| `build-hub 0.6.0` | The workspace's preset and its version. |
+| `build-hub 0.7.0` | The workspace's preset and its version. |
 | `146 entities` | Every entity in the workspace, drafts included. |
 | `[+2 −1 ~3]` | What the session changed: 2 entities added, 1 removed, 3 edited. A count of zero is left out, and the bracket is absent while the session has changed nothing. |
-| `3 draft` | Entities with `draft: true`. A count of zero is left out. |
+| `3 draft` | Entities with `status: draft`. A count of zero is left out. |
 | `check ✓` | `khub check` passes. |
 
 A failing `khub check` reads `check ✗ 1 error` or `check ✗ <n> errors` and turns
@@ -52,12 +52,18 @@ row in place of Claude Code's raw drawing.
 | Result | What came back, in one line: `⎿ 12 entities`, or `⎿ + adr/ad-… · draft` after an `add`. |
 | List | Up to five lines of a list result, then `… n more`. |
 
-- A list follows the result line for `query`, `stale`, `search`, `neighbors`, a
-  `get` with several ids, a failed `check` and a `validate` with errors.
+- A list follows the result line for `query`, `run`, `stale`, `recent`, `search`,
+  `retrieve`, `neighbors`, a `get` with several ids, a failed `check` and a
+  `validate` with errors.
 - A list line for an entity holds its id, its title and its flags (`draft`,
   `orphan`, `stale`). A `neighbors` line holds the id, the direction and the
   predicate. A `check` line holds the bucket and the id or path. A `validate`
   line holds the id, the field and the reason.
+- The result line of a `search` or a `recent` carries khub's `note:` when it
+  printed one, such as rows `--limit` dropped.
+- A write run with `--dry-run` reads as a preview in the plain tone:
+  `⎿ dry run · + adr/ad-…`, or `⎿ dry run · no change` for an `edit` that would
+  move nothing. Its refusal reads `⎿ dry run · ✗ <code>: <message>`.
 - The `json` button returns that compact row to Claude Code's raw drawing.
 - A command made only of khub calls joined by `;` or `&&` draws one compact row
   per call, with the time and the `json` button on the first. A leading
@@ -82,7 +88,7 @@ The baseline is the set of entity ids khub reports when the session starts.
 |---|---|---|
 | `+` added | khub's current ids against the baseline | Every new entity, whoever made it: Claude, a hand edit or a shell command. |
 | `−` removed | khub's current ids against the baseline | Every entity that is gone, whoever removed it. |
-| `~` edited | Claude's own tool calls in the session | A khub `edit`, `link` or `unlink`, and an Edit or Write on an entity file. |
+| `~` edited | Claude's own tool calls in the session | A khub `edit`, `link` or `unlink`, and an Edit or Write on an entity file. A `--dry-run` never counts. |
 
 - An edit made outside Claude's tools does not raise `~`. An entity changed in
   an editor or by a shell script stays out of the edited count.

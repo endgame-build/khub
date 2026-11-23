@@ -18,27 +18,35 @@ Commands:
   init  Scaffold a workspace from a preset and wire it into the agent context files.
   upgrade  Refresh an existing workspace: the shipped schema and templates, new scaffolds, the wire block.
   status  Summarize the workspace: counts, draft/active, orphan/stale, OKF conformance.
+  doctor  Diagnose the workspace: git, schema, provenance, lock, storage layout.
   add  Create an entity: khub add opportunity --client initech --owner noor --stage prospect.
   get  Read entities' frontmatter and body, optionally with derived edges.
   edit  Edit an entity: khub edit initech-deal stage proposal-sent  (or --field value).
   link  Add a relation: khub link initech-pov partner northwind.
   unlink  Remove a relation: khub unlink initech-pov partner northwind.
   remove  Remove an entity, guarded by inbound edges: khub remove old-fragment [--force].
+  verify  Record a review: khub verify ad-2026-01-15-use-jwt --by human:ilya.
   query  Filter entities: khub query --type opportunity --stage prospect --format json.
+  run  Run a saved query: khub run open-prospects --format json.
   search  Full-text search: khub search modernization --type transcript --format json.
+  retrieve  Assemble context in one call: khub retrieve "auth token" --expand depends_on:2 --max-bytes 20000.
   neighbors  Walk one-hop neighbors: khub neighbors initech-pov [--predicate client --in].
   impact  Compute blast radius: khub impact node-a [--reverse] [--predicate <p>].
   history  Trace supersession lineage: khub history decision-0012 [--limit 3].
   validate  Validate entities: khub validate [TARGET] [--strict].
   check  Check the active graph: completeness, orphans, dangling edges, strays, cycles, bodies.
   stale  List entities past the `updated` threshold, oldest first: khub stale [--days N].
-  reindex  Regenerate the OKF index.md from the graph: khub reindex [--dry-run].
-  viz  Render the typed graph to a self-contained Cytoscape HTML: khub viz [--out F] [--open] [--type T].
-  serve  Serve a read-only graph view on loopback: khub serve [--port 7777].
-  backfill  Backfill missing dates and frontmatter: khub backfill [--type T] [--dry-run].
+  recent  List entities touched within the window, newest first: khub recent [--days N].
+  reindex  Regenerate the OKF index.md from the graph: khub reindex [--dry-run | --check].
+  export  Write the workspace as an OKF 0.2 bundle: khub export --okf DIR.
+  import  Read an OKF bundle into the workspace as drafts: khub import --okf DIR.
+  viz  Render the typed graph to a self-contained Cytoscape HTML: khub viz [--out F] [--open] [--type T] [--aspect A].
+  serve  Serve a read-only graph view on loopback: khub serve [--port 7777] [--aspect A].
+  backfill  Backfill missing dates and frontmatter: khub backfill [--type T] [--infer-type] [--dry-run].
   wire  Wire the workspace into agent context files (CLAUDE.md gets ``@`` imports of the
 schema layer files; AGENTS.md gets a schema pointer). Bare ``wire`` updates whichever already exist.
   schema  Introspect the active schema.
+  completion  Print a shell completion script: khub completion bash|zsh|fish|powershell.
 
 ```
 
@@ -75,12 +83,13 @@ Usage: khub upgrade [OPTIONS]
 
 Refresh an existing workspace: the shipped schema and templates, new scaffolds, the wire block.
 
-Replaces .khub/{ontology,policy,storage}.yaml and .khub/templates/*.yaml from the preset recorded in .khub/config.yaml, copying an edited file to <name>.bak first; preflights the candidate schema and scaffolds before publishing, then re-wires the agent files and regenerates index.md. Refuses outside a workspace: ``khub init`` scaffolds, ``khub upgrade`` refreshes.
+Replaces .khub/{ontology,policy,storage}.yaml and .khub/templates/*.yaml from the preset recorded in .khub/config.yaml, copying an edited file to <name>.bak first; migrates legacy entity fields (`draft`, bare `sources` entries, a retired `status`) in place; preflights the candidate schema and scaffolds before publishing, then re-wires the agent files and regenerates index.md. Refuses outside a workspace: ``khub init`` scaffolds, ``khub upgrade`` refreshes.
 
 Options:
   --dry-run  Preview core and tail outcomes without changing the workspace.
   --no-schema  Keep this workspace's .khub/ files — schema and templates — as they are; report what the shipped ontology has that they do not.
   --no-wire  Skip re-wiring CLAUDE.md and AGENTS.md.
+  --unlock <str>  Let the upgrade remove a locked type, or a locked predicate as type.predicate; repeatable.
   --format <str>  text confirmation (default); json emits every step's outcome. [default: text]
   --help  Show this message and exit.
 
@@ -96,6 +105,20 @@ Summarize the workspace: counts, draft/active, orphan/stale, OKF conformance.
 
 Options:
   --format <str>  text (Rich table on a TTY) or json. [default: text]
+  --help  Show this message and exit.
+
+```
+
+## khub doctor
+
+```console
+$ khub doctor --help
+Usage: khub doctor [OPTIONS]
+
+Diagnose the workspace: git, schema, provenance, lock, storage layout.
+
+Options:
+  --format <str>  text (on a TTY) or json. [default: text]
   --help  Show this message and exit.
 
 ```
@@ -120,6 +143,8 @@ Options:
   --body <str>  Body prose as a string.
   --body-file <str>  Read the body from a file ('-' for stdin).
   --no-template  Start with an empty body. Refused on a type whose template has a required heading, since the result would fail validate; use --body to supply your own sections.
+  --by <str>  Who the write is stamped as in generated.by. Default: KHUB_ACTOR, then agent/claude-code under Claude Code, then khub.
+  --dry-run  Run every check the write runs and print what it would emit; write nothing.
   --format <str>  text or json (emits the written record). [default: text]
   --help  Show this message and exit.
 
@@ -134,10 +159,11 @@ Usage: khub get [OPTIONS] [ID]...
 Read entities' frontmatter and body, optionally with derived edges.
 
 Arguments:
-  ID... <str>  One or more bare slugs or qualified type/slug IDs, in output order.
+  ID... <str>  One or more bare slugs or qualified type/slug IDs (file paths under --path), in output order.
 
 Options:
   --edges  Include stored and derived edges.
+  --path  Read each ID as a file path, relative to the current directory or absolute, and get the entity in it.
   --format <str>  json, table, raw, or text (Rich on a TTY). [default: text]
   --help  Show this message and exit.
 
@@ -160,6 +186,8 @@ Options:
   --strict  Reject fields the schema does not declare.
   --body <str>  Replace the body with this string ('' clears it).
   --body-file <str>  Replace the body from a file ('-' for stdin).
+  --by <str>  Who the write is stamped as in generated.by. Default: KHUB_ACTOR, then agent/claude-code under Claude Code, then khub.
+  --dry-run  Run every check the write runs and print what it would emit; write nothing.
   --format <str>  text or json (emits the updated record). [default: text]
   --help  Show this message and exit.
 
@@ -179,6 +207,8 @@ Arguments:
   TARGET <str>
 
 Options:
+  --by <str>  Who the write is stamped as in generated.by. Default: KHUB_ACTOR, then agent/claude-code under Claude Code, then khub.
+  --dry-run  Run every check the write runs and print what it would emit; write nothing.
   --format <str>  text or json (emits the edge record). [default: text]
   --help  Show this message and exit.
 
@@ -198,6 +228,8 @@ Arguments:
   TARGET <str>
 
 Options:
+  --by <str>  Who the write is stamped as in generated.by. Default: KHUB_ACTOR, then agent/claude-code under Claude Code, then khub.
+  --dry-run  Run every check the write runs and print what it would emit; write nothing.
   --format <str>  text or json (emits the edge record). [default: text]
   --help  Show this message and exit.
 
@@ -216,7 +248,25 @@ Arguments:
 
 Options:
   --force  Delete despite inbound edges (leaves them dangling).
+  --dry-run  Run every check the write runs and print what it would emit; write nothing.
   --format <str>  text or json (emits the removed record). [default: text]
+  --help  Show this message and exit.
+
+```
+
+## khub verify
+
+```console
+$ khub verify --help
+Usage: khub verify [OPTIONS] [ID]
+
+Record a review: khub verify ad-2026-01-15-use-jwt --by human:ilya.
+
+Options:
+  --by <str>  Who reviewed it (required): human:<name>, process:<name>, or <producer>[/<version>].
+  --at <str>  When, as ISO 8601 with a T and an offset; default now.
+  --commit  Also make a signed git commit of the entity's file; refused when signing is not configured.
+  --format <str>  text or json (emits the recorded event). [default: text]
   --help  Show this message and exit.
 
 ```
@@ -234,12 +284,39 @@ Options:
   --tag <str>  Keep entities carrying this tag.
   --has <str>  Keep entities with a resolvable edge for the predicate.
   --missing <str>  Keep entities lacking a resolvable edge (gap finder).
+  --under <str>  Keep entities that reach this entity over --via, any number of hops.
+  --via <str>  The relation --under follows up to its parent, or its declared inverse.
+  --count <str>  Bound the edge count for a relation or inverse: 'depends_on>=2' (repeatable).
+  --in-count <str>  Bound the inbound edge count: '>=5', or 0 for none (repeatable).
+  --out-count <str>  Bound the outbound edge count: 0 finds leaves (repeatable).
   --orphan  Keep only orphan (edge-less) entities.
   --stale  Keep only stale entities.
   --draft  Isolate drafts.
   --active  Exclude drafts.
   --limit <int>  Cap the returned set.
+  --trust <str>  Keep entities at this review tier: unverified, machine, or human.
   --format <str>  text (Rich table on a TTY), json, or ids. [default: text]
+  --receipt  Wrap JSON output with the applied filters, matched and returned counts, and truncation.
+  --save-as <str>  Also save these filters under a name for `khub run <name>`.
+  --replace  Let --save-as overwrite a different saved query of that name.
+  --help  Show this message and exit.
+
+```
+
+## khub run
+
+```console
+$ khub run --help
+Usage: khub run [OPTIONS] {name}
+
+Run a saved query: khub run open-prospects --format json.
+
+Arguments:
+  name <str>  A name saved with khub query --save-as. [required]
+
+Options:
+  --format <str>  text (Rich table on a TTY), json, or ids. [default: text]
+  --receipt  Wrap JSON output with the applied filters, matched and returned counts, and truncation.
   --help  Show this message and exit.
 
 ```
@@ -259,7 +336,37 @@ Options:
   --type <str>  Restrict to one entity type.
   --limit <int>  Cap the returned set. [default: 20]
   --plain  Treat text as plain words: any may match, prefix-matched, punctuation literal.
+  --also <str>  Another query group, ranked on its own and fused with the rest by reciprocal rank (repeatable).
   --format <str>  text (Rich table on a TTY), json, or ids. [default: text]
+  --receipt  Wrap JSON output with the applied query, matched and returned counts, and truncation.
+  --help  Show this message and exit.
+
+```
+
+## khub retrieve
+
+```console
+$ khub retrieve --help
+Usage: khub retrieve [OPTIONS] [TEXT]
+
+Assemble context in one call: khub retrieve "auth token" --expand depends_on:2 --max-bytes 20000.
+
+Arguments:
+  TEXT <str>  FTS5 MATCH text to seed from (plain words with --plain), or none with --id.
+
+Options:
+  --id <str>  Seed by id instead of a search (repeatable).
+  --type <str>  Restrict the search to one entity type.
+  --plain  Treat TEXT as plain words: any may match, prefix-matched, punctuation literal.
+  --expand <str>  Follow this predicate, to --depth hops or its own (depends_on:2); repeatable. Default: every predicate.
+  --in  Inbound edges only (incl. derived inverses).
+  --out  Outbound (stored) edges only.
+  --depth <int>  Hops to expand from each seed; 0 returns the seeds alone. [default: 1]
+  --limit <int>  Cap the seeds before expansion (default: 20 for a search, every --id).
+  --max-entities <int>  Cap the entities after expansion, periphery first; 0 is unbounded.
+  --max-bytes <int>  Cap the bytes of the JSON document, trimming the same way; 0 is unbounded.
+  --no-body  Leave each entity's body out.
+  --format <str>  text (Rich table on a TTY) or json. [default: text]
   --help  Show this message and exit.
 
 ```
@@ -351,6 +458,10 @@ Check the active graph: completeness, orphans, dangling edges, strays, cycles, b
 
 Options:
   --strict  Fail the gate on orphans too (default: informational).
+  --stale  Fail the gate on active entities whose stale_after has passed.
+  --require-verified  Fail the gate on active entities below --tier.
+  --tier <str>  The review tier --require-verified asks for: machine or human. [default: machine]
+  --mentions  Also suggest edges for entities a body names but no relation links (informational; never written).
   --format <str>  text (Rich on a TTY) or json. [default: text]
   --help  Show this message and exit.
 
@@ -371,16 +482,72 @@ Options:
 
 ```
 
+## khub recent
+
+```console
+$ khub recent --help
+Usage: khub recent [OPTIONS]
+
+List entities touched within the window, newest first: khub recent [--days N].
+
+Options:
+  --days <int>  Window in days; an entity at most N days old is recent. [default: 7]
+  --limit <int>  Cap the returned set.
+  --format <str>  text (Rich table on a TTY) or json. [default: text]
+  --help  Show this message and exit.
+
+```
+
 ## khub reindex
 
 ```console
 $ khub reindex --help
 Usage: khub reindex [OPTIONS]
 
-Regenerate the OKF index.md from the graph: khub reindex [--dry-run].
+Regenerate the OKF index.md from the graph: khub reindex [--dry-run | --check].
 
 Options:
   --dry-run  Print the diff against the current index.md and write nothing.
+  --check  Exit 1 if index.md is missing or stale, printing the diff; write nothing.
+  --help  Show this message and exit.
+
+```
+
+## khub export
+
+```console
+$ khub export --help
+Usage: khub export [OPTIONS]
+
+Write the workspace as an OKF 0.2 bundle: khub export --okf DIR.
+
+One md concept per entity at a path mirroring the workspace; json, yaml and collection rows are materialized as md. Declared relations become a `# Related` section of bundle-absolute links. Every directory gets an index.md, and the root one declares okf_version. Only entities are exported: .khub/, agent files and ignored paths stay out, and strays are listed. The bundle is built beside the target and swapped in, so a failed export changes nothing. A .khub-export file at the bundle root lists the files the export wrote. The target must be empty or absent, and must not overlap the workspace. --force replaces a target only when it holds that file, holds no .khub/ and no .git/, and holds nothing the file does not list.
+
+Options:
+  --okf <str>  The bundle directory to write (required).
+  --force  Replace a bundle khub exported before, when it holds only the files its .khub-export lists.
+  --dry-run  List the files the bundle would hold and write nothing.
+  --format <str>  text or json (the written paths). [default: text]
+  --help  Show this message and exit.
+
+```
+
+## khub import
+
+```console
+$ khub import --help
+Usage: khub import [OPTIONS]
+
+Read an OKF bundle into the workspace as drafts: khub import --okf DIR.
+
+Every `.md` concept in the bundle except index.md and log.md lands as a draft in the type its `type` names, matched by name or slug, or mapped with --type-map. Frontmatter is kept as written, unknown keys included. The id is the type's scheme around the file's stem, as add mints one, with the stem kept in `aliases` unless another entity already answers to it. The bundle's `verified` is kept as `okf_verified` and never counted, and a relation value nothing answers to is kept in `okf_unresolved`; a concept already carrying the key import writes is skipped. A link to another imported concept becomes a `references` edge; export's `# Related` section is read back into relations. A concept that cannot land is skipped and reported. The concepts that land are written all or none, and nothing is written to the bundle.
+
+Options:
+  --okf <str>  The bundle directory to read (required).
+  --type-map <str>  A YAML file mapping OKF types to this workspace's types.
+  --by <str>  Who `generated.by` records on a concept that has no `generated`. Default: KHUB_ACTOR, then agent/claude-code under Claude Code, then khub.
+  --dry-run  Plan the import and write nothing.
+  --format <str>  text or json (every imported and skipped concept). [default: text]
   --help  Show this message and exit.
 
 ```
@@ -391,12 +558,13 @@ Options:
 $ khub viz --help
 Usage: khub viz [OPTIONS]
 
-Render the typed graph to a self-contained Cytoscape HTML: khub viz [--out F] [--open] [--type T].
+Render the typed graph to a self-contained Cytoscape HTML: khub viz [--out F] [--open] [--type T] [--aspect A].
 
 Options:
   --out <str>  Output path for the HTML (default viz.html). [default: viz.html]
   --open  Open the written file in the default browser.
   --type <str>  Render only that type and its incident edges.
+  --aspect <str>  What to draw: instances (the entities), schema (the types and their relations), or both. [default: instances]
   --help  Show this message and exit.
 
 ```
@@ -407,10 +575,11 @@ Options:
 $ khub serve --help
 Usage: khub serve [OPTIONS]
 
-Serve a read-only graph view on loopback: khub serve [--port 7777].
+Serve a read-only graph view on loopback: khub serve [--port 7777] [--aspect A].
 
 Options:
   --port <int>  Port to bind on 127.0.0.1; 0 takes an ephemeral one. [default: 7777]
+  --aspect <str>  View to open on: instances, schema, or both. Default: the schema view.
   --help  Show this message and exit.
 
 ```
@@ -421,10 +590,11 @@ Options:
 $ khub backfill --help
 Usage: khub backfill [OPTIONS]
 
-Backfill missing dates and frontmatter: khub backfill [--type T] [--dry-run].
+Backfill missing dates and frontmatter: khub backfill [--type T] [--infer-type] [--dry-run].
 
 Options:
   --type <str>  Add missing per-type frontmatter scaffolding for that type.
+  --infer-type  Stamp type on a stray file from the one layout that holds it (file, folder and singleton layouts). A stray with no frontmatter, another type, or a collection row is left and listed.
   --dry-run  List the entities and fields that would change; write nothing.
   --help  Show this message and exit.
 
@@ -552,6 +722,24 @@ List schema changes since the last `khub schema snapshot`.
 
 Options:
   --format <str>  text (Rich table on a TTY) or json. [default: text]
+  --help  Show this message and exit.
+
+```
+
+## khub completion
+
+```console
+$ khub completion --help
+Usage: khub completion [OPTIONS] SHELL
+
+Print a shell completion script: khub completion bash|zsh|fish|powershell.
+
+Load it for this session with `source <(khub completion zsh)`, or write it to the shell's completion directory to keep it. Candidates come from the binary at TAB time.
+
+Arguments:
+  SHELL <str>  bash, zsh, fish, or powershell. [required]
+
+Options:
   --help  Show this message and exit.
 
 ```

@@ -1,0 +1,1 @@
+{"id": "story/first", "type": "story", "slug": "first", "predicate": "depends_on", "target": "story/second", "changed": true}

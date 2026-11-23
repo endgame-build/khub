@@ -43,7 +43,8 @@ changes what the model reads.
   hands the pure functions the matching `Flavour` from `hooks/workspace.ts`.
 
 The mod API is early access and moves between Claude Code releases. Everything
-below under "Engine rules" was observed on Claude Code 2.1.288 and 2.1.291.
+below under "Engine rules" was observed on Claude Code 2.1.288, 2.1.291 and
+2.1.325. CI pins 2.1.325.
 
 ## What the mod may not do
 
@@ -79,8 +80,8 @@ below under "Engine rules" was observed on Claude Code 2.1.288 and 2.1.291.
 - The first refresh of a session fixes the baseline. `+n` and `−n` are the ids
   that joined and left it, so they include changes made outside Claude.
 - `~n` counts baseline entities the session edited through its tools: a khub
-  `edit`, `link` or `unlink` that changed something, and an Edit or Write on a
-  file that holds one entity. A change made outside those tools does not raise it.
+  `edit`, `link` or `unlink` that changed something (never a `--dry-run`), and an
+  Edit or Write on a file that holds one entity. A change made outside those tools does not raise it.
 - A cut document, or a call that did not answer, keeps what the band shows.
 
 ## Engine rules that shape the code
@@ -108,6 +109,10 @@ below under "Engine rules" was observed on Claude Code 2.1.288 and 2.1.291.
   blocks a tool. In a `.catch`, `next(e)` replays what the call settled to and
   runs nothing twice. The Bash hook's handler also clears the call's row, so a
   row never stays running.
+- **The band holds one row per plugin.** The engine asks each plugin that hooks
+  `AbovePrompt` for its own row and stacks the rows. A mounted band in a test
+  holds every plugin's row, so a test asserts on khub's row, never on the
+  absence of another's. `next(e)` draws no row for khub.
 - **A grouped row draws its result inline, and a standalone row gets a
   `ToolResult` block.** The normal view of a verbose session groups calls, draws
   each as a `ToolUse` row with the result inside it, and raises no `ToolResult`
@@ -161,6 +166,17 @@ tsc -p .                            # after Claude Code has laid .claude-plugin/
 bash tools/record-fixtures.sh       # rebuild tests/fixtures.ts from the built binary
 ```
 
+Two more run in the `plugin` job, from the repo root:
+
+```bash
+bash plugin/tools/budget.sh         # SKILL.md bytes, description chars, wire block bytes ≤ plugin/budget.json; --write re-records
+bash plugin/tools/skill-flags.sh ./khub <ws>... -- plugin/skills/*/SKILL.md   # every `khub …` a skill names is a call the binary accepts
+```
+
+`budget.json` is a ceiling, re-recorded deliberately in the commit that grows
+the text, like a parity fixture. The flag lint reads field flags from the live
+schema of the workspaces given, so it spells no type or field.
+
 `validate` and `test` need no credentials and no network. `tools/try.sh` builds
 khub and a scratch workspace, then prints the command that opens a session there
 with the plugin loaded.
@@ -183,17 +199,31 @@ test. It gives a workspace at a fixed root and khub answering from the fixtures.
 | `--version` | the version number in the printed text |
 | `schema` | `provenance.{preset, version}`, `types[].{name, layout, format, path}` |
 | `check` | `passed`, `strict`, every array-valued bucket, and `id`, `path` or `alias` of a finding |
-| `query`, `stale` | per row `id`, `title`, `draft`, `orphan`, `stale` |
-| `add`, `edit`, `remove` | `id`, `draft` |
+| `query`, `run`, `stale` | per row `id`, `title`, `draft`, `orphan`, `stale` |
+| `recent` | per row `id`, `title`, `draft`, and the stderr `note:` line |
+| `add`, `edit`, `remove` | `id`, `draft`, and an `edit` dry run's `changed` |
 | `link`, `unlink` | `id`, `slug`, `predicate`, `target`, `changed` |
+| `verify` | `id`, `by`, `at`, `commit` |
 | `get` | `id`, `title` or `name` at the top or in `frontmatter`, `edges` |
 | `search` | per row `id`, `title`, the flags, and the stderr `note:` line |
+| `retrieve` | `count`, `omitted.{truncated, insufficient}`, and per entity `id`, `title`, `draft`, `orphan`, `stale` |
+| `query --receipt`, `run --receipt`, `search --receipt` | `receipt` and `results`; the rows are read from `results` |
 | `neighbors` | per row `id`, `predicate`, `direction` |
 | `impact` | per row `depth` |
 | `history`, `schema types`, `schema edges` | the number of rows |
 | `status` | `total`, `draft`, `orphan`, `stale` |
 | `validate` | `count`, `errors[].{id, field, reason}`, `gaps` |
 | `schema show`, `schema diff`, `schema snapshot` | `name`, `fields`, `relations`, `pending`, `changes`, `types` |
+
+Rows of `query`, `get`, `search` and `neighbors` end with `trust`, and
+`status` carries `expired` and `trust` counts and the `okf_nonconformant`
+paths; the mod reads none of them, so they need no `MIN_KHUB` bump. `check`'s `superseded_verifications` never fails
+the gate and is listed in `INFORMATIONAL`, and so are `retention`, `waived` and
+`mentions`, the last present only under `check --mentions`. `stale_waivers`
+fails the gate and is not listed. `expired` appears only under
+`check --stale` and `below_tier` only under `check --require-verified`; both
+fail the gate, so neither is in `INFORMATIONAL`. A `flag_shadowed` finding's
+`id` is `<type>/*`.
 
 `khub query --format ids` prints bare slugs, which two types may share. The mod
 reads `query --format json` for qualified ids.

@@ -1,6 +1,7 @@
 // search.go ports cli/search_cmd.py: full-text over title and body. Raw FTS5
 // MATCH syntax passes through ("quoted phrases", OR, NEAR, prefix*); --plain
-// takes plain words instead.
+// takes plain words instead. Each --also adds a query group of its own; the
+// groups' rankings are merged by reciprocal rank fusion (search.SearchGroups).
 
 package cli
 
@@ -10,6 +11,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/endgame-build/khub/internal/clock"
 	"github.com/endgame-build/khub/internal/omap"
 	"github.com/endgame-build/khub/internal/search"
 )
@@ -17,7 +19,8 @@ import (
 func registerSearch(root *cobra.Command) {
 	var typeName, format string
 	var limit int
-	var plain bool
+	var plain, rcpt bool
+	var also []string
 	cmd := newCmd("search {text}", "Full-text search: khub search modernization --type transcript --format json.",
 		"{text}", func(cmd *cobra.Command, args []string) error {
 			if len(args) == 0 {
@@ -28,11 +31,14 @@ func registerSearch(root *cobra.Command) {
 				if err != nil {
 					return err
 				}
-				res, err := search.Search(ws, args[0], search.Options{
-					Type: optString(cmd, "type", typeName), Limit: limit, Plain: plain, Now: today()})
+				opts := search.Options{
+					Type: optString(cmd, "type", typeName), Limit: limit, Plain: plain, Now: clock.Now()}
+				groups := append([]string{args[0]}, also...)
+				res, err := search.SearchGroups(ws, groups, opts)
 				if err != nil {
 					return err
 				}
+				fused := res.Groups > 1 // one distinct group is a plain search, with its bytes
 				if note := searchNote(res, plain); note != "" {
 					Note(note)
 				}
@@ -55,11 +61,22 @@ func registerSearch(root *cobra.Command) {
 					record.Set("orphan", h.Orphan)
 					record.Set("stale", h.Stale)
 					record.Set("score", h.Score)
+					if fused && h.Groups > 0 {
+						record.Set("fused", h.Fused)
+						record.Set("groups", h.Groups)
+					}
 					if plain {
 						record.Set("match", h.Match)
 						record.Set("title_match", h.TitleMatch)
 					}
 					record.Set("snippet", h.Snippet)
+					if h.Section != nil {
+						section := make([]any, len(h.Section))
+						for i, title := range h.Section {
+							section[i] = title
+						}
+						record.Set("section", section)
+					}
 					record.Set("path", h.Path)
 					if h.Locator != "" {
 						record.Set("locator", h.Locator)
@@ -68,10 +85,22 @@ func registerSearch(root *cobra.Command) {
 					edges.Set("out", edgeCounts(h.Out))
 					edges.Set("in", edgeCounts(h.In))
 					record.Set("edges", edges)
+					record.Set("trust", h.Trust)
 					records = append(records, record)
 					rows = append(rows, []string{h.Type + "/" + h.Slug, h.Title, h.Snippet})
 				}
-				return Emit(records, format, func() {
+				var doc any = records
+				if rcpt {
+					applied := omap.New()
+					applied.Set("text", args[0])
+					applied.Set("also", strList(also))
+					applied.Set("match", strList(res.Matches))
+					applied.Set("plain", plain)
+					applied.Set("type", orNull(opts.Type))
+					applied.Set("limit", limit)
+					doc = withReceipt(applied, res.Total, records)
+				}
+				return Emit(doc, format, func() {
 					if len(rows) == 0 {
 						fmt.Println("No entities match")
 						return
@@ -84,7 +113,9 @@ func registerSearch(root *cobra.Command) {
 	cmd.Flags().StringVar(&typeName, "type", "", "Restrict to one entity type.")
 	cmd.Flags().IntVar(&limit, "limit", 20, "Cap the returned set.")
 	cmd.Flags().BoolVar(&plain, "plain", false, "Treat text as plain words: any may match, prefix-matched, punctuation literal.")
+	cmd.Flags().StringArrayVar(&also, "also", nil, "Another query group, ranked on its own and fused with the rest by reciprocal rank (repeatable).")
 	cmd.Flags().StringVar(&format, "format", "text", "text (Rich table on a TTY), json, or ids.")
+	cmd.Flags().BoolVar(&rcpt, "receipt", false, "Wrap JSON output with the applied query, matched and returned counts, and truncation.")
 	root.AddCommand(cmd)
 }
 

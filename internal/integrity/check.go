@@ -1,7 +1,7 @@
 // The `check` gate — src/khub/core/integrity.py:402-777.
 //
-// check is graph-wide over the active (draft:false) subgraph. It computes
-// required-completeness from the schema, never from the draft flag
+// check is graph-wide over the active (not `status: draft`) subgraph. It
+// computes required-completeness from the schema, never from the status
 // (REQ-INT002-05), and finds the structural gaps that define it:
 // active-but-incomplete entities, drafts that cannot satisfy a required
 // relation, orphans, dangling edges, stray files, misplaced files, malformed
@@ -16,6 +16,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/endgame-build/khub/internal/canon"
 	"github.com/endgame-build/khub/internal/entity"
@@ -23,10 +24,10 @@ import (
 	"github.com/endgame-build/khub/internal/graph"
 	"github.com/endgame-build/khub/internal/index"
 	"github.com/endgame-build/khub/internal/introspect"
-	"github.com/endgame-build/khub/internal/omap"
+	"github.com/endgame-build/khub/internal/project"
 	"github.com/endgame-build/khub/internal/schema"
 	"github.com/endgame-build/khub/internal/template"
-	"github.com/endgame-build/khub/internal/values"
+	"github.com/endgame-build/khub/internal/trust"
 )
 
 // Incomplete is integrity.Incomplete: an active entity missing required fields
@@ -65,6 +66,20 @@ type Misplaced struct {
 	Type     string
 	Expected string
 }
+
+// RetentionHit is one entity past its type's retention rule: its effective date
+// (`updated`, else `created`) is more than the rule's days old and, under
+// `no_outbound`, it has no outbound edge. A candidate for removal, reported and
+// never acted on.
+type RetentionHit struct {
+	Type    string
+	Slug    string
+	Date    string // the effective date, YYYY-MM-DD
+	AgeDays int
+}
+
+// ID is RetentionHit.id.
+func (e RetentionHit) ID() string { return e.Type + "/" + e.Slug }
 
 // AliasConflict is one alias that names more than one entity: two or more
 // entities declare it, or it is some other entity's slug. Either way an ID
@@ -138,11 +153,113 @@ type CheckReport struct {
 	Misplaced []Misplaced
 	// Aliases that name more than one entity. Fails the gate.
 	AliasConflicts []AliasConflict
+	// Active entities whose authored `stale_after` has passed, as qualified
+	// ids. Computed always; a gate only under StaleGate (`check --stale`).
+	Expired   []string
+	StaleGate bool
+	// Active entities and their review tier (trust.Tier), every one of them;
+	// TierGate ("machine" or "human", "" for off) turns those below it into a
+	// failing finding (`check --require-verified`).
+	BelowTier []TierFinding
+	TierGate  string
+	// Review events whose recorded `rev` no longer matches the content: the
+	// review saw an earlier version. Informational, like Thin.
+	Superseded []SupersededVerification
+	// Entities past their type's policy `retention` rule. Informational —
+	// never consulted by Passed, `--strict` included: the clock alone moves an
+	// entity into this bucket, and a gate that turns red with no change to the
+	// workspace would fail every CI run on the day a meeting turns N days old.
+	Retention []RetentionHit
+	// Schema fields that share a name with a write verb's own flag, so that
+	// verb can never set them. The CLI fills it (it owns the flags); a schema
+	// defect, so it fails the gate.
+	FlagShadowed []FlagShadow
+	// Body mentions with no edge behind them, filled only when the audit was
+	// asked for (MentionsRun). Suggestions, never findings: never consulted
+	// by Passed, `--strict` included.
+	Mentions    []Mention
+	MentionsRun bool
+	// Findings a policy `waive` entry accepts, moved out of their bucket and
+	// kept visible here with the reason. Never consulted by Passed.
+	Waived []Waived
+	// Waivers no finding matched — the finding was fixed, the entity renamed
+	// or removed, or the waiver mistyped. Fails the gate, so a waiver cannot
+	// rot into a standing exemption for whatever later reappears.
+	StaleWaivers []StaleWaiver
 }
+
+// Waived is one finding a policy waiver accepts. Finding names the bucket it
+// was moved out of; Detail is the finding itself, as that bucket holds it
+// (Incomplete, Dangling, FieldError, or an orphan's qualified id).
+type Waived struct {
+	Type    string
+	Slug    string
+	Finding string
+	Reason  string
+	Detail  any
+}
+
+// ID is Waived.id.
+func (w Waived) ID() string { return w.Type + "/" + w.Slug }
+
+// StaleWaiver is a policy waiver that matched no finding. Cause says why:
+// StaleNoMatch, or StaleOrphanExempt for an `orphans` waiver on a type that
+// declares `orphan: true` and so never has one.
+type StaleWaiver struct {
+	Type    string
+	Slug    string
+	Finding string
+	Reason  string
+	Cause   string
+}
+
+// StaleWaiver causes.
+const (
+	StaleNoMatch      = "no_match"
+	StaleOrphanExempt = "orphan_exempt"
+)
+
+// ID is StaleWaiver.id.
+func (w StaleWaiver) ID() string { return w.Type + "/" + w.Slug }
+
+// CheckOptions selects check's opt-in passes.
+type CheckOptions struct {
+	// Strict fails the gate on orphans too.
+	Strict bool
+	// Mentions runs the body-mention audit (see mentions.go).
+	Mentions bool
+}
+
+// FlagShadow is one field a write verb's flag shadows: Commands are the verbs
+// (`add`, `edit`) whose own --<Field> flag wins over it.
+type FlagShadow struct {
+	Type, Field string
+	Commands    []string
+}
+
+// SupersededVerification is one `verified` event (Event, its index in the
+// list) whose `rev` no longer matches the entity's content.
+type SupersededVerification struct {
+	Type, Slug string
+	Event      int
+	By, Rev    string
+}
+
+// ID is SupersededVerification.id.
+func (s SupersededVerification) ID() string { return s.Type + "/" + s.Slug }
 
 // Passed is CheckReport.passed.
 func (r *CheckReport) Passed() bool {
 	if r.Strict && len(r.Orphans) > 0 {
+		return false
+	}
+	if r.StaleGate && len(r.Expired) > 0 {
+		return false
+	}
+	if len(r.BelowGate()) > 0 {
+		return false
+	}
+	if len(r.FlagShadowed) > 0 {
 		return false
 	}
 	return len(r.Incomplete) == 0 &&
@@ -157,7 +274,8 @@ func (r *CheckReport) Passed() bool {
 		len(r.MissingSingletons) == 0 &&
 		len(r.DraftRequiredSingletons) == 0 &&
 		len(r.Misplaced) == 0 &&
-		len(r.AliasConflicts) == 0
+		len(r.AliasConflicts) == 0 &&
+		len(r.StaleWaivers) == 0
 }
 
 // Check is integrity.check: walk the active subgraph for completeness,
@@ -168,12 +286,18 @@ func (r *CheckReport) Passed() bool {
 // that points at a stray dangles instead of silently resolving to a non-entity.
 // A file that could not be parsed is a malformed entry, not a node, and fails
 // the check.
-func Check(root string, strict bool) (*CheckReport, error) {
+func Check(root string, strict bool, now time.Time) (*CheckReport, error) {
+	return CheckWith(root, CheckOptions{Strict: strict}, now)
+}
+
+// CheckWith is Check with the opt-in passes selectable.
+func CheckWith(root string, opts CheckOptions, now time.Time) (*CheckReport, error) {
+	strict := opts.Strict
 	resolved, err := introspect.LoadSchema(root)
 	if err != nil {
 		return nil, err
 	}
-	scanned, err := index.Build(root, resolved)
+	scanned, err := index.BuildWithBodies(root, resolved) // bodies feed trust.Rev
 	if err != nil {
 		return nil, err
 	}
@@ -258,7 +382,7 @@ func Check(root string, strict bool) (*CheckReport, error) {
 		rtype, _ := resolved.Types.Get(tname)
 		node := index.Node{Type: tname, Slug: tname}
 		if valid.Nodes[node] {
-			if values.AsBool(draftFlag(valid.Meta[node])) {
+			if rtype.IsDraft(valid.Meta[node]) {
 				draftSingletons = append(draftSingletons, tname)
 			}
 		} else if rtype.Required {
@@ -290,7 +414,13 @@ func Check(root string, strict bool) (*CheckReport, error) {
 	// Bodies, over every valid node of every templated type — the same pass
 	// validate runs, whole-workspace.
 	body := bodyFindings(root, resolved, valid, nil)
-	return &CheckReport{
+	var mentions []Mention
+	if opts.Mentions {
+		mentions = mentionSuggestions(resolved, valid, g, entityNodes, body.templates)
+	}
+	report := &CheckReport{
+		Mentions:                mentions,
+		MentionsRun:             opts.Mentions,
 		TemplateInvalid:         body.templateInvalid,
 		BodyShape:               body.shape,
 		Thin:                    body.gaps,
@@ -309,7 +439,194 @@ func Check(root string, strict bool) (*CheckReport, error) {
 		StrayTemplates:          strayTemplates,
 		MissingTemplates:        missingTemplates,
 		AliasConflicts:          aliasConflicts(valid, entityNodes),
-	}, nil
+		Expired:                 expiredEntities(resolved, valid, entityNodes, now),
+		BelowTier:               tiers(resolved, valid, entityNodes),
+		Superseded:              supersededVerifications(resolved, valid, entityNodes),
+		Retention:               retentionHits(resolved, valid, g, entityNodes, now),
+	}
+	applyWaivers(resolved, valid, report)
+	return report, nil
+}
+
+// applyWaivers moves every finding a policy `waive` entry names out of its
+// bucket into Waived, and reports each waiver that matched nothing as stale.
+//
+// A waiver covers its whole bucket for that entity: every dangling edge it
+// holds, every body finding. Matching runs regardless of --strict — an orphan
+// is an orphan whether or not the gate counts it, so its waiver is never
+// stale for want of the flag.
+//
+// An `incomplete` waiver on an entity that is present but a draft is dormant:
+// neither matched nor stale. Drafts are exempt from required-completeness, so
+// the finding cannot arise while the entity is unpublished — and a draft
+// toggle alone must not move the gate, in either direction: drafting the
+// entity would otherwise fail check on a stale waiver, and deleting the
+// waiver to clear that would fail it again on re-publish. `incomplete` is the
+// only waivable bucket that skips drafts; orphans, dangling edges and body
+// findings are reported for drafts too.
+func applyWaivers(resolved *schema.ResolvedSchema, valid *index.Index, r *CheckReport) {
+	type key struct{ typ, slug, finding string }
+	reasons := map[key]string{}
+	for _, tname := range resolved.Types.Keys() {
+		rtype, _ := resolved.Types.Get(tname)
+		for _, w := range rtype.Waivers {
+			reasons[key{tname, w.Slug, w.Finding}] = w.Reason
+		}
+	}
+	r.Waived = []Waived{}
+	r.StaleWaivers = []StaleWaiver{}
+	if len(reasons) == 0 {
+		return
+	}
+	matched := map[key]bool{}
+	// waive reports whether the finding is waived, recording it if so.
+	waive := func(finding, typ, slug string, detail any) bool {
+		k := key{typ, slug, finding}
+		reason, ok := reasons[k]
+		if !ok {
+			return false
+		}
+		matched[k] = true
+		r.Waived = append(r.Waived, Waived{Type: typ, Slug: slug, Finding: finding, Reason: reason, Detail: detail})
+		return true
+	}
+	// In the order check emits the buckets (schema.WaivableFindings).
+	r.Incomplete = keep(r.Incomplete, func(i Incomplete) bool { return !waive("incomplete", i.Type, i.Slug, i) })
+	r.Orphans = keep(r.Orphans, func(id string) bool {
+		typ, slug, _ := strings.Cut(id, "/")
+		return !waive("orphans", typ, slug, id)
+	})
+	r.Dangling = keep(r.Dangling, func(d Dangling) bool { return !waive("dangling", d.Type, d.Slug, d) })
+	r.BodyShape = keep(r.BodyShape, func(e FieldError) bool { return !waive("body_shape", e.Type, e.Slug, e) })
+	r.Thin = keep(r.Thin, func(e FieldError) bool { return !waive("thin", e.Type, e.Slug, e) })
+
+	// Ontology declaration order, then the order the waivers were written.
+	for _, tname := range resolved.Types.Keys() {
+		rtype, _ := resolved.Types.Get(tname)
+		for _, w := range rtype.Waivers {
+			if matched[key{tname, w.Slug, w.Finding}] {
+				continue
+			}
+			node := index.Node{Type: tname, Slug: w.Slug}
+			if w.Finding == "incomplete" && valid.Nodes[node] && rtype.IsDraft(valid.Meta[node]) {
+				continue // dormant while the entity is a draft
+			}
+			cause := StaleNoMatch
+			if w.Finding == "orphans" && rtype.Orphan {
+				cause = StaleOrphanExempt
+			}
+			r.StaleWaivers = append(r.StaleWaivers,
+				StaleWaiver{Type: tname, Slug: w.Slug, Finding: w.Finding, Reason: w.Reason, Cause: cause})
+		}
+	}
+}
+
+// keep returns the items pred accepts, in order, never nil.
+func keep[T any](items []T, pred func(T) bool) []T {
+	out := make([]T, 0, len(items))
+	for _, it := range items {
+		if pred(it) {
+			out = append(out, it)
+		}
+	}
+	return out
+}
+
+// retentionHits sweeps every type declaring a policy `retention` rule. Drafts
+// count, as they do for the orphan sweep: an abandoned draft is the likeliest
+// end-of-life candidate of all. The date is `updated`, else `created`, the
+// first that parses (project.Age); an entity with neither is never reported.
+//
+// What counts as outbound for `no_outbound` is the graph's out-degree: a
+// stored edge that resolves, to any entity, a draft included, or a path
+// reference to an entity's file. A derived inverse is not stored on this
+// entity and does not count; a self-loop is dropped from the graph; a dangling
+// value or a path reference to a non-entity file is no edge.
+func retentionHits(resolved *schema.ResolvedSchema, valid *index.Index, g *graph.Graph,
+	nodes []index.Node, now time.Time) []RetentionHit {
+	out := []RetentionHit{}
+	for _, n := range nodes {
+		rtype, _ := resolved.Types.Get(n.Type)
+		rule := rtype.Retention
+		if rule == nil {
+			continue
+		}
+		date, age, ok := project.Age(valid.Meta[n], now)
+		if !ok || age <= rule.Days {
+			continue
+		}
+		if rule.NoOutbound && g.OutDegree(n) > 0 {
+			continue
+		}
+		out = append(out, RetentionHit{Type: n.Type, Slug: n.Slug, Date: date.Format("2006-01-02"), AgeDays: age})
+	}
+	return out
+}
+
+// supersededVerifications lists every review event that saw an earlier
+// version of its entity.
+func supersededVerifications(resolved *schema.ResolvedSchema, idx *index.Index, nodes []index.Node) []SupersededVerification {
+	out := []SupersededVerification{}
+	for _, n := range nodes {
+		rtype, _ := resolved.Types.Get(n.Type)
+		events := trust.Events(idx.Meta[n])
+		for _, i := range trust.Superseded(rtype, idx.Meta[n], idx.Body[n]) {
+			by, _ := events[i].Get("by")
+			rev, _ := events[i].Get("rev")
+			out = append(out, SupersededVerification{
+				Type: n.Type, Slug: n.Slug, Event: i, By: pyStr(by), Rev: pyStr(rev),
+			})
+		}
+	}
+	return out
+}
+
+// TierFinding is one active entity and its review tier.
+type TierFinding struct {
+	Type, Slug, Trust string
+}
+
+// ID is TierFinding.id.
+func (f TierFinding) ID() string { return f.Type + "/" + f.Slug }
+
+// BelowGate is the tier gate's finding: the active entities below TierGate,
+// none while the gate is off.
+func (r *CheckReport) BelowGate() []TierFinding {
+	out := []TierFinding{}
+	if r.TierGate == "" {
+		return out
+	}
+	for _, f := range r.BelowTier {
+		if trust.Rank(f.Trust) < trust.Rank(r.TierGate) {
+			out = append(out, f)
+		}
+	}
+	return out
+}
+
+// tiers lists every active entity with its review tier.
+func tiers(resolved *schema.ResolvedSchema, idx *index.Index, nodes []index.Node) []TierFinding {
+	out := []TierFinding{}
+	for _, n := range nodes {
+		rtype, _ := resolved.Types.Get(n.Type)
+		if !rtype.IsDraft(idx.Meta[n]) {
+			out = append(out, TierFinding{n.Type, n.Slug, trust.Tier(rtype, idx.Meta[n], idx.Body[n])})
+		}
+	}
+	return out
+}
+
+// expiredEntities lists the active entities whose `stale_after` has passed:
+// an authored expiry, apart from the age staleness `khub stale` reports.
+func expiredEntities(resolved *schema.ResolvedSchema, idx *index.Index, nodes []index.Node, now time.Time) []string {
+	out := []string{}
+	for _, n := range nodes {
+		rtype, _ := resolved.Types.Get(n.Type)
+		if !rtype.IsDraft(idx.Meta[n]) && project.Expired(idx.Meta[n], now) {
+			out = append(out, n.ID())
+		}
+	}
+	return out
 }
 
 // aliasConflicts groups every declared alias case-insensitively, the way ID
@@ -346,16 +663,6 @@ func aliasConflicts(valid *index.Index, nodes []index.Node) []AliasConflict {
 		}
 	}
 	return out
-}
-
-// draftFlag is `meta.get("draft", False)` — a missing key defaults to False,
-// which as_bool then reads (a hand-authored `draft: "false"` is PUBLISHED).
-func draftFlag(meta *omap.Map) any {
-	v, ok := meta.Get("draft")
-	if !ok {
-		return false
-	}
-	return v
 }
 
 // skipDir is integrity._SKIP_DIRS: the shared prune list plus khub's own
@@ -445,7 +752,7 @@ func misplacedFiles(root string, resolved *schema.ResolvedSchema) ([]Misplaced, 
 			continue
 		}
 		rel = filepath.ToSlash(rel) // reported as Misplaced.Path
-		if skipped(rel) {
+		if skipped(rel) || schema.ReservedEntityName(filepath.Base(rel)) {
 			continue
 		}
 		accepted := false
@@ -538,41 +845,19 @@ func templatedMisplaced(idx *index.Index) []Misplaced {
 // already not a pinned contract; this uses the 3.12+ string order.
 func rglobMD(root string, resolved *schema.ResolvedSchema) ([]string, error) {
 	trees := storageTrees(resolved)
-	ignore := resolved.Ignore
 	var out []string
-	var walk func(dir string) error
-	walk = func(dir string) error {
-		entries, err := fsio.ReadDir(root, dir)
-		if err != nil {
-			return err
-		}
-		for _, e := range entries {
-			path := filepath.Join(dir, e.Name())
-			if rel, err := filepath.Rel(root, path); err == nil && ignore.Ignored(rel, e.IsDir()) {
-				continue
-			}
-			if e.Type().IsRegular() {
-				name := e.Name()
-				if strings.HasSuffix(name, ".md") {
-					out = append(out, path)
-				} else if strings.HasSuffix(name, ".json") || strings.HasSuffix(name, ".yaml") {
-					if rel, err := filepath.Rel(root, path); err == nil && underStorageTree(rel, trees) {
-						out = append(out, path)
-					}
-				}
-			}
-			if e.IsDir() && !skipDir(e.Name()) && !strings.HasPrefix(e.Name(), ".") {
-				if isLink(path) {
-					continue
-				}
-				if err := walk(path); err != nil {
-					return err
-				}
+	err := index.WalkTree(root, resolved.Ignore, func(path string) error {
+		name := filepath.Base(path)
+		if strings.HasSuffix(name, ".md") {
+			out = append(out, path)
+		} else if strings.HasSuffix(name, ".json") || strings.HasSuffix(name, ".yaml") {
+			if rel, err := filepath.Rel(root, path); err == nil && underStorageTree(rel, trees) {
+				out = append(out, path)
 			}
 		}
 		return nil
-	}
-	if err := walk(root); err != nil {
+	})
+	if err != nil {
 		return nil, err
 	}
 	// Order by the slash form, so a Windows separator sorts as "/" does.
@@ -608,11 +893,6 @@ func underStorageTree(rel string, trees []string) bool {
 		}
 	}
 	return false
-}
-
-func isLink(path string) bool {
-	fi, err := os.Lstat(path)
-	return err == nil && fsio.IsLink(fi)
 }
 
 // skipped applies the _SKIP_DIRS / leading-dot filter to every part of the
@@ -686,10 +966,10 @@ func incompleteEntities(
 	out := []Incomplete{}
 	for _, node := range nodes {
 		meta := idx.Meta[node]
-		if values.AsBool(draftFlag(meta)) {
+		rtype, _ := resolved.Types.Get(node.Type)
+		if rtype.IsDraft(meta) {
 			continue // drafts are exempt from required-completeness
 		}
-		rtype, _ := resolved.Types.Get(node.Type)
 		// Both lists stay non-nil: an Incomplete is emitted when EITHER is
 		// non-empty, and the other must serialize as [] (Python's empty list),
 		// never JSON null.
@@ -717,7 +997,7 @@ func incompleteEntities(
 			}
 			anyActive := false
 			for t := range resolvedTo {
-				if !values.AsBool(draftFlag(idx.Meta[t])) {
+				if ttype, _ := resolved.Types.Get(t.Type); !ttype.IsDraft(idx.Meta[t]) {
 					anyActive = true
 					break
 				}

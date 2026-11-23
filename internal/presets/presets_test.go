@@ -156,9 +156,9 @@ func TestFirmOpsPreset(t *testing.T) {
 		if rtype.Relations.Has("superseded_by") {
 			t.Errorf("%s declares a stored inverse superseded_by", name)
 		}
-		attr, ok := rtype.Attributes.Get("draft")
-		if !ok || attr.BaseType != "bool" {
-			t.Errorf("%s.draft is not the core bool", name)
+		attr, ok := rtype.Attributes.Get("status")
+		if !ok || attr.OverriddenFromBase || attr.Default != "stable" {
+			t.Errorf("%s.status is not the core OKF status", name)
 		}
 	}
 	if _, ok := typeOf(t, s, "client").Relations.Get("partner"); !ok {
@@ -290,9 +290,9 @@ func TestBuildHubPreset(t *testing.T) {
 	assertRelation(t, s, "requirement", "realized_in", []string{"component"}, true, false)
 
 	// adr is the only decision type; affects is the blast-radius query.
-	assertEnum(t, s, "adr", "status", []string{"proposed", "accepted", "rejected"})
-	if !attr(t, s, "adr", "status").Required {
-		t.Error("adr.status is not required")
+	assertEnum(t, s, "adr", "decision", []string{"proposed", "accepted", "rejected"})
+	if a := attr(t, s, "adr", "decision"); !a.Required || a.Default != nil {
+		t.Error("adr.decision is not required, or carries a default")
 	}
 	assertRelation(t, s, "adr", "supersedes", []string{"adr"}, false, false)
 	if r := relation(t, s, "adr", "supersedes"); r.Inverse == nil || *r.Inverse != "superseded" || !r.Acyclic {
@@ -331,30 +331,23 @@ func TestBuildHubPreset(t *testing.T) {
 
 	// api: provider is required so `check` catches an interface nobody owns.
 	assertEnum(t, s, "api", "kind", []string{"rest", "graphql", "grpc", "events", "data"})
-	assertEnum(t, s, "api", "status", []string{"proposed", "active", "deprecated"})
-	for _, name := range []string{"kind", "status"} {
-		if !attr(t, s, "api", name).Required {
-			t.Errorf("api.%s is not required", name)
-		}
+	if !attr(t, s, "api", "kind").Required {
+		t.Error("api.kind is not required")
 	}
 	assertRelation(t, s, "api", "provider", []string{"component"}, false, true)
 
-	// repo is the codebase registry: org/name, status, a title to mint from;
+	// repo is the codebase registry: org/name and a title to mint from;
 	// ownership is derived from the components naming it, never stored.
 	if a := attr(t, s, "repo", "repo"); a.BaseType != "text" || !a.Required ||
 		a.Pattern == nil || *a.Pattern != `^[a-z0-9._-]+(/[a-z0-9._-]+)+$` {
 		t.Errorf("repo.repo = %s required=%v pattern=%v", a.BaseType, a.Required, a.Pattern)
 	}
-	assertEnum(t, s, "repo", "status", []string{"active", "archived"})
-	if !attr(t, s, "repo", "status").Required {
-		t.Error("repo.status is not required")
-	}
 	if n := len(ownPredicates(s, "repo")); n != 0 {
 		t.Errorf("repo declares %d relations", n)
 	}
 
-	// Inverses are computed at read time, never stored; status is always an
-	// explicit statement.
+	// Inverses are computed at read time, never stored. api and repo inherit
+	// the base OKF status, never a type-level one.
 	for _, name := range s.Types.Keys() {
 		rtype, _ := s.Types.Get(name)
 		for _, inverse := range []string{"superseded", "superseded_by", "consumed_by", "consumers"} {
@@ -364,8 +357,8 @@ func TestBuildHubPreset(t *testing.T) {
 		}
 	}
 	for _, name := range []string{"adr", "api", "repo"} {
-		if attr(t, s, name, "status").Default != nil {
-			t.Errorf("%s.status carries a default", name)
+		if a := attr(t, s, name, "status"); a.OverriddenFromBase || a.Default != "stable" {
+			t.Errorf("%s.status is not the base OKF status", name)
 		}
 	}
 }

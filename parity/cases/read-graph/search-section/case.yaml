@@ -1,0 +1,23 @@
+# search reports `section`: the Markdown heading path to the first match in
+# the snippet, when the snippet excerpts the body. Absent for a title match,
+# a frontmatter value, text before the first heading, and a body with no
+# headings. A `#` line inside a code fence is not a heading; a closing run
+# of `#` is dropped; a shallower heading closes the deeper ones.
+steps:
+- argv: ["init", "build-hub", ".", "--no-wire"]
+- argv: ["add", "component", "--title", "Store", "--kind", "service", "--stack", "golang", "--body", "Intro about widgets.\n\n# Design\n\nOverview text.\n\n## Write path ##\n\n```bash\n# zebra is not a heading here\n```\n\n### Locking\n\nWe take a flock on the lockfile before writing.\n\n## Read path\n\nReaders never take the flock.\n"]
+- argv: ["add", "component", "--title", "Cache", "--kind", "service", "--body", "Plain prose about eviction, no headings at all.\n"]
+- argv: ["search", "lockfile"]
+- argv: ["search", "zebra"]
+- argv: ["search", "readers"]
+- argv: ["search", "widgets"]
+- argv: ["search", "golang"]
+- argv: ["search", "store"]
+- argv: ["search", "eviction"]
+- argv: ["search", "--plain", "flock readers"]
+# A phrase longer than the snippet comes back unmarked from inside it; the
+# section is where the snippet opens. A bare `#` closes `# Beta` and
+# names nothing, so text under it has no section.
+- argv: ["add", "component", "--title", "Queue", "--kind", "service", "--body", "# Alpha\n\na b c d e f g h i j k l m n o p q r s t u v w x y z\n\n# Beta\n\nw1 w2 w3 w4 w5 w6 w7 w8 w9 w10 w11 w12 w13 w14 w15\n\n#\n\nthe wombat lives here\n"]
+- argv: ["search", "\"w1 w2 w3 w4 w5 w6 w7 w8 w9 w10 w11 w12 w13 w14 w15\""]
+- argv: ["search", "wombat"]

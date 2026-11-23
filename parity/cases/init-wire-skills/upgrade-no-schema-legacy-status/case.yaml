@@ -1,0 +1,17 @@
+# Under --no-schema the old layer files stay, and a 0.6.0 build-hub api still
+# declares its own `status` enum (proposed, active, deprecated), which holds no
+# `draft`. So an api's `draft: true` is not written as `status: draft`
+# (validate would then reject it): the entity stays as written and the
+# conflict names a full upgrade. A false flag is still dropped, bare `sources`
+# still move to `references`, and the api's own status values stay. The sh
+# step gives the 0.7.0 api that 0.6.0 status.
+steps:
+- argv: ["init", "build-hub", ".", "--no-wire"]
+- sh: |
+    perl -0pi -e 's/^(    api:\n      when: [^\n]*\n      attributes:\n)/$1        status:\n          enum: [proposed, active, deprecated]\n          required: true\n/m' .khub/ontology.yaml
+    printf -- '---\ntype: api\ntitle: Q\ncreated: 2026-01-15\nkind: rest\nprovider: cmp-x\nstatus: proposed\ndraft: true\n---\n' > knowledge/apis/api-q.md
+    printf -- '---\ntype: api\ntitle: R\ncreated: 2026-01-15\nkind: rest\nprovider: cmp-x\ndraft: true\n---\n' > knowledge/apis/api-r.md
+    printf -- '---\ntype: api\ntitle: S\ncreated: 2026-01-15\nkind: rest\nprovider: cmp-x\nstatus: active\ndraft: false  # retired\n---\n' > knowledge/apis/api-s.md
+    printf -- '---\ntype: component\ntitle: X  # hand comment\ncreated: 2026-01-15\nkind: service\nsources:\n- api-q\n---\n' > knowledge/components/cmp-x.md
+- argv: ["upgrade", "--no-schema", "--no-wire", "--format", "json"]
+- argv: ["validate", "--format", "json"]

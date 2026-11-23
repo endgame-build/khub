@@ -5,15 +5,20 @@ package reindex
 // assertions are left to the golden fixtures.
 
 import (
+	"errors"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
+	"slices"
 	"strings"
 	"testing"
 
 	"github.com/endgame-build/khub/internal/canon"
 	"github.com/endgame-build/khub/internal/index"
 	"github.com/endgame-build/khub/internal/omap"
+	"github.com/endgame-build/khub/internal/project"
 	"github.com/endgame-build/khub/internal/schema"
 )
 
@@ -59,8 +64,9 @@ func TestCrossLinksEdgesAndSlugFallback(t *testing.T) {
 	}
 }
 
-// TS-PRJ-001-U03 (REQ-PRJ001-01, PRJ-002) + U06: the OKF version and the entity
-// count are stamped, and an empty workspace still renders a valid zero-row index.
+// TS-PRJ-001-U03 (REQ-PRJ001-01, PRJ-002) + U06: okf_version is the only
+// frontmatter key (OKF 0.2 §8), and an empty workspace renders the frontmatter
+// alone.
 func TestIndexStampsOKFVersion(t *testing.T) {
 	cases := []struct {
 		name      string
@@ -69,7 +75,7 @@ func TestIndexStampsOKFVersion(t *testing.T) {
 		wantBody  string
 	}{
 		{"seeded", firmOpsWS, 5, "initech-deal"},
-		{"empty", freshWS, 0, "_No entities._"},
+		{"empty", freshWS, 0, ""},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -84,8 +90,11 @@ func TestIndexStampsOKFVersion(t *testing.T) {
 			if v, _ := meta.Get("okf_version"); v != OKFVersion {
 				t.Errorf("okf_version = %v, want %q", v, OKFVersion)
 			}
-			if v, _ := meta.Get("entity_count"); v != tc.wantCount {
-				t.Errorf("entity_count = %v, want %d", v, tc.wantCount)
+			if keys := meta.Keys(); len(keys) != 1 {
+				t.Errorf("frontmatter keys = %v, want okf_version alone", keys)
+			}
+			if tc.wantBody == "" && content != "---\nokf_version: '0.2'\n---\n" {
+				t.Errorf("empty index = %q", content)
 			}
 			if !strings.Contains(content, tc.wantBody) {
 				t.Errorf("body does not contain %q:\n%s", tc.wantBody, content)
@@ -158,19 +167,46 @@ func TestReindexWritesTheIndex(t *testing.T) {
 	}
 	text := readRaw(t, root, "index.md")
 	for _, heading := range []string{
-		"## opportunity", "## project", "## meeting", "## person", "## client",
+		"# opportunity\n", "# project\n", "# meeting\n", "# person\n", "# client\n",
 	} {
 		if !strings.Contains(text, heading) {
 			t.Errorf("missing %q", heading)
 		}
 	}
 	for _, xlink := range []string{
-		"owner → [Noor P](identity/team/noor.md)",
-		"engagement → [Initech PoV](projects/initech-pov/_index.md)",
+		"\n  * owner → [Noor P](identity/team/noor.md)\n",
+		"\n  * engagement → [Initech PoV](projects/initech-pov/_index.md)\n",
 	} {
 		if !strings.Contains(text, xlink) {
 			t.Errorf("missing cross-link %q", xlink)
 		}
+	}
+}
+
+// An entry is `* [Title](link) - description` (OKF 0.2 §8), the description
+// folded onto one line, and an entry without one ends at the link. The written
+// index is itself conformant.
+func TestIndexEntriesCarryTheDescription(t *testing.T) {
+	root := freshWS(t)
+	seed(t, root, "fragments/described.md", kv{"type", "fragment"}, kv{"stage", "raw"},
+		kv{"title", "Described"}, kv{"description", "Line one\n  and two"})
+	seed(t, root, "fragments/plain.md", kv{"type", "fragment"}, kv{"stage", "raw"})
+	mustReindex(t, root, false)
+	text := readRaw(t, root, "index.md")
+	for _, want := range []string{
+		"\n* [Described](fragments/described.md) - Line one and two\n",
+		"\n* [plain](fragments/plain.md)\n",
+	} {
+		if !strings.Contains(text, want) {
+			t.Errorf("missing %q in\n%s", want, text)
+		}
+	}
+	bad, err := project.OKFNonconformant(root, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if slices.Contains(bad, "index.md") {
+		t.Errorf("the written index is not OKF-conformant:\n%s", text)
 	}
 }
 
@@ -238,6 +274,143 @@ func TestReindexRefusesWhenACollectionIsMalformed(t *testing.T) {
 	if readRaw(t, root, "index.md") != before {
 		t.Error("the stale index was not left intact")
 	}
+}
+
+// Check is the dry-run diff as a gate: it writes nothing, reports a missing
+// file as missing, and refuses a malformed scan instead of judging a partial
+// graph.
+func TestCheckStaleMissingAndMalformed(t *testing.T) {
+	root := collectionWS(t)
+	create(t, root, "repo", "svc-a", "repo", "acme/a", "status", "active")
+	_ = os.Remove(filepath.Join(root, "index.md"))
+
+	result, err := Check(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !result.Missing || !result.Stale || result.Diff == "" || result.Wrote {
+		t.Fatalf("missing index: Missing=%v Stale=%v Wrote=%v diff=%q",
+			result.Missing, result.Stale, result.Wrote, result.Diff)
+	}
+	if _, serr := os.Stat(filepath.Join(root, "index.md")); !os.IsNotExist(serr) {
+		t.Fatal("check wrote index.md")
+	}
+
+	mustReindex(t, root, false)
+	result, err = Check(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Missing || result.Stale || result.Diff != "" {
+		t.Fatalf("current index: Missing=%v Stale=%v diff=%q", result.Missing, result.Stale, result.Diff)
+	}
+
+	collection := "knowledge/architecture/repos.yaml"
+	writeRaw(t, root, collection,
+		readRaw(t, root, collection)+"svc-a:\n  repo: acme/dup\n  status: active\n")
+	if _, err := Check(root); locatedCode(err) != "malformed_projection" {
+		t.Fatalf("check over a malformed scan: err = %v, want malformed_projection", err)
+	}
+}
+
+// A CRLF checkout of a current index.md (git's core.autocrlf on Windows) is
+// current: index.md is read with universal newlines, as every khub text read is.
+func TestCheckReadsCRLFAsCurrent(t *testing.T) {
+	root := firmOpsWS(t)
+	mustReindex(t, root, false)
+	crlf := strings.ReplaceAll(readRaw(t, root, "index.md"), "\n", "\r\n")
+	writeRaw(t, root, "index.md", crlf)
+
+	result, err := Check(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Stale || result.Diff != "" {
+		t.Fatalf("CRLF index: Stale=%v diff=%q", result.Stale, result.Diff)
+	}
+}
+
+// Staleness is decided on bytes. The display diff splits lines over runes, so
+// an invalid byte decodes to U+FFFD and would match a real U+FFFD; the verdict
+// must not depend on it.
+func TestCheckStaleOnBytesTheDiffCannotSee(t *testing.T) {
+	root := firmOpsWS(t)
+	create(t, root, "person", "ada", "name", "Ada", "role", "partner",
+		"title", "Bad\uFFFDTitle")
+	mustReindex(t, root, false)
+	text := readRaw(t, root, "index.md")
+	if !strings.Contains(text, "\uFFFD") {
+		t.Fatal("index.md does not carry the title")
+	}
+	writeRaw(t, root, "index.md", strings.ReplaceAll(text, "\uFFFD", "\xff"))
+
+	result, err := Check(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !result.Stale || result.Missing {
+		t.Fatalf("invalid byte: Stale=%v Missing=%v diff=%q", result.Stale, result.Missing, result.Diff)
+	}
+}
+
+// An index.md that cannot be read is a refusal, as it is for the reindex a
+// stale verdict would name, never a stale verdict: a symlink is unsafe_path,
+// a directory or an unreadable file is an OS error.
+func TestCheckRefusesWhatReindexRefuses(t *testing.T) {
+	t.Run("symlink", func(t *testing.T) {
+		root := firmOpsWS(t)
+		mustReindex(t, root, false)
+		writeRaw(t, root, "real.md", readRaw(t, root, "index.md"))
+		index := filepath.Join(root, "index.md")
+		if err := os.Remove(index); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Symlink("real.md", index); err != nil {
+			t.Skipf("symlinks unavailable: %v", err)
+		}
+		_, err := Check(root)
+		if locatedCode(err) != "unsafe_path" {
+			t.Fatalf("check over a symlink: err = %v, want unsafe_path", err)
+		}
+		if _, rerr := Reindex(root, false); locatedCode(rerr) != "unsafe_path" {
+			t.Fatalf("reindex over a symlink: err = %v, want unsafe_path", rerr)
+		}
+	})
+	t.Run("directory", func(t *testing.T) {
+		root := firmOpsWS(t)
+		if err := os.Mkdir(filepath.Join(root, "index.md"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		_, cerr := Check(root)
+		_, rerr := Reindex(root, false)
+		if cerr == nil || rerr == nil || !errors.Is(cerr, fs.ErrInvalid) || !errors.Is(rerr, fs.ErrInvalid) {
+			t.Fatalf("directory index.md: check err = %v, reindex err = %v, want both invalid", cerr, rerr)
+		}
+		// A dry run stays a lenient preview.
+		if result := mustReindex(t, root, true); !result.Stale {
+			t.Fatal("dry run over a directory index.md: want the whole index as the diff")
+		}
+	})
+	t.Run("unreadable", func(t *testing.T) {
+		if runtime.GOOS == "windows" {
+			t.Skip("chmod does not deny reads on Windows")
+		}
+		root := firmOpsWS(t)
+		mustReindex(t, root, false)
+		index := filepath.Join(root, "index.md")
+		if err := os.Chmod(index, 0); err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { _ = os.Chmod(index, 0o644) })
+		if f, err := os.Open(index); err == nil {
+			_ = f.Close()
+			t.Skip("running as a user chmod does not bind")
+		}
+		_, err := Check(root)
+		if err == nil || !errors.Is(err, fs.ErrPermission) {
+			t.Fatalf("check over an unreadable index.md: err = %v, want permission denied", err)
+		}
+	})
 }
 
 // --- helpers -----------------------------------------------------------------

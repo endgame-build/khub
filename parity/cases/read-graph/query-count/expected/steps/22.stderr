@@ -1,0 +1,7 @@
+Usage: khub query [OPTIONS]
+Try 'khub query --help' for help.
+╭─ Error ──────────────────────────────────────────────────────────────────────╮
+│ Invalid value for '--count': 'depends_on' is not <relation><op><n>, as in    │
+│ depends_on=0 or 'depends_on>=2'. The op is one of =, !=, <, <=, >, >=; quote │
+│ a bound that holds < or >.                                                   │
+╰──────────────────────────────────────────────────────────────────────────────╯

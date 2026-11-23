@@ -1,0 +1,21 @@
+# The file shapes that broke the Go port, as fixtures (this family replaces
+# parity/tools/seed_adversarial.py, which planted them for a fuzzer that no
+# longer exists). Each case plants its bytes with printf escapes in `sh`
+# steps — OCTAL where a byte is needed, because the runner's `sh -c` is dash
+# on Ubuntu and dash's printf has no \xHH (see
+# integrity/control-char-is-malformed) — so nothing here is a raw byte in git.
+#
+# A CRLF entity was invisible to an early build: the frontmatter boundary used
+# [ \t]* and the \r hid the closing fence. It must be visible to every read.
+# What edit does is pinned on purpose: khub normalizes CRLF on read and writes
+# the file back LF, so after the edit `get --format raw` prints LF bytes. No
+# expected file here holds a \r.
+steps:
+- argv: ["init", "firm-ops", ".", "--no-wire"]
+- sh: "mkdir -p fragments && printf -- '---\\r\\ntype: fragment\\r\\ncreated: 2026-01-15\\r\\nname: CRLF entity\\r\\n---\\r\\nbody\\r\\n' > fragments/crlf.md"
+- argv: ["status", "--format", "json"]
+- argv: ["query", "--type", "fragment", "--format", "json"]
+- argv: ["search", "body", "--format", "ids"]
+- argv: ["check", "--format", "json"]
+- argv: ["edit", "fragment/crlf", "stage", "raw", "--format", "json"]
+- argv: ["get", "fragment/crlf", "--format", "raw"]

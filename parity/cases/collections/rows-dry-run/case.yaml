@@ -1,0 +1,18 @@
+# --dry-run against collection rows: the fresh read, the mutation and the
+# re-render all run, the slug gate refuses as the write does, and the
+# collection file keeps its bytes.
+steps:
+- argv: ["init", "preset-cells", ".", "--no-wire", "--preset-source", "PRESETSRC"]
+- argv: ["add", "repo", "--title", "khub", "--stack", "go", "--format", "json"]
+- argv: ["add", "vendor", "--title", "Neon", "--format", "json"]
+- sh: "rm -rf .khub/generated"
+- argv: ["add", "repo", "--title", "Other", "--dry-run", "--format", "json"]
+- argv: ["add", "repo", "--title", "khub", "--dry-run", "--format", "json"]
+- argv: ["add", "account", "--title", "Acme", "--amount", "lots", "--dry-run", "--format", "json"]
+- argv: ["edit", "repo/khub", "stack", "python", "--dry-run", "--format", "json"]
+- argv: ["link", "vendor/neon", "related", "repo/khub", "--dry-run", "--format", "json"]
+- argv: ["unlink", "vendor/neon", "related", "repo/khub", "--dry-run", "--format", "json"]
+- argv: ["remove", "vendor/neon", "--dry-run", "--format", "json"]
+- sh: "test ! -e .khub/generated"
+- argv: ["get", "repo/khub", "--format", "raw"]
+- argv: ["query", "--format", "json"]

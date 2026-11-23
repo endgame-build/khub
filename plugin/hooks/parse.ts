@@ -31,15 +31,22 @@ type Segment = { words: string[]; ops: string[] }
 
 const NONE: Parsed = { kind: 'none' }
 const BOOLEAN_FLAGS = new Set([
-  'active', 'draft', 'dry-run', 'edges', 'force', 'help', 'in', 'no-schema',
+  'active', 'draft', 'dry-run', 'edges', 'force', 'help', 'in', 'no-body', 'no-schema',
   'no-template', 'no-wire', 'open', 'orphan', 'out', 'plain', 'reverse', 'stale', 'strict',
 ])
+// A verb's own boolean flags. `add <type> --path <value>` may set a field named path, so
+// `get --path` cannot join the shared set: its paths are positional.
+const VERB_BOOLEAN_FLAGS: Record<string, Set<string>> = {
+  get: new Set(['path']),
+  query: new Set(['replace']),
+  reindex: new Set(['check']),
+}
 const WRITES = new Set(['add', 'edit', 'link', 'unlink', 'remove'])
 const OPERATORS = new Set(['backfill', 'init', 'reindex', 'upgrade', 'wire'])
 const SCHEMA_VIEWS = new Set(['base', 'diff', 'edges', 'jsonschema', 'show', 'snapshot', 'types'])
 
 // These flags of `khub edit` name no field.
-const EDIT_OPTIONS = new Set(['format', 'strict'])
+const EDIT_OPTIONS = new Set(['dry-run', 'format', 'strict'])
 
 const isWord = (token: Token): token is Word => 'text' in token
 const isOn = (flag: string | true | undefined) => flag !== undefined && flag !== 'false'
@@ -281,7 +288,7 @@ function khubCall(words: string[], binary: RegExp): Simple | null {
     if (equals >= 0) {
       found.flags[name] = word.slice(equals + 1)
       i += 1
-    } else if (BOOLEAN_FLAGS.has(name) || next === undefined || next.startsWith('--')) {
+    } else if (BOOLEAN_FLAGS.has(name) || VERB_BOOLEAN_FLAGS[verb]?.has(name) || next === undefined || next.startsWith('--')) {
       found.flags[name] = true
       i += 1
     } else {
@@ -294,7 +301,7 @@ function khubCall(words: string[], binary: RegExp): Simple | null {
 }
 
 // Reads the khub calls off the text of a command the tokenizer could not follow. It keeps
-// each verb, and whether `--force` or `--dry-run` follows it.
+// each verb, and whether `--force`, `--dry-run` or `--check` follows it.
 function scan(command: string, flavour: Flavour): Simple[] {
   const calls = command.matchAll(scanOf(flavour))
 
@@ -304,6 +311,7 @@ function scan(command: string, flavour: Flavour): Simple[] {
     return call(match[1] as string, {
       ...(rest.includes('--force') ? { force: true as const } : {}),
       ...(rest.includes('--dry-run') ? { 'dry-run': true as const } : {}),
+      ...(/--check(?![\w-])/.test(rest) ? { check: true as const } : {}),
     })
   })
 }
@@ -368,10 +376,15 @@ export const callsOf = (parsed: Parsed): Simple[] =>
 
 export const isWrite = (found: Simple) => WRITES.has(found.verb)
 
+// Tells whether a call asked for a preview. A dry run of any verb writes nothing.
+export const isDryRun = (found: Simple) => isOn(found.flags['dry-run'])
+
+// Tells whether a call is the `reindex --check` gate, which writes nothing.
+const isIndexCheck = (found: Simple) => found.verb === 'reindex' && isOn(found.flags.check)
+
 // Tells whether a call changes entities, the schema, the index or the agent files.
 export const mutates = (found: Simple) =>
-  isWrite(found) ||
-  (OPERATORS.has(found.verb) && !isOn(found.flags['dry-run'])) ||
+  ((isWrite(found) || OPERATORS.has(found.verb)) && !isDryRun(found) && !isIndexCheck(found)) ||
   (found.verb === 'schema' && found.sub === 'snapshot')
 
 // Returns what a `khub edit` call changed, as `<field> <value>` pairs. A body is named,

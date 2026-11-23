@@ -130,5 +130,9 @@ func lensFront(rtype *schema.ResolvedType, meta *omap.Map) *omap.Map {
 		v, _ := meta.Get(k)
 		out.Set(k, v)
 	}
+	// The base status reads as the effective lifecycle, as query reads it.
+	if attr, ok := rtype.Attributes.Get("status"); ok && !attr.OverriddenFromBase {
+		out.Set("status", rtype.EffectiveStatus(meta))
+	}
 	return out
 }

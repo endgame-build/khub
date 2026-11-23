@@ -1,29 +1,101 @@
  requirement (file · ids req-slug)
-┏━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━┳━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━┓
-┃ field        │ type         │ required │ enum                │ notes         ┃
-┡━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━╇━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━┩
-│ type         │ text         │ ✓        │                     │               │
-│ draft        │ bool         │          │                     │ default False │
-│ author       │ text         │          │                     │               │
-│ created      │ date         │ ✓        │                     │               │
-│ updated      │ date         │          │                     │               │
-│ title        │ text         │ ✓        │                     │               │
-│ description  │ text         │          │                     │               │
-│ resource     │ text         │          │                     │               │
-│ tags         │ list         │          │                     │               │
-│ aliases      │ list         │          │                     │               │
-│ kind         │ text         │ ✓        │ functional,         │               │
-│              │              │          │ non-functional,     │               │
-│              │              │          │ constraint,         │               │
-│              │              │          │ business-rule       │               │
-│ enforcement  │ text         │          │ ui, backend,        │               │
-│              │              │          │ database, external, │               │
-│              │              │          │ review              │               │
-│ related      │ → any        │          │ any                 │               │
-│ sources      │ → any        │          │ any                 │               │
-│ references   │ → any        │          │ any                 │               │
-│ depends_on   │ → any        │          │ any                 │ acyclic       │
-│ capabilities │ → capability │          │ typed               │               │
-│ use_cases    │ → use-case   │          │ typed               │               │
-│ realized_in  │ → component  │          │ typed               │               │
-└──────────────┴──────────────┴──────────┴─────────────────────┴───────────────┘
+┏━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━┳━━━━━━━━━━┳━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━┓
+┃ field           │ type         │ required │ enum           │ notes           ┃
+┡━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━╇━━━━━━━━━━╇━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━┩
+│ type            │ text         │ ✓        │                │                 │
+│ status          │ text         │          │ draft, stable, │ default stable  │
+│                 │              │          │ deprecated     │                 │
+│ author          │ text         │          │                │                 │
+│ created         │ date         │ ✓        │                │                 │
+│ updated         │ date         │          │                │                 │
+│ title           │ text         │ ✓        │                │                 │
+│ description     │ text         │          │                │                 │
+│ resource        │ text         │          │                │                 │
+│ tags            │ list         │          │                │                 │
+│ aliases         │ list         │          │                │                 │
+│ generated       │ object       │          │                │                 │
+│   generated.by  │ text         │ ✓        │                │                 │
+│   generated.at  │ datetime     │          │                │ pattern         │
+│                 │              │          │                │ \d{4}-\d{2}-\d{ │
+│                 │              │          │                │ 2}[Tt]\d{2}:\d{ │
+│                 │              │          │                │ 2}:\d{2}(\.\d+) │
+│                 │              │          │                │ ?([Zz]|[+-]\d{2 │
+│                 │              │          │                │ }:\d{2})        │
+│ verified        │ list         │          │                │                 │
+│   verified[]    │ object       │          │                │                 │
+│     verified[]. │ text         │ ✓        │                │                 │
+│ by              │              │          │                │                 │
+│     verified[]. │ datetime     │          │                │ pattern         │
+│ at              │              │          │                │ \d{4}-\d{2}-\d{ │
+│                 │              │          │                │ 2}[Tt]\d{2}:\d{ │
+│                 │              │          │                │ 2}:\d{2}(\.\d+) │
+│                 │              │          │                │ ?([Zz]|[+-]\d{2 │
+│                 │              │          │                │ }:\d{2})        │
+│     verified[]. │ text         │          │                │                 │
+│ rev             │              │          │                │                 │
+│ stale_after     │ datetime     │          │                │ pattern         │
+│                 │              │          │                │ \d{4}-\d{2}-\d{ │
+│                 │              │          │                │ 2}[Tt]\d{2}:\d{ │
+│                 │              │          │                │ 2}:\d{2}(\.\d+) │
+│                 │              │          │                │ ?([Zz]|[+-]\d{2 │
+│                 │              │          │                │ }:\d{2})        │
+│ sources         │ list         │          │                │                 │
+│   sources[]     │ object       │          │                │                 │
+│     sources[].r │ text         │ ✓        │                │                 │
+│ esource         │              │          │                │                 │
+│     sources[].i │ text         │          │                │                 │
+│ d               │              │          │                │                 │
+│     sources[].t │ text         │          │                │                 │
+│ itle            │              │          │                │                 │
+│     sources[].a │ text         │          │                │                 │
+│ uthor           │              │          │                │                 │
+│     sources[].u │ number       │          │                │                 │
+│ sage_count      │              │          │                │                 │
+│     sources[].l │ datetime     │          │                │ pattern         │
+│ ast_modified    │              │          │                │ \d{4}-\d{2}-\d{ │
+│                 │              │          │                │ 2}[Tt]\d{2}:\d{ │
+│                 │              │          │                │ 2}:\d{2}(\.\d+) │
+│                 │              │          │                │ ?([Zz]|[+-]\d{2 │
+│                 │              │          │                │ }:\d{2})        │
+│     sources[].u │ object       │          │                │                 │
+│ sage_window     │              │          │                │                 │
+│       sources[] │ datetime     │          │                │ pattern         │
+│ .usage_window.f │              │          │                │ \d{4}-\d{2}-\d{ │
+│ rom             │              │          │                │ 2}[Tt]\d{2}:\d{ │
+│                 │              │          │                │ 2}:\d{2}(\.\d+) │
+│                 │              │          │                │ ?([Zz]|[+-]\d{2 │
+│                 │              │          │                │ }:\d{2})        │
+│       sources[] │ datetime     │          │                │ pattern         │
+│ .usage_window.t │              │          │                │ \d{4}-\d{2}-\d{ │
+│ o               │              │          │                │ 2}[Tt]\d{2}:\d{ │
+│                 │              │          │                │ 2}:\d{2}(\.\d+) │
+│                 │              │          │                │ ?([Zz]|[+-]\d{2 │
+│                 │              │          │                │ }:\d{2})        │
+│ usage_window    │ object       │          │                │                 │
+│   usage_window. │ datetime     │          │                │ pattern         │
+│ from            │              │          │                │ \d{4}-\d{2}-\d{ │
+│                 │              │          │                │ 2}[Tt]\d{2}:\d{ │
+│                 │              │          │                │ 2}:\d{2}(\.\d+) │
+│                 │              │          │                │ ?([Zz]|[+-]\d{2 │
+│                 │              │          │                │ }:\d{2})        │
+│   usage_window. │ datetime     │          │                │ pattern         │
+│ to              │              │          │                │ \d{4}-\d{2}-\d{ │
+│                 │              │          │                │ 2}[Tt]\d{2}:\d{ │
+│                 │              │          │                │ 2}:\d{2}(\.\d+) │
+│                 │              │          │                │ ?([Zz]|[+-]\d{2 │
+│                 │              │          │                │ }:\d{2})        │
+│ kind            │ text         │ ✓        │ functional,    │                 │
+│                 │              │          │ non-functional │                 │
+│                 │              │          │ , constraint,  │                 │
+│                 │              │          │ business-rule  │                 │
+│ enforcement     │ text         │          │ ui, backend,   │                 │
+│                 │              │          │ database,      │                 │
+│                 │              │          │ external,      │                 │
+│                 │              │          │ review         │                 │
+│ related         │ → any        │          │ any            │                 │
+│ references      │ → any        │          │ any            │                 │
+│ depends_on      │ → any        │          │ any            │ acyclic         │
+│ capabilities    │ → capability │          │ typed          │                 │
+│ use_cases       │ → use-case   │          │ typed          │                 │
+│ realized_in     │ → component  │          │ typed          │                 │
+└─────────────────┴──────────────┴──────────┴────────────────┴─────────────────┘

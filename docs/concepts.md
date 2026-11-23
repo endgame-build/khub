@@ -18,17 +18,17 @@ The schema declares the entity types, their attributes, and the legal relations.
 
 ## Relations are single-sided; inverses are derived
 
-A relation is a role-named field the schema marks as an edge. The field name is the predicate; the value is the target: `owner: dana-lee` is one edge, `owner`, pointing at `dana-lee`. Resolution compares the target's `(type, slug)` identity, while preserving the spelling stored in the source. A derived inverse is identified by source type and predicate, computed at read time, and never written. Inline body links are navigational only.
+A relation is a role-named field the schema marks as an edge. The field name is the predicate; the value is the target: `owner: dana-lee` is one edge, `owner`, pointing at `dana-lee`. Resolution compares the target's `(type, slug)` identity, while preserving the spelling stored in the source. A derived inverse is identified by source type and predicate, computed at read time, and never written. Inline body links are navigational only; `check --mentions` suggests the edges a body names but no relation carries, and writes none.
 
 ## validate vs check
 
-This is the distinction that trips people up. `validate` is per-entity: is this one entity well-formed against the schema, and do its relations resolve? A missing required field does not fail validate, and it never blocks the write; capture is never blocked. `check` is graph-wide over the active (non-draft) subgraph: it enforces required-completeness and reports active-but-incomplete entities, plus orphans, dangling edges, stray files, cycles, and missing required singletons. Write freely; gate with check.
+This is the distinction that trips people up. `validate` is per-entity: is this one entity well-formed against the schema, and do its relations resolve? A missing required field does not fail validate, and it never blocks the write; capture is never blocked. `check` is graph-wide over the active (non-draft) subgraph: it enforces required-completeness and reports active-but-incomplete entities, plus whatever else is wrong with the graph as a whole — [`cli.md`](cli.md#reading-check-output) lists every finding and which ones fail the gate. Write freely; gate with check.
 
 Body structure follows the same split: a type's template (`.khub/templates/<type>.yaml`) is both the scaffold `add`/`init` seed a body from and the contract `validate` holds it to — required section headings in order, extras allowed, capture never blocked.
 
 ## draft, orphan, and stale are projection properties
 
-`draft` is a manual publish flag, default false, never inferred from completeness. A published entity can be incomplete; a draft can be complete; a draft never satisfies another entity's required relation. `orphan` (no edge in or out) and `stale` (past an `updated` threshold, dates backfilled from git) are computed on every read. A type may declare `orphan: true` to opt out of the orphan notion entirely, for a narrative root nothing points at by design — otherwise it would carry a finding no authoring could ever close. `check` and `stale` gate on the same computation the reads surface; what you see is what the gate sees.
+`status: draft` is a manual publish flag, never inferred from completeness. An entity without a `status` is `stable`, and `deprecated` carries no gate meaning. Every read row still reports a derived `draft` flag. A published entity can be incomplete; a draft can be complete; a draft never satisfies another entity's required relation. `orphan` (no edge in or out) and `stale` (past an `updated` threshold, dates backfilled from git) are computed on every read. A type may declare `orphan: true` to opt out of the orphan notion entirely, for a narrative root nothing points at by design — otherwise it would carry a finding no authoring could ever close. `check` and `stale` gate on the same computation the reads surface; what you see is what the gate sees.
 
 ## Structural integrity is not semantic truth
 

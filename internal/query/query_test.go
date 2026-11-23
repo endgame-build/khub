@@ -40,7 +40,7 @@ func qws(t *testing.T) string {
 		{"active", true}, {"team", []any{"noor"}},
 	}, recent...)...)
 	seed(t, ws, "projects/no-owner/_index.md", append([]kv{
-		{"type", "project"}, {"client", "initech"}, {"draft", true},
+		{"type", "project"}, {"client", "initech"}, {"status", "draft"},
 	}, recent...)...)
 	// an orphan (no edges) and a stale (old, but edged) client for the flag filters
 	seed(t, ws, "clients/orphan-client.md", append([]kv{{"type", "client"}, {"name", "Orphan"}}, recent...)...)
@@ -190,7 +190,9 @@ func TestQueryTagMatchesMembership(t *testing.T) {
 	}
 }
 
-// A many-valued relation matches on membership; a bool matches case-insensitively.
+// A many-valued relation matches on membership; a bool matches
+// case-insensitively; an unwritten attribute matches its schema default
+// (`active` defaults true, so no-owner, which never wrote it, is active).
 func TestQueryMatchesListAndBoolFields(t *testing.T) {
 	ws := qws(t)
 	team := mustQuery(t, ws, Filters{Type: ptr("project"), Fields: fields("team", "noor")})
@@ -198,12 +200,12 @@ func TestQueryMatchesListAndBoolFields(t *testing.T) {
 		t.Fatalf("got %v", slugs(team))
 	}
 	active := mustQuery(t, ws, Filters{Type: ptr("project"), Fields: fields("active", "true")})
-	if !eq(slugs(active), []string{"has-owner"}) {
+	if !eq(slugs(active), []string{"has-owner", "no-owner"}) {
 		t.Fatalf("got %v", slugs(active))
 	}
 	// YAML True renders "True"; the compare lowercases both sides.
 	upper := mustQuery(t, ws, Filters{Type: ptr("project"), Fields: fields("active", "TRUE")})
-	if !eq(slugs(upper), []string{"has-owner"}) {
+	if !eq(slugs(upper), []string{"has-owner", "no-owner"}) {
 		t.Fatalf("got %v", slugs(upper))
 	}
 }
@@ -272,6 +274,24 @@ func TestQueryLimit(t *testing.T) {
 	got := mustQuery(t, qws(t), Filters{Type: ptr("opportunity"), Limit: ptr(2)})
 	if len(got) != 2 {
 		t.Fatalf("want 2, got %v", slugs(got))
+	}
+}
+
+// QueryCounted counts every match before --limit cuts the set, so a caller
+// can tell a capped result from a complete one (`query --receipt`).
+func TestQueryCountedCountsBeforeLimit(t *testing.T) {
+	ws := qws(t)
+	for _, tc := range []struct {
+		limit       *int
+		total, kept int
+	}{{nil, 3, 3}, {ptr(2), 3, 2}, {ptr(5), 3, 3}, {ptr(0), 3, 0}, {ptr(-1), 3, 2}} {
+		got, total, err := QueryCounted(ws, Filters{Type: ptr("opportunity"), Limit: tc.limit}, now)
+		if err != nil {
+			t.Fatalf("QueryCounted: %v", err)
+		}
+		if total != tc.total || len(got) != tc.kept {
+			t.Errorf("limit %v: total %d kept %d, want %d and %d", tc.limit, total, len(got), tc.total, tc.kept)
+		}
 	}
 }
 
@@ -417,5 +437,102 @@ func TestHasAndMissingOverAnAttribute(t *testing.T) {
 	missing := sortedSlugs(mustQuery(t, ws, Filters{Type: ptr("adr"), Missing: ptr("status")}))
 	if !eq(missing, []string{"blank", "nullish"}) {
 		t.Fatalf("got %v", missing)
+	}
+}
+
+// A legacy `draft: true` with no lifecycle status reads as draft everywhere
+// query looks: `--draft`, and `--status draft` rather than the stable default.
+func TestQueryReadsTheEffectiveStatus(t *testing.T) {
+	ws := freshWS(t)
+	recent := []kv{{"created", date("2026-06-01")}}
+	seed(t, ws, "clients/legacy.md", append([]kv{{"type", "client"}, {"name", "Legacy"}, {"draft", true}}, recent...)...)
+	seed(t, ws, "clients/retired.md", append([]kv{
+		{"type", "client"}, {"name", "Retired"}, {"status", "rejected"}, {"draft", true}}, recent...)...)
+	seed(t, ws, "clients/plain.md", append([]kv{{"type", "client"}, {"name", "Plain"}}, recent...)...)
+	client := ptr("client")
+	for _, c := range []struct {
+		f    Filters
+		want []string
+	}{
+		{Filters{Type: client, Fields: fields("status", "draft")}, []string{"legacy", "retired"}},
+		{Filters{Type: client, Fields: fields("status", "stable")}, []string{"plain"}},
+		{Filters{Type: client, DraftOnly: true}, []string{"legacy", "retired"}},
+	} {
+		if got := sortedSlugs(mustQuery(t, ws, c.f)); !eq(got, c.want) {
+			t.Fatalf("%+v: got %v, want %v", c.f, got, c.want)
+		}
+	}
+}
+
+// --- --under / --via containment scope ---------------------------------------
+
+// A parent-stored hierarchy: folders list their children. `parent` is the
+// declared inverse of folder.children only; doc.children declares none.
+const treePreset = `
+version: "0.1.0"
+ontology:
+  entities:
+    folder:
+      relations:
+        children: { to: [folder, doc], many: true, inverse: parent }
+    doc:
+      relations:
+        children: { to: doc, many: true }
+storage:
+  folder: { layout: file, path: folders }
+  doc:    { layout: file, path: docs }
+`
+
+func treeWS(t *testing.T) string {
+	t.Helper()
+	ws := wsFromSchema(t, treePreset)
+	seed(t, ws, "folders/root.md", kv{"type", "folder"}, kv{"title", "Root"}, kv{"children", []any{"sub", "readme"}})
+	seed(t, ws, "folders/sub.md", kv{"type", "folder"}, kv{"title", "Sub"}, kv{"children", []any{"spec"}})
+	seed(t, ws, "docs/readme.md", kv{"type", "doc"}, kv{"title", "Readme"})
+	seed(t, ws, "docs/spec.md", kv{"type", "doc"}, kv{"title", "Spec"}, kv{"children", []any{"annex"}})
+	seed(t, ws, "docs/annex.md", kv{"type", "doc"}, kv{"title", "Annex"})
+	return ws
+}
+
+// A stored predicate walks from the entity up to the anchor: over `children`,
+// the entities under `spec` are the ones whose children reach it.
+func TestUnderStoredPredicateWalksUpward(t *testing.T) {
+	got := sortedSlugs(mustQuery(t, treeWS(t), Filters{Under: ptr("spec"), Via: ptr("children")}))
+	if !eq(got, []string{"root", "sub"}) {
+		t.Fatalf("got %v", got)
+	}
+}
+
+// A declared inverse walks the parent-stored edges down from the anchor, and
+// only the (source type, predicate) pairs that declare it: doc.children has no
+// `parent` inverse, so annex is not under root.
+func TestUnderDeclaredInverseWalksDownward(t *testing.T) {
+	ws := treeWS(t)
+	got := sortedSlugs(mustQuery(t, ws, Filters{Under: ptr("root"), Via: ptr("parent")}))
+	if !eq(got, []string{"readme", "spec", "sub"}) {
+		t.Fatalf("got %v", got)
+	}
+	docs := sortedSlugs(mustQuery(t, ws, Filters{Type: ptr("doc"), Under: ptr("root"), Via: ptr("parent")}))
+	if !eq(docs, []string{"readme", "spec"}) {
+		t.Fatalf("got %v", docs)
+	}
+}
+
+// Half a pair is refused rather than ignored, and an unknown --via lists the
+// declared inverses beside the stored predicates.
+func TestUnderRefusals(t *testing.T) {
+	ws := treeWS(t)
+	for _, f := range []Filters{{Under: ptr("root")}, {Via: ptr("parent")}} {
+		_, err := Query(ws, f, now)
+		var located *errs.Located
+		if !errors.As(err, &located) || located.Code != "filter_error" {
+			t.Fatalf("half pair %+v: want filter_error, got %#v", f, err)
+		}
+	}
+	_, err := Query(ws, Filters{Under: ptr("root"), Via: ptr("bogus")}, now)
+	var located *errs.Located
+	if !errors.As(err, &located) || located.Code != "unknown_predicate" ||
+		!strings.Contains(located.Message, "parent") {
+		t.Fatalf("want unknown_predicate listing the inverse, got %#v", err)
 	}
 }

@@ -20,12 +20,14 @@ import (
 	"errors"
 	"io/fs"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/endgame-build/khub/internal/canon"
 	"github.com/endgame-build/khub/internal/errs"
 	"github.com/endgame-build/khub/internal/fsio"
 	"github.com/endgame-build/khub/internal/introspect"
+	"github.com/endgame-build/khub/internal/migrate"
 	"github.com/endgame-build/khub/internal/omap"
 	"github.com/endgame-build/khub/internal/presets"
 	"github.com/endgame-build/khub/internal/schema"
@@ -40,6 +42,9 @@ type UpgradeOptions struct {
 	DryRun   bool
 	// Preview runs dry-run tails against the prepared temporary workspace.
 	Preview func(string) error
+	// Unlock names the locked elements this run may remove: a type by name,
+	// a predicate as `type.predicate`. A name that unlocks nothing is inert.
+	Unlock []string
 	// Tails runs after a real upgrade has published, still under the workspace
 	// lock, so the wire and index tails see exactly the tree the core
 	// committed. The callee must use the Held variants (wire.WireHeld,
@@ -70,6 +75,12 @@ type UpgradeResult struct {
 	VersionFrom string
 	VersionTo   string
 	Config      []ConfigChange
+	// Carried lists the policy and storage keys kept from the workspace over
+	// the shipped files (see carryEdits).
+	Carried []Carried
+	// Dropped lists the carried keys let go because the schema they produced
+	// did not resolve (see settleCarried).
+	Dropped []Dropped
 	// SingletonsCreated names the singleton types this run minted — creations
 	// only, the same rule init follows.
 	SingletonsCreated []string
@@ -78,6 +89,126 @@ type UpgradeResult struct {
 	SchemaDrift  []string
 	DryRun       bool
 	RemovedTypes []string
+	// Migrated lists the entities rewritten from a legacy shape, and
+	// MigrationConflicts the ones left unchanged because their fields disagree.
+	Migrated           []migrate.Entity
+	MigrationConflicts []migrate.Conflict
+}
+
+// lockedRemovals lists what the current schema locks and the candidate drops,
+// in the current schema's declaration order: each type, then its locked
+// predicates. all is every such element; blocked is all minus the unlocked
+// names. A predicate goes with its type, so a removed type's locked
+// predicates need their own unlock — every locked element a migration
+// removes is named, never implied. An unlock that names nothing is inert.
+func lockedRemovals(old, next *schema.ResolvedSchema, unlock []string) (blocked, all []string) {
+	unlocked := map[string]bool{}
+	for _, n := range unlock {
+		unlocked[n] = true
+	}
+	blocked, all = []string{}, []string{}
+	add := func(name string) {
+		all = append(all, name)
+		if !unlocked[name] {
+			blocked = append(blocked, name)
+		}
+	}
+	for _, name := range old.Types.Keys() {
+		ot, _ := old.Types.Get(name)
+		nt, kept := next.Types.Get(name)
+		if ot.Locked && !kept {
+			add(name)
+		}
+		for _, pred := range ot.LockedRelations {
+			if !kept || !nt.Relations.Has(pred) {
+				add(name + "." + pred)
+			}
+		}
+	}
+	return blocked, all
+}
+
+// rawLocks reads the locks from a current schema that does not resolve, so a
+// typo in a lock — or any unrelated schema error — cannot switch every lock
+// off. It reads every layer file leniently, joining on the top-level keys as
+// resolve does: the types are ontology.entities' names, then any name policy
+// alone mentions; a lock is any `locked` other than false or null (a
+// malformed lock still holds), and locked_relations is a list of names or a
+// single one. A file that does not parse at all and mentions `locked` is
+// locks_unreadable: what it locks cannot be known.
+func rawLocks(root string) (*schema.ResolvedSchema, error) {
+	types := schema.NewOrdered[*schema.ResolvedType]()
+	declare := func(name string) *schema.ResolvedType {
+		rt, ok := types.Get(name)
+		if !ok {
+			rt = &schema.ResolvedType{Name: name, Relations: schema.NewOrdered[*schema.ResolvedRelation]()}
+			types.Set(name, rt)
+		}
+		return rt
+	}
+	var policies []*omap.Map
+	for _, name := range []string{presets.OntologyFile, presets.PolicyFile, presets.StorageFile} {
+		rel := ".khub/" + name
+		raw, err := fsio.ReadFile(root, filepath.Join(root, osPath(rel)))
+		if err != nil {
+			if errors.Is(err, fs.ErrNotExist) {
+				continue
+			}
+			return nil, err
+		}
+		doc, perr := schema.ParseDoc(rel, string(raw))
+		if perr != nil {
+			if strings.Contains(string(raw), "locked") {
+				return nil, errs.LocksUnreadable(rel, perr.Error())
+			}
+			continue
+		}
+		if entities, ok := mapAt(doc, "ontology", "entities"); ok {
+			for _, tn := range entities.Keys() {
+				declare(tn)
+			}
+		}
+		if policy, ok := mapAt(doc, "policy"); ok {
+			policies = append(policies, policy)
+		}
+	}
+	for _, policy := range policies {
+		for _, tn := range policy.Keys() {
+			entry, ok := mapAt(policy, tn)
+			if !ok {
+				continue
+			}
+			rt := declare(tn)
+			if v, has := entry.Get("locked"); has && v != nil && v != false {
+				rt.Locked = true
+			}
+			v, _ := entry.Get("locked_relations")
+			names, _ := v.([]any)
+			if s, isStr := v.(string); isStr {
+				names = []any{s}
+			}
+			for _, n := range names {
+				if s, isStr := n.(string); isStr && !slices.Contains(rt.LockedRelations, s) {
+					rt.LockedRelations = append(rt.LockedRelations, s)
+				}
+			}
+		}
+	}
+	return &schema.ResolvedSchema{Types: types}, nil
+}
+
+// mapAt walks nested mapping keys, reporting false at the first that is
+// absent or not a mapping.
+func mapAt(m *omap.Map, keys ...string) (*omap.Map, bool) {
+	for _, k := range keys {
+		v, _ := m.Get(k)
+		next, ok := v.(*omap.Map)
+		if !ok {
+			return nil, false
+		}
+		m = next
+	}
+	return m, true
 }
 
 // Upgrade brings the workspace at root up to the preset the binary ships:
@@ -116,9 +247,12 @@ func upgradeCandidate(root string, opt UpgradeOptions, sourceDir string) (*Upgra
 	target := pyPath(filepath.ToSlash(root))
 	khubDir := pyJoin(target, ".khub")
 	config := []ConfigChange{}
+	carried := []Carried{}
+	dropped := []Dropped{}
 	versionTo := versionFrom
 	if !opt.NoSchema {
-		config, err = replaceConfig(target, khubDir, preset, merged, source)
+		sameVersion := preset == recorded && versionFrom == merged.Version
+		config, carried, dropped, err = replaceConfig(target, khubDir, preset, merged, source, sameVersion)
 		if err != nil {
 			return nil, err
 		}
@@ -159,50 +293,72 @@ func upgradeCandidate(root string, opt UpgradeOptions, sourceDir string) (*Upgra
 		VersionFrom:       versionFrom,
 		VersionTo:         versionTo,
 		Config:            config,
+		Carried:           carried,
+		Dropped:           dropped,
 		SingletonsCreated: created,
 		SchemaDrift:       drift,
 	}, nil
 }
 
 // replaceConfig puts every shipped file back over the workspace copy: the
-// three layer files in write order, then the templates by name. Only what
-// changed is reported.
-func replaceConfig(target, khubDir, preset string, merged *flattened, source fs.FS) ([]ConfigChange, error) {
+// three layer files in write order, then the templates by name. policy.yaml
+// and storage.yaml keep the workspace's own per-type keys (carryEdits); the
+// ontology is replaced whole. Only what changed is reported.
+func replaceConfig(target, khubDir, preset string, merged *flattened, source fs.FS, sameVersion bool) ([]ConfigChange, []Carried, []Dropped, error) {
 	changes := []ConfigChange{}
-	for _, layer := range merged.layers() {
-		incoming, err := layerBytes(preset, merged.Version, layer.Doc)
-		if err != nil {
-			return nil, err
+	declared := map[string]bool{}
+	if entities, ok := mapIn(merged.Ontology, "ontology"); ok {
+		if types, ok := mapIn(entities, "entities"); ok {
+			for _, t := range types.Keys() {
+				declared[t] = true
+			}
 		}
-		change, reported, err := replaceFile(target, pyJoin(khubDir, layer.File), incoming, true)
+	}
+	settled, carried, dropped, err := settleCarried(target, khubDir, merged, declared, sameVersion)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	carried = append([]Carried{}, carried...)
+	dropped = append([]Dropped{}, dropped...)
+	for _, layer := range merged.layers() {
+		doc := layer.Doc
+		path := pyJoin(khubDir, layer.File)
+		if d, ok := settled[layer.File]; ok {
+			doc = d
+		}
+		incoming, err := layerBytes(preset, merged.Version, doc)
 		if err != nil {
-			return nil, err
+			return nil, nil, nil, err
+		}
+		change, reported, err := replaceFile(target, path, incoming, true)
+		if err != nil {
+			return nil, nil, nil, err
 		}
 		if reported {
 			changes = append(changes, change)
 		}
 	}
 	if !presets.HasTemplates(preset, source) {
-		return changes, nil
+		return changes, carried, dropped, nil
 	}
 	tplDir := pyJoin(khubDir, "templates")
 	if err := fsio.MkdirAll(osPath(target), osPath(tplDir)); err != nil {
-		return nil, err
+		return nil, nil, nil, err
 	}
 	for _, tpl := range presets.Templates(preset, source) {
 		payload, err := fs.ReadFile(source, tpl)
 		if err != nil {
-			return nil, err
+			return nil, nil, nil, err
 		}
 		change, reported, err := replaceFile(target, pyJoin(tplDir, pyName(tpl)), string(payload), false)
 		if err != nil {
-			return nil, err
+			return nil, nil, nil, err
 		}
 		if reported {
 			changes = append(changes, change)
 		}
 	}
-	return changes, nil
+	return changes, carried, dropped, nil
 }
 
 // replaceFile is kb's _replace_config for one file. A workspace predating the

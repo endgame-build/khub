@@ -1,5 +1,12 @@
+# An accented title mints a slug with its Latin accents spelled out
+# (`Café — Straße` → `req-cafe-strasse`), and the entity reads back by it. A
+# lookup composes a name before folding it, so an alias written composed
+# (`Café`, NFC) is found from its decomposed, uppercased spelling (`CAFE` +
+# combining acute, NFD, as macOS file names arrive).
 steps:
 - argv: ["init", "build-hub", ".", "--no-wire"]
-- argv: ["add", "requirement", "--title", "Caf\u00e9 \u2014 Stra\u00dfe", "--kind", "functional", "--format", "json"]
-- argv: ["get", "req-caf-stra-e", "--format", "json"]
-- argv: ["get", "req-caf-stra-e", "--format", "raw"]
+- argv: ["add", "requirement", "--title", "Café — Straße", "--kind", "functional", "--format", "json"]
+- argv: ["get", "req-cafe-strasse", "--format", "json"]
+- argv: ["get", "req-cafe-strasse", "--format", "raw"]
+- argv: ["edit", "req-cafe-strasse", "aliases", "Café", "--format", "json"]
+- argv: ["get", "CAFÉ", "--format", "json"]

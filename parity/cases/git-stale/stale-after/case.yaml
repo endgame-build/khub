@@ -1,0 +1,21 @@
+# `stale_after` is an authored expiry, a different signal from the `updated`
+# age. At or after it an entity is stale whatever its age: `stale` lists it
+# with `reason: expired` beside the `age` rows, `status` counts `expired`
+# apart from `stale`, `query --stale` flags it, and `check --stale` turns
+# active expired entities into a failing gate (exit 1). A draft is not
+# active, and a plain `check` keeps its shape and passes.
+mode: human
+steps:
+- argv: ["init", "build-hub", ".", "--no-wire"]
+- sh: |
+    printf -- '---\ntype: requirement\ntitle: Holds until spring\nkind: functional\ncreated: 2026-01-10\nupdated: 2026-01-10\nstale_after: 2026-01-01T00:00:00Z\n---\n' > knowledge/requirements/req-spring.md
+    printf -- '---\ntype: requirement\ntitle: Later\nkind: functional\ncreated: 2026-01-10\nupdated: 2026-01-10\nstale_after: 2027-01-01T00:00:00Z\n---\n' > knowledge/requirements/req-later.md
+    printf -- '---\ntype: requirement\ntitle: Old\nkind: functional\ncreated: 2025-01-01\nupdated: 2025-01-01\n---\n' > knowledge/requirements/req-old.md
+    printf -- '---\ntype: requirement\ntitle: Parked\nkind: functional\nstatus: draft\ncreated: 2026-01-10\nupdated: 2026-01-10\nstale_after: 2026-01-01T00:00:00Z\n---\n' > knowledge/requirements/req-parked.md
+- argv: ["stale", "--format", "json"]
+- argv: ["stale"]
+- argv: ["status", "--format", "json"]
+- argv: ["query", "--stale", "--format", "json"]
+- argv: ["check", "--format", "json"]
+- argv: ["check", "--stale", "--format", "json"]
+- argv: ["check", "--stale"]

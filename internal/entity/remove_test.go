@@ -48,7 +48,7 @@ func TestRemovalGuard(t *testing.T) {
 	ws := newWS(t, "firm-ops")
 	referencedClient(t, ws)
 
-	refused, err := Delete(ws, "initech", false)
+	refused, err := Delete(ws, "initech", false, false)
 	requireNoError(t, err)
 	if refused.Removed || len(refused.Inbound) != 3 {
 		t.Fatalf("removed=%v inbound=%d", refused.Removed, len(refused.Inbound))
@@ -56,7 +56,7 @@ func TestRemovalGuard(t *testing.T) {
 	if _, statErr := os.Stat(filepath.Join(ws, "clients", "initech.md")); statErr != nil {
 		t.Fatal("a refused remove deleted the file")
 	}
-	forced, err := Delete(ws, "initech", true)
+	forced, err := Delete(ws, "initech", true, false)
 	requireNoError(t, err)
 	if !forced.Removed {
 		t.Fatal("--force did not remove")
@@ -69,9 +69,9 @@ func TestFolderAndFlatDeletion(t *testing.T) {
 	seed(t, ws, "projects/lonely/_index.md", kv("type", "project", "client", "x", "owner", "y"))
 	seed(t, ws, "fragments/note.md", kv("type", "fragment", "stage", "raw", "owner", "y"))
 
-	_, err := Delete(ws, "lonely", false)
+	_, err := Delete(ws, "lonely", false, false)
 	requireNoError(t, err)
-	_, err = Delete(ws, "note", false)
+	_, err = Delete(ws, "note", false, false)
 	requireNoError(t, err)
 
 	if _, statErr := os.Stat(filepath.Join(ws, "projects", "lonely")); statErr == nil {
@@ -87,7 +87,7 @@ func TestForceLeavesDanglingEdges(t *testing.T) {
 	ws := newWS(t, "firm-ops")
 	referencedClient(t, ws)
 
-	res, err := Delete(ws, "initech", true)
+	res, err := Delete(ws, "initech", true, false)
 	requireNoError(t, err)
 	if !res.Removed || len(res.Inbound) != 3 {
 		t.Fatalf("removed=%v inbound=%d", res.Removed, len(res.Inbound))
@@ -108,7 +108,7 @@ func TestForceLeavesDanglingEdges(t *testing.T) {
 // TS-ENT-005-U05: an unresolvable id raises a lookup error.
 func TestLookupErrorForMissing(t *testing.T) {
 	ws := newWS(t, "firm-ops")
-	_, err := Delete(ws, "ghost", false)
+	_, err := Delete(ws, "ghost", false, false)
 	e := requireCode(t, err, "lookup_error")
 	requireMessageContains(t, e, "No entity 'ghost' found")
 }
@@ -122,7 +122,7 @@ func TestRemoveSingletonDeletesItsOneFile(t *testing.T) {
 	if _, statErr := os.Stat(created.Path); statErr != nil {
 		t.Fatalf("singleton not written: %v", statErr)
 	}
-	res, err := Delete(ws, "prd", false)
+	res, err := Delete(ws, "prd", false, false)
 	requireNoError(t, err)
 	if !res.Removed {
 		t.Fatal("the singleton was not removed")

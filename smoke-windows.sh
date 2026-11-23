@@ -17,7 +17,7 @@ WORK=${1:-${TMPDIR:-/tmp}/khub-smoke-windows}
 if [ -z "${KHUB:-}" ]; then
   if [ -x "$REPO/khub.exe" ]; then KHUB="$REPO/khub.exe"; else KHUB="$REPO/khub"; fi
 fi
-export KHUB KHUB_PARITY_NOW=2026-01-15
+export KHUB KHUB_PARITY_NOW=2026-01-15 KHUB_ACTOR=khub KHUB_SESSION=''
 # The gate decides on stdout alone here: no override may make serve start.
 unset TTY_COMPATIBLE FORCE_COLOR
 # A pinned git identity, and no user or system config (Git for Windows ships
@@ -114,6 +114,7 @@ say "git: stale and backfill read git log"
 G=$WORK/git; mkdir -p "$G"; cd "$G" || exit 1
 ok 0 "init"                            "$KHUB" init build-hub . --no-wire
 ok 0 "add"                             "$KHUB" add requirement --title "Old" --kind functional
+# shellcheck disable=SC2329  # invoked through `ok`, as its command
 commit_at() { # <message>: commit everything, dated 2025-06-01
   # Only ever into the repository `git init` made here. If init failed, git
   # would find whatever repository encloses $WORK (a checkout, when the
@@ -123,6 +124,7 @@ commit_at() { # <message>: commit everything, dated 2025-06-01
   git add -A && GIT_AUTHOR_DATE=2025-06-01T10:00:00Z GIT_COMMITTER_DATE=2025-06-01T10:00:00Z git commit -qm "$1"
 }
 # Drop `updated` so the date can only come from git.
+# shellcheck disable=SC2329  # invoked through `ok`, as its command
 strip_updated() {
   sed -i.orig '/^updated:/d' knowledge/requirements/req-old.md && rm -f knowledge/requirements/req-old.md.orig
 }

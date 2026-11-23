@@ -1,0 +1,374 @@
+{
+  "corpus": {
+    "scale": 300,
+    "seed": 1,
+    "today": "2026-01-15",
+    "preset": "build-hub",
+    "khub_version": "0.32.0",
+    "total": 300,
+    "tree_sha256": "04cc4a89df15f7242b8211e45f4c614dafb3d936d735b056fcea54093aedf56d"
+  },
+  "env": [
+    "KHUB_PARITY_NOW=2026-01-15",
+    "COLUMNS=80",
+    "TTY_COMPATIBLE=0",
+    "NO_COLOR=1",
+    "TZ=UTC"
+  ],
+  "cases": [
+    {
+      "label": "status",
+      "argv": [
+        "status"
+      ],
+      "exit": 0,
+      "stdout_bytes": 382,
+      "stderr_bytes": 0,
+      "rows": 0,
+      "sha256": "cdb939ed6f361e367ef4afb092ff520d8b6368b9d6f633692a879eb61c58de92"
+    },
+    {
+      "label": "schema",
+      "argv": [
+        "schema"
+      ],
+      "exit": 0,
+      "stdout_bytes": 58007,
+      "stderr_bytes": 0,
+      "rows": 0,
+      "sha256": "ee097d5592b2b5bfa005d5eba890609dec89dbcab47d1fb3d4cb03afae6e9081"
+    },
+    {
+      "label": "check",
+      "argv": [
+        "check"
+      ],
+      "exit": 0,
+      "stdout_bytes": 4121,
+      "stderr_bytes": 0,
+      "rows": 0,
+      "sha256": "9fc75c72775124cff5d5d68191800d16520a3925b8d45ac05db10841f930b474"
+    },
+    {
+      "label": "check --strict",
+      "argv": [
+        "check",
+        "--strict"
+      ],
+      "exit": 1,
+      "stdout_bytes": 4121,
+      "stderr_bytes": 0,
+      "rows": 0,
+      "sha256": "aa56d32a655b5f3cd5ff0abbc92bc3eb1e4655b16ef8214a859e9637edf7e6f7"
+    },
+    {
+      "label": "check --stale",
+      "argv": [
+        "check",
+        "--stale"
+      ],
+      "exit": 1,
+      "stdout_bytes": 5746,
+      "stderr_bytes": 0,
+      "rows": 0,
+      "sha256": "6aa7ee63d20b92adec3c2fbe310bdae5c50ea5df200dfa6dbba0a8f86dead692"
+    },
+    {
+      "label": "check --require-verified",
+      "argv": [
+        "check",
+        "--require-verified"
+      ],
+      "exit": 1,
+      "stdout_bytes": 35960,
+      "stderr_bytes": 0,
+      "rows": 0,
+      "sha256": "00b6c33f64a882d275a0d7711ce9596534c8831d1714fa6f2d67769b6d2d3bfa"
+    },
+    {
+      "label": "validate (whole corpus)",
+      "argv": [
+        "validate"
+      ],
+      "exit": 0,
+      "stdout_bytes": 69,
+      "stderr_bytes": 0,
+      "rows": 0,
+      "sha256": "c1e41b2f0be83c3b701e26a6337cb5c2e5668f5efba8818e8fcef2d1fc5236a1"
+    },
+    {
+      "label": "validate \u003cone entity\u003e",
+      "argv": [
+        "validate",
+        "requirement/req-refund-tax-filings-before-the-cutoff"
+      ],
+      "exit": 0,
+      "stdout_bytes": 1269,
+      "stderr_bytes": 0,
+      "rows": 0,
+      "sha256": "8d24270a91226714bff92bfaf9019cf61e7617fbf3af402a37eb3ceb6e03fb44"
+    },
+    {
+      "label": "query",
+      "argv": [
+        "query"
+      ],
+      "exit": 0,
+      "stdout_bytes": 75434,
+      "stderr_bytes": 0,
+      "rows": 300,
+      "sha256": "9f5d6ac3604ecc5b502d2f5935b40fb9e646ce3475688406d62b044f34f67135"
+    },
+    {
+      "label": "query --type requirement",
+      "argv": [
+        "query",
+        "--type",
+        "requirement"
+      ],
+      "exit": 0,
+      "stdout_bytes": 39067,
+      "stderr_bytes": 0,
+      "rows": 142,
+      "sha256": "0ff79a2fc04952f5702e89d79d5b0d47b99a644a9deb1b93e0eaa5beff8dd857"
+    },
+    {
+      "label": "query --orphan",
+      "argv": [
+        "query",
+        "--orphan"
+      ],
+      "exit": 0,
+      "stdout_bytes": 5212,
+      "stderr_bytes": 0,
+      "rows": 19,
+      "sha256": "ad0b3e463117540398740803b203682c2b9c15156f770678c24824cf876d180a"
+    },
+    {
+      "label": "query --tag",
+      "argv": [
+        "query",
+        "--tag",
+        "platform"
+      ],
+      "exit": 0,
+      "stdout_bytes": 18532,
+      "stderr_bytes": 0,
+      "rows": 73,
+      "sha256": "8f61805917e5f8bd310d6baea3fe381aac213deee8d2b90a69f8c66018feb87b"
+    },
+    {
+      "label": "query --trust human",
+      "argv": [
+        "query",
+        "--trust",
+        "human"
+      ],
+      "exit": 0,
+      "stdout_bytes": 13968,
+      "stderr_bytes": 0,
+      "rows": 56,
+      "sha256": "cd551d394a2df2f280e6319f942a2947365f74f0d330f72e02495f012964584e"
+    },
+    {
+      "label": "search (one hit)",
+      "argv": [
+        "search",
+        "xylotrope"
+      ],
+      "exit": 0,
+      "stdout_bytes": 516,
+      "stderr_bytes": 0,
+      "rows": 1,
+      "sha256": "822bc87a6153304cab086af67b67f5817d4213601e798537a7792c8dfca698cb"
+    },
+    {
+      "label": "search (many hits)",
+      "argv": [
+        "search",
+        "platform"
+      ],
+      "exit": 0,
+      "stdout_bytes": 2376,
+      "stderr_bytes": 0,
+      "rows": 5,
+      "sha256": "0edc64523d2345fb9055d08a6291b89d8dbbe9c7ff3160687a01c748390d41f1"
+    },
+    {
+      "label": "search (no hit)",
+      "argv": [
+        "search",
+        "quxzzytl"
+      ],
+      "exit": 0,
+      "stdout_bytes": 3,
+      "stderr_bytes": 150,
+      "rows": 0,
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+    },
+    {
+      "label": "get",
+      "argv": [
+        "get",
+        "req-refund-tax-filings-before-the-cutoff"
+      ],
+      "exit": 0,
+      "stdout_bytes": 990,
+      "stderr_bytes": 0,
+      "rows": 0,
+      "sha256": "1fbeb64c73c85cecc62353411ebaeb1252d127645073342066ec70ce7cd355a5"
+    },
+    {
+      "label": "get --edges",
+      "argv": [
+        "get",
+        "cmp-stripe",
+        "--edges"
+      ],
+      "exit": 0,
+      "stdout_bytes": 1163,
+      "stderr_bytes": 0,
+      "rows": 0,
+      "sha256": "3c5efa0c3dbc82516b358800f4c67cb898cd159a58eb43bdacd615a8676c2b55"
+    },
+    {
+      "label": "get \u003cchain middle\u003e --edges",
+      "argv": [
+        "get",
+        "ad-2025-05-09-consolidate-on-row-level-security-for-the-ledger",
+        "--edges"
+      ],
+      "exit": 0,
+      "stdout_bytes": 2073,
+      "stderr_bytes": 0,
+      "rows": 0,
+      "sha256": "b06a1adac4b182568f21f8ec040a9db5eddf6aa771f1bf03f238b96af4bb319c"
+    },
+    {
+      "label": "neighbors",
+      "argv": [
+        "neighbors",
+        "cmp-ledger-helpers"
+      ],
+      "exit": 0,
+      "stdout_bytes": 2665,
+      "stderr_bytes": 0,
+      "rows": 12,
+      "sha256": "039df7e5fe290204b089b7517b438807b9f2ac0c5e2e741ad5965a205cbf183d"
+    },
+    {
+      "label": "neighbors --depth 12",
+      "argv": [
+        "neighbors",
+        "cmp-ledger-helpers",
+        "--depth",
+        "12"
+      ],
+      "exit": 0,
+      "stdout_bytes": 117591,
+      "stderr_bytes": 0,
+      "rows": 533,
+      "sha256": "5118d9cc7d2a827597aee01897844e110d2397f31915a0b13ca250976c31fb6e"
+    },
+    {
+      "label": "impact",
+      "argv": [
+        "impact",
+        "cmp-kyc-service"
+      ],
+      "exit": 0,
+      "stdout_bytes": 1126,
+      "stderr_bytes": 0,
+      "rows": 11,
+      "sha256": "ba0fadff729ee0c10c0dd76c8b7d15013bb2e2c8c62a7ddb144b8b9de114f51b"
+    },
+    {
+      "label": "impact --reverse",
+      "argv": [
+        "impact",
+        "cmp-sendgrid",
+        "--reverse"
+      ],
+      "exit": 0,
+      "stdout_bytes": 1485,
+      "stderr_bytes": 0,
+      "rows": 14,
+      "sha256": "fbed62f575fa57c09c187106a9e4638a694e8b4e2fcd8897be5af4653ca0ba03"
+    },
+    {
+      "label": "history",
+      "argv": [
+        "history",
+        "ad-2025-12-21-split-out-signed-webhooks-in-the-settlement-path"
+      ],
+      "exit": 0,
+      "stdout_bytes": 1431,
+      "stderr_bytes": 0,
+      "rows": 6,
+      "sha256": "4f2b48458f1a75779f943f5528a6caba0e1f7872f9b281875e1dcb6cb45e37a5"
+    },
+    {
+      "label": "stale --days 90",
+      "argv": [
+        "stale",
+        "--days",
+        "90"
+      ],
+      "exit": 0,
+      "stdout_bytes": 34654,
+      "stderr_bytes": 0,
+      "rows": 160,
+      "sha256": "396f0bb7746309d093402caa018fc482100e0f8bfd0497aaea1be4ba4a6b7816"
+    },
+    {
+      "label": "reindex --dry-run",
+      "argv": [
+        "reindex",
+        "--dry-run"
+      ],
+      "exit": 0,
+      "stdout_bytes": 23,
+      "stderr_bytes": 0,
+      "rows": 0,
+      "sha256": "ea7c47b8f667c0e54ffa9a115895097035a5db7cd3b2b1c3d63b4ede788348f4"
+    },
+    {
+      "label": "upgrade --dry-run",
+      "argv": [
+        "upgrade",
+        "--dry-run",
+        "--no-wire"
+      ],
+      "exit": 0,
+      "stdout_bytes": 292,
+      "stderr_bytes": 0,
+      "rows": 0,
+      "sha256": "7b06a8f7f033f2981195dbdb77e996587bc62265ed01460197112e3662207e7e"
+    },
+    {
+      "label": "upgrade",
+      "argv": [
+        "upgrade",
+        "--no-wire"
+      ],
+      "exit": 0,
+      "stdout_bytes": 293,
+      "stderr_bytes": 0,
+      "rows": 0,
+      "sha256": "1057315e2d67295f32277f683a1c223c453c7e1d1e7de07a37e5cb9257f98482"
+    },
+    {
+      "label": "schema show \u003ctype\u003e",
+      "argv": [
+        "schema",
+        "show",
+        "requirement"
+      ],
+      "exit": 0,
+      "stdout_bytes": 5744,
+      "stderr_bytes": 0,
+      "rows": 0,
+      "sha256": "d4b1eecee2802410c152b9ae4c6b3b39491b16e82089479fba91cf966904ea93"
+    }
+  ]
+}

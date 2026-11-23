@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/endgame-build/khub/internal/canon"
+	"github.com/endgame-build/khub/internal/clock"
 	"github.com/endgame-build/khub/internal/integrity"
 )
 
@@ -162,7 +163,7 @@ func TestTypeScaffolding(t *testing.T) {
 	if !report2.OK() {
 		t.Fatalf("scaffolding broke validate: %v", report2.Errors)
 	}
-	check, err := integrity.Check(root, false)
+	check, err := integrity.Check(root, false, clock.Now())
 	if err != nil {
 		t.Fatalf("check: %v", err)
 	}
@@ -180,7 +181,7 @@ func TestTypeScaffolding(t *testing.T) {
 // Finding #5: a misspelled --type fails loudly instead of a silent no-op
 // success.
 func TestUnknownTypeFailsLoudly(t *testing.T) {
-	_, err := Backfill(scaffoldWS(t), ptr("opportunty"), false)
+	_, err := Backfill(scaffoldWS(t), ptr("opportunty"), false, false)
 	if err == nil {
 		t.Fatal("a misspelled --type scaffolded nothing and reported success")
 	}

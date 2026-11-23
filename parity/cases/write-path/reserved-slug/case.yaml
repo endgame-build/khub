@@ -4,6 +4,6 @@ steps:
 - argv: ["add", "adr", "--title", "Nul"]
 - argv: ["add", "requirement", "--id", "CON", "--title", "Explicit", "--kind", "functional"]
 - sh: 'perl -ni -e "print unless /^ +id_prefix: rp$/" .khub/storage.yaml'
-- argv: ["add", "repo", "--title", "Aux", "--repo", "acme/aux", "--status", "active"]
-- argv: ["add", "repo", "--title", "Aux", "--repo", "acme/aux", "--status", "active", "--id", "aux-repo"]
+- argv: ["add", "repo", "--title", "Aux", "--repo", "acme/aux"]
+- argv: ["add", "repo", "--title", "Aux", "--repo", "acme/aux", "--id", "aux-repo"]
 - argv: ["query", "--format", "ids"]

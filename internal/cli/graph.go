@@ -53,6 +53,7 @@ func registerNeighbors(root *cobra.Command) {
 					record.Set("direction", n.Direction)
 					record.Set("derived", n.Derived)
 					record.Set("depth", n.Depth)
+					record.Set("trust", n.Trust)
 					records = append(records, record)
 					rows = append(rows, []string{
 						n.Type + "/" + n.Slug, n.Predicate, n.Direction, fmt.Sprint(n.Depth),

@@ -12,7 +12,7 @@ The schema is imported below, so it loads into context even without running the 
 
 @.khub/storage.yaml
 
-Schema files: [`.khub/ontology.yaml`](.khub/ontology.yaml) (the domain model), [`.khub/policy.yaml`](.khub/policy.yaml), [`.khub/storage.yaml`](.khub/storage.yaml). Preset: `build-hub@0.6.0`. Entity types: `prd`, `arc42`, `capability`, `actor`, `use-case`, `requirement`, `adr`, `system`, `component`, `api`, `repo`.
+Schema files: [`.khub/ontology.yaml`](.khub/ontology.yaml) (the domain model), [`.khub/policy.yaml`](.khub/policy.yaml), [`.khub/storage.yaml`](.khub/storage.yaml). Preset: `build-hub@0.7.0`. Entity types: `prd`, `arc42`, `capability`, `actor`, `use-case`, `requirement`, `adr`, `system`, `component`, `api`, `repo`.
 
 Record as you go — when one of these moments occurs, capture it:
 
@@ -36,7 +36,7 @@ Reading the graph is a khub operation too — query it, do not grep it:
 
 - Introspect: `khub schema`, `khub schema show <type>`, `khub status`.
 - Read: `khub query --type <t>`, `khub get <id> --edges`, `khub neighbors <id>`, `khub impact <id>`, `khub history <id>`, `khub search <text>`.
-- Write: `khub add <type> --<field> <v>`, `khub edit <id> <field> <v>`, `khub link <id> <pred> <target>`, `khub unlink`, `khub remove <id>`. Capture is never blocked; `--draft` marks an entity unpublished.
+- Write: `khub add <type> --<field> <v>`, `khub edit <id> <field> <v>`, `khub link <id> <pred> <target>`, `khub unlink`, `khub remove <id>`, `khub verify <id> --by <actor>` (a review someone actually did). Capture is never blocked; `--draft` writes `status: draft`, and `khub edit <id> status stable` publishes.
 - Every read and every write above takes `--format json`. Piped output is JSON by default; a table is only for a TTY. (`reindex`, `viz`, `backfill` and `wire` are operator commands and print prose.)
 
 Not installed? `npm install -D @endgame-build/khub`, then the khub plugin for Claude Code, which the user installs with `/plugin marketplace add endgame-build/khub` and `/plugin install khub@khub`.
@@ -50,7 +50,7 @@ This repository is a [khub](https://github.com/endgame-build/khub) workspace: it
 
 The ontology is defined in the schema files below; read them to work in this model, even without running the khub CLI:
 
-Schema files: [`.khub/ontology.yaml`](.khub/ontology.yaml) (the domain model), [`.khub/policy.yaml`](.khub/policy.yaml), [`.khub/storage.yaml`](.khub/storage.yaml). Preset: `build-hub@0.6.0`. Entity types: `prd`, `arc42`, `capability`, `actor`, `use-case`, `requirement`, `adr`, `system`, `component`, `api`, `repo`.
+Schema files: [`.khub/ontology.yaml`](.khub/ontology.yaml) (the domain model), [`.khub/policy.yaml`](.khub/policy.yaml), [`.khub/storage.yaml`](.khub/storage.yaml). Preset: `build-hub@0.7.0`. Entity types: `prd`, `arc42`, `capability`, `actor`, `use-case`, `requirement`, `adr`, `system`, `component`, `api`, `repo`.
 
 Record as you go — when one of these moments occurs, capture it:
 
@@ -74,7 +74,7 @@ Reading the graph is a khub operation too — query it, do not grep it:
 
 - Introspect: `khub schema`, `khub schema show <type>`, `khub status`.
 - Read: `khub query --type <t>`, `khub get <id> --edges`, `khub neighbors <id>`, `khub impact <id>`, `khub history <id>`, `khub search <text>`.
-- Write: `khub add <type> --<field> <v>`, `khub edit <id> <field> <v>`, `khub link <id> <pred> <target>`, `khub unlink`, `khub remove <id>`. Capture is never blocked; `--draft` marks an entity unpublished.
+- Write: `khub add <type> --<field> <v>`, `khub edit <id> <field> <v>`, `khub link <id> <pred> <target>`, `khub unlink`, `khub remove <id>`, `khub verify <id> --by <actor>` (a review someone actually did). Capture is never blocked; `--draft` writes `status: draft`, and `khub edit <id> status stable` publishes.
 - Every read and every write above takes `--format json`. Piped output is JSON by default; a table is only for a TTY. (`reindex`, `viz`, `backfill` and `wire` are operator commands and print prose.)
 
 Not installed? `npm install -D @endgame-build/khub`, then `npx skills add endgame-build/khub`.

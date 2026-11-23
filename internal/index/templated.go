@@ -96,7 +96,7 @@ func walkTemplate(r *os.Root, root string, tp *schema.PathTemplate, i int, dir s
 			return nil
 		}
 		if leaf {
-			if info.Mode().IsRegular() {
+			if info.Mode().IsRegular() && !schema.ReservedEntityName(name) {
 				*out = append(*out, rel)
 			}
 			return nil
@@ -159,6 +159,12 @@ func (idx *Index) pathNode(target string) (Node, bool) {
 	if !ok {
 		return Node{}, false
 	}
+	return idx.FileNode(rel)
+}
+
+// FileNode is the per-item or singleton node stored in the file at rel, a
+// clean workspace-relative slash path matched byte for byte as scanned.
+func (idx *Index) FileNode(rel string) (Node, bool) {
 	idx.pathOnce.Do(func() {
 		idx.byPath = make(map[string]Node, len(idx.Paths))
 		for _, n := range idx.Order {
@@ -191,3 +197,8 @@ func (idx *Index) ResolvesToFile(rel *schema.ResolvedRelation, target string) bo
 func (idx *Index) Satisfies(rel *schema.ResolvedRelation, target string) bool {
 	return len(idx.ResolveTarget(rel, target)) > 0 || idx.ResolvesToFile(rel, target)
 }
+
+// LocalRef is a link or path value made workspace-local: the anchor dropped,
+// backslashes read as separators, the path cleaned. ok is false for an empty
+// value or one that leaves its root (`..`, an absolute path).
+func LocalRef(target string) (string, bool) { return cleanRef(target) }

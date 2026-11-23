@@ -108,12 +108,18 @@ func TestProvenanceMissingKeysReadEmpty(t *testing.T) {
 	}
 }
 
-func TestProvenanceMissingConfigErrors(t *testing.T) {
-	// Python raises FileNotFoundError; here the *os.PathError reaches the
-	// CLI's os_error boundary.
-	_, err := Provenance(t.TempDir())
-	if err == nil || !os.IsNotExist(err) {
-		t.Fatalf("want not-exist error, got %v", err)
+// A missing config.yaml is the located config_missing refusal, for every
+// reader of it.
+func TestMissingConfigIsConfigMissing(t *testing.T) {
+	root := t.TempDir()
+	_, perr := Provenance(root)
+	_, serr := StaleDays(root)
+	_, xerr := PresetSource(root)
+	for _, err := range []error{perr, serr, xerr} {
+		var le *errs.Located
+		if !errors.As(err, &le) || le.Code != "config_missing" {
+			t.Fatalf("want config_missing, got %v", err)
+		}
 	}
 }
 

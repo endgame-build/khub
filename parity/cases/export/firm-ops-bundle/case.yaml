@@ -1,0 +1,31 @@
+# `export --okf` writes the workspace as an OKF 0.2 bundle. The workspace sits
+# in hub/ and the bundle in bundle/ beside it, so the tree manifest covers
+# both. An md entity is copied as written, OKF families and comments included,
+# with its declared relations appended as one `# Related` section of
+# bundle-absolute links; the dangling `partner` is listed as plain text. A
+# folder entity keeps its `_index.md` path. Every directory gets an index.md,
+# and only the root one has frontmatter (`okf_version`). A dry run lists the
+# same files and writes nothing; a second export refuses the non-empty target
+# until --force. Bundle bytes are shown by copying files into fragment bodies
+# and reading them raw (an sh step's output is not recorded).
+steps:
+- argv: ["init", "firm-ops", "hub", "--no-wire"]
+- sh: |
+    printf -- '---\ntype: client\nname: Initech  # the client\ndescription: A systems integrator.\ncreated: 2026-01-15\nupdated: 2026-01-15\nstatus: stable\ngenerated:\n  by: khub\n  at: 2026-01-15T00:00:00Z\nverified:\n- {by: human:noor, at: 2026-01-16T00:00:00Z, rev: r1}\nsources:\n- resource: https://initech.example\n  id: s1\nstale_after: 2027-01-01T00:00:00Z\nusage_window:\n  from: 2026-01-01T00:00:00Z\n  to: 2026-06-30T00:00:00Z\nx_crm_note: kept as written\npartner: ghost-partner\n---\nWe met Initech through a referral.[^s1]\n\n[^s1]: The CRM record.\n' > hub/clients/initech.md
+    printf -- '---\ntype: person\nname: Noor\nrole: partner\ncreated: 2026-01-15\n---\n' > hub/identity/team/noor.md
+    mkdir -p hub/opportunities/initech-deal
+    printf -- '---\ntype: opportunity\nname: Initech deal\nstage: prospect\nclient: initech\nowner: noor\ncreated: 2026-01-15\nupdated: 2026-01-15\n---\nA first conversation.\n' > hub/opportunities/initech-deal/_index.md
+- argv: ["-C", "hub", "export", "--okf", "bundle", "--dry-run", "--format", "json"]
+- argv: ["-C", "hub", "export", "--okf", "bundle", "--format", "json"]
+- argv: ["-C", "hub", "export", "--okf", "bundle", "--format", "json"]
+- argv: ["-C", "hub", "export", "--okf", "bundle", "--force", "--format", "json"]
+- sh: |
+    for f in clients/initech.md opportunities/initech-deal/_index.md index.md opportunities/index.md opportunities/initech-deal/index.md; do
+      n=$(printf %s "$f" | tr '/_.' '---')
+      { printf -- '---\ntype: fragment\ntitle: %s\n---\n' "$f"; cat "bundle/$f"; } > "hub/fragments/snap-$n.md"
+    done
+- argv: ["-C", "hub", "get", "fragment/snap-clients-initech-md", "--format", "raw"]
+- argv: ["-C", "hub", "get", "fragment/snap-opportunities-initech-deal--index-md", "--format", "raw"]
+- argv: ["-C", "hub", "get", "fragment/snap-index-md", "--format", "raw"]
+- argv: ["-C", "hub", "get", "fragment/snap-opportunities-index-md", "--format", "raw"]
+- argv: ["-C", "hub", "get", "fragment/snap-opportunities-initech-deal-index-md", "--format", "raw"]

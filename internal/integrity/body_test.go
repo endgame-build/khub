@@ -22,7 +22,7 @@ ontology:
       attributes:
         title:  { required: true }
         kind:   { enum: [functional, non-functional, constraint] }
-        status: { enum: [proposed, accepted], default: proposed }
+        decision: { enum: [proposed, accepted], default: proposed }
       relations:
         affects: { to: any, many: true }
     memo:
@@ -194,16 +194,16 @@ lenses:
 	}
 }
 
-// `add` writes no schema defaults beyond `draft` — a value khub chose is not a
-// statement anybody made — and a hand-authored file may omit even that, so a
-// lens on a defaulted field would otherwise apply to nobody.
+// `add` writes no schema defaults — a value khub chose is not a statement
+// anybody made — so a lens on a defaulted field (the base `status`, a type's
+// own `decision`) would otherwise apply to nobody.
 func TestWhenReadsSchemaDefaultOfUnwrittenField(t *testing.T) {
 	root := bodyWS(t, "sections: []\nlenses:\n"+
-		"- {code: published, when: {draft: false}, instruction: Not a draft; hold it to that.}\n"+
-		"- {code: open, when: {status: proposed}, instruction: Still open?}\n")
+		"- {code: published, when: {status: stable}, instruction: Not a draft; hold it to that.}\n"+
+		"- {code: open, when: {decision: proposed}, instruction: Still open?}\n")
 	createBody(t, root, "note", "x", "")
-	if raw := readRaw(t, root, "notes/x.md"); strings.Contains(raw, "status:") {
-		t.Fatalf("the status default leaked into the file:\n%s", raw)
+	if raw := readRaw(t, root, "notes/x.md"); strings.Contains(raw, "status:") || strings.Contains(raw, "decision:") {
+		t.Fatalf("a schema default leaked into the file:\n%s", raw)
 	}
 	// Neither field written at all.
 	seed(t, root, "notes/y.md", kv{"type", "note"}, kv{"title", "Y"}, kv{"created", "2026-06-01"})
@@ -214,11 +214,11 @@ func TestWhenReadsSchemaDefaultOfUnwrittenField(t *testing.T) {
 			t.Fatalf("%s: lenses = %v", id, got)
 		}
 	}
-	update(t, root, "note/y", "draft", "true", "status", "accepted")
+	update(t, root, "note/y", "status", "draft", "decision", "accepted")
 	if got := mustValidate(t, root, ptr("note/y"), false).Lenses; len(got) != 0 {
 		t.Fatalf("after edit: lenses = %v", got)
 	}
-	update(t, root, "note/x", "draft", "true")
+	update(t, root, "note/x", "status", "draft")
 	if got := mustValidate(t, root, ptr("note/x"), false).Lenses; len(got) != 1 || got[0].Code != "open" {
 		t.Fatalf("after drafting: lenses = %v", got)
 	}

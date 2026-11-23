@@ -1,0 +1,218 @@
+{
+  "recorded": {
+    "khub": "0.30.0",
+    "commit": "52b1d45",
+    "go": "go1.26.10",
+    "goos": "linux",
+    "runner": "ubuntu26",
+    "nproc": 4,
+    "cpu_model": "AMD EPYC 7763 64-Core Processor",
+    "runs": 3
+  },
+  "profile": {
+    "scales": [
+      100,
+      2000
+    ],
+    "repeat": 11,
+    "statistic": "min"
+  },
+  "tolerance": {
+    "exponent_ceiling": 1.15,
+    "exponent_delta": 0.1,
+    "cpu_ratio": 1.35,
+    "wall_ratio": 2
+  },
+  "control": "schema show \u003ctype\u003e",
+  "floor": "--version (process floor)",
+  "floor_wall_ms": 3.07,
+  "reads": {
+    "--version (process floor)": {
+      "cpu_e": 0.01,
+      "cpu_r": 0.31,
+      "wall_r": 1
+    },
+    "check": {
+      "cpu_e": 0.8,
+      "cpu_r": 54.51,
+      "wall_r": 91.51
+    },
+    "check --require-verified": {
+      "cpu_e": 0.79,
+      "cpu_r": 55.18,
+      "wall_r": 92.42
+    },
+    "check --stale": {
+      "cpu_e": 0.79,
+      "cpu_r": 54.62,
+      "wall_r": 91.38
+    },
+    "check --strict": {
+      "cpu_e": 0.79,
+      "cpu_r": 54.76,
+      "wall_r": 91.7
+    },
+    "get": {
+      "cpu_e": 0.8,
+      "cpu_r": 33.35,
+      "wall_r": 36.92
+    },
+    "get --edges": {
+      "cpu_e": 0.81,
+      "cpu_r": 33.57,
+      "wall_r": 36.98
+    },
+    "get \u003cchain middle\u003e --edges": {
+      "cpu_e": 0.81,
+      "cpu_r": 33.66,
+      "wall_r": 36.76
+    },
+    "history": {
+      "cpu_e": 0.81,
+      "cpu_r": 34.78,
+      "wall_r": 38.92
+    },
+    "impact": {
+      "cpu_e": 0.81,
+      "cpu_r": 35.16,
+      "wall_r": 39.7
+    },
+    "impact --reverse": {
+      "cpu_e": 0.81,
+      "cpu_r": 35.02,
+      "wall_r": 40.11
+    },
+    "neighbors": {
+      "cpu_e": 0.82,
+      "cpu_r": 34.94,
+      "wall_r": 39.12
+    },
+    "neighbors --depth 12": {
+      "cpu_e": 0.83,
+      "cpu_r": 38.81,
+      "wall_r": 49.89
+    },
+    "query": {
+      "cpu_e": 0.81,
+      "cpu_r": 36.77,
+      "wall_r": 44.43
+    },
+    "query --orphan": {
+      "cpu_e": 0.81,
+      "cpu_r": 35.06,
+      "wall_r": 39.97
+    },
+    "query --tag": {
+      "cpu_e": 0.81,
+      "cpu_r": 35.26,
+      "wall_r": 40.68
+    },
+    "query --trust human": {
+      "cpu_e": 0.81,
+      "cpu_r": 35.5,
+      "wall_r": 41.89
+    },
+    "query --type requirement": {
+      "cpu_e": 0.81,
+      "cpu_r": 35.6,
+      "wall_r": 41.48
+    },
+    "reindex --dry-run": {
+      "cpu_e": 0.83,
+      "cpu_r": 38.57,
+      "wall_r": 47.65
+    },
+    "schema": {
+      "cpu_e": 0,
+      "cpu_r": 1.08,
+      "wall_r": 3.14
+    },
+    "schema show \u003ctype\u003e": {
+      "cpu_e": 0,
+      "cpu_r": 1,
+      "wall_r": 2.88
+    },
+    "search (many hits)": {
+      "cpu_e": 0.82,
+      "cpu_r": 39.01,
+      "wall_r": 51.43
+    },
+    "search (no hit)": {
+      "cpu_e": 0.8,
+      "cpu_r": 37.07,
+      "wall_r": 47.66
+    },
+    "search (one hit)": {
+      "cpu_e": 0.8,
+      "cpu_r": 38.32,
+      "wall_r": 50.24
+    },
+    "stale --days 90": {
+      "cpu_e": 0.8,
+      "cpu_r": 34.93,
+      "wall_r": 39.39
+    },
+    "status": {
+      "cpu_e": 0.86,
+      "cpu_r": 61.17,
+      "wall_r": 114.63
+    },
+    "upgrade": {
+      "cpu_e": 0.81,
+      "cpu_r": 125.75,
+      "wall_r": 262.44
+    },
+    "upgrade --dry-run": {
+      "cpu_e": 0.81,
+      "cpu_r": 125.75,
+      "wall_r": 263.26
+    },
+    "validate (whole corpus)": {
+      "cpu_e": 0.78,
+      "cpu_r": 50.69,
+      "wall_r": 82.67
+    },
+    "validate \u003cone entity\u003e": {
+      "cpu_e": 0.76,
+      "cpu_r": 33.96,
+      "wall_r": 37.62
+    }
+  },
+  "writes": {
+    "add": {
+      "cpu_e": 0.75,
+      "cpu_r": 34.01,
+      "wall_r": null
+    },
+    "edit": {
+      "cpu_e": 0.75,
+      "cpu_r": 34.07,
+      "wall_r": null
+    },
+    "link": {
+      "cpu_e": 0.79,
+      "cpu_r": 33.61,
+      "wall_r": null
+    },
+    "link (no-op)": {
+      "cpu_e": 0.8,
+      "cpu_r": 33.65,
+      "wall_r": null
+    },
+    "remove": {
+      "cpu_e": 0.8,
+      "cpu_r": 34.34,
+      "wall_r": null
+    },
+    "unlink": {
+      "cpu_e": 0.79,
+      "cpu_r": 33.65,
+      "wall_r": null
+    },
+    "verify": {
+      "cpu_e": 0.8,
+      "cpu_r": 33.68,
+      "wall_r": null
+    }
+  }
+}

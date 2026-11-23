@@ -27,8 +27,14 @@ go build -o parity-run ./parity/runner
 ./parity-run -bin "$PWD/khub" -cases parity/cases                # every fixture
 ./parity-run -coverage parity/coverage.yaml -cases parity/cases \
              -subset-of "$PWD/khub"                              # no uncovered command/flag/error code
-bash smoke.sh                                                    # end to end, both build presets
+bash smoke-windows.sh                                            # all of smoke.sh, then the Windows-likely cases (every OS)
+KHUB=$PWD/khub bash parity/scale/smoke.sh --scale 300            # a generated corpus against its own manifest, with the footprint pin
 ```
+
+CI runs more than this per PR (the race detector, a shuffled run, a coverage
+floor, the plugin budgets and flag lint, the cross-version self row) and a
+nightly on top (scale at 550, the bench and its gate, fuzzing, the coverage
+union, a snapshot release). `docs/ci.md` lists every job and what it proves.
 
 The distribution channel has its own gates, which CI runs as the
 `npm-package` job:
@@ -47,6 +53,7 @@ Two more that only matter when you touch what they cover:
 ```bash
 go run ./parity/yamlgate parity/corpus   # if you touch internal/canon
 bash parity/tools/gen_cli_reference.sh   # if you add or change a flag
+go run ./parity/tools/presetdocs         # if you touch presets/ or the schema JSON (builds khub fresh)
 ```
 
 ## The fixtures are the spec
@@ -81,6 +88,17 @@ package ports. That provenance is deliberate; the Python source itself is gone
   the graph-wide gate. Capture is never blocked on write.
 - Read [`docs/design-memo.md`](docs/design-memo.md) for the invariants before
   non-trivial work. Each has a sentinel fixture under `parity/cases/invariants/`.
+
+## Docs: one canonical home per behaviour
+
+User-facing behaviour is specified in exactly one place, and rationale links to
+it rather than restating it: commands, flags, output shapes and exit codes live
+in [`docs/cli.md`](docs/cli.md); the schema vocabulary and storage in
+[`docs/schema.md`](docs/schema.md). [`docs/design-memo.md`](docs/design-memo.md)
+and [`docs/concepts.md`](docs/concepts.md) say why, and link. A change to
+behaviour updates its canonical page in the same commit and replaces any
+restatement it finds elsewhere with a link. The full map and the rules are in
+[`.claude/rules/docs.md`](.claude/rules/docs.md).
 
 ## Commits and releases
 

@@ -23,9 +23,16 @@ builds six binaries and publishes them; nothing is uploaded by hand.
    go test ./...
    ./parity-run -bin "$PWD/khub" -cases parity/cases
    ./parity-run -coverage parity/coverage.yaml -cases parity/cases -subset-of "$PWD/khub"
-   bash smoke.sh
+   bash smoke-windows.sh                                # all of smoke.sh, then the Windows-likely cases
+   KHUB=$PWD/khub bash parity/scale/smoke.sh            # 550 entities, with the footprint pin
    npm/smoke.sh
    ```
+   Then look at the last scheduled runs of `nightly.yml` and `compat.yml` on
+   `main`: a tag on a commit the nightly has not seen green, or that the
+   published-version matrix does not upgrade from, is a release with a known
+   hole in it. After the tag, add the new version to
+   `parity/compat/versions.txt` in the next PR, so the next release is tested
+   against this one.
 4. Commit on a branch, then merge to `main` (fast-forward or PR).
 5. Tag the release commit on `main`: `git tag -a vX.Y.Z -m "khub vX.Y.Z: <summary>"`.
 6. Push both: `git push origin main && git push origin vX.Y.Z`.

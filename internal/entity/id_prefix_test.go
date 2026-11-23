@@ -39,10 +39,10 @@ func TestLiteralPrefixAndDate(t *testing.T) {
 	t.Setenv("KHUB_PARITY_NOW", "2026-01-15")
 	ws := newWS(t, "build-hub")
 	first, err := Create(ws, "adr", CreateOpts{
-		Fields: fields("title", "Use Postgres", "status", "proposed"), UseTemplate: true})
+		Fields: fields("title", "Use Postgres", "decision", "proposed"), UseTemplate: true})
 	requireNoError(t, err)
 	second, err := Create(ws, "adr", CreateOpts{
-		Fields: fields("title", "Drop Redis", "status", "proposed"), UseTemplate: true})
+		Fields: fields("title", "Drop Redis", "decision", "proposed"), UseTemplate: true})
 	requireNoError(t, err)
 	if first.Slug != "ad-2026-01-15-use-postgres" || second.Slug != "ad-2026-01-15-drop-redis" {
 		t.Fatalf("slugs = %q, %q", first.Slug, second.Slug)
@@ -63,7 +63,7 @@ func TestLiteralPrefixWithoutDate(t *testing.T) {
 		case "component":
 			extra = append(extra, "kind", "service")
 		case "repo":
-			extra = append(extra, "repo", "acme/api", "status", "active")
+			extra = append(extra, "repo", "acme/api")
 		}
 		res, err := Create(ws, tc.typ, CreateOpts{Fields: fields(extra...), UseTemplate: true})
 		requireNoError(t, err)
@@ -121,7 +121,7 @@ func TestMintingReadsNoSiblings(t *testing.T) {
 			"---\ntype: adr\ntitle: "+slug+"\nstatus: proposed\ncreated: 2026-01-01\n---\n")
 	}
 	next, err := Create(ws, "adr", CreateOpts{
-		Fields: fields("title", "Next", "status", "proposed"), UseTemplate: true})
+		Fields: fields("title", "Next", "decision", "proposed"), UseTemplate: true})
 	requireNoError(t, err)
 	if next.Slug != "ad-2026-01-15-next" {
 		t.Fatalf("slug = %q, want ad-2026-01-15-next", next.Slug)
@@ -134,14 +134,14 @@ func TestExplicitIDBypassesTheScheme(t *testing.T) {
 	t.Setenv("KHUB_PARITY_NOW", "2026-01-15")
 	ws := newWS(t, "build-hub")
 	res, err := Create(ws, "adr", CreateOpts{
-		Fields: fields("title", "Hand named", "status", "proposed"),
+		Fields: fields("title", "Hand named", "decision", "proposed"),
 		ID:     "hand", UseTemplate: true})
 	requireNoError(t, err)
 	if res.Slug != "hand" {
 		t.Fatalf("explicit slug = %q", res.Slug)
 	}
 	next, err := Create(ws, "adr", CreateOpts{
-		Fields: fields("title", "Next", "status", "proposed"), UseTemplate: true})
+		Fields: fields("title", "Next", "decision", "proposed"), UseTemplate: true})
 	requireNoError(t, err)
 	if next.Slug != "ad-2026-01-15-next" {
 		t.Fatalf("next slug = %q", next.Slug)
@@ -155,12 +155,12 @@ func TestSameTitleRefusesAndNamesID(t *testing.T) {
 	t.Setenv("KHUB_PARITY_NOW", "2026-01-15")
 	ws := newWS(t, "build-hub")
 	_, err := Create(ws, "adr", CreateOpts{
-		Fields: fields("title", "Use Postgres", "status", "proposed"), UseTemplate: true})
+		Fields: fields("title", "Use Postgres", "decision", "proposed"), UseTemplate: true})
 	requireNoError(t, err)
 	before := mdFiles(t, ws)
 
 	_, err = Create(ws, "adr", CreateOpts{
-		Fields: fields("title", "Use Postgres", "status", "accepted"), UseTemplate: true})
+		Fields: fields("title", "Use Postgres", "decision", "accepted"), UseTemplate: true})
 	e := requireCode(t, err, "slug_taken")
 	requireMessageContains(t, e,
 		"Slug 'ad-2026-01-15-use-postgres' already exists in adr; pass --id <slug> to name this one differently")
@@ -173,7 +173,7 @@ func TestSameTitleRefusesAndNamesID(t *testing.T) {
 	}
 
 	named, err := Create(ws, "adr", CreateOpts{
-		Fields: fields("title", "Use Postgres", "status", "accepted"),
+		Fields: fields("title", "Use Postgres", "decision", "accepted"),
 		ID:     "use-postgres-again", UseTemplate: true})
 	requireNoError(t, err)
 	if named.Slug != "use-postgres-again" {
@@ -187,7 +187,7 @@ func TestCreatedOverrideDatesTheId(t *testing.T) {
 	t.Setenv("KHUB_PARITY_NOW", "2026-01-15")
 	ws := newWS(t, "build-hub")
 	res, err := Create(ws, "adr", CreateOpts{
-		Fields:      fields("title", "Imported", "status", "accepted", "created", "2025-03-01"),
+		Fields:      fields("title", "Imported", "decision", "accepted", "created", "2025-03-01"),
 		UseTemplate: true})
 	requireNoError(t, err)
 	if res.Slug != "ad-2025-03-01-imported" {

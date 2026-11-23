@@ -1,0 +1,36 @@
+# Every write that changes an entity's content stamps OKF `generated: {by, at}`:
+# `at` from the clock, `by` from `--by`, else KHUB_ACTOR (here process:nightly).
+# A no-op link or edit writes nothing, and a tags-only edit writes the tags but
+# stamps nothing. `validate` reports an actor outside the convention
+# (human:, process:, <producer>[/<version>]) as a gap, never an error. A
+# schema field named like a write verb's own flag is a schema defect `check`
+# and `validate` report. It blocks no write: only passing that flag to a write
+# of that type refuses (flag_shadowed), since the flag would swallow the value.
+env:
+  KHUB_ACTOR: "process:nightly"
+steps:
+- argv: ["init", "build-hub", ".", "--no-wire"]
+- argv: ["add", "requirement", "--title", "First", "--kind", "functional", "--by", "human:ilya", "--format", "json"]
+- argv: ["add", "requirement", "--title", "Second", "--kind", "functional", "--format", "json"]
+- argv: ["get", "req-first", "--format", "raw"]
+- argv: ["get", "req-second", "--format", "raw"]
+- argv: ["link", "req-first", "related", "req-second", "--by", "agent/claude-code", "--format", "json"]
+- argv: ["link", "req-first", "related", "req-second", "--by", "human:nobody", "--format", "json"]
+- argv: ["get", "req-first", "--format", "raw"]
+- argv: ["unlink", "req-first", "related", "req-second", "--by", "process:ci", "--format", "json"]
+- argv: ["edit", "req-second", "description", "Edited", "--by", "khub/0.31", "--format", "json"]
+- argv: ["get", "req-first", "--format", "raw"]
+- argv: ["get", "req-second", "--format", "raw"]
+- sh: |
+    printf -- '---\ntype: requirement\ntitle: Hand\nkind: functional\ncreated: 2026-01-15\ngenerated: {by: Ilya Pukhalski, at: 2026-01-15T00:00:00Z}\n---\n' > knowledge/requirements/req-hand.md
+- argv: ["validate", "requirement/req-hand", "--format", "json"]
+- sh: "printf '    memo:\\n      attributes:\\n        by: { type: text }\\n' >> .khub/ontology.yaml"
+- argv: ["add", "requirement", "--title", "Third", "--kind", "functional", "--by", "human:ilya", "--format", "json"]
+- argv: ["add", "memo", "--title", "Note", "--format", "json"]
+- argv: ["add", "memo", "--title", "Other", "--by", "human:ilya", "--format", "json"]
+- argv: ["edit", "memo/note", "title", "Renamed", "--by", "human:ilya", "--format", "json"]
+- argv: ["validate", "memo", "--format", "json"]
+- argv: ["check", "--format", "json"]
+- argv: ["edit", "req-second", "tags", "reviewed", "--by", "human:tagger", "--format", "json"]
+- argv: ["edit", "req-second", "description", "Edited", "--by", "human:noop", "--format", "json"]
+- argv: ["get", "req-second", "--format", "raw"]

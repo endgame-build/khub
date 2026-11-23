@@ -31,7 +31,15 @@ test('every spelling of the binary is recognized', () => {
 test('env assignments, -C and a leading cd do not hide the call', () => {
   expect(simple('KHUB_PARITY_NOW=2026-01-15 khub -C ./ws get cmp-search --edges').positional).toEqual(['cmp-search'])
   expect(simple('khub --workspace=/tmp/ws query --type adr').flags).toEqual({ type: 'adr' })
+  expect(simple('khub retrieve --no-body auth --expand depends_on:2').positional).toEqual(['auth'])
   expect(simple('cd docs/ws && khub link ad-1 affects cmp-search').verb).toBe('link')
+})
+
+test('get --path takes no value: every path is positional', () => {
+  const found = simple('khub get --path notes/a.md cards/b.json --format json')
+  expect(found.positional).toEqual(['notes/a.md', 'cards/b.json'])
+  expect(found.flags).toEqual({ path: true, format: 'json' })
+  expect(simple('khub add doc --path x/y.md').flags).toEqual({ path: 'x/y.md' })
 })
 
 test('the workspace a call names is kept', () => {
@@ -139,6 +147,11 @@ test('a subshell or an open quote is read off the text', () => {
     kind: 'compound',
     calls: [{ kind: 'simple', verb: 'upgrade', sub: null, workspace: null, positional: [], flags: { 'dry-run': true } }],
   })
+  expect(classify('(cd ws && khub reindex --check)', UNIX)).toEqual({
+    kind: 'compound',
+    calls: [{ kind: 'simple', verb: 'reindex', sub: null, workspace: null, positional: [], flags: { check: true } }],
+  })
+  expect(callsOf(classify('(cd ws && khub reindex --check)', UNIX)).some(mutates)).toBe(false)
   expect(verbs('khub add adr --title "open')).toEqual(['add'])
   expect(verbs('(./bin/khub add adr --title x; khub check)')).toEqual(['add', 'check'])
   expect(classify('(echo khub)', UNIX).kind).toBe('none')
@@ -170,11 +183,18 @@ test('a call that changes the workspace is told from a read', () => {
   expect(mutates(simple('khub reindex'))).toBe(true)
   expect(mutates(simple('khub reindex --dry-run'))).toBe(false)
   expect(mutates(simple('khub reindex --dry-run=true'))).toBe(false)
+  for (const write of ['add adr --title x', 'edit x kind y', 'link x p y', 'unlink x p y', 'remove x --force']) {
+    expect(mutates(simple(`khub ${write} --dry-run`))).toBe(false)
+  }
+  expect(mutates(simple('khub reindex --check'))).toBe(false)
+  expect(mutates(simple('khub -C ./ws reindex --check'))).toBe(false)
+  expect(mutates(simple('khub reindex --check=false'))).toBe(true)
   expect(mutates(simple('khub schema snapshot'))).toBe(true)
   expect(mutates(simple('khub get x'))).toBe(false)
 })
 
 test('an edit names the fields it changed, and a body by name alone', () => {
+  expect(edited(simple('khub edit cmp-search lifecycle deprecated --dry-run'))).toBe('lifecycle deprecated')
   expect(edited(simple('khub edit cmp-search lifecycle deprecated'))).toBe('lifecycle deprecated')
   expect(edited(simple('khub edit cmp-search --lifecycle deprecated --format json'))).toBe('lifecycle deprecated')
   expect(edited(simple('khub edit cmp-search --lifecycle deprecated --tier tier-2 --strict'))).toBe(
@@ -239,4 +259,12 @@ test('unix reads khub.exe and a backslash path as some other program', () => {
   expect(classify('KHUB status', UNIX).kind).toBe('none')
   expect(classify('C:\\\\tools\\\\khub status', UNIX).kind).toBe('none')
   expect(classify('(khub.exe add adr --title x)', UNIX).kind).toBe('none')
+})
+
+test('--replace takes no value, so the word after it is not read as one', () => {
+  const call = simple('khub query --save-as mine --replace kind service')
+
+  expect(call.flags).toEqual({ 'save-as': 'mine', replace: true })
+  expect(call.positional).toEqual(['kind', 'service'])
+  expect(simple('khub run open-prospects --format json').positional).toEqual(['open-prospects'])
 })

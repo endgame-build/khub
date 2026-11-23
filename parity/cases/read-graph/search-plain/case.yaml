@@ -3,7 +3,7 @@ steps:
 - argv: ["add", "requirement", "--title", "Encrypt sensitive payloads at rest", "--kind", "functional"]
 - argv: ["add", "component", "--title", "Café kiosk", "--kind", "service"]
 - argv: ["add", "component", "--title", "Auth service", "--kind", "service", "--stack", "go"]
-- argv: ["add", "adr", "--title", "Use Redis for the login limiter", "--status", "accepted"]
+- argv: ["add", "adr", "--title", "Use Redis for the login limiter", "--decision", "accepted"]
 - argv: ["search", "encrypt customer sensitive payload"]
 - argv: ["search", "--plain", "encrypt customer sensitive payload"]
 - argv: ["search", "--plain", "nothing-matches-this"]

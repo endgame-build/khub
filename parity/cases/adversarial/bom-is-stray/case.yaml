@@ -1,0 +1,18 @@
+# A UTF-8 BOM before the opening fence. python-frontmatter never saw a fence,
+# so at scan altitude the file is a stray: status counts it, check names it
+# and exits 1, query returns nothing. The edit altitude reads the document on
+# its own terms: `get` answers with empty frontmatter and the BOM inside the
+# body, and `edit` strips the BOM and heals the file into an entity. That
+# two-altitude split is documented (.claude/rules/yaml.md); this pins it at
+# the CLI so a change to either side is a deliberate re-record.
+#
+# The BOM is written with the OCTAL escape: dash's printf has no \xHH.
+steps:
+- argv: ["init", "firm-ops", ".", "--no-wire"]
+- sh: "mkdir -p fragments && printf -- '\\357\\273\\277---\\ntype: fragment\\ncreated: 2026-01-15\\nname: BOM\\n---\\nbody\\n' > fragments/bom.md"
+- argv: ["status", "--format", "json"]
+- argv: ["check", "--format", "json"]
+- argv: ["query", "--type", "fragment", "--format", "json"]
+- argv: ["get", "fragment/bom", "--format", "json"]
+- argv: ["edit", "fragment/bom", "stage", "raw", "--format", "json"]
+- argv: ["status", "--format", "json"]

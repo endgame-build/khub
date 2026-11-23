@@ -12,7 +12,642 @@ Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelo
   complete keys and flag a typo'd key or a bad value in `ontology.yaml`,
   `policy.yaml` and `storage.yaml` as you type. It is built from the key lists
   the schema loader checks, and a test fails when the two disagree. See
-  [Editor validation](docs/schema.md#editor-validation-json-schema).
+  [Editor validation](docs/schema.md#editor-validation-json-schema). The
+  plugin (0.1.12) reads the verb as a schema view.
+
+## [0.33.0] — 2026-11-15
+
+khub tells an agent more and lets it try a write first. A refusal now carries
+`field`, `expected` and `suggestion`, so a misspelt kind, id or predicate comes
+back with the value to use, and `docs/cli-output-contract.md` sets out the
+whole output contract. Every write verb takes `--dry-run`. `check` gains
+retention rules, per-entity waivers and, under `--mentions`, link suggestions
+from body text, and `validate` reports dead relative links. In a Claude Code
+session each write warns about the gating findings it has not shown yet; that
+costs one `check` per write (an `edit` on 550 entities takes about 90 ms
+instead of 40 ms), and `KHUB_SESSION=` turns it off. `query` filters by what sits under an entity (`--under`) and by edge counts
+(`--count`). New commands: `khub recent`, `khub doctor`, `khub completion`,
+saved queries (`query --save-as`, `khub run`), `reindex --check`, and
+`viz`/`serve --aspect`. A locked type or predicate
+survives `upgrade` unless `--unlock` names it. The workspace format is
+unchanged, so no `khub upgrade` is needed.
+
+### Added
+
+- **`query --under <id> --via <predicate>`.** Scopes a query to everything
+  that reaches an entity over a relation, any number of hops: `--under
+  sys-shop --via system` lists the shop's components, and over `depends_on`
+  every transitive dependent. The edge runs from the contained entity to its
+  container; the anchor is excluded, and the other filters AND with it. A
+  declared inverse as `--via` walks a hierarchy stored on the parent:
+  `--under <adr> --via superseded` is every record that ADR replaced.
+  `query --receipt` echoes both in `applied`.
+- **Cardinality filters on `query`.** `--count <relation><op><n>` keeps an
+  entity by how many entities it is joined to under one relation or declared
+  inverse (`--count superseded=0`, `--count 'depends_on>=2'`);
+  `--in-count` and `--out-count` take `<op><n>` (or a bare `n`) over every
+  inbound or outbound edge, so `--out-count 0` finds leaves and
+  `--in-count '>=5'` the hubs. The op is one of `=`, `!=`, `<`, `<=`, `>`,
+  `>=`; each flag repeats and every bound ANDs. The counts read the graph
+  `--has`, `--missing` and `--orphan` read. A name with no edges (an
+  attribute, a typo) refuses as `filter_error`; a malformed bound is a usage
+  error. Quote a bound holding `<` or `>`: the shell reads them as redirects.
+  `query --receipt` echoes the bounds in `applied` as `count`, `in_count` and
+  `out_count` lists.
+- **`khub recent`** lists the entities touched within a window, newest first
+  (`--days N`, default 7; `--limit N`). It judges the same date `stale` does:
+  `updated`, else the file's last commit, else `created`. Rows carry `id`,
+  `type`, `slug`, `title`, `draft`, `effective_date`, `age` and `source`.
+  `--limit` is `query`'s (0 returns nothing, `-n` drops the last n), and a cut
+  says so in a `note:` line on stderr. The plugin (0.1.6) draws a compact row
+  for it, the note included.
+- `docs/ingestion-conflicts.md`, the conflict policy for the planned
+  ingestion path: a re-run never silently overwrites a value in a published
+  entity, reports each disagreement (entity, field, ours, theirs, source)
+  under a named strategy (`manual` by default), and proposes identity matches
+  with their evidence instead of merging. A design only; no command changes.
+  `docs/build-hub-preset.md` now records a facet id as an `aliases` entry
+  (`facet:FUNC-007`) instead of a tag.
+- `docs/ingestion-alignment.md`, the alignment ladder for the planned
+  ingestion path, companion to `docs/ingestion-conflicts.md`: a reference in a
+  source record resolves by exact source id or khub id, an unknown source id
+  gets a draft stub carrying it as an alias, and look-alikes are proposed with
+  stable evidence codes (`title_equal`, `alias_equal`, `title_match`,
+  `text_match`) but never linked. Also sets out the `exact` and `full`
+  alignment modes and the linker numbers the ingestion goldens will measure.
+  A design only; no command changes.
+- **Machine-readable refusals.** The JSON refusal envelope now carries
+  `field`, `expected` and `suggestion` where a refusal has them, so an agent
+  can correct a call without parsing the message: `enum_violation` names the
+  attribute, its members and the nearest one; `lookup_error` and
+  `referential_integrity` suggest the nearest existing id (never the entity
+  being written); `unknown_type`, `filter_error`, `illegal_predicate`,
+  `unknown_predicate`, `strict_unknown_field`, `unknown_preset` and
+  `bad_target` list what is declared and suggest the nearest;
+  `ambiguity_error` lists the qualified ids to choose from; the value
+  refusals (`pattern_violation`, `number_violation`, `date_violation`,
+  `bool_violation`, `value_shape`) and `cardinality_violation`,
+  `empty_relation_value`, `flag_shadowed` and `draft_retired` name the field.
+  A tie is never guessed: equally near ids are listed in `expected` instead.
+  Each key is absent when it does not apply, and messages, prose output and
+  exit codes are unchanged.
+- **`docs/cli-output-contract.md`.** One page for what a program reading khub
+  may rely on: when stdout is JSON, one value per call, the JSON dialect,
+  stderr, exit codes and the refusal envelope.
+- **Dead relative links.** `validate` reports a relative link in any Markdown
+  body (inline link, image or reference definition) whose file does not exist
+  as a `body` gap, `dead link '<dest>' (no such file)`. Resolved from the
+  entity's directory and case-exact on every platform; links in fenced or
+  indented code, comments and code spans, external URLs, anchors and
+  root-relative paths are not read, and a link that resolves outside the
+  workspace (directly or through a symlink) is skipped, never probed. A gap
+  never fails the gate, so `validate` output gains rows but no exit code
+  moves. `check` does not report them. Closes #52.
+- **`check --mentions`.** An opt-in audit: an entity whose body prose names
+  another entity (by title, name, alias or slug; fenced code, HTML comments and
+  template headings are skipped) with no edge between the two is
+  listed under a new last key, `mentions`, with the predicates that could link
+  it. Suggestions only — nothing is written, `passed` and the exit code never
+  move, and without the flag the payload is unchanged. Plugin 0.1.9 counts
+  `mentions` as informational. Closes #39.
+- **Write warnings per session.** In a session (`KHUB_SESSION`, or Claude
+  Code's `CLAUDE_CODE_SESSION_ID` when that is unset), `add`, `edit`, `link`,
+  `unlink` and `remove` print each gating `check` finding the session has not
+  been shown as a stderr line, `warning: <id> › <rule>: <message>`: the
+  standing debt on the first write, only what changed after that. Advisory:
+  stdout, exit codes and the gates are unchanged, and with no session nothing
+  is printed. `KHUB_SESSION=` turns it off. A write prints at most 20 warnings
+  and then a count, escapes control characters in workspace text, and costs
+  one `check` scan run outside the workspace lock. `verify`, `import`,
+  `backfill`, `wire` and `upgrade` do not warn. Session records untouched for
+  30 days are pruned. Closes #55.
+- **Retention policy.** Policy `retention: { days: N, no_outbound: true }`
+  is a type's end-of-life rule. `check` lists every entity of the type whose
+  `updated` (else `created`) date is more than `N` days old in a new
+  `retention` bucket, `{id, type, slug, date, age_days}`; with `no_outbound`,
+  only one that also has no outbound edge. Unlike `stale`, no git date is
+  read: bump `updated` to keep an entity. The bucket is informational, like
+  `thin`: it never fails the gate, `--strict` included, and khub deletes
+  nothing. It is not `expired`, which reads an entity's own `stale_after`.
+  `schema show --format json` prints the rule. Closes #21.
+- **Check waivers.** Policy `waive` accepts one entity's `incomplete`,
+  `orphans`, `dangling`, `body_shape` or `thin` finding, with a required
+  reason. `check` moves a waived finding out of its bucket into a new
+  `waived` list, with the reason and the finding itself, and it no longer
+  counts against `passed`. A waiver that matches no finding is listed under
+  the new `stale_waivers` bucket (with a `cause`) and fails the gate, so
+  waivers cannot rot; an `incomplete` waiver on a draft is dormant, so a draft
+  toggle never moves the gate. `khub upgrade` keeps `waive` blocks, as it
+  keeps every per-type policy key the shipped file lacks. Closes #38.
+- **`--dry-run` on `add`, `edit`, `link`, `unlink` and `remove`.** A dry run
+  runs every check the write runs (schema, referential integrity, slug and
+  alias gates, the inbound-edge guard, the collection re-render and the
+  storage path and lock path refusals) and refuses where the write would, on
+  the same exit code. A filesystem failure the OS reports only when the write
+  publishes (permissions, a full disk, a concurrent writer) can still differ:
+  a dry run that exits 0 does not promise the write will. It takes no lock,
+  stamps no `generated`, prints no session warnings and writes nothing. On
+  success it prints the record the write would print, plus `changed`
+  (whether the write would move a byte on disk; `link` and `unlink` already
+  carry it) and `"dry_run": true`, one shape across the five verbs.
+  `remove --dry-run` also lists `inbound`, the edges a `--force` would leave
+  dangling. Text output reads `Would create …`, `Would update …`,
+  `Would link …`, `Would unlink …`, `Would remove …`, or the write's own no-op
+  line. The plugin (0.1.10) draws a dry run as a preview and never counts it
+  as a session edit. Closes #59.
+- **`backfill --infer-type`.** A stray whose frontmatter has no `type` is
+  stamped with the one type whose layout holds it, and is then an ordinary
+  entity for `validate` and `check`. It covers `file`, `folder` and `singleton`
+  layouts. A file with no frontmatter, a file starting with a byte-order
+  mark, a file naming another type and a collection row stay strays, and the
+  run lists each with its reason. An authored `type` is never overwritten: a
+  write that would replace a present value refuses with the new code
+  `would_overwrite` (exit 2, `field` names the key). `--dry-run` previews the
+  stamp. The khub skill points agents at it. Closes #78.
+- **Locked types and predicates.** Policy `locked: true` and
+  `locked_relations: [<predicate>, …]` mark load-bearing schema elements.
+  `khub upgrade` refuses a schema that removes one (`locked_removed`, exit 2,
+  dry run included, nothing written; `expected` lists the `--unlock` values)
+  unless the run passes `--unlock <type>` or `--unlock <type>.<predicate>`
+  for each. A current schema that does not resolve keeps its locks; one too
+  broken to read them from is `locks_unreadable`. A lock the workspace added
+  is carried across upgrades like any other per-type policy key. The khub and
+  setup skills tell an agent that `--unlock` is the workspace owner's
+  decision, to ask for rather than pass on its own. Closes #13.
+- **`khub reindex --check`.** A drift gate for `index.md`, for CI or a
+  pre-commit hook. It writes nothing, prints `index.md is up to date` and
+  exits 0 when the file matches the graph, and otherwise prints the diff,
+  names `khub reindex` on stderr and exits 1, a missing `index.md` included.
+  It refuses (exit 2) whatever `reindex` refuses: an unparseable entity file,
+  and an `index.md` that is a symlink, a directory or unreadable. Passing it
+  with `--dry-run` is a usage error. Both read `index.md` with universal
+  newlines, so a CRLF checkout of a current index is current. The plugin
+  (0.1.11) counts `reindex --check` as a read. Closes #67.
+- **`khub completion <bash|zsh|fish|powershell>`.** Prints a shell completion
+  script. At TAB time the script asks the binary itself (`khub __complete`), so
+  it completes the commands, subcommands and options the installed khub has,
+  the closed value sets (`--format`, `wire --target`, `query --trust`,
+  `check --tier`, `init`'s presets), and paths only where a value is a path
+  (`-C`, `--body-file`, `export --okf`, `import --okf`, `import --type-map`).
+  Workspace values (types, ids) are not completed. bash needs 4.1+ with
+  bash-completion. `completion` was a usage error until now;
+  `--install-completion` still is. Closes #46.
+- **Saved queries.** `khub query … --save-as <name>` saves the query's filters
+  to `.khub/queries.yaml` (tracked in git, hand-editable) and `khub run <name>`
+  replays them with the same output, byte for byte. Every query filter saves,
+  `--under`/`--via`, the count bounds and `--trust` included; `--format` and
+  `--receipt` belong to each run, and `run` takes both. A different
+  definition under a taken name refuses (`saved_query_exists`) until
+  `--replace`; saving the same one again is a no-op. A save splices the file
+  as `edit` splices frontmatter, so comments on the rest of the file survive;
+  one that cannot refuses (`saved_query_unspliceable`). New refusal codes:
+  `invalid_query_name`, `saved_query_exists`, `saved_query_unspliceable`,
+  `unknown_saved_query` (with the saved names as `expected` and the nearest
+  as `suggestion`), `invalid_saved_query` (`field` names the key). The plugin
+  draws a compact row for `run`. Closes #31.
+- **`khub doctor`.** A self-diagnosis of what every other command assumes: a
+  workspace, git and its history, a schema that resolves, a readable
+  provenance stamp in `.khub/config.yaml` naming a preset `upgrade` can find
+  at a version no newer than this binary ships, a workspace lock a write can
+  take, storage shaped (and, on macOS and Linux, writable at its top) the way
+  each type's layout reads it, and a workspace every file of which `check`
+  can read. Each check reports `ok`, `warn`, `fail` or `skip` with a code and
+  a message, as JSON on a pipe like every read. It exits 0 when nothing
+  fails (a warning does not), 1 when a check fails, and 2 only for a usage
+  error; a missing workspace is a failed check (exit 1), where every other
+  command refuses it with exit 2. On macOS and Linux doctor writes nothing:
+  it asks the kernel whether a write would be allowed. On Windows the lock
+  check creates and removes one probe file inside `.khub/generated/`, and
+  skips when that directory does not exist. The khub skill tells the agent
+  to run `khub doctor` when a failure's own error does not explain it.
+  Closes #41.
+- **`viz --aspect instances|schema|both`.** `instances` is today's entity
+  graph and stays the default, byte for byte. `schema` draws the resolved
+  ontology from the schema alone: a box per declared type listing its
+  attributes with UML multiplicity, an `any` box for the base block, and an
+  edge per declared relation labelled with its multiplicity, solid when
+  required and dashed when optional. `both` draws the two together, the types
+  above the entities that realize them, joined by dotted instance-of edges.
+  `--type` narrows every aspect to the type's outbound frontier. Closes #61.
+- **`serve --aspect`** opens the page on the matching view through
+  `?aspect=` on the printed URL. The page gains a **Both** view: the graph
+  view's entities with their types boxed above them, under the same focus,
+  depth and predicate filters. The server is unchanged: read-only, GET and
+  HEAD only, the same Host-header guard. `khub completion` offers the three
+  aspects for both flags.
+
+### Changed
+
+- `check --format json` always carries the `retention` key, after
+  `superseded_verifications`. The plugin counts it as informational (plugin
+  0.1.9).
+- `check --format json` always carries `stale_waivers`, just before `strict`,
+  and `waived`, after `retention`. The plugin counts `waived` as
+  informational; `stale_waivers` fails the gate.
+- **`--dry-run` is now an option of `add` and `edit`,** so it wins over a
+  schema field named `dry_run`, as `--draft`, `--strict` and `--format`
+  already win over theirs: `--dry-run yes` used to set that field and is now a
+  usage error (exit 2). Set such a field with `--dry_run <value>` or
+  positionally (`edit <id> dry_run <value>`).
+
+- **`query` field filters named `under` or `via`.** A schema field called
+  `under` or `via` can no longer be filtered as `--under <value>` or
+  `--via <value>`: query's own options take precedence over same-named
+  fields, as `--type`, `--tag` and `--limit` already do.
+- **`query` reserves `--count`, `--in-count` and `--out-count`.** A field
+  named `count` can no longer be filtered as `query --count <value>`; a field
+  `in_count` or `out_count` is still filtered by its underscore spelling
+  (`--in_count 1`). A malformed bound names the clash when the schema declares
+  such a field. `add` and `edit` still write those fields.
+- The human view of `stale` (and `recent`) in a workspace without git history
+  now says `No git history; dates come from updated or created only`. It said
+  `using updated field only`, which was wrong: an undated entity falls back to
+  `created`.
+- The `setup` skill (plugin 0.1.7) says when setup is done: `khub status
+  --format json` and `khub check` answer from the workspace. It ends with a
+  fixed report for the user, collects its prohibitions in one never-do list,
+  and says when the plugin's band shows. Step 1 states that with the per-repo
+  install `khub …` runs as `npx @endgame-build/khub …`. Before, step 2 ran a
+  bare `khub` that a dev-dependency install does not put on the `PATH`.
+- The `khub` skill no longer says `status --format json` names the active
+  preset; `schema --format json` does, under `provenance`.
+- The `khub` agent skill is decision guidance, not a fixed pipeline: a table
+  of which verb answers which question and what to call next from its
+  answer; retrieval exact first (`get`, `query`), then the graph
+  (`neighbors`, `impact`, `history`), then `search`, then the body, stepping
+  only on a named gap; a write convention (search before `add`, `edit` over a
+  second entity, inferred facts as `--draft`, never overwrite a human's value,
+  verify only a review that happened, claim a write only on exit 0); and the
+  write loop as generate, validate, iterate. Reinstall or update the plugin,
+  or rerun `npx skills add endgame-build/khub`, to pick it up.
+- **Preset reference docs are generated.** The version, counts, base block,
+  relation vocabulary and per-type attribute tables in
+  `docs/firm-ops-preset.md` and `docs/build-hub-preset.md` now come from
+  `khub schema --format json` (`go run ./parity/tools/presetdocs`), and CI
+  fails when they drift from the preset. Regenerating corrected the firm-ops
+  page, which had missed the base `aliases` attribute, the required `name` on
+  `opportunity` and the required `title` on five types. A preset with no doc,
+  or a type with no generated section, fails the gate.
+
+### Fixed
+
+- **A long double-quoted value keeps its text when wrapped.** A value khub
+  wrote double-quoted, folded right after an escaped backslash, read back
+  with an extra space there, so a Windows path gained one. The fold now
+  keeps its `\` escape. A file an older khub already wrote this way holds
+  the space in its bytes; editing the value again rewrites it. Closes #80.
+- **Multi-line plain values read per the YAML spec.** A plain value written
+  across lines, by hand or by khub, folds the way PyYAML and ruamel fold
+  it, so `get` and `search` can return a different value for an existing
+  file: a trailing `# note` is a comment, no longer part of the value.
+
+## [0.32.0] — 2026-11-14
+
+Retrieval takes fewer calls. `khub retrieve` assembles seeds and their
+neighbourhood under entity and byte caps in one call, `search --also` fuses
+several queries into one ranking, `get --path` turns a file path into its
+entity, and `--receipt` says what a query or search applied and whether
+`--limit` cut it. `get --edges` now lists every inbound edge. On a
+2,000-entity corpus, one `retrieve` takes a quarter of the time of the
+`search`, `get` and `neighbors` calls it replaces, and one fused search half
+the time of two searches. Existing commands are as fast as in 0.31.0. The
+workspace format is unchanged, so no `khub upgrade` is needed.
+
+### Added
+
+- **`--receipt` on `query` and `search`.** The JSON output becomes
+  `{"receipt": {...}, "results": [...]}`: the receipt echoes the filters or
+  query the call applied (for `search`, the `--also` groups and the FTS5
+  expression each group ran, which shows what `--plain` built; for `query`,
+  the `--trust` tier too), the match count before `--limit`, the
+  returned count, and whether `--limit` dropped rows. Without the flag the
+  output is unchanged; tables and `--format ids` ignore it.
+- The Claude Code plugin (0.1.5) reads a `--receipt` document's `results`, so
+  the compact row for `query --receipt` or `search --receipt` counts and lists
+  its entities. The `khub` skill mentions the flag.
+
+- **`get --path`.** `khub get --path <file>...` reads each argument as a file
+  path, relative to the current directory (as `--body-file` is) or absolute,
+  and answers with the entity stored there, the same record `get <id>`
+  returns. A folder entity's directory and any file under it resolve to that
+  entity. A collection file refuses with its ids (`path_is_collection`), and
+  a path outside the workspace (`path_outside_workspace`) or one that holds
+  no entity (`path_not_entity`, with the reason) refuses the whole batch with
+  exit 2. A symlink inside the workspace is refused as storage refuses one
+  (`unsafe_path`). Closes #82.
+
+- **`khub retrieve`.** One-call bounded context assembly, the read verb an
+  agent otherwise composes from `search`, `get` and `neighbors` while
+  managing its own budget. Seeds are a search (`retrieve "auth token"`, the
+  same MATCH syntax as `search`, `--plain` and `--type` honoured) or ids
+  (`--id`, repeatable), capped by `--limit` before expansion. The expansion
+  is a breadth-first walk over the derived graph, `--expand <predicate>[:<depth>]`
+  per predicate or every predicate to `--depth`, in `--in`/`--out`/both.
+  `--max-entities` and `--max-bytes` trim the periphery first (the deepest,
+  then the greatest `(type, slug)`, then the least relevant seed); the byte
+  cap holds the printed JSON document itself. There is no token budget: a
+  tokenizer is model-specific, bytes are what every caller can measure. The
+  document is `{count, entities, omitted}`: each entity the `get --edges`
+  record with `title`, the lifecycle flags and a `reason` (a seed's score and
+  snippet, or the predicate, direction, source id and depth it was reached
+  by); `omitted` counts what each cap dropped, names the first ids, and says
+  `truncated` and `insufficient` (a cap could not hold the seeds) outright.
+  `--no-body` drops the bodies. The Claude Code plugin (0.1.5) draws a row for
+  it, and the khub skill says when to reach for it.
+
+- **Fused search.** `khub search <text> --also <text>` ranks each text as
+  its own query group and merges the rankings by reciprocal rank fusion
+  (`1 / (60 + rank)` summed over the groups that hit an entity), so an
+  intent and an exact anchor can go in one call, and an entity both reach
+  usually outranks one only a single group ranks first, where one `OR`
+  query lets the common words bury the rare one. `--also` repeats;
+  `--plain` applies per group; `--limit` and the `note:` lines apply to the
+  fused list. A fused record carries `fused` (higher = better; compare rows
+  on it) and `groups` after `score`; `score` and `snippet` there come from
+  the group where the hit ranks best. A repeated group counts once, and a
+  single group is the search it always was, byte for byte.
+
+- **Search hits name their section.** A `khub search` JSON hit whose snippet
+  excerpts the body under a Markdown heading carries `section`, the heading
+  path to the snippet's first match (`["Design", "Write path", "Locking"]`).
+  It is absent for a title or frontmatter match and for a body with no
+  heading above the match. Ranking, `score` and `snippet` are unchanged.
+
+### Changed
+
+- **`get --edges` lists every inbound edge.** It skipped an inbound edge whose
+  relation declares no `inverse`, so it disagreed with `neighbors --in` and
+  `search`'s `edges.in` counts. Such an edge is now listed as `derived: true`,
+  named `<source type>.<predicate>`; that name is a label, so filter with the
+  raw predicate. A source that names the target in several spellings lists
+  once per relation, as `neighbors` counts it, and `remove`'s inbound-edge
+  count follows the same rule (#79).
+
+- A schema field named `receipt` can no longer be filtered with
+  `query --receipt <value>`: the new option takes precedence, as `query`'s
+  other options already do over a same-named field.
+
+## [0.31.0] — 2026-11-01
+
+A khub Markdown entity is now an OKF 0.2 concept as written. The base block
+declares the OKF lifecycle, provenance and trust families, and the attribute
+vocabulary gains nested values. This release breaks existing workspaces, and
+`khub upgrade` migrates them in place: run it once after updating the binary.
+`validate` names each legacy shape until then.
+
+### Breaking
+
+- **`status` replaces `draft`.** The base `status` is `draft | stable |
+  deprecated`, default `stable`. `add` writes no status unless `--draft` asks
+  for `status: draft`, and `add --draft` beside a non-draft `--status`
+  refuses (`status_draft_conflict`). `edit <id> status draft|stable` moves it,
+  and drops a leftover `draft` key in the same write. `edit <id> draft …`
+  refuses (`draft_retired`). JSON rows keep a derived `draft` flag,
+  and `--draft`/`--active` and the `draft_singletons` keys are unchanged.
+  `validate` reports a leftover `draft` key as an error naming `khub upgrade`.
+  Until then a truthy legacy `draft` reads as draft whatever `status` says,
+  so a 0.30.0 draft is never published by accident.
+- **The `sources` relation is gone.** `sources` is now the OKF list of source
+  objects (`{resource, id, title, author, usage_count, last_modified,
+  usage_window}`), metadata that makes no edge. Move a bare id or path to
+  `references`; `validate` reports a bare `sources` entry naming `khub upgrade`.
+- **`khub reindex` writes an OKF 0.2 index.** The root `index.md`
+  frontmatter holds `okf_version: '0.2'` alone (`entity_count` is gone).
+  Sections are `# <type>` headings, entries are `* [Title](path) -
+  description` with the entity's `description`, and cross-links follow each
+  entry as indented `  * <predicate> → [Title](path)` sub-bullets. An empty
+  workspace's index is the frontmatter alone.
+- **`status`'s `okf_conformant` follows OKF 0.2 §11.** Every `.md` file below
+  the root, outside hidden directories, vendored trees and `.khub/ignore`,
+  needs frontmatter with a non-empty `type`, and `index.md` and `log.md` keep
+  their reserved shape. The root `CLAUDE.md` and `AGENTS.md` that `khub
+  wire` writes are exempt. Broken links and strays no longer break it, and a
+  `README.md` or `docs/` page without frontmatter now does. The
+  new `okf_nonconformant` lists the files, and text prints one `not
+  OKF-conformant: <path>` line each.
+- **build-hub 0.7.0.** adr `status` becomes `decision` (`proposed | accepted |
+  rejected`, required). api and repo drop their own `status` and inherit the
+  base one. The `proposed` lens reads `decision`, api's `spec` lens reads
+  `status: stable`, and repo's `archived` lens reads `status: deprecated`. A
+  value outside the base enum on a type that inherits it (an adr
+  `status: accepted`) is a `validate` error naming `khub upgrade`.
+- **`index.md` and `log.md` are never entities**, at any depth. They are no
+  longer strays inside a type directory. `add` refuses a slug whose file
+  would carry either name (`invalid_slug`), plain or templated, and a storage
+  path or path template whose file is either name refuses when the schema
+  loads.
+
+### Added
+
+- **`khub import --okf <dir>`** reads an OKF bundle into the workspace as
+  drafts. Each concept lands in the khub type its OKF `type` names, matched by
+  name or slug or mapped with `--type-map`; an unmapped type is skipped and
+  reported, never invented, and a map naming an undeclared type refuses the
+  run. Frontmatter is kept as written, unknown keys and key order included.
+  The id is minted by the type's scheme around the file's stem, with the stem
+  kept in `aliases` unless another entity already answers to it
+  (`alias_dropped`); a taken id is skipped rather than suffixed or merged. The
+  bundle's `verified` is quarantined as `okf_verified` and never counted, and
+  a relation value nothing answers to as `okf_unresolved`; a concept already
+  carrying the key import must write is skipped (`quarantine_taken`). Links to other
+  imported concepts become `references`, and export's `# Related` section
+  reads back into relations, so export and import round-trip without
+  duplicate edges. `--by` names the writer stamped on a concept with no
+  `generated`. A concept that cannot land is skipped and reported, and a
+  value or link naming it is quarantined or counted broken, never written as
+  an edge. The rest is written all or none under one workspace lock; a write
+  that fails undoes the run's other writes. `--dry-run` plans and writes
+  nothing.
+- **`khub export --okf <dir>`** writes the workspace as an OKF 0.2 bundle
+  another tool can read. Each entity becomes one md concept at a path
+  mirroring the workspace: md entities are copied as written, and json, yaml
+  and collection rows are materialized as md. Declared relations become a
+  `# Related` section of bundle-absolute links, every directory gets an
+  `index.md`, and the root one declares `okf_version: '0.2'`. Only entities
+  are exported, and strays are listed. The bundle is built beside the target
+  and swapped in, so a failed export changes nothing. A `.khub-export` file
+  at the bundle root lists the files the export wrote. The target must be
+  empty and must not overlap the workspace. `--force` replaces a previous
+  export only when the target holds that file, holds no `.khub/` and no
+  `.git/`, and holds nothing the file does not list, so it never deletes a
+  workspace, a repository or a file someone added. A target that is a symlink
+  is replaced where it points, and a replaced bundle that will not delete is
+  listed in `cleanup_left`. `--dry-run` lists the files and writes nothing.
+- **`upgrade` migrates legacy entities.** Every entity the scan sees (md,
+  per-item json and yaml, collection rows) is rewritten in place, with the
+  file's comments kept wherever the change can be spliced:
+  - `draft: true` becomes `status: draft`, and a falsy `draft` is dropped.
+  - Bare ids and paths in `sources` move to `references`; source objects stay.
+  - A `status` outside the base enum moves to the field whose enum holds it
+    (an adr's `accepted` becomes `decision: accepted`), or maps onto the base
+    enum (`proposed` → `draft`, `active` → `stable`, `archived` →
+    `deprecated`). A type that redeclares `status` keeps its own values, so
+    `--no-schema` moves no status.
+  - A date-only `stale_after` becomes that day's midnight UTC
+    (`2026-12-31T00:00:00Z`); `validate` names `khub upgrade` on it.
+
+  The rewrites ride the upgrade's journal, rollback and `--dry-run`. A real
+  run syncs every file it stages and publishes, so a large first migration
+  takes minutes; `--dry-run` skips the syncs.
+- **`upgrade` keeps the workspace's policy and storage edits.** Replacing
+  `policy.yaml` and `storage.yaml` keeps every per-type key or type entry the
+  shipped file lacks (a workspace's own `path_refs`, say), and at the same
+  preset version every value the workspace changed (a `format: json`, a
+  `path`), and reports each in `carried: [{file, type, key}]`. Across
+  versions a value both files carry goes to the shipped one, with the edit in
+  the `.bak`. A carried key the new schema rejects never blocks the upgrade:
+  it is let go and reported in `dropped: [{file, type, key, reason}]`. Before, the whole file was replaced, so migrated path
+  references dangled and json or yaml entities of an edited type vanished. JSON
+  appends `migrated` (`{id, path, changes: [{op, field, from, to}],
+  reemitted}`) and `migration_conflicts` (`{id, path, field, reason}`). A
+  `draft: true` beside a retired status wins and becomes `status: draft`.
+  Beside `stable` or `deprecated`, or on a type whose status cannot hold
+  `draft` (old layer files under `--no-schema`), it is a conflict and the
+  entity stays as written, as does a file migrate cannot read. A second
+  upgrade reports `migrated: []`.
+- **Nested attribute values.** `type: object` with `fields`, and `items` on a
+  `list`, nest the attribute grammar to any depth. `validate` checks each
+  declared nested key and reports every violation by its dotted path
+  (`verified[0].by is required`); a bare mapping where a list of objects is
+  declared counts as its one item. `add` and `edit` refuse a command-line
+  value for an object or a list of objects (`value_shape`). `schema show`
+  prints nested fields as indented rows.
+- **OKF families in the base.** `generated`, `verified`, `stale_after`,
+  `sources` and `usage_window`. Their datetimes are ISO 8601 with a `T` and an
+  explicit offset (`Z` or `+hh:mm`, either letter in either case), and `add`
+  and `edit` store such a value as written. A datetime without a pattern still normalizes as before.
+- **`khub verify <id> --by <actor>`** records a review as an OKF `verified`
+  event `{by, at, rev}`. `--by` is required, `--at` defaults to now, and `rev`
+  hashes the content the reviewer saw (body, declared fields, `status`,
+  relations), so a later content or status edit supersedes the review and a
+  tag edit does not. `--commit` adds a signed git commit of that entity's file
+  alone. It refuses (`commit_refused`) before writing when the file has
+  uncommitted changes or git cannot sign, restores the file when the commit
+  fails, and never commits unsigned or waits on a prompt.
+- **Trust tiers.** Every read derives `trust: unverified|machine|human` from
+  the live `verified` events (a live `human:` review wins). An event counts
+  only when its `by` follows the actor convention and its `at` is an OKF
+  datetime; one without a `rev` always holds, as OKF §5.3 reads it. `query --trust` filters on it,
+  `query`, `get`, `search` and `neighbors` rows end with it, `status` counts
+  each tier, and `check` lists reviews of a version that has since changed in
+  `superseded_verifications`, informational.
+- **`check --require-verified [--tier machine|human]`** fails the gate on
+  active entities whose trust ranks below the tier (default `machine`), listed
+  in a `below_tier` bucket that appears only under the flag.
+- **`stale_after` expires an entity.** From that instant it is stale whatever
+  its age. `khub stale` rows carry `reason: age|expired`, `status` counts
+  `expired` apart from `stale`, and `check --stale` makes active expired
+  entities fail the gate.
+- **`--by <actor>` on `add`, `edit`, `link` and `unlink`** names who a write is
+  stamped as (see the `generated` change below).
+- **`validate` gaps** for an actor outside the convention (`human:`,
+  `process:`, `<producer>[/<version>]`) and for a body footnote and a
+  `sources[].id` that do not cite each other, including a footnote on an
+  entity with no `sources`, and for two sources sharing an id. Inline and fenced code cite nothing. Neither fails
+  the gate.
+- **`KHUB_PARITY_NOW` takes an offset datetime** as well as a date.
+
+### Changed
+
+- **A content write stamps `generated: {by, at}`.** `add`, and an `edit`,
+  `link` or `unlink` that changes the body, a declared field, `status` or a
+  relation, record the last writer and when. An edit of bookkeeping alone
+  (`tags`, `aliases`, `stale_after`, `author`, `created`) bumps `updated` without a stamp, and an
+  edit that changes nothing writes nothing. `by` is `--by`, then `KHUB_ACTOR`,
+  then `agent/claude-code` under Claude Code, then `khub`, and never a person
+  read from git. `backfill`, `reindex` and `upgrade` never stamp, and existing
+  entities are not backfilled. Every content-write fixture moves by the stamp.
+- **`created` and `updated` are the local date**; `generated.at` and
+  `verified[].at` stay UTC.
+- **A schema field named like a flag of `add` or `edit` is a schema defect.**
+  The verb reads its flag first, so it can never set the field. `check` and
+  `validate` report it (`flag_shadowed`) and fail. It blocks no write: only a
+  write that passes that flag for a type declaring the field refuses, naming
+  both meanings, the rename and the positional `khub edit <id> <field>
+  <value>`, which still sets the field.
+- **An unparseable `KHUB_PARITY_NOW` refuses every command**
+  (`clock_pin_invalid`) instead of falling back to the real clock.
+- **Query filters read schema defaults, for every attribute.** A `--<field>`
+  filter on `query` reads an unwritten attribute as its schema default, as
+  lenses already do. So `--status stable` matches an entity that never wrote a
+  status, and a firm-ops `--active true` now matches a project that never
+  wrote `active`, whose default is true.
+- **`khub stale` lists an entity whose date does not parse.** It used to skip
+  one; it now lists it first, with the value as written in `effective_date`
+  and `age: null`, matching the `stale` flag `query` and `status` already
+  report.
+- **Read rows stay minimal.** `query` and `search` rows carry no `status`
+  field; they keep the derived `draft` flag and end with `trust`, as `get`
+  records do. The plugin reads none of the new fields, so its minimum khub
+  version is unchanged.
+- **Newly minted slugs for accented titles differ from 0.30.0.** Latin
+  accents are spelled out instead of dropped: `add requirement --title
+  "Café — Straße"` mints `req-cafe-strasse`, where 0.30.0 minted
+  `req-caf-stra-e`. A title arriving composed (NFC) or decomposed (NFD, as
+  macOS file names are) mints the same slug, and `ß`, `æ`, `œ`, `ø`, `ł`, `đ`,
+  `þ` are spelled `ss`, `ae`, `oe`, `o`, `l`, `d`, `th`. Existing files keep
+  their names. Lookup composes a name before folding it, so a decomposed
+  spelling finds a composed alias.
+- `reindex` and `export` label an entity with its `title`, else its `name`,
+  else its slug, and escape descriptions as well as titles in index rows.
+
+### Fixed
+
+- An unquoted impossible date (`2026-02-30`) passed `validate`; it is now an
+  error at the top level and inside an object.
+- A YAML document holding a long plain value the emitter had folded onto
+  several lines could no longer be spliced, so the next edit of a collection
+  row re-wrote the whole file and dropped every comment. Such a document now
+  splices like any other.
+- `upgrade` over a file or directory it cannot read refused with only
+  `os_error: PermissionError: [Errno 13] Permission denied: '<path>'`. It
+  still refuses, and the message now says upgrade copies the whole workspace
+  first, that nothing was written, and how to proceed.
+- A YAML merge key (`<<: *anchor`, a list of anchors, block or flow) made
+  the file malformed; it now loads as ruamel and PyYAML load it, an explicit
+  key beating a merged one. An edit keeps the `<<` line as written and writes
+  a changed merged value as an explicit key beside it.
+- A plain value with two spaces where the emitter wrapped the line (a long
+  `name` ending in `  tail`) read back with one space. The emitter no longer
+  breaks a line after a run of spaces, and never wraps a key. ruamel.yaml
+  does both, so this is a deliberate deviation from its bytes; no T3 case
+  moves (1089 of 1089 in both profiles).
+- A value holding NEL, LS or PS (U+0085, U+2028, U+2029) was single-quoted
+  with the break raw and read back changed; it is now double-quoted with the
+  break escaped. ruamel.yaml corrupts these values, so the T3 differential
+  excludes its 58 such rows (1031 of 1031 compared in both profiles).
+- A long plain value folded at a word starting with `-` read back with a
+  doubled space; the loader now folds plain scalars from their source lines.
+- A missing `.khub/config.yaml` crashed `query`, `status`, `stale` and
+  `upgrade` with `os_error`; it is now `config_missing`, naming the
+  `khub init <preset> . --force` that recreates it.
+- One name declared as both an attribute and a relation on a type is a schema
+  error instead of the attribute silently winning.
+- **Integers past int64 kept their radix digits.** A frontmatter integer
+  too large for int64 written in octal (YAML 1.1 `0…`, 1.2 `0o…`), hex or
+  binary, or a decimal with leading zeros, printed its digits as if decimal.
+  The value was wrong, and under `--format json` a leading zero made a number
+  no JSON parser accepts. It now carries its decimal value, as PyYAML and
+  ruamel load it.
+- **Digitless floats in JSON.** A hand-written `.inf`, `-.inf` or `.nan` in
+  frontmatter printed `+.Inf`, `-I.nf` and `N.aN` under `--format json`, which
+  no JSON parser accepts. Every JSON dialect now carries the YAML spelling as a
+  string (`"g": ".inf"`); the YAML emitter writes the literal back and human
+  output prints `inf`/`nan`.
+
+### Notes
+
+- **Reading a 0.31 workspace with 0.30 or older.** An older khub does not
+  know the base `status`, so it refuses build-hub 0.7.0's templates, and
+  `validate` and `check` fail there. Its `reindex` would rewrite the OKF 0.2
+  `index.md` back to 0.1. Upgrade every khub on a team together, then run
+  `khub upgrade` once per workspace.
+- **Reading a 0.30 workspace with an older binary.** A `.khub/ignore` makes
+  `check` on 0.29 and earlier report every ignored entity as `misplaced`;
+  path-template storage and `id_ordinal` are not understood there either. A
+  workspace that uses none of the 0.30 features reads cleanly on 0.27 and
+  later, and a 0.27 `upgrade` would rewrite the wire block back and re-lay
+  the skill files 0.28 removed — pin one khub version per team.
 
 ## [0.30.0] — 2026-10-28
 

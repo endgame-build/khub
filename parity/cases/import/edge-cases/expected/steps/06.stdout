@@ -1,0 +1,1 @@
+{"error": {"code": "import_bundle_overlaps", "message": "Refusing to import hub/inner: the bundle and the workspace overlap, so the workspace would read its own files as concepts. Import a bundle outside the workspace"}}

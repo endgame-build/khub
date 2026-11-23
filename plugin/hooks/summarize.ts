@@ -1,17 +1,17 @@
 import type { KhubCall, KhubRow, KhubTone } from '../types'
-import { clean, count, firstLine, INFORMATIONAL, isRow, refusal, rowsOf, text } from './cli'
+import { clean, count, firstLine, INFORMATIONAL, isRow, refusal, rowsOf, text, unwrapReceipt } from './cli'
 import type { Row } from './cli'
-import { edited } from './parse'
+import { edited, isDryRun, isWrite } from './parse'
 import type { Simple } from './parse'
 
 export type Summary = { head: string; line: string; tone: KhubTone }
 
 type Result = { line: string; tone: KhubTone }
 
-// The first positional of these verbs names what the call is about, a type for add and an
-// id for the rest.
+// The first positional of these verbs names what the call is about: a type for add, a saved
+// query's name for run, and an id for the rest.
 const SUBJECT_VERBS = new Set([
-  'add', 'edit', 'get', 'history', 'impact', 'link', 'neighbors', 'remove', 'unlink', 'validate',
+  'add', 'edit', 'get', 'history', 'impact', 'link', 'neighbors', 'remove', 'run', 'unlink', 'validate', 'verify',
 ])
 
 const NOTHING: Result = { line: '', tone: 'plain' }
@@ -37,6 +37,11 @@ export function failingOf(check: Row): Array<{ bucket: string; items: unknown[] 
 function subjectOf(call: Simple): string {
   if (call.verb === 'query') return typeof call.flags.type === 'string' ? call.flags.type : ''
   if (call.verb === 'search') return call.positional[0] === undefined ? '' : `"${call.positional[0]}"`
+  if (call.verb === 'retrieve') {
+    if (call.positional[0] !== undefined) return `"${call.positional[0]}"`
+
+    return typeof call.flags.id === 'string' ? call.flags.id : ''
+  }
   if (call.verb === 'schema') return call.sub === 'show' ? (call.positional[0] ?? '') : ''
 
   return SUBJECT_VERBS.has(call.verb) ? (call.positional[0] ?? '') : ''
@@ -65,6 +70,18 @@ function searchResult(rows: Row[], note: string): Result {
 
   // khub's own note for an empty result already says there were no hits.
   return { line: rows.length === 0 && /^no hits/i.test(noted) ? noted : `${hits} · ${noted}`, tone: 'warn' }
+}
+
+// A retrieval says how much it holds and warns when a cap cut it; one that could not
+// hold its seeds is an error, since the answer is not the evidence asked for.
+function retrieveResult(row: Row): Result {
+  const omitted = isRow(row.omitted) ? row.omitted : {}
+  const n = Number(row.count)
+  const held = n === 0 ? 'no entities' : count(n, 'entity', 'entities')
+
+  if (omitted.insufficient === true) return { line: `${held} · insufficient`, tone: 'bad' }
+
+  return omitted.truncated === true ? { line: `${held} · truncated`, tone: 'warn' } : { line: held, tone: 'plain' }
 }
 
 function validateResult(row: Row): Result {
@@ -110,7 +127,8 @@ function schemaResult(call: Simple, json: unknown): Result {
 }
 
 // Reads what a call's JSON document says, by verb and by the document's shape.
-function resultOf(call: Simple, json: unknown, note: string): Result {
+function resultOf(call: Simple, doc: unknown, note: string): Result {
+  const json = unwrapReceipt(doc)
   const rows = rowsOf(json)
   const row = isRow(json) ? json : {}
   const entities = { line: rows.length === 0 ? 'no entities' : count(rows.length, 'entity', 'entities'), tone: 'plain' } as const
@@ -120,6 +138,9 @@ function resultOf(call: Simple, json: unknown, note: string): Result {
       return { line: `+ ${text(row.id)}${row.draft === true ? ' · draft' : ''}`, tone: 'ok' }
 
     case 'edit': {
+      // Only a dry run's record carries `changed` for an edit.
+      if (row.changed === false) return { line: 'no change', tone: 'plain' }
+
       const fields = edited(call)
 
       return { line: `~ ${text(row.id ?? call.positional[0])}${fields === '' ? '' : ` · ${fields}`}`, tone: 'ok' }
@@ -132,6 +153,13 @@ function resultOf(call: Simple, json: unknown, note: string): Result {
     case 'remove':
       return { line: `− ${text(row.id)}`, tone: 'ok' }
 
+    // A review names the entity, who reviewed it and when, and the signed commit under --commit.
+    case 'verify': {
+      const commit = typeof row.commit === 'string' ? ` · ${row.commit.slice(0, 7)}` : ''
+
+      return { line: `${text(row.id)} · ${text(row.by)} · ${text(row.at)}${commit} ✓`, tone: 'ok' }
+    }
+
     case 'get': {
       if (Array.isArray(json)) return entities
 
@@ -142,11 +170,22 @@ function resultOf(call: Simple, json: unknown, note: string): Result {
     }
 
     case 'query':
+    case 'run':
     case 'stale':
       return entities
 
+    case 'recent': {
+      // khub's note says when --limit cut the list.
+      const noted = firstLine(note).replace(/^note: /, '').slice(0, 80)
+
+      return noted === '' ? entities : { line: `${entities.line} · ${noted}`, tone: 'warn' }
+    }
+
     case 'search':
       return searchResult(rows, note)
+
+    case 'retrieve':
+      return retrieveResult(row)
 
     case 'neighbors': {
       const inbound = rows.filter(found => found.direction === 'in').length
@@ -190,12 +229,18 @@ export function summarize(call: Simple, json: unknown, note: string): Summary {
   const head = headOf(call)
   const refused = refusal(json)
 
-  if (refused) return { head, line: clean(`✗ ${refused.code}: ${refused.message}`), tone: 'bad' }
+  // A write's dry run says so on every line, a refusal included: the head omits the flag.
+  const dry = isWrite(call) && isDryRun(call) ? 'dry run · ' : ''
+
+  if (refused) return { head, line: clean(`${dry}✗ ${refused.code}: ${refused.message}`), tone: 'bad' }
 
   // With no document the call is still running, or it printed prose.
   if (json === undefined) return { head, line: clean(firstLine(note)), tone: 'plain' }
 
   const result = resultOf(call, json, note)
+
+  // A write's dry run reads as what the write would do, in the plain tone of a read.
+  if (dry !== '') return { head, line: clean(`${dry}${result.line}`), tone: 'plain' }
 
   return { head, line: clean(result.line), tone: result.tone }
 }
@@ -223,16 +268,22 @@ function findingRows(check: Row): KhubRow[] {
 }
 
 // Returns every row a call's document lists, by verb.
-function listOf(call: Simple, json: unknown): KhubRow[] {
+function listOf(call: Simple, doc: unknown): KhubRow[] {
+  const json = unwrapReceipt(doc)
   const rows = rowsOf(json)
   const row = isRow(json) ? json : {}
 
   switch (call.verb) {
     case 'get':
     case 'query':
+    case 'recent':
+    case 'run':
     case 'search':
     case 'stale':
       return rows.map(entityRow)
+
+    case 'retrieve':
+      return rowsOf(row.entities).map(entityRow)
 
     case 'neighbors':
       return rows.map(found => ({

@@ -44,6 +44,9 @@ func Execute(argv []string) int {
 		_ = usageBox(root, "Missing command.")
 		return 2
 	}
+	if isCompletionRequest(rest) {
+		rest = prepareCompletionRequest(root, rest)
+	}
 	root.SetArgs(rest)
 	cmd, err := root.ExecuteC()
 	if err == nil {
@@ -202,10 +205,13 @@ func newRoot() *cobra.Command {
 		return usageBox(cmd, clickFlagMessage(cmd, err))
 	})
 	root.SilenceUsage = true
-	// Typer builds the app with add_completion=False, so khub has no
-	// completion surface at all: `khub completion` and --install-completion
-	// must both be usage errors. Cobra adds `completion` by default.
+	// Typer built the app with add_completion=False, so --install-completion
+	// stays a usage error. `khub completion SHELL` is khub's own command
+	// (completion.go); cobra's default group, with its per-shell subcommands,
+	// is never added.
 	root.CompletionOptions.DisableDefaultCmd = true
+	// At TAB time `khub -C <dir>` completes directories, as the option takes.
+	_ = root.MarkFlagDirname("workspace")
 	// Click has no `help` COMMAND either — `khub help` is "No such command
 	// 'help'.", exit 2. A help command whose Use is empty has the empty name,
 	// so cobra's InitDefaultHelpCmd finds one already set and never mints the
@@ -219,27 +225,36 @@ func newRoot() *cobra.Command {
 	registerInit(root)
 	registerUpgrade(root)
 	registerStatus(root)
+	registerDoctor(root)
 	registerAdd(root)
 	registerGet(root)
 	registerEdit(root)
 	registerLink(root)
 	registerUnlink(root)
 	registerRemove(root)
+	registerVerify(root)
 	registerQuery(root)
+	registerRun(root)
 	registerSearch(root)
+	registerRetrieve(root)
 	registerNeighbors(root)
 	registerImpact(root)
 	registerHistory(root)
 	registerValidate(root)
 	registerCheck(root)
 	registerStale(root)
+	registerRecent(root)
 	registerReindex(root)
+	registerExport(root)
+	registerImport(root)
 	registerViz(root)
 	registerServe(root)
 	registerBackfill(root)
 	registerWire(root)
 	registerSchema(root)
+	registerCompletion(root)
 	dropHelpShorthand(root) // after every registration, so subcommands are covered
+	wireCompletions(root)
 	return root
 }
 
@@ -261,7 +276,7 @@ func suggest(want string, candidates []string) string {
 	}
 	best, bestDist := "", 0
 	for _, c := range candidates {
-		d := editDistance(want, c)
+		d := errs.EditDistance(want, c)
 		if d > limit {
 			continue
 		}
@@ -273,28 +288,6 @@ func suggest(want string, candidates []string) string {
 		return ""
 	}
 	return " Did you mean '" + best + "'?"
-}
-
-// editDistance is plain Levenshtein over runes, two rows.
-func editDistance(a, b string) int {
-	ar, br := []rune(a), []rune(b)
-	prev := make([]int, len(br)+1)
-	cur := make([]int, len(br)+1)
-	for j := range prev {
-		prev[j] = j
-	}
-	for i := 1; i <= len(ar); i++ {
-		cur[0] = i
-		for j := 1; j <= len(br); j++ {
-			cost := 1
-			if ar[i-1] == br[j-1] {
-				cost = 0
-			}
-			cur[j] = min(min(cur[j-1]+1, prev[j]+1), prev[j-1]+cost)
-		}
-		prev, cur = cur, prev
-	}
-	return prev[len(br)]
 }
 
 // commandNames lists the commands a user could have meant at cmd's level.

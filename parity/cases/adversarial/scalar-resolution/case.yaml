@@ -1,0 +1,15 @@
+# md frontmatter resolves under YAML 1.1 at scan altitude (yes/no/on are
+# booleans, 017 is octal, 1:30 is sexagesimal) and under 1.2 at edit
+# altitude, where the splice keeps every scalar's bytes verbatim. `.inf` is a
+# float JSON cannot spell: it is carried as the string ".inf" (an earlier
+# build printed `+.Inf`, which no parser accepts). An integer past int64
+# survives both altitudes as its literal.
+steps:
+- argv: ["init", "firm-ops", ".", "--no-wire"]
+- sh: "mkdir -p fragments && printf -- '---\\ntype: fragment\\ncreated: 2026-01-15\\nname: scalars\\na: yes\\nb: no\\nc: on\\nd: 017\\ne: 1:30\\nf: 2026-01-15\\ng: .inf\\nh: -.inf\\ni: .nan\\ncount: 100000000000000000000000000000\\n---\\nbody\\n' > fragments/yaml-scalars.md"
+- argv: ["get", "fragment/yaml-scalars", "--format", "json"]
+- argv: ["get", "fragment/yaml-scalars", "--edges", "--format", "json"]
+- argv: ["search", "yes", "--format", "ids"]
+- argv: ["edit", "fragment/yaml-scalars", "stage", "raw", "--format", "json"]
+- argv: ["get", "fragment/yaml-scalars", "--format", "raw"]
+- argv: ["get", "fragment/yaml-scalars", "--format", "json"]

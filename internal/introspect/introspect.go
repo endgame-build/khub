@@ -335,6 +335,14 @@ func typeView(resolved *schema.ResolvedSchema, rtype *schema.ResolvedType) *omap
 	v.Set("id_shape", nullIfEmpty(rtype.IDShape()))
 	v.Set("required", rtype.Required)
 	v.Set("orphan", rtype.Orphan)
+	// Only when declared, like `path_refs`: a schema with no retention rule
+	// reads exactly as it did before the policy key existed.
+	if r := rtype.Retention; r != nil {
+		rv := omap.New()
+		rv.Set("days", r.Days)
+		rv.Set("no_outbound", r.NoOutbound)
+		v.Set("retention", rv)
+	}
 	v.Set("when", strPtr(rtype.When))
 	fields := []any{}
 	for _, name := range rtype.Attributes.Keys() {
@@ -377,6 +385,21 @@ func attrView(a *schema.ResolvedAttribute) *omap.Map {
 	}
 	f.Set("pattern", strPtr(a.Pattern))
 	f.Set("default", a.Default)
+	// Only when declared, so a schema that nests nothing renders (and
+	// snapshots) exactly as before. An element is anonymous: it has no name.
+	if a.Fields != nil {
+		fields := []any{}
+		for _, name := range a.Fields.Keys() {
+			sub, _ := a.Fields.Get(name)
+			fields = append(fields, attrView(sub))
+		}
+		f.Set("fields", fields)
+	}
+	if a.Items != nil {
+		items := attrView(a.Items)
+		items.Delete("name")
+		f.Set("items", items)
+	}
 	return f
 }
 

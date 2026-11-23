@@ -1,0 +1,32 @@
+# Cardinality filters (#58). --count bounds the resolved edges under one
+# relation or declared inverse; --in-count/--out-count bound every inbound or
+# outbound edge. They read the same derived graph as --has/--missing/--orphan:
+# `--count depends_on>=1` keeps what `--has depends_on` keeps, `=0` what
+# `--missing` keeps (types that cannot carry the relation never count as zero),
+# and `--in-count 0 --out-count 0` the edge-less entities. Flags repeat and AND,
+# so two bounds make a range. An attribute has no edges and refuses as
+# filter_error; a malformed bound is a usage error. Both exit 2.
+steps:
+- argv: ["init", "build-hub", ".", "--no-wire"]
+- argv: ["add", "component", "--title", "API", "--kind", "service"]
+- argv: ["add", "component", "--title", "Web", "--kind", "service"]
+- argv: ["add", "component", "--title", "Worker", "--kind", "service"]
+- argv: ["add", "component", "--title", "Lone", "--kind", "service"]
+- argv: ["add", "requirement", "--title", "Auth required", "--kind", "functional"]
+- argv: ["add", "system", "--title", "Core"]
+- argv: ["link", "cmp-web", "depends_on", "cmp-api"]
+- argv: ["link", "cmp-worker", "depends_on", "cmp-api"]
+- argv: ["link", "cmp-worker", "depends_on", "cmp-web"]
+- argv: ["link", "req-auth-required", "realized_in", "cmp-api"]
+- argv: ["query", "--count", "depends_on>=2"]
+- argv: ["query", "--type", "component", "--count", "depends_on=0"]
+- argv: ["query", "--type", "component", "--count", "depends_on>=1", "--count", "depends_on<2"]
+- argv: ["query", "--type", "component", "--count", "depends_on!=1"]
+- argv: ["query", "--in-count", ">=2"]
+- argv: ["query", "--type", "component", "--out-count", "0"]
+- argv: ["query", "--type", "component", "--in-count", "0", "--out-count", "0"]
+- argv: ["query", "--type", "component", "--count=depends_on>2"]
+- argv: ["query", "--type", "component", "--count", "kind=1"]
+- argv: ["query", "--count", "nope>=1"]
+- argv: ["query", "--count", "depends_on"]
+- argv: ["query", "--in-count", ">=many"]

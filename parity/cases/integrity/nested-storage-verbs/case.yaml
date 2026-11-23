@@ -1,0 +1,32 @@
+# Nested storage through the verbs integrity/nested-storage does not reach
+# (ported from the retired smoke-nested.sh): a qualified relation value
+# (`--epic epic/ep-1`) fills only its slug into the path; link and unlink
+# rewrite the nested file in place; history, search, stale and validate find
+# it; reindex links both path templates into index.md (the manifest pins
+# the bytes, and the dry run after it proves the index is current); a
+# placement field that is missing, blank or a list is not misplaced, where
+# a scalar that disagrees with the directory is.
+steps:
+- argv: ["init", "build-hub", ".", "--no-wire"]
+- sh: "rm -rf .khub/templates knowledge && printf 'ontology:\\n  entities:\\n    epic: {}\\n    story:\\n      relations:\\n        epic: {to: epic}\\n        supersedes: {to: story}\\n' > .khub/ontology.yaml && printf 'policy:\\n  story: {path_refs: true}\\n' > .khub/policy.yaml && printf 'storage:\\n  epic: {layout: file, path: [\"work/{slug}/{slug}.md\", \"projects/{project}/work/{slug}/{slug}.md\"]}\\n  story: {layout: file, path: [\"work/{epic}/{slug}.md\", \"projects/{project}/work/{epic}/{slug}.md\"]}\\n' > .khub/storage.yaml"
+- argv: ["add", "epic", "--title", "Hub", "--id", "ep-1", "--format", "json"]
+- argv: ["add", "epic", "--title", "Project", "--id", "ep-2", "--project", "p1", "--format", "json"]
+- argv: ["add", "story", "--title", "First", "--epic", "ep-1", "--format", "json"]
+- argv: ["add", "story", "--title", "Second", "--epic", "ep-2", "--project", "p1", "--format", "json"]
+- argv: ["add", "story", "--title", "Qualified", "--epic", "epic/ep-1", "--format", "json"]
+- argv: ["get", "story/first", "--format", "json"]
+- argv: ["edit", "story/first", "--title", "First edited", "--format", "json"]
+- argv: ["link", "story/first", "depends_on", "story/second", "--format", "json"]
+- argv: ["get", "story/first", "--format", "raw"]
+- argv: ["unlink", "story/first", "depends_on", "story/second", "--format", "json"]
+- argv: ["get", "story/first", "--format", "raw"]
+- argv: ["history", "story/first", "--format", "json"]
+- argv: ["search", "edited", "--format", "json"]
+- argv: ["stale", "--format", "json"]
+- argv: ["validate", "story/first", "--format", "json"]
+- argv: ["reindex"]
+- argv: ["reindex", "--dry-run"]
+- argv: ["edit", "story/first", "--epic", "ep-2", "--format", "json"]
+- sh: "printf -- '---\\ntype: story\\ntitle: Missing field\\ncreated: 2026-01-15\\n---\\n' > work/ep-1/missing.md && printf -- '---\\ntype: story\\ntitle: Blank field\\ncreated: 2026-01-15\\nepic: \"   \"\\n---\\n' > work/ep-1/blank.md && printf -- '---\\ntype: story\\ntitle: List field\\ncreated: 2026-01-15\\nepic: [ep-1]\\n---\\n' > work/ep-1/list.md"
+- argv: ["check", "--format", "json"]
+- argv: ["remove", "story/second", "--format", "json"]

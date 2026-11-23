@@ -2,6 +2,7 @@ package canon
 
 import (
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 )
@@ -20,6 +21,14 @@ type BigInt struct{ Literal string }
 // fixed notation for decimal exponents in (-4, 16], else e±NN with a
 // two-digit minimum exponent.
 func PyFloatRepr(f float64) string {
+	switch {
+	case math.IsNaN(f):
+		return "nan"
+	case math.IsInf(f, 1):
+		return "inf"
+	case math.IsInf(f, -1):
+		return "-inf"
+	}
 	shortest := strconv.FormatFloat(f, 'e', -1, 64) // d.ddddde±XX
 	mant, expPart, _ := strings.Cut(shortest, "e")
 	exp10, _ := strconv.Atoi(expPart)
@@ -77,6 +86,9 @@ func scalarString(v any) (string, error) {
 	case BigInt:
 		return x.Literal, nil
 	case float64:
+		if lit, ok := YAMLFloatLiteral(x); ok {
+			return lit, nil
+		}
 		return PyFloatRepr(x), nil
 	case Date:
 		return x.ISO, nil
@@ -85,4 +97,21 @@ func scalarString(v any) (string, error) {
 	default:
 		return "", fmt.Errorf("not a scalar: %T", v)
 	}
+}
+
+// YAMLFloatLiteral names the three floats that have no digits: the YAML
+// spellings ruamel's representer writes (`.inf`, `-.inf`, `.nan`), and what
+// every JSON dialect carries as a STRING, because JSON has no token for them
+// and `+.Inf` is what reproducing CPython's digit layout used to print. The
+// second result is false for every finite value.
+func YAMLFloatLiteral(f float64) (string, bool) {
+	switch {
+	case math.IsNaN(f):
+		return ".nan", true
+	case math.IsInf(f, 1):
+		return ".inf", true
+	case math.IsInf(f, -1):
+		return "-.inf", true
+	}
+	return "", false
 }

@@ -7,7 +7,7 @@ A schema is authored in khub's own YAML vocabulary, split across three layer fil
 | File | Layer | Carries |
 |---|---|---|
 | `ontology.yaml` | the domain | per-type `attributes`, `relations`, `when` |
-| `policy.yaml` | this workspace's gates | `required`, `orphan`, `path_refs` |
+| `policy.yaml` | this workspace's gates | `required`, `orphan`, `path_refs`, `retention`, `waive`, `locked`, `locked_relations` |
 | `storage.yaml` | where bytes land | `layout`, `path`, `format`, `id_prefix`, `id_date`, `id_ordinal`, `template` |
 
 `khub init` copies a preset's three files into `.khub/`; you edit them directly, and they carry no runtime tie to the hub. The three reunite at load time into one resolved contract every command reads — the layers merge on their **top-level keys** (`ontology:` / `policy:` / `storage:`), never on filenames, so one file carrying all three blocks resolves identically (useful for fixtures; three files is the canonical layout). Ontology declares which types exist; policy and storage only annotate them, and an entry for a type ontology never declared is a resolve error. See [`concepts.md`](concepts.md) for why the schema is the contract.
@@ -16,17 +16,33 @@ The split is what makes the ontology a clean projection surface: `ontology.yaml`
 
 ## The base block is embedded, not copied
 
-Every entity inherits ten base attributes: `type` (text, required: the discriminator each kind pins its value on), `draft` (bool, default false), `author` (text: the writer, person or agent), `created` (date, required), `updated` (date), the three OKF fields `title`, `description`, and `resource` (text; `resource` is the canonical URI, khub's link-out), `tags` (list), and `aliases` (list: other names an ID lookup resolves to, after every slug lookup misses; see [Lookup](cli.md#lookup)) — plus four universal relations (`related`, `sources`, `references`, `depends_on`), each `to: any` and `many: true`, with `depends_on` acyclic by contract.
+Every entity inherits these base attributes:
+
+- `type` (text, required): the discriminator each kind pins its value on.
+- `status` (`draft | stable | deprecated`, default `stable`): the OKF lifecycle. `status: draft` is the manual publish flag. An absent status reads as `stable` and is never written.
+- `author` (text): the creator, set once. `created` (date, required) and `updated` (date).
+- The OKF fields `title`, `description` and `resource` (text; `resource` is the canonical URI, khub's link-out), plus `tags` (list) and `aliases` (list: other names an ID lookup resolves to, after every slug lookup misses; see [Lookup](cli.md#lookup)).
+- The OKF provenance and trust families, all objects or lists of objects: `generated` (`{by, at}`, the last writer), `verified` (a list of `{by, at, rev}` review events; a single mapping counts as a one-item list), `stale_after` (a datetime), `sources` (a list of `{resource, id, title, author, usage_count, last_modified, usage_window}`, what the concept was derived from) and `usage_window` (`{from, to}`). khub writes `generated` on every content change it makes (see [Write semantics](cli.md#write-semantics)), `khub verify` appends to `verified` (see [Trust](cli.md#trust)), and a passed `stale_after` makes the entity stale whatever its age. A `sources[].id` and a body footnote `[^id]` cite each other, and `validate` reports either one alone as a gap.
+
+An OKF datetime (`generated.at`, `verified[].at`, `stale_after`, a source's `last_modified`, either window bound) is ISO 8601 with a `T` and an explicit offset, `Z` or `+hh:mm`; `add` and `edit` store it as written. A plain `datetime` field a preset declares keeps accepting a value without an offset, and a write still normalizes it. Three universal relations complete the base: `related`, `references` and `depends_on`, each `to: any` and `many: true`, with `depends_on` acyclic by contract. An OKF source entry is metadata, never an edge; a reference the graph should walk belongs in `references`.
 
 The base is khub's own plumbing, not domain modelling, so it ships **embedded in the binary** (`presets/core/ontology.yaml`) and is supplied to every resolve — it is never written into a workspace, which keeps `ontology.yaml` purely the domain. Read the effective base with `khub schema base`. An authored `ontology.base` is **rejected** with a located error: the base is not an authoring surface (redefining it whole would silently change what `check`, `stale`, and the graph walks read), and the override mechanism is per-type, below.
 
-A type overrides a base attribute by redeclaring it in its own `attributes`: make `updated` required, make `title` required, relax `created` to optional. An override facet-merges (an unstated facet is inherited; an explicit `required: false` beats an inherited true); a redeclared relation replaces the base's whole.
+A type overrides a base attribute by redeclaring it in its own `attributes`: make `updated` required, make `title` required, relax `created` to optional. An override facet-merges (an unstated facet is inherited; an explicit `required: false` beats an inherited true); a redeclared `fields` or `items` replaces the base's whole, and so does a redeclared relation. One name cannot be both an attribute and a relation on a type; the schema refuses to load.
 
 ## Authoring a type
 
 A type is declared under `ontology.entities`, keyed by its name, carrying only domain semantics:
 
 `attributes:` is a map keyed by name → `{ type?, required?, default?, enum?, pattern? }`. `type` is one of `text | number | date | datetime | bool | list` (default `text`). `enum` is a list of allowed values. `pattern` is a regex the whole value must match: Go RE2 syntax, anchored at both ends and case-sensitive. RE2 has no lookaround or backreferences, so a pattern using either refuses when the schema loads; in exchange a match runs in linear time, whatever the pattern.
+
+An attribute's value may nest. `type: object` declares a mapping, and `fields:` declares its keys with the same grammar as `attributes:`, to any depth. `items:` on a `type: list` declares the list's element: a scalar spec, or an object with its own `fields`. `fields` applies only to an object and `items` only to a list; anywhere else the schema refuses to load. `validate` checks each declared nested key for `required`, `enum`, `pattern` and `type`, accepts keys the object does not declare, and names a failure by its path, as in `verified[0].by is required`. A bare mapping where a list of objects is declared counts as that list's one element, so `verified: {by: human:ilya}` reads as `verified: [{by: human:ilya}]`. A list without `items` is unchecked, as before. One command-line string cannot spell a mapping, so `add` and `edit` refuse a value for an object or a list of objects with `value_shape` (exit 2) and leave the file alone; write those values in the entity file. A value for a list of scalars is split on commas and each element is checked against `items`.
+
+```yaml
+attributes:
+  generated: { type: object, fields: { by: { required: true }, at: { type: datetime } } }
+  verified:  { type: list, items: { type: object, fields: { by: { required: true }, rev: {} } } }
+```
 
 `relations:` is a map keyed by predicate → `{ to, many?, required?, inverse?, acyclic? }`. The field name *is* the predicate. `to` names a single type, a list of type names (a union edge), or `any` (polymorphic). A relation is single-valued by default; `many: true` makes it multi-valued. `required: true` makes it a completeness requirement, enforced by `khub check` over the active graph. `acyclic` lives here, on the predicate, because it is a property of the domain — a hierarchy edge is acyclic by meaning, not by workspace preference.
 
@@ -64,7 +80,7 @@ Per type, keyed by the type's name. khub reads these directly.
 
 - `layout` — `file` (one entity per file, `{path}/{slug}.md`), `folder` (one entity per folder, `{path}/{slug}/_index.md`), `collection` (every entity of the type is a row in ONE file), or `singleton` (exactly one fixed file, 0..1 entity; the slug IS the type name, so `khub get prd` resolves it).
 - `format` — `md` (the default: YAML frontmatter + prose body), `json`, or `yaml`. Collections take `json | jsonl | yaml`. A non-md entity is a single mapping; prose rides in a reserved `body` field.
-- `path` — the inventory directory, relative to the workspace root (or the file, for a collection/singleton). A `file` type may give a path template, or a list of them, instead — see [Nested storage](#nested-storage-path-templates).
+- `path` — the inventory directory, relative to the workspace root (or the file, for a collection/singleton). A `file` type may give a path template, or a list of them, instead — see [Nested storage](#nested-storage-path-templates). A path or template whose file is `index.md` or `log.md` refuses when the schema loads, because OKF reserves both names for navigation.
 - `id_prefix`, `id_date`, `id_ordinal` and `template` — below.
 
 A type with no storage entry at all takes the default: one file per entity under a directory named for the type (`layout: file`, `path: <type>`), so an ontology-only schema resolves and runs. An entry that **does** exist must state its `layout` — a path with no layout is a half-statement, and silently defaulting it to `file` would turn a forgotten `layout: collection` into a directory of strays. A collection with no `path` stores at `{type}.{format}`; a singleton always needs its `path` — the exact file it lives at.
@@ -112,11 +128,33 @@ A trailing `/` matches directories only, and a matched directory excludes everyt
 
 ## Workspace gates (`policy.yaml`)
 
-Per type, keyed by the type's name — what `check` demands of it in *this* workspace.
+Per type, keyed by the type's name — what `check` demands of it in *this* workspace, and what `upgrade` may not take away.
 
 - `required` — singleton-only: `check` reports a missing required singleton (e.g. a workspace without its `prd.md`).
 - `orphan` — `orphan: true` declares that edge-less is this type's *expected* state, so `check` stops reporting its entities as orphans, `--strict` stops failing on them, `query --orphan` stops flagging them and the `status` count stops including them. Default `false`. Use it for a narrative root nothing points at by design: build-hub declares it on its two narrative singletons (`prd`, `arc42`), because every stored edge in that preset points *up* the durability ladder and the documents sit above its top — so orphan-ness there is a finding no authoring could ever close, and without the flag `check --strict` could not go green on a correct workspace. Unlike `required` this is **not** singleton-only: any type whose members are legitimately unwired may declare it, and a singleton that *does* carry relations is still swept. It removes no signal — a missing required edge is still reported by required-completeness, which names the field.
-- `path_refs` — `path_refs: true` lets this type's relation values name a workspace file by its path (`sources: [system/prd.md]`), for a corpus whose documents cite each other by path. A value that resolves as an id still does; one that does not is read as a workspace-relative path, an `#anchor` and a leading `./` dropped. If it is an entity's file, it is an edge to that entity, subject to the relation's targets. Otherwise, on a `to: any` relation, any existing file or directory satisfies it without an edge (`manifest.yaml`, `docs/guide.md`). A path to nothing dangles, and a write naming one is refused, as for an id.
+- `path_refs` — `path_refs: true` lets this type's relation values name a workspace file by its path (`references: [system/prd.md]`), for a corpus whose documents cite each other by path. A value that resolves as an id still does; one that does not is read as a workspace-relative path, an `#anchor` and a leading `./` dropped. If it is an entity's file, it is an edge to that entity, subject to the relation's targets. Otherwise, on a `to: any` relation, any existing file or directory satisfies it without an edge (`manifest.yaml`, `docs/guide.md`). A path to nothing dangles, and a write naming one is refused, as for an id.
+- `retention` — `retention: { days: N, no_outbound: true }` is this type's end-of-life rule. `check` lists in its `retention` bucket every entity of the type whose date is more than `N` days old. The date is `updated`, else `created` — the first of the two that parses, so an impossible or empty `updated` falls back to `created` rather than hiding the entity. Unlike `stale`, retention reads no git history: an entity with neither date is never reported, and the way to keep one is to bump its `updated`. `days` is required, an integer of at least 1; `no_outbound` defaults to `false` and reads `yes`/`true` as every other schema boolean does. With `no_outbound: true` only an entity with no outbound edge is listed. Outbound means an edge stored on the entity that resolves — to any entity, a draft included, or through a path reference to an entity's file. An inbound edge does not count (its inverse is derived, never stored here), and neither does a self-loop, a value that dangles, or a path reference to a file that is no entity. Drafts are swept too, as for orphans, and so are collection rows. The bucket is informational, `--strict` included: the clock alone moves an entity into it, and a gate that turned red with no change to the workspace would fail every CI run the day a meeting turned `N` days old. khub never deletes anything — the `retention` bucket is a list for a human to act on, with `khub remove`. `khub schema show <type> --format json` prints the rule; the schema snapshot leaves it out, so `schema diff` does not show a retention change. `khub upgrade` keeps a `retention` rule the shipped `policy.yaml` lacks, as it keeps every per-type key of the workspace's own (see [`docs/cli.md`](cli.md#workspace)).
+
+  Retention is not expiry: `stale_after` is a date an author writes on one entity, and `check --stale` can gate on it (`expired`); `retention` is an age rule the workspace declares for a whole type, and it never gates.
+
+  ```yaml
+  policy:
+    meeting: { retention: { days: 90, no_outbound: true } }   # a meeting that recorded nothing, after a quarter
+  ```
+- `waive` — per-entity exemptions from `check`, each with the reason it is accepted. Keyed by the entity's slug, then by the `check` bucket it waives: `incomplete`, `orphans`, `dangling`, `body_shape` or `thin` — the findings that belong to one entity. A reason is required and may not be blank; any other bucket, a reason that is not a string, an entity naming no bucket (`x: {}` or `x:`), or an empty key (a plain `null:` or `~:`) is an `invalid_schema` refusal. Quote a slug YAML would read as something else — `'2024':`, `'0x10':`, `'true':` — or it is read as a number or boolean and turned back into text (`0x10:` is the slug `16`), and the waiver comes back stale.
+
+  ```yaml
+  policy:
+    component:
+      waive:
+        cmp-legacy-billing:
+          orphans: Retired; kept as the audit trail of the 2025 migration.
+          dangling: Its owner team was dissolved; the edge is history.
+  ```
+
+  A waived finding is never hidden: it leaves its bucket, stops counting against `passed` (`--strict` included), and is listed under `waived` with the reason and the finding itself. A waiver covers its whole bucket for that entity — every dangling edge it holds, every body finding — so name the narrowest bucket that fits. A waiver that matches no finding is listed under `stale_waivers` — in ontology declaration order, then the order the waivers are written — and **fails** the gate: fix the finding and the waiver must go too, so an exemption cannot outlive what it was written for, and the file stays the list of what is deliberately accepted. Its `cause` is `no_match`, or `orphan_exempt` for an `orphans` waiver on a type declaring `orphan: true`. One exception keeps a draft toggle from moving the gate: an `incomplete` waiver on an entity that is present but `status: draft` is dormant — neither waived nor stale — since drafts are exempt from completeness; it applies again when the entity is published. `khub upgrade` keeps every `waive` block for each type the new ontology still declares, as it keeps every per-type key the shipped `policy.yaml` lacks. `waive` is `orphan: true` at entity granularity, and it changes `check` only — `query --orphan`, `status` and `validate` still report what they see. Findings with no single owning entity (strays, misplaced files, cycles, alias conflicts, the template and singleton buckets) cannot be waived.
+
+- `locked` / `locked_relations` — load-bearing schema elements. `locked: true` holds the type; `locked_relations: [<predicate>, …]` holds predicates the type itself declares (a name listed twice counts once; a name it does not declare, a base edge included, is a `schema_error`). `khub upgrade` refuses a new schema that removes a locked element (`locked_removed`, exit 2, nothing written) unless the run names it: `--unlock <type>` or `--unlock <type>.<predicate>`. A removed type's locked predicates need their own unlock, so every locked element a migration drops is named. Only removal is held: a kept element whose facets change, or which the new release no longer locks, passes. An `--unlock` name that matches nothing is ignored. The lock reads the schema being replaced, so a preset marks what it ships as locked and a workspace may lock its own additions. A workspace-authored lock is a per-type key the shipped `policy.yaml` lacks, so `upgrade` carries it while the new ontology still declares the type (see [`khub upgrade`](cli.md#workspace)). A current schema that does not resolve keeps its locks: they are read leniently from the raw layer files, and a file too broken to parse that mentions `locked` refuses the upgrade (`locks_unreadable`). A hand edit of the layer files is not a migration and is never refused.
 
 ## Capture cues (`when`)
 
@@ -287,11 +325,11 @@ lenses:
     An adjective is not a bound.
 ```
 
-- `when` reads frontmatter with the schema's defaults filled in, so it can filter on a field nobody had to write; a value, or a list of them, is compared as the scalar would be written to disk, so `draft: false` in a lens meets `draft: false` in a body whether either arrived as a bool or as text. The field must be one the type declares (attribute or relation), and `section` must name a declared heading: a typo in either would apply to nobody, forever, with nothing to report it, so both are `template_invalid`.
+- `when` reads frontmatter with the schema's defaults filled in, so it can filter on a field nobody had to write; a value, or a list of them, is compared as the scalar would be written to disk, so `active: true` in a lens meets `active: true` in a body whether either arrived as a bool or as text, and `when: {status: stable}` meets an entity that never wrote a status. The field must be one the type declares (attribute or relation), and `section` must name a declared heading: a typo in either would apply to nobody, forever, with nothing to report it, so both are `template_invalid`.
 - `after` orders: lenses come out in declaration order, adjusted so every `after` holds (a stable topological sort — two lenses with no ordering between them keep their written order). An unknown code, a repeated code or a cycle is `template_invalid`.
 - `name` defaults to `code`; `instruction` is printed verbatim, indented, one lens per block.
 
-The [CLI reference](cli.md) covers the on-disk contract for entity formats and collections in full, and its [finding table](cli.md#reading-check-output) lists every body finding beside the rest.
+This page shows how to author a template. The template keys, how bodies are judged and the findings they raise are specified in [`cli.md`](cli.md#body-templates), as are the on-disk contract for [entity formats](cli.md#entity-formats) and [collections](cli.md#collections); the [finding table](cli.md#reading-check-output) lists every body finding beside the rest.
 
 ## Extend
 
@@ -304,7 +342,7 @@ Inspect the effective schema with `khub schema` (full), `khub schema types`, `kh
 khub publishes a JSON Schema (draft-07) of the layer-file vocabulary, so an editor can complete keys, show what each one means, and flag a typo'd key or a bad value as you type. One schema covers all three files, since any of them may carry any layer block. Get it in either of two ways:
 
 - `khub schema jsonschema` prints the schema for the khub you run, so it never describes keys your binary does not have. It reads no workspace. On a terminal it prints indented JSON; piped, it prints one line, like every other command. Save it with `TTY_COMPATIBLE=1 khub schema jsonschema > .khub/layers.schema.json` and run it again after you upgrade khub.
-- [`schemas/layers.schema.json`](../schemas/layers.schema.json) in this repository holds the same bytes, from `https://raw.githubusercontent.com/endgame-build/khub/v<version>/schemas/layers.schema.json` for a release from 0.31.0 on. A Go test fails when the file and the binary disagree.
+- [`schemas/layers.schema.json`](../schemas/layers.schema.json) in this repository holds the same bytes, from `https://raw.githubusercontent.com/endgame-build/khub/v<version>/schemas/layers.schema.json` for any release that ships the command. A Go test fails when the file and the binary disagree.
 
 Point the editor at it. With the YAML language server (VS Code's YAML extension, and editors built on it), map the files in settings, so the layer files stay as `khub init` wrote them. khub reads the layer files as YAML 1.2, which is the language server's default: leave `yaml.yamlVersion` unset. In 1.1 mode the server reads unquoted `yes`, `no`, `on`, `off`, `y` and `n` as booleans, so it flags values khub reads as strings, such as `enum: [yes, no]`.
 
@@ -316,7 +354,7 @@ Point the editor at it. With the YAML language server (VS Code's YAML extension,
 
 Or put a modeline at the top of each file: `# yaml-language-server: $schema=layers.schema.json`. The path is relative to the file. `khub upgrade` replaces an edited layer file with the preset's and keeps your copy as `<name>.bak`, so a modeline does not survive an upgrade and the settings mapping does.
 
-The JSON Schema checks one value at a time: the keys each mapping allows, the value sets (`layout`, `format`, scalar `type`), the `id_prefix` and `template` patterns, and that a storage entry states its `layout` and a relation its `to`. It accepts every boolean form khub reads (`yes`, `on`, `1`). It cannot check a rule that spans fields or files: the layout and format matrix, a policy or storage entry for a type ontology does not declare, a relation to an unknown type. khub reports those when it loads the schema, so the next khub command names them. An empty or comment-only file passes, as khub reads it as empty. The JSON Schema is stricter than khub in one place: khub also reads a layer block or a whole file written as `false`, `0`, `''` or an empty list as empty, and the JSON Schema asks for a mapping or nothing.
+The JSON Schema checks one value at a time: the keys each mapping allows, the value sets (`layout`, `format`, attribute `type`, the findings a waiver names), the `id_prefix` and `template` patterns, a retention `days` of at least 1, a non-blank waiver reason, and that a storage entry states its `layout`, a relation its `to` and a retention rule its `days`. It accepts every boolean form khub reads (`yes`, `on`, `1`). It cannot check a rule that spans fields or files: the layout and format matrix, `fields` on a type other than `object` or `items` on one other than `list`, a policy or storage entry for a type ontology does not declare, a relation to an unknown type, a `locked_relations` name the type does not declare. khub reports those when it loads the schema, so the next khub command names them. An empty or comment-only file passes, as khub reads it as empty. The JSON Schema is stricter than khub in one place: khub also reads a layer block or a whole file written as `false`, `0`, `''` or an empty list as empty, and the JSON Schema asks for a mapping or nothing.
 
 ## Open schema and `--strict`
 

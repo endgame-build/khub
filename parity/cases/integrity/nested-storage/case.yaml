@@ -17,7 +17,7 @@ steps:
 - argv: ["add", "story", "--title", "First", "--epic", "ep-1", "--references", "work/ep-1/ep-1.md", "--format", "json"]
 - argv: ["add", "story", "--title", "Second", "--epic", "ep-2", "--project", "p1", "--format", "json"]
 - sh: "mkdir -p spokes/a spokes/b decisions work/ep-3 && printf -- '---\\ntype: spec\\ntitle: A\\ncreated: 2026-01-15\\n---\\n' > spokes/a/spec.md && printf -- '---\\ntype: spec\\ntitle: B\\ncreated: 2026-01-15\\n---\\n' > spokes/b/spec.md && printf -- '---\\ntype: note\\ntitle: Notes\\n---\\n' > work/ep-1/notes.md && printf -- '---\\ntype: adr\\ntitle: Old\\ncreated: 2026-01-15\\n---\\n' > decisions/001-old.md && printf -- '---\\ntype: story\\ntitle: Twin\\ncreated: 2026-01-15\\n---\\n' > work/ep-3/first.md && printf 'hi\\n' > README.md"
-- argv: ["edit", "story/first", "--sources", "spokes/a/spec.md", "--related", "README.md#top", "--format", "json"]
+- argv: ["edit", "story/first", "--related", "spokes/a/spec.md, README.md#top", "--format", "json"]
 - argv: ["edit", "story/first", "--depends_on", "missing.md", "--format", "json"]
 - argv: ["query", "--format", "json"]
 - argv: ["neighbors", "story/first", "--format", "json"]

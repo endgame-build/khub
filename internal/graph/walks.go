@@ -13,6 +13,7 @@ import (
 	"github.com/endgame-build/khub/internal/index"
 	"github.com/endgame-build/khub/internal/introspect"
 	"github.com/endgame-build/khub/internal/schema"
+	"github.com/endgame-build/khub/internal/trust"
 )
 
 // Direction literals for Neighbors.
@@ -31,6 +32,7 @@ type Neighbor struct {
 	Direction string // "out" (stored) | "in" (derived inverse)
 	Derived   bool
 	Depth     int
+	Trust     string // the neighbour's review tier (trust.Tier); set by WalkNeighbors
 }
 
 // ImpactNode is a node in the transitive closure, with its depth from the source.
@@ -68,30 +70,30 @@ func Neighbors(idx *index.Index, id string, predicate *string, direction string,
 	}
 	// bounds frontier expansion (and the source is never its own neighbour)
 	visited := map[index.Node]bool{src: true}
-	// dedup on the whole (node, predicate, direction) triple — adjacentHit IS
+	// dedup on the whole (node, predicate, direction) triple — Adjacency IS
 	// that triple, so it doubles as the key.
-	emitted := map[adjacentHit]bool{}
+	emitted := map[Adjacency]bool{}
 	frontier := []index.Node{src}
 	found := []Neighbor{}
 	for d := 0; d < depth && len(frontier) > 0; d++ {
 		var next []index.Node
 		for _, node := range frontier {
-			for _, a := range adjacent(g, node, direction, predicate) {
-				if a.node == src || emitted[a] {
+			for _, a := range Adjacent(g, node, direction, predicate) {
+				if a.Node == src || emitted[a] {
 					continue
 				}
 				emitted[a] = true
 				found = append(found, Neighbor{
-					Type:      a.node.Type,
-					Slug:      a.node.Slug,
-					Predicate: a.pred,
-					Direction: a.dir,
-					Derived:   a.dir == DirectionIn,
+					Type:      a.Node.Type,
+					Slug:      a.Node.Slug,
+					Predicate: a.Predicate,
+					Direction: a.Direction,
+					Derived:   a.Direction == DirectionIn,
 					Depth:     d + 1,
 				})
-				if !visited[a.node] {
-					visited[a.node] = true
-					next = append(next, a.node)
+				if !visited[a.Node] {
+					visited[a.Node] = true
+					next = append(next, a.Node)
 				}
 			}
 		}
@@ -100,27 +102,31 @@ func Neighbors(idx *index.Index, id string, predicate *string, direction string,
 	return found, nil
 }
 
-type adjacentHit struct {
-	node index.Node
-	pred string
-	dir  string
+// Adjacency is one step a walk may take from a node: the node it reaches,
+// over which predicate, in which direction ("in" is a derived inverse).
+type Adjacency struct {
+	Node      index.Node
+	Predicate string
+	Direction string
 }
 
-// adjacent yields (neighbour, predicate, direction) for one node, filtered —
-// _adjacent. Out-edges come first, exactly like the Python generator.
-func adjacent(g *Graph, node index.Node, direction string, predicate *string) []adjacentHit {
-	var out []adjacentHit
+// Adjacent yields (neighbour, predicate, direction) for one node, filtered —
+// _adjacent. Out-edges come first, exactly like the Python generator, each
+// side in adjacency-insertion order, so every walk built on it is
+// deterministic. neighbors and retrieve share it.
+func Adjacent(g *Graph, node index.Node, direction string, predicate *string) []Adjacency {
+	var out []Adjacency
 	if direction == DirectionOut || direction == DirectionBoth {
 		for _, e := range g.OutEdges(node) {
 			if predicate == nil || e.Predicate == *predicate {
-				out = append(out, adjacentHit{e.To, e.Predicate, DirectionOut})
+				out = append(out, Adjacency{e.To, e.Predicate, DirectionOut})
 			}
 		}
 	}
 	if direction == DirectionIn || direction == DirectionBoth {
 		for _, e := range g.InEdges(node) {
 			if predicate == nil || e.Predicate == *predicate {
-				out = append(out, adjacentHit{e.From, e.Predicate, DirectionIn})
+				out = append(out, Adjacency{e.From, e.Predicate, DirectionIn})
 			}
 		}
 	}
@@ -159,6 +165,33 @@ func Impact(idx *index.Index, id string, predicate string, reverse bool) ([]Impa
 		out = append(out, ImpactNode{Type: n.Type, Slug: n.Slug, Depth: depths[n]})
 	}
 	return out, nil
+}
+
+// Under returns every node that reaches src over predicate's stored edges,
+// with its hop count: the transitive containment set behind `query --under`.
+// An edge points from the contained entity to its container (a component's
+// `system`), so this is Impact's reverse walk. src is never under itself, even
+// on a cyclic hierarchy.
+func Under(g *Graph, src index.Node, predicate string) map[index.Node]int {
+	depths := shortestPathLengths(predicateAdjacency(g, predicate, true), src)
+	delete(depths, src)
+	return depths
+}
+
+// UnderInverse is Under over a declared inverse: a node is under src when
+// src's stored edge points to it, through any (source type, predicate) pair
+// that declares the inverse. That is a hierarchy stored on the parent (an
+// ADR's `supersedes`, read as `superseded`) walked forward from src.
+func UnderInverse(g *Graph, src index.Node, declares func(sourceType, predicate string) bool) map[index.Node]int {
+	succ := map[index.Node][]index.Node{}
+	for _, e := range g.Edges() {
+		if declares(e.From.Type, e.Predicate) {
+			succ[e.From] = append(succ[e.From], e.To)
+		}
+	}
+	depths := shortestPathLengths(succ, src)
+	delete(depths, src)
+	return depths
 }
 
 // predicateAdjacency is _predicate_digraph collapsed to a successor map, with
@@ -270,27 +303,36 @@ func firstSuccessor(g *Graph, node index.Node, predicate string) (index.Node, bo
 // WalkNeighbors is walk_neighbors: load, index, and walk in one call. A named
 // predicate no type declares is a located error; nil (no filter) stays valid.
 func WalkNeighbors(root, id string, predicate *string, direction string, depth int) ([]Neighbor, error) {
-	resolved, idx, err := walkIndex(root)
+	resolved, idx, err := walkIndex(root, true) // bodies feed trust.Rev
 	if err != nil {
 		return nil, err
 	}
 	if predicate != nil {
-		if err := requirePredicate(resolved, *predicate); err != nil {
+		if err := RequirePredicate(resolved, *predicate); err != nil {
 			return nil, err
 		}
 	}
-	return Neighbors(idx, id, predicate, direction, depth)
+	found, err := Neighbors(idx, id, predicate, direction, depth)
+	if err != nil {
+		return nil, err
+	}
+	for i, n := range found {
+		node := index.Node{Type: n.Type, Slug: n.Slug}
+		rtype, _ := resolved.Types.Get(n.Type)
+		found[i].Trust = trust.Tier(rtype, idx.Meta[node], idx.Body[node])
+	}
+	return found, nil
 }
 
 // WalkImpact is walk_impact. An explicit or default predicate no type declares is
 // a located error, so impact on a preset without that edge fails cleanly instead
 // of returning a lone source node.
 func WalkImpact(root, id string, predicate string, reverse bool) ([]ImpactNode, error) {
-	resolved, idx, err := walkIndex(root)
+	resolved, idx, err := walkIndex(root, false)
 	if err != nil {
 		return nil, err
 	}
-	if err := requirePredicate(resolved, predicate); err != nil {
+	if err := RequirePredicate(resolved, predicate); err != nil {
 		return nil, err
 	}
 	return Impact(idx, id, predicate, reverse)
@@ -300,11 +342,11 @@ func WalkImpact(root, id string, predicate string, reverse bool) ([]ImpactNode, 
 // preset (e.g. firm-ops) that declares no supersession — a located error, not a
 // silent one-node chain.
 func WalkHistory(root, id string, predicate string, limit *int) ([]HistoryLink, error) {
-	resolved, idx, err := walkIndex(root)
+	resolved, idx, err := walkIndex(root, false)
 	if err != nil {
 		return nil, err
 	}
-	if err := requirePredicate(resolved, predicate); err != nil {
+	if err := RequirePredicate(resolved, predicate); err != nil {
 		return nil, err
 	}
 	return History(idx, id, predicate, limit)
@@ -312,24 +354,30 @@ func WalkHistory(root, id string, predicate string, limit *int) ([]HistoryLink, 
 
 // walkIndex is _walk_index plus the schema load the walk_* entries share: the
 // index the walks see has strays filtered, like every other verb.
-func walkIndex(root string) (*schema.ResolvedSchema, *index.Index, error) {
+// walkIndex scans for a walk; bodies keeps each entity's body, for trust.
+func walkIndex(root string, bodies bool) (*schema.ResolvedSchema, *index.Index, error) {
 	resolved, err := introspect.LoadSchema(root)
 	if err != nil {
 		return nil, nil, err
 	}
-	scanned, err := index.Build(root, resolved)
+	build := index.Build
+	if bodies {
+		build = index.BuildWithBodies
+	}
+	scanned, err := build(root, resolved)
 	if err != nil {
 		return nil, nil, err
 	}
 	return resolved, index.Filter(scanned, index.StrayNodes(scanned)), nil
 }
 
-// requirePredicate is _require_predicate: raise unless some type in the schema
-// declares predicate (universal edges included).
+// RequirePredicate is _require_predicate: raise unless some type in the schema
+// declares predicate (universal edges included). The refusal lists the
+// declared predicates, so a caller corrects the call without a second lookup.
 //
 // core/errors.py builds this LocatedError inline with no factory, so the code and
 // message are assembled here rather than in internal/errs.
-func requirePredicate(resolved *schema.ResolvedSchema, predicate string) error {
+func RequirePredicate(resolved *schema.ResolvedSchema, predicate string) error {
 	declared := map[string]bool{}
 	for _, tname := range resolved.Types.Keys() {
 		rtype, _ := resolved.Types.Get(tname)
@@ -340,6 +388,12 @@ func requirePredicate(resolved *schema.ResolvedSchema, predicate string) error {
 	if declared[predicate] {
 		return nil
 	}
+	return UnknownPredicate(predicate, declared)
+}
+
+// UnknownPredicate is the `unknown_predicate` refusal, listing the declared
+// names sorted.
+func UnknownPredicate(predicate string, declared map[string]bool) error {
 	names := make([]string, 0, len(declared))
 	for p := range declared {
 		names = append(names, p)
@@ -349,5 +403,8 @@ func requirePredicate(resolved *schema.ResolvedSchema, predicate string) error {
 		"No predicate '%s' in the schema. Declared predicates: %s",
 		predicate, strings.Join(names, ", ")))
 	e.Relation = predicate
+	e.Field = predicate
+	e.Expected = names
+	e.Suggestion = errs.Nearest(predicate, names)
 	return e
 }

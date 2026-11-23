@@ -2,7 +2,8 @@
 // `khub query`.
 //
 // ANDs a set of filters (type, frontmatter field, tag, --has/--missing predicate
-// presence, orphan/stale flags, draft scope) over the entity index and the
+// presence, --count/--in-count/--out-count edge cardinality, orphan/stale
+// flags, draft scope, --under containment) over the entity index and the
 // resolved edge graph. Filters read frontmatter and derived edges only, never
 // body prose (QRY-001). An empty result is a success, not an error (QRY-002).
 // Every match carries its orphan and stale flags (QRY-009), computed identically
@@ -15,6 +16,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/endgame-build/khub/internal/entity"
 	"github.com/endgame-build/khub/internal/errs"
 	"github.com/endgame-build/khub/internal/graph"
 	"github.com/endgame-build/khub/internal/index"
@@ -22,6 +24,7 @@ import (
 	"github.com/endgame-build/khub/internal/omap"
 	"github.com/endgame-build/khub/internal/project"
 	"github.com/endgame-build/khub/internal/schema"
+	"github.com/endgame-build/khub/internal/trust"
 	"github.com/endgame-build/khub/internal/values"
 	"github.com/endgame-build/khub/internal/workspace"
 )
@@ -35,6 +38,8 @@ type Match struct {
 	Stale  bool
 	// Carried so listing a type does not cost one `get` per row.
 	Title string
+	// Trust is the review tier (trust.Tier), derived on every read.
+	Trust string
 }
 
 // Filters is core.query.QueryFilters: the ANDed filter set parsed from the CLI.
@@ -45,24 +50,54 @@ type Filters struct {
 	Type *string
 	// Fields is the parsed --<field> <value> set in CLI input order; values are
 	// strings.
-	Fields     *omap.Map
-	Tag        *string
-	Has        *string
-	Missing    *string
+	Fields  *omap.Map
+	Tag     *string
+	Has     *string
+	Missing *string
+	// Counts, InCount and OutCount are the cardinality filters (count.go),
+	// each list ANDed.
+	Counts     []Count
+	InCount    []Comparison
+	OutCount   []Comparison
 	Orphan     bool
 	Stale      bool
 	DraftOnly  bool
 	ActiveOnly bool
 	Limit      *int
+	Trust      *string // keep only entities at this review tier
+	// Under keeps the entities that reach this anchor over Via's stored edges,
+	// any number of hops; the anchor itself is excluded. Both or neither.
+	Under *string
+	Via   *string
 }
 
 // Query returns the entities passing every filter, each annotated orphan/stale.
 func Query(root string, filters Filters, now time.Time) ([]Match, error) {
+	matches, _, err := QueryCounted(root, filters, now)
+	return matches, err
+}
+
+// QueryCounted is Query plus the number of entities that passed every filter
+// before Limit cut the set — what `query --receipt` reports as matched.
+func QueryCounted(root string, filters Filters, now time.Time) ([]Match, int, error) {
+	matches, err := queryAll(root, filters, now)
+	if err != nil {
+		return nil, 0, err
+	}
+	total := len(matches)
+	if filters.Limit != nil {
+		matches = Limit(matches, *filters.Limit)
+	}
+	return matches, total, nil
+}
+
+// queryAll returns every entity passing the filters, ignoring Limit.
+func queryAll(root string, filters Filters, now time.Time) ([]Match, error) {
 	resolved, err := introspect.LoadSchema(root)
 	if err != nil {
 		return nil, err
 	}
-	scanned, err := index.Build(root, resolved)
+	scanned, err := index.BuildWithBodies(root, resolved) // bodies feed trust.Rev
 	if err != nil {
 		return nil, err
 	}
@@ -77,6 +112,14 @@ func Query(root string, filters Filters, now time.Time) ([]Match, error) {
 	if err := validateFilterNames(resolved, root, filters, inverses); err != nil {
 		return nil, err
 	}
+	if t := filters.Trust; t != nil && *t != trust.Unverified && *t != trust.Machine && *t != trust.Human {
+		return nil, errs.UnknownTier(*t, trust.Tiers)
+	}
+
+	under, err := scope(resolved, idx, g, inverses, filters)
+	if err != nil {
+		return nil, err
+	}
 
 	nodes := append([]index.Node(nil), idx.Order...)
 	index.SortNodes(nodes)
@@ -85,6 +128,11 @@ func Query(root string, filters Filters, now time.Time) ([]Match, error) {
 	for _, node := range nodes {
 		if filters.Type != nil && *filters.Type != "" && node.Type != *filters.Type {
 			continue
+		}
+		if under != nil {
+			if _, ok := under[node]; !ok {
+				continue
+			}
 		}
 		meta := idx.Meta[node]
 		// A type declaring `orphan: true` is never flagged: edge-less is its
@@ -96,24 +144,72 @@ func Query(root string, filters Filters, now time.Time) ([]Match, error) {
 		if !passes(node, meta, g, filters, resolved, inverses, orphan, stale) {
 			continue
 		}
-		draftRaw, _ := meta.Get("draft")
+		tier := trust.Tier(rtype, meta, idx.Body[node])
+		if filters.Trust != nil && *filters.Trust != tier {
+			continue
+		}
 		matches = append(matches, Match{
 			Type:   node.Type,
 			Slug:   node.Slug,
-			Draft:  values.AsBool(draftRaw),
+			Draft:  rtype.IsDraft(meta),
 			Orphan: orphan,
 			Stale:  stale,
-			Title:  title(meta, node.Slug),
+			Title:  Title(meta, node.Slug),
+			Trust:  tier,
 		})
-	}
-	if filters.Limit != nil {
-		matches = limitMatches(matches, *filters.Limit)
 	}
 	return matches, nil
 }
 
-// title is `str(meta.get("title") or meta.get("name") or slug)`.
-func title(meta *omap.Map, slug string) string {
+// scope is the --under/--via set: nil when the pair is absent. --via names a
+// stored predicate, walked from the contained entity up to its container, or
+// a declared inverse, walked down from the anchor over the stored edges that
+// declare it. A stored predicate wins over an inverse of the same name, as it
+// does for --has. Half a pair is refused; the CLI catches it first.
+func scope(resolved *schema.ResolvedSchema, idx *index.Index, g *graph.Graph,
+	inverses inverseIndex, f Filters) (map[index.Node]int, error) {
+	if f.Under == nil && f.Via == nil {
+		return nil, nil
+	}
+	if f.Under == nil || f.Via == nil {
+		return nil, errs.New("filter_error", "--under and --via go together")
+	}
+	via := *f.Via
+	stored := map[string]bool{}
+	for _, tname := range resolved.Types.Keys() {
+		rtype, _ := resolved.Types.Get(tname)
+		for _, p := range rtype.Relations.Keys() {
+			stored[p] = true
+		}
+	}
+	sources := inverses[inverseKey{"", via}]
+	if !stored[via] && len(sources) == 0 {
+		declared := map[string]bool{}
+		for p := range stored {
+			declared[p] = true
+		}
+		for k := range inverses {
+			if k.Type == "" {
+				declared[k.Name] = true
+			}
+		}
+		return nil, graph.UnknownPredicate(via, declared)
+	}
+	anchor, err := entity.ResolveID(idx, *f.Under)
+	if err != nil {
+		return nil, err
+	}
+	if stored[via] {
+		return graph.Under(g, anchor, via), nil
+	}
+	return graph.UnderInverse(g, anchor, func(sourceType, predicate string) bool {
+		return sources[inverseSource{sourceType, predicate}]
+	}), nil
+}
+
+// Title is `str(meta.get("title") or meta.get("name") or slug)` — the title a
+// listing record carries; retrieve prints the same one.
+func Title(meta *omap.Map, slug string) string {
 	for _, key := range []string{"title", "name"} {
 		v, _ := meta.Get(key)
 		if values.Truthy(v) {
@@ -123,8 +219,10 @@ func title(meta *omap.Map, slug string) string {
 	return slug
 }
 
-// limitMatches is Python's matches[:limit], including the negative-index form.
-func limitMatches(matches []Match, n int) []Match {
+// Limit is Python's matches[:limit], including the negative-index form: 0
+// keeps nothing and -n drops the last n. `query --limit` and `recent --limit`
+// share it, so the flag means one thing across the read commands.
+func Limit[T any](matches []T, n int) []T {
 	if n < 0 {
 		n += len(matches)
 		if n < 0 {
@@ -177,6 +275,15 @@ func validateFilterNames(resolved *schema.ResolvedSchema, root string, filters F
 				return errs.UnknownFilterField(pred, *filters.Type, declaredNames(inverses, *filters.Type, fields))
 			}
 		}
+		rels := map[string]bool{}
+		for _, r := range rtype.Relations.Keys() {
+			rels[r] = true
+		}
+		for _, c := range filters.Counts {
+			if !rels[c.Name] && len(inverses[inverseKey{*filters.Type, c.Name}]) == 0 {
+				return errs.UnknownCountRelation(c.Name, *filters.Type, declaredNames(inverses, *filters.Type, rels))
+			}
+		}
 		return nil
 	}
 	attrs, rels := map[string]bool{}, map[string]bool{}
@@ -197,6 +304,11 @@ func validateFilterNames(resolved *schema.ResolvedSchema, root string, filters F
 	for _, pred := range preds {
 		if !rels[pred] && !attrs[pred] && len(inverses[inverseKey{"", pred}]) == 0 {
 			return errs.UnknownFilterField(pred, "any", declaredNames(inverses, "", attrs, rels))
+		}
+	}
+	for _, c := range filters.Counts {
+		if !rels[c.Name] && len(inverses[inverseKey{"", c.Name}]) == 0 {
+			return errs.UnknownCountRelation(c.Name, "any", declaredNames(inverses, "", rels))
 		}
 	}
 	return nil
@@ -236,8 +348,8 @@ func fieldKeys(f Filters) []string {
 // frontmatter) — _passes.
 func passes(node index.Node, meta *omap.Map, g *graph.Graph, f Filters,
 	resolved *schema.ResolvedSchema, inverses inverseIndex, orphan, stale bool) bool {
-	draftRaw, _ := meta.Get("draft")
-	isDraft := values.AsBool(draftRaw)
+	rtype, _ := resolved.Types.Get(node.Type)
+	isDraft := rtype.IsDraft(meta)
 	if f.ActiveOnly && isDraft {
 		return false
 	}
@@ -248,6 +360,17 @@ func passes(node index.Node, meta *omap.Map, g *graph.Graph, f Filters,
 		wantedAny, _ := f.Fields.Get(fname)
 		wanted, _ := wantedAny.(string)
 		got, _ := meta.Get(fname)
+		// An unwritten attribute reads as its schema default, as lenses read it:
+		// `--status stable` matches an entity that never wrote a status. The
+		// base status reads as the effective lifecycle, so a legacy
+		// `draft: true` matches `--status draft`.
+		attr, isAttr := rtype.Attributes.Get(fname)
+		switch {
+		case isAttr && fname == "status" && !attr.OverriddenFromBase:
+			got = rtype.EffectiveStatus(meta)
+		case isAttr && got == nil:
+			got = attr.Default
+		}
 		if !fieldMatches(got, wanted) {
 			return false
 		}
@@ -268,6 +391,27 @@ func passes(node index.Node, meta *omap.Map, g *graph.Graph, f Filters,
 		hasValue(node, meta, g, resolved, inverses, *f.Missing)) {
 		return false
 	}
+	for _, c := range f.Counts {
+		// As with --missing, a type that cannot carry the relation is not a
+		// zero: `--count depends_on=0` without --type keeps only the types that
+		// declare depends_on.
+		if !countable(node.Type, resolved, inverses, c.Name) {
+			return false
+		}
+		if !c.Cmp.Holds(edgeCount(g, node, c.Name, inverses[inverseKey{node.Type, c.Name}])) {
+			return false
+		}
+	}
+	for _, c := range f.InCount {
+		if !c.Holds(g.InDegree(node)) {
+			return false
+		}
+	}
+	for _, c := range f.OutCount {
+		if !c.Holds(g.OutDegree(node)) {
+			return false
+		}
+	}
 	if f.Orphan && !orphan {
 		return false
 	}
@@ -286,6 +430,16 @@ func declares(type_ string, resolved *schema.ResolvedSchema, inverses inverseInd
 	}
 	return rtype.Relations.Has(name) || rtype.Attributes.Has(name) ||
 		len(inverses[inverseKey{type_, name}]) > 0
+}
+
+// countable reports whether type_ has edges under name at all — a relation or
+// a declared inverse. An attribute has no edges, so it is not countable.
+func countable(type_ string, resolved *schema.ResolvedSchema, inverses inverseIndex, name string) bool {
+	rtype, ok := resolved.Types.Get(type_)
+	if !ok {
+		return false
+	}
+	return rtype.Relations.Has(name) || len(inverses[inverseKey{type_, name}]) > 0
 }
 
 // hasValue reports whether node carries name: a resolved edge for a relation, a

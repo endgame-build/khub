@@ -7,6 +7,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/endgame-build/khub/internal/migrate"
 	"github.com/endgame-build/khub/internal/reindex"
 	"github.com/endgame-build/khub/internal/wire"
 	"github.com/endgame-build/khub/internal/workspace"
@@ -113,26 +114,52 @@ func TestUpgradePayloadKeyOrder(t *testing.T) {
 	result := &workspace.UpgradeResult{
 		Path: "/ws", Preset: "build-lite", VersionFrom: "0.1.0", VersionTo: "0.2.0",
 		Config:            []workspace.ConfigChange{{Name: ".khub/storage.yaml", Action: "replaced"}},
+		Carried:           []workspace.Carried{{File: ".khub/policy.yaml", Type: "adr", Key: "path_refs"}},
 		SingletonsCreated: []string{}, SchemaDrift: []string{},
+		Migrated: []migrate.Entity{{ID: "note/a", Path: "notes/a.md",
+			Changes: []migrate.Change{{Op: migrate.OpDeleteKey, Field: "draft", From: false}}}},
+		MigrationConflicts: []migrate.Conflict{{ID: "note/b", Path: "notes/b.md", Field: "draft", Reason: "r"}},
 	}
 	unchanged := "unchanged"
 	payload := upgradePayload(result, tailOf(&wire.Result{}, nil), tailOf(&unchanged, nil))
-	want := []string{"path", "preset", "version_from", "version_to", "config", "singletons_created",
-		"schema_drift", "wire", "index", "dry_run", "removed_types"}
+	want := []string{"path", "preset", "version_from", "version_to", "config", "carried", "dropped", "singletons_created",
+		"schema_drift", "wire", "index", "dry_run", "removed_types", "migrated", "migration_conflicts"}
 	if !reflect.DeepEqual(payload.Keys(), want) {
 		t.Errorf("keys = %v, want %v", payload.Keys(), want)
 	}
+	type keyed = interface{ Keys() []string }
 	config, _ := payload.Get("config")
-	record := config.([]any)[0].(interface{ Keys() []string })
+	record := config.([]any)[0].(keyed)
+	carried, _ := payload.Get("carried")
+	if keys := carried.([]any)[0].(keyed).Keys(); !reflect.DeepEqual(keys, []string{"file", "type", "key"}) {
+		t.Errorf("carried record keys = %v", keys)
+	}
 	if !reflect.DeepEqual(record.Keys(), []string{"name", "action", "backup"}) {
 		t.Errorf("config record keys = %v", record.Keys())
+	}
+	migrated, _ := payload.Get("migrated")
+	entry := migrated.([]any)[0].(interface {
+		keyed
+		Get(string) (any, bool)
+	})
+	if !reflect.DeepEqual(entry.Keys(), []string{"id", "path", "changes", "reemitted"}) {
+		t.Errorf("migrated record keys = %v", entry.Keys())
+	}
+	changes, _ := entry.Get("changes")
+	if keys := changes.([]any)[0].(keyed).Keys(); !reflect.DeepEqual(keys, []string{"op", "field", "from", "to"}) {
+		t.Errorf("change keys = %v", keys)
+	}
+	conflicts, _ := payload.Get("migration_conflicts")
+	if keys := conflicts.([]any)[0].(keyed).Keys(); !reflect.DeepEqual(keys, []string{"id", "path", "field", "reason"}) {
+		t.Errorf("conflict keys = %v", keys)
 	}
 
 	payload = upgradePayload(result,
 		tailOf[wire.Result](nil, errors.New("wire broke")),
 		tailOf[string](nil, errors.New("index broke")))
-	want = []string{"path", "preset", "version_from", "version_to", "config", "singletons_created",
-		"schema_drift", "wire", "wire_error", "index", "index_error", "dry_run", "removed_types"}
+	want = []string{"path", "preset", "version_from", "version_to", "config", "carried", "dropped", "singletons_created",
+		"schema_drift", "wire", "wire_error", "index", "index_error", "dry_run", "removed_types",
+		"migrated", "migration_conflicts"}
 	if !reflect.DeepEqual(payload.Keys(), want) {
 		t.Errorf("keys = %v, want %v", payload.Keys(), want)
 	}
@@ -140,5 +167,19 @@ func TestUpgradePayloadKeyOrder(t *testing.T) {
 		if v, _ := payload.Get(key); v != nil {
 			t.Errorf("%s = %v on failure, want null", key, v)
 		}
+	}
+}
+
+func TestMigrationLine(t *testing.T) {
+	got := migrationLine(migrate.Entity{ID: "adr/x", Path: "decisions/x.md", Reemitted: true, Changes: []migrate.Change{
+		{Op: migrate.OpRenameKey, Field: "status", From: "status", To: "decision"},
+		{Op: migrate.OpMapValue, Field: "status", From: true, To: "draft"},
+		{Op: migrate.OpDeleteKey, Field: "draft", From: false},
+		{Op: migrate.OpMoveEntries, Field: "sources", From: []any{"a"}, To: "references"},
+	}})
+	want := "migrated adr/x (decisions/x.md): status → decision, status true → draft, dropped draft, " +
+		"sources → references — rewritten whole, comments not kept"
+	if got != want {
+		t.Fatalf("\n got: %q\nwant: %q", got, want)
 	}
 }

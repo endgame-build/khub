@@ -1,0 +1,10 @@
+# A session's first write over a long backlog prints at most 20 warnings, then
+# one line counting the rest. All of them are recorded as shown, so the next
+# write prints only its own new finding.
+env:
+  KHUB_SESSION: s1
+steps:
+- argv: ["init", "firm-ops", ".", "--no-wire"]
+- sh: "for i in $(seq -w 1 25); do printf -- \"---\\ntype: person\\nname: P$i\\ncreated: 2026-01-15\\n---\\n\" > identity/team/p$i.md; done"
+- argv: ["add", "client", "--name", "Initech Corp"]
+- argv: ["add", "person", "--name", "Pat"]

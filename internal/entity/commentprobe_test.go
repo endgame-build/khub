@@ -73,6 +73,7 @@ func TestCommentSurvivesEdit(t *testing.T) {
 		"description: touched-by-go\n" +
 		"created: 2026-01-01\n" +
 		"updated: " + today().ISO + "\n" +
+		stamped("") +
 		"---\n"
 	if got := readFile(t, path); got != want {
 		t.Fatalf("edit output\n got: %q\nwant: %q", got, want)
@@ -100,6 +101,7 @@ func TestInlineCommentKeepsItsColumn(t *testing.T) {
 	}
 	// Python: `stage:     prospect  # gapped` -> `stage: won           # gapped`
 	// (the run after the colon collapses to one space; `#` keeps column 21).
+	// `stage` is undeclared on client, so not content: no `generated` stamp.
 	want := "---\n" +
 		"type: client\n" +
 		"name: Edge Co\n" +
@@ -165,6 +167,7 @@ func TestNewTopLevelKeyKeepsComments(t *testing.T) {
 		"created: 2026-01-01\n" +
 		"updated: " + today().ISO + "\n" +
 		"description: brand new\n" +
+		stamped("") +
 		"---\n"
 	if got := readFile(t, path); got != want {
 		t.Fatalf("edit output\n got: %q\nwant: %q", got, want)
@@ -196,6 +199,7 @@ func TestCollectionRowEditKeepsComments(t *testing.T) {
 		"# second header line\n" +
 		"alpha:\n  type: repo\n  repo: acme/alpha   # the main service\n" +
 		"  status: archived\n  created: 2026-01-01\n  updated: " + today().ISO + "\n" +
+		stamped("  ") +
 		"# between rows\n" +
 		"beta:\n  type: repo\n  repo: acme/beta\n" +
 		"  status: active   # keep an eye on this\n" +
@@ -206,11 +210,9 @@ func TestCollectionRowEditKeepsComments(t *testing.T) {
 	}
 }
 
-// The fallback, end to end: an edit whose shape a splice cannot express still
-// writes a correct document — it just loses the comments, which is the trade
-// canon/splice.go documents. Clearing the body deletes a key, and a deletion
-// reorders the mapping, so this document re-emits whole.
-func TestUnspliceableEditStillWritesCorrectly(t *testing.T) {
+// Clearing the body deletes the reserved `body` key, and canon splices a
+// deleted pair out by its lines, so the hand-written comment survives.
+func TestBodyClearKeepsComments(t *testing.T) {
 	ws := hubYAMLWS(t)
 	path := filepath.Join(ws, "knowledge", "architecture", "contracts", "orders-api.yaml")
 	mkdirAll(t, filepath.Dir(path))
@@ -224,14 +226,46 @@ func TestUnspliceableEditStillWritesCorrectly(t *testing.T) {
 	if _, err := Update(ws, "contract/orders-api", UpdateOpts{Body: &empty}); err != nil {
 		t.Fatalf("update: %v", err)
 	}
+	want := "type: contract\ntitle: Orders API  # keep this comment\n" +
+		"kind: api\nstatus: active\nprovider: checkout\n" +
+		"created: 2026-01-01\nupdated: " + today().ISO + "\n" + stamped("")
+	if got := readFile(t, path); got != want {
+		t.Fatalf("body clear\n got: %q\nwant: %q", got, want)
+	}
+}
+
+// The fallback, end to end: an edit whose shape a splice cannot express still
+// writes a correct document — it just loses the comments, which is the trade
+// canon/splice.go documents. A content edit stamps `generated: {by, at}`, and
+// `at` is a new key inside a one-line flow mapping, which has no line of its
+// own to take, so this document re-emits whole.
+func TestUnspliceableEditStillWritesCorrectly(t *testing.T) {
+	ws := hubYAMLWS(t)
+	path := filepath.Join(ws, "knowledge", "architecture", "contracts", "orders-api.yaml")
+	mkdirAll(t, filepath.Dir(path))
+	writeFile(t, path, "type: contract\ntitle: Orders API  # keep this comment\n"+
+		"kind: api\nstatus: active\nprovider: checkout\n"+
+		"generated: {by: human:old}\n"+
+		"created: 2026-01-01\nupdated: 2026-01-01\n")
+	seed(t, ws, "knowledge/architecture/components/checkout.md",
+		kv("type", "component", "title", "Checkout", "kind", "service"))
+
+	if _, err := Update(ws, "contract/orders-api",
+		UpdateOpts{Fields: fields("title", "Orders API v2")}); err != nil {
+		t.Fatalf("update: %v", err)
+	}
 	after := readFile(t, path)
-	if strings.Contains(after, "body:") {
-		t.Fatalf("--body '' left the reserved key:\n%s", after)
-	}
 	if strings.Contains(after, "# keep this comment") {
-		t.Fatalf("a deletion is not spliceable; the fallback should have re-emitted:\n%s", after)
+		t.Fatalf("a new key in a flow mapping is not spliceable; the fallback should have re-emitted:\n%s", after)
 	}
-	if got, _ := readMeta(t, path).Get("title"); got != "Orders API" {
+	meta := readMeta(t, path)
+	if got, _ := meta.Get("title"); got != "Orders API v2" {
 		t.Fatalf("title = %#v after the fallback write", got)
+	}
+	generated, _ := meta.Get("generated")
+	if g, ok := generated.(interface{ Get(string) (any, bool) }); !ok {
+		t.Fatalf("generated = %#v after the fallback write", generated)
+	} else if at, _ := g.Get("at"); at == nil {
+		t.Fatalf("generated has no at after the fallback write: %#v", generated)
 	}
 }

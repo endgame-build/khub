@@ -1,0 +1,1 @@
+{"error": {"code": "import_type_map_invalid", "message": "Type map badmap.yaml is not a YAML mapping. It must be a YAML mapping of OKF type to a declared khub type, one string each: `Metric: capability`"}}

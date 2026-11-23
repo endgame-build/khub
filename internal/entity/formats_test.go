@@ -65,7 +65,10 @@ func TestJSONEntityBytes(t *testing.T) {
 		"  \"type\": \"jnote\",\n" +
 		"  \"created\": \"" + today().ISO + "\",\n" +
 		"  \"updated\": \"" + today().ISO + "\",\n" +
-		"  \"draft\": false,\n" +
+		"  \"generated\": {\n" +
+		"    \"by\": \"khub\",\n" +
+		"    \"at\": \"2026-01-15T00:00:00Z\"\n" +
+		"  },\n" +
 		"  \"when\": \"2026-06-19T10:00:00\",\n" +
 		"  \"day\": \"2026-06-19\",\n" +
 		"  \"body\": \"prose\"\n" +
@@ -86,7 +89,7 @@ func TestYAMLEntityBytes(t *testing.T) {
 	want := "type: ynote\n" +
 		"created: " + today().ISO + "\n" +
 		"updated: " + today().ISO + "\n" +
-		"draft: false\n" +
+		stamped("") +
 		"when: 2026-06-19 10:00:00\n" +
 		"day: 2026-06-19\n" +
 		"body: prose\n"
@@ -121,7 +124,7 @@ func TestNonMDEditRoundTrip(t *testing.T) {
 	if got := readFile(t, res.Path); got != "type: ynote\n"+
 		"created: "+today().ISO+"\n"+
 		"updated: "+today().ISO+"\n"+
-		"draft: false\n"+
+		stamped("")+
 		"day: 2026-07-01\n"+
 		"body: prose\n" {
 		t.Fatalf("after edit:\n%s", got)

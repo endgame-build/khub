@@ -293,8 +293,8 @@ func validateResolved(resolved *ResolvedSchema) error {
 		t, _ := resolved.Types.Get(name)
 		for _, attrName := range t.Attributes.Keys() {
 			attr, _ := t.Attributes.Get(attrName)
-			if err := attr.CompilePattern(); err != nil {
-				return errs.New("invalid_schema", fmt.Sprintf("Invalid pattern at ontology.entities.%s.attributes.%s: %s", name, attrName, err))
+			if err := checkAttr("ontology.entities."+name+".attributes."+attrName, attr); err != nil {
+				return err
 			}
 		}
 		if t.Templated() {
@@ -332,6 +332,32 @@ func validateResolved(resolved *ResolvedSchema) error {
 			}
 		}
 		types = append(types, t)
+	}
+	return nil
+}
+
+// checkAttr compiles an attribute's pattern and checks that `fields` and
+// `items` sit on the type that reads them, at every depth.
+func checkAttr(loc string, a *ResolvedAttribute) error {
+	if err := a.CompilePattern(); err != nil {
+		return errs.New("invalid_schema", fmt.Sprintf("Invalid pattern at %s: %s", loc, err))
+	}
+	if a.Fields != nil && a.BaseType != "object" {
+		return errs.FacetMisplaced(loc, "fields", "object")
+	}
+	if a.Items != nil && a.BaseType != "list" {
+		return errs.FacetMisplaced(loc, "items", "list")
+	}
+	if a.Fields != nil {
+		for _, k := range a.Fields.Keys() {
+			f, _ := a.Fields.Get(k)
+			if err := checkAttr(loc+".fields."+k, f); err != nil {
+				return err
+			}
+		}
+	}
+	if a.Items != nil {
+		return checkAttr(loc+".items", a.Items)
 	}
 	return nil
 }
@@ -554,12 +580,25 @@ func resolveType(name string, decl *TypeDecl, base *BaseBlock, declared map[stri
 		relations.Set(rn, rr)
 	}
 
+	// One key cannot be read both as a value and as an edge.
+	for _, an := range attributes.Keys() {
+		if relations.Has(an) {
+			return nil, errs.AttributeIsRelation(name, an)
+		}
+	}
 	if err := checkIDPrefix(name, decl, attributes); err != nil {
 		return nil, err
 	}
 	for _, rn := range relations.Keys() {
 		rr, _ := relations.Get(rn)
 		rr.ByPath = decl.PathRefs
+	}
+	for _, rn := range decl.LockedRelations {
+		if !decl.Relations.Has(rn) {
+			return nil, errs.New("schema_error", fmt.Sprintf(
+				"%s.locked_relations names '%s', which is not a relation %s declares",
+				name, rn, name))
+		}
 	}
 	storage := StorageConfig{Layout: decl.Layout, Path: decl.Path, Fmt: decl.Format, Templates: decl.Templates}
 	return &ResolvedType{
@@ -569,12 +608,17 @@ func resolveType(name string, decl *TypeDecl, base *BaseBlock, declared map[stri
 		Relations:   relations,
 		Required:    decl.Required,
 		Orphan:      decl.Orphan,
+		Retention:   decl.Retention,
 		IDPrefix:    idPrefixOf(decl.IDPrefix),
 		IDDate:      decl.IDDate,
 		IDOrdinal:   decl.IDOrdinal,
 		Template:    decl.Template,
 		TemplateOff: decl.TemplateOff,
 		When:        decl.When,
+		Waivers:     decl.Waivers,
+
+		Locked:          decl.Locked,
+		LockedRelations: decl.LockedRelations,
 	}, nil
 }
 
@@ -653,7 +697,28 @@ func resolveAttr(name string, ad *AttrDecl, overridden bool) *ResolvedAttribute 
 		Enum:               enum,
 		Default:            ad.Default,
 		OverriddenFromBase: overridden,
+		Fields:             resolveFields(ad.Fields),
+		Items:              resolveItems(name, ad.Items),
 	}
+}
+
+func resolveFields(decls *Ordered[*AttrDecl]) *Ordered[*ResolvedAttribute] {
+	if decls == nil {
+		return nil
+	}
+	out := NewOrdered[*ResolvedAttribute]()
+	for _, k := range decls.Keys() {
+		d, _ := decls.Get(k)
+		out.Set(k, resolveAttr(k, d, false))
+	}
+	return out
+}
+
+func resolveItems(name string, decl *AttrDecl) *ResolvedAttribute {
+	if decl == nil {
+		return nil
+	}
+	return resolveAttr(name, decl, false)
 }
 
 // overrideAttr: the type-level declaration wins, but an override that only
@@ -681,6 +746,21 @@ func overrideAttr(name string, baseAttr *ResolvedAttribute, ad *AttrDecl) *Resol
 	if ad.Default != nil {
 		def = ad.Default
 	}
+	// A redeclared `fields` or `items` replaces the base's whole, as a
+	// redeclared relation does. An inherited one survives only while the type
+	// it belongs to does.
+	var fields *Ordered[*ResolvedAttribute]
+	if ad.Fields != nil {
+		fields = resolveFields(ad.Fields)
+	} else if baseType == "object" {
+		fields = baseAttr.Fields
+	}
+	var items *ResolvedAttribute
+	if ad.Items != nil {
+		items = resolveItems(name, ad.Items)
+	} else if baseType == "list" {
+		items = baseAttr.Items
+	}
 	return &ResolvedAttribute{
 		Name:               name,
 		BaseType:           baseType,
@@ -689,6 +769,8 @@ func overrideAttr(name string, baseAttr *ResolvedAttribute, ad *AttrDecl) *Resol
 		Enum:               enum,
 		Default:            def,
 		OverriddenFromBase: true,
+		Fields:             fields,
+		Items:              items,
 	}
 }
 

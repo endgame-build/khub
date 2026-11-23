@@ -5,8 +5,8 @@
 mode: human
 steps:
 - argv: ["init", "build-hub", ".", "--no-wire"]
-- argv: ["add", "adr", "--title", "X", "--status", "bogus", "--format", "json"]
-- argv: ["add", "adr", "--title", "X", "--status", "bogus"]
+- argv: ["add", "adr", "--title", "X", "--decision", "bogus", "--format", "json"]
+- argv: ["add", "adr", "--title", "X", "--decision", "bogus"]
 - argv: ["add", "adr", "--title", "No status"]
 - argv: ["check", "--format", "json"]
 - argv: ["check"]

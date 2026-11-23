@@ -1,0 +1,28 @@
+# Every storage cell exports: a json and a yaml per-item entity become `.md`
+# beside where they lived, collection rows (jsonl, yaml, json) become
+# `<collection stem>/<slug>.md`, all with the entity's fields as frontmatter in
+# the safe profile and its `body` as the body; md, folder and singleton
+# entities are copied as written. Bundle bytes are shown by copying files into
+# note bodies and reading them raw.
+steps:
+- argv: ["init", "preset-cells", "hub", "--no-wire", "--preset-source", "PRESETSRC"]
+- sh: |
+    printf -- '{\n  "type": "card",\n  "title": "C1",\n  "created": "2026-01-15",\n  "status": "draft",\n  "body": "Card body."\n}\n' > hub/cards/c1.json
+    printf -- 'type: sheet\ntitle: S1\ncreated: 2026-01-15\ndescription: a description long enough that the round-trip emitter would fold it past eighty columns\n' > hub/sheets/s1.yaml
+    printf -- '{"slug": "r1", "type": "repo", "title": "R1", "created": "2026-01-15", "stack": "go"}\n' > hub/repos.jsonl
+    printf -- '# vendors\nacme:\n  type: vendor\n  title: Acme\n  created: 2026-01-15\n  related: [r1, ghost]\n  body: Row prose.\n' > hub/vendors.yaml
+    printf -- '{"a1": {"type": "account", "title": "A1", "created": "2026-01-15", "amount": 12}}\n' > hub/accounts.json
+    mkdir -p hub/dossiers/d1
+    printf -- '---\ntype: dossier\ntitle: D1\ncreated: 2026-01-15\n---\nDossier body.\n' > hub/dossiers/d1/_index.md
+- argv: ["-C", "hub", "export", "--okf", "bundle", "--format", "json"]
+- sh: |
+    for f in cards/c1.md sheets/s1.md repos/r1.md vendors/acme.md accounts/a1.md vendors/index.md; do
+      n=$(printf %s "$f" | tr '/.' '--')
+      { printf -- '---\ntype: note\ntitle: %s\ncreated: 2026-01-15\n---\n' "$f"; cat "bundle/$f"; } > "hub/notes/snap-$n.md"
+    done
+- argv: ["-C", "hub", "get", "note/snap-cards-c1-md", "--format", "raw"]
+- argv: ["-C", "hub", "get", "note/snap-sheets-s1-md", "--format", "raw"]
+- argv: ["-C", "hub", "get", "note/snap-repos-r1-md", "--format", "raw"]
+- argv: ["-C", "hub", "get", "note/snap-vendors-acme-md", "--format", "raw"]
+- argv: ["-C", "hub", "get", "note/snap-accounts-a1-md", "--format", "raw"]
+- argv: ["-C", "hub", "get", "note/snap-vendors-index-md", "--format", "raw"]

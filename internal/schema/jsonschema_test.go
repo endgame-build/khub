@@ -3,22 +3,24 @@ package schema
 // The layer JSON Schema against the vocabulary walk it describes: the committed
 // copy is what LayerJSONSchema builds, every shipped preset layer passes it,
 // every key list the walk forbids extras with is a property set of it, and on
-// a table of probes it never rejects what the walk accepts.
+// a table of probes it never rejects what the walk accepts. A draft-07
+// validator judges every document.
 
 import (
+	"bytes"
 	"flag"
 	"fmt"
 	"go/ast"
 	"go/parser"
 	"go/token"
-	"math"
 	"os"
 	"path/filepath"
-	"regexp"
 	"slices"
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/santhosh-tekuri/jsonschema/v6"
 
 	"github.com/endgame-build/khub/internal/canon"
 	"github.com/endgame-build/khub/internal/omap"
@@ -80,6 +82,8 @@ func TestLayerJSONSchemaCoversVocabulary(t *testing.T) {
 		{[]string{"definitions", "attribute"}, attributeKeys},
 		{[]string{"definitions", "relation"}, relationKeys},
 		{[]string{"definitions", "policy"}, policyTypeKeys},
+		{[]string{"definitions", "retention"}, retentionKeys},
+		{[]string{"definitions", "waiver"}, WaivableFindings},
 		{[]string{"definitions", "storage"}, storageTypeKeys},
 		{[]string{"definitions", "id_prefix_by"}, idPrefixDeclKeys},
 	}
@@ -117,6 +121,7 @@ var schemaKeyLists = map[string]string{
 	"attributeKeys":        "definitions.attribute",
 	"relationKeys":         "definitions.relation",
 	"policyTypeKeys":       "definitions.policy",
+	"retentionKeys":        "definitions.retention",
 	"storageTypeKeys":      "definitions.storage",
 	"idPrefixDeclKeys":     "definitions.id_prefix_by",
 	// Walk only: the base block and the re-nested document are khub's own,
@@ -333,7 +338,7 @@ func rootIdent(e ast.Expr) *ast.Ident {
 }
 
 func TestShippedPresetLayersPassTheJSONSchema(t *testing.T) {
-	s := committedSchema(t)
+	s := compiledSchema(t)
 	presets := presetsDir(t)
 	entries, err := os.ReadDir(presets)
 	if err != nil {
@@ -345,9 +350,8 @@ func TestShippedPresetLayersPassTheJSONSchema(t *testing.T) {
 			continue
 		}
 		for _, p := range presetPaths(t, e.Name()) {
-			doc := parseLayerFile(t, p)
-			if errs := jsValidate(s, s, doc, "$"); len(errs) > 0 {
-				t.Errorf("%s fails the JSON Schema:\n  %s", p, strings.Join(errs, "\n  "))
+			if err := validateDoc(t, s, parseLayerFile(t, p)); err != nil {
+				t.Errorf("%s fails the JSON Schema:\n%v", p, err)
 			}
 			checked++
 		}
@@ -358,8 +362,27 @@ func TestShippedPresetLayersPassTheJSONSchema(t *testing.T) {
 	// The embedded base is not an authoring surface: an authored ontology.base
 	// is refused, and the schema says so too.
 	core := parseLayerFile(t, filepath.Join(presets, "core", "ontology.yaml"))
-	if errs := jsValidate(s, s, core, "$"); len(errs) == 0 {
+	if validateDoc(t, s, core) == nil {
 		t.Error("core/ontology.yaml passes the JSON Schema; an authored ontology.base must not")
+	}
+}
+
+// TestJSONSchemaNamesATypoAndABadValue holds the two errors an editor exists
+// to catch to the place it points at.
+func TestJSONSchemaNamesATypoAndABadValue(t *testing.T) {
+	s := compiledSchema(t)
+	for _, tc := range []struct{ text, want string }{
+		{"ontology:\n  entitles: {}\n", "entitles"},
+		{"ontology:\n  entities:\n    a: {}\nstorage:\n  a: { layout: files }\n", "/storage/a/layout"},
+	} {
+		err := validateDoc(t, s, mustParseDoc(t, tc.text))
+		if err == nil {
+			t.Errorf("the JSON Schema accepts:\n%s", tc.text)
+			continue
+		}
+		if !strings.Contains(err.Error(), tc.want) {
+			t.Errorf("error does not name %q:\n%v", tc.want, err)
+		}
 	}
 }
 
@@ -367,7 +390,7 @@ func TestShippedPresetLayersPassTheJSONSchema(t *testing.T) {
 // accepts must pass the schema (the schema is never stricter, falsy layer
 // blocks aside); a probe the walk rejects on a single-field rule must fail it.
 func TestJSONSchemaAgreesWithTheWalk(t *testing.T) {
-	s := committedSchema(t)
+	s := compiledSchema(t)
 	const ont = "ontology:\n  entities:\n    a:\n      attributes:\n        kind: { enum: [x, y] }\n    b: {}\n"
 	// An empty, comment-only, `~` or bare `---` document is null to an editor
 	// and an empty layer file to khub.
@@ -376,8 +399,8 @@ func TestJSONSchemaAgreesWithTheWalk(t *testing.T) {
 			t.Errorf("null document %q is refused by the walk: %s", text, msg)
 		}
 	}
-	if errs := jsValidate(s, s, nil, "$"); len(errs) > 0 {
-		t.Errorf("a null document fails the JSON Schema: %s", strings.Join(errs, "; "))
+	if err := validateDoc(t, s, nil); err != nil {
+		t.Errorf("a null document fails the JSON Schema: %v", err)
 	}
 	// khub reads a document that is just `0` or `false` as empty too (ParseDoc
 	// collapses it before the walk); the schema asks for a mapping or null.
@@ -385,7 +408,7 @@ func TestJSONSchemaAgreesWithTheWalk(t *testing.T) {
 		if msg := walkError(mustParseDoc(t, fmt.Sprintf("%v\n", v))); msg != "" {
 			t.Errorf("document %v is refused by the walk: %s", v, msg)
 		}
-		if len(jsValidate(s, s, v, "$")) == 0 {
+		if validateDoc(t, s, v) == nil {
 			t.Errorf("document %v passes the JSON Schema", v)
 		}
 	}
@@ -396,6 +419,9 @@ func TestJSONSchemaAgreesWithTheWalk(t *testing.T) {
 		"ontology:\n  entities:\n",
 		ont,
 		ont + "policy:\n  a: { required: 'No', orphan: 'On', path_refs: 0 }\n  b: { required: false, orphan: F, path_refs: y }\n",
+		ont + "policy:\n  a: { retention: { days: 30, no_outbound: 'yes' }, locked: true, locked_relations: [] }\n",
+		ont + "policy:\n  a: { retention: { days: 1 }, waive: null, locked_relations: null }\n",
+		ont + "policy:\n  a:\n    waive:\n      some-slug: { orphans: Retired., thin: 'A stub on purpose.' }\n",
 		ont + "storage:\n  a: { layout: file }\n",
 		ont + "storage:\n  a: { layout: file, path: null, format: md, id_prefix: null, template: null }\n",
 		ont + "storage:\n  a: { layout: file, path: 'w/{slug}.md' }\n",
@@ -408,7 +434,10 @@ func TestJSONSchemaAgreesWithTheWalk(t *testing.T) {
 		"ontology:\n  entities:\n    a:\n      when: null\n      attributes:\n" +
 			"        f: { type: null, required: null, default: null, enum: null, pattern: null }\n" +
 			"        g: { type: date, default: 2026-01-01, required: 'off' }\n" +
-			"        h: {}\n      relations:\n" +
+			"        h: {}\n" +
+			"        o: { type: object, fields: { k: { type: number }, n: { type: object, fields: {} } } }\n" +
+			"        l: { type: list, items: { type: text, enum: [p, q] } }\n" +
+			"      relations:\n" +
 			"        r: { to: any, many: 'yes', required: 0, inverse: null, acyclic: true }\n" +
 			"        s: { to: [a, b] }\n",
 	}
@@ -424,6 +453,10 @@ func TestJSONSchemaAgreesWithTheWalk(t *testing.T) {
 		"ontology:\n  entities:\n    a:\n      attributes:\n        f: { enum: [1] }\n",
 		"ontology:\n  entities:\n    a:\n      attributes:\n        f: { required: maybe }\n",
 		"ontology:\n  entities:\n    a:\n      attributes:\n        f: { nope: 1 }\n",
+		"ontology:\n  entities:\n    a:\n      attributes:\n        f: { type: object, fields: null }\n",
+		"ontology:\n  entities:\n    a:\n      attributes:\n        f: { type: object, fields: { k: { nope: 1 } } }\n",
+		"ontology:\n  entities:\n    a:\n      attributes:\n        f: { type: list, items: null }\n",
+		"ontology:\n  entities:\n    a:\n      attributes:\n        f: { type: list, items: { type: nope } }\n",
 		"ontology:\n  entities:\n    a:\n      relations:\n        r: { many: true }\n",
 		"ontology:\n  entities:\n    a:\n      relations:\n        r: { to: 42 }\n",
 		"ontology:\n  entities:\n    a:\n      relations:\n        r: { to: [a, 1] }\n",
@@ -432,6 +465,21 @@ func TestJSONSchemaAgreesWithTheWalk(t *testing.T) {
 		ont + "policy:\n  a: { nope: true }\n",
 		ont + "policy:\n  a: { orphan: null }\n",
 		ont + "policy:\n  a: null\n",
+		ont + "policy:\n  a: { retention: null }\n",
+		ont + "policy:\n  a: { retention: { no_outbound: true } }\n",
+		ont + "policy:\n  a: { retention: { days: 0 } }\n",
+		ont + "policy:\n  a: { retention: { days: '30' } }\n",
+		ont + "policy:\n  a: { retention: { days: 3, nope: 1 } }\n",
+		ont + "policy:\n  a: { waive: [] }\n",
+		ont + "policy:\n  a: { waive: { s: {} } }\n",
+		ont + "policy:\n  a: { waive: { s: [orphans] } }\n",
+		ont + "policy:\n  a: { waive: { s: { nope: Because. } } }\n",
+		ont + "policy:\n  a: { waive: { s: { orphans: '  ' } } }\n",
+		ont + "policy:\n  a: { waive: { s: { orphans: 3 } } }\n",
+		ont + "policy:\n  a: { waive: { '': { orphans: Because. } } }\n",
+		ont + "policy:\n  a: { locked: maybe }\n",
+		ont + "policy:\n  a: { locked_relations: r }\n",
+		ont + "policy:\n  a: { locked_relations: [1] }\n",
 		ont + "storage:\n  a: { path: as }\n",
 		ont + "storage:\n  a: { layout: nope }\n",
 		ont + "storage:\n  a: { layout: file, format: gjson }\n",
@@ -458,7 +506,7 @@ func TestJSONSchemaAgreesWithTheWalk(t *testing.T) {
 		if msg := walkError(doc); msg != "" {
 			t.Errorf("falsy-block probe is refused by the walk (%s):\n%s", msg, text)
 		}
-		if errs := jsValidate(s, s, doc, "$"); len(errs) == 0 {
+		if validateDoc(t, s, doc) == nil {
 			t.Errorf("falsy-block probe passes the JSON Schema:\n%s", text)
 		}
 	}
@@ -468,9 +516,8 @@ func TestJSONSchemaAgreesWithTheWalk(t *testing.T) {
 			t.Errorf("probe meant to be accepted is refused by the walk (%s):\n%s", msg, text)
 			continue
 		}
-		if errs := jsValidate(s, s, doc, "$"); len(errs) > 0 {
-			t.Errorf("the walk accepts this but the JSON Schema refuses it (%s):\n%s",
-				strings.Join(errs, "; "), text)
+		if err := validateDoc(t, s, doc); err != nil {
+			t.Errorf("the walk accepts this but the JSON Schema refuses it (%v):\n%s", err, text)
 		}
 	}
 	for _, text := range rejected {
@@ -479,14 +526,8 @@ func TestJSONSchemaAgreesWithTheWalk(t *testing.T) {
 			t.Errorf("probe meant to be refused is accepted by the walk:\n%s", text)
 			continue
 		}
-		errs := jsValidate(s, s, doc, "$")
-		if len(errs) == 0 {
+		if validateDoc(t, s, doc) == nil {
 			t.Errorf("the walk refuses this but the JSON Schema accepts it:\n%s", text)
-		}
-		for _, e := range errs {
-			if strings.Contains(e, "unknown to this test") {
-				t.Errorf("probe refused by the validator, not the schema: %s", e)
-			}
 		}
 	}
 }
@@ -513,6 +554,44 @@ func walkError(doc *omap.Map) string {
 		return err.Error()
 	}
 	return ""
+}
+
+// compiledSchema compiles the committed file with a draft-07 validator, which
+// also checks it against the draft-07 meta-schema.
+func compiledSchema(t *testing.T) *jsonschema.Schema {
+	t.Helper()
+	raw, err := os.ReadFile(jsonSchemaFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	doc, err := jsonschema.UnmarshalJSON(bytes.NewReader(raw))
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := jsonschema.NewCompiler()
+	if err := c.AddResource("layers.schema.json", doc); err != nil {
+		t.Fatal(err)
+	}
+	s, err := c.Compile("layers.schema.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	return s
+}
+
+// validateDoc validates a loaded layer document as an editor sees it: the
+// JSON form of what khub read, so a YAML date is the string it spells.
+func validateDoc(t *testing.T, s *jsonschema.Schema, doc any) error {
+	t.Helper()
+	text, err := canon.EncodeDisk(doc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	v, err := jsonschema.UnmarshalJSON(strings.NewReader(text))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return s.Validate(v)
 }
 
 func mustParseDoc(t *testing.T, text string) *omap.Map {
@@ -553,159 +632,4 @@ func dig(t *testing.T, m *omap.Map, path []string) *omap.Map {
 		t.Fatalf("no mapping at %v", path)
 	}
 	return out
-}
-
-// jsValidate is a draft-07 validator for the keywords LayerJSONSchema emits.
-// It returns one line per failure; any keyword it does not know fails, so the
-// schema cannot grow a keyword this test silently ignores.
-func jsValidate(root, s *omap.Map, v any, at string) []string {
-	var out []string
-	fail := func(format string, args ...any) {
-		out = append(out, at+": "+fmt.Sprintf(format, args...))
-	}
-	for _, kw := range s.Keys() {
-		arg, _ := s.Get(kw)
-		switch kw {
-		case "$schema", "title", "description", "definitions":
-		case "$ref":
-			name := strings.TrimPrefix(arg.(string), "#/definitions/")
-			defs, _ := root.Get("definitions")
-			def, ok := defs.(*omap.Map).Get(name)
-			if !ok {
-				fail("unresolved $ref %v", arg)
-				continue
-			}
-			out = append(out, jsValidate(root, def.(*omap.Map), v, at)...)
-		case "allOf":
-			for _, sub := range arg.([]any) {
-				out = append(out, jsValidate(root, sub.(*omap.Map), v, at)...)
-			}
-		case "anyOf":
-			var why []string
-			for _, sub := range arg.([]any) {
-				errs := jsValidate(root, sub.(*omap.Map), v, at)
-				if len(errs) == 0 {
-					why = nil
-					break
-				}
-				why = append(why, errs...)
-			}
-			if why != nil {
-				fail("matches no branch of anyOf")
-				out = append(out, why...)
-			}
-		case "type":
-			types := []any{arg}
-			if list, ok := arg.([]any); ok {
-				types = list
-			}
-			if !slices.ContainsFunc(types, func(typ any) bool { return jsIsType(v, typ.(string)) }) {
-				fail("%T is not %v", v, arg)
-			}
-		case "enum":
-			if !slices.ContainsFunc(arg.([]any), func(e any) bool { return jsEqual(e, v) }) {
-				fail("%v is not one of %v", v, arg)
-			}
-		case "const":
-			if !jsEqual(arg, v) {
-				fail("%v is not %v", v, arg)
-			}
-		case "pattern":
-			if str, ok := v.(string); ok && !regexp.MustCompile(arg.(string)).MatchString(str) {
-				fail("%q does not match %v", str, arg)
-			}
-		case "minItems":
-			if list, ok := v.([]any); ok && int64(len(list)) < arg.(int64) {
-				fail("fewer than %v items", arg)
-			}
-		case "items":
-			if list, ok := v.([]any); ok {
-				for i, it := range list {
-					out = append(out, jsValidate(root, arg.(*omap.Map), it, fmt.Sprintf("%s[%d]", at, i))...)
-				}
-			}
-		case "required":
-			if m, ok := v.(*omap.Map); ok {
-				for _, k := range arg.([]any) {
-					if _, has := m.Get(k.(string)); !has {
-						fail("missing %v", k)
-					}
-				}
-			}
-		case "properties":
-		case "additionalProperties":
-			m, ok := v.(*omap.Map)
-			if !ok {
-				continue
-			}
-			props, _ := s.Get("properties")
-			for _, k := range m.Keys() {
-				val, _ := m.Get(k)
-				if props != nil {
-					if ps, has := props.(*omap.Map).Get(k); has {
-						out = append(out, jsValidate(root, ps.(*omap.Map), val, at+"."+k)...)
-						continue
-					}
-				}
-				switch ap := arg.(type) {
-				case bool:
-					if !ap {
-						fail("unknown key %q", k)
-					}
-				case *omap.Map:
-					out = append(out, jsValidate(root, ap, val, at+"."+k)...)
-				}
-			}
-		default:
-			fail("keyword %q unknown to this test's validator", kw)
-		}
-	}
-	return out
-}
-
-func jsIsType(v any, typ string) bool {
-	switch typ {
-	case "null":
-		return v == nil
-	case "boolean":
-		_, ok := v.(bool)
-		return ok
-	case "string":
-		switch v.(type) {
-		case string, canon.Date, canon.DateTime:
-			return true
-		}
-	case "object":
-		_, ok := v.(*omap.Map)
-		return ok
-	case "array":
-		_, ok := v.([]any)
-		return ok
-	}
-	return false
-}
-
-func jsEqual(a, b any) bool {
-	fa, aNum := jsNumber(a)
-	fb, bNum := jsNumber(b)
-	if aNum || bNum {
-		return aNum && bNum && fa == fb
-	}
-	switch a.(type) {
-	case string, bool, nil:
-		return a == b
-	}
-	return false
-}
-
-func jsNumber(v any) (float64, bool) {
-	switch x := v.(type) {
-	case int:
-		return float64(x), true
-	case int64:
-		return float64(x), true
-	case float64:
-		return x, !math.IsNaN(x)
-	}
-	return 0, false
 }

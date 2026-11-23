@@ -1,0 +1,8 @@
+No git history; dates come from updated or created only
+ recent
+┏━━━━━━━━━━━━━┳━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━┳━━━━━┳━━━━━━━━━┓
+┃ id          │ title        │ effective_date │ age │ source  ┃
+┡━━━━━━━━━━━━━╇━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━╇━━━━━╇━━━━━━━━━┩
+│ arc42/arc42 │ Architecture │ 2026-01-15     │ 0   │ updated │
+│ prd/prd     │ PRD          │ 2026-01-15     │ 0   │ updated │
+└─────────────┴──────────────┴────────────────┴─────┴─────────┘

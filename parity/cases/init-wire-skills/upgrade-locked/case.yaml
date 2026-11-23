@@ -1,0 +1,27 @@
+# Policy `locked` and `locked_relations` hold load-bearing schema elements
+# across an upgrade. The workspace adds a locked type (ritual) and a locked
+# predicate on a shipped type (repo.mirrors, listed twice: it counts once);
+# the shipped preset has neither, so upgrade refuses (locked_removed, exit 2)
+# — on a dry run too — naming every locked element still in the way and every
+# --unlock flag the whole run needs, including one already passed. Unlocking
+# both upgrades and reports ritual removed.
+# A locked_relations name the type does not declare (a base edge) is a
+# schema_error, and a current schema that does not resolve still holds its
+# locks: upgrade reads them from the raw layer files. A layer file that does
+# not parse and mentions a lock is locks_unreadable; one that mentions none is
+# repaired. Twin case: init-wire-skills/upgrade-locked-refused pins the tree
+# right after a refused real run.
+steps:
+- argv: ["init", "build-hub", ".", "--no-wire"]
+- sh: "printf '      relations:\\n        mirrors: { to: repo, many: true }\\n    ritual:\\n      when: a team ritual is set up\\n' >> .khub/ontology.yaml && printf '  repo: { locked_relations: [mirrors, mirrors] }\\n  ritual: { locked: true }\\n' >> .khub/policy.yaml"
+- argv: ["upgrade", "--dry-run", "--format", "json"]
+- argv: ["upgrade"]
+- argv: ["upgrade", "--unlock", "ritual", "--format", "json"]
+- argv: ["upgrade", "--unlock", "ritual", "--unlock", "repo.mirrors", "--no-wire", "--format", "json"]
+- sh: "printf '    ritual:\\n      when: a team ritual is set up\\n' >> .khub/ontology.yaml && printf '  api: { locked_relations: [related] }\\n  ritual: { locked: true }\\n' >> .khub/policy.yaml"
+- argv: ["schema", "types"]
+- argv: ["upgrade", "--format", "json"]
+- sh: "printf 'policy: {ritual: {locked: true}\\n' > .khub/policy.yaml"
+- argv: ["upgrade", "--format", "json"]
+- sh: "printf 'policy: {prd: {orphan: true}\\n' > .khub/policy.yaml"
+- argv: ["upgrade", "--no-wire", "--format", "json"]

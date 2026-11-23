@@ -11,6 +11,7 @@ package schema
 
 import (
 	"fmt"
+	"path"
 	"path/filepath"
 	"regexp"
 	"slices"
@@ -68,8 +69,10 @@ func (t *ResolvedType) IsOrphan(hasOut, hasIn bool) bool {
 	return !hasOut && !hasIn && !t.Orphan
 }
 
-// ResolvedAttribute is a scalar or enum attribute on a resolved type (base
-// merged, overrides applied).
+// ResolvedAttribute is an attribute on a resolved type (base merged,
+// overrides applied). Fields declares an object's keys and Items a list's
+// element; each is nil unless declared. An element carries its list's Name, so
+// a message about it names the field the user wrote.
 type ResolvedAttribute struct {
 	patternOnce        sync.Once
 	patternRE          *regexp.Regexp
@@ -81,6 +84,14 @@ type ResolvedAttribute struct {
 	Enum               []string // nil = no enum
 	Default            any      // nil = no default (Python None)
 	OverriddenFromBase bool
+	Fields             *Ordered[*ResolvedAttribute]
+	Items              *ResolvedAttribute
+}
+
+// HoldsObjects reports whether the attribute's value is a mapping or a list of
+// mappings — a shape no single command-line string can express.
+func (a *ResolvedAttribute) HoldsObjects() bool {
+	return a.BaseType == "object" || (a.BaseType == "list" && a.Items != nil && a.Items.BaseType == "object")
 }
 
 // ResolvedRelation is a typed / union / any edge. The predicate is the
@@ -166,6 +177,9 @@ type ResolvedType struct {
 	Required bool
 	// See TypeDecl.Orphan: this type's instances are exempt from the orphan sweep.
 	Orphan bool
+	// See TypeDecl.Retention: the end-of-life rule `check` reports against;
+	// nil when the type declares none.
+	Retention *RetentionDecl
 	// See TypeDecl.IDPrefix: `add` mints `<prefix>-<slug>` when this is set.
 	IDPrefix *IDPrefix
 	// See TypeDecl.IDDate: the minted id carries its mint date,
@@ -179,6 +193,30 @@ type ResolvedType struct {
 	TemplateOff bool
 	// See TypeDecl.When: the moment to capture this type, in domain language.
 	When *string
+	// See TypeDecl.Waivers: per-entity check-finding waivers, authored order.
+	Waivers []Waiver
+	// See TypeDecl.Locked / LockedRelations: what `khub upgrade` refuses to
+	// drop unless unlocked.
+	Locked          bool
+	LockedRelations []string
+}
+
+// WaivableFindings is the `check` buckets a policy `waive` entry may name, in
+// the order `check` emits them. Each is a finding about one entity, so a
+// waiver names it by slug under the entity's own type. Path-addressed and
+// multi-entity findings (strays, misplaced, cycles, alias conflicts, the
+// template and singleton buckets) have no single owner to waive them on.
+var WaivableFindings = []string{"incomplete", "orphans", "dangling", "body_shape", "thin"}
+
+// Waiver is one policy `waive` entry: the `check` finding Finding on the
+// entity Slug (of the type that declares it) is accepted, for Reason. A waived
+// finding is still reported — under `waived`, with the reason — and stops
+// counting against `passed`; a waiver no finding matches is reported as stale
+// and fails the gate, so a waiver cannot outlive what it was written for.
+type Waiver struct {
+	Slug    string
+	Finding string
+	Reason  string
 }
 
 // Templated reports whether the type stores its entities by path template.
@@ -311,6 +349,12 @@ func (t *ResolvedType) IDShape() string {
 	return strings.Join(parts, "-")
 }
 
+// Declares reports whether the type declares name as an attribute or a
+// relation.
+func (t *ResolvedType) Declares(name string) bool {
+	return t.Attributes.Has(name) || t.Relations.Has(name)
+}
+
 // FieldNames lists the type's declared field names — attributes, then
 // relations, each in declaration order. A template's lens `when` clauses are
 // validated against this set (template.LoadTemplate's fields parameter).
@@ -357,6 +401,10 @@ func (t *ResolvedType) StorageRelpath() string {
 	return t.Name
 }
 
+// ReservedEntityName reports whether a file name is OKF navigation, never an
+// entity at any depth: index.md and log.md.
+func ReservedEntityName(name string) bool { return name == "index.md" || name == "log.md" }
+
 // AcceptsEntityPath describes exactly the paths ScanType reads, including depth.
 // A templated type claims a matching file only when the file's `type` names
 // it, which this path-only test cannot see.
@@ -364,7 +412,7 @@ func (t *ResolvedType) AcceptsEntityPath(rel string) bool {
 	rel = filepath.ToSlash(filepath.Clean(rel))
 	if t.Templated() {
 		_, _, ok := t.MatchTemplate(rel)
-		return ok
+		return ok && !ReservedEntityName(path.Base(rel))
 	}
 	base := t.StorageRelpath()
 	if t.Storage.Layout == LayoutCollection || t.Storage.Layout == LayoutSingleton {
@@ -379,7 +427,7 @@ func (t *ResolvedType) AcceptsEntityPath(rel string) bool {
 	if t.Storage.Layout == LayoutFolder {
 		return len(parts) == 2 && parts[1] == "_index"+suffix
 	}
-	return len(parts) == 1 && sub != "_index"+suffix && strings.HasSuffix(sub, suffix)
+	return len(parts) == 1 && sub != "_index"+suffix && !ReservedEntityName(sub) && strings.HasSuffix(sub, suffix)
 }
 
 // MatchPattern is the shared write/integrity full-match gate. Cache belongs to

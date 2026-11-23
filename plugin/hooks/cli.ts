@@ -44,12 +44,26 @@ export function refusal(json: unknown): Refusal | undefined {
 }
 
 // These `khub check` buckets never fail the gate. Orphans fail it under `--strict`.
-export const INFORMATIONAL = new Set(['draft_singletons', 'orphans', 'thin'])
+// `waived` holds the findings a policy waiver accepts; `stale_waivers` does fail it.
+export const INFORMATIONAL = new Set([
+  'draft_singletons',
+  'mentions',
+  'orphans',
+  'retention',
+  'thin',
+  'superseded_verifications',
+  'waived',
+])
 
 export const isRow = (value: unknown): value is Row =>
   typeof value === 'object' && value !== null && !Array.isArray(value)
 
 export const rowsOf = (json: unknown): Row[] => (Array.isArray(json) ? json.filter(isRow) : [])
+
+// Returns the records of a `--receipt` document, `{receipt, results}`, and any other
+// document as it came.
+export const unwrapReceipt = (json: unknown): unknown =>
+  isRow(json) && isRow(json.receipt) && Array.isArray(json.results) ? json.results : json
 
 export const text = (value: unknown) => (value === undefined || value === null ? '' : String(value))
 

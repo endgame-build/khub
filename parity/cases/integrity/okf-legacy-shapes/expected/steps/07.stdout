@@ -1,0 +1,1 @@
+{"error": {"code": "invalid_slug", "message": "Slug 'index' in requirement is reserved: index.md is an OKF navigation file; choose another --id"}}

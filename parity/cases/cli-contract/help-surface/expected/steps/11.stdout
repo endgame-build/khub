@@ -7,11 +7,20 @@ Options:
   --tag <str>  Keep entities carrying this tag.
   --has <str>  Keep entities with a resolvable edge for the predicate.
   --missing <str>  Keep entities lacking a resolvable edge (gap finder).
+  --under <str>  Keep entities that reach this entity over --via, any number of hops.
+  --via <str>  The relation --under follows up to its parent, or its declared inverse.
+  --count <str>  Bound the edge count for a relation or inverse: 'depends_on>=2' (repeatable).
+  --in-count <str>  Bound the inbound edge count: '>=5', or 0 for none (repeatable).
+  --out-count <str>  Bound the outbound edge count: 0 finds leaves (repeatable).
   --orphan  Keep only orphan (edge-less) entities.
   --stale  Keep only stale entities.
   --draft  Isolate drafts.
   --active  Exclude drafts.
   --limit <int>  Cap the returned set.
+  --trust <str>  Keep entities at this review tier: unverified, machine, or human.
   --format <str>  text (Rich table on a TTY), json, or ids. [default: text]
+  --receipt  Wrap JSON output with the applied filters, matched and returned counts, and truncation.
+  --save-as <str>  Also save these filters under a name for `khub run <name>`.
+  --replace  Let --save-as overwrite a different saved query of that name.
   --help  Show this message and exit.
 

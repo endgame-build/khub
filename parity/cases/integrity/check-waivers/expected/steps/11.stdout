@@ -1,0 +1,1 @@
+{"error": {"code": "invalid_schema", "message": "Invalid schema at policy.component.waive.cmp-island.strays: Input should be 'incomplete', 'orphans', 'dangling', 'body_shape' or 'thin'"}}

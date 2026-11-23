@@ -1,0 +1,73 @@
+# Nested attribute values: `type: object` with `fields`, and `items` on a
+# `list`. `schema show` renders the nested fields as indented rows and as
+# nested JSON. `validate` checks every declared nested key, reports each
+# violation as its own error named by its dotted path, and reads a bare
+# mapping where a list of objects is declared as that list's one item. An
+# unquoted impossible date (2026-02-30, 2026-13-45T00:00:00Z) is an error at
+# the top level and nested, as `edit` refuses it. `edit` refuses a string for
+# an object or a list of objects (value_shape, exit 2) and writes nothing.
+mode: human
+steps:
+- argv: ["init", "build-hub", ".", "--no-wire"]
+- sh: |
+    rm -rf .khub/templates knowledge .khub/policy.yaml .khub/storage.yaml
+    cat > .khub/ontology.yaml <<'EOF'
+    ontology:
+      entities:
+        note:
+          attributes:
+            generated:
+              type: object
+              fields:
+                by: { required: true }
+                at: { type: datetime }
+            verified:
+              type: list
+              items:
+                type: object
+                fields:
+                  by: { required: true, pattern: '[a-z]+:.+' }
+                  rev: {}
+    EOF
+    mkdir -p note
+    cat > note/good.md <<'EOF'
+    ---
+    type: note
+    title: Good
+    created: 2026-01-15
+    generated: {by: agent/claude-code, at: 2026-01-15T10:00:00Z}
+    verified:
+      by: human:ilya
+      rev: abc123
+    ---
+    EOF
+    cat > note/bad.md <<'EOF'
+    ---
+    type: note
+    title: Bad
+    created: 2026-01-15
+    updated: 2026-02-30
+    generated: {at: 2026-13-45T00:00:00Z}
+    verified:
+    - by: human:ilya
+    - by: nobody
+      rev: r2
+    - rev: r3
+    ---
+    EOF
+    cat > note/odd.md <<'EOF'
+    ---
+    type: note
+    title: Odd
+    created: 2026-01-15
+    generated: x
+    ---
+    EOF
+- argv: ["schema", "show", "note"]
+- argv: ["schema", "show", "note", "--format", "json"]
+- argv: ["validate", "note/good", "--format", "json"]
+- argv: ["validate", "note/bad", "--format", "json"]
+- argv: ["validate"]
+- argv: ["edit", "note/good", "--generated", "x", "--format", "json"]
+- argv: ["edit", "note/good", "--verified", "human:ilya", "--format", "json"]
+- argv: ["edit", "note/good", "--updated", "2026-02-30", "--format", "json"]

@@ -6,7 +6,7 @@ steps:
 - argv: ["add", "requirement", "--title", "Auth required", "--kind", "functional"]
 - argv: ["add", "component", "--title", "API", "--kind", "service", "--stack", "python"]
 - argv: ["add", "component", "--title", "Web", "--kind", "service"]
-- argv: ["add", "adr", "--title", "Use JWT", "--status", "accepted"]
+- argv: ["add", "adr", "--title", "Use JWT", "--decision", "accepted"]
 - argv: ["link", "req-auth-required", "realized_in", "cmp-api"]
 - argv: ["link", "cmp-web", "depends_on", "cmp-api"]
 - argv: ["link", "ad-2026-01-15-use-jwt", "affects", "cmp-api"]

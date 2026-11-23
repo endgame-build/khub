@@ -194,40 +194,61 @@ func TestSplicePreservesUntouchedNonCanonicalScalars(t *testing.T) {
 	}
 }
 
-// A deleted key cannot be spliced.
-func TestSpliceRefusesADeletedKey(t *testing.T) {
-	requireNoSplice(t, "type: client  # keep\nbody: prose\nstage: prospect\n",
-		m("type", "client", "stage", "prospect"))
-}
-
 // A reordered mapping cannot be spliced.
 func TestSpliceRefusesAReorderedMapping(t *testing.T) {
 	requireNoSplice(t, "type: client  # keep\nstage: prospect\n",
 		m("stage", "prospect", "type", "client"))
 }
 
-// A new key BELOW the root cannot be placed: ruamel puts it after whatever
-// comment is attached to the block's last pair, which a splice cannot know.
-func TestSpliceRefusesANewNestedKey(t *testing.T) {
-	requireNoSplice(t, "# header\nalpha:\n  type: repo\n  status: active   # watch\n",
-		m("alpha", m("type", "repo", "status", "active", "updated", Date{ISO: "2026-08-15"})))
+// A new key inside a flow mapping has no line of its own to take.
+func TestSpliceRefusesANewKeyInAFlowMapping(t *testing.T) {
+	requireNoSplice(t, "# header\ngenerated: {by: x}\n",
+		m("generated", m("by", "x", "at", "y")))
 }
 
-// A value that is a block, not a same-line scalar, cannot be spliced.
-func TestSpliceRefusesABlockValue(t *testing.T) {
-	requireNoSplice(t, "# header\ntags:\n  - alpha\n  - beta\n",
-		m("tags", []any{"alpha", "gamma"}))
-	requireNoSplice(t, "# header\nnested:\n  a: 1\n",
-		m("nested", "flattened"))
-	requireNoSplice(t, "# header\ntext: |\n  block literal\n",
-		m("text", "replaced"))
-}
-
-// An implicit null (`key:` with nothing after it) is not a same-line scalar:
-// the splice must not overwrite the colon token.
-func TestSpliceRefusesAnImplicitNull(t *testing.T) {
-	requireNoSplice(t, "# header\nempty:\nstage: prospect\n",
-		m("empty", "filled", "stage", "prospect"))
+// A changed value that is not a same-line scalar, before or after, has its
+// pair's own lines rewritten by the emitter; every other line keeps its bytes,
+// and a comment on the key's line stays on it.
+func TestSpliceReplacesAValueThatIsNotASameLineScalar(t *testing.T) {
+	for _, tc := range []struct {
+		name, src, want string
+		keep            *omap.Map
+	}{
+		{"changed block list",
+			"# header\ntags:  # the tags\n  - alpha\n  - beta   # dropped with it\nz: 1\n",
+			"# header\ntags:  # the tags\n- alpha\n- gamma\nz: 1\n",
+			m("tags", []any{"alpha", "gamma"}, "z", int64(1))},
+		{"block mapping to a scalar",
+			"# header\nnested:\n  a: 1\n",
+			"# header\nnested: flattened\n",
+			m("nested", "flattened")},
+		{"literal block to a scalar",
+			"# header\ntext: |\n  block literal\nz: 1\n",
+			"# header\ntext: replaced\nz: 1\n",
+			m("text", "replaced", "z", int64(1))},
+		{"implicit null",
+			"# header\nempty:\nstage: prospect\n",
+			"# header\nempty: filled\nstage: prospect\n",
+			m("empty", "filled", "stage", "prospect")},
+		{"bare mapping to a list, comment kept",
+			"type: row\nverified: {by: a, at: x}  # keep me\nz: 1\n",
+			"type: row\nverified:                 # keep me\n- by: a\n  at: x\n- by: b\n  at: y\nz: 1\n",
+			m("type", "row", "verified", []any{m("by", "a", "at", "x"), m("by", "b", "at", "y")}, "z", int64(1))},
+		{"flow list grows",
+			"tags: [a, b]  # few\n",
+			"tags:         # few\n- a\n- b\n- c\n",
+			m("tags", []any{"a", "b", "c"})},
+		{"quoted key keeps its spelling",
+			"\"tags\":\n- a\n",
+			"\"tags\":\n- b\n",
+			m("tags", []any{"b"})},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := splice(t, tc.src, tc.keep); got != tc.want {
+				t.Fatalf("\n got: %q\nwant: %q", got, tc.want)
+			}
+		})
+	}
 }
 
 // A malformed document never reaches the splice.
@@ -359,11 +380,64 @@ func TestSplicePreservesAuthoredFormattingPythonWouldNormalize(t *testing.T) {
 
 // Anchors, aliases and merge keys are refused: khub never writes them, and
 // ruamel's ignore_aliases would expand them on a re-emit anyway.
-func TestSpliceRefusesAnchorsAndMerges(t *testing.T) {
+func TestSpliceRefusesAnchorsAndComplexKeys(t *testing.T) {
 	requireNoSplice(t, "# h\na: &x 1\nb: *x\n", m("a", int64(2), "b", int64(1)))
-	requireNoSplice(t, "# h\nbase: &b\n  k: 1\nrow:\n  <<: *b\n  k2: 2\n",
-		m("base", m("k", int64(1)), "row", m("k", int64(1), "k2", int64(3))))
 	requireNoSplice(t, "# h\n? complex\n: 1\nb: 2\n", m("complex", int64(1), "b", int64(3)))
+}
+
+// A `<<` merge survives an edit byte for byte. An edit of an explicit key
+// splices in place; an edit of a key the merge supplies is written as an
+// explicit key in that mapping, which outranks the merge. Both loaders' key
+// orders hold (ruamel: explicit first; PyYAML: merged first).
+// An edit of any merged-in key splices whatever its place in the merged
+// order, keeping the anchor and the `<<` line; the loaded key order holds in
+// both modes. A flow mapping takes no inserted key, so there the edit falls
+// back to a whole re-emit.
+func TestSpliceEditsMergedKeysInEveryOrder(t *testing.T) {
+	src := "b: &b\n  x: 1\n  y: 2\nm:\n  <<: *b\n  z: 3\n"
+	cases := []struct {
+		name string
+		mode ResolveMode
+		want *omap.Map
+		out  string
+	}{
+		{"ruamel, first merged key", Mode12, m("b", m("x", int64(1), "y", int64(2)), "m", m("z", int64(3), "x", int64(9), "y", int64(2))),
+			src + "  x: 9\n"},
+		{"ruamel, second merged key", Mode12, m("b", m("x", int64(1), "y", int64(2)), "m", m("z", int64(3), "x", int64(1), "y", int64(9))),
+			src + "  x: 1\n  y: 9\n"},
+		{"pyyaml, second merged key", Mode11, m("b", m("x", int64(1), "y", int64(2)), "m", m("x", int64(1), "y", int64(9), "z", int64(3))),
+			src + "  y: 9\n"},
+	}
+	for _, c := range cases {
+		out, err := SpliceMapping([]byte(src), c.want, c.mode)
+		if err != nil || string(out) != c.out {
+			t.Errorf("%s: err=%v\n got %q\nwant %q", c.name, err, out, c.out)
+		}
+	}
+	requireNoSplice(t, "b: &b {x: 1, y: 2}\nm: {<<: *b, z: 3}\n",
+		m("b", m("x", int64(1), "y", int64(2)), "m", m("z", int64(3), "x", int64(1), "y", int64(9))))
+}
+
+func TestSpliceKeepsMerges(t *testing.T) {
+	src := "# h\nbase: &b\n  k: 1\nrow:\n  <<: *b  # shared\n  k2: 2\n"
+	cases := []struct {
+		mode ResolveMode
+		want *omap.Map
+		out  string
+	}{
+		{Mode12, m("base", m("k", int64(1)), "row", m("k2", int64(3), "k", int64(1))),
+			"# h\nbase: &b\n  k: 1\nrow:\n  <<: *b  # shared\n  k2: 3\n"},
+		{Mode12, m("base", m("k", int64(1)), "row", m("k2", int64(2), "k", int64(5))),
+			"# h\nbase: &b\n  k: 1\nrow:\n  <<: *b  # shared\n  k2: 2\n  k: 5\n"},
+		{Mode11, m("base", m("k", int64(1)), "row", m("k", int64(5), "k2", int64(2))),
+			"# h\nbase: &b\n  k: 1\nrow:\n  <<: *b  # shared\n  k2: 2\n  k: 5\n"},
+	}
+	for i, c := range cases {
+		out, err := SpliceMapping([]byte(src), c.want, c.mode)
+		if err != nil || string(out) != c.out {
+			t.Errorf("case %d: err=%v\n got %q\nwant %q", i, err, out, c.out)
+		}
+	}
 }
 
 // A CRLF document keeps its line endings; an append to a file with no trailing

@@ -26,6 +26,8 @@ test('the head names the verb and what the call is about', () => {
   expect(head('khub query --type component --format json')).toBe('khub query component')
   expect(head('khub query --draft')).toBe('khub query')
   expect(head('khub search --plain "regex patterns"')).toBe('khub search "regex patterns"')
+  expect(head('khub retrieve --plain "regex patterns" --no-body')).toBe('khub retrieve "regex patterns"')
+  expect(head('khub retrieve --id cmp-search --depth 2')).toBe('khub retrieve cmp-search')
   expect(head('khub schema show adr --format json')).toBe('khub schema show adr')
   expect(head('khub schema')).toBe('khub schema')
   expect(head(`khub link ${ADR} affects cmp-search`)).toBe(`khub link ${ADR}`)
@@ -58,6 +60,18 @@ test('add names the new id and marks a draft', () => {
   expect(sayOf('khub add actor --title Operator --draft', { id: 'actor/act-operator', draft: true }).line).toBe(
     '+ actor/act-operator · draft',
   )
+})
+
+test('verify names the entity, the reviewer and when, and a signed commit', () => {
+  expect(say(`khub verify ${ADR} --by human:reviewer --format json`, F.verify_adr)).toEqual({
+    head: `khub verify ${ADR}`,
+    line: `adr/${ADR} · human:reviewer · 2026-01-15T00:00:00Z ✓`,
+    tone: 'ok',
+  })
+  expect(
+    sayOf('khub verify adr-x --by human:a --commit', { id: 'adr/adr-x', by: 'human:a', at: 'T', commit: '0123456789abcdef' })
+      .line,
+  ).toBe('adr/adr-x · human:a · T · 0123456 ✓')
 })
 
 test('edit names the field it set, from positionals or from a flag', () => {
@@ -97,6 +111,28 @@ test('remove names what went', () => {
   })
 })
 
+test('a write run with --dry-run reads as a preview, never as a write', () => {
+  expect(say('khub add adr --title "Use RE2 patterns" --decision accepted --dry-run --format json', F.add_dry)).toEqual({
+    head: 'khub add adr',
+    line: `dry run · + adr/${ADR}`,
+    tone: 'plain',
+  })
+  expect(say('khub edit cmp-search lifecycle production --dry-run --format json', F.edit_dry)).toEqual({
+    head: 'khub edit cmp-search',
+    line: 'dry run · no change',
+    tone: 'plain',
+  })
+  expect(say('khub unlink cmp-search depends_on cmp-storage --dry-run --format json', F.unlink_dry).line).toBe(
+    'dry run · ⇢ cmp-search depends_on cmp-storage',
+  )
+  expect(say('khub remove cmp-search --dry-run --format json', F.remove_refused)).toEqual({
+    head: 'khub remove cmp-search',
+    line: `dry run · ✗ inbound_edge_refusal: Refusing to remove component 'cmp-search': 1 inbound edge resolves to it. Pass --force to override`,
+    tone: 'bad',
+  })
+  expect(say('khub remove cmp-search --format json', F.remove_refused).line).toMatch(/^✗ inbound_edge_refusal: /)
+})
+
 test('get shows the id, the title and the edge count', () => {
   expect(say('khub get cmp-search --edges --format json', F.get_search).line).toBe('component/cmp-search · Search · 3 edges')
   expect(sayOf('khub get cmp-search', { id: 'component/cmp-search', frontmatter: { name: 'Search' } }).line).toBe(
@@ -105,10 +141,16 @@ test('get shows the id, the title and the edge count', () => {
   expect(sayOf('khub get a b', [{ id: 'x/a' }, { id: 'x/b' }]).line).toBe('2 entities')
 })
 
-test('query and stale count entities', () => {
+test('query, recent and stale count entities', () => {
   expect(say('khub query --type component --format json', F.query_components).line).toBe('2 entities')
   expect(say('khub query --draft --format json', F.query_draft).line).toBe('no entities')
   expect(sayOf('khub stale --days 30', [{ id: 'x/a' }])).toEqual({ head: 'khub stale', line: '1 entity', tone: 'plain' })
+  expect(say('khub recent --limit 2 --format json', F.recent_limited)).toEqual({
+    head: 'khub recent',
+    line: '2 entities · showing 2 of 8 recent entities; pass --limit 8 for all',
+    tone: 'warn',
+  })
+  expect(sayOf('khub recent', [{ id: 'x/a' }])).toEqual({ head: 'khub recent', line: '1 entity', tone: 'plain' })
 })
 
 test('search shows the top hit, and warns with khub\'s note', () => {
@@ -129,6 +171,34 @@ test('search shows the top hit, and warns with khub\'s note', () => {
     tone: 'warn',
   })
   expect(sayOf('khub search zzzz', []).line).toBe('no hits')
+})
+
+test('retrieve says how much it holds, and warns when a cap cut it', () => {
+  expect(say('khub retrieve --plain search --no-body --format json', F.retrieve_search)).toEqual({
+    head: 'khub retrieve "search"',
+    line: '4 entities',
+    tone: 'plain',
+  })
+  expect(say('khub retrieve --id cmp-search --depth 2 --max-entities 2 --no-body --format json', F.retrieve_trimmed)).toEqual({
+    head: 'khub retrieve cmp-search',
+    line: '2 entities · truncated',
+    tone: 'warn',
+  })
+  expect(sayOf('khub retrieve zzzz', { count: 0, entities: [], omitted: { truncated: false } }).line).toBe('no entities')
+  expect(sayOf('khub retrieve auth --max-bytes 300', { count: 1, entities: [{}], omitted: { truncated: true, insufficient: true } })).toEqual({
+    head: 'khub retrieve "auth"',
+    line: '1 entity · insufficient',
+    tone: 'bad',
+  })
+})
+
+test('a --receipt document reads as its results', () => {
+  const receipt = { query: {}, matched: 3, returned: 2, truncated: true }
+  const doc = { receipt, results: [{ id: 'x/a', title: 'A' }, { id: 'x/b' }] }
+
+  expect(sayOf('khub query --receipt', doc).line).toBe('2 entities')
+  expect(sayOf('khub search api --receipt', doc).line).toBe('2 hits · top x/a')
+  expect(previewOf(classify('khub query --receipt', UNIX) as Simple, doc).rows.map(row => row.text)).toEqual(['x/a', 'x/b'])
 })
 
 test('the walks count what they reached', () => {
@@ -164,9 +234,16 @@ test('status, validate and check report their counts', () => {
     line: 'failed · dangling 1',
     tone: 'bad',
   })
-  expect(sayOf('khub check --strict', { passed: false, strict: true, orphans: ['x/a', 'x/b'], thin: [{}] }).line).toBe(
+  expect(sayOf('khub check --strict', { passed: false, strict: true, orphans: ['x/a', 'x/b'], thin: [{}], retention: [{}] }).line).toBe(
     'failed · orphans 2',
   )
+  expect(
+    sayOf('khub check', { passed: false, stale_waivers: [{ id: 'x/gone' }], waived: [{ id: 'x/a' }, { id: 'x/b' }] }).line,
+  ).toBe('failed · stale_waivers 1')
+  // `--mentions` suggestions never fail the gate, so a failed check does not count them.
+  expect(
+    sayOf('khub check --mentions', { passed: false, strict: false, strays: ['a.md'], mentions: [{ id: 'x/a' }] }).line,
+  ).toBe('failed · strays 1')
 })
 
 test('schema views say how much they hold', () => {
@@ -201,7 +278,7 @@ test('any other verb shows the first line of its note, or nothing', () => {
 const list = (command: string, fixture: Fixture) => previewOf(classify(command, UNIX) as Simple, parseJson(fixture.stdout))
 const listOf = (command: string, json: unknown) => previewOf(classify(command, UNIX) as Simple, json)
 
-test('a query, a search and a stale list show id, title and flags', () => {
+test('a query, a search, a recent and a stale list show id, title and flags', () => {
   expect(list('khub query --type component --format json', F.query_components)).toEqual({
     rows: [
       { text: 'component/cmp-search', note: 'Search', flags: [] },
@@ -211,6 +288,13 @@ test('a query, a search and a stale list show id, title and flags', () => {
   })
   expect(list('khub search --plain search --format json', F.search_hits).rows).toEqual([
     { text: 'component/cmp-search', note: 'Search', flags: [] },
+  ])
+  expect(list('khub recent --limit 2 --format json', F.recent_limited).rows).toEqual([
+    { text: 'actor/act-analyst', note: 'Analyst', flags: [] },
+    { text: 'arc42/arc42', note: 'Architecture', flags: [] },
+  ])
+  expect(listOf('khub recent', [{ id: 'x/a', title: 'A', draft: true }]).rows).toEqual([
+    { text: 'x/a', note: 'A', flags: ['draft'] },
   ])
   expect(listOf('khub stale', [{ id: 'x/a', title: 'A', draft: true, orphan: true, stale: true }]).rows).toEqual([
     { text: 'x/a', note: 'A', flags: ['draft', 'orphan', 'stale'] },
@@ -231,6 +315,21 @@ test('a get of several entities lists them, and a get of one lists none', () => 
     { text: 'x/b', note: 'B', flags: [] },
   ])
   expect(list('khub get cmp-search --edges --format json', F.get_search)).toEqual({ rows: [], more: 0 })
+})
+
+test('a retrieval lists its entities with their titles and flags', () => {
+  expect(list('khub retrieve --plain search --no-body --format json', F.retrieve_search)).toEqual({
+    rows: [
+      { text: 'component/cmp-search', note: 'Search', flags: [] },
+      { text: 'component/cmp-storage', note: 'Storage', flags: [] },
+      { text: 'repo/rp-api', note: 'API', flags: [] },
+      { text: 'use-case/uc-find-a-document', note: 'Find a document', flags: [] },
+    ],
+    more: 0,
+  })
+  expect(listOf('khub retrieve x', { count: 1, entities: [{ id: 'adr/a', title: 'A', draft: true }], omitted: {} }).rows).toEqual([
+    { text: 'adr/a', note: 'A', flags: ['draft'] },
+  ])
 })
 
 test('neighbors show the direction and the predicate', () => {
@@ -280,4 +379,21 @@ test('control characters in entity text never reach a row or a line', () => {
   expect(sayOf('khub get nope', { error: { code: 'lookup_error', message: 'No\u001b[1m entity' } }).line).toBe(
     '✗ lookup_error: No [1m entity',
   )
+})
+
+test('run is a query by name: the head names the saved query, the rows are its entities', () => {
+  expect(say('khub run components --format json', F.run_components)).toEqual({
+    head: 'khub run components',
+    line: '2 entities',
+    tone: 'plain',
+  })
+  expect(list('khub run components --format json', F.run_components)).toEqual(
+    list('khub query --type component --format json', F.query_components),
+  )
+  expect(say('khub query --type component --save-as components --format json', F.query_saved).line).toBe('2 entities')
+  expect(say('khub run nope --format json', F.run_missing)).toEqual({
+    head: 'khub run nope',
+    line: "✗ unknown_saved_query: No saved query 'nope' in .khub/queries.yaml. Saved queries: components",
+    tone: 'bad',
+  })
 })

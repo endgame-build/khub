@@ -18,6 +18,8 @@ not stale references.
 
 Read before non-trivial work: `docs/design-memo.md` (rationale + invariants),
 `docs/cli.md` (full command surface + JSON contracts), `docs/collections-design.md`.
+Before touching a workflow or a gate: `docs/ci.md` (every job and what it
+proves) and `.claude/rules/ci.md` (the rules for changing them).
 
 ## Commands
 
@@ -39,8 +41,21 @@ go build -o parity-run ./parity/runner
 ./parity-run -bin "$PWD/khub" -coverage parity/coverage.yaml -subset-of "$PWD/khub"
 ./parity-run -bin "$PWD/khub" -record -only <family>/<case>      # re-record one case
 bash smoke.sh                                                    # end-to-end, both build presets
+bash smoke-windows.sh                                            # all of smoke.sh, then the Windows-likely cases (every OS)
 bash parity/tools/gen_cli_reference.sh                           # regenerate docs/cli-reference.md
+bash parity/tools/coverage-floor.sh "$PWD/khub-cover" /tmp/cov    # parity with a `go build -cover` binary; internal/cli ≥ parity/coverage-floor.txt
+KHUB=$PWD/khub bash parity/scale/smoke.sh --scale 300            # a generated corpus against its own manifest, plus the footprint pin
+bash parity/compat/smoke.sh <old-khub> "$PWD/khub"               # a workspace an older binary wrote survives this one
+go run ./parity/scale/bench -bin ./khub -profile gate -format json > bench.json && go run ./parity/scale/gate -baseline parity/scale/baseline.json bench.json
+go run ./parity/tools/presetdocs                                 # regenerate docs/<preset>-preset.md tables (fresh build)
 ```
+
+CI runs the first block on three OSes per PR (`ci.yml`), the race detector,
+shuffle, scale smoke and coverage floor beside it (`go-extras`), the compat self
+row on every PR and the published-version matrix when the upgrade surface
+changes (`compat.yml`), and the rest nightly (`nightly.yml`: scale at 550,
+bench and gate, benchstat against the last release, fuzzing, full coverage,
+govulncheck, a goreleaser snapshot through the npm assembler).
 
 The Claude Code plugin lives under `plugin/` (the two agent skills and the mod),
 listed by the marketplace manifest `.claude-plugin/marketplace.json`. The binary
@@ -65,7 +80,10 @@ npm/smoke.sh                   # assemble, pack, install and run the npm package
 `parity/cases/**/expected/` holds raw bytes — stdout, stderr, exit code, and a
 tree manifest per step. **Those bytes are the contract.** A change that moves
 them is a behaviour change: re-record deliberately, review the diff, and say why
-in the commit. Never re-record to make a red suite green.
+in the commit. Never re-record to make a red suite green. The same discipline
+holds for every recorded number: `parity/scale/footprint.json` (bytes per read),
+`parity/scale/baseline.json` (growth and ratios), `plugin/budget.json` (the
+skills' size), `parity/coverage-floor.txt`.
 
 ## Architecture
 
@@ -119,19 +137,20 @@ comes back, with zero per-type code and no logic of its own. See
 - **`validate` vs `check` are distinct gates.** `validate` = per-entity
   well-formedness + referential integrity over *present* declared fields (missing
   required does NOT block capture). `check` = graph-wide over the active
-  (`draft: false`) subgraph: required-completeness, orphans, dangling edges,
+  (not `status: draft`) subgraph: required-completeness, orphans, dangling edges,
   strays, cycles. Don't collapse them.
-- **`draft` is a manual publish flag**, never derived from completeness. No verb
-  auto-promotes/demotes.
+- **`status: draft` is a manual publish flag**, never derived from completeness.
+  An absent status reads as `stable` and is never written; read rows keep a
+  derived `draft` flag. No verb auto-promotes/demotes.
 - **Capture is never blocked.** Referential integrity hard-fails on write; a
   missing required field just leaves the entity incomplete for `check` to report.
 - **Writes are workspace-serialized and atomic.** One stable
   `.khub/generated/locks/workspace.lock` covers scan, validation, and commit for
   every existing-workspace mutation. Keep lock files while a process may hold them. Publication uses
   unique sibling temporaries, preserves permissions, and refuses unsafe paths and symlinks.
-- **Storage is per-type config**: `layout` (file / folder / collection) × `format`
-  (md / json / yaml; collections take json / jsonl / yaml). Non-md entities carry
-  prose in a reserved `body` field. Collections use the same workspace lock and
+- **Storage is per-type config**: `layout` × `format`, declared in `storage.yaml`
+  (the layouts and path templates: `docs/schema.md`; formats and collections:
+  `docs/cli.md`). Non-md entities carry prose in a reserved `body` field. Collections use the same workspace lock and
   atomic publication as every other mutation; `.khub/generated/` is gitignored.
 
 Each invariant has a sentinel fixture under `parity/cases/invariants/`.
@@ -142,7 +161,9 @@ Each invariant has a sentinel fixture under `parity/cases/invariants/`.
 (round-trip at width 80, safe at width 4096) — and its 1.1-vs-1.2 scalar
 resolution split. This is a property of **khub's file format**, not a leftover of
 the Python implementation: entities must stay diff-stable for git and readable by
-anything else that touches them.
+anything else that touches them. It deviates where ruamel would corrupt a value:
+a plain scalar never breaks after a run of spaces, a simple key never wraps,
+and a value holding NEL, LS or PS is double-quoted rather than single-quoted.
 
 `parity/yamlgate` is the standing regression for it (`go run ./parity/yamlgate
 parity/corpus`), and `parity/tools/gen_*_cases.py` regenerate its corpora.
@@ -159,5 +180,8 @@ layer files into an engagement's `.khub/` and the templates to
 module root (a `//go:embed` pattern cannot contain `..`, so the embed cannot live
 under `internal/`).
 
-The preset is the source of truth for its schema; planning specs may drift from
-it (see `docs/firm-ops-preset.md`, `docs/build-hub-preset.md`).
+The preset is the source of truth for its schema. The tables in
+`docs/<preset>-preset.md` between `GENERATED` markers are generated from
+`khub schema --format json` (`go run ./parity/tools/presetdocs`, which builds
+khub fresh from the checkout) and CI fails when they drift; the prose around them is hand-written. Every
+preset needs such a doc, and every type a generated section.

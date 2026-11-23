@@ -26,9 +26,9 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
-	"time"
 
 	"github.com/endgame-build/khub/internal/canon"
+	"github.com/endgame-build/khub/internal/clock"
 	"github.com/endgame-build/khub/internal/errs"
 	"github.com/endgame-build/khub/internal/fsio"
 	"github.com/endgame-build/khub/internal/introspect"
@@ -458,7 +458,7 @@ func layDownTree(target string, resolved *schema.ResolvedSchema) error {
 // is never touched (WS-003 as amended). It appends to created as it goes so
 // the caller can roll creations back on failure.
 func createSingletons(target string, resolved *schema.ResolvedSchema, created *[]singleton) error {
-	today := today()
+	today := clock.Today()
 	for _, name := range resolved.Types.Keys() {
 		rt, _ := resolved.Types.Get(name)
 		if rt.Storage.Layout != schema.LayoutSingleton {
@@ -489,7 +489,6 @@ func createSingletons(target string, resolved *schema.ResolvedSchema, created *[
 		meta.Set("type", name)
 		meta.Set("created", canon.Date{ISO: today})
 		meta.Set("updated", canon.Date{ISO: today})
-		meta.Set("draft", false)
 		meta.Set("title", title)
 		text, err := canon.Render(meta, tpl.Render(), "md")
 		if err != nil {
@@ -564,7 +563,8 @@ var (
 const indexName = "index.md"
 
 // entityHashes is _entity_hashes: content hashes of entity-suffixed files,
-// keyed by relpath. The root index.md is skipped (see indexName).
+// keyed by relpath. index.md and log.md are skipped at any depth: OKF reserves
+// them for navigation (schema.ReservedEntityName), and indexName is one.
 //
 // The skip test runs against the FULL path's components, target's own
 // included — a workspace living under a directory named .git or node_modules
@@ -603,7 +603,7 @@ func entityHashes(target string) (map[string]string, error) {
 		if !hasEntitySuffix(d.Name()) {
 			return nil
 		}
-		if d.Name() == indexName && filepath.Dir(p) == root {
+		if schema.ReservedEntityName(d.Name()) {
 			return nil
 		}
 		payload, rerr := os.ReadFile(p)
@@ -669,15 +669,6 @@ func resolvedName(target string) string {
 		return "workspace"
 	}
 	return name
-}
-
-// today is date.today() through the parity clock seam: KHUB_PARITY_NOW freezes
-// it when the recorder sets it, and only then.
-func today() string {
-	if frozen := os.Getenv("KHUB_PARITY_NOW"); frozen != "" {
-		return frozen
-	}
-	return time.Now().Format("2006-01-02")
 }
 
 // pathExists is Path.exists(): symlinks are followed, so a dangling link

@@ -1,0 +1,17 @@
+# Upgrade replaces policy.yaml and storage.yaml from the preset, but keeps the
+# per-type keys the workspace added, at any version, and reports each as
+# `carried`. Here the workspace sits a version behind and added `path_refs`
+# for adr: after upgrade adr still accepts a path reference, and a value the
+# workspace changed (prd's `orphan`) goes back to the shipped one, kept in the
+# .bak. A carried key the new schema rejects (`retired_flag`) never blocks the
+# upgrade: it is dropped and reported under `dropped` with the reason.
+steps:
+- argv: ["init", "build-hub", ".", "--no-wire"]
+- sh: |
+    printf '  adr:\n    path_refs: true\n    retired_flag: true\n' >> .khub/policy.yaml
+    sed -i.tmp 's/^    orphan: true$/    orphan: false/' .khub/policy.yaml
+    sed -i.tmp 's/^version: .*/version: 0.6.0/' .khub/config.yaml
+    rm .khub/*.tmp
+- argv: ["upgrade", "--no-wire", "--format", "json"]
+- argv: ["add", "adr", "--title", "Use files", "--decision", "accepted", "--references", "knowledge/prd.md", "--format", "json"]
+- argv: ["validate", "--format", "json"]

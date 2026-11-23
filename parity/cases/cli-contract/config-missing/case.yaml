@@ -1,0 +1,11 @@
+# A workspace whose .khub/config.yaml is gone refuses every command that reads
+# it (config_missing, exit 2), naming the fix. A forced re-run of init
+# recreates only the missing file, and the workspace answers again.
+steps:
+- argv: ["init", "firm-ops", ".", "--no-wire"]
+- sh: "rm .khub/config.yaml"
+- argv: ["status", "--format", "json"]
+- argv: ["query"]
+- argv: ["stale", "--format", "json"]
+- argv: ["init", "firm-ops", ".", "--no-wire", "--force", "--format", "json"]
+- argv: ["status", "--format", "json"]

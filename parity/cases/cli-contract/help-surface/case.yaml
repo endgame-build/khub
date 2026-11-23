@@ -34,4 +34,5 @@ steps:
 - argv: ["schema", "types", "--help"]
 - argv: ["schema", "show", "--help"]
 - argv: ["schema", "edges", "--help"]
+- argv: ["completion", "--help"]
 - argv: ["schema", "jsonschema", "--help"]

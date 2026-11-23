@@ -106,7 +106,7 @@
       "type": "object",
       "properties": {
         "type": {
-          "description": "The scalar type. Default text; may be left out when enum is given or on an override.",
+          "description": "The value type. Default text; may be left out when enum is given or on an override.",
           "anyOf": [
             {
               "enum": [
@@ -115,7 +115,8 @@
                 "date",
                 "datetime",
                 "bool",
-                "list"
+                "list",
+                "object"
               ]
             },
             {
@@ -159,6 +160,21 @@
             },
             {
               "type": "null"
+            }
+          ]
+        },
+        "fields": {
+          "description": "An object's keys, each declared like an attribute. Type object only.",
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/attribute"
+          }
+        },
+        "items": {
+          "description": "The element of a list, declared like an attribute. Type list only.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/attribute"
             }
           ]
         }
@@ -251,9 +267,112 @@
               "$ref": "#/definitions/bool"
             }
           ]
+        },
+        "retention": {
+          "description": "The end-of-life rule check reports against. khub never deletes an entity.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/retention"
+            }
+          ]
+        },
+        "waive": {
+          "description": "Accepted check findings, keyed by the slug of an entity of this type.",
+          "anyOf": [
+            {
+              "type": "object",
+              "additionalProperties": {
+                "$ref": "#/definitions/waiver"
+              },
+              "propertyNames": {
+                "pattern": "[^\t\n\u000b\f\r    -     　]"
+              }
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "locked": {
+          "description": "When true, khub upgrade refuses a schema that drops this type unless --unlock names it.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/bool"
+            }
+          ]
+        },
+        "locked_relations": {
+          "description": "This type's own predicates that khub upgrade holds the same way.",
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "additionalProperties": false
+    },
+    "retention": {
+      "description": "Report an entity whose updated date, else created, is more than days old.",
+      "type": "object",
+      "properties": {
+        "days": {
+          "description": "Age in days past which check reports the entity.",
+          "type": "integer",
+          "minimum": 1
+        },
+        "no_outbound": {
+          "description": "When true, report only an entity that also has no outbound edge.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/bool"
+            }
+          ]
+        }
+      },
+      "required": [
+        "days"
+      ],
+      "additionalProperties": false
+    },
+    "waiver": {
+      "description": "The check findings accepted on one entity, each with its reason.",
+      "type": "object",
+      "properties": {
+        "incomplete": {
+          "description": "Why this finding is accepted.",
+          "type": "string",
+          "pattern": "[^\t\n\u000b\f\r    -     　]"
+        },
+        "orphans": {
+          "description": "Why this finding is accepted.",
+          "type": "string",
+          "pattern": "[^\t\n\u000b\f\r    -     　]"
+        },
+        "dangling": {
+          "description": "Why this finding is accepted.",
+          "type": "string",
+          "pattern": "[^\t\n\u000b\f\r    -     　]"
+        },
+        "body_shape": {
+          "description": "Why this finding is accepted.",
+          "type": "string",
+          "pattern": "[^\t\n\u000b\f\r    -     　]"
+        },
+        "thin": {
+          "description": "Why this finding is accepted.",
+          "type": "string",
+          "pattern": "[^\t\n\u000b\f\r    -     　]"
+        }
+      },
+      "additionalProperties": false,
+      "minProperties": 1
     },
     "storage": {
       "description": "Where and how one type's bytes land. An entry must state its layout.",

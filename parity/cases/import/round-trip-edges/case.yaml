@@ -1,0 +1,16 @@
+# A relation written in two spellings round-trips as one edge. The use case's
+# `served_by` names its component qualified (`component/cmp-ledger`) and bare
+# (`cmp-billing`); export writes both as `# Related` links, and import reads
+# them back into `served_by` without adding either again. A concept with no
+# `generated` is stamped with the writer `--by` names.
+steps:
+- argv: ["init", "build-hub", "src", "--no-wire"]
+- sh: |
+    printf -- '---\ntype: component\ntitle: Ledger\nkind: service\ncreated: 2026-01-15\n---\n' > src/knowledge/components/cmp-ledger.md
+    printf -- '---\ntype: component\ntitle: Billing\nkind: service\ncreated: 2026-01-15\n---\n' > src/knowledge/components/cmp-billing.md
+    printf -- '---\ntype: use-case\ntitle: Pay an invoice\ntrigger: human\ncreated: 2026-01-15\nserved_by:\n- component/cmp-ledger\n- cmp-billing\n---\n' > src/knowledge/use-cases/uc-pay-an-invoice.md
+- argv: ["-C", "src", "export", "--okf", "bundle", "--format", "json"]
+- argv: ["init", "build-hub", "dst", "--no-wire"]
+- argv: ["-C", "dst", "import", "--okf", "bundle", "--by", "process:importer", "--format", "json"]
+- argv: ["-C", "dst", "get", "use-case/uc-pay-an-invoice", "--format", "raw"]
+- argv: ["-C", "dst", "get", "use-case/uc-pay-an-invoice", "--edges", "--format", "json"]

@@ -7,7 +7,7 @@ steps:
 - argv: ["init", "build-hub", ".", "--no-wire"]
 - argv: ["add", "requirement", "--title", "Fast", "--kind", "non-functional"]
 - argv: ["add", "requirement", "--title", "Bounded", "--kind", "constraint"]
-- argv: ["add", "adr", "--title", "Maybe", "--status", "proposed"]
+- argv: ["add", "adr", "--title", "Maybe", "--decision", "proposed"]
 - argv: ["validate", "requirement/req-fast"]
 - argv: ["validate", "requirement/req-fast", "--format", "json"]
 - argv: ["validate", "requirement/req-bounded", "--format", "json"]

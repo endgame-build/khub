@@ -1,0 +1,32 @@
+# The refusal envelope's machine fields (docs/cli-output-contract.md): `field`,
+# `expected` and `suggestion`, each present only when the refusal has one. One
+# near miss per suggesting code, plus a far miss that must stay silent.
+steps:
+- argv: ["init", "build-hub", ".", "--no-wire"]
+- argv: ["add", "requirement", "--title", "Settle", "--kind", "functionl"]
+- argv: ["add", "requirement", "--title", "Settle", "--kind", "functional"]
+- argv: ["get", "req-setle"]
+- argv: ["get", "requirement/req-setle"]
+- argv: ["get", "zzzz"]
+- argv: ["link", "req-settle", "related", "req-setle"]
+- argv: ["link", "req-settle", "relatd", "req-settle"]
+- argv: ["query", "--type", "requirment"]
+- argv: ["query", "--type", "requirement", "--has", "knd"]
+- argv: ["query", "--type", "requirement", "--has", "nope"]
+- argv: ["wire", "--target", "agent"]
+- argv: ["init", "firm-op", "sub"]
+# Ties are silence: with cmp-search under two types and cmp-serch2 beside it,
+# every one is one edit from cmp-serch, so expected lists them and nothing is
+# suggested. A qualified miss is matched against every type: a misspelt type
+# finds its entity, and a slug held under other types lists them.
+- argv: ["add", "component", "--title", "Search"]
+- argv: ["add", "system", "--title", "Sys", "--id", "cmp-search"]
+- argv: ["add", "component", "--title", "Two", "--id", "cmp-serch2"]
+- argv: ["get", "cmp-serch"]
+- argv: ["get", "compnent/cmp-search"]
+- argv: ["get", "api/cmp-search"]
+# The entity being written is never suggested as its own target: that retry
+# would only meet self_link (step 7 above is the single-candidate case).
+- argv: ["link", "cmp-serch2", "depends_on", "cmp-serch3"]
+- argv: ["add", "requirement", "--title", "Z", "--knid", "y", "--strict"]
+- argv: ["neighbors", "req-settle", "--predicate", "relatd"]

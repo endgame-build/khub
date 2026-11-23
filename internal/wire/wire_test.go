@@ -369,8 +369,8 @@ func TestGoldenWiredFiles(t *testing.T) {
 	ws := freshWS(t, "build-hub")
 	mustWire(t, ws, Options{})
 	want := map[string]string{
-		"CLAUDE.md": "1597b98360774aa76458bd59a39047f5431ad176c4058af85c3727d988b570f8",
-		"AGENTS.md": "09bde6fbc69c65918c1688fc8deb77cf1db80cd3f0baddb75cdbda00286db7f2",
+		"CLAUDE.md": "bfa1f4939c6c0d0424db53825ce2e4dd022041e73e093b0cead2767a7f80fd6c",
+		"AGENTS.md": "bf3b52b9766a64a10c412aa304f0826cd8dacd55ce11b1e5ebc28dc475f639cc",
 	}
 	for name, digest := range want {
 		sum := sha256.Sum256([]byte(read(t, filepath.Join(ws, name))))
