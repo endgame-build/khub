@@ -65,9 +65,9 @@ func SpliceEntry(src []byte, path []string, entry *omap.Map, mode ResolveMode) (
 	}
 	// The spliced text must read back as the whole document with just this
 	// entry replaced; anything else never ships.
-	want := setPath(have, path, entry)
+	addressed := setPath(have, path, entry)
 	check, checkNonMap, cerr := LoadDocMap(out, mode)
-	if cerr != nil || checkNonMap != nil || !want || !equalValue(check, have) {
+	if cerr != nil || checkNonMap != nil || !addressed || !equalValue(check, have) {
 		return nil, ErrNoSplice
 	}
 	return []byte(out), nil

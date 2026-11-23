@@ -293,10 +293,7 @@ func plan(root, typeName string, target Target, now time.Time) (*Plan, error) {
 		if textual(to.Format) {
 			lossy = append(lossy, unrepresentable(node, meta, to.Format)...)
 		}
-		meta, err = reshape(rtype, node.Slug, meta, from, to, &lossy)
-		if err != nil {
-			return nil, err
-		}
+		meta = reshape(rtype, node.Slug, meta, from, to, &lossy)
 		if to.Layout == schema.LayoutCollection {
 			if body != "" {
 				meta.Set("body", body)
@@ -644,7 +641,7 @@ func readSource(root string, rtype *schema.ResolvedType, idx *index.Index, node 
 // trip reproduces the file it started from. Nothing else moves: `status`,
 // `generated`, `verified` and every other base field cross as they are, since
 // a migration is not a write that stamps.
-func reshape(rtype *schema.ResolvedType, slug string, meta *omap.Map, from, to Storage, lossy *[]string) (*omap.Map, error) {
+func reshape(rtype *schema.ResolvedType, slug string, meta *omap.Map, from, to Storage, lossy *[]string) *omap.Map {
 	out := omap.New()
 	if to.Layout != schema.LayoutCollection {
 		if _, has := meta.Get("type"); !has {
@@ -676,7 +673,7 @@ func reshape(rtype *schema.ResolvedType, slug string, meta *omap.Map, from, to S
 			}
 		}
 	}
-	return out, nil
+	return out
 }
 
 // restoreInstants is v with every string a declared `date` or `datetime`
