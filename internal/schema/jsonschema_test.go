@@ -15,10 +15,13 @@ import (
 	"go/token"
 	"os"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
 	"testing"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/santhosh-tekuri/jsonschema/v6"
 
@@ -67,38 +70,53 @@ func committedSchema(t *testing.T) *omap.Map {
 	return v.(*omap.Map)
 }
 
+// keyLists is every key list addExtras checks, paired with the schema node
+// holding its properties. A walk-only list (the base block and the re-nested
+// document are khub's own, never authored) has no node. The AST guard holds
+// each name to the literal it declares, so a row cannot pair a name with
+// another list.
+var keyLists = []struct {
+	name string
+	keys []string
+	node []string // nil: walk only
+}{
+	{"layerDocKeys", layerDocKeys, []string{}},
+	{"authoredOntologyKeys", authoredOntologyKeys, []string{"properties", "ontology", "anyOf", "0"}},
+	{"ontologyTypeKeys", ontologyTypeKeys, []string{"definitions", "entity"}},
+	{"attributeKeys", attributeKeys, []string{"definitions", "attribute"}},
+	{"relationKeys", relationKeys, []string{"definitions", "relation"}},
+	{"policyTypeKeys", policyTypeKeys, []string{"definitions", "policy"}},
+	{"retentionKeys", retentionKeys, []string{"definitions", "retention"}},
+	{"storageTypeKeys", storageTypeKeys, []string{"definitions", "storage"}},
+	{"idPrefixDeclKeys", idPrefixDeclKeys, []string{"definitions", "id_prefix_by"}},
+	{"baseKeys", baseKeys, nil},
+	{"ontologyKeys", ontologyKeys, nil},
+	{"walkLayerKeys", walkLayerKeys, nil},
+}
+
 // TestLayerJSONSchemaCoversVocabulary pins each closed mapping of the schema to
 // the key list the walk forbids extras with. LayerJSONSchema already panics on
 // a mismatch; this names which list moved.
 func TestLayerJSONSchemaCoversVocabulary(t *testing.T) {
 	s := committedSchema(t)
-	cases := []struct {
-		path []string
-		keys []string
-	}{
-		{[]string{}, layerDocKeys},
-		{[]string{"properties", "ontology", "anyOf", "0"}, authoredOntologyKeys},
-		{[]string{"definitions", "entity"}, ontologyTypeKeys},
-		{[]string{"definitions", "attribute"}, attributeKeys},
-		{[]string{"definitions", "relation"}, relationKeys},
-		{[]string{"definitions", "policy"}, policyTypeKeys},
-		{[]string{"definitions", "retention"}, retentionKeys},
-		{[]string{"definitions", "waiver"}, WaivableFindings},
-		{[]string{"definitions", "storage"}, storageTypeKeys},
-		{[]string{"definitions", "id_prefix_by"}, idPrefixDeclKeys},
-	}
-	for _, tc := range cases {
-		node := dig(t, s, tc.path)
+	check := func(path, keys []string) {
+		node := dig(t, s, path)
 		props, _ := node.Get("properties")
-		got := slices.Clone(props.(*omap.Map).Keys())
-		if !slices.Equal(got, tc.keys) {
-			t.Errorf("%s: properties %v, vocabulary %v", strings.Join(tc.path, "."), got, tc.keys)
+		if got := props.(*omap.Map).Keys(); !slices.Equal(got, keys) {
+			t.Errorf("%s: properties %v, vocabulary %v", strings.Join(path, "."), got, keys)
 		}
 		if ap, _ := node.Get("additionalProperties"); ap != false {
 			t.Errorf("%s: additionalProperties = %v, want false (the walk forbids extras)",
-				strings.Join(tc.path, "."), ap)
+				strings.Join(path, "."), ap)
 		}
 	}
+	for _, l := range keyLists {
+		if l.node != nil {
+			check(l.node, l.keys)
+		}
+	}
+	// A waiver's keys are the findings takeWaivers accepts, not an addExtras list.
+	check([]string{"definitions", "waiver"}, WaivableFindings)
 	// The walk's own ontology list differs from the authored one by `base`
 	// alone, which mergeLayers rejects from an authored file.
 	extra := []string{}
@@ -112,25 +130,6 @@ func TestLayerJSONSchemaCoversVocabulary(t *testing.T) {
 	}
 }
 
-// schemaKeyLists maps each key list the JSON Schema describes to the schema
-// node holding its properties. The walk-only lists name why they are not.
-var schemaKeyLists = map[string]string{
-	"layerDocKeys":         "the root",
-	"authoredOntologyKeys": "properties.ontology",
-	"ontologyTypeKeys":     "definitions.entity",
-	"attributeKeys":        "definitions.attribute",
-	"relationKeys":         "definitions.relation",
-	"policyTypeKeys":       "definitions.policy",
-	"retentionKeys":        "definitions.retention",
-	"storageTypeKeys":      "definitions.storage",
-	"idPrefixDeclKeys":     "definitions.id_prefix_by",
-	// Walk only: the base block and the re-nested document are khub's own,
-	// never authored. ontologyKeys differs from authoredOntologyKeys by `base`.
-	"baseKeys":      "",
-	"ontologyKeys":  "",
-	"walkLayerKeys": "",
-}
-
 // TestExtraKeyChecksUseTheKeyLists reads the package's source so a key cannot
 // reach the walk without reaching the schema. In every non-test file:
 //
@@ -142,8 +141,8 @@ var schemaKeyLists = map[string]string{
 //     operand of == or !=, which reads a kind and reports nothing), so no key
 //     check bypasses it.
 //
-// Every list addExtras is called with must be one the JSON Schema describes
-// or a walk-only list named in schemaKeyLists.
+// Every list addExtras is called with must be a keyLists row, and every row's
+// keys must be the literal its name declares.
 func TestExtraKeyChecksUseTheKeyLists(t *testing.T) {
 	fset := token.NewFileSet()
 	names, err := filepath.Glob("*.go")
@@ -176,6 +175,7 @@ func extraKeyViolations(fset *token.FileSet, files []*ast.File) []string {
 
 	// The package-level key lists.
 	lists := map[string]*ast.Ident{}
+	values := map[string][]string{}
 	for _, f := range files {
 		for _, d := range f.Decls {
 			gd, ok := d.(*ast.GenDecl)
@@ -193,6 +193,10 @@ func extraKeyViolations(fset *token.FileSet, files []*ast.File) []string {
 						continue
 					}
 					lists[name.Name] = name
+					for _, el := range vs.Values[i].(*ast.CompositeLit).Elts {
+						s, _ := strconv.Unquote(el.(*ast.BasicLit).Value)
+						values[name.Name] = append(values[name.Name], s)
+					}
 				}
 			}
 		}
@@ -269,16 +273,22 @@ func extraKeyViolations(fset *token.FileSet, files []*ast.File) []string {
 			})
 		}
 	}
-	for name := range used {
-		if _, known := schemaKeyLists[name]; !known {
-			out = append(out, fmt.Sprintf(
-				"addExtras checks %s, which the JSON Schema does not describe; "+
-					"add it to LayerJSONSchema and schemaKeyLists", name))
+	rows := map[string]bool{}
+	for _, l := range keyLists {
+		rows[l.name] = true
+		if !used[l.name] {
+			out = append(out, fmt.Sprintf("keyLists names %s, which no addExtras call checks", l.name))
+		}
+		if !slices.Equal(values[l.name], l.keys) {
+			out = append(out, fmt.Sprintf("keyLists pairs %s with %v, but it declares %v",
+				l.name, l.keys, values[l.name]))
 		}
 	}
-	for name := range schemaKeyLists {
-		if !used[name] {
-			out = append(out, fmt.Sprintf("schemaKeyLists names %s, which no addExtras call checks", name))
+	for name := range used {
+		if !rows[name] {
+			out = append(out, fmt.Sprintf(
+				"addExtras checks %s, which keyLists does not pair with a schema node; "+
+					"add it to LayerJSONSchema and keyLists", name))
 		}
 	}
 	slices.Sort(out)
@@ -395,7 +405,7 @@ func TestJSONSchemaAgreesWithTheWalk(t *testing.T) {
 	// An empty, comment-only, `~` or bare `---` document is null to an editor
 	// and an empty layer file to khub.
 	for _, text := range []string{"", "# notes only\n", "~\n", "---\n"} {
-		if msg := walkError(mustParseDoc(t, text)); msg != "" {
+		if msg := walkError(t, text); msg != "" {
 			t.Errorf("null document %q is refused by the walk: %s", text, msg)
 		}
 	}
@@ -405,7 +415,7 @@ func TestJSONSchemaAgreesWithTheWalk(t *testing.T) {
 	// khub reads a document that is just `0` or `false` as empty too (ParseDoc
 	// collapses it before the walk); the schema asks for a mapping or null.
 	for _, v := range []any{int64(0), false} {
-		if msg := walkError(mustParseDoc(t, fmt.Sprintf("%v\n", v))); msg != "" {
+		if msg := walkError(t, fmt.Sprintf("%v\n", v)); msg != "" {
 			t.Errorf("document %v is refused by the walk: %s", v, msg)
 		}
 		if validateDoc(t, s, v) == nil {
@@ -439,7 +449,7 @@ func TestJSONSchemaAgreesWithTheWalk(t *testing.T) {
 			"        l: { type: list, items: { type: text, enum: [p, q] } }\n" +
 			"      relations:\n" +
 			"        r: { to: any, many: 'yes', required: 0, inverse: null, acyclic: true }\n" +
-			"        s: { to: [a, b] }\n",
+			"        s: { to: [a, b] }\n    b: {}\n",
 	}
 	rejected := []string{
 		"nope: 1\n",
@@ -477,6 +487,7 @@ func TestJSONSchemaAgreesWithTheWalk(t *testing.T) {
 		ont + "policy:\n  a: { waive: { s: { orphans: '  ' } } }\n",
 		ont + "policy:\n  a: { waive: { s: { orphans: 3 } } }\n",
 		ont + "policy:\n  a: { waive: { '': { orphans: Because. } } }\n",
+		ont + "policy:\n  a: { waive: { ~: { orphans: Because. } } }\n",
 		ont + "policy:\n  a: { locked: maybe }\n",
 		ont + "policy:\n  a: { locked_relations: r }\n",
 		ont + "policy:\n  a: { locked_relations: [1] }\n",
@@ -488,6 +499,7 @@ func TestJSONSchemaAgreesWithTheWalk(t *testing.T) {
 		ont + "storage:\n  a: { layout: file, path: [1] }\n",
 		ont + "storage:\n  a: { layout: file, id_prefix: AD }\n",
 		ont + "storage:\n  a: { layout: file, id_prefix: { by: kind } }\n",
+		ont + "storage:\n  a: { layout: file, id_prefix: { map: { x: xa, y: ya } } }\n",
 		ont + "storage:\n  a: { layout: file, id_prefix: { by: kind, map: { x: X } } }\n",
 		ont + "storage:\n  a: { layout: file, id_prefix: { by: kind, map: {}, nope: 1 } }\n",
 		ont + "storage:\n  a: { layout: file, template: true }\n",
@@ -503,7 +515,7 @@ func TestJSONSchemaAgreesWithTheWalk(t *testing.T) {
 	}
 	for _, text := range stricter {
 		doc := mustParseDoc(t, text)
-		if msg := walkError(doc); msg != "" {
+		if msg := walkError(t, text); msg != "" {
 			t.Errorf("falsy-block probe is refused by the walk (%s):\n%s", msg, text)
 		}
 		if validateDoc(t, s, doc) == nil {
@@ -512,7 +524,7 @@ func TestJSONSchemaAgreesWithTheWalk(t *testing.T) {
 	}
 	for _, text := range accepted {
 		doc := mustParseDoc(t, text)
-		if msg := walkError(doc); msg != "" {
+		if msg := walkError(t, text); msg != "" {
 			t.Errorf("probe meant to be accepted is refused by the walk (%s):\n%s", msg, text)
 			continue
 		}
@@ -522,7 +534,7 @@ func TestJSONSchemaAgreesWithTheWalk(t *testing.T) {
 	}
 	for _, text := range rejected {
 		doc := mustParseDoc(t, text)
-		if walkError(doc) == "" {
+		if walkError(t, text) == "" {
 			t.Errorf("probe meant to be refused is accepted by the walk:\n%s", text)
 			continue
 		}
@@ -532,25 +544,102 @@ func TestJSONSchemaAgreesWithTheWalk(t *testing.T) {
 	}
 }
 
-// walkError runs one document through what Resolve runs over the authored
-// layers: mergeLayers, the vocabulary walk, then the storage matrix. "" means
-// accepted.
-func walkError(doc *omap.Map) string {
-	layers, err := mergeLayers([]schemaDoc{{name: "probe.yaml", m: doc}})
-	if err != nil {
-		return err.Error()
+// TestJSONSchemaAgreesOnNullForEveryKey writes `<key>: null` for every key of
+// every closed mapping, beside the keys a valid mapping needs, and asks the
+// walk and the schema for one verdict, so no key's nullability drifts.
+func TestJSONSchemaAgreesOnNullForEveryKey(t *testing.T) {
+	s := compiledSchema(t)
+	const ent = "ontology:\n  entities:\n    a:\n      attributes:\n        kind: { enum: [x, y] }\n"
+	// Per mapping: the keys a valid one needs, and where it sits (%s is its body).
+	type nullCtx struct {
+		needs map[string]string
+		wrap  string
 	}
-	raw := omap.New()
-	ont := omap.New()
-	ont.Set("entities", layers.entities)
-	raw.Set("ontology", ont)
-	raw.Set("policy", layers.policy)
-	raw.Set("storage", layers.storage)
-	sf, verrs := validateSchemaFile(raw)
-	if len(verrs) > 0 {
-		return smuggledError(verrs).Error()
+	contexts := map[string]nullCtx{
+		"waiver":               {nil, ent + "policy:\n  a:\n    waive:\n      s: { %s }\n"},
+		"layerDocKeys":         {nil, "%s\n"},
+		"authoredOntologyKeys": {nil, "ontology: { %s }\n"},
+		"ontologyTypeKeys":     {nil, "ontology:\n  entities:\n    a: { %s }\n"},
+		"attributeKeys":        {nil, "ontology:\n  entities:\n    a:\n      attributes:\n        f: { %s }\n"},
+		"relationKeys":         {map[string]string{"to": "a"}, "ontology:\n  entities:\n    a:\n      relations:\n        r: { %s }\n"},
+		"policyTypeKeys":       {nil, ent + "policy:\n  a: { %s }\n"},
+		"retentionKeys":        {map[string]string{"days": "1"}, ent + "policy:\n  a:\n    retention: { %s }\n"},
+		"storageTypeKeys":      {map[string]string{"layout": "file"}, ent + "storage:\n  a: { %s }\n"},
+		"idPrefixDeclKeys": {map[string]string{"by": "kind", "map": "{ x: xa, y: ya }"},
+			ent + "storage:\n  a:\n    layout: file\n    id_prefix: { %s }\n"},
 	}
-	if err := finishLayered(sf); err != nil {
+	type list struct {
+		name string
+		keys []string
+	}
+	lists := []list{{"waiver", WaivableFindings}}
+	for _, l := range keyLists {
+		if l.node != nil {
+			lists = append(lists, list{l.name, l.keys})
+		}
+	}
+	for _, l := range lists {
+		c, ok := contexts[l.name]
+		if !ok {
+			t.Errorf("%s has no null-probe context", l.name)
+			continue
+		}
+		for _, k := range l.keys {
+			var pairs []string
+			for _, other := range l.keys {
+				if v, needed := c.needs[other]; needed && other != k {
+					pairs = append(pairs, other+": "+v)
+				}
+			}
+			text := fmt.Sprintf(c.wrap, strings.Join(append(pairs, k+": null"), ", "))
+			walkOK := walkError(t, text) == ""
+			schemaOK := validateDoc(t, s, mustParseDoc(t, text)) == nil
+			if walkOK != schemaOK {
+				t.Errorf("%s: walk accepts %v, JSON Schema accepts %v:\n%s", k, walkOK, schemaOK, text)
+			}
+		}
+	}
+}
+
+// TestJSONSchemaKnownGaps pins the single-value rules JSON Schema cannot say,
+// which docs/schema.md lists: the walk refuses each, the schema lets it by.
+// A probe that starts failing here moved to one side; file it where it now
+// belongs.
+func TestJSONSchemaKnownGaps(t *testing.T) {
+	s := compiledSchema(t)
+	const ont = "ontology:\n  entities:\n    a:\n      attributes:\n        kind: { enum: [x, y] }\n"
+	for _, text := range []string{
+		ont + "policy:\n  a: { retention: { days: 30.0 } }\n",
+		ont + "storage:\n  a: { layout: file, path: ../outside }\n",
+		ont + "storage:\n  a: { layout: file, path: /tmp/a }\n",
+		ont + "storage:\n  a: { layout: file, path: .khub/a }\n",
+		ont + "storage:\n  a: { layout: file, path: ['w/{nope}.md'] }\n",
+		"ontology:\n  entities:\n    a:\n      attributes:\n        f: { pattern: '(' }\n",
+	} {
+		if walkError(t, text) == "" {
+			t.Errorf("the walk now accepts this known gap:\n%s", text)
+		}
+		if validateDoc(t, s, mustParseDoc(t, text)) != nil {
+			t.Errorf("the JSON Schema now refuses this known gap:\n%s", text)
+		}
+	}
+}
+
+// TestNonBlankIsTrimSpace holds nonBlank to strings.TrimSpace, rune by rune.
+func TestNonBlankIsTrimSpace(t *testing.T) {
+	re := regexp.MustCompile("^" + nonBlank + "$")
+	for r := rune(0); r <= unicode.MaxRune; r++ {
+		if utf8.ValidRune(r) && re.MatchString(string(r)) == unicode.IsSpace(r) {
+			t.Errorf("nonBlank and unicode.IsSpace disagree on %U", r)
+		}
+	}
+}
+
+// walkError resolves one probe document the way khub loads a workspace's
+// layers, every check of Resolve included. "" means accepted.
+func walkError(t *testing.T, text string) string {
+	t.Helper()
+	if _, err := ResolveWith(nil, writeSchemaFiles(t, text)); err != nil {
 		return err.Error()
 	}
 	return ""
