@@ -1,43 +1,26 @@
-// app.js — boot, dispatch, the render dispatcher, the effect runner.
+// app.js — boot and the router.
 //
-// The only module allowed to reach for everything. Every state change in the
-// application goes through the one dispatch below: reduce (pure) → render (the
-// only place that touches the document or cytoscape) → effects (the only place
-// that fetches).
+// The page is three views over one address: the ontology overview, one type's
+// list, one entity. Everything a view shows is derived from the URL fragment
+// (route.js), so reload, back/forward and a pasted link all restore it. Each
+// view fetches what it needs when it opens; nothing polls.
 
-import * as api from './api.js';
-import * as gfx from './cy.js';
-import * as panels from './panels.js';
-import { initial, reduce, diff } from './state.js';
-import { buildModel, indexSchema, computeVisible, legalTargetTypes, typeOf,
-         buildSchemaGraph, buildBothGraph, usedEdgeCounts, aspectView } from './model.js';
-import { el, fill, text } from './dom.js';
+import * as overview from './overview.js';
+import * as list from './list.js';
+import * as entity from './entity.js';
+import { parse, format } from './route.js';
+import { el, fill } from './dom.js';
+import { notice } from './widgets.js';
 
-var state, model, schema, colors, ink, typeOrder;
-var lastLayout = '';
-// The view's own explanation of what is on screen (a layout fallback, edges the
-// predicate filter is hiding). Held because it outlives the render that
-// produced it and must not be destroyed by a passing message.
-var viewNotice = '';
-// computeVisible walks every edge, and render() used to call it on every
-// dispatch — including each search keystroke. It depends on exactly three
-// slices, so it is recomputed only when one of them moves.
-var lastVisible = null;
-var lastListMs = 0;
-// Where the list was scrolled, per type. Without this, clicking a row and
-// coming back drops you at the top, which ruins the scan-check-scan job the
-// list exists for.
-var listScroll = {};
-// The ontology, as introspect.EdgesView built it. Fetched once with the schema.
-var schemaEdges = [];
-var dom = {};
+var main, crumbs;
+var lastKey = '';
 
 function $(id) { return document.getElementById(id); }
 
-// readColors resolves Paper's sanctioned graph ramp out of the stylesheet.
-// app.js holds no colour literal of its own: the token sheet is the source, and
-// cytoscape needs hex because it parses colours itself and understands neither
-// custom properties nor lab().
+// readColors resolves the graph ramp out of the stylesheet. app.js holds no
+// colour literal of its own: the token sheet is the source, and cytoscape
+// needs hex because it parses colours itself and understands neither custom
+// properties nor lab().
 function readColors() {
   var cs = getComputedStyle(document.documentElement);
   function v(name) { return cs.getPropertyValue(name).trim(); }
@@ -52,309 +35,72 @@ function readColors() {
   };
 }
 
-function dispatch(action) {
-  if (action.type === 'NAV_ENTITY') rememberScroll();
-  var next = reduce(state, action);
-  if (next === state) return;
-  var changed = diff(state, next);
-  state = next;
-  render(changed);
-  effects(changed);
+// setCrumbs draws the breadcrumb trail: every item but the last is a link.
+function setCrumbs(items) {
+  var nodes = [];
+  items.forEach(function (it, i) {
+    if (i) nodes.push(el('span', { class: 'sep', 'aria-hidden': 'true' }, '›'));
+    if (it.route && i < items.length - 1) nodes.push(el('a', { class: 'crumb', href: format(it.route) }, it.label));
+    else nodes.push(el('span', { class: 'crumb here', 'aria-current': 'page' }, it.label));
+  });
+  fill(crumbs, nodes);
 }
 
-function render(changed) {
-  if (!lastVisible || changed.focus || changed.depth || changed.filters) {
-    lastVisible = computeVisible(state, model);
-  }
-  var visible = lastVisible;
-  // View decides first, level second. computeVisible describes the instance
-  // graph and says nothing about an ontology, so schema must not be reasoned
-  // about through it.
-  var asSchema = state.view === 'schema';
-  var asList = !asSchema && state.view === 'list';
-  // The combined view is the graph view plus an overlay: the same focus,
-  // depth and filters decide which entities show, and their types are boxed
-  // above them.
-  var asBoth = state.view === 'both';
-  var moved = changed.focus || changed.depth || changed.filters || changed.view;
+var colors = readColors();
 
-  // A view switch changes which population is on the canvas, and lastLayout is
-  // one memo across all of them. Left stale, returning to a view whose layout
-  // name happens to match declines to run — leaving freshly added elements
-  // stacked at the origin.
-  if (changed.view) lastLayout = '';
+var ctx = {
+  colors: colors.ramp,
+  ink: colors.ink,
+  crumbs: setCrumbs,
+  // nav pushes a history entry, so back returns to the previous view.
+  nav: function (route) {
+    var h = format(route);
+    if (h === location.hash || (h === '#/' && location.hash === '')) { render(); return; }
+    location.hash = h;
+  },
+  // replace rewrites the address without a history entry: typing into a
+  // filter box is one step back, not one per keystroke.
+  replace: function (route) {
+    history.replaceState(null, '', location.pathname + location.search + format(route));
+    render();
+  }
+};
 
-  if (asSchema && moved) {
-    var sch = buildSchemaGraph(schema, schemaEdges, state.hiddenPredicates,
-                               usedEdgeCounts(model), model.byType);
-    var schIds = new Set(gfx.setOverlay(sch));
-    gfx.setLevelClass(0);
-    gfx.showOnly(schIds);
-    // An ontology is layered, not a force field: requirement -> component ->
-    // repo is a chain, and cose with three connected pairs and three isolates
-    // has almost nothing to push against, so it scattered them — a connected
-    // type ended up further from its neighbour than the unconnected ones.
-    gfx.runLayout({ name: 'schema' });
-    viewNotice = schemaNotice(sch);
-    renderNotice();
-  }
-
-  if (!asSchema && !asList && moved) {
-    // The graph view draws no synthetic elements — the ontology is where the
-    // type level lives. The combined view is the one that adds them.
-    var ids = new Set();
-    visible.nodes.forEach(function (id) { ids.add(id); });
-    visible.edges.forEach(function (id) { ids.add(id); });
-    // Only navigation relayouts the combined view. A filter toggle rebuilds
-    // the overlay (which boxes and relations show depends on it), so the
-    // boxes' positions are read first and put back after.
-    var relayout = changed.focus || changed.depth || changed.view;
-    var saved = (asBoth && !relayout) ? gfx.overlayPositions() : null;
-    if (asBoth) {
-      var both = buildBothGraph(
-        buildSchemaGraph(schema, schemaEdges, state.hiddenPredicates, usedEdgeCounts(model), model.byType),
-        Array.from(visible.nodes));
-      gfx.setOverlay(both).forEach(function (id) { ids.add(id); });
-    } else {
-      gfx.setOverlay(null);
-    }
-
-    gfx.setLevelClass(visible.level);
-    gfx.showOnly(ids);
-
-    // Navigation relayouts; filters do not. Re-running a force-directed layout
-    // because someone toggled a legend row is both slow and maddening. The
-    // exception is a change of layout ALGORITHM: un-hiding a predicate can turn
-    // an edgeless set into a connected one, and a grid laid out for no edges is
-    // the wrong shape for a graph that now has a hundred.
-    //
-    // The combined view follows the same rule. Its overlay was just rebuilt,
-    // so on a filter change the boxes go back where they were, and a box the
-    // change brought in is placed above the entities that realize it rather
-    // than relaying out every entity on the canvas.
-    if (asBoth) {
-      lastLayout = 'both';
-      if (relayout || !saved.size) gfx.runLayout({ name: 'both' });
-      else gfx.restoreOverlay(saved);
-    } else if (changed.focus || changed.depth || changed.view ||
-        visible.layout.name !== lastLayout) {
-      lastLayout = visible.layout.name;
-      gfx.runLayout(visible.layout);
-    }
-  }
-
-  if (moved || changed.sort) {
-    dom.list.hidden = !asList;
-    if (asList) {
-      var t0 = performance.now();
-      panels.renderList(dom.list, state, model, visible, colors, typeOrder);
-      // focus is empty at the top level, where the list spans the workspace and
-      // there is no per-type scroll position to restore.
-      dom.list.scrollTop = state.focus.length ? (listScroll[state.focus[0].name] || 0) : 0;
-      lastListMs = Math.round(performance.now() - t0);
-    }
-    // The notice explains the canvas — a layout fallback, edges a filter is
-    // hiding. It says nothing about a list, and #notice floats above one.
-    viewNotice = (asList || asSchema) ? '' : visible.notice;
-    if (!asSchema) renderNotice();
-  }
-
-  if (changed.focus) panels.renderCrumbs(dom.crumbs, state, model);
-  if (changed.filters) panels.renderFilters(dom.filters, state, model, schema, colors, typeOrder);
-  if (changed.search) panels.renderSearch(dom.results, state, model);
-  if (changed.focus || changed.filters || changed.depth) {
-    panels.renderCounts(dom.counts, state, model, visible);
-  }
-  if (changed.inspect || changed.focus) panels.renderInspector(dom.inspector, state, model);
-  if (changed.compose) {
-    panels.renderComposer(dom.composer, state, schema);
-    gfx.mark(state.compose.a, state.compose.b,
-      state.compose.a ? legalTargetTypes(schema, typeOf(state.compose.a)) : null);
-  }
-  if (changed.notice) renderNotice();
-  if (changed.focus || changed.view) {
-    // All four are always available now — they are peers over one workspace,
-    // not a toggle that only means something at one level.
-    dom.asschema.className = 'btn-ghost' + (state.view === 'schema' ? ' on' : '');
-    dom.asgraph.className = 'btn-ghost' + (state.view === 'graph' ? ' on' : '');
-    dom.asboth.className = 'btn-ghost' + (state.view === 'both' ? ' on' : '');
-    dom.aslist.className = 'btn-ghost' + (state.view === 'list' ? ' on' : '');
-    // Levels and depth belong to the instance views; an ontology is flat.
-    dom.crumbs.hidden = asSchema;
-    dom.depthctl.hidden = asSchema;
-  }
-  if ((changed.depth || changed.focus || changed.view) && !asSchema) {
-    // Live at both levels now: at a type the + control is how other types come
-    // back into view.
-    dom.expand.disabled = !state.focus.length || state.depth >= 3;
-    dom.contract.disabled = !state.focus.length || state.depth <= 0;
-    text(dom.depth, state.focus.length
-      ? (state.depth === 0 ? 'this type only' : 'depth ' + state.depth)
-      : '');
-  }
+// viewKey names what is on screen, ignoring sort and filters: a change of key
+// is a new page, which scrolls to the top.
+function viewKey(route) {
+  if (route.view === 'list') return 'list:' + route.type;
+  if (route.view === 'entity') return 'entity:' + route.id;
+  return route.view;
 }
 
-// An explanation of the current view always wins over a transient message.
-// They shared one slot before, so copying a command at L1 erased "101 edges are
-// hidden here" — the answer to a question the reader was still asking.
-function renderNotice() { panels.renderNotice(dom.notice, viewNotice || state.notice); }
-
-function effects(changed) {
-  if (changed.inspect && state.inspect && state.inspect.kind === 'type' && state.inspect.status === 'loading') {
-    var name = state.inspect.name;
-    api.getType(name).then(
-      function (data) { dispatch({ type: 'INSPECT_TYPE_OK', name: name, data: data }); },
-      function (err) { dispatch({ type: 'INSPECT_TYPE_ERR', name: name, message: err.message }); }
-    );
-    return;
+function render() {
+  var route = parse(location.hash);
+  var key = viewKey(route);
+  if (key !== lastKey) {
+    main.scrollTop = 0;
+    lastKey = key;
   }
-  if (changed.inspect && state.inspect && state.inspect.status === 'loading') {
-    var id = state.inspect.id;
-    api.getEntity(id).then(
-      function (data) { dispatch({ type: 'INSPECT_OK', id: id, data: data }); },
-      function (err) { dispatch({ type: 'INSPECT_ERR', id: id, message: err.message }); }
-    );
-  }
-}
-
-// onGraph is the single meaning of a canvas click: focus what was clicked.
-// There is no selection mode — the command composer is driven from the
-// inspector's buttons, so one click never has two meanings.
-// schemaNotice says what the ontology is not showing. Unhiding the universal
-// predicates draws every type against every type, so their absence is worth
-// explaining rather than leaving as a silently partial picture.
-function schemaNotice(sch) {
-  var base = schema.baseRelations.filter(function (p) { return state.hiddenPredicates.has(p); });
-  var derived = (schema.derivedRelations || []).filter(function (p) { return state.hiddenPredicates.has(p); });
-  var parts = [];
-  if (base.length) parts.push(base.length + ' universal (' + base.join(', ') + ') — shown, they connect every type to every type');
-  if (derived.length) parts.push(derived.length + ' derived inverse' + (derived.length === 1 ? '' : 's') + ' (' + derived.join(', ') + ')');
-  return parts.length ? 'Hidden: ' + parts.join(' · ') : '';
-}
-
-function rememberScroll() {
-  if (state.focus.length === 1 && state.view === 'list') {
-    listScroll[state.focus[0].name] = dom.list.scrollTop;
-  }
-}
-
-function onGraph(evt) {
-  // A schema node is a declared type, not an entity and not a drill-down
-  // target: clicking it explains the contract rather than switching what you
-  // are looking at.
-  if (evt.schema) {
-    // An instance-of edge says only "this entity is of that type", which both
-    // its ends already show; it has nothing to inspect.
-    if (evt.data && evt.data.instanceOf) return;
-    if (evt.target === 'node' && evt.data.schemaKind === 'type') {
-      dispatch({ type: 'INSPECT_TYPE', name: evt.data.type });
-    } else if (evt.target === 'edge') {
-      dispatch({ type: 'INSPECT_RELATION', data: evt.data });
-    }
-    return;
-  }
-  if (evt.target === 'node') {
-    // NAV_ENTITY inspects as part of navigating, so this is one action.
-    dispatch({ type: 'NAV_ENTITY', id: evt.id });
-    return;
-  }
-  if (evt.target === 'edge') {
-    // An edge has nothing to drill into, so its click is unambiguous.
-    dispatch({
-      type: 'COMPOSE_UNLINK',
-      source: evt.data.source, predicate: evt.data.label, target: evt.data.target
-    });
-    dispatch({ type: 'NOTICE', text: 'Queued an unlink for ' + evt.data.label });
+  if (route.view !== 'overview') overview.unmount();
+  if (route.view !== 'list') list.unmount();
+  if (route.view !== 'entity') entity.unmount();
+  document.body.dataset.view = route.view;
+  switch (route.view) {
+    case 'overview': overview.show(main, route, ctx); break;
+    case 'list': list.show(main, route, ctx); break;
+    case 'entity': entity.show(main, route, ctx); break;
+    default:
+      setCrumbs([{ label: 'Ontology', route: { view: 'overview', sel: '' } }, { label: 'Not found' }]);
+      fill(main, [notice('Nothing at this address', 'The address names no view of this workspace.',
+        [{ label: 'Back to the ontology', href: '#/' }])]);
   }
 }
 
 function boot() {
-  dom = {
-    cy: $('cy'), crumbs: $('crumbs'), counts: $('counts'), filters: $('filters'),
-    inspector: $('inspector'), composer: $('composer'), results: $('results'),
-    search: $('search'), notice: $('notice'), expand: $('expand'),
-    contract: $('contract'), depth: $('depth'), list: $('list'),
-    aslist: $('aslist'), asgraph: $('asgraph'), asschema: $('asschema'),
-    asboth: $('asboth'),
-    depthctl: $('depthctl')
-  };
-
-  Promise.all([api.getGraph(), api.getSchema()]).then(function (r) {
-    model = buildModel(r[0]);
-    schema = indexSchema(r[1]);
-    schemaEdges = r[1].edges || [];
-    var c = readColors();
-    colors = c.ramp;
-    ink = c.ink;
-
-    // One ordering, used by both the canvas and the legend — indexing them
-    // separately made a zero-count type magenta in the legend and grey on the
-    // canvas.
-    //
-    // Present types first, sorted, which is exactly viz.go's own rule
-    // (sortedKeys over the types present). That is what keeps a type the same
-    // colour in the served app and in the static artifact. Declared-but-empty
-    // types follow, so they still get a colour for their L0 circle; viz never
-    // draws them, so the tail cannot disagree with anything.
-    typeOrder = model.types.concat(
-      schema.declaredTypes.filter(function (t) { return !model.byType.has(t); }).sort()
-    );
-    state = initial(schema.baseRelations, schema.derivedRelations);
-    // `khub serve --aspect` prints a URL carrying ?aspect=, so the page lands
-    // where the operator asked. Read once at boot; the buttons own the view
-    // from then on.
-    var landing = aspectView(window.location.search);
-    if (landing) state = Object.assign({}, state, { view: landing });
-    panels.init(dispatch);
-
-    gfx.mount(dom.cy, { nodes: model.nodes, edges: model.edges },
-      gfx.buildStyle(typeOrder, colors, ink));
-    gfx.applyFlags();
-    gfx.on(onGraph);
-    gfx.hoverLabels();
-
-    dom.search.addEventListener('input', function () {
-      dispatch({ type: 'SET_SEARCH', text: dom.search.value });
-    });
-    dom.asschema.addEventListener('click', function () {
-      gfx.setSnapNextFit();
-      dispatch({ type: 'SET_VIEW', view: 'schema' });
-    });
-    dom.aslist.addEventListener('click', function () { dispatch({ type: 'SET_VIEW', view: 'list' }); });
-    dom.asboth.addEventListener('click', function () {
-      gfx.setSnapNextFit();
-      dispatch({ type: 'SET_VIEW', view: 'both' });
-    });
-    dom.asgraph.addEventListener('click', function () {
-      // Snap rather than tween: the canvas sat under the list with a stale
-      // viewport, so an animated fit would start from nowhere.
-      gfx.setSnapNextFit();
-      dispatch({ type: 'SET_VIEW', view: 'graph' });
-    });
-    dom.expand.addEventListener('click', function () { dispatch({ type: 'EXPAND' }); });
-    dom.contract.addEventListener('click', function () { dispatch({ type: 'CONTRACT' }); });
-
-    // Snap the first fit rather than animating it: cytoscape fits to every
-    // element at init, so the opening frame is the whole 2,000-node preset
-    // spread zoomed out, and animating away from it reads as a flash.
-    gfx.setSnapNextFit();
-    render({
-      focus: true, depth: true, filters: true, search: true,
-      inspect: true, compose: true, notice: true, view: true, sort: true
-    });
-
-    if (model.droppedDuplicateEdges) {
-      dispatch({
-        type: 'NOTICE',
-        text: 'Collapsed ' + model.droppedDuplicateEdges + ' duplicate edge record(s)'
-      });
-    }
-  }).catch(function (err) {
-    fill(dom.inspector, [
-      el('div', { class: 'cap' }, 'Could not load'),
-      el('div', { class: 'err' }, err.message || String(err))
-    ]);
-  });
+  main = $('main');
+  crumbs = $('crumbs');
+  window.addEventListener('hashchange', render);
+  render();
 }
 
 boot();

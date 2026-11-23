@@ -4,6 +4,49 @@ Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+### Changed
+
+- **`khub serve` is an ontology explorer: three routed views replace Schema,
+  Both, Graph, List and the side panel.** The overview draws the declared
+  types and relations, with the selected type's own attributes and relations
+  (the inherited base folded away) or the selected relation's cardinality,
+  inverse and usage beside it. A type's list has one row per entity with its
+  draft, stale, orphan and incomplete markers, its trust tier, its own
+  attributes and one count of distinct linked entities per relation, outgoing
+  and incoming, counted off the graph `query --count` reads, sortable by any column and
+  filterable by an entity linked through one relation, an attribute value, a
+  marker and free text. An entity's page shows its attributes, verification
+  history, its body rendered as formatted text, and every connection grouped
+  by relation and direction, each neighbour with its type, title, markers and
+  a one-line summary. Every view has its own address in the URL fragment, so a
+  reload, back/forward or a pasted link restores it. The server stays
+  read-only; the link/unlink command composer is gone with the views it served.
+  On a 2,000-entity workspace a list loads in about 0.3 s.
+- **`serve --aspect` is accepted for compatibility** and still printed on the
+  URL; every value now opens the overview. Its help text says so — the one
+  fixture byte change.
+
+### Added
+
+- **`GET /api/rows/<type>`**, and `markers`, `body_tree` and `neighbours` on
+  `/api/entity/<id>` after the existing fields. `/api/schema` gains `base`
+  (what `khub schema base` prints), and a refusal from the server carries
+  `field`, `expected` and `suggestion` when the error sets them, as the CLI's
+  envelope does.
+- **`github.com/yuin/goldmark` v1.8.7**, pure Go, used only by the new
+  `internal/explore` package to parse entity bodies for the page (depguard
+  keeps it there). Nothing on a write path depends on it.
+
+### Fixed
+
+- The served page's modules revalidate on every load (`Cache-Control:
+  no-cache`), so a browser never runs a cached module from a previous binary
+  beside a new one.
+- The schema diagram draws its relation arrows: a self-relation's style named
+  a `curve-style` cytoscape does not have, which stopped every edge from being
+  laid out, and a deprecated label-sized box width left the layout measuring
+  empty boxes.
+
 ## [0.33.0] — 2026-11-15
 
 khub tells an agent more and lets it try a write first. A refusal now carries

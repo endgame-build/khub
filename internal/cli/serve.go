@@ -54,10 +54,10 @@ func registerServe(root *cobra.Command) {
 				if addr, ok := ln.Addr().(*net.TCPAddr); ok {
 					bound = addr.Port
 				}
-				// The aspect rides on the URL rather than in server state: the
-				// page reads it once at load, so the link the operator copies
-				// or bookmarks reopens the same view, and the server stays a
-				// function of the request alone.
+				// The aspect rides on the printed URL so existing invocations
+				// and bookmarks keep working; the page ignores it and always
+				// lands on the ontology overview. Which view is open lives in
+				// the URL fragment the page writes.
 				page := "/"
 				if cmd.Flags().Changed("aspect") {
 					page = "/?aspect=" + aspect
@@ -73,6 +73,6 @@ func registerServe(root *cobra.Command) {
 	cmd.Flags().IntVar(&port, "port", serve.DefaultPort,
 		"Port to bind on 127.0.0.1; 0 takes an ephemeral one.")
 	cmd.Flags().StringVar(&aspect, "aspect", "",
-		"View to open on: instances, schema, or both. Default: the schema view.")
+		"Accepted for compatibility; every value opens the ontology overview.")
 	root.AddCommand(cmd)
 }

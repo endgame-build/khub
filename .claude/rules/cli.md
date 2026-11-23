@@ -78,16 +78,30 @@ review point.
 
 ## `khub serve`
 
-A read-only loopback view of the graph for a human. Its exposure is inbound —
-anything already running on the machine can reach it — and that is what the
-guards answer.
+A read-only loopback view of the workspace for a human: the ontology, one
+type's rows, one entity. Its exposure is inbound — anything already running
+on the machine can reach it — and that is what the guards answer.
 
 - **TTY gate.** `serve` refuses a non-terminal stdout (`serve_needs_tty`) so an
   agent that invokes it by accident gets an immediate refusal, not a hang.
   `TTY_COMPATIBLE=1` is the documented escape.
 - **The server rebuilds from the live tree on every request; the page fetches
-  once on load.** No polling, no event stream; do not add either without a
+  when a view loads.** Views are routed by the URL fragment, and each one
+  loads fresh data when it opens; a sort or filter change re-renders from the
+  data in hand. No polling, no event stream; do not add either without a
   reason better than symmetry.
+- **Every CLI fact on the page comes from a core package.** Rows, list counts,
+  markers, summaries and the body tree are `internal/explore`, built on the
+  functions `query`, `check` and `get` call; `serve` routes and encodes. The
+  overview's per-type counts and relation-usage tallies are summed on the page
+  from the `viz` graph (`ui/model.js`), which is a picture, not a CLI fact. A
+  list count or marker the page computed itself would be a second definition.
+- **Bodies reach the page as a block tree, never as markup.** `explore`
+  parses Markdown (goldmark, confined there by depguard) into a dozen node
+  kinds the page builds through `dom.js`; raw HTML arrives as text and only
+  `http`/`https`/`mailto` hrefs survive. That is what keeps
+  `TestUIHasNoMarkupSinks` satisfiable — do not add a renderer that needs a
+  sink.
 - **Read-only is structural.** Every method but GET and HEAD is rejected
   before routing. A write endpoint would make three things mandatory: a
   per-run token in the URL, an `Origin` check, and harness coverage of the
@@ -104,5 +118,6 @@ guards answer.
   forever**: those modes do not set `TTY_COMPATIBLE=0`. Keep such cases in the
   default `mode: pipe`.
 - `entity.Get` builds its index without the stray filter, so `/api/entity/{id}`
-  can answer for a file `/api/graph` has no node for. The UI only links from
-  graph nodes; a new caller must not assume otherwise.
+  can answer for a file `/api/graph` and `/api/rows` have no node for (it then
+  carries no markers and no neighbours). The UI only links from rows and
+  neighbours; a new caller must not assume otherwise.

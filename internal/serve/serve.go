@@ -1,15 +1,15 @@
-// Package serve is `khub serve`: a read-only HTTP view of the workspace graph,
+// Package serve is `khub serve`: a read-only HTTP view of the workspace,
 // bound to loopback, rebuilding from the live files on every request.
 //
-// It is the live counterpart to viz — same graph, same Cytoscape elements,
-// same embedded library — where viz writes one self-contained file for sharing
-// and printing. Both call viz.Graph; only the transport differs.
+// The page has three views — the ontology, one type's rows, one entity — and
+// draws them from core packages: viz for the graph, introspect for the
+// schema, explore for the rows and the entity page. This package only routes
+// and encodes.
 //
 // Read-only is structural, not a policy: there are no write endpoints, and the
 // guard rejects every method but GET and HEAD before routing, so adding one
-// has to be a deliberate act. The page composes `khub link` / `khub unlink`
-// commands for the operator to run, which keeps every mutation on khub's
-// existing validated write path.
+// has to be a deliberate act. Every mutation stays on khub's validated CLI
+// write path.
 package serve
 
 import (
@@ -28,8 +28,10 @@ import (
 
 	"github.com/endgame-build/khub/internal/assets"
 	"github.com/endgame-build/khub/internal/canon"
+	"github.com/endgame-build/khub/internal/clock"
 	"github.com/endgame-build/khub/internal/entity"
 	"github.com/endgame-build/khub/internal/errs"
+	"github.com/endgame-build/khub/internal/explore"
 	"github.com/endgame-build/khub/internal/introspect"
 	"github.com/endgame-build/khub/internal/omap"
 	"github.com/endgame-build/khub/internal/schema"
@@ -73,6 +75,7 @@ func Handler(root string) http.Handler {
 	mux.HandleFunc("/api/schema", s.apiSchema)
 	mux.HandleFunc("/api/entity/", s.apiEntity)
 	mux.HandleFunc("/api/type/", s.apiType)
+	mux.HandleFunc("/api/rows/", s.apiRows)
 	return guard(mux)
 }
 
@@ -194,6 +197,12 @@ func (s *server) static(w http.ResponseWriter, r *http.Request) {
 		fail(w, http.StatusNotFound, "not_found", "No such asset")
 		return
 	}
+	// The page's own modules change with the binary, and a browser that
+	// heuristically caches one of them while fetching a newer sibling runs a
+	// page assembled from two releases. no-cache makes every load revalidate;
+	// the files are a few kilobytes. The vendored library above keeps the
+	// browser's default caching: it changes only when it is re-vendored.
+	w.Header().Set("Cache-Control", "no-cache")
 	switch path.Ext(name) {
 	case ".js":
 		w.Header().Set("Content-Type", "application/javascript; charset=utf-8")
@@ -212,9 +221,9 @@ func (s *server) static(w http.ResponseWriter, r *http.Request) {
 // means there is nothing to invalidate and no way to answer with a stale
 // graph — the property `search` has, for the same reason.
 func (s *server) apiGraph(w http.ResponseWriter, r *http.Request) {
-	// No type filter: the whole graph goes to the client once, which is what
-	// makes every level change and every search a local operation. viz keeps
-	// --type because it renders one static file per invocation.
+	// No type filter: the overview needs every node to count entities per type
+	// and every edge to tally each declared relation's usage. viz keeps --type
+	// because it renders one static file per invocation.
 	elements, types, err := viz.Graph(s.root, nil)
 	if err != nil {
 		failErr(w, err)
@@ -235,9 +244,8 @@ func (s *server) apiGraph(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, payload)
 }
 
-// apiSchema serves the resolved schema the page needs to offer only legal
-// predicates: a link the schema forbids can then never be composed, which is
-// the schema doing the work rather than the page reimplementing it.
+// apiSchema serves the resolved schema the overview draws: the declared types,
+// the base relations every type inherits, and the ontology's edges.
 func (s *server) apiSchema(w http.ResponseWriter, r *http.Request) {
 	resolved, err := introspect.LoadSchema(s.root)
 	if err != nil {
@@ -257,9 +265,8 @@ func (s *server) apiSchema(w http.ResponseWriter, r *http.Request) {
 	payload.Set("types", types)
 	// The base block is already merged into every type's relations, so this
 	// list is not extra edges — it names which of a type's predicates are the
-	// universal ones. The page needs that to hide them by default: four edges
-	// available on all N types is a complete graph, and drawing it is the
-	// crowding OntoGraph's aspect split exists to avoid.
+	// universal ones. Kept for any caller reading it; the page draws the base
+	// relations once, from the `any` box, using `base` below.
 	payload.Set("base_relations", relationRecords(resolved.BaseRelations))
 	// The ontology as a graph, straight from the projection `khub schema edges`
 	// prints. Serving it rather than re-deriving it on the page is what keeps
@@ -268,9 +275,11 @@ func (s *server) apiSchema(w http.ResponseWriter, r *http.Request) {
 	//
 	// Its vocabulary is introspect's (`from`/`to`), not this file's `targets`.
 	// Left as-is deliberately: renaming would fork the contract from the CLI's,
-	// and `types[].relations` above stays untouched because the command
-	// composer reads it.
+	// and `types[].relations` above keeps its shape for any caller reading it.
 	payload.Set("edges", introspect.EdgesView(resolved))
+	// The base block in full — the record `khub schema base` prints — so the
+	// overview can show the attributes and relations every type inherits.
+	payload.Set("base", introspect.BaseView(resolved))
 	writeJSON(w, payload)
 }
 
@@ -280,11 +289,17 @@ func (s *server) apiSchema(w http.ResponseWriter, r *http.Request) {
 // The id is resolved against the index by entity.Get, never joined onto a
 // filesystem path, so a traversal attempt is simply a lookup miss.
 //
+// The page's three extra fields (markers, body_tree, neighbours) are appended
+// after the `get` record, from explore.Page, so the existing fields keep their
+// order and meaning.
+//
 // Deliberate divergence: entity.Get builds its index WITHOUT
 // index.Filter(StrayNodes) and without RejectMalformed, unlike viz.Graph
-// (internal/viz/viz.go), so a stray file is fetchable by id while not being a
-// node in /api/graph. Left rather than forked — the page only ever links from
-// graph nodes, so nothing in the UI can reach the difference.
+// (internal/viz/viz.go) and explore, so a stray file is fetchable by id while
+// not being a node in /api/graph or a row in /api/rows. Left rather than
+// forked — the page only links from rows and neighbours, so nothing in the UI
+// can reach the difference; a stray fetched by hand gets no markers and no
+// neighbours rather than an error.
 func (s *server) apiEntity(w http.ResponseWriter, r *http.Request) {
 	id := r.URL.Path[len("/api/entity/"):]
 	if id == "" {
@@ -320,7 +335,47 @@ func (s *server) apiEntity(w http.ResponseWriter, r *http.Request) {
 		edges = append(edges, edge)
 	}
 	record.Set("edges", edges)
+	page, err := explore.Page(s.root, view.Type+"/"+view.Slug, clock.Now())
+	var located *errs.Located
+	switch {
+	case err == nil:
+		for _, k := range page.Keys() {
+			v, _ := page.Get(k)
+			record.Set(k, v)
+		}
+	case errors.As(err, &located) && located.Code == "lookup_error":
+		// A file `get` reads but the graph does not hold: a stray, which
+		// `check` reports. Said so outright, so the page can show it as one
+		// rather than as an entity with no markers and no connections.
+		record.Set("markers", nil)
+		record.Set("body_tree", explore.BodyTree(view.Body))
+		record.Set("neighbours", []any{})
+		record.Set("stray", true)
+	default:
+		failErr(w, err)
+		return
+	}
 	writeJSON(w, record)
+}
+
+// apiRows serves one type's list: every entity of the type with its markers,
+// plain attributes and a count of distinct linked entities per relation —
+// explore.Rows, counted off the same graph `khub query --count` reads.
+// Sorting and filtering are the page's: one response per list load.
+//
+// An undeclared type is the same `unknown_type` refusal /api/type gives.
+func (s *server) apiRows(w http.ResponseWriter, r *http.Request) {
+	name := r.URL.Path[len("/api/rows/"):]
+	if name == "" {
+		fail(w, http.StatusNotFound, "not_found", "No type name given")
+		return
+	}
+	rows, err := explore.Rows(s.root, name, clock.Now())
+	if err != nil {
+		failErr(w, err)
+		return
+	}
+	writeJSON(w, rows)
 }
 
 // relPath renders a workspace path the way the CLI's records do: relative to
@@ -436,7 +491,7 @@ func failErr(w http.ResponseWriter, err error) {
 			// exactly what the caller needs to retry with a qualified id.
 			status = http.StatusConflict
 		}
-		fail(w, status, located.Code, located.Message)
+		failWith(w, status, located)
 		return
 	}
 	if errors.Is(err, fs.ErrNotExist) {
@@ -447,9 +502,26 @@ func failErr(w http.ResponseWriter, err error) {
 }
 
 func fail(w http.ResponseWriter, status int, code, message string) {
+	failWith(w, status, &errs.Located{Code: code, Message: message})
+}
+
+// failWith carries a refusal's machine fields into the envelope the way the
+// CLI's FailLocated does — `field`, `expected`, `suggestion`, each only when
+// set — so the page can offer an ambiguous id's candidates as links rather
+// than parse them out of the prose.
+func failWith(w http.ResponseWriter, status int, e *errs.Located) {
 	inner := omap.New()
-	inner.Set("code", code)
-	inner.Set("message", message)
+	inner.Set("code", e.Code)
+	inner.Set("message", e.Message)
+	if e.Field != "" {
+		inner.Set("field", e.Field)
+	}
+	if len(e.Expected) > 0 {
+		inner.Set("expected", strList(e.Expected))
+	}
+	if e.Suggestion != "" {
+		inner.Set("suggestion", e.Suggestion)
+	}
 	env := omap.New()
 	env.Set("error", inner)
 	doc, err := canon.EncodeCLI(env)
