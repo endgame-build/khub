@@ -11,7 +11,10 @@ package schema
 // value the walk accepts (a lax boolean such as `yes`, a null where a field is
 // optional) passes here too. It is looser where a rule spans fields or files —
 // the storage matrix, a policy entry for an undeclared type, a relation to an
-// unknown type — which only khub reports when it loads the schema. One
+// unknown type — and where JSON Schema cannot say what the loader checks: a
+// storage path that leaves the workspace or names a reserved file, a path
+// template's placeholders, an attribute pattern that is not valid RE2, an
+// integer written as 30.0. khub reports those when it loads the schema. One
 // deliberate exception: a document, a layer block or `entities` that is falsy
 // but neither a mapping nor null (`policy: false`, `entities: []`, a document
 // that is just `0`) loads as empty, and the schema still asks for a mapping
@@ -100,16 +103,15 @@ func LayerJSONSchema() *omap.Map {
 	defs.Set("storage", object(
 		"Where and how one type's bytes land. An entry must state its layout.",
 		storageTypeKeys, props{
-			"layout": enumOf(layoutLiterals,
-				"file: one entity per file. folder: one per folder (_index). "+
-					"collection: every entity a row of one file. singleton: one fixed file."),
+			"layout": enumOf(layoutLiterals, layoutDescription()),
 			"path": nullable(anyOf(
 				"The inventory directory, relative to the workspace root, or the file for a "+
 					"collection or singleton. A file layout may give a path template "+
 					"placing {slug}, or a list of them.",
 				str(""), minItems(listOf(str(""), ""), 1))),
 			"format": enumOf(storageFormats(),
-				"md (the default), json or yaml per item; json, jsonl or yaml for a collection."),
+				"Per item "+strings.Join(sortedKeys(PerItem), ", ")+" (md the default)"+
+					"; for a collection "+strings.Join(sortedKeys(Collection), ", ")+"."),
 			"id_prefix": nullable(anyOf(
 				"The prefix a minted id starts with: a slug token, or one chosen by the value of an attribute.",
 				pattern(str(""), IDPrefixPattern), ref("id_prefix_by"))),
@@ -145,16 +147,14 @@ func LayerJSONSchema() *omap.Map {
 					"A type with no entry is stored one file per entity under a directory named for it.")),
 			"version": desc("The preset's version, stamped by a preset."),
 		})
+	// An empty, comment-only or `~` document is null to an editor, and khub
+	// reads it as an empty layer file.
+	root.Set("type", []any{"object", "null"})
 	out := omap.New()
 	out.Set("$schema", JSONSchemaDraft)
 	out.Set("title", "khub layer file")
 	for _, k := range root.Keys() {
 		v, _ := root.Get(k)
-		if k == "type" {
-			// An empty, comment-only or `~` document is null to an editor,
-			// and khub reads it as an empty layer file.
-			v = []any{"object", "null"}
-		}
 		out.Set(k, v)
 	}
 	out.Set("definitions", defs)
@@ -208,7 +208,7 @@ func str(description string) *omap.Map {
 
 // nonBlank matches a string strings.TrimSpace leaves non-empty: one character
 // outside unicode.IsSpace's set, spelled out so an ECMA engine reads the same.
-const nonBlank = "[^\t\n\v\f\r \u0085   -     　]"
+const nonBlank = "[^\t\n\v\f\r \u0085\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000]"
 
 // waiver is one waive entry: the findings accepted on one entity, each with
 // its non-blank reason.
@@ -309,11 +309,6 @@ func nullable(s *omap.Map) *omap.Map {
 		}
 		inner.Set(k, v)
 	}
-	// A described $ref arrives wrapped in allOf; under anyOf the bare $ref
-	// says the same.
-	if all, ok := inner.Get("allOf"); ok && inner.Len() == 1 && len(all.([]any)) == 1 {
-		inner = all.([]any)[0].(*omap.Map)
-	}
 	null := omap.New()
 	null.Set("type", "null")
 	m.Set("anyOf", []any{inner, null})
@@ -332,7 +327,7 @@ func laxBool() *omap.Map {
 	n := omap.New()
 	n.Set("enum", []any{0, 1})
 	s := pattern(str(""), "^("+strings.Join(alts, "|")+")$")
-	return anyOf("A boolean. khub also reads 0, 1, yes, no, on, off, t, f, y and n, in any case.", b, n, s)
+	return anyOf("A boolean. khub also reads "+strings.Join(words, ", ")+", in any case.", b, n, s)
 }
 
 // caseless spells a word as a case-insensitive pattern ([tT][rR][uU][eE]):
@@ -353,15 +348,32 @@ func caseless(w string) string {
 // storageFormats is every format some layout accepts, in a fixed order: md
 // first (the default), then the rest sorted.
 func storageFormats() []string {
-	set := map[string]bool{}
-	for k := range PerItem {
-		set[k] = true
-	}
-	for k := range Collection {
-		set[k] = true
-	}
+	set := maps.Clone(PerItem)
+	maps.Copy(set, Collection)
 	delete(set, "md")
-	return append([]string{"md"}, slices.Sorted(maps.Keys(set))...)
+	return append([]string{"md"}, sortedKeys(set)...)
+}
+
+func sortedKeys(set map[string]bool) []string { return slices.Sorted(maps.Keys(set)) }
+
+// layoutDescription says what each layout in layoutLiterals stores. A layout
+// with no meaning here panics.
+func layoutDescription() string {
+	meaning := map[string]string{
+		"file":       "one entity per file",
+		"folder":     "one per folder (_index)",
+		"collection": "every entity a row of one file",
+		"singleton":  "one fixed file",
+	}
+	parts := make([]string, len(layoutLiterals))
+	for i, l := range layoutLiterals {
+		m, ok := meaning[l]
+		if !ok {
+			panic(fmt.Sprintf("jsonschema: layout %q has no description", l))
+		}
+		parts[i] = l + ": " + m + "."
+	}
+	return strings.Join(parts, " ")
 }
 
 func strs(values []string) []any {

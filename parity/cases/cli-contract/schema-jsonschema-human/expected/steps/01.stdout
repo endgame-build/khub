@@ -128,7 +128,11 @@
           "description": "Whether check demands a value on an active entity.",
           "anyOf": [
             {
-              "$ref": "#/definitions/bool"
+              "allOf": [
+                {
+                  "$ref": "#/definitions/bool"
+                }
+              ]
             },
             {
               "type": "null"
@@ -410,7 +414,7 @@
           ]
         },
         "format": {
-          "description": "md (the default), json or yaml per item; json, jsonl or yaml for a collection.",
+          "description": "Per item json, md, yaml (md the default); for a collection json, jsonl, yaml.",
           "enum": [
             "md",
             "json",
@@ -502,7 +506,7 @@
       "additionalProperties": false
     },
     "bool": {
-      "description": "A boolean. khub also reads 0, 1, yes, no, on, off, t, f, y and n, in any case.",
+      "description": "A boolean. khub also reads 1, true, t, yes, y, on, 0, false, f, no, n, off, in any case.",
       "anyOf": [
         {
           "type": "boolean"
