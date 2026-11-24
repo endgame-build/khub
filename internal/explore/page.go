@@ -108,6 +108,7 @@ func Page(root, id string, now time.Time) (*omap.Map, error) {
 	out.Set("body_tree", bodyTree(s.idx.Body[node], s.linkResolver(node), s.nameResolver(node)))
 	out.Set("neighbours", groups)
 	out.Set("malformed", strList(s.malformed))
+	out.Set("rev", s.rev(node))
 	return out, nil
 }
 

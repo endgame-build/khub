@@ -162,6 +162,28 @@ export function notice(title, detail, links, retry) {
 // SAME_ROWS is the most rows a reading is compared over.
 var SAME_ROWS = 5000;
 
+// copyLater puts text that is still being worked out on the clipboard. The
+// promise goes to the clipboard whole, so the press that asked still counts as
+// the reader's own when the answer is slow. Empty text leaves the clipboard be.
+export function copyLater(btn, promise, failed) {
+  var blob = promise.then(function (value) {
+    if (!value) throw new Error('');
+    return new Blob([value], { type: 'text/plain' });
+  });
+  var label = btn.textContent;
+  var say = function (word) {
+    text(btn, word);
+    setTimeout(function () { if (btn.textContent === word) text(btn, label); }, 1500);
+  };
+  if (!navigator.clipboard) { say('Not available'); blob.catch(function () {}); return; }
+  var done = window.ClipboardItem
+    ? navigator.clipboard.write([new ClipboardItem({ 'text/plain': blob })])
+    : promise.then(function (value) { if (value) return navigator.clipboard.writeText(value); });
+  promise.catch(failed);
+  done.then(function () { promise.then(function (value) { if (value) say('Copied'); }); },
+    function () { promise.then(function (value) { if (value) say('Not copied'); }, function () {}); });
+}
+
 // same says whether a view's new reading is the one it already shows, so a
 // refresh that found nothing new leaves the page alone.
 export function same(view, payload) {

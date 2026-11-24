@@ -4,6 +4,7 @@
 
 import * as api from './api.js';
 import * as panel from './panel.js';
+import * as marks from './marks.js';
 import { el, fill, text, tn } from './dom.js';
 import { same, markerTags, trustTag, trustBar, trustKey, entityLink, markerName, MEANING, MARKERS, plural, num, notice, skeleton, problem, copyButton, rowOpens, reveal } from './widgets.js';
 import { format, listRoute, typeRoute, homeRoute, markedRoute, openId, DAYS } from './route.js';
@@ -76,6 +77,7 @@ export function show(main, route, ctx, force) {
     head.appendChild(el('h1', null, 'Review'));
     mine.sub = el('p', { class: 'sub' });
     head.appendChild(mine.sub);
+    head.appendChild(marks.bar(order));
     var left = el('div', { class: 'col' }), right = el('div', { class: 'col' });
     left.appendChild(mine.blocks.findings);
     left.appendChild(mine.blocks.recent);
@@ -213,6 +215,7 @@ function typesBlock(mine, o) {
 function findings(mine, f, ctx) {
   mine.blocks.findings.hidden = false;
   mine.found = [].concat.apply([], f.buckets.map(function (b) { return b.items; })).filter(function (i) { return i.id; });
+  marks.changed();
   if (f.passed) {
     fill(mine.blocks.findings, [el('p', { class: 'pass' }, 'khub check passes.')]);
     return;
@@ -263,6 +266,8 @@ function recent(mine, ctx) {
     if (same(mine.seen.recent, found)) return;
     mine.drawn = true;
     mine.changes = found.rows;
+    marks.settle(found.rows);
+    marks.changed();
     var nodes = [head()];
     if (!found.rows.length) nodes.push(el('p', { class: 'empty' }, 'Nothing was written in this window.'));
     else {
@@ -275,11 +280,12 @@ function recent(mine, ctx) {
         li.appendChild(el('span', { class: 'ty' }, r.type));
         var mid = el('span', { class: 'mid' });
         mid.appendChild(entityLink(r.id, r.title, ctx));
+        mid.appendChild(marks.tag(r.id));
         mid.appendChild(el('span', { class: 'tail' }, [r.new ? 'new' : 'edited', r.by ? 'by ' + r.by : ''].filter(Boolean).join(' ')));
         li.appendChild(mid);
-        var marks = markerTags(r.markers);
-        marks.appendChild(trustTag(r.markers.trust));
-        li.appendChild(marks);
+        var tags = markerTags(r.markers);
+        tags.appendChild(trustTag(r.markers.trust));
+        li.appendChild(tags);
         ul.appendChild(li);
       });
       nodes.push(ul);

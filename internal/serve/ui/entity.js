@@ -4,6 +4,7 @@
 
 import * as api from './api.js';
 import * as panel from './panel.js';
+import * as marks from './marks.js';
 import { el, fill, tn } from './dom.js';
 import { same, markerTags, trustTag, notice, copyButton, entityLink, opensBeside, skeleton, problem, when, plural, num, MARKERS, markerName } from './widgets.js';
 import { renderBlocks, shallowest } from './blocks.js';
@@ -221,7 +222,10 @@ function review(e) {
   // staleness is judged by.
   var dated = String(fm.updated || fm.created || '').slice(0, 10);
   if (made.at && dated && String(made.at).slice(0, 10) > dated) line.appendChild(said('dated', '', dated));
-  if (m && !e.stray) line.appendChild(verifyButton(e.id));
+  if (m && !e.stray) {
+    line.appendChild(verifyButton(e.id));
+    line.appendChild(marks.button(e.id, e.rev));
+  }
   box.appendChild(line);
   if (events.length > 1) {
     var d = el('details');

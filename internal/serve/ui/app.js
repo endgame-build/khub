@@ -13,6 +13,7 @@ import * as query from './query.js';
 import * as entity from './entity.js';
 import * as panel from './panel.js';
 import * as find from './find.js';
+import * as marks from './marks.js';
 import * as api from './api.js';
 import { parse, format, typeRoute, homeRoute, overviewOf, entityRoute, opening, openId, TIERS } from './route.js';
 import { step } from './listmodel.js';
@@ -310,6 +311,7 @@ function onKey(evt) {
     case 'r': refresh(); break;
     case 'j': move(1); break;
     case 'k': move(-1); break;
+    case ' ': markOpen(evt); break;
     case ']': ctx.page(1); break;
     case '[': ctx.page(-1); break;
     case '?': keys(); break;
@@ -317,6 +319,15 @@ function onKey(evt) {
       if (openId(route) && (evt.target === document.body || evt.target === main)) ctx.nav(entityRoute(openId(route)));
       break;
   }
+}
+
+// markOpen marks the entity open beside the view. Space stays what it is on a
+// control, and scrolls where nothing is open.
+function markOpen(evt) {
+  var at = panel.read(openId(route));
+  if (!at || !at.rev || evt.target.closest('button, summary, details')) return;
+  evt.preventDefault();
+  marks.toggle(at.id, at.rev);
 }
 
 // keys lists the keyboard's shortcuts, and what the page's terms mean.
@@ -332,7 +343,7 @@ function keys() {
   var box = el('dialog', { class: 'keybox', 'aria-label': 'Keys and terms' });
   box.appendChild(el('h2', null, 'Keys'));
   box.appendChild(list(  [['/', 'Search'], ['j, k', 'Open the next or previous row, or link of a page, beside it'], ['], [', 'Go to the next or previous page of the list it was opened from'], ['Enter', 'Open what is beside the list as a page'],
-    ['Esc', 'Close what is open, or leave one type for the full map'], ['r', 'Read the workspace again'], ['Shift-click', 'Leave a filter value out'], ['?', 'This list']]));
+    ['Space', 'Mark what is open beside the view, to sign off with others'], ['Esc', 'Close what is open, or leave one type for the full map'], ['r', 'Read the workspace again'], ['Shift-click', 'Leave a filter value out'], ['?', 'This list']]));
   box.appendChild(el('h2', null, 'Markers'));
   box.appendChild(list(MARKERS.map(function (k) { return [markerName(k), MEANING[k]]; })));
   box.appendChild(el('h2', null, 'Trust'));

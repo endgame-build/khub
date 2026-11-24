@@ -18,6 +18,13 @@ Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelo
   an entity beside it, and an entity page opened from a list keeps the list's
   breadcrumb and goes through it with `]` and `[`.
 
+### Added
+
+- **Marks on the served page.** Space marks what is open, a list counts its
+  marks, and one button copies a `khub verify` line for each, leaving out what
+  changed after it was marked. `/api/revs` answers content revisions, and
+  `/api/entity/<id>` gains `rev`.
+
 ## [0.34.0] — 2026-11-24
 
 `khub serve` becomes the page a person reviews a workspace on. It opens on what

@@ -474,6 +474,10 @@ body[data-view="overview"] main { overflow: hidden; }
 .check input { margin: 2px 0 0; }
 .filters { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 10px; }
 .filters input.q { width: 260px; }
+.markbar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin-top: 10px; padding: 7px 12px; background: var(--beige); border-radius: var(--r-control); font-size: 13px; }
+.markbar .btn { padding: 2px 12px; }
+.tag-read { margin-left: 8px; background: var(--navy); color: var(--white); }
+.copy[aria-pressed="true"] { background: var(--navy); color: var(--white); }
 .chips { display: inline-flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 .chip { display: inline-flex; gap: 6px; align-items: center; padding: 2px 9px; border-radius: 12px; background: var(--beige-deep); font-size: 12.5px; line-height: 20px; max-width: 100%; }
 .chip em { font-style: normal; color: var(--ink-soft); }

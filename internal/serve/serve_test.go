@@ -691,7 +691,7 @@ func TestEntityAndQueryEndpoints(t *testing.T) {
 	if query.Matched != 1 || len(query.Rows) != 1 || query.Rows[0].ID != "opportunity/acme-deal" {
 		t.Errorf("query = %+v", query)
 	}
-	for _, path := range []string{"/api/history/", "/api/reach/", "/api/query/", "/api/marked/", "/api/marked/nope", "/api/history/client/nope", "/api/reach/client/nope", "/api/query/nope"} {
+	for _, path := range []string{"/api/history/", "/api/reach/", "/api/query/", "/api/marked/", "/api/marked/nope", "/api/revs", "/api/revs?" + strings.Repeat("id=client/acme&", 201), "/api/history/client/nope", "/api/reach/client/nope", "/api/query/nope"} {
 		resp, err := http.Get(srv.URL + path)
 		if err != nil {
 			t.Fatal(err)

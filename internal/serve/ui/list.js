@@ -7,6 +7,7 @@
 
 import * as api from './api.js';
 import * as panel from './panel.js';
+import * as marks from './marks.js';
 import * as rail from './facets.js';
 import { el, fill, text } from './dom.js';
 import { same, markerTags, trustTag, notice, entityLink, rowOpens, reveal, when, copyButton, skeleton, MEANING, MARKERS, markerName, num } from './widgets.js';
@@ -54,6 +55,7 @@ export function show(main, route, ctx, force) {
   api.getRows(route.type).then(function (rowset) {
     if (view !== (kept || mine)) return;
     ctx.loaded(rowset.malformed);
+    marks.settle(rowset.rows);
     if (kept && same(kept, rowset)) { ctx.ready(); panel.sync(kept.ui.aside, ctx.route(), ctx, kept.rows, true); return; }
     if (!kept) same(mine, rowset); else mine.seen = kept.seen;
     unwatch();
@@ -166,6 +168,7 @@ function build(main, rowset, crumbs, ctx, aside) {
   ui.chips = el('span', { class: 'chips' });
   bar.appendChild(ui.chips);
   head.appendChild(bar);
+  head.appendChild(marks.bar(order));
   pane.appendChild(head);
   ui.table = el('div', { class: 'listtable' });
   pane.appendChild(ui.table);
@@ -266,6 +269,7 @@ function update(route, ctx, force) {
 
   var rows = sortRows(filterRows(rowset, list), list.sort, list.dir);
   view.rows = rows;
+  marks.changed();
   text(ui.count, countLine(num(rows.length), num(rowset.total)));
   var cmd = queryCommand(rowset, list);
   fill(ui.command, [cmd.command ? copyButton('Copy khub query', cmd.command)
@@ -380,6 +384,7 @@ function rowOf(row, attrs, cols, ctx, open) {
   var r = el('tr', { 'data-id': row.id, class: row.id === open ? 'open' : null });
   var title = el('th', { scope: 'row', class: 'title' });
   title.appendChild(entityLink(row.id, row.title, ctx));
+  title.appendChild(marks.tag(row.id));
   title.appendChild(el('div', { class: 'slug mono' }, row.slug));
   r.appendChild(title);
   var markers = el('td', { class: 'marks' });

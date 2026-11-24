@@ -86,6 +86,7 @@ func Handler(root string, shadows Shadows) http.Handler {
 	mux.HandleFunc("/api/queries", s.apiQueries)
 	mux.HandleFunc("/api/query/", s.apiQuery)
 	mux.HandleFunc("/api/marked/", s.apiMarked)
+	mux.HandleFunc("/api/revs", s.apiRevs)
 	mux.HandleFunc("/api/history/", s.apiHistory)
 	mux.HandleFunc("/api/reach/", s.apiReach)
 	mux.HandleFunc("/api/schema", s.apiSchema)
@@ -337,6 +338,20 @@ func (s *server) apiMarked(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	payload, err := explore.Marked(s.root, name, clock.Now())
+	answer(w, payload, err)
+}
+
+// maxRevs is how many entities one request may ask the revision of.
+const maxRevs = 200
+
+// apiRevs serves the content revision of each entity named, in one scan.
+func (s *server) apiRevs(w http.ResponseWriter, r *http.Request) {
+	ids := r.URL.Query()["id"]
+	if len(ids) == 0 || len(ids) > maxRevs {
+		fail(w, http.StatusBadRequest, "bad_request", fmt.Sprintf("Name from 1 to %d entities with 'id'", maxRevs))
+		return
+	}
+	payload, err := explore.Revs(s.root, ids, clock.Now())
 	answer(w, payload, err)
 }
 

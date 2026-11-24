@@ -127,6 +127,9 @@ answer.
   a file's name and can hold anything a shell would run. Quoting does not stop a
   control character, which the terminal acts on first, so such a value has no
   word and its copy button is off.
+- **A mark holds the revision that was read** (`ui/marks.js`). A verify command
+  is copied for a marked entity only while `/api/revs` still answers that
+  revision, so a reader never signs an edit they did not see.
 - **A path handed to git is a name, and git fetches nothing.**
   `gitlog.FileVersions` passes `--literal-pathspecs`, overrules `log.follow` and
   sets `GIT_NO_LAZY_FETCH`; a side git cannot show is unknown, never absent.
