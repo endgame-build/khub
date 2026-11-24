@@ -1,0 +1,1 @@
+{"error": {"code": "invalid_actor", "message": "'human:' names no reviewer trust counts. Use human:<name>, process:<name> or <producer>[/<version>]; a name holds no spaces", "field": "verified.by"}}

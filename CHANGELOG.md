@@ -6,6 +6,9 @@ Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelo
 
 ### Changed
 
+- **`khub verify` refuses a reviewer trust never counts.** `--by human:`,
+  `--by 'human:Ana Ruiz'` and a bare word with a space exit 2 (`invalid_actor`)
+  and write nothing. They used to record an event no read counted.
 - **The served page names its dates and its parse errors.** The list column
   Updated is Dated, the date staleness is judged by; an entity says its date
   beside a younger write. A file that does not parse carries what the parser
