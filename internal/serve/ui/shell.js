@@ -17,11 +17,12 @@ export function word(value) {
   return PLAIN.test(s) ? s : "'" + s.replace(/'/g, "'\\''") + "'";
 }
 
-// verifyCommand records a review of id. The reviewer puts a name in place of
-// <name>: left as it is, the command is a syntax error to every shell, so
-// pasting it alone records nothing. '' for an id that cannot be pasted.
-export function verifyCommand(id) {
-  return command(['khub verify', word(id), '--by human:<name>']);
+// verifyCommand records reviewer's review of id. '' without a reviewer (khub
+// would record a review by nobody) and for an id or a name that cannot be
+// pasted.
+export function verifyCommand(id, reviewer) {
+  var who = String(reviewer || '').trim();
+  return who ? command(['khub verify', word(id), '--by', word('human:' + who)]) : '';
 }
 
 // runCommand replays a saved query.

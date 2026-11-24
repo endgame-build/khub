@@ -57,6 +57,12 @@ test('list: half a pair, repeats and unknown values are dropped', () => {
   assert.equal(parse('#/type/x?rel=sideways:a&to=a/b').list.rel, '');
 });
 
+test('a list across types is of a marker, or of what no review holds for', () => {
+  assert.deepEqual(parse('#/marked/superseded?open=a/b'), { view: 'marked', name: 'superseded', open: 'a/b' });
+  assert.equal(format(parse('#/marked/unverified')), '#/marked/unverified');
+  ['#/marked/', '#/marked/shiny', '#/marked/human', '#/marked/stale/x'].forEach(h => assert.equal(parse(h).view, 'notfound', h));
+});
+
 test('query and what is open beside a view', () => {
   assert.deepEqual(parse('#/query/open-things?open=a/b'), { view: 'query', name: 'open-things', open: 'a/b' });
   assert.equal(format({ view: 'query', name: 'open-things', open: '' }), '#/query/open-things');

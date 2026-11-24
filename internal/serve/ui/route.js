@@ -11,6 +11,7 @@
 //   #/ontology                 the diagram       ?sel=type:<name> | rel:<from>.<predicate> ?focus ?map=1
 //   #/type/<name>              one type's list   ?sort ?dir ?q ?rel+to ?count… ?attr… ?status… ?trust… ?by… ?not… ?base ?open
 //   #/query/<name>             a saved query     ?open
+//   #/marked/<marker>          what carries one marker, of every type  ?open
 //   #/entity/<type>/<slug>     one entity        ?open
 //
 // A parameter marked … may repeat. `#/?sel=…` still opens the diagram.
@@ -22,6 +23,8 @@
 export var STATUSES = ['incomplete', 'superseded', 'expired', 'orphan', 'draft', 'stale'];
 // Review tiers, lowest first (internal/trust Tiers).
 export var TIERS = ['unverified', 'machine', 'human'];
+// What a list across types is of: no review holds, or one marker.
+var MARKED = [TIERS[0]].concat(STATUSES);
 export var DAYS = 7; // the review home's window when none is asked for
 var MAX_DAYS = 3650;
 var DEFAULT_SORT = 'title';
@@ -88,6 +91,9 @@ export function parse(hash) {
     var q = decode(segs[1]);
     if (q === null) return { view: 'notfound' };
     return { view: 'query', name: q, open: params.get('open') || '' };
+  }
+  if (segs[0] === 'marked' && segs.length === 2 && MARKED.indexOf(segs[1]) !== -1) {
+    return { view: 'marked', name: segs[1], open: params.get('open') || '' };
   }
   if (segs[0] === 'entity' && segs.length >= 2) {
     var parts = segs.slice(1).map(decode);
@@ -162,6 +168,9 @@ export function format(route) {
     case 'query':
       if (route.open) q.set('open', route.open);
       return withParams('#/query/' + encodeURIComponent(route.name), q);
+    case 'marked':
+      if (route.open) q.set('open', route.open);
+      return withParams('#/marked/' + route.name, q);
     case 'list': {
       var l = Object.assign(emptyList(), route.list || {});
       LIST_KEYS.forEach(function (k) {
@@ -184,6 +193,7 @@ export function listRoute(type, list, changes) {
   return { view: 'list', type: type, list: Object.assign(emptyList(), list || {}, changes || {}) };
 }
 
+export function markedRoute(name) { return { view: 'marked', name: name, open: '' }; }
 export function homeRoute() { return { view: 'home', days: DAYS }; }
 export function overviewOf(sel, more) { return Object.assign({ view: 'overview', sel: sel || '', focus: '', map: false }, more || {}); }
 export function entityRoute(id) { return { view: 'entity', id: id, open: '' }; }

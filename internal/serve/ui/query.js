@@ -1,13 +1,33 @@
-// query.js — a saved query's rows, as `khub run` lists them.
+// query.js — a list across types: a saved query's rows, as `khub run` lists
+// them, or what carries one marker.
 
 import * as api from './api.js';
 import * as panel from './panel.js';
 import { el, fill } from './dom.js';
-import { same, markerTags, trustTag, notice, entityLink, rowOpens, plural, num, copyButton, skeleton } from './widgets.js';
+import { same, markerTags, trustTag, notice, entityLink, rowOpens, plural, num, copyButton, skeleton, markerName, MEANING } from './widgets.js';
 import { homeRoute, openId } from './route.js';
 import { runCommand } from './shell.js';
 
-var view = null; // { name, root, rows, aside }
+// What khub query says to list what carries a marker, where it can.
+var COMMANDS = {
+  unverified: 'khub query --trust unverified', orphan: 'khub query --orphan', draft: 'khub query --draft', stale: 'khub query --stale'
+};
+
+var view = null; // { key, root, rows, aside, seen }
+
+// subject is what a route lists: its title, its rows, its command, and what to
+// say when there are none.
+function subject(route) {
+  if (route.view === 'query') {
+    return { title: route.name, read: function () { return api.getQuery(route.name); }, label: 'Copy khub run', command: runCommand(route.name), none: 'Nothing matches this query today.' };
+  }
+  return {
+    title: route.name === 'unverified' ? 'No review holds' : sentence(markerName(route.name)), note: MEANING[route.name],
+    read: function () { return api.getMarked(route.name); }, label: 'Copy khub query', command: COMMANDS[route.name], none: 'Nothing is marked with this today.'
+  };
+}
+
+function sentence(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
 
 // focusOn puts the keyboard on a row's title.
 export function focusOn(id) {
@@ -23,41 +43,43 @@ export function unmount() { view = null; panel.unmount(); }
 export function order() { return view && view.rows ? view.rows : []; }
 
 export function show(main, route, ctx, force) {
-  var crumbs = ctx.crumbs([{ label: 'Review', route: homeRoute() }, { label: route.name }]);
-  if (!force && view && view.name === route.name && view.root && view.root.isConnected) { mark(route, ctx); ctx.ready(); return; }
+  var what = subject(route), key = route.view + ':' + route.name;
+  var crumbs = ctx.crumbs([{ label: 'Review', route: homeRoute() }, { label: what.title }]);
+  if (!force && view && view.key === key && view.root && view.root.isConnected) { mark(route, ctx); ctx.ready(); return; }
   var kept = force && view && view.root && view.root.isConnected;
-  var mine = { name: route.name };
-  if (!kept) fill(main, [skeleton('Loading ' + route.name, 6)]);
+  var mine = { key: key };
+  if (!kept) fill(main, [skeleton('Loading ' + what.title, 6)]);
   else Object.assign(mine, view);
   view = mine;
-  api.getQuery(route.name).then(function (found) {
+  what.read().then(function (found) {
     if (view !== mine) return;
     ctx.loaded(found.malformed);
     if (same(mine, found) && kept) { mark(ctx.route(), ctx, true); ctx.ready(); return; }
-    draw(main, found, crumbs, ctx);
+    draw(main, found, what, crumbs, ctx);
     mark(ctx.route(), ctx, true);
     ctx.ready();
   }, function (err) {
     if (view !== mine) return;
     if (kept) { ctx.failed(err); return; }
-    fill(main, [notice('Could not run ' + route.name, err.message, [{ label: 'Go to the review', href: '#/' }], ctx.refresh)]);
+    fill(main, [notice('Could not list ' + what.title, err.message, [{ label: 'Go to the review', href: '#/' }], ctx.refresh)]);
   });
 }
 
-function draw(main, found, crumbs, ctx) {
+function draw(main, found, what, crumbs, ctx) {
   var root = el('section', { class: 'split' });
   var left = el('div', { class: 'pane' });
   var head = el('header', { class: 'viewhead' });
   head.appendChild(crumbs);
   var row = el('div', { class: 'titlerow' });
-  row.appendChild(el('h1', null, found.name));
+  row.appendChild(el('h1', null, what.title));
   row.appendChild(el('span', { class: 'count' }, found.rows.length < found.matched ? num(found.rows.length) + ' of ' + num(found.matched) : plural(found.matched, 'entity', 'entities')));
-  row.appendChild(copyButton('Copy khub run', runCommand(found.name)));
+  if (what.command !== undefined) row.appendChild(copyButton(what.label, what.command));
   head.appendChild(row);
+  if (what.note) head.appendChild(el('p', { class: 'sub' }, what.note + '.'));
   left.appendChild(head);
-  if (!found.rows.length) left.appendChild(el('p', { class: 'empty' }, 'Nothing matches this query today.'));
+  if (!found.rows.length) left.appendChild(el('p', { class: 'empty' }, what.none));
   else {
-    var t = el('table', { class: 'rows', 'aria-label': found.name });
+    var t = el('table', { class: 'rows', 'aria-label': what.title });
     var tr = el('tr');
     ['Title', 'Type', 'Markers', 'Trust'].forEach(function (h) { tr.appendChild(el('th', { scope: 'col' }, h)); });
     var thead = el('thead');

@@ -11,7 +11,7 @@ const hostile = [
 
 test('a plain id is copied as it reads', () => {
   assert.equal(word('requirement/req-an-invoice'), 'requirement/req-an-invoice');
-  assert.equal(verifyCommand('requirement/req-a'), 'khub verify requirement/req-a --by human:<name>');
+  assert.equal(verifyCommand('requirement/req-a', 'ana'), "khub verify requirement/req-a --by 'human:ana'");
 });
 
 test('a hostile id is one quoted word', () => {
@@ -22,7 +22,7 @@ test('a hostile id is one quoted word', () => {
 test('a value a terminal would act on is never copied', () => {
   ['z\ntouch NL', 'a\u001b[201~b', 'a\u0015b', 'a\u007f', 'a\u009bb', '\u0000'].forEach(v => {
     assert.equal(word(v), '', JSON.stringify(v));
-    assert.equal(verifyCommand('note/' + v), '');
+    assert.equal(verifyCommand('note/' + v, 'ana'), '');
     assert.equal(runCommand(v), '');
     assert.equal(q({ attr: ['owner=' + v] }).command, '');
   });
@@ -36,13 +36,13 @@ test('a shell hands every id back unchanged', { skip: process.platform === 'win3
   });
 });
 
-test('the verify command runs nothing until a name is put in', { skip: process.platform === 'win32' }, () => {
-  const run = cmd => spawnSync('sh', ['-c', 'khub() { echo RAN "$@"; }; ' + cmd], { encoding: 'utf8' });
-  const asCopied = run(verifyCommand('requirement/req-a'));
-  assert.notEqual(asCopied.status, 0);
-  assert.equal(asCopied.stdout, '');
-  assert.equal(run(verifyCommand('requirement/req-a').replace('<name>', 'ana')).stdout,
-    'RAN verify requirement/req-a --by human:ana\n');
+test('the verify command names one reviewer, whatever the name', { skip: process.platform === 'win32' }, () => {
+  const run = cmd => spawnSync('sh', ['-c', 'khub() { printf "[%s]" "$@"; }; ' + cmd], { encoding: 'utf8' }).stdout;
+  ['ana', 'Ana Ruiz', "o'neil", '$(id)', 'x; touch PWNED', 'José'].forEach(name => {
+    assert.equal(run(verifyCommand('requirement/req-a', name)), '[verify][requirement/req-a][--by][human:' + name + ']');
+  });
+  // nobody's review is not a command
+  ['', '  ', undefined, 'a\u001bb'].forEach(name => assert.equal(verifyCommand('requirement/req-a', name), ''));
 });
 
 const rs = { type: 'requirement', relations: [

@@ -67,18 +67,23 @@ export function trustKey() {
 // copyButton puts text on the clipboard and says so on the button. Loopback is
 // a trustworthy origin, so the Clipboard API is there over plain HTTP. Text
 // that cannot be pasted safely (shell.js answers '') is not offered.
-export function copyButton(label, value, cls) {
+export function copyButton(label, value) {
   if (!value) return el('button', { type: 'button', class: 'copy', disabled: true, title: 'Its name holds control characters a terminal would act on' }, label);
-  var btn = el('button', { type: 'button', class: cls || 'copy', title: value, 'aria-live': 'polite' }, label);
+  var btn = el('button', { type: 'button', class: 'copy', title: value, 'aria-live': 'polite' }, label);
+  btn.addEventListener('click', function () { copy(btn, value); });
+  return btn;
+}
+
+// copy puts value on the clipboard and says so on btn for a moment.
+export function copy(btn, value) {
+  var label = btn.getAttribute('data-label') || btn.textContent;
+  btn.setAttribute('data-label', label);
   var say = function (word) {
     text(btn, word);
     setTimeout(function () { text(btn, label); }, 1500);
   };
-  btn.addEventListener('click', function () {
-    if (!navigator.clipboard) { say('Not available'); return; }
-    navigator.clipboard.writeText(value).then(function () { say('Copied'); }, function () { say('Not copied'); });
-  });
-  return btn;
+  if (!navigator.clipboard) { say('Not available'); return; }
+  navigator.clipboard.writeText(value).then(function () { say('Copied'); }, function () { say('Not copied'); });
 }
 
 // entityLink leads to an entity. A plain click opens it beside the view where

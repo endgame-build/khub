@@ -19,9 +19,9 @@ import { step } from './listmodel.js';
 import { el, fill, text } from './dom.js';
 import { notice, MARKERS, MEANING, markerName } from './widgets.js';
 
-var VIEWS = { home: home, types: types, overview: overview, list: list, query: query, entity: entity };
+var VIEWS = { home: home, types: types, overview: overview, list: list, query: query, marked: query, entity: entity };
 var TABS = [
-  { label: 'Review', views: ['home', 'query'], route: homeRoute() },
+  { label: 'Review', views: ['home', 'query', 'marked'], route: homeRoute() },
   { label: 'Types', views: ['types', 'list', 'entity'], route: { view: 'types' } },
   { label: 'Ontology', views: ['overview'], route: overviewOf('') }
 ];
@@ -177,7 +177,7 @@ var ctx = {
   listRoute: function (type) { return lists[type] ? opening(lists[type], '') : typeRoute(type); },
   // canOpen says whether an entity can be read beside the view on screen.
   canOpen: function (id) {
-    return ['list', 'query', 'entity'].indexOf(route.view) !== -1 && route.id !== id && panel.hasRoom();
+    return ['list', 'query', 'marked', 'entity'].indexOf(route.view) !== -1 && route.id !== id && panel.hasRoom();
   },
   open: function (id) {
     var to = opening(route, id);
@@ -195,7 +195,7 @@ var ctx = {
 function viewKey(r) {
   if (r.view === 'list') return 'list:' + r.type;
   if (r.view === 'entity') return 'entity:' + r.id;
-  if (r.view === 'query') return 'query:' + r.name;
+  if (r.view === 'query' || r.view === 'marked') return r.view + ':' + r.name;
   return r.view;
 }
 
@@ -218,7 +218,7 @@ function render(here) {
     restore = entry.scroll;
   }
   if (route.view === 'list') lists[route.type] = route;
-  Object.keys(VIEWS).forEach(function (name) { if (name !== route.view) VIEWS[name].unmount(); });
+  Object.keys(VIEWS).forEach(function (name) { if (VIEWS[name] !== VIEWS[route.view]) VIEWS[name].unmount(); });
   document.body.dataset.view = route.view;
   drawTabs();
   var view = VIEWS[route.view];

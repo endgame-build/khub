@@ -14,7 +14,7 @@ Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelo
   - It opens on what needs attention: unreviewed, incomplete, changed since
     review, expired, orphan, draft and stale entities by type, the findings
     `check` fails on, the changes of the last days, each type's review share and
-    largest gap, and the saved queries.
+    largest gap, and the saved queries. Each number opens one list across types.
   - Search in the header finds an exact id or alias, then text.
   - A type's list has facets with counts, chips for what is applied, the
     matching `khub query` to copy, counts that open what they count, and a side
@@ -22,7 +22,7 @@ Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelo
     300 rows at a time.
   - An entity leads with its description and a review bar: who reviewed it, who
     wrote it, why it carries each marker, what changed since the review, and the
-    verify command. Its links are rows by relation; its history and what it
+    verify command, with the reviewer's name asked for once. Its links are rows by relation; its history and what it
     reaches through other entities stand beside them.
   - The ontology is a layered diagram in which nothing overlaps, held by a
     property test over the shipped presets and 300 generated schemas. A schema
@@ -40,6 +40,7 @@ Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelo
 
 - **Endpoints behind the page**: `/api/overview`, `/api/findings`,
   `/api/recent`, `/api/search`, `/api/queries`, `/api/query/<name>`,
+  `/api/marked/<marker>`,
   `/api/rows/<type>`, `/api/history/<id>` and `/api/reach/<id>`. `/api/entity/<id>`
   gains `markers`, `reasons`, `body_tree`, `neighbours` and `malformed` after the
   existing fields, and `stray` on a file the graph does not hold; `/api/schema` gains `base`, `workspace` and each type's

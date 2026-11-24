@@ -5,7 +5,7 @@
 import * as api from './api.js';
 import { el, fill, text, tn } from './dom.js';
 import { same, markerTags, trustTag, trustBar, trustKey, entityLink, markerName, MEANING, MARKERS, plural, num, notice, skeleton, problem, copyButton } from './widgets.js';
-import { format, listRoute, typeRoute, homeRoute, DAYS } from './route.js';
+import { format, listRoute, typeRoute, homeRoute, markedRoute, DAYS } from './route.js';
 import { words } from './listmodel.js';
 
 var SHOWN = 3; // how many types a tile names before the reader asks for the rest
@@ -101,8 +101,10 @@ function attention(mine, o) {
   if (!cards.length) { fill(mine.blocks.attention, [el('p', { class: 'empty' }, total ? 'Every entity is reviewed and nothing is marked.' : 'Agents write entities with khub add; they appear here.')]); return; }
   fill(mine.blocks.attention, cards.map(function (c) {
     var box = el('div', { class: 'tile tile-' + c.key, title: MEANING[c.key] });
-    box.appendChild(el('b', null, num(c.n)));
-    box.appendChild(el('span', { class: 'what' }, c.key === 'unverified' ? 'no review holds' : markerName(c.key)));
+    var head = el('a', { class: 'tilehead', href: format(markedRoute(c.key)) });
+    head.appendChild(el('b', null, num(c.n)));
+    head.appendChild(el('span', { class: 'what' }, c.key === 'unverified' ? 'no review holds' : markerName(c.key)));
+    box.appendChild(head);
     var ul = el('ul');
     var line = function (t) {
       var li = el('li');

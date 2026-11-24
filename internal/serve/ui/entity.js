@@ -9,7 +9,8 @@ import { same, markerTags, trustTag, notice, copyButton, entityLink, opensBeside
 import { renderBlocks, shallowest } from './blocks.js';
 import { words } from './listmodel.js';
 import { format, entityRoute } from './route.js';
-import { word, verifyCommand } from './shell.js';
+import { word } from './shell.js';
+import { verifyButton } from './reviewer.js';
 
 // GROUP is how many entities of one relation are drawn before the reader asks
 // for the rest; COMMITS, how many commits.
@@ -184,7 +185,7 @@ function review(e) {
   line.appendChild(said(last ? (m && m.superseded ? 'last reviewed by' : 'reviewed by') : 'No review yet', last && last.by, last && last.at));
   var made = fm.generated || {};
   if (made.by) line.appendChild(said('written by', made.by, made.at));
-  if (m && !e.stray) line.appendChild(copyButton('Copy verify command', verifyCommand(e.id), 'btn'));
+  if (m && !e.stray) line.appendChild(verifyButton(e.id));
   box.appendChild(line);
   if (events.length > 1) {
     var d = el('details');

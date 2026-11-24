@@ -58,13 +58,7 @@ func SavedQuery(root, name string, now time.Time) (*omap.Map, error) {
 		if !s.idx.Nodes[node] {
 			continue // removed between the two scans
 		}
-		r := omap.New()
-		r.Set("id", node.ID())
-		r.Set("type", m.Type)
-		r.Set("slug", m.Slug)
-		r.Set("title", m.Title)
-		r.Set("markers", s.markers(node).record())
-		rows = append(rows, r)
+		rows = append(rows, s.listed(node))
 	}
 	out := omap.New()
 	out.Set("name", name)

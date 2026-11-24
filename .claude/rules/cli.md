@@ -118,8 +118,9 @@ answer.
 - **What the page remembers lives with the history entry.** `app.js` stamps
   each entry in `history.state` and keeps its scroll, its drawn rows and the
   diagram's viewport in memory under that stamp, so back and forward restore a
-  place and a new visit starts at the top. The one memory beside it is each
-  type's last list address, which an entity's breadcrumb returns to. What a
+  place and a new visit starts at the top. Two memories sit beside it: each
+  type's last list address, which an entity's breadcrumb returns to, and the
+  reviewer's name, the only thing in local storage (`ui/reviewer.js`). What a
   view shows stays in the fragment; a place is never in the address.
 - **Text a reader pastes into a terminal goes through `ui/shell.js`.** An id is
   a file's name and can hold anything a shell would run. Quoting does not stop a

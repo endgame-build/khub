@@ -445,6 +445,7 @@ the diagram's zoom.
 | `#/type/<name>` | One type's entities as rows |
 | `#/entity/<type>/<slug>` | One entity |
 | `#/query/<name>` | The rows of a saved query, as `khub run` lists them |
+| `#/marked/<marker>` | The entities of every type carrying one marker (`incomplete`, `superseded`, `expired`, `orphan`, `draft`, `stale`), or `unverified`: at most 1,000 rows, the count whole. Each number on the review home opens one |
 | `#/ontology` | The diagram of the types and their relations (`?sel=type:<name>` or `?sel=rel:<from>.<predicate>`, `?focus=<type>`, `?map=1`) |
 
 **Every view.** The header carries the workspace's name, a search box and the
@@ -487,7 +488,8 @@ row, or link of an entity page, Enter opens the page, Esc closes. Below 900 px a
 
 **An entity.** It leads with its description. A review bar says the tier, who
 reviewed it and when, who wrote it and why it carries each marker, and copies
-the `khub verify` command. Where a review no longer holds, the page shows the
+the `khub verify` command. The page asks for the reviewer's name the first time
+and keeps it in the browser's local storage, the one thing it keeps there. Where a review no longer holds, the page shows the
 fields and body lines that changed since the version reviewed, or says why git
 cannot tell. The body is rendered from a block tree the server parses: raw HTML
 and comments are shown as text, only `http`, `https` and `mailto` links are

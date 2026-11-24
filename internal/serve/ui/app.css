@@ -226,7 +226,7 @@ main { flex: 1; min-height: 0; overflow: auto; position: relative; container-typ
 main:focus { outline: none; }
 
 /* ——— shared grammar ——— */
-input[type="search"], select {
+input[type="search"], input[type="text"], select {
   font: inherit; font-size: 13px; height: 30px; padding: 0 9px; border-radius: var(--r-control);
   border: 1px solid var(--edge); background: var(--white); color: var(--ink);
 }
@@ -306,6 +306,9 @@ th.num, td.num { text-align: right; font-variant-numeric: tabular-nums; }
 .keybox { border: 0; border-radius: var(--r-frame); box-shadow: var(--lift-flight); background: var(--white); color: var(--ink); padding: 20px 24px; max-width: min(520px, calc(100vw - 40px)); }
 .keybox::backdrop { background: lab(2% 0 -6 / 0.25); }
 .keybox h2 { margin: 0 0 6px; }
+.keybox form { display: grid; gap: 8px; min-width: min(360px, 70vw); font-size: 13px; }
+.keybox .err { margin: 0; }
+.dialogrow { display: flex; gap: 8px; align-items: center; }
 .keys { display: grid; grid-template-columns: max-content 1fr; gap: 6px 18px; margin: 0 0 16px; font-size: 13px; }
 .keys dt { font-weight: 500; }
 .keys dd { margin: 0; color: var(--ink-mid); }
@@ -315,9 +318,12 @@ th.num, td.num { text-align: right; font-variant-numeric: tabular-nums; }
 .attention { display: flex; flex-wrap: wrap; background: var(--white); border-radius: var(--r-group); box-shadow: var(--lift-rest); margin-bottom: 16px; overflow: hidden; }
 .attention > .empty, .attention > .skel { flex: 1; padding: 14px 18px; margin: 0; }
 .tile { flex: 1 1 150px; max-width: 360px; padding: 12px 18px 14px; box-shadow: 1px 0 var(--line-soft), 0 1px var(--line-soft); min-width: 0; }
-.tile > b { font: 600 20px/26px var(--display); font-variant-numeric: tabular-nums; }
-.tile .what { margin-left: 6px; font-size: 13px; color: var(--ink-mid); }
-.tile-incomplete > b, .tile-superseded > b { color: var(--crit-fg); }
+.tilehead { color: var(--ink); }
+.tilehead:hover { text-decoration: none; }
+.tilehead:hover .what { text-decoration: underline; }
+.tile b { font: 600 20px/26px var(--display); font-variant-numeric: tabular-nums; }
+.tile .what { margin-left: 6px; font-size: 13px; color: var(--link); }
+.tile-incomplete b, .tile-superseded b { color: var(--crit-fg); }
 .tile ul { list-style: none; margin: 6px 0 0; padding: 0; font-size: 13px; }
 .tile li { display: flex; justify-content: space-between; gap: 10px; line-height: 24px; }
 .tile li a { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -512,6 +518,7 @@ table.rows tbody tr.open > * { background: var(--beige-deep); }
 .rline { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 18px; }
 .rline .trust { font-size: 13px; }
 .rline .btn { padding: 2px 12px; }
+.verify { display: inline-flex; gap: 6px; align-items: center; }
 .said { color: var(--ink-mid); overflow-wrap: anywhere; }
 .said b { font-weight: 600; color: var(--ink); }
 .review details { margin-top: 6px; }

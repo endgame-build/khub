@@ -22,6 +22,7 @@ import (
 	"net/http"
 	"path"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"syscall"
 	"time"
@@ -84,6 +85,7 @@ func Handler(root string, shadows Shadows) http.Handler {
 	mux.HandleFunc("/api/search", s.apiSearch)
 	mux.HandleFunc("/api/queries", s.apiQueries)
 	mux.HandleFunc("/api/query/", s.apiQuery)
+	mux.HandleFunc("/api/marked/", s.apiMarked)
 	mux.HandleFunc("/api/history/", s.apiHistory)
 	mux.HandleFunc("/api/reach/", s.apiReach)
 	mux.HandleFunc("/api/schema", s.apiSchema)
@@ -322,6 +324,20 @@ func named(w http.ResponseWriter, r *http.Request, prefix, refusal string) (stri
 		fail(w, http.StatusNotFound, "not_found", refusal)
 	}
 	return name, name != ""
+}
+
+// apiMarked serves the entities of every type that carry one marker.
+func (s *server) apiMarked(w http.ResponseWriter, r *http.Request) {
+	name, ok := named(w, r, "/api/marked/", "No marker given")
+	if !ok {
+		return
+	}
+	if !slices.Contains(explore.MarkedNames, name) {
+		fail(w, http.StatusNotFound, "not_found", "No such marker")
+		return
+	}
+	payload, err := explore.Marked(s.root, name, clock.Now())
+	answer(w, payload, err)
 }
 
 // apiHistory serves the commits that touched one entity, and what changed since
