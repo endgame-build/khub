@@ -78,7 +78,7 @@ export function queryCommand(rowset, list) {
   only('trust', list.trust || [], function (v) { return '--trust ' + v; });
   only('markers', list.status || [], function (v) {
     if (v === 'draft' || v === 'orphan' || v === 'stale') return '--' + v;
-    why = why || 'the ' + v + ' marker';
+    why = why || 'the ' + (v === 'superseded' ? 'changed since review' : v) + ' marker';
     return '';
   });
   var counts = new Map();

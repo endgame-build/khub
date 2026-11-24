@@ -20,8 +20,8 @@ Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelo
 
 ### Added
 
-- **Marks on the served page.** Space marks what is open, a list counts its
-  marks, and one button copies a `khub verify` line for each, leaving out what
+- **Marks on the served page.** Space marks what is open for sign-off, marks
+  hold across lists and through a reload, and one button copies a `khub verify` line for each, leaving out what
   changed after it was marked. `/api/revs` answers content revisions, and
   `/api/entity/<id>` gains `rev`.
 

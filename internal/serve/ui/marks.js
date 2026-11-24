@@ -1,17 +1,18 @@
-// marks.js — the entities a reader has read and means to sign off. A mark holds
-// the content revision that was read, and lasts until the page closes. The mark
-// bar asks for every revision again before it copies, and leaves out what
-// changed after it was marked.
+// marks.js — the entities a reader has read and means to sign off, across the
+// workspace. A mark holds the content revision that was read, and lasts as long
+// as the browser tab. The mark bar asks for every revision again before it
+// copies, and leaves out what changed after it was marked.
 
 import * as api from './api.js';
 import { el, fill, text } from './dom.js';
 import { num, plural, copyLater } from './widgets.js';
 import { signable } from './shell.js';
-import { withName } from './reviewer.js';
+import { withName, signer } from './reviewer.js';
 
 var BATCH = 200; // how many revisions one request answers (serve.go)
 var NAMED = 3;   // how many left-out entities are named
-var marks = new Map(); // id → { rev, trust } as marked
+var KEY = 'khub.marks:'; // and the page's address: one workspace a port
+var marks = load(); // id → { rev, trust } as marked
 var drawn = [];  // { node, draw } of what shows marks
 var note = null; // { where, said }: how the last copy went, on the view it was on
 
@@ -22,8 +23,21 @@ function follow(node, draw) {
   return node;
 }
 
+// load reads the marks the tab kept through a reload.
+function load() {
+  try {
+    var kept = JSON.parse(sessionStorage.getItem(KEY + location.host) || '[]');
+    return new Map(kept.filter(function (m) { return Array.isArray(m) && typeof m[0] === 'string' && m[1] && typeof m[1].rev === 'string'; }));
+  } catch (e) { return new Map(); } // storage off, or not ours
+}
+
+function keep() {
+  try { sessionStorage.setItem(KEY + location.host, JSON.stringify(Array.from(marks))); } catch (e) { /* kept for this page alone */ }
+}
+
 // changed redraws what shows marks: after a mark, or after a view's rows moved.
 export function changed() {
+  keep();
   drawn.forEach(function (d) { d.draw(); });
 }
 
@@ -58,7 +72,7 @@ export function settle(rows) {
 
 // tag shows on a row that it is marked.
 export function tag(id) {
-  return el('span', { class: 'tag tag-read', 'data-mark': id, hidden: !marks.has(id) }, 'marked');
+  return el('span', { class: 'tag tag-read', 'data-mark': id, hidden: !marks.has(id) }, 'for sign-off');
 }
 
 // paint brings every row's tag in line, whichever view drew it.
@@ -70,30 +84,29 @@ function paint() {
 
 // button marks one entity, as read at rev.
 export function button(id, rev, trust) {
-  var btn = el('button', { type: 'button', class: 'copy', title: 'Mark to sign off with others (Space)', on: { click: function () { toggle(id, rev, trust); } } });
+  var btn = el('button', { type: 'button', class: 'copy', title: 'Sign it off with the other marked entities (Space)', on: { click: function () { toggle(id, rev, trust); } } });
   return follow(btn, function () {
     var had = marks.get(id), here = !!had && had.rev === rev;
     btn.setAttribute('aria-pressed', String(here));
-    text(btn, here ? 'Marked as read' : had ? 'Changed since marked: mark again' : 'Mark as read');
+    text(btn, here ? 'Marked for sign-off' : had ? 'Changed since marked: mark again' : 'Mark for sign-off');
   });
 }
 
-// bar counts a view's marks and copies their verify commands. rows is how the
-// view lists what it holds.
+// bar counts the marks and copies a verify line for each, wherever it was made.
+// rows is how the view on screen lists what it holds.
 export function bar(rows) {
   var said = el('span', { class: 'said', role: 'status' });
   var count = el('b');
   var copyBtn = el('button', { type: 'button', class: 'btn', on: { click: function () { withName(send); } } });
   var clear = el('button', { type: 'button', class: 'btn-ghost', on: { click: function () {
-    mine().forEach(function (id) { marks.delete(id); });
+    marks.clear();
     note = null;
     changed();
   } } }, 'Clear marks');
   var box = el('div', { class: 'markbar', role: 'group', 'aria-label': 'Marked entities' });
   fill(box, [count, copyBtn, clear, said]);
-  function mine() {
-    return rows().map(function (r) { return r.id; }).filter(function (id) { return marks.has(id); });
-  }
+  function mine() { return Array.from(marks.keys()); }
+  function here() { return rows().filter(function (r) { return marks.has(r.id); }).length; }
   function send(name) {
     var at = where();
     var say = function (s) { note = { where: at, said: s }; changed(); };
@@ -113,8 +126,9 @@ export function bar(rows) {
     var n = mine().length, s = note && note.where === where() ? note.said : '';
     var inside = box.contains(document.activeElement);
     text(said, s);
-    text(count, num(n) + ' of ' + num(rows().length) + ' marked');
-    text(copyBtn, 'Copy ' + plural(n, 'verify line'));
+    var h = here();
+    text(count, h === n ? num(n) + ' marked for sign-off' : num(n) + ' marked for sign-off, ' + num(h) + ' here');
+    text(copyBtn, (signer() ? 'Copy ' : 'Set name and copy ') + plural(n, 'verify line'));
     count.hidden = copyBtn.hidden = clear.hidden = !n;
     box.hidden = !n && !s;
     // The control the keyboard was on is gone.

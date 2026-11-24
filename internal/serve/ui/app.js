@@ -358,7 +358,7 @@ function keys() {
   var box = el('dialog', { class: 'keybox', 'aria-label': 'Keys and terms' });
   box.appendChild(el('h2', null, 'Keys'));
   box.appendChild(list(  [['/', 'Search'], ['j, k', 'Open the next or previous row, or link of a page, beside it'], ['], [', 'Go to the next or previous page of the list it was opened from'], ['Enter', 'Open what is beside the list as a page'],
-    ['Space', 'Mark what is open beside the view, to sign off with others'], ['Esc', 'Close what is open, or leave one type for the full map'], ['r', 'Read the workspace again'], ['Shift-click', 'Leave a filter value out'], ['?', 'This list']]));
+    ['Space', 'Mark what is open beside the view for sign-off; the marked bar copies a verify line for each, to run in a terminal'], ['Esc', 'Close what is open, or leave one type for the full map'], ['r', 'Read the workspace again'], ['Shift-click', 'Leave a filter value out'], ['?', 'This list']]));
   box.appendChild(el('h2', null, 'Markers'));
   box.appendChild(list(MARKERS.map(function (k) { return [markerName(k), MEANING[k]]; })));
   box.appendChild(el('h2', null, 'Trust'));

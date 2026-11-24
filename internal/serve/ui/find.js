@@ -37,6 +37,7 @@ export function close() {
   var was = !box.hidden || document.activeElement === input;
   stop();
   open(false);
+  if (was) { input.value = ''; hits = []; }
   if (document.activeElement === input) document.getElementById('main').focus({ preventScroll: true });
   return was;
 }

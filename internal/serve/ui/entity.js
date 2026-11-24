@@ -413,7 +413,7 @@ function drawHistory(box, h) {
       if (c.date) { sub.appendChild(when(c.date)); sub.appendChild(tn(' ')); }
       sub.appendChild(tn(c.subject));
       li.appendChild(sub);
-      li.appendChild(el('span', { class: 'who mono' }, [c.author, String(c.commit || '').slice(0, 8)].filter(Boolean).join(' ')));
+      li.appendChild(el('span', { class: 'who mono' }, ['commit ' + String(c.commit || '').slice(0, 8), c.author ? 'by ' + c.author : ''].filter(function (w) { return w && w !== 'commit '; }).join(' · ')));
       ol.appendChild(li);
     };
     h.commits.slice(0, COMMITS).forEach(draw);

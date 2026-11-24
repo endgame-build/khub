@@ -22,6 +22,9 @@ function keep(value) {
   drawn.forEach(function (d) { d.draw(); });
 }
 
+// signer is the reviewer's name, '' until it is set.
+export function signer() { return name; }
+
 // withName hands the reviewer's name on, asking for it first when there is none.
 export function withName(then) {
   if (name) then(name); else ask(function () { then(name); });
@@ -44,6 +47,7 @@ export function verifyButton(id) {
     var pasted = word(id);
     btn.disabled = !pasted;
     btn.title = !pasted ? 'Its name holds control characters a terminal would act on' : verifyCommand(id, name) || 'Asks for your name first';
+    text(btn, name ? 'Copy verify command' : 'Set name and copy verify command');
     text(who, name ? 'as ' + name : 'Set name');
     who.title = name ? 'Change the reviewer\'s name' : 'Set the reviewer\'s name';
   }
