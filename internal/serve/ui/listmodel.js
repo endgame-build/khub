@@ -9,17 +9,28 @@ var MARKERS = ['draft', 'stale', 'orphan', 'incomplete'];
 // Review tiers in rising order (internal/trust): unverified < machine < human.
 var TRUST_RANK = { unverified: 0, machine: 1, human: 2 };
 
-// visibleColumns is the relation columns on screen: the base relations
-// (related, references, depends_on) only when the reader asked for them.
-export function visibleColumns(rowset, base) {
-  return (rowset.relations || []).filter(function (c) { return base || !c.base; });
+// visibleColumns is the relation columns on screen. The base relations
+// (related, references, depends_on) and the relations no row uses fold away
+// until the reader asks for all of them; a column a sort or a filter is using
+// (keep) always shows.
+export function visibleColumns(rowset, all, keep) {
+  return (rowset.relations || []).filter(function (c) {
+    if (all || (keep && keep.indexOf(c.key) !== -1)) return true;
+    return !c.base && (rowset.rows || []).some(function (row) { return row.counts && row.counts[c.key]; });
+  });
 }
 
-// columnByKey finds a relation column by key, or null.
-export function columnByKey(rowset, key) {
-  var cols = rowset.relations || [];
-  for (var i = 0; i < cols.length; i++) if (cols[i].key === key) return cols[i];
-  return null;
+// countTarget is where a count leads: one linked entity's own page; several
+// of one type, that type's list filtered to this row from the relation's
+// other end; several types, the row's own page, which groups them.
+export function countTarget(type, col, row) {
+  var linked = (row.links && row.links[col.key]) || [];
+  if (!linked.length) return null;
+  if (linked.length === 1) return { entity: linked[0] };
+  var peer = linked[0].slice(0, linked[0].indexOf('/'));
+  if (!linked.every(function (id) { return id.indexOf(peer + '/') === 0; })) return { entity: row.id };
+  var rel = col.direction === 'out' ? 'in:' + (col.base ? '*' : type) + '.' + col.predicate : 'out:' + col.predicate;
+  return { type: peer, rel: rel, to: row.id };
 }
 
 function attrPair(attr) {
@@ -78,6 +89,7 @@ export function filterRows(rowset, list) {
     if (bound && !holds((row.counts && row.counts[bound.key]) || 0, bound.op, bound.n)) return false;
     if (pair && !attrMatches(row, pair.name, pair.value)) return false;
     if (list.status && !row[list.status]) return false;
+    if (list.trust && row.trust !== list.trust) return false;
     return true;
   });
 }
@@ -131,7 +143,7 @@ export function countLine(shown, total) { return shown + ' of ' + total; }
 // linkTargets lists the entities some row links to through one column — the
 // choices the "linked to" filter offers — sorted, each once.
 export function linkTargets(rowset, key) {
-  var seen = {};
+  var seen = Object.create(null);
   var out = [];
   (rowset.rows || []).forEach(function (row) {
     ((row.links && row.links[key]) || []).forEach(function (id) {
@@ -148,7 +160,7 @@ export function attrValues(rowset, name) {
   for (var i = 0; i < attrs.length; i++) {
     if (attrs[i].name === name && attrs[i].enum && attrs[i].enum.length) return attrs[i].enum.slice();
   }
-  var seen = {};
+  var seen = Object.create(null);
   var out = [];
   (rowset.rows || []).forEach(function (row) {
     var v = row.attrs ? row.attrs[name] : undefined;

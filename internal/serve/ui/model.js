@@ -140,6 +140,37 @@ function countUses(used, from, predicate, to) {
   return total;
 }
 
+// incomingRelations lists the relations other types declare toward a type and
+// its own record does not show: those with a declared inverse are there as
+// derived relations, base relations are every type's, and its relations to
+// itself are its own.
+export function incomingRelations(schema, name, used) {
+  var out = [];
+  schema.edges.forEach(function (row) {
+    if (row.derived || row.inverse || row.from.indexOf('any') !== -1) return;
+    if (row.to.indexOf(name) === -1 && row.to.indexOf('any') === -1) return;
+    row.from.forEach(function (from) {
+      if (from === name) return;
+      out.push({
+        predicate: row.predicate, from: from, many: !!row.many, required: !!row.required,
+        used: countUses(used, from, row.predicate, name)
+      });
+    });
+  });
+  return out;
+}
+
+// relationCoverage is how many of a type's entities have a relation at all. An
+// entity pointing at itself has none, as the list's columns count it.
+export function relationCoverage(model, from, predicate) {
+  var have = new Set();
+  model.edges.forEach(function (e) {
+    var d = e.data;
+    if (d.label === predicate && d.source !== d.target && typeOf(d.source) === from) have.add(d.source);
+  });
+  return { have: have.size, total: (model.byType.get(from) || []).length };
+}
+
 // selectionIds maps an overview selection (`type:<name>` or
 // `rel:<from>.<predicate>`) to the diagram element ids it highlights.
 export function selectionIds(sch, sel) {
@@ -181,6 +212,7 @@ export function typeDetails(view, count, base) {
   }
   return {
     name: view.name,
+    when: view.when || '',
     count: count,
     attributes: (view.fields || []).map(function (f) {
       return {

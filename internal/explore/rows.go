@@ -105,9 +105,10 @@ func (s *snapshot) row(node index.Node, attrs []*schema.ResolvedAttribute, cols 
 }
 
 // listAttributes are the attribute columns of a type's list: the attributes the
-// type declares itself — not the base block's bookkeeping and provenance, which
-// every type carries — whose values are plain (no mapping, no list of
-// mappings). title is the row's own title column, so it is not repeated.
+// type declares itself — a base attribute it redeclares (a status with its own
+// values) included, the rest of the base block's bookkeeping and provenance
+// not — whose values are plain (no mapping, no list of mappings). title is the
+// row's own title column, so it is not repeated.
 func listAttributes(resolved *schema.ResolvedSchema, rtype *schema.ResolvedType) []*schema.ResolvedAttribute {
 	var out []*schema.ResolvedAttribute
 	for _, name := range rtype.Attributes.Keys() {
@@ -115,7 +116,7 @@ func listAttributes(resolved *schema.ResolvedSchema, rtype *schema.ResolvedType)
 		if name == "title" || a.HoldsObjects() {
 			continue
 		}
-		if resolved.BaseAttributes != nil && resolved.BaseAttributes.Has(name) {
+		if !a.OverriddenFromBase && resolved.BaseAttributes != nil && resolved.BaseAttributes.Has(name) {
 			continue
 		}
 		out = append(out, a)

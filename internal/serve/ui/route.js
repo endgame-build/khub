@@ -7,7 +7,7 @@
 // the Host guard sees.
 //
 //   #/                         overview          ?sel=type:<name> | rel:<from>.<predicate>
-//   #/type/<name>              one type's list   ?sort ?dir ?q ?rel+to ?count ?attr ?status ?base
+//   #/type/<name>              one type's list   ?sort ?dir ?q ?rel+to ?count ?attr ?status ?trust ?base
 //   #/entity/<type>/<slug>     one entity
 //
 // `?aspect=` from `khub serve --aspect` rides on location.search, not the
@@ -15,10 +15,12 @@
 // overview.
 
 export var STATUSES = ['draft', 'stale', 'orphan', 'incomplete'];
+// Review tiers, lowest first (internal/trust Tiers).
+export var TIERS = ['unverified', 'machine', 'human'];
 var DEFAULT_SORT = 'title';
 var DEFAULT_DIR = 'asc';
 // Format order: fixed, so one view has one address.
-var LIST_KEYS = ['sort', 'dir', 'q', 'rel', 'to', 'count', 'attr', 'status', 'base'];
+var LIST_KEYS = ['sort', 'dir', 'q', 'rel', 'to', 'count', 'attr', 'status', 'trust', 'base'];
 // A count bound, as `khub query --count` spells one: <column key><op><n>.
 export var COUNT_RE = /^((?:out|in):.+?)(>=|<=|!=|=|>|<)(\d+)$/;
 
@@ -27,7 +29,7 @@ function decode(seg) {
 }
 
 function emptyList() {
-  return { sort: DEFAULT_SORT, dir: DEFAULT_DIR, q: '', rel: '', to: '', count: '', attr: '', status: '', base: false };
+  return { sort: DEFAULT_SORT, dir: DEFAULT_DIR, q: '', rel: '', to: '', count: '', attr: '', status: '', trust: '', base: false };
 }
 
 // parse reads a location.hash ('' or '#/...') into a route. A malformed
@@ -81,6 +83,8 @@ function listParams(p) {
   if (attr && attr.indexOf('=') > 0) out.attr = attr;
   var status = p.get('status');
   if (STATUSES.indexOf(status) !== -1) out.status = status;
+  var trust = p.get('trust');
+  if (TIERS.indexOf(trust) !== -1) out.trust = trust;
   if (p.get('base') === '1') out.base = true;
   return out;
 }

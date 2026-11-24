@@ -172,6 +172,9 @@ button:disabled { cursor: default; opacity: 0.4; }
 .mono { font-family: var(--mono); }
 a { color: var(--navy); text-decoration: none; }
 a:hover { text-decoration: underline; }
+/* Navy is too near the ink to tell a link from text; the line tells it. */
+main a:not(.btn):not(.btn-ghost) { text-decoration: underline; text-decoration-color: var(--ink-soft); text-decoration-thickness: 1px; text-underline-offset: 2px; }
+main a:not(.btn):not(.btn-ghost):hover { text-decoration-color: currentColor; text-decoration-thickness: 2px; }
 
 /* ——— bar ——— */
 /* Chrome casts no shadow; the hairline is the app-frame rule. */
@@ -181,6 +184,7 @@ a:hover { text-decoration: underline; }
 }
 #brand { font-family: var(--display); font-size: 16px; font-weight: 600; color: var(--ink); }
 #brand:hover { text-decoration: none; }
+#brand .ws { margin-left: 8px; padding: 1px 7px; border-radius: var(--r-badge); background: var(--beige-deep); font-size: 12.5px; font-weight: 500; color: var(--ink-mid); }
 #crumbs { display: flex; align-items: center; gap: 6px; min-width: 0; font-size: 13px; }
 #crumbs .crumb { padding: 2px 6px; border-radius: var(--r-badge); color: var(--ink-mid); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 42ch; }
 #crumbs a.crumb:hover { background: var(--beige-deep); text-decoration: none; }
@@ -209,6 +213,10 @@ h3 { font-family: var(--display); font-size: 13px; font-weight: 600; margin: 18p
 
 .notice-box { max-width: 720px; margin: 64px auto; padding: 0 28px; }
 .linklist { margin: 14px 0 0; padding-left: 18px; }
+.copy { margin-left: 8px; padding: 2px 8px; border-radius: var(--r-badge); background: var(--beige-deep); font: 500 11.5px var(--sans); color: var(--ink-mid); min-height: 24px; }
+.sidecol .copy { margin-left: 0; background: var(--white); }
+.more { margin: 12px 0; }
+.more[hidden] { display: none; }
 .linklist li { margin: 4px 0; font-family: var(--mono); font-size: 13px; }
 
 /* Markers: one tag per set flag. Colour plus the word, never colour alone. */
@@ -219,9 +227,8 @@ h3 { font-family: var(--display); font-size: 13px; font-weight: 600; margin: 18p
 }
 .tag-draft { background: var(--beige-deep); color: var(--ink-soft); }
 .tag-incomplete { background: var(--crit-tint); color: var(--crit-fg); }
-.tag-orphan { color: var(--graph-amber); background: lab(55.6864% 21.5518 81.378 / 0.12); }
-.tag-stale { color: var(--graph-amber); background: lab(55.6864% 21.5518 81.378 / 0.12); }
-.tag-trust { color: var(--ok); background: lab(46.1094% -42.9662 35.1265 / 0.1); }
+.tag-orphan, .tag-stale { color: var(--ink-mid); background: lab(55.6864% 21.5518 81.378 / 0.2); }
+.tag-trust { color: var(--cat-pine); background: lab(46.1094% -42.9662 35.1265 / 0.1); }
 .trust { font-family: var(--mono); font-size: 11px; color: var(--ink-soft); }
 .trust-human, .trust-machine { color: var(--ok); }
 
@@ -255,6 +262,9 @@ body[data-view="overview"] main { overflow: hidden; }
   border-radius: var(--r-group); padding: 16px 18px;
 }
 .details h2 { font-size: 20px; margin: 2px 0 8px; }
+.details .when { margin: 0 0 12px; color: var(--ink-mid); font-size: 13px; }
+.details h2:focus { outline: none; }
+.coverage { margin: 0; font-size: 13px; font-variant-numeric: tabular-nums; }
 .details .actions { display: flex; align-items: center; gap: 12px; margin: 0 0 6px; }
 .details table { font-size: 12.5px; }
 .details th, .details td { padding: 6px 10px; }
@@ -295,19 +305,31 @@ table.rows th button { display: block; width: 100%; padding: 9px 12px 7px; font:
 table.rows th.sorted { color: var(--ink); }
 table.rows th.num button { text-align: right; }
 table.rows td { padding: 7px 12px; }
-table.rows td.title { min-width: 180px; max-width: 320px; }
-table.rows td.title a { font-weight: 500; }
+/* The title stays in view while the columns scroll under it. */
+table.rows tbody th.title {
+  position: sticky; top: auto; left: 0; z-index: 1; background: var(--white); min-width: 260px; max-width: 420px;
+  padding: 7px 12px; text-align: left; white-space: normal; vertical-align: top; border-bottom: 1px solid var(--line-soft);
+  font: inherit; letter-spacing: normal; text-transform: none; color: var(--ink);
+}
+table.rows tbody tr:last-child th.title { border-bottom: 0; }
+table.rows thead th.title { left: 0; z-index: 2; }
+table.rows thead th.title button { display: inline-block; width: auto; }
+table.rows th.title a { font-weight: 500; }
+table.rows th.title .slug { font-size: 11px; color: var(--ink-soft); overflow-wrap: anywhere; }
+table.rows th button.on { color: var(--ink); }
+table.rows thead th.title button:not(.on) { color: var(--ink-soft); }
 table.rows td.attr { max-width: 200px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-table.rows td.id { color: var(--ink-soft); font-size: 11.5px; white-space: nowrap; }
 table.rows td.num { text-align: right; font-variant-numeric: tabular-nums; font-family: var(--mono); }
-table.rows td.zero { color: var(--line); }
-table.rows tbody tr:hover td { background: var(--paper); }
+table.rows td.zero { color: var(--ink-soft); }
+table.rows td.num a { display: inline-block; min-width: 24px; padding: 4px 0; margin: -4px 0; }
+table.rows tbody tr:hover td, table.rows tbody tr:hover th.title { background: var(--paper); }
 
 /* ——— entity ——— */
 /* The entity page uses the whole window: the connection grid gains columns
    as it widens, and only running text keeps a reading measure (.prose). */
 .entity { padding: 20px 28px 60px; }
-.entity .path { font-size: 11.5px; color: var(--ink-soft); }
+.entity .path { font-size: 11.5px; color: var(--ink-soft); overflow-wrap: anywhere; }
+.entity .lede { font-size: 15px; line-height: 1.55; color: var(--ink); margin: 12px 0 0; }
 .banner { background: var(--crit-tint); color: var(--crit-fg); border-radius: var(--r-control); padding: 8px 12px; font-size: 13px; max-width: 80ch; }
 .entitycols { display: flex; gap: 28px; align-items: flex-start; }
 .maincol { flex: 1; min-width: 0; }
@@ -331,7 +353,6 @@ table.rows tbody tr:hover td { background: var(--paper); }
 .prose pre code { background: none; padding: 0; }
 .prose blockquote { margin: 10px 0; padding: 2px 14px; border-left: 3px solid var(--line); color: var(--ink-mid); }
 .prose .deadlink { border-bottom: 1px dotted var(--ink-soft); }
-.prose a.elink { border-bottom: 1px solid var(--line); }
 
 .maincol > h2 { margin: 0 0 6px; }
 .group { margin-bottom: 18px; }
@@ -347,9 +368,13 @@ table.rows tbody tr:hover td { background: var(--paper); }
 .nid { font-size: 11px; color: var(--ink-soft); margin-top: 1px; }
 .nsum { margin: 4px 0 0; font-size: 12.5px; color: var(--ink-mid); }
 
-@media (max-width: 900px) {
-  .overview { flex-direction: column; }
+@media (max-width: 900px), (max-height: 520px) {
+  /* Stacked, the diagram keeps a height of its own and the page scrolls. */
+  body[data-view="overview"] main { overflow: auto; }
+  .overview { flex-direction: column; height: auto; }
+  .diagram { flex: none; height: 60vh; min-height: 340px; }
   .details { width: auto; }
+  table.rows tbody th.title, table.rows thead th.title { left: auto; min-width: 200px; }
   .entitycols { flex-direction: column; }
   .sidecol { width: auto; }
 }

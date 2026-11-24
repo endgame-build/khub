@@ -12,10 +12,13 @@ export function destroy() {
   if (cy) { cy.destroy(); cy = null; }
 }
 
-// MAX_ZOOM keeps a small schema from being blown up to fill the canvas.
+// MAX_ZOOM keeps a small schema from being blown up to fill the canvas, and
+// MIN_ZOOM a large one from being shrunk until no name can be read.
 var MAX_ZOOM = 1.25;
+var MIN_ZOOM = 0.8;
+var MARGIN = 32;
 
-// mount draws placed elements (layout.placeElements) and fits them.
+// mount draws placed elements (layout.placeElements), framed to be read.
 export function mount(container, elements, style) {
   destroy();
   cy = cytoscape({
@@ -28,18 +31,42 @@ export function mount(container, elements, style) {
     autoungrabify: true,
     boxSelectionEnabled: false
   });
-  fit();
+  frame();
   return cy;
 }
 
-// fit frames the whole diagram, never zooming a small one past MAX_ZOOM.
+// frame shows the diagram at a size its names can be read at: all of it when
+// that fits, else its middle. fit is how to see the whole of a large one.
+function frame() {
+  fit();
+  if (cy.zoom() < MIN_ZOOM) {
+    cy.zoom(MIN_ZOOM);
+    cy.center();
+  }
+}
+
+// fit shows the whole diagram, never zooming a small one past MAX_ZOOM.
 export function fit() {
   if (!cy) return;
-  cy.fit(cy.elements(), 32);
+  cy.fit(cy.elements(), MARGIN);
   if (cy.zoom() > MAX_ZOOM) {
     cy.zoom(MAX_ZOOM);
     cy.center();
   }
+}
+
+// viewport reads the zoom and pan; given one, it puts them back.
+export function viewport(to) {
+  if (!cy) return null;
+  if (to) cy.viewport({ zoom: to.zoom, pan: to.pan });
+  return { zoom: cy.zoom(), pan: Object.assign({}, cy.pan()) };
+}
+
+// reveal centres the selected elements when any part of them is out of view.
+function reveal(picked) {
+  if (!picked.length) return;
+  var seen = cy.extent(), box = picked.boundingBox();
+  if (box.x1 < seen.x1 || box.y1 < seen.y1 || box.x2 > seen.x2 || box.y2 > seen.y2) cy.center(picked);
 }
 
 // select marks the selected elements and, around them, their neighbourhood:
@@ -63,6 +90,7 @@ export function select(ids) {
       ele.toggleClass('faded', picked.length > 0 && !keep.has(ele) && !ele.hasClass('grp'));
     });
   });
+  reveal(picked);
 }
 
 // on forwards normalized taps. Nothing outside this file sees a cytoscape
@@ -171,10 +199,7 @@ export function buildStyle(types, colors, ink, boxH, groupPad) {
     },
     { selector: 'node.tag.required', style: { 'border-style': 'solid' } },
     { selector: 'node.tag.unused', style: { 'opacity': 0.55, 'border-style': 'dotted' } },
-    { selector: 'edge.hot', style: { 'font-size': 11, 'color': ink.mid, 'opacity': 1, 'width': 2 } },
-    { selector: 'node.picked', style: { 'border-width': 3, 'border-color': ink.navy, 'border-opacity': 1, 'border-style': 'solid' } },
-    { selector: 'edge.picked', style: { 'width': 2.5, 'opacity': 1, 'line-color': ink.navy, 'target-arrow-color': ink.navy, 'color': ink.navy } },
-    { selector: '.faded', style: { 'opacity': 0.18 } }
+    { selector: 'edge.hot', style: { 'font-size': 11, 'color': ink.mid, 'opacity': 1, 'width': 2 } }
   ];
   types.forEach(function (name, i) {
     style.push({
@@ -182,5 +207,11 @@ export function buildStyle(types, colors, ink, boxH, groupPad) {
       style: { 'background-color': colors[i % colors.length], 'border-color': colors[i % colors.length] }
     });
   });
+  // After the type colours: the last matching rule wins.
+  style.push(
+    { selector: 'node.picked', style: { 'border-width': 3, 'border-color': ink.navy, 'border-opacity': 1, 'border-style': 'solid' } },
+    { selector: 'edge.picked', style: { 'width': 2.5, 'opacity': 1, 'line-color': ink.navy, 'target-arrow-color': ink.navy, 'color': ink.navy } },
+    { selector: '.faded', style: { 'opacity': 0.18 } }
+  );
   return style;
 }

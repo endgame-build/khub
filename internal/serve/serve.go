@@ -266,6 +266,11 @@ func (s *server) apiSchema(w http.ResponseWriter, r *http.Request) {
 		record.Set("relations", relationRecords(t.Relations))
 		types = append(types, record)
 	}
+	name, err := workspace.Name(s.root)
+	if err != nil {
+		failErr(w, err)
+		return
+	}
 	payload := omap.New()
 	payload.Set("types", types)
 	// The base block is already merged into every type's relations, so this
@@ -285,6 +290,9 @@ func (s *server) apiSchema(w http.ResponseWriter, r *http.Request) {
 	// The base block in full — the record `khub schema base` prints — so the
 	// overview can show the attributes and relations every type inherits.
 	payload.Set("base", introspect.BaseView(resolved))
+	// What the header and the tab title call this workspace: a person reviewing
+	// two of them has two tabs open.
+	payload.Set("workspace", name)
 	writeJSON(w, payload)
 }
 

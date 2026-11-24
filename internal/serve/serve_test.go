@@ -245,7 +245,8 @@ func TestSchemaEndpointNamesBaseRelations(t *testing.T) {
 	defer srv.Close()
 
 	var payload struct {
-		Types []struct {
+		Workspace string `json:"workspace"`
+		Types     []struct {
 			Name      string `json:"name"`
 			Relations []struct {
 				Predicate string   `json:"predicate"`
@@ -260,6 +261,9 @@ func TestSchemaEndpointNamesBaseRelations(t *testing.T) {
 
 	if len(payload.Types) == 0 {
 		t.Fatal("no types")
+	}
+	if payload.Workspace == "" || strings.ContainsAny(payload.Workspace, `/\\`) {
+		t.Errorf("workspace = %q, want its name and never a path", payload.Workspace)
 	}
 	// The page hides these by default; if they stopped being reported it would
 	// silently start drawing a complete graph instead.

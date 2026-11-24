@@ -2,6 +2,7 @@ package explore
 
 import (
 	"errors"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -186,6 +187,43 @@ func TestRowsRefuseMalformedScan(t *testing.T) {
 		var located *errs.Located
 		if !errors.As(err, &located) || located.Code != "malformed_projection" || !strings.Contains(located.Message, "cmp-broken.md") {
 			t.Errorf("%s: want malformed_projection naming the file, got %v", name, err)
+		}
+	}
+}
+
+// A base attribute the type redeclares is the type's own: its column, its
+// allowed values. One it merely inherits stays out.
+func TestRowsShowARedeclaredBaseAttribute(t *testing.T) {
+	root := buildHubWS(t)
+	ontology := filepath.Join(root, ".khub", "ontology.yaml")
+	raw, err := os.ReadFile(ontology)
+	if err != nil {
+		t.Fatal(err)
+	}
+	const anchor = "        decision:\n          enum:\n"
+	if !strings.Contains(string(raw), anchor) {
+		t.Fatalf("ontology.yaml no longer holds %q", anchor)
+	}
+	writeFile(t, ontology, strings.Replace(string(raw), anchor,
+		"        status:\n          enum: [proposed, accepted, rejected]\n"+anchor, 1))
+	for typ, want := range map[string]bool{"adr": true, "component": false} {
+		set, err := Rows(root, typ, now)
+		if err != nil {
+			t.Fatal(err)
+		}
+		found := false
+		for _, a := range get(t, set, "attributes").([]any) {
+			m := a.(*omap.Map)
+			if get(t, m, "name") != "status" {
+				continue
+			}
+			found = true
+			if enum := get(t, m, "enum").([]any); len(enum) != 3 || enum[0] != "proposed" {
+				t.Errorf("%s status enum = %v", typ, enum)
+			}
+		}
+		if found != want {
+			t.Errorf("%s shows a status column = %v, want %v", typ, found, want)
 		}
 	}
 }

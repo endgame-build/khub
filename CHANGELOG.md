@@ -20,7 +20,8 @@ Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelo
   by relation and direction, each neighbour with its type, title, markers and
   a one-line summary. Every view has its own address in the URL fragment, so a
   reload, back/forward or a pasted link restores it. The server stays
-  read-only; the link/unlink command composer is gone with the views it served.
+  read-only; the link/unlink command composer and the entity search box are
+  gone with the views they served.
   On a 2,000-entity workspace a list loads in about 0.3 s.
 - **The overview is a layered diagram that never overlaps.** Types joined by
   relations are framed as related groups and laid out in layers (dagre's
@@ -38,6 +39,22 @@ Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelo
   `?count=in:requirement.realized_in=0` lists what nothing realizes. The header
   row stays in view while a long list scrolls, the tab title names the page,
   and focus moves to a newly opened page.
+- **The explorer answers a reviewer's questions about what it shows.** A type's
+  panel carries its capture cue and the incoming relations that declare no
+  inverse; a relation's panel says how many entities have one and how many do
+  not, each a link to them. A list filters by trust tier, shows a base
+  attribute the type redeclares (a status with its own values), folds the
+  relation columns no row uses, and makes every count the way to what it
+  counts. An entity's page leads with its description, links the entities its
+  attributes name, and copies its id, its path and its verify command.
+- **The explorer keeps the reader's place.** Back brings back a list's scroll
+  and rows and the diagram's zoom; a breadcrumb returns to the list as it was
+  filtered; keyboard focus survives a sort and follows a choice into the panel;
+  the diagram lays itself out again when the window changes shape and never
+  opens too small to read. A list draws 300 rows at a time: one of 48,643
+  entities shows its first rows in about 3 s instead of 21 to 51 s.
+- **The header and the tab title name the workspace** (`workspace` on
+  `/api/schema`: the name `init` recorded, else the directory's).
 - **`serve --aspect` is accepted for compatibility** and still printed on the
   URL; every value now opens the overview. Its help text says so — the one
   fixture byte change.

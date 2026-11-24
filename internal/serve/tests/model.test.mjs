@@ -96,6 +96,8 @@ test('details panels: type, base and relation', () => {
     relations: [{ predicate: 'served_by', to: ['component'], many: true, required: false, inverse: 'serves', derived: false }]
   }, 2);
   assert.equal(td.count, 2);
+  assert.equal(td.when, '');
+  assert.equal(m.typeDetails({ name: 'x', when: 'a rule is stated' }, 0).when, 'a rule is stated');
   assert.deepEqual(td.attributes[0], { name: 'trigger', type: 'text', required: true, allowed: 'human, event', inherited: false });
   assert.deepEqual(td.relations[0], { predicate: 'served_by', to: 'component', many: true, required: false, inverse: 'serves', derived: false, inherited: false });
   // With the base block: an attribute exactly as the base declares it is
@@ -113,4 +115,28 @@ test('details panels: type, base and relation', () => {
   const rd = m.relationDetails(sch, 'rel:use-case.served_by');
   assert.deepEqual(rd, { from: 'use-case', predicate: 'served_by', to: 'component', kind: 'typed', many: true, required: false, inverse: 'serves', acyclic: false, used: 2 });
   assert.equal(m.relationDetails(sch, 'rel:x.y'), null);
+});
+
+test('incoming relations: the ones no declared inverse already lists', () => {
+  const { schema, model } = build();
+  const used = m.usedEdgeCounts(model);
+  // served_by declares an inverse, so component lists it as a derived relation
+  assert.deepEqual(m.incomingRelations(schema, 'component', used), [
+    { predicate: 'provider', from: 'api', many: false, required: true, used: 0 }
+  ]);
+  // a relation to any type comes in everywhere but from its own type
+  const any = m.indexSchema({ ...schemaPayload, edges: schemaPayload.edges.concat([
+    { predicate: 'affects', from: ['adr'], to: ['any'], kind: 'any', many: true, required: false, inverse: null, acyclic: false, derived: false }
+  ]) });
+  assert.deepEqual(m.incomingRelations(any, 'use-case', used).map(r => r.predicate), ['affects']);
+  assert.deepEqual(m.incomingRelations(any, 'adr', used), []);
+});
+
+test('coverage counts the entities that have a relation, self-links aside', () => {
+  const { model } = build();
+  assert.deepEqual(m.relationCoverage(model, 'use-case', 'served_by'), { have: 2, total: 2 });
+  assert.deepEqual(m.relationCoverage(model, 'adr', 'supersedes'), { have: 1, total: 2 });
+  assert.deepEqual(m.relationCoverage(model, 'api', 'provider'), { have: 0, total: 0 });
+  const selfish = m.buildModel({ nodes: graph.nodes, edges: [{ data: { source: 'adr/a', target: 'adr/a', label: 'supersedes' } }] });
+  assert.deepEqual(m.relationCoverage(selfish, 'adr', 'supersedes'), { have: 0, total: 2 });
 });

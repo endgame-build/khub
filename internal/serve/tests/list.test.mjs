@@ -34,7 +34,7 @@ const rowset = {
       links: { 'out:system': [], 'in:use-case.served_by': [], 'out:related': [] } }
   ]
 };
-const none = { sort: 'title', dir: 'asc', q: '', rel: '', to: '', attr: '', status: '', base: false };
+const none = { sort: 'title', dir: 'asc', q: '', rel: '', to: '', attr: '', status: '', trust: '', base: false };
 const ids = rows => rows.map(r => r.id);
 
 test('base columns are hidden unless asked for', () => {
@@ -102,4 +102,42 @@ test('N of M, link targets and attribute values', () => {
   assert.deepEqual(m.attrValues(rowset, 'stack'), ['go', 'postgres']); // observed, split, sorted
   assert.equal(m.columnTitle(rowset.relations[1]), '← serves');
   assert.equal(m.columnTitle(rowset.relations[0]), '→ system');
+});
+
+test('trust filters, and combines with the rest', () => {
+  assert.deepEqual(ids(m.filterRows(rowset, { ...none, trust: 'unverified' })), ['component/b', 'component/d']);
+  assert.deepEqual(ids(m.filterRows(rowset, { ...none, trust: 'unverified', status: 'incomplete' })), ['component/d']);
+  assert.deepEqual(ids(m.filterRows(rowset, { ...none, trust: 'human' })), ['component/a']);
+});
+
+test('a relation nothing uses folds away, unless it is asked for or in force', () => {
+  const empty = { key: 'out:repo', label: 'repo', direction: 'out', predicate: 'repo', peer_types: ['repo'], base: false };
+  const rs = { ...rowset, relations: rowset.relations.concat([empty]) };
+  const shown = (all, keep) => m.visibleColumns(rs, all, keep).map(c => c.key);
+  assert.deepEqual(shown(false), ['out:system', 'in:use-case.served_by']);
+  assert.deepEqual(shown(false, ['out:repo', 'out:related']), ['out:system', 'in:use-case.served_by', 'out:related', 'out:repo']);
+  assert.deepEqual(shown(true), ['out:system', 'in:use-case.served_by', 'out:related', 'out:repo']);
+});
+
+test('a count leads to what it counts', () => {
+  const col = (key, peer_types, base = false) => ({ key, direction: key.split(':')[0], predicate: key.split(':')[1].split('.').pop(), peer_types, base });
+  const row = links => ({ id: 'component/a', links });
+  const to = (c, linked) => m.countTarget('component', c, row({ [c.key]: linked }));
+  assert.equal(to(col('out:system', ['system']), []), null);
+  // one: the entity itself
+  assert.deepEqual(to(col('out:system', ['system']), ['system/core']), { entity: 'system/core' });
+  // several of one type: that type's list, filtered to this row from the other end
+  assert.deepEqual(to(col('out:consumes', ['api']), ['api/a', 'api/b']), { type: 'api', rel: 'in:component.consumes', to: 'component/a' });
+  assert.deepEqual(to(col('in:use-case.served_by', ['use-case']), ['use-case/a', 'use-case/b']), { type: 'use-case', rel: 'out:served_by', to: 'component/a' });
+  // base relations collapse their incoming side
+  assert.deepEqual(to(col('out:depends_on', ['any'], true), ['component/b', 'component/c']), { type: 'component', rel: 'in:*.depends_on', to: 'component/a' });
+  assert.deepEqual(to(col('in:*.depends_on', ['*'], true), ['api/b', 'api/c']), { type: 'api', rel: 'out:depends_on', to: 'component/a' });
+  // several types: the row's own page lists them
+  assert.deepEqual(to(col('out:affects', ['any']), ['component/b', 'repo/c']), { entity: 'component/a' });
+});
+
+test('a value named like an Object method is a value like any other', () => {
+  const rs = { ...rowset, rows: [{ id: 'component/z', title: 'z', attrs: { stack: 'constructor' }, counts: {}, links: { 'out:system': ['toString'] } }] };
+  assert.deepEqual(m.attrValues(rs, 'stack'), ['constructor']);
+  assert.deepEqual(m.linkTargets(rs, 'out:system'), ['toString']);
 });

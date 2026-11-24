@@ -93,7 +93,7 @@ on the machine can reach it — and that is what the guards answer.
 - **Every CLI fact on the page comes from a core package.** Rows, list counts,
   markers, summaries and the body tree are `internal/explore`, built on the
   functions `query`, `check` and `get` call; `serve` routes and encodes. The
-  overview's per-type counts and relation-usage tallies are summed on the page
+  overview's per-type counts, relation-usage tallies and coverage are summed on the page
   from the `viz` graph (`ui/model.js`), which is a picture, not a CLI fact. A
   list count or marker the page computed itself would be a second definition.
 - **The overview's picture is computed, never simulated.** `ui/layout.js`
@@ -103,6 +103,14 @@ on the machine can reach it — and that is what the guards answer.
   no-overlap property over the presets and 300 generated schemas — keep a new
   diagram feature inside that model (a node the layout places) rather than
   adding force-directed physics or renderer-placed decorations such as loops.
+- **What the page remembers lives with the history entry.** `app.js` stamps
+  each entry in `history.state` and keeps its scroll, its drawn rows and the
+  diagram's viewport in memory under that stamp, so back and forward restore a
+  place and a new visit starts at the top. The one memory beside it is each
+  type's last list address, which an entity's breadcrumb returns to. What a
+  view shows stays in the fragment; a place is never in the address.
+- **Text a reader pastes into a terminal goes through `ui/shell.js`.** An id is
+  a file's name and can hold anything a shell would run.
 - **Bodies reach the page as a block tree, never as markup.** `explore`
   parses Markdown (goldmark, confined there by depguard) into a dozen node
   kinds the page builds through `dom.js`; raw HTML arrives as text and only
