@@ -5,14 +5,15 @@ import { readFile } from 'node:fs/promises';
 const code = await readFile(new URL('../ui/route.js', import.meta.url), 'utf8');
 const { parse, format, listRoute, opening, openId } = await import('data:text/javascript;base64,' + Buffer.from(code).toString('base64'));
 
-const home = { view: 'home', days: 7 };
+const home = { view: 'home', days: 7, open: '' };
 const overview = (sel, more) => ({ view: 'overview', sel, focus: '', map: false, ...more });
 const empty = { sort: 'title', dir: 'asc', q: '', rel: '', to: '', count: [], attr: [], status: [], trust: [], by: [], not: [], base: false, open: '' };
 
 test('home: bare, slash, and its window', () => {
   assert.deepEqual(parse(''), home);
   assert.deepEqual(parse('#/'), home);
-  assert.deepEqual(parse('#/?days=30'), { view: 'home', days: 30 });
+  assert.deepEqual(parse('#/?days=30'), { view: 'home', days: 30, open: '' });
+  assert.deepEqual(parse(format(opening(parse('#/?days=30'), 'a/b'))), { view: 'home', days: 30, open: 'a/b' });
   assert.equal(format({ view: 'home', days: 30 }), '#/?days=30');
   assert.equal(format(home), '#/');
   ['x', '-1', '99999', ''].forEach(d => assert.deepEqual(parse('#/?days=' + d), home));

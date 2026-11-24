@@ -6,7 +6,7 @@
 // fragment never reaches the server, so filters never touch the request path
 // the Host guard sees.
 //
-//   #/                         the review home   ?days
+//   #/                         the review home   ?days ?open
 //   #/types                    every type
 //   #/ontology                 the diagram       ?sel=type:<name> | rel:<from>.<predicate> ?focus ?map=1
 //   #/type/<name>              one type's list   ?sort ?dir ?q ?rel+to ?count… ?attr… ?status… ?trust… ?by… ?not… ?base ?open
@@ -78,7 +78,7 @@ export function parse(hash) {
 
   if (segs.length === 1 && segs[0] === '') {
     if (params.get('sel') !== null) return overviewRoute(params);
-    return { view: 'home', days: days(params.get('days')) };
+    return { view: 'home', days: days(params.get('days')), open: params.get('open') || '' };
   }
   if (segs[0] === 'types' && segs.length === 1) return { view: 'types' };
   if (segs[0] === 'ontology' && segs.length === 1) return overviewRoute(params);
@@ -155,6 +155,7 @@ export function format(route) {
   switch (route.view) {
     case 'home':
       if (route.days !== undefined && route.days !== DAYS) q.set('days', route.days);
+      if (route.open) q.set('open', route.open);
       return withParams('#/', q);
     case 'types': return '#/types';
     case 'overview':
@@ -194,7 +195,7 @@ export function listRoute(type, list, changes) {
 }
 
 export function markedRoute(name) { return { view: 'marked', name: name, open: '' }; }
-export function homeRoute() { return { view: 'home', days: DAYS }; }
+export function homeRoute() { return { view: 'home', days: DAYS, open: '' }; }
 export function overviewOf(sel, more) { return Object.assign({ view: 'overview', sel: sel || '', focus: '', map: false }, more || {}); }
 export function entityRoute(id) { return { view: 'entity', id: id, open: '' }; }
 export function typeRoute(type) { return listRoute(type, null, null); }

@@ -7,7 +7,7 @@ import * as panel from './panel.js';
 import { el, fill, tn } from './dom.js';
 import { same, markerTags, trustTag, notice, copyButton, entityLink, opensBeside, skeleton, problem, when, plural, num, MARKERS, markerName } from './widgets.js';
 import { renderBlocks, shallowest } from './blocks.js';
-import { words } from './listmodel.js';
+import { words, step } from './listmodel.js';
 import { format, entityRoute } from './route.js';
 import { word } from './shell.js';
 import { verifyButton } from './reviewer.js';
@@ -73,14 +73,18 @@ export function show(main, route, ctx, force) {
 }
 
 function draw(main, mine, e, ctx) {
-  var crumbs = ctx.crumbs([
+  var from = ctx.from();
+  var crumbs = ctx.crumbs((from ? from.trail : [
     { label: 'Types', route: { view: 'types' } },
-    { label: e.type, route: ctx.listRoute(e.type) },
-    { label: title(e) }
-  ]);
+    { label: e.type, route: ctx.listRoute(e.type) }
+  ]).concat([{ label: title(e) }]));
   var p = parts(e, ctx, false);
   var page = el('article', { class: 'entity pane' });
-  page.appendChild(crumbs);
+  var top = el('div', { class: 'ptop' });
+  top.appendChild(crumbs);
+  var walk = from ? walkBar(from.rows, e.id, ctx) : null;
+  if (walk) top.appendChild(walk);
+  page.appendChild(top);
   page.appendChild(p.head);
   if (e.stray) {
     page.appendChild(el('p', { class: 'stray' },
@@ -114,6 +118,13 @@ function draw(main, mine, e, ctx) {
     return (seen[i.id] = true);
   });
   fill(main, [root]);
+  var held = ctx.held();
+  if (held && walk) {
+    // At an end the button just used is off: the other one is next.
+    var now = walk.querySelector('button[aria-label="' + held + '"]');
+    if (now.disabled) now = walk.querySelector('button:not(:disabled)');
+    if (now) now.focus({ preventScroll: true });
+  }
 
   if (!e.stray) fill(history, [el('h2', null, 'History'), skeleton('Loading history', 3)]);
   var read = { history: {}, reach: {} };
@@ -138,6 +149,22 @@ function draw(main, mine, e, ctx) {
     });
   };
   mine.more(mine);
+}
+
+// walkBar goes through the list an entity was opened from, page by page.
+function walkBar(rows, id, ctx) {
+  var at = -1;
+  rows.forEach(function (r, i) { if (r.id === id) at = i; });
+  if (at === -1 || rows.length < 2) return null;
+  var bar = el('div', { class: 'walk', role: 'group', 'aria-label': 'The list it was opened from' });
+  [['Previous', -1, '[', '‹'], ['Next', 1, ']', '›']].forEach(function (b) {
+    bar.appendChild(el('button', {
+      type: 'button', class: 'sq', title: b[0] + ' (' + b[2] + ')', 'aria-label': b[0], disabled: step(rows, id, b[1]) === id,
+      on: { click: function () { ctx.page(b[1], b[0]); } }
+    }, b[3]));
+  });
+  bar.appendChild(el('span', { class: 'at' }, num(at + 1) + ' of ' + num(rows.length)));
+  return bar;
 }
 
 // parts are the pieces the page and the panel lay out. compact is the panel:

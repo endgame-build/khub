@@ -116,8 +116,9 @@ answer.
   places) rather than adding force-directed physics or renderer-placed
   decorations such as loops.
 - **What the page remembers lives with the history entry.** `app.js` stamps
-  each entry in `history.state` and keeps its scroll, its drawn rows and the
-  diagram's viewport in memory under that stamp, so back and forward restore a
+  each entry in `history.state` and keeps its scroll, its drawn rows, the
+  diagram's viewport and the list an entity page was opened from in memory under
+  that stamp, so back and forward restore a
   place and a new visit starts at the top. Two memories sit beside it: each
   type's last list address, which an entity's breadcrumb returns to, and the
   reviewer's name, the only thing in local storage (`ui/reviewer.js`). What a

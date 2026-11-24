@@ -483,9 +483,11 @@ command to copy where the CLI can say it. They are in the address: `q`, `rel` +
 `by=<writer>` and `not=<kind>:<value>`, which may repeat, beside `sort` and
 `dir`.
 
-**The side panel.** A click on a row, or on a link of an entity page, reads that
-entity beside the view (`?open=<id>`). `j` and `k` move to the next and previous
-row, or link of an entity page, Enter opens the page, Esc closes. Below 900 px a link opens the page.
+**The side panel.** A click on a row, on a change or finding of the review home,
+or on a link of an entity page, reads that entity beside the view (`?open=<id>`). `j` and `k` move to the next and previous
+row, or link of an entity page, Enter opens the page, Esc closes. A page opened
+from a list keeps that list's breadcrumb and goes through it with `]` and `[`,
+and Back leaves it in one step. Below 900 px a link opens the page.
 
 **An entity.** It leads with its description. A review bar says the tier, who
 reviewed it and when, who wrote it and why it carries each marker, and copies

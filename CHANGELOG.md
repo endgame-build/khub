@@ -11,6 +11,9 @@ Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelo
   beside a younger write. A file that does not parse carries what the parser
   says. The change since a review no longer repeats the description, and folds a
   long difference of the body.
+- **The served page keeps the list a reader is walking.** The review home opens
+  an entity beside it, and an entity page opened from a list keeps the list's
+  breadcrumb and goes through it with `]` and `[`.
 
 ## [0.34.0] — 2026-11-24
 

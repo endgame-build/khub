@@ -342,6 +342,9 @@ th.num, td.num { text-align: right; font-variant-numeric: tabular-nums; }
 .feed li:last-child { border-bottom: 0; }
 .feed li.day { display: block; padding: 12px 0 4px; font-size: 12px; font-weight: 600; color: var(--ink-mid); }
 .feed .ty { overflow: hidden; text-overflow: ellipsis; }
+.feed li.row { cursor: pointer; }
+.feed li.row:hover { background: var(--paper); }
+.feed li.open, .bucket li.open { background: var(--beige-deep); }
 .feed .mid a { overflow-wrap: anywhere; }
 .feed .tags { justify-content: flex-end; }
 .feed .trust { min-width: 60px; text-align: right; }
@@ -424,7 +427,7 @@ body[data-view="overview"] main { overflow: hidden; }
 /* The panel stays while the view scrolls under it, so its height is the
    scrolling region's. */
 .split { display: flex; align-items: flex-start; min-height: 100%; }
-.split > .pane { flex: 1; min-width: 0; }
+.split > .pane, .split > .home { flex: 1; min-width: 0; }
 /* A table wider than its pane widens the pane, so main scrolls to its end
    instead of hiding it under the panel. The heading keeps to the window. */
 .listview > .pane, .split > .pane:has(> table.rows) { min-width: min-content; }
@@ -509,6 +512,9 @@ table.rows tbody tr.open > * { background: var(--beige-deep); }
 
 /* ——— entity ——— */
 .entity { max-width: 1600px; }
+.ptop { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+.walk { display: flex; align-items: center; gap: 6px; flex: none; }
+.walk .at { font-size: 12px; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
 .ehead h1 { max-width: 40ch; }
 .ehead h2 { font-size: 18px; line-height: 1.3; margin: 0; }
 .idline { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin: 4px 0 0; font-size: 12px; color: var(--ink-soft); overflow-wrap: anywhere; }
@@ -597,6 +603,7 @@ summary { cursor: pointer; }
   .listview:has(> .peek:not([hidden])) .viewhead { max-width: calc(100vw - var(--peek) - 48px); }
 }
 /* With a panel open the page beside it has one column to spare. */
+.split:has(> .peek:not([hidden])) .homecols { grid-template-columns: minmax(0, 1fr); }
 .split:has(> .peek:not([hidden])) .entitycols { grid-template-columns: minmax(0, 1fr); }
 @media (max-width: 1360px) { .listview :is(th, td).by { display: none; } }
 @media (max-width: 1280px) { .overview { grid-template-columns: 176px minmax(0, 1fr) 350px; } }

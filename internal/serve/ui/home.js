@@ -3,9 +3,10 @@
 // own request, so a slow one does not hold the rest.
 
 import * as api from './api.js';
+import * as panel from './panel.js';
 import { el, fill, text, tn } from './dom.js';
-import { same, markerTags, trustTag, trustBar, trustKey, entityLink, markerName, MEANING, MARKERS, plural, num, notice, skeleton, problem, copyButton } from './widgets.js';
-import { format, listRoute, typeRoute, homeRoute, markedRoute, DAYS } from './route.js';
+import { same, markerTags, trustTag, trustBar, trustKey, entityLink, markerName, MEANING, MARKERS, plural, num, notice, skeleton, problem, copyButton, rowOpens, reveal } from './widgets.js';
+import { format, listRoute, typeRoute, homeRoute, markedRoute, openId, DAYS } from './route.js';
 import { words } from './listmodel.js';
 
 var SHOWN = 3; // how many types a tile names before the reader asks for the rest
@@ -24,17 +25,47 @@ var BUCKETS = {
 
 var view = null;
 
-export function unmount() { view = null; }
+export function unmount() { view = null; panel.unmount(); }
+
+// order is what next and previous follow: the changes, then the findings.
+export function order() {
+  if (!view) return [];
+  var seen = Object.create(null);
+  return (view.changes || []).concat(view.found || []).filter(function (r) { return !seen[r.id] && (seen[r.id] = true); });
+}
+
+// rowsOf are the lines about one entity.
+function rowsOf(id) {
+  return Array.prototype.filter.call(view.root.querySelectorAll('li[data-id]'), function (li) { return li.getAttribute('data-id') === id; });
+}
+
+// focusOn puts the keyboard on a line's link.
+export function focusOn(id) {
+  var li = view && view.root && rowsOf(id)[0];
+  if (li) li.querySelector('a').focus({ preventScroll: true });
+}
+
+// mark shows which line is open and reads it beside the page.
+function mark(route, ctx, force) {
+  var open = openId(route);
+  Array.prototype.forEach.call(view.root.querySelectorAll('li.open'), function (li) { li.classList.remove('open'); });
+  var lines = open ? rowsOf(open) : [];
+  lines.forEach(function (li) { li.classList.add('open'); });
+  panel.sync(view.aside, route, ctx, order(), force);
+  if (lines.length && open !== view.shown) reveal(lines[0]);
+  view.shown = open;
+}
 
 export function show(main, route, ctx, force) {
   ctx.crumbs([{ label: 'Review' }]);
   if (!force && view && view.root.isConnected) {
     if (view.days !== route.days) { view.days = route.days; view.most = ctx.entry().most || 0; recent(view, ctx); }
+    mark(route, ctx, false);
     ctx.ready();
     return;
   }
   var kept = force && view && view.root.isConnected ? view : null;
-  var mine = { days: route.days, most: ctx.entry().most || 0, from: 0, drawn: kept ? kept.drawn : false, root: kept ? kept.root : null, blocks: kept ? kept.blocks : null, seen: kept ? kept.seen : { overview: {}, findings: {}, recent: {}, queries: {} } };
+  var mine = { days: route.days, most: ctx.entry().most || 0, from: 0, drawn: kept ? kept.drawn : false, root: kept ? kept.root : null, aside: kept ? kept.aside : null, shown: kept ? kept.shown : '', changes: kept ? kept.changes : [], found: kept ? kept.found : [], blocks: kept ? kept.blocks : null, seen: kept ? kept.seen : { overview: {}, findings: {}, recent: {}, queries: {} } };
   view = mine;
   if (!mine.root) {
     mine.blocks = {
@@ -57,7 +88,11 @@ export function show(main, route, ctx, force) {
     mine.root.appendChild(head);
     mine.root.appendChild(mine.blocks.attention);
     mine.root.appendChild(cols);
-    fill(main, [mine.root]);
+    var split = el('section', { class: 'split' });
+    split.appendChild(mine.root);
+    mine.aside = el('aside', { class: 'peek', 'aria-label': 'Entity', hidden: true });
+    split.appendChild(mine.aside);
+    fill(main, [split]);
     fill(mine.blocks.attention, [skeleton('Loading the workspace', 2)]);
     fill(mine.blocks.types, [el('h2', null, 'Types'), skeleton('Loading types', 6)]);
   } else mine.sub = mine.root.querySelector('.sub');
@@ -79,6 +114,7 @@ export function show(main, route, ctx, force) {
   api.getQueries().then(function (q) { if (view === mine && !same(mine.seen.queries, q)) queries(mine, q); },
     function (err) { if (view === mine && !kept) { mine.blocks.queries.hidden = false; fill(mine.blocks.queries, [el('h2', null, 'Saved queries'), problem(err)]); } });
   recent(mine, ctx);
+  mark(route, ctx, force);
 }
 
 function attention(mine, o) {
@@ -176,6 +212,7 @@ function typesBlock(mine, o) {
 
 function findings(mine, f, ctx) {
   mine.blocks.findings.hidden = false;
+  mine.found = [].concat.apply([], f.buckets.map(function (b) { return b.items; })).filter(function (i) { return i.id; });
   if (f.passed) {
     fill(mine.blocks.findings, [el('p', { class: 'pass' }, 'khub check passes.')]);
     return;
@@ -187,7 +224,7 @@ function findings(mine, f, ctx) {
     d.appendChild(el('summary', null, (BUCKETS[b.bucket] || words(b.bucket)) + ' (' + num(b.total) + ')'));
     var ul = el('ul');
     b.items.forEach(function (i) {
-      var li = el('li');
+      var li = el('li', i.id ? { 'data-id': i.id } : null);
       if (i.id) li.appendChild(entityLink(i.id, i.id, ctx, 'mono'));
       else if (i.about) li.appendChild(el('span', { class: 'mono' }, i.about));
       (i.ids || []).forEach(function (id, n) {
@@ -203,6 +240,7 @@ function findings(mine, f, ctx) {
   });
   nodes.push(copyButton('Copy khub check', 'khub check'));
   fill(mine.blocks.findings, nodes);
+  mark(ctx.route(), ctx, false);
 }
 
 function recent(mine, ctx) {
@@ -224,6 +262,7 @@ function recent(mine, ctx) {
     if (view !== mine || mine.days !== days) return;
     if (same(mine.seen.recent, found)) return;
     mine.drawn = true;
+    mine.changes = found.rows;
     var nodes = [head()];
     if (!found.rows.length) nodes.push(el('p', { class: 'empty' }, 'Nothing was written in this window.'));
     else {
@@ -231,7 +270,8 @@ function recent(mine, ctx) {
       var last = '';
       found.rows.forEach(function (r) {
         if (r.date !== last) { last = r.date; ul.appendChild(el('li', { class: 'day' }, dayName(r))); }
-        var li = el('li');
+        var li = el('li', { 'data-id': r.id, class: 'row' });
+        rowOpens(li, r.id, ctx);
         li.appendChild(el('span', { class: 'ty' }, r.type));
         var mid = el('span', { class: 'mid' });
         mid.appendChild(entityLink(r.id, r.title, ctx));
@@ -257,6 +297,7 @@ function recent(mine, ctx) {
       }
     }
     fill(mine.blocks.recent, nodes);
+    mark(ctx.route(), ctx, false);
     if (mine.from) {
       // The button is gone: the keyboard goes on from the first new change.
       var next = mine.blocks.recent.querySelectorAll('.feed .mid a')[mine.from];

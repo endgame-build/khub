@@ -113,12 +113,12 @@ export function rowOpens(tr, id, ctx) {
   });
 }
 
-// reveal scrolls a row into view under its table's sticky header, and never
-// sideways.
+// reveal scrolls a row into view, under its table's sticky header when it is in
+// one, and never sideways.
 export function reveal(tr) {
-  var main = document.getElementById('main'), head = tr.closest('table').querySelector('thead');
+  var main = document.getElementById('main'), table = tr.closest('table'), head = table && table.querySelector('thead');
   var box = main.getBoundingClientRect(), row = tr.getBoundingClientRect();
-  var top = box.top + head.getBoundingClientRect().height;
+  var top = box.top + (head ? head.getBoundingClientRect().height : 0);
   if (row.top < top) main.scrollTop -= top - row.top;
   else if (row.bottom > box.bottom) main.scrollTop += row.bottom - box.bottom;
 }
