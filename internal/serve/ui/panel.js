@@ -10,12 +10,11 @@ import { parts } from './entity.js';
 
 var WIDE = '(min-width: 900px)'; // app.css stacks the panel below it
 var shown = null; // { host, id, seen }
-var current = null; // { id, rev } of the entity the panel has read
+var current = null; // { open, id, rev, trust }: what the panel has read, and the address that opened it
 var place = null; // { id, at }: where the open entity last was among the rows
 
-// read is the entity on show and the revision of it that was read, null while
-// it loads.
-export function read(id) { return current && current.id === id ? current : null; }
+// read is what the panel opened as open has read, null while it loads.
+export function read(open) { return current && current.open === open ? current : null; }
 
 // placeOf is that index, -1 for another entity.
 export function placeOf(id) { return place && place.id === id ? place.at : -1; }
@@ -40,7 +39,7 @@ export function sync(host, route, ctx, rows, force) {
   if (!again) { current = null; fill(body, [skeleton('Loading ' + id, 6)]); host.scrollTop = 0; }
   api.getEntity(id).then(function (e) {
     if (shown !== mine) return;
-    current = { id: id, rev: e.stray ? '' : e.rev };
+    current = { open: id, id: e.id, rev: e.stray ? '' : e.rev, trust: e.markers ? e.markers.trust : '' };
     if (same(mine, e)) return;
     var p = parts(e, ctx, true);
     fill(body, [p.head, p.review, p.since, p.body, p.links, p.attributes].filter(Boolean));

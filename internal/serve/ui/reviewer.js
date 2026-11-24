@@ -35,9 +35,9 @@ export function verifyButton(id) {
   var who = el('button', { type: 'button', class: 'copy', on: { click: function () { ask(function () { who.focus(); }); } } });
   btn.addEventListener('click', function () {
     var asked = !name;
-    withName(function (who) {
+    withName(function (signer) {
       if (asked) btn.focus();
-      copy(btn, verifyCommand(id, who));
+      copy(btn, verifyCommand(id, signer));
     });
   });
   function draw() {

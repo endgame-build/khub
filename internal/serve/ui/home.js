@@ -35,15 +35,24 @@ export function order() {
   return (view.changes || []).concat(view.found || []).filter(function (r) { return !seen[r.id] && (seen[r.id] = true); });
 }
 
-// rowsOf are the lines about one entity.
+// rowsOf are the lines about one entity, its change before its findings.
 function rowsOf(id) {
-  return Array.prototype.filter.call(view.root.querySelectorAll('li[data-id]'), function (li) { return li.getAttribute('data-id') === id; });
+  return Array.prototype.filter.call(view.root.querySelectorAll('li[data-id]'), function (li) { return li.getAttribute('data-id') === id; })
+    .sort(function (a, b) { return (a.closest('.feed') ? 0 : 1) - (b.closest('.feed') ? 0 : 1); });
 }
 
 // focusOn puts the keyboard on a line's link.
 export function focusOn(id) {
   var li = view && view.root && rowsOf(id)[0];
-  if (li) li.querySelector('a').focus({ preventScroll: true });
+  if (!li) return;
+  unfold(li);
+  li.querySelector('a').focus({ preventScroll: true });
+}
+
+// unfold opens the bucket a line is folded into.
+function unfold(li) {
+  var bucket = li.closest('details');
+  if (bucket) bucket.open = true;
 }
 
 // mark shows which line is open and reads it beside the page.
@@ -53,8 +62,13 @@ function mark(route, ctx, force) {
   var lines = open ? rowsOf(open) : [];
   lines.forEach(function (li) { li.classList.add('open'); });
   panel.sync(view.aside, route, ctx, order(), force);
-  if (lines.length && open !== view.shown) reveal(lines[0]);
-  view.shown = open;
+  // Blocks above the line may still be loading, and move it.
+  if (lines.length && (open !== view.shown || view.pending)) {
+    unfold(lines[0]);
+    reveal(lines[0]);
+  }
+  // A line still to load is revealed when it does.
+  if (lines.length || !open) view.shown = open;
 }
 
 export function show(main, route, ctx, force) {
@@ -66,7 +80,7 @@ export function show(main, route, ctx, force) {
     return;
   }
   var kept = force && view && view.root.isConnected ? view : null;
-  var mine = { days: route.days, most: ctx.entry().most || 0, from: 0, drawn: kept ? kept.drawn : false, root: kept ? kept.root : null, aside: kept ? kept.aside : null, shown: kept ? kept.shown : '', changes: kept ? kept.changes : [], found: kept ? kept.found : [], blocks: kept ? kept.blocks : null, seen: kept ? kept.seen : { overview: {}, findings: {}, recent: {}, queries: {} } };
+  var mine = { days: route.days, most: ctx.entry().most || 0, from: 0, drawn: kept ? kept.drawn : false, root: kept ? kept.root : null, aside: kept ? kept.aside : null, shown: kept ? kept.shown : '', pending: kept ? 0 : 4, changes: kept ? kept.changes : [], found: kept ? kept.found : [], blocks: kept ? kept.blocks : null, seen: kept ? kept.seen : { overview: {}, findings: {}, recent: {}, queries: {} } };
   view = mine;
   if (!mine.root) {
     mine.blocks = {
@@ -110,13 +124,21 @@ export function show(main, route, ctx, force) {
     if (view !== mine) return;
     if (kept) { ctx.failed(err); return; }
     fill(main, [notice('Could not read the workspace', err.message, [], ctx.refresh)]);
-  });
+  }).then(function () { if (mine.root.isConnected) landed(mine, ctx); });
   api.getFindings().then(function (f) { if (view === mine && !same(mine.seen.findings, f)) findings(mine, f, ctx); },
-    function (err) { if (view === mine && !kept) { mine.blocks.findings.hidden = false; fill(mine.blocks.findings, [el('h2', null, 'Check'), problem(err)]); } });
+    function (err) { if (view === mine && !kept) { mine.blocks.findings.hidden = false; fill(mine.blocks.findings, [el('h2', null, 'Check'), problem(err)]); } }).then(function () { landed(mine, ctx); });
   api.getQueries().then(function (q) { if (view === mine && !same(mine.seen.queries, q)) queries(mine, q); },
-    function (err) { if (view === mine && !kept) { mine.blocks.queries.hidden = false; fill(mine.blocks.queries, [el('h2', null, 'Saved queries'), problem(err)]); } });
+    function (err) { if (view === mine && !kept) { mine.blocks.queries.hidden = false; fill(mine.blocks.queries, [el('h2', null, 'Saved queries'), problem(err)]); } }).then(function () { landed(mine, ctx); });
   recent(mine, ctx);
   mark(route, ctx, force);
+}
+
+// landed counts a block that has loaded, and keeps the open line in view until
+// the last one has.
+function landed(mine, ctx) {
+  if (view !== mine) return;
+  mark(ctx.route(), ctx, false);
+  if (mine.pending) mine.pending -= 1;
 }
 
 function attention(mine, o) {
@@ -227,9 +249,12 @@ function findings(mine, f, ctx) {
     d.appendChild(el('summary', null, (BUCKETS[b.bucket] || words(b.bucket)) + ' (' + num(b.total) + ')'));
     var ul = el('ul');
     b.items.forEach(function (i) {
-      var li = el('li', i.id ? { 'data-id': i.id } : null);
-      if (i.id) li.appendChild(entityLink(i.id, i.id, ctx, 'mono'));
-      else if (i.about) li.appendChild(el('span', { class: 'mono' }, i.about));
+      var li = el('li', i.id ? { 'data-id': i.id, class: 'row' } : null);
+      if (i.id) {
+        rowOpens(li, i.id, ctx);
+        li.appendChild(entityLink(i.id, i.id, ctx, 'mono'));
+        li.appendChild(marks.tag(i.id));
+      } else if (i.about) li.appendChild(el('span', { class: 'mono' }, i.about));
       (i.ids || []).forEach(function (id, n) {
         if (n || i.about) li.appendChild(tn(' · '));
         li.appendChild(entityLink(id, id, ctx, 'mono'));
@@ -314,7 +339,7 @@ function recent(mine, ctx) {
   }, function (err) {
     if (view !== mine) return;
     if (!mine.drawn) fill(mine.blocks.recent, [head(), problem(err)]);
-  });
+  }).then(function () { if (view === mine) landed(mine, ctx); });
 }
 
 function dayName(r) {

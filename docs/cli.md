@@ -489,7 +489,8 @@ row, or link of an entity page, Enter opens the page, Esc closes. A page opened
 from a list keeps that list's breadcrumb and goes through it with `]` and `[`,
 and Back leaves it in one step. Below 900 px a link opens the page.
 
-**Marks.** Space, or Mark as read, marks the entity open beside a list. A list
+**Marks.** Space marks the entity open beside a list, and Mark as read is beside
+its verify command, there and on its page. A list
 with marked rows counts them and copies one `khub verify` line for each, under
 the reviewer's name. A mark holds the content revision that was read: copying
 asks for every revision again, and an entity that changed is left out and named.
@@ -498,7 +499,7 @@ Marks last until the page closes, and one goes once a person's review holds.
 **An entity.** It leads with its description. A review bar says the tier, who
 reviewed it and when, who wrote it and why it carries each marker, and copies
 the `khub verify` command. The page asks for the reviewer's name the first time
-(one word, since a name with a space does not count toward trust) and keeps it in
+(one word, since `khub verify` refuses a name with a space) and keeps it in
 the browser's local storage, the one thing it keeps there. Where a review no longer holds, the page shows the
 fields and body lines that changed since the version reviewed (more than 8 lines
 of the body fold), or says why git cannot tell. The body is rendered from a block tree the server parses: raw HTML

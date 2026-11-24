@@ -119,17 +119,20 @@ answer.
   each entry in `history.state` and keeps its scroll, its drawn rows, the
   diagram's viewport and the list an entity page was opened from in memory under
   that stamp, so back and forward restore a
-  place and a new visit starts at the top. Two memories sit beside it: each
-  type's last list address, which an entity's breadcrumb returns to, and the
-  reviewer's name, the only thing in local storage (`ui/reviewer.js`). What a
+  place and a new visit starts at the top. Three memories sit beside it: each
+  type's last list address, which an entity's breadcrumb returns to; the marks,
+  until the page closes; and the reviewer's name, the only thing in local storage
+  (`ui/reviewer.js`). What a
   view shows stays in the fragment; a place is never in the address.
 - **Text a reader pastes into a terminal goes through `ui/shell.js`.** An id is
   a file's name and can hold anything a shell would run. Quoting does not stop a
   control character, which the terminal acts on first, so such a value has no
   word and its copy button is off.
-- **A mark holds the revision that was read** (`ui/marks.js`). A verify command
-  is copied for a marked entity only while `/api/revs` still answers that
-  revision, so a reader never signs an edit they did not see.
+- **A mark holds the revision that was read** (`ui/marks.js`), and
+  `/api/entity` serves the revision of the record it answers with
+  (`explore.PageView`). The mark bar copies a line only while `/api/revs` still
+  answers that revision. The single verify command makes no such check, and
+  nothing covers an edit between the copy and the run.
 - **A path handed to git is a name, and git fetches nothing.**
   `gitlog.FileVersions` passes `--literal-pathspecs`, overrules `log.follow` and
   sets `GIT_NO_LAZY_FETCH`; a side git cannot show is unknown, never absent.

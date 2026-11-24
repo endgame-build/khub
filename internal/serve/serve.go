@@ -448,6 +448,12 @@ func (s *server) apiEntity(w http.ResponseWriter, r *http.Request) {
 		failErr(w, err)
 		return
 	}
+	// The page's record is the one its revision and body tree belong to. A stray
+	// has none, and keeps the one above.
+	paged, page, perr := explore.PageView(s.root, view.Type+"/"+view.Slug, clock.Now())
+	if perr == nil {
+		view = paged
+	}
 	record := omap.New()
 	record.Set("id", view.Type+"/"+view.Slug)
 	record.Set("type", view.Type)
@@ -472,15 +478,14 @@ func (s *server) apiEntity(w http.ResponseWriter, r *http.Request) {
 		edges = append(edges, edge)
 	}
 	record.Set("edges", edges)
-	page, err := explore.Page(s.root, view.Type+"/"+view.Slug, clock.Now())
 	var located *errs.Located
 	switch {
-	case err == nil:
+	case perr == nil:
 		for _, k := range page.Keys() {
 			v, _ := page.Get(k)
 			record.Set(k, v)
 		}
-	case errors.As(err, &located) && located.Code == "lookup_error":
+	case errors.As(perr, &located) && located.Code == "lookup_error":
 		// A file `get` reads but the graph does not hold: a stray, which
 		// `check` reports. Said so outright, so the page can show it as one
 		// rather than as an entity with no markers and no connections.
@@ -490,7 +495,7 @@ func (s *server) apiEntity(w http.ResponseWriter, r *http.Request) {
 		record.Set("stray", true)
 		record.Set("malformed", []any{})
 	default:
-		failErr(w, err)
+		failErr(w, perr)
 		return
 	}
 	writeJSON(w, record)

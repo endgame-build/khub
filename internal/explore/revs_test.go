@@ -1,10 +1,13 @@
 package explore
 
 import (
+	"path/filepath"
 	"testing"
 
 	"github.com/endgame-build/khub/internal/entity"
+	"github.com/endgame-build/khub/internal/introspect"
 	"github.com/endgame-build/khub/internal/omap"
+	"github.com/endgame-build/khub/internal/trust"
 )
 
 // The revision the page marks is the one a review would record, and it moves
@@ -43,5 +46,31 @@ func TestRevsAgreeWithVerify(t *testing.T) {
 	edit(t, path, "title: Payments", "title: Payouts")
 	if read() == before {
 		t.Error("an edit left the revision standing")
+	}
+}
+
+// A page's revision is of the record it serves, whatever the storage and the
+// line endings.
+func TestPageRevIsOfItsRecord(t *testing.T) {
+	root := formatsWS(t)
+	writeFile(t, filepath.Join(root, "notes", "note-crlf.md"), "---\r\ntype: note\r\ntitle: |\r\n  two\r\n  lines\r\n---\r\nBody.\r\nMore.\r\n")
+	resolved, err := introspect.LoadSchema(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range []string{"note/note-one", "note/note-crlf", "card/card-one", "row/row-one"} {
+		view, page, err := PageView(root, id, now)
+		if err != nil {
+			t.Fatal(err)
+		}
+		rtype, _ := resolved.Types.Get(view.Type)
+		out, err := Revs(root, []string{id}, now)
+		if err != nil {
+			t.Fatal(err)
+		}
+		want := get(t, get(t, out, "revs").(*omap.Map), id)
+		if got := get(t, page, "rev"); got != want || got != trust.Rev(rtype, view.Meta, view.Body) {
+			t.Errorf("%s: page %v, revs %v", id, got, want)
+		}
 	}
 }

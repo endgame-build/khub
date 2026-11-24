@@ -168,6 +168,7 @@ var ctx = {
     }
     settled = true;
     entry.scroll = main.scrollTop;
+    marks.prune();
   },
   // loaded says the view on screen was read just now, and which files the
   // reading had to leave out.
@@ -190,7 +191,7 @@ var ctx = {
     var to = opening(route, id);
     if (openId(route)) { ctx.replace(to); return; }
     // The same rows and groups stay drawn under the new entry.
-    carried = { rows: entry.rows, groups: entry.groups };
+    carried = { rows: entry.rows, groups: entry.groups, most: entry.most, from: entry.from };
     ctx.nav(to);
   },
   close: function () { ctx.replace(opening(route, '')); },
@@ -228,6 +229,7 @@ function render(here) {
   var was = route && VIEWS[route.view] && VIEWS[route.view].order ? { route: route, rows: VIEWS[route.view].order(), trail: trail } : null;
   enter();
   route = parse(location.hash);
+  if (here !== true) held = '';
   if (fresh && was && was.route.view !== 'entity' && route.view === 'entity') comeFrom(was);
   var key = viewKey(route);
   if (key !== lastKey) {
@@ -260,9 +262,18 @@ function comeFrom(was) {
   var back = opening(was.route, '');
   entry.from = {
     route: back,
-    rows: was.rows.map(function (r) { return { id: r.id }; }),
+    rows: idsOf(was.rows),
     trail: was.trail.slice(0, -1).concat([{ label: was.trail[was.trail.length - 1].label, route: back }])
   };
+}
+
+// idsOf is the ids of rows, as one list for as long as the rows stay the same:
+// a walk of many pages of a long list keeps it once.
+var lastIds = [];
+function idsOf(rows) {
+  var same = rows.length === lastIds.length && rows.every(function (r, i) { return r.id === lastIds[i].id; });
+  if (!same) lastIds = rows.map(function (r) { return { id: r.id }; });
+  return lastIds;
 }
 
 // refresh reads the view on screen again and puts the reader back where they
@@ -298,6 +309,11 @@ function move(by) {
 }
 
 function onKey(evt) {
+  // Brackets are typed with Option or AltGr on many layouts.
+  if ((evt.key === ']' || evt.key === '[') && !evt.metaKey && (evt.altKey || !evt.ctrlKey) && !typing(evt.target) && !document.querySelector('dialog[open]')) {
+    ctx.page(evt.key === ']' ? 1 : -1);
+    return;
+  }
   if (evt.metaKey || evt.ctrlKey || evt.altKey) return;
   if (evt.key === 'Escape') {
     if (find.close() || typing(evt.target) || document.querySelector('dialog[open]')) return;
@@ -312,8 +328,6 @@ function onKey(evt) {
     case 'j': move(1); break;
     case 'k': move(-1); break;
     case ' ': markOpen(evt); break;
-    case ']': ctx.page(1); break;
-    case '[': ctx.page(-1); break;
     case '?': keys(); break;
     case 'Enter':
       if (openId(route) && (evt.target === document.body || evt.target === main)) ctx.nav(entityRoute(openId(route)));
@@ -322,12 +336,13 @@ function onKey(evt) {
 }
 
 // markOpen marks the entity open beside the view. Space stays what it is on a
-// control, and scrolls where nothing is open.
+// control and in a block that scrolls on its own, and scrolls where nothing is
+// open.
 function markOpen(evt) {
   var at = panel.read(openId(route));
-  if (!at || !at.rev || evt.target.closest('button, summary, details')) return;
+  if (!at || !at.rev || evt.shiftKey || evt.target.closest('button, summary, .linediff')) return;
   evt.preventDefault();
-  marks.toggle(at.id, at.rev);
+  if (!evt.repeat) marks.toggle(at.id, at.rev, at.trust);
 }
 
 // keys lists the keyboard's shortcuts, and what the page's terms mean.

@@ -60,32 +60,28 @@ export function show(main, route, ctx, force) {
   }, function (err) {
     if (view !== mine) return;
     if (kept && err.status !== 404) { ctx.failed(err); return; }
-    ctx.crumbs([{ label: 'Types', route: { view: 'types' } }, { label: route.id }]);
+    // An entity that is gone does not end the walk it was part of.
+    var top = head(ctx, [{ label: 'Types', route: { view: 'types' } }], route.id, route.id);
     if (err.code === 'ambiguity_error') {
-      fill(main, [notice('More than one entity answers to ' + route.id, 'Pick the one you meant.',
+      fill(main, [top, notice('More than one entity answers to ' + route.id, 'Pick the one you meant.',
         (err.expected || []).map(function (id) { return { label: id, href: format(entityRoute(id)) }; }))]);
       return;
     }
     var gone = err.status === 404;
     var links = [{ label: 'All types', href: '#/types' }];
     if (err.suggestion) links.unshift({ label: 'Did you mean ' + err.suggestion + '?', href: format(entityRoute(err.suggestion)) });
-    fill(main, [notice(gone ? 'No such entity' : 'Could not load ' + route.id, err.message || String(err), links, gone ? null : ctx.refresh)]);
+    fill(main, [top, notice(gone ? 'No such entity' : 'Could not load ' + route.id, err.message || String(err), links, gone ? null : ctx.refresh)]);
+    hold(main, ctx);
   });
 }
 
 function draw(main, mine, e, ctx) {
-  var from = ctx.from();
-  var crumbs = ctx.crumbs((from ? from.trail : [
-    { label: 'Types', route: { view: 'types' } },
-    { label: e.type, route: ctx.listRoute(e.type) }
-  ]).concat([{ label: title(e) }]));
   var p = parts(e, ctx, false);
   var page = el('article', { class: 'entity pane' });
-  var top = el('div', { class: 'ptop' });
-  top.appendChild(crumbs);
-  var walk = from ? walkBar(from.rows, e.id, ctx) : null;
-  if (walk) top.appendChild(walk);
-  page.appendChild(top);
+  page.appendChild(head(ctx, [
+    { label: 'Types', route: { view: 'types' } },
+    { label: e.type, route: ctx.listRoute(e.type) }
+  ], title(e), e.id));
   page.appendChild(p.head);
   if (e.stray) {
     page.appendChild(el('p', { class: 'stray' },
@@ -119,13 +115,7 @@ function draw(main, mine, e, ctx) {
     return (seen[i.id] = true);
   });
   fill(main, [root]);
-  var held = ctx.held();
-  if (held && walk) {
-    // At an end the button just used is off: the other one is next.
-    var now = walk.querySelector('button[aria-label="' + held + '"]');
-    if (now.disabled) now = walk.querySelector('button:not(:disabled)');
-    if (now) now.focus({ preventScroll: true });
-  }
+  hold(root, ctx);
 
   if (!e.stray) fill(history, [el('h2', null, 'History'), skeleton('Loading history', 3)]);
   var read = { history: {}, reach: {} };
@@ -150,6 +140,26 @@ function draw(main, mine, e, ctx) {
     });
   };
   mine.more(mine);
+}
+
+// head is the top of a page: the trail to it, its own unless it was opened from
+// a list, and the way through that list.
+function head(ctx, trail, label, id) {
+  var from = ctx.from();
+  var top = el('div', { class: 'ptop' });
+  top.appendChild(ctx.crumbs((from ? from.trail : trail).concat([{ label: label }])));
+  var walk = from ? walkBar(from.rows, id, ctx) : null;
+  if (walk) top.appendChild(walk);
+  return top;
+}
+
+// hold leaves the keyboard on the walk's button it was on. At an end that button
+// is off, and the other one is next.
+function hold(root, ctx) {
+  var held = ctx.held();
+  var now = held && root.querySelector('.walk button[aria-label="' + held + '"]');
+  if (now && now.disabled) now = root.querySelector('.walk button:not(:disabled)');
+  if (now) now.focus({ preventScroll: true });
 }
 
 // walkBar goes through the list an entity was opened from, page by page.
@@ -221,10 +231,10 @@ function review(e) {
   // A write may be younger than the date the entity carries, which is the one
   // staleness is judged by.
   var dated = String(fm.updated || fm.created || '').slice(0, 10);
-  if (made.at && dated && String(made.at).slice(0, 10) > dated) line.appendChild(said('dated', '', dated));
+  if (made.at && dated && civil(made.at) > dated) line.appendChild(said('dated', '', dated));
   if (m && !e.stray) {
     line.appendChild(verifyButton(e.id));
-    line.appendChild(marks.button(e.id, e.rev));
+    line.appendChild(marks.button(e.id, e.rev, m.trust));
   }
   box.appendChild(line);
   if (events.length > 1) {
@@ -252,6 +262,15 @@ function review(e) {
     box.appendChild(ul);
   }
   return box;
+}
+
+// civil is the day of an instant on the reader's own calendar, as khub writes
+// its dates.
+function civil(at) {
+  var d = new Date(at);
+  if (isNaN(d)) return String(at).slice(0, 10);
+  var two = function (n) { return (n < 10 ? '0' : '') + n; };
+  return d.getFullYear() + '-' + two(d.getMonth() + 1) + '-' + two(d.getDate());
 }
 
 function said(what, who, at) {

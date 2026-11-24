@@ -39,9 +39,9 @@ func TestSummaryRule(t *testing.T) {
 	}
 }
 
-// The same body summarizes the same way whatever the storage: md frontmatter
-// plus prose, a json file's reserved body field, a jsonl collection row's.
-func TestSummaryAcrossFormats(t *testing.T) {
+// formatsWS holds one entity of the same text per format.
+func formatsWS(t *testing.T) string {
+	t.Helper()
 	root := t.TempDir()
 	writeFile(t, filepath.Join(root, ".khub", "config.yaml"),
 		"name: ws\npreset: fixture\nversion: 0.0.0\nsource:\ndefaults:\n  stale_days: 90\n")
@@ -69,6 +69,13 @@ storage:
 			t.Fatalf("create %s: %v", typ, err)
 		}
 	}
+	return root
+}
+
+// The same body summarizes the same way whatever the storage: md frontmatter
+// plus prose, a json file's reserved body field, a jsonl collection row's.
+func TestSummaryAcrossFormats(t *testing.T) {
+	root := formatsWS(t)
 	snap, err := load(root, now)
 	if err != nil {
 		t.Fatal(err)

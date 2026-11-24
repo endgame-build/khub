@@ -455,8 +455,8 @@ func NoReviewList(type_ string) *Located {
 func InvalidActor(value string) *Located {
 	return &Located{
 		Code: "invalid_actor",
-		Message: fmt.Sprintf("'%s' names no reviewer trust counts. Use human:<name>, process:<name> or <producer>[/<version>]; "+
-			"a name holds no spaces", value),
+		Message: fmt.Sprintf("'%s' names no reviewer trust counts. Use human:<name> or process:<name>, with no space in the name, "+
+			"or <producer>[/<version>]", value),
 		Target: value,
 		Field:  "verified.by",
 	}

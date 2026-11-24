@@ -140,7 +140,10 @@ func whyMalformed(root string, resolved *schema.ResolvedSchema, path string) str
 	if err == nil {
 		return unknown
 	}
-	first, _, _ := strings.Cut(strings.TrimSpace(err.Error()), "\n")
+	// A refusal of the file itself names it by its full path, which a served
+	// page does not report.
+	said := strings.ReplaceAll(filepath.ToSlash(err.Error()), filepath.ToSlash(root)+"/", "")
+	first, _, _ := strings.Cut(strings.TrimSpace(said), "\n")
 	if r := []rune(first); len(r) > reasonLimit {
 		first = string(r[:reasonLimit]) + "…"
 	}
@@ -154,8 +157,21 @@ func parseAs(resolved *schema.ResolvedSchema, path, text, format string) error {
 	for _, name := range resolved.Types.Keys() {
 		rtype, _ := resolved.Types.Get(name)
 		if rtype.Storage.Layout == schema.LayoutCollection && filepath.ToSlash(rtype.CollectionRelpath()) == path {
-			_, err := canon.LoadCollection(text, rtype.Storage.Fmt)
-			return err
+			rows, err := canon.LoadCollection(text, rtype.Storage.Fmt)
+			if err != nil {
+				return err
+			}
+			for _, slug := range rows.Keys() {
+				raw, _ := rows.Get(slug)
+				row, ok := raw.(*omap.Map)
+				if !ok {
+					return fmt.Errorf("Row '%s' is not a mapping", slug)
+				}
+				if _, _, err := canon.SplitRow(row, rtype.Storage.Fmt); err != nil {
+					return err
+				}
+			}
+			return nil
 		}
 	}
 	_, _, err := canon.Parse(text, format)

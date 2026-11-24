@@ -1,1 +1,1 @@
-{"error": {"code": "invalid_actor", "message": "'human:Ana Ruiz' names no reviewer trust counts. Use human:<name>, process:<name> or <producer>[/<version>]; a name holds no spaces", "field": "verified.by"}}
+{"error": {"code": "invalid_actor", "message": "'human:Ana Ruiz' names no reviewer trust counts. Use human:<name> or process:<name>, with no space in the name, or <producer>[/<version>]", "field": "verified.by"}}

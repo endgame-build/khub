@@ -342,8 +342,7 @@ th.num, td.num { text-align: right; font-variant-numeric: tabular-nums; }
 .feed li:last-child { border-bottom: 0; }
 .feed li.day { display: block; padding: 12px 0 4px; font-size: 12px; font-weight: 600; color: var(--ink-mid); }
 .feed .ty { overflow: hidden; text-overflow: ellipsis; }
-.feed li.row { cursor: pointer; }
-.feed li.row:hover { background: var(--paper); }
+.feed li.row, .bucket li.row { cursor: pointer; }
 .feed li.open, .bucket li.open { background: var(--beige-deep); }
 .feed .mid a { overflow-wrap: anywhere; }
 .feed .tags { justify-content: flex-end; }
@@ -353,7 +352,7 @@ th.num, td.num { text-align: right; font-variant-numeric: tabular-nums; }
 .foot { margin: 10px 0 0; font-size: 12.5px; color: var(--ink-mid); }
 .findings .pass { margin: 0; color: var(--ok); font-weight: 500; }
 .bucket { border-top: 1px solid var(--line-soft); padding: 8px 0; }
-.bucket summary { cursor: pointer; font-size: 13px; font-weight: 500; }
+.bucket summary { font-size: 13px; font-weight: 500; }
 .bucket ul { list-style: none; margin: 6px 0 0; padding: 0; max-height: 300px; overflow: auto; }
 .bucket li { padding: 4px 0; font-size: 12.5px; overflow-wrap: anywhere; }
 .bucket li .why { display: block; color: var(--ink-mid); }
@@ -418,7 +417,7 @@ body[data-view="overview"] main { overflow: hidden; }
 .details .kvlist + h3 { margin-top: 18px; }
 .coverage { margin: 0 0 14px; font-size: 13px; font-variant-numeric: tabular-nums; }
 .inherited { margin-top: 16px; }
-.inherited summary { cursor: pointer; font-size: 12.5px; color: var(--ink-mid); margin-bottom: 8px; }
+.inherited summary { font-size: 12.5px; color: var(--ink-mid); margin-bottom: 8px; }
 .inherited .tblwrap + .tblwrap { margin-top: 8px; }
 .plainlist { list-style: none; margin: 0; padding: 0; font-size: 12.5px; }
 .plainlist li { padding: 3px 0; overflow-wrap: anywhere; }
@@ -450,8 +449,7 @@ body[data-view="overview"] main { overflow: hidden; }
 
 /* ——— list ——— */
 .rail { position: sticky; top: 0; flex: none; width: 232px; max-height: 100cqh; overflow: auto; padding: 18px 4px 40px 20px; }
-.rail > summary { cursor: pointer; font-size: 13px; font-weight: 600; }
-.morefilters > summary { cursor: pointer; }
+.rail > summary { font-size: 13px; font-weight: 600; }
 .skip { position: absolute; left: 20px; top: 14px; padding: 2px 9px; border-radius: var(--r-control); background: var(--navy); color: var(--white); font-size: 12.5px; z-index: 3; }
 .skip:not(:focus) { opacity: 0; pointer-events: none; }
 .rail h2 { font-size: 13px; margin: 18px 0 0; }
@@ -532,7 +530,7 @@ table.rows tbody tr.open > * { background: var(--beige-deep); }
 .said { color: var(--ink-mid); overflow-wrap: anywhere; }
 .said b { font-weight: 600; color: var(--ink); }
 .review details { margin-top: 6px; }
-.review summary, .level summary { cursor: pointer; font-size: 12.5px; color: var(--ink-mid); }
+.review summary, .level summary { font-size: 12.5px; color: var(--ink-mid); }
 .events { margin: 4px 0 0; padding-left: 20px; }
 .reasons { list-style: none; margin: 8px 0 0; padding: 8px 0 0; border-top: 1px solid var(--line-soft); display: grid; gap: 4px; }
 .reasons li { display: flex; gap: 8px; align-items: baseline; }

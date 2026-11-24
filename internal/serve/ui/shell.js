@@ -34,6 +34,19 @@ export function verifyCommand(id, reviewer) {
   return reviewerFault(reviewer) ? '' : command(['khub verify', word(id), '--by', word('human:' + reviewer)]);
 }
 
+// signable sorts marked entities ({ id, rev }) by what may be signed now: the
+// verify lines of those still at the revision that was read, those that changed,
+// and those whose command cannot be pasted. now maps an id to its revision.
+export function signable(marked, now, reviewer) {
+  var out = { lines: [], changed: [], unsafe: [] };
+  marked.forEach(function (m) {
+    if (!m.rev || now.get(m.id) !== m.rev) { out.changed.push(m); return; }
+    var line = verifyCommand(m.id, reviewer);
+    if (line) out.lines.push(line); else out.unsafe.push(m);
+  });
+  return out;
+}
+
 // runCommand replays a saved query.
 export function runCommand(name) { return command(['khub run', word(name)]); }
 
