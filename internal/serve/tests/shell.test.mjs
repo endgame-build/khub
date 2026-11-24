@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
 const code = await readFile(new URL('../ui/shell.js', import.meta.url), 'utf8');
-const { word, verifyCommand, queryCommand, runCommand } = await import('data:text/javascript;base64,' + Buffer.from(code).toString('base64'));
+const { word, verifyCommand, queryCommand, runCommand, reviewerFault } = await import('data:text/javascript;base64,' + Buffer.from(code).toString('base64'));
 
 const hostile = [
   "x; touch PWNED; #", "it's", '$(id)', '`id`', 'a b', '--help me', 'é', "'; id; '", '*', '~', ''
@@ -11,7 +11,7 @@ const hostile = [
 
 test('a plain id is copied as it reads', () => {
   assert.equal(word('requirement/req-an-invoice'), 'requirement/req-an-invoice');
-  assert.equal(verifyCommand('requirement/req-a', 'ana'), "khub verify requirement/req-a --by 'human:ana'");
+  assert.equal(verifyCommand('requirement/req-a', 'ana'), 'khub verify requirement/req-a --by human:ana');
 });
 
 test('a hostile id is one quoted word', () => {
@@ -38,11 +38,15 @@ test('a shell hands every id back unchanged', { skip: process.platform === 'win3
 
 test('the verify command names one reviewer, whatever the name', { skip: process.platform === 'win32' }, () => {
   const run = cmd => spawnSync('sh', ['-c', 'khub() { printf "[%s]" "$@"; }; ' + cmd], { encoding: 'utf8' }).stdout;
-  ['ana', 'Ana Ruiz', "o'neil", '$(id)', 'x; touch PWNED', 'José'].forEach(name => {
+  ['ana', 'ana-ruiz', "o'neil", '$(id)', 'x;touch', 'José'].forEach(name => {
     assert.equal(run(verifyCommand('requirement/req-a', name)), '[verify][requirement/req-a][--by][human:' + name + ']');
   });
   // nobody's review is not a command
-  ['', '  ', undefined, 'a\u001bb'].forEach(name => assert.equal(verifyCommand('requirement/req-a', name), ''));
+  ['', '  ', undefined, 'a\u001bb', 'Ana Ruiz', 'ana ', 'ana\u00a0ruiz'].forEach(name => {
+    assert.equal(verifyCommand('requirement/req-a', name), '', JSON.stringify(name));
+    assert.notEqual(reviewerFault(name), '');
+  });
+  assert.equal(reviewerFault('ana'), '');
 });
 
 const rs = { type: 'requirement', relations: [

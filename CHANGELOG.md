@@ -14,7 +14,8 @@ Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelo
   - It opens on what needs attention: unreviewed, incomplete, changed since
     review, expired, orphan, draft and stale entities by type, the findings
     `check` fails on, the changes of the last days, each type's review share and
-    largest gap, and the saved queries. Each number opens one list across types.
+    largest gap, and the saved queries. Each headline number opens one
+    list across types.
   - Search in the header finds an exact id or alias, then text.
   - A type's list has facets with counts, chips for what is applied, the
     matching `khub query` to copy, counts that open what they count, and a side

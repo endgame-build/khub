@@ -232,6 +232,12 @@ test('next and previous stop at the ends', () => {
   assert.equal(m.step(r, 'req/1', -1), 'req/1');
   assert.equal(m.step(r, 'req/gone', 1), 'req/1');
   assert.equal(m.step([], 'req/1', 1), '');
+  // reviewed away: the next row has its index
+  assert.equal(m.step(r, 'req/gone', 1, 2), 'req/3');
+  assert.equal(m.step(r, 'req/gone', -1, 2), 'req/2');
+  assert.equal(m.step(r, 'req/gone', 1, 9), 'req/4');
+  assert.equal(m.step(r, 'req/gone', -1, 0), 'req/1');
+  assert.equal(m.step(r, '', 1, 2), 'req/1');
 });
 
 test('dates and writers sort, missing last', () => {

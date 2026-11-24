@@ -9,18 +9,22 @@ import { step } from './listmodel.js';
 import { parts } from './entity.js';
 
 var WIDE = '(min-width: 900px)'; // app.css stacks the panel below it
-var shown = null; // { host, id }
+var shown = null; // { host, id, seen }
+var place = null; // { id, at }: where the open entity last was among the rows
+
+// placeOf is that index, -1 for another entity.
+export function placeOf(id) { return place && place.id === id ? place.at : -1; }
 
 export function hasRoom() { return window.matchMedia(WIDE).matches; }
 
-export function unmount() { shown = null; }
+export function unmount() { shown = null; place = null; }
 
 // sync brings host in line with what the route holds open. rows, when given,
 // is the order next and previous follow. force reads the entity again.
 export function sync(host, route, ctx, rows, force) {
   var id = openId(route);
   host.hidden = !id;
-  if (!id) { fill(host, []); shown = null; return; }
+  if (!id) { fill(host, []); shown = null; place = null; return; }
   if (!force && shown && shown.host === host && shown.id === id) { bar(host, id, ctx, rows); return; }
   var again = shown && shown.host === host && shown.id === id;
   var mine = { host: host, id: id, seen: again ? shown.seen : null };
@@ -44,15 +48,17 @@ export function sync(host, route, ctx, rows, force) {
 function bar(host, id, ctx, rows) {
   var at = -1;
   (rows || []).forEach(function (r, i) { if (r.id === id) at = i; });
+  if (at !== -1) place = { id: id, at: at };
+  var was = placeOf(id);
   var nodes = [];
-  if (at !== -1) {
+  if (rows && was !== -1) {
     [['Previous', -1, 'k', '‹'], ['Next', 1, 'j', '›']].forEach(function (b) {
       nodes.push(el('button', {
-        type: 'button', class: 'sq', title: b[0] + ' (' + b[2] + ')', 'aria-label': b[0], disabled: step(rows, id, b[1]) === id,
-        on: { click: function () { ctx.open(step(rows, id, b[1])); } }
+        type: 'button', class: 'sq', title: b[0] + ' (' + b[2] + ')', 'aria-label': b[0], disabled: [id, ''].indexOf(step(rows, id, b[1], was)) !== -1,
+        on: { click: function () { ctx.open(step(rows, id, b[1], was)); } }
       }, b[3]));
     });
-    nodes.push(el('span', { class: 'at' }, (at + 1) + ' of ' + rows.length));
+    nodes.push(el('span', { class: 'at' }, at === -1 ? 'No longer listed' : (at + 1) + ' of ' + rows.length));
   }
   nodes.push(el('span', { class: 'gap' }));
   nodes.push(el('a', { class: 'btn-ghost', href: format(entityRoute(id)), title: 'Open as a page (Enter)' }, 'Open page'));

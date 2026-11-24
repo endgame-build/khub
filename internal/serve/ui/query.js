@@ -4,7 +4,7 @@
 import * as api from './api.js';
 import * as panel from './panel.js';
 import { el, fill } from './dom.js';
-import { same, markerTags, trustTag, notice, entityLink, rowOpens, plural, num, copyButton, skeleton, markerName, MEANING } from './widgets.js';
+import { same, markerTags, trustTag, notice, entityLink, rowOpens, reveal, plural, num, copyButton, skeleton, markerName, MEANING } from './widgets.js';
 import { homeRoute, openId } from './route.js';
 import { runCommand } from './shell.js';
 
@@ -13,7 +13,7 @@ var COMMANDS = {
   unverified: 'khub query --trust unverified', orphan: 'khub query --orphan', draft: 'khub query --draft', stale: 'khub query --stale'
 };
 
-var view = null; // { key, root, rows, aside, seen }
+var view = null; // { key, root, rows, aside, seen, shown }
 
 // subject is what a route lists: its title, its rows, its command, and what to
 // say when there are none.
@@ -33,7 +33,7 @@ function sentence(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
 export function focusOn(id) {
   if (!view || !view.root) return;
   Array.prototype.forEach.call(view.root.querySelectorAll('tbody tr'), function (tr) {
-    if (tr.getAttribute('data-id') === id) tr.querySelector('a').focus();
+    if (tr.getAttribute('data-id') === id) tr.querySelector('a').focus({ preventScroll: true });
   });
 }
 
@@ -55,7 +55,9 @@ export function show(main, route, ctx, force) {
     if (view !== mine) return;
     ctx.loaded(found.malformed);
     if (same(mine, found) && kept) { mark(ctx.route(), ctx, true); ctx.ready(); return; }
-    draw(main, found, what, crumbs, ctx);
+    var row = kept && document.activeElement.closest('tbody tr');
+    draw(main, found, what, crumbs, ctx, kept && mine.aside);
+    if (row) { focusOn(row.getAttribute('data-id')); if (document.activeElement === document.body) main.focus({ preventScroll: true }); }
     mark(ctx.route(), ctx, true);
     ctx.ready();
   }, function (err) {
@@ -65,7 +67,8 @@ export function show(main, route, ctx, force) {
   });
 }
 
-function draw(main, found, what, crumbs, ctx) {
+// draw builds the list. aside, when given, is the panel to keep.
+function draw(main, found, what, crumbs, ctx, aside) {
   var root = el('section', { class: 'split' });
   var left = el('div', { class: 'pane' });
   var head = el('header', { class: 'viewhead' });
@@ -106,7 +109,7 @@ function draw(main, found, what, crumbs, ctx) {
     left.appendChild(t);
   }
   root.appendChild(left);
-  view.aside = el('aside', { class: 'peek', 'aria-label': 'Entity', hidden: true });
+  view.aside = aside || el('aside', { class: 'peek', 'aria-label': 'Entity', hidden: true });
   root.appendChild(view.aside);
   fill(main, [root]);
   view.root = root;
@@ -114,8 +117,13 @@ function draw(main, found, what, crumbs, ctx) {
 }
 
 function mark(route, ctx, force) {
+  var open = openId(route), at = null;
   Array.prototype.forEach.call(view.root.querySelectorAll('tbody tr'), function (tr) {
-    tr.classList.toggle('open', tr.getAttribute('data-id') === openId(route));
+    var on = tr.getAttribute('data-id') === open;
+    tr.classList.toggle('open', on);
+    if (on) at = tr;
   });
   panel.sync(view.aside, route, ctx, view.rows, force);
+  if (at && open !== view.shown) reveal(at);
+  view.shown = open;
 }

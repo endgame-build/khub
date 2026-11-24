@@ -29,12 +29,12 @@ export function unmount() { view = null; }
 export function show(main, route, ctx, force) {
   ctx.crumbs([{ label: 'Review' }]);
   if (!force && view && view.root.isConnected) {
-    if (view.days !== route.days) { view.days = route.days; view.most = 0; recent(view, ctx); }
+    if (view.days !== route.days) { view.days = route.days; view.most = ctx.entry().most || 0; recent(view, ctx); }
     ctx.ready();
     return;
   }
   var kept = force && view && view.root.isConnected ? view : null;
-  var mine = { days: route.days, most: kept ? kept.most : 0, drawn: kept ? kept.drawn : false, root: kept ? kept.root : null, blocks: kept ? kept.blocks : null, seen: kept ? kept.seen : { overview: {}, findings: {}, recent: {}, queries: {} } };
+  var mine = { days: route.days, most: ctx.entry().most || 0, from: 0, drawn: kept ? kept.drawn : false, root: kept ? kept.root : null, blocks: kept ? kept.blocks : null, seen: kept ? kept.seen : { overview: {}, findings: {}, recent: {}, queries: {} } };
   view = mine;
   if (!mine.root) {
     mine.blocks = {
@@ -246,13 +246,23 @@ function recent(mine, ctx) {
       if (found.total > found.rows.length) {
         var foot = el('p', { class: 'foot' }, 'The newest ' + num(found.rows.length) + ' of ' + plural(found.total, 'change') + '. ');
         if (found.rows.length < MOST) {
-          foot.appendChild(el('button', { type: 'button', class: 'copy', on: { click: function () { mine.most = MOST; recent(mine, ctx); } } },
+          foot.appendChild(el('button', { type: 'button', class: 'copy', on: { click: function () {
+            view.most = ctx.entry().most = MOST;
+            view.from = found.rows.length;
+            recent(view, ctx);
+          } } },
             'Show ' + (found.total > MOST ? num(MOST) : 'all')));
         }
         nodes.push(foot);
       }
     }
     fill(mine.blocks.recent, nodes);
+    if (mine.from) {
+      // The button is gone: the keyboard goes on from the first new change.
+      var next = mine.blocks.recent.querySelectorAll('.feed .mid a')[mine.from];
+      mine.from = 0;
+      if (next) next.focus({ preventScroll: true });
+    }
     ctx.ready();
   }, function (err) {
     if (view !== mine) return;

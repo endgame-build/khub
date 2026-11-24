@@ -9,7 +9,7 @@ import * as api from './api.js';
 import * as panel from './panel.js';
 import * as rail from './facets.js';
 import { el, fill, text } from './dom.js';
-import { same, markerTags, trustTag, notice, entityLink, rowOpens, when, copyButton, skeleton, MEANING, MARKERS, markerName, num } from './widgets.js';
+import { same, markerTags, trustTag, notice, entityLink, rowOpens, reveal, when, copyButton, skeleton, MEANING, MARKERS, markerName, num } from './widgets.js';
 import {
   visibleColumns, visibleAttributes, filterRows, sortRows, countLine, linkTargets,
   columnTitle, countTarget, columnsInUse, applied, highFirst, attrText
@@ -336,15 +336,6 @@ function mark(route, ctx, force) {
   panel.sync(view.ui.aside, route, ctx, view.rows, force);
   if (at && (force || open !== view.shown)) reveal(at);
   view.shown = open;
-}
-
-// reveal scrolls a row into view under the sticky header, and never sideways.
-function reveal(tr) {
-  var main = document.getElementById('main'), head = view.ui.table.querySelector('thead');
-  var box = main.getBoundingClientRect(), row = tr.getBoundingClientRect();
-  var top = box.top + (head ? head.getBoundingClientRect().height : 0);
-  if (row.top < top) main.scrollTop -= top - row.top;
-  else if (row.bottom > box.bottom) main.scrollTop += row.bottom - box.bottom;
 }
 
 // sortButton is one header's sort control.

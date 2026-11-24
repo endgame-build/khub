@@ -1,8 +1,9 @@
 // shell.js — text the reader may paste into a terminal. Pure, no imports, so
 // node --test loads it directly.
 
-// PLAIN is a word every shell reads as itself (internal/cli shellPlain).
-var PLAIN = /^[A-Za-z0-9_./-]+$/;
+// PLAIN is a word every shell reads as itself: internal/cli's shellPlain and the
+// colon of an actor, which Windows' cmd would otherwise get in quotes it keeps.
+var PLAIN = /^[A-Za-z0-9_./:-]+$/;
 
 // CONTROL is what a terminal acts on before a shell reads it. Quoting does not
 // help: an escape sequence can end the paste and the line it is quoted in.
@@ -17,12 +18,20 @@ export function word(value) {
   return PLAIN.test(s) ? s : "'" + s.replace(/'/g, "'\\''") + "'";
 }
 
-// verifyCommand records reviewer's review of id. '' without a reviewer (khub
-// would record a review by nobody) and for an id or a name that cannot be
-// pasted.
+// reviewerFault is why a name cannot sign a review, '' when it can: a review by
+// `human:` and a name counts toward trust only while the name is one word.
+export function reviewerFault(name) {
+  var s = String(name || '');
+  if (!s) return 'A review needs a name.';
+  if (CONTROL.test(s)) return 'A name cannot hold control characters.';
+  if (/\s/.test(s)) return 'A name is one word here, like ana-ruiz: khub does not count a review by a name with a space.';
+  return '';
+}
+
+// verifyCommand records reviewer's review of id. '' without a reviewer who can
+// sign one, and for an id that cannot be pasted.
 export function verifyCommand(id, reviewer) {
-  var who = String(reviewer || '').trim();
-  return who ? command(['khub verify', word(id), '--by', word('human:' + who)]) : '';
+  return reviewerFault(reviewer) ? '' : command(['khub verify', word(id), '--by', word('human:' + reviewer)]);
 }
 
 // runCommand replays a saved query.

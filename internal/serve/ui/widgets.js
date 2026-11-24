@@ -113,6 +113,16 @@ export function rowOpens(tr, id, ctx) {
   });
 }
 
+// reveal scrolls a row into view under its table's sticky header, and never
+// sideways.
+export function reveal(tr) {
+  var main = document.getElementById('main'), head = tr.closest('table').querySelector('thead');
+  var box = main.getBoundingClientRect(), row = tr.getBoundingClientRect();
+  var top = box.top + head.getBoundingClientRect().height;
+  if (row.top < top) main.scrollTop -= top - row.top;
+  else if (row.bottom > box.bottom) main.scrollTop += row.bottom - box.bottom;
+}
+
 // when renders a date or a datetime as its day, whole on hover.
 export function when(value) {
   var s = String(value || '');

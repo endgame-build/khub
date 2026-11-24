@@ -3,18 +3,23 @@
 
 import { el, fill, text } from './dom.js';
 import { copy } from './widgets.js';
-import { verifyCommand, word } from './shell.js';
+import { verifyCommand, reviewerFault, word } from './shell.js';
 
 var KEY = 'khub.reviewer';
 var name = read();
+var drawn = []; // { box, draw } of every button on the page
 
 function read() {
-  try { return localStorage.getItem(KEY) || ''; } catch (e) { return ''; } // storage may be off
+  var kept = '';
+  try { kept = localStorage.getItem(KEY) || ''; } catch (e) { /* storage may be off */ }
+  return reviewerFault(kept) ? '' : kept;
 }
 
 function keep(value) {
   name = value;
   try { localStorage.setItem(KEY, value); } catch (e) { /* kept for this page alone */ }
+  drawn = drawn.filter(function (d) { return d.box.isConnected; });
+  drawn.forEach(function (d) { d.draw(); });
 }
 
 // verifyButton copies the command that records a review of id, asking for the
@@ -22,10 +27,10 @@ function keep(value) {
 export function verifyButton(id) {
   var box = el('span', { class: 'verify' });
   var btn = el('button', { type: 'button', class: 'btn', 'aria-live': 'polite' }, 'Copy verify command');
-  var who = el('button', { type: 'button', class: 'copy', on: { click: function () { ask(function () { draw(); who.focus(); }); } } });
+  var who = el('button', { type: 'button', class: 'copy', on: { click: function () { ask(function () { who.focus(); }); } } });
   btn.addEventListener('click', function () {
     if (name) { copy(btn, verifyCommand(id, name)); return; }
-    ask(function () { draw(); copy(btn, verifyCommand(id, name)); });
+    ask(function () { btn.focus(); copy(btn, verifyCommand(id, name)); });
   });
   function draw() {
     var pasted = word(id);
@@ -35,19 +40,19 @@ export function verifyButton(id) {
     who.title = name ? 'Change the reviewer\'s name' : 'Set the reviewer\'s name';
   }
   draw();
+  drawn.push({ box: box, draw: draw });
   fill(box, [btn, who]);
   return box;
 }
 
 // ask takes the reviewer's name, and then calls back.
 function ask(then) {
-  var input = el('input', { type: 'text', id: 'reviewer', value: name, autocomplete: 'name', spellcheck: false, maxLength: 80 });
+  var input = el('input', { type: 'text', id: 'reviewer', value: name, autocomplete: 'username', spellcheck: false, maxLength: 80 });
   var wrong = el('p', { class: 'err', role: 'alert' });
   var form = el('form', { on: { submit: function (evt) {
     evt.preventDefault();
-    var value = input.value.trim();
-    if (!value) { text(wrong, 'A review needs a name.'); input.focus(); return; }
-    if (!word(value)) { text(wrong, 'A name cannot hold control characters.'); input.focus(); return; }
+    var value = input.value.trim(), fault = reviewerFault(value);
+    if (fault) { text(wrong, fault); input.focus(); return; }
     keep(value);
     box.close();
     then();

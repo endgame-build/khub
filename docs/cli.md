@@ -440,16 +440,16 @@ the diagram's zoom.
 
 | Address | View |
 |---|---|
-| `#/` | Review: how many entities are unreviewed, incomplete, changed since review, expired, orphan, draft and stale, by type; the findings `check` fails on; what changed in the window (`?days=`, 7 by default); each type with its review share and its largest gap (the relation in use that fewest of its entities have, leaving out inherited relations and those that only join a type to itself); the saved queries with their counts |
+| `#/` | Review: how many entities are unreviewed, incomplete, changed since review, expired, orphan, draft and stale, by type; the findings `check` fails on; what changed in the window (`?days=`, 7 by default; the newest 50, or up to 1,000 on request); each type with its review share and its largest gap (the relation in use that fewest of its entities have, leaving out inherited relations and those that only join a type to itself); the saved queries with their counts |
 | `#/types` | Every declared type with its capture cue, its count, its review share and its markers |
 | `#/type/<name>` | One type's entities as rows |
 | `#/entity/<type>/<slug>` | One entity |
 | `#/query/<name>` | The rows of a saved query, as `khub run` lists them |
-| `#/marked/<marker>` | The entities of every type carrying one marker (`incomplete`, `superseded`, `expired`, `orphan`, `draft`, `stale`), or `unverified`: at most 1,000 rows, the count whole. Each number on the review home opens one |
+| `#/marked/<marker>` | The entities of every type carrying one marker (`incomplete`, `superseded`, `expired`, `orphan`, `draft`, `stale`), or `unverified`: at most 1,000 rows, the count whole. The headline numbers of the review home each open one |
 | `#/ontology` | The diagram of the types and their relations (`?sel=type:<name>` or `?sel=rel:<from>.<predicate>`, `?focus=<type>`, `?map=1`) |
 
 **Every view.** The header carries the workspace's name, a search box and the
-time the view was read. Search finds an exact id or alias first, then runs
+time the view was read; `?` lists the keys and what each marker and tier means. Search finds an exact id or alias first, then runs
 `khub search` in plain mode over titles and text. A file that does not parse is
 named in a banner; the counts and markers on the page leave it out. A view reads
 the workspace again when the window comes back to the front (unless it did so in
@@ -489,7 +489,8 @@ row, or link of an entity page, Enter opens the page, Esc closes. Below 900 px a
 **An entity.** It leads with its description. A review bar says the tier, who
 reviewed it and when, who wrote it and why it carries each marker, and copies
 the `khub verify` command. The page asks for the reviewer's name the first time
-and keeps it in the browser's local storage, the one thing it keeps there. Where a review no longer holds, the page shows the
+(one word, since a name with a space does not count toward trust) and keeps it in
+the browser's local storage, the one thing it keeps there. Where a review no longer holds, the page shows the
 fields and body lines that changed since the version reviewed, or says why git
 cannot tell. The body is rendered from a block tree the server parses: raw HTML
 and comments are shown as text, only `http`, `https` and `mailto` links are

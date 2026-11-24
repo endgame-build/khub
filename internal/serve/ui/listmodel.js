@@ -310,11 +310,13 @@ export function applied(rowset, list) {
 }
 
 // step is the row before or after the open one, the first when none is open;
-// the ends stay where they are.
-export function step(rows, open, by) {
+// the ends stay where they are. An open entity that left the rows (it was just
+// reviewed) is stepped from its former index, was, where the next row now is.
+export function step(rows, open, by, was) {
   if (!rows.length) return '';
   var at = -1;
   for (var i = 0; i < rows.length; i++) if (rows[i].id === open) { at = i; break; }
+  if (at === -1 && open && was >= 0) return rows[Math.max(0, Math.min(rows.length - 1, by > 0 ? was : was - 1))].id;
   if (at === -1) return rows[0].id;
   return rows[Math.max(0, Math.min(rows.length - 1, at + by))].id;
 }

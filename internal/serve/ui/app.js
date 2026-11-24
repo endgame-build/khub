@@ -202,6 +202,8 @@ function viewKey(r) {
 // render draws the view the address names. here says the entry on screen only
 // changed its address, so its place is where the reader is.
 function render(here) {
+  // A question asked over one view is not the next view's.
+  Array.prototype.forEach.call(document.querySelectorAll('dialog[open]'), function (d) { d.close(); });
   enter();
   route = parse(location.hash);
   var key = viewKey(route);
@@ -251,7 +253,7 @@ function typing(node) {
 function move(by) {
   var view = VIEWS[route.view];
   var rows = view && view.order ? view.order() : [];
-  var id = step(rows, openId(route), by);
+  var id = step(rows, openId(route), by, panel.placeOf(openId(route)));
   if (!id || id === openId(route)) return;
   if (!panel.hasRoom()) return;
   var follow = document.activeElement.closest && document.activeElement.closest('tr, li');
