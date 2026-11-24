@@ -183,7 +183,7 @@ func TestMalformedFileIsNamed(t *testing.T) {
 		"page":     func() (*omap.Map, error) { return Page(root, "component/cmp-ledger", now) },
 		"overview": func() (*omap.Map, error) { return Overview(root, now) },
 		"find":     func() (*omap.Map, error) { return Find(root, "ledger", now) },
-		"recent":   func() (*omap.Map, error) { return Recent(root, 7, now) },
+		"recent":   func() (*omap.Map, error) { return Recent(root, 7, RecentLimit, now) },
 	} {
 		out, err := call()
 		if err != nil {

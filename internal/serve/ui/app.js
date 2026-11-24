@@ -14,10 +14,10 @@ import * as entity from './entity.js';
 import * as panel from './panel.js';
 import * as find from './find.js';
 import * as api from './api.js';
-import { parse, format, typeRoute, homeRoute, overviewOf, entityRoute, opening, openId } from './route.js';
+import { parse, format, typeRoute, homeRoute, overviewOf, entityRoute, opening, openId, TIERS } from './route.js';
 import { step } from './listmodel.js';
 import { el, fill, text } from './dom.js';
-import { notice } from './widgets.js';
+import { notice, MARKERS, MEANING, markerName } from './widgets.js';
 
 var VIEWS = { home: home, types: types, overview: overview, list: list, query: query, entity: entity };
 var TABS = [
@@ -121,7 +121,8 @@ function drawAsOf(err) {
   var at = new Date(loadedAt);
   var two = function (n) { return (n < 10 ? '0' : '') + n; };
   if (!asof.firstChild) {
-    fill(asof, [el('span'), el('button', { type: 'button', class: 'copy', title: 'Read the workspace again (r)', on: { click: refresh } }, 'Refresh')]);
+    fill(asof, [el('span'), el('button', { type: 'button', class: 'copy', title: 'Read the workspace again (r)', on: { click: refresh } }, 'Refresh'),
+      el('button', { type: 'button', class: 'copy', title: 'Keys and terms (?)', 'aria-label': 'Keys and terms', on: { click: keys } }, '?')]);
   }
   var said = asof.firstChild;
   said.className = err ? 'late' : '';
@@ -280,17 +281,24 @@ function onKey(evt) {
   }
 }
 
-// keys lists the keyboard's shortcuts.
+// keys lists the keyboard's shortcuts, and what the page's terms mean.
 function keys() {
-  var dl = el('dl', { class: 'keys' });
-  [['/', 'Search'], ['j, k', 'Open the next or previous row beside the list'], ['Enter', 'Open what is beside the list as a page'],
-    ['Esc', 'Close what is open, or leave one type for the full map'], ['r', 'Read the workspace again'], ['?', 'This list']].forEach(function (k) {
-    dl.appendChild(el('dt', null, k[0]));
-    dl.appendChild(el('dd', null, k[1]));
-  });
-  var box = el('dialog', { class: 'keybox', 'aria-label': 'Keyboard shortcuts' });
-  box.appendChild(el('h2', null, 'Keyboard'));
-  box.appendChild(dl);
+  var list = function (pairs) {
+    var dl = el('dl', { class: 'keys' });
+    pairs.forEach(function (k) {
+      dl.appendChild(el('dt', null, k[0]));
+      dl.appendChild(el('dd', null, k[1]));
+    });
+    return dl;
+  };
+  var box = el('dialog', { class: 'keybox', 'aria-label': 'Keys and terms' });
+  box.appendChild(el('h2', null, 'Keys'));
+  box.appendChild(list(  [['/', 'Search'], ['j, k', 'Open the next or previous row beside the list'], ['Enter', 'Open what is beside the list as a page'],
+    ['Esc', 'Close what is open, or leave one type for the full map'], ['r', 'Read the workspace again'], ['Shift-click', 'Leave a filter value out'], ['?', 'This list']]));
+  box.appendChild(el('h2', null, 'Markers'));
+  box.appendChild(list(MARKERS.map(function (k) { return [markerName(k), MEANING[k]]; })));
+  box.appendChild(el('h2', null, 'Trust'));
+  box.appendChild(list(TIERS.map(function (k) { return [k, MEANING[k]]; })));
   box.appendChild(el('button', { type: 'button', class: 'btn', on: { click: function () { box.close(); } } }, 'Close'));
   box.addEventListener('close', function () { box.remove(); });
   document.body.appendChild(box);

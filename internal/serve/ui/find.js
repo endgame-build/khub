@@ -84,14 +84,14 @@ function draw(found, q) {
     var top = el('span', { class: 'top' });
     top.appendChild(el('span', { class: 'ty' }, h.type));
     top.appendChild(el('b', null, h.title));
-    top.appendChild(markerTags(h.markers, false));
-    if (h.markers.trust !== 'unverified') top.appendChild(trustTag(h.markers.trust));
+    top.appendChild(markerTags(h.markers));
+    top.appendChild(trustTag(h.markers.trust));
     a.appendChild(top);
     a.appendChild(el('span', { class: 'under' }, h.snippet || h.id));
     a.addEventListener('click', done);
     return a;
   });
-  if (!hits.length) nodes.push(el('p', { class: 'hint' }, 'Nothing answers to “' + found.q + '”'));
+  if (!hits.length) nodes.push(el('p', { class: 'hint' }, 'Nothing answers to “' + found.q + '”. Search reads the ids, aliases, titles and text of entities.'));
   else if (found.total > hits.length) nodes.push(el('p', { class: 'hint' }, 'The first ' + hits.length + ' of ' + plural(found.total, 'match', 'matches')));
   fill(box, nodes);
   at = -1;

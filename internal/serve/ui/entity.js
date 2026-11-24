@@ -120,7 +120,7 @@ function draw(main, mine, e, ctx) {
     api.getHistory(e.id).then(function (h) {
       if (view !== now || same(read.history, h)) return;
       drawHistory(history, h);
-      drawSince(p.since, h.since_review);
+      drawSince(p.since, h.since_review, h.commits.length);
       ctx.ready();
     }, function (err) {
       if (view === now && !read.history.seen) fill(history, [el('h2', null, 'History'), problem(err)]);
@@ -184,7 +184,7 @@ function review(e) {
   line.appendChild(said(last ? (m && m.superseded ? 'last reviewed by' : 'reviewed by') : 'No review yet', last && last.by, last && last.at));
   var made = fm.generated || {};
   if (made.by) line.appendChild(said('written by', made.by, made.at));
-  if (m && !e.stray) line.appendChild(copyButton('Copy verify command', verifyCommand(e.id)));
+  if (m && !e.stray) line.appendChild(copyButton('Copy verify command', verifyCommand(e.id), 'btn'));
   box.appendChild(line);
   if (events.length > 1) {
     var d = el('details');
@@ -199,7 +199,7 @@ function review(e) {
     box.appendChild(d);
   }
   var reasons = e.reasons || {};
-  var wrong = MARKERS.filter(function (k) { return m && m[k] && reasons[k] && !(k === 'stale' && m.expired); });
+  var wrong = MARKERS.filter(function (k) { return m && m[k] && reasons[k]; });
   if (wrong.length) {
     var ul = el('ul', { class: 'reasons' });
     wrong.forEach(function (k) {
@@ -276,12 +276,16 @@ function body(e, ctx, compact, lede) {
 // heading names a group of links: the relation in words, and the types at its
 // other end.
 function heading(g, H) {
-  var dot = g.direction === 'in' ? g.label.indexOf('.') : -1;
+  var dot = g.label.indexOf('.');
   var name = words(dot === -1 ? g.label : g.label.slice(dot + 1));
+  var peers = Array.from(new Set(g.items.map(function (i) { return i.type; }).filter(Boolean))).join(', ');
+  // A relation read backwards under its own name says the wrong thing, so the
+  // type leads and the relation follows; a declared inverse reads as it is.
+  var backwards = g.direction === 'in' && (dot !== -1 || g.base);
+  var first = backwards ? peers : name;
   var h = el(H);
-  h.appendChild(tn(name.charAt(0).toUpperCase() + name.slice(1)));
-  var peers = Array.from(new Set(g.items.map(function (i) { return i.type; }).filter(Boolean)));
-  h.appendChild(el('span', { class: 'n' }, [num(g.items.length), peers.join(', ')].filter(Boolean).join(' ')));
+  h.appendChild(tn(first.charAt(0).toUpperCase() + first.slice(1)));
+  h.appendChild(el('span', { class: 'n' }, (backwards ? 'through ' + name : peers) + ' (' + num(g.items.length) + ')'));
   return h;
 }
 
@@ -309,7 +313,7 @@ function group(g, ctx, H) {
     if (it.resolved) {
       li.appendChild(entityLink(it.id, it.title || it.id, ctx, 't'));
       li.appendChild(el('span', { class: 'sum', title: it.summary || it.id }, it.summary || it.id));
-      li.appendChild(markerTags(it.markers, false));
+      li.appendChild(markerTags(it.markers));
       li.appendChild(trustTag(it.markers && it.markers.trust));
     } else {
       li.appendChild(el('span', { class: 't mono' }, it.id));
@@ -367,12 +371,12 @@ function drawHistory(box, h) {
 
 // drawSince shows what changed after the newest review, where one no longer
 // holds.
-function drawSince(box, s) {
+function drawSince(box, s, commits) {
   box.hidden = !s;
   if (!s) return;
   var head = el('p', { class: 'sincehead' });
   head.appendChild(said(s.found ? 'Changed since the review by' : s.holds ? 'Reviewed by' : 'The review no longer holds, by', s.by, s.at));
-  if (!s.found) { fill(box, [head, el('p', { class: 'hint' }, s.reason)]); return; }
+  if (!s.found) { fill(box, [head, el('p', { class: 'hint' }, s.reason + '. ' + (commits ? 'History lists what each commit changed.' : ''))]); return; }
   var nodes = [head];
   if (s.fields.length) {
     var dl = el('dl', { class: 'diff' });

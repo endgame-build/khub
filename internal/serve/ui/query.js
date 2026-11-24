@@ -72,7 +72,7 @@ function draw(main, found, crumbs, ctx) {
       line.appendChild(title);
       line.appendChild(el('td', { class: 'ty' }, r.type));
       var m = el('td');
-      m.appendChild(markerTags(r.markers, false));
+      m.appendChild(markerTags(r.markers));
       line.appendChild(m);
       var tier = el('td');
       tier.appendChild(trustTag(r.markers.trust));

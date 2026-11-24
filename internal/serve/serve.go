@@ -15,6 +15,7 @@ import (
 	"context"
 	"embed"
 	"errors"
+	"fmt"
 	"io"
 	"io/fs"
 	"net"
@@ -256,26 +257,41 @@ func (s *server) apiFindings(w http.ResponseWriter, r *http.Request) {
 	answer(w, payload, err)
 }
 
-// The window `recent` uses when none is asked for, and the longest one worth
-// asking for.
+// The window `recent` uses when none is asked for, and the longest window and
+// the most changes worth asking for.
 const (
-	recentDays    = 7
-	maxRecentDays = 3650
+	recentDays     = 7
+	maxRecentDays  = 3650
+	maxRecentLimit = 1000
 )
 
 // apiRecent serves the entities touched in the last `days` days.
 func (s *server) apiRecent(w http.ResponseWriter, r *http.Request) {
-	days := recentDays
-	if raw := r.URL.Query().Get("days"); raw != "" {
-		n, err := strconv.Atoi(raw)
-		if err != nil || n < 0 || n > maxRecentDays {
-			fail(w, http.StatusBadRequest, "bad_request", "The days window is a whole number from 0 to "+strconv.Itoa(maxRecentDays))
-			return
-		}
-		days = n
+	days, ok := number(w, r, "days", recentDays, 0, maxRecentDays)
+	if !ok {
+		return
 	}
-	payload, err := explore.Recent(s.root, days, clock.Now())
+	limit, ok := number(w, r, "limit", explore.RecentLimit, 1, maxRecentLimit)
+	if !ok {
+		return
+	}
+	payload, err := explore.Recent(s.root, days, limit, clock.Now())
 	answer(w, payload, err)
+}
+
+// number is the query parameter name within its bounds, fallback when absent;
+// anything else is answered with the refusal.
+func number(w http.ResponseWriter, r *http.Request, name string, fallback, least, most int) (int, bool) {
+	raw := r.URL.Query().Get(name)
+	if raw == "" {
+		return fallback, true
+	}
+	n, err := strconv.Atoi(raw)
+	if err != nil || n < least || n > most {
+		fail(w, http.StatusBadRequest, "bad_request", fmt.Sprintf("Parameter '%s' is a whole number from %d to %d", name, least, most))
+		return 0, false
+	}
+	return n, true
 }
 
 // apiSearch serves the hits for `q`: what it names outright, then full text.

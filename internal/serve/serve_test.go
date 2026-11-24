@@ -253,14 +253,14 @@ func TestOverviewRebuildsPerRequest(t *testing.T) {
 func TestRecentRefusesABadWindow(t *testing.T) {
 	srv := httptest.NewServer(Handler(wsWithEntities(t), nil))
 	defer srv.Close()
-	for _, days := range []string{"-1", "x", "99999999999999999999"} {
-		resp, err := http.Get(srv.URL + "/api/recent?days=" + days)
+	for _, q := range []string{"days=-1", "days=x", "days=99999999999999999999", "limit=0", "limit=1001", "limit=x"} {
+		resp, err := http.Get(srv.URL + "/api/recent?" + q)
 		if err != nil {
 			t.Fatal(err)
 		}
 		resp.Body.Close()
 		if resp.StatusCode != http.StatusBadRequest {
-			t.Errorf("days=%s = %d, want 400", days, resp.StatusCode)
+			t.Errorf("%s = %d, want 400", q, resp.StatusCode)
 		}
 	}
 }

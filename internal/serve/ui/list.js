@@ -269,7 +269,7 @@ function update(route, ctx, force) {
   text(ui.count, countLine(num(rows.length), num(rowset.total)));
   var cmd = queryCommand(rowset, list);
   fill(ui.command, [cmd.command ? copyButton('Copy khub query', cmd.command)
-    : el('span', { class: 'hint', title: 'khub query has no flag for ' + cmd.why }, 'no khub query for this')]);
+    : el('span', { class: 'hint' }, 'khub query cannot say ' + cmd.why)]);
 
   // A choice redraws the control the keyboard is on, so focus goes back to it.
   var focused = focusedKey(ui.rail) || focusedKey(ui.table);
@@ -392,7 +392,7 @@ function rowOf(row, attrs, cols, ctx, open) {
   title.appendChild(el('div', { class: 'slug mono' }, row.slug));
   r.appendChild(title);
   var markers = el('td', { class: 'marks' });
-  markers.appendChild(markerTags(row, false));
+  markers.appendChild(markerTags(row));
   r.appendChild(markers);
   var trust = el('td');
   trust.appendChild(trustTag(row.trust));

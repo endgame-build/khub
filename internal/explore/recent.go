@@ -9,13 +9,13 @@ import (
 	"github.com/endgame-build/khub/internal/values"
 )
 
-// recentLimit caps the changes listed; the total is always whole.
-const recentLimit = 50
+// RecentLimit is how many changes are listed when no limit is asked for; the
+// total is always whole.
+const RecentLimit = 50
 
 // Recent is the entities `khub recent` lists for the window (/api/recent),
 // newest first, each with who wrote it, whether it is new, and its markers.
-func Recent(root string, days int, now time.Time) (*omap.Map, error) {
-	limit := recentLimit
+func Recent(root string, days, limit int, now time.Time) (*omap.Map, error) {
 	report, err := gitlog.Recent(root, days, &limit, now)
 	if err != nil {
 		return nil, err

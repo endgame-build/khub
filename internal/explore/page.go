@@ -124,7 +124,8 @@ func (s *snapshot) reasons(node index.Node) *omap.Map {
 	}
 	if m.Expired {
 		raw, _ := meta.Get("stale_after")
-		out.Set("expired", "Its stale_after, "+values.Str(raw)+", has passed")
+		day, _, _ := strings.Cut(values.Str(raw), "T")
+		out.Set("expired", "Its stale_after, "+day+", has passed")
 	}
 	if project.AgeStale(meta, s.now, s.staleDays, nil) {
 		date, source := project.EffectiveDate(meta, nil)

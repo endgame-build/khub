@@ -3,7 +3,7 @@
 
 import * as api from './api.js';
 import { el, fill } from './dom.js';
-import { same, trustBar, markerName, MARKERS, MEANING, notice, skeleton, num } from './widgets.js';
+import { same, trustBar, trustKey, markerName, MARKERS, MEANING, notice, skeleton, num } from './widgets.js';
 import { format, typeRoute, listRoute, overviewOf } from './route.js';
 
 var view = null;
@@ -79,5 +79,6 @@ function table(list, when) {
   t.appendChild(body);
   var card = el('div', { class: 'card' });
   card.appendChild(t);
+  card.appendChild(trustKey());
   return card;
 }

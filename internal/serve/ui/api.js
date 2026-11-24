@@ -39,7 +39,7 @@ function idPath(id) { return id.split('/').map(encodeURIComponent).join('/'); }
 
 export function getOverview() { return get('/api/overview'); }
 export function getFindings() { return get('/api/findings'); }
-export function getRecent(days) { return get('/api/recent?days=' + encodeURIComponent(days)); }
+export function getRecent(days, limit) { return get('/api/recent?days=' + encodeURIComponent(days) + (limit ? '&limit=' + limit : '')); }
 export function getQueries() { return get('/api/queries'); }
 export function getQuery(name) { return get('/api/query/' + encodeURIComponent(name)); }
 export function search(q, signal) { return get('/api/search?q=' + encodeURIComponent(q), signal); }

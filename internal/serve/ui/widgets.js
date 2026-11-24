@@ -23,17 +23,16 @@ export var MARKERS = STATUSES;
 var NAMES = { superseded: 'changed since review' };
 export function markerName(key) { return NAMES[key] || key; }
 
-// markerTags renders the status markers that are set. An empty result is an
-// empty span, so a table cell keeps its height. An expired entity is stale by
-// definition, so the narrower of the two is the one shown.
-export function markerTags(m, withTrust) {
+// markerTags renders the status markers that are set, so a list filtered by one
+// shows it on every row. An empty result is an empty span, so a table cell keeps
+// its height.
+export function markerTags(m) {
   var wrap = el('span', { class: 'tags' });
   if (!m) return wrap;
   MARKERS.forEach(function (k) {
-    if (!m[k] || (k === 'stale' && m.expired)) return;
+    if (!m[k]) return;
     wrap.appendChild(el('span', { class: 'tag tag-' + k, title: MEANING[k] }, markerName(k)));
   });
-  if (withTrust && m.trust && m.trust !== 'unverified') wrap.appendChild(trustTag(m.trust));
   return wrap;
 }
 
@@ -55,12 +54,22 @@ export function trustBar(tiers, total) {
   return wrap;
 }
 
+// trustKey says what the parts of those bars are.
+export function trustKey() {
+  var p = el('p', { class: 'foot tkey' });
+  ['human', 'machine'].forEach(function (tier) {
+    p.appendChild(el('i', { class: 'part-' + tier, 'aria-hidden': 'true' }));
+    p.appendChild(el('span', null, tier));
+  });
+  return p;
+}
+
 // copyButton puts text on the clipboard and says so on the button. Loopback is
 // a trustworthy origin, so the Clipboard API is there over plain HTTP. Text
 // that cannot be pasted safely (shell.js answers '') is not offered.
-export function copyButton(label, value) {
+export function copyButton(label, value, cls) {
   if (!value) return el('button', { type: 'button', class: 'copy', disabled: true, title: 'Its name holds control characters a terminal would act on' }, label);
-  var btn = el('button', { type: 'button', class: 'copy', title: value, 'aria-live': 'polite' }, label);
+  var btn = el('button', { type: 'button', class: cls || 'copy', title: value, 'aria-live': 'polite' }, label);
   var say = function (word) {
     text(btn, word);
     setTimeout(function () { text(btn, label); }, 1500);

@@ -4,11 +4,12 @@
 
 import * as api from './api.js';
 import { el, fill, text, tn } from './dom.js';
-import { same, markerTags, trustBar, entityLink, markerName, MEANING, MARKERS, plural, num, notice, skeleton, problem, copyButton } from './widgets.js';
+import { same, markerTags, trustTag, trustBar, trustKey, entityLink, markerName, MEANING, MARKERS, plural, num, notice, skeleton, problem, copyButton } from './widgets.js';
 import { format, listRoute, typeRoute, homeRoute, DAYS } from './route.js';
 import { words } from './listmodel.js';
 
 var SHOWN = 3; // how many types a tile names before the reader asks for the rest
+var MOST = 1000; // how many changes are listed on request
 var WINDOWS = [0, DAYS, 30, 90];
 
 // What each check bucket means to a reader.
@@ -28,12 +29,12 @@ export function unmount() { view = null; }
 export function show(main, route, ctx, force) {
   ctx.crumbs([{ label: 'Review' }]);
   if (!force && view && view.root.isConnected) {
-    if (view.days !== route.days) { view.days = route.days; recent(view, ctx); }
+    if (view.days !== route.days) { view.days = route.days; view.most = 0; recent(view, ctx); }
     ctx.ready();
     return;
   }
   var kept = force && view && view.root.isConnected ? view : null;
-  var mine = { days: route.days, drawn: kept ? kept.drawn : false, root: kept ? kept.root : null, blocks: kept ? kept.blocks : null, seen: kept ? kept.seen : { overview: {}, findings: {}, recent: {}, queries: {} } };
+  var mine = { days: route.days, most: kept ? kept.most : 0, drawn: kept ? kept.drawn : false, root: kept ? kept.root : null, blocks: kept ? kept.blocks : null, seen: kept ? kept.seen : { overview: {}, findings: {}, recent: {}, queries: {} } };
   view = mine;
   if (!mine.root) {
     mine.blocks = {
@@ -84,7 +85,7 @@ function attention(mine, o) {
   var total = 0, reviewed = 0;
   o.types.forEach(function (t) { total += t.count; reviewed += t.trust.human + t.trust.machine; });
   text(mine.sub, total
-    ? plural(total, 'entity', 'entities') + ' in ' + plural(o.types.filter(function (t) { return t.count; }).length, 'type') + ', ' + num(reviewed) + ' reviewed'
+    ? plural(total, 'entity', 'entities') + ' in ' + plural(o.types.filter(function (t) { return t.count; }).length, 'type') + ', ' + num(reviewed) + ' with a review that holds'
     : 'Nothing has been captured yet.');
   var cards = MARKERS.map(function (key) {
     var by = o.types.filter(function (t) { return t.markers[key]; });
@@ -101,7 +102,7 @@ function attention(mine, o) {
   fill(mine.blocks.attention, cards.map(function (c) {
     var box = el('div', { class: 'tile tile-' + c.key, title: MEANING[c.key] });
     box.appendChild(el('b', null, num(c.n)));
-    box.appendChild(el('span', { class: 'what' }, c.key === 'unverified' ? 'not reviewed' : markerName(c.key)));
+    box.appendChild(el('span', { class: 'what' }, c.key === 'unverified' ? 'no review holds' : markerName(c.key)));
     var ul = el('ul');
     var line = function (t) {
       var li = el('li');
@@ -166,7 +167,7 @@ function typesBlock(mine, o) {
   });
   t.appendChild(body);
   var empty = o.types.length - used.length;
-  fill(mine.blocks.types, [el('h2', null, 'Types'), used.length ? t : el('p', { class: 'empty' }, 'No type has entities yet.'),
+  fill(mine.blocks.types, [el('h2', null, 'Types'), used.length ? t : el('p', { class: 'empty' }, 'No type has entities yet.'), used.length ? trustKey() : null,
     el('p', { class: 'foot' }, empty ? plural(empty, 'type') + ' with no entities. ' : '')]);
   mine.blocks.types.lastChild.appendChild(el('a', { href: '#/types' }, 'All types'));
 }
@@ -217,7 +218,7 @@ function recent(mine, ctx) {
   };
   var days = mine.days;
   if (!mine.drawn) fill(mine.blocks.recent, [head(), skeleton('Loading changes', 5)]);
-  api.getRecent(days).then(function (found) {
+  api.getRecent(days, mine.most).then(function (found) {
     if (view !== mine || mine.days !== days) return;
     if (same(mine.seen.recent, found)) return;
     mine.drawn = true;
@@ -234,11 +235,20 @@ function recent(mine, ctx) {
         mid.appendChild(entityLink(r.id, r.title, ctx));
         mid.appendChild(el('span', { class: 'tail' }, [r.new ? 'new' : 'edited', r.by ? 'by ' + r.by : ''].filter(Boolean).join(' ')));
         li.appendChild(mid);
-        li.appendChild(markerTags(r.markers, true));
+        var marks = markerTags(r.markers);
+        marks.appendChild(trustTag(r.markers.trust));
+        li.appendChild(marks);
         ul.appendChild(li);
       });
       nodes.push(ul);
-      if (found.total > found.rows.length) nodes.push(el('p', { class: 'foot' }, 'The newest ' + found.rows.length + ' of ' + plural(found.total, 'change') + '.'));
+      if (found.total > found.rows.length) {
+        var foot = el('p', { class: 'foot' }, 'The newest ' + num(found.rows.length) + ' of ' + plural(found.total, 'change') + '. ');
+        if (found.rows.length < MOST) {
+          foot.appendChild(el('button', { type: 'button', class: 'copy', on: { click: function () { mine.most = MOST; recent(mine, ctx); } } },
+            'Show ' + (found.total > MOST ? num(MOST) : 'all')));
+        }
+        nodes.push(foot);
+      }
     }
     fill(mine.blocks.recent, nodes);
     ctx.ready();

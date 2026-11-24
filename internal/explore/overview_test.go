@@ -300,7 +300,7 @@ func TestRowsDatesAgreeWithRecent(t *testing.T) {
 
 func TestRecentAgreesWithRecent(t *testing.T) {
 	root := buildHubWS(t)
-	out, err := Recent(root, 7, now)
+	out, err := Recent(root, 7, RecentLimit, now)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -309,7 +309,7 @@ func TestRecentAgreesWithRecent(t *testing.T) {
 		t.Fatal(err)
 	}
 	rows := get(t, out, "rows").([]any)
-	if get(t, out, "total") != report.Total || len(rows) != min(report.Total, recentLimit) {
+	if get(t, out, "total") != report.Total || len(rows) != min(report.Total, RecentLimit) {
 		t.Fatalf("%v rows of %v, recent has %d", len(rows), get(t, out, "total"), report.Total)
 	}
 	for i, r := range rows {
