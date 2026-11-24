@@ -4,6 +4,17 @@ Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [0.35.0] — 2026-11-24
+
+A reviewer signs off several entities at once. On the served page, Space marks
+what is open, marks hold across lists and through a reload, and one button
+copies a `khub verify` line for each, leaving out what changed after it was
+marked. A page opened from a list walks through it, the review home opens a row
+beside it, and a file that does not parse says why. `khub verify` now refuses a
+reviewer trust never counts (`human:` alone, a name with a space): a script that
+passed one gets exit 2 where it got exit 0. The workspace format is unchanged,
+so no `khub upgrade` is needed.
+
 ### Changed
 
 - **`khub verify` refuses a reviewer trust never counts.** `--by human:`,
