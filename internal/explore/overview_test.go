@@ -242,6 +242,28 @@ func TestFindingsAgreeWithCheck(t *testing.T) {
 	}
 }
 
+// A file that does not parse carries what the parser says, on one line.
+func TestFindingsSayWhyAFileDoesNotParse(t *testing.T) {
+	root := buildHubWS(t)
+	dir := filepath.Join(root, "knowledge", "components")
+	writeFile(t, filepath.Join(dir, "cmp-a.md"), "---\ntype: component\ntitle: [unclosed\n---\n")
+	writeFile(t, filepath.Join(dir, "cmp-b.md"), "---\ntitle: 1\ntitle: "+strings.Repeat("x", 600)+"\n---\n")
+	out, err := Findings(root, nil, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b := get(t, out, "buckets").([]any)[0].(*omap.Map)
+	if get(t, b, "bucket") != "malformed" || get(t, b, "total") != 2 {
+		t.Fatalf("bucket %v", b)
+	}
+	for i, want := range []string{"[3:8]", "already defined"} {
+		reason := get(t, get(t, b, "items").([]any)[i].(*omap.Map), "reason").(string)
+		if !strings.Contains(reason, want) || strings.Contains(reason, "\n") || len([]rune(reason)) > 240 {
+			t.Errorf("reason %q", reason)
+		}
+	}
+}
+
 // superseded is check's superseded_verifications, of the newest review.
 func TestSupersededAgreesWithCheck(t *testing.T) {
 	root := reviewedWS(t)

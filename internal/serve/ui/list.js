@@ -422,7 +422,7 @@ function table(rowset, attrs, cols, rows, list, ctx) {
     tr.appendChild(header(columnTitle(c), c.key, list, ctx, 'num',
       c.predicate + ', ' + (c.direction === 'in' ? 'incoming from ' : 'outgoing to ') + c.peer_types.join(' | ')));
   });
-  tr.appendChild(header('Updated', 'updated', list, ctx, 'date'));
+  tr.appendChild(header('Dated', 'updated', list, ctx, 'date', 'The date staleness is judged by: its updated date, else its created date'));
   tr.appendChild(header('Written by', 'by', list, ctx, 'by'));
   thead.appendChild(tr);
   t.appendChild(thead);

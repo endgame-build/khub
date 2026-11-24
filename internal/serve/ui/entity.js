@@ -17,6 +17,9 @@ import { verifyButton } from './reviewer.js';
 var GROUP = 24;
 var COMMITS = 6;
 
+// FOLD is how many changed lines of a body show without opening them.
+var FOLD = 8;
+
 // What a commit did, where it lists no fields.
 var KINDS = {
   bookkeeping: 'dates, stamps or reviews', created: 'created', removed: 'removed',
@@ -121,7 +124,7 @@ function draw(main, mine, e, ctx) {
     api.getHistory(e.id).then(function (h) {
       if (view !== now || same(read.history, h)) return;
       drawHistory(history, h);
-      drawSince(p.since, h.since_review, h.commits.length);
+      drawSince(p.since, h.since_review, h.commits.length, p.changed);
       ctx.ready();
     }, function (err) {
       if (view === now && !read.history.seen) fill(history, [el('h2', null, 'History'), problem(err)]);
@@ -154,14 +157,16 @@ export function parts(e, ctx, compact) {
   if (e.path) id.appendChild(copyButton('Copy path', word(e.path)));
   head.appendChild(id);
   if (lede) head.appendChild(el('p', { class: 'lede' }, fm.description));
+  var changed = el('span', { class: 'tag tag-superseded', hidden: true }, 'changed since review');
+  if (lede) head.lastChild.appendChild(changed);
 
   var since = el('section', { class: 'since', hidden: true });
   if (compact && Array.isArray(fm.verified) && fm.verified.length) {
-    api.getHistory(e.id).then(function (h) { drawSince(since, h.since_review); }, function () {});
+    api.getHistory(e.id).then(function (h) { drawSince(since, h.since_review, 0, changed); }, function () {});
   }
 
   return {
-    head: head, review: review(e), since: since,
+    head: head, review: review(e), since: since, changed: changed,
     body: body(e, ctx, compact, lede), links: links(e, ctx, H), attributes: attributes(e, t, lede, H)
   };
 }
@@ -185,6 +190,10 @@ function review(e) {
   line.appendChild(said(last ? (m && m.superseded ? 'last reviewed by' : 'reviewed by') : 'No review yet', last && last.by, last && last.at));
   var made = fm.generated || {};
   if (made.by) line.appendChild(said('written by', made.by, made.at));
+  // A write may be younger than the date the entity carries, which is the one
+  // staleness is judged by.
+  var dated = String(fm.updated || fm.created || '').slice(0, 10);
+  if (made.at && dated && String(made.at).slice(0, 10) > dated) line.appendChild(said('dated', '', dated));
   if (m && !e.stray) line.appendChild(verifyButton(e.id));
   box.appendChild(line);
   if (events.length > 1) {
@@ -371,9 +380,11 @@ function drawHistory(box, h) {
 }
 
 // drawSince shows what changed after the newest review, where one no longer
-// holds.
-function drawSince(box, s, commits) {
+// holds. flag is beside the description the page leads with, and says it is one
+// of the changes.
+function drawSince(box, s, commits, flag) {
   box.hidden = !s;
+  flag.hidden = !(s && s.found && s.fields.some(function (f) { return f.name === 'description' && f.after; }));
   if (!s) return;
   var head = el('p', { class: 'sincehead' });
   head.appendChild(said(s.found ? 'Changed since the review by' : s.holds ? 'Reviewed by' : 'The review no longer holds, by', s.by, s.at));
@@ -386,7 +397,9 @@ function drawSince(box, s, commits) {
       var dd = el('dd');
       if (f.before) dd.appendChild(el('del', null, f.before));
       if (f.before && f.after) dd.appendChild(tn(' '));
-      if (f.after) dd.appendChild(el('ins', null, f.after));
+      // The new description is the one the page leads with.
+      if (f.name === 'description' && f.after) dd.appendChild(tn(f.before ? ' rewritten, as above' : 'added, as above'));
+      else if (f.after) dd.appendChild(el('ins', null, f.after));
       else dd.appendChild(tn(' removed'));
       dl.appendChild(dd);
     });
@@ -398,7 +411,15 @@ function drawSince(box, s, commits) {
       var kind = { '+': 'add', '-': 'cut', '…': 'gap' }[l.op] || 'same';
       pre.appendChild(el('div', { class: 'l-' + kind }, (l.op === '…' ? '⋯' : l.op) + ' ' + (l.text || '')));
     });
-    nodes.push(pre);
+    var lines = s.body.filter(function (l) { return l.op === '+' || l.op === '-'; }).length;
+    if (lines <= FOLD) nodes.push(pre);
+    else {
+      // The body is on the page below, so a long difference is there to open.
+      var fold = el('details', { class: 'fold' });
+      fold.appendChild(el('summary', null, num(lines) + ' lines of the body changed'));
+      fold.appendChild(pre);
+      nodes.push(fold);
+    }
   }
   if (s.cut) nodes.push(el('p', { class: 'hint' }, 'The comparison is cut here. Read the rest with git.'));
   if (!s.fields.length && !s.body.length && !s.cut) nodes.push(el('p', { class: 'hint' }, 'Its content is the same as reviewed, under another shape of the type.'));

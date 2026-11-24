@@ -465,7 +465,8 @@ every such review under `superseded_verifications`. Trust is the review tier.
 **A type's list.** One row per entity with its markers, its trust, its own
 attributes (a base attribute it redeclares included), one count of distinct
 linked entities per relation, outgoing and incoming (counted off the graph
-`query --count` and `get --edges` read), its date and who wrote it. Each count opens what it
+`query --count` and `get --edges` read), the date staleness is judged by
+(`updated`, else `created`) and who wrote it. Each count opens what it
 counts. Any column sorts. Rows are drawn 300 at a time. Attributes that are
 empty or repeat the title or the date, the inherited `related`, `references` and
 `depends_on`, and the relations no row uses fold away until asked for (`base=1`).
@@ -491,8 +492,8 @@ reviewed it and when, who wrote it and why it carries each marker, and copies
 the `khub verify` command. The page asks for the reviewer's name the first time
 (one word, since a name with a space does not count toward trust) and keeps it in
 the browser's local storage, the one thing it keeps there. Where a review no longer holds, the page shows the
-fields and body lines that changed since the version reviewed, or says why git
-cannot tell. The body is rendered from a block tree the server parses: raw HTML
+fields and body lines that changed since the version reviewed (more than 8 lines
+of the body fold), or says why git cannot tell. The body is rendered from a block tree the server parses: raw HTML
 and comments are shown as text, only `http`, `https` and `mailto` links are
 kept, a relative link to another entity's file becomes a link inside the page,
 and so does a word or code span that is exactly an entity's id, or a slug only

@@ -4,6 +4,14 @@ Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+### Changed
+
+- **The served page names its dates and its parse errors.** The list column
+  Updated is Dated, the date staleness is judged by; an entity says its date
+  beside a younger write. A file that does not parse carries what the parser
+  says. The change since a review no longer repeats the description, and folds a
+  long difference of the body.
+
 ## [0.34.0] — 2026-11-24
 
 `khub serve` becomes the page a person reviews a workspace on. It opens on what

@@ -2,9 +2,11 @@ package explore
 
 import (
 	"fmt"
+	"path/filepath"
 	"strings"
 	"time"
 
+	"github.com/endgame-build/khub/internal/canon"
 	"github.com/endgame-build/khub/internal/integrity"
 	"github.com/endgame-build/khub/internal/introspect"
 	"github.com/endgame-build/khub/internal/omap"
@@ -68,7 +70,13 @@ func Findings(root string, shadows func(*schema.ResolvedSchema) []integrity.Flag
 		collect(name, len(list), func(i int) any { return of("", list[i], reason) })
 	}
 
-	abouts("malformed", report.Malformed, "The file does not parse")
+	collect("malformed", len(report.Malformed), func(i int) any {
+		path := report.Malformed[i]
+		if i >= findingLimit {
+			return of("", path, "") // counted, never listed
+		}
+		return of("", path, whyMalformed(root, resolved, path))
+	})
 	collect("incomplete", len(report.Incomplete), func(i int) any {
 		f := report.Incomplete[i]
 		return of(f.ID(), "", missing(f))
@@ -115,4 +123,41 @@ func Findings(root string, shadows func(*schema.ResolvedSchema) []integrity.Flag
 	out.Set("passed", report.Passed())
 	out.Set("buckets", buckets)
 	return out, nil
+}
+
+// reasonLimit caps a parser's message, which may quote the file.
+const reasonLimit = 200
+
+// whyMalformed is what the parser says of a file the scan could not parse. The
+// scan keeps the path alone, so the few listed are parsed once more.
+func whyMalformed(root string, resolved *schema.ResolvedSchema, path string) string {
+	const unknown = "The file does not parse"
+	text, err := canon.ReadTextIn(root, filepath.Join(root, filepath.FromSlash(path)))
+	if err == nil {
+		format := strings.TrimPrefix(filepath.Ext(path), ".")
+		err = parseAs(resolved, path, canon.NormalizeNewlines(text), format)
+	}
+	if err == nil {
+		return unknown
+	}
+	first, _, _ := strings.Cut(strings.TrimSpace(err.Error()), "\n")
+	if r := []rune(first); len(r) > reasonLimit {
+		first = string(r[:reasonLimit]) + "…"
+	}
+	if first == "" {
+		return unknown
+	}
+	return "It does not parse: " + first
+}
+
+func parseAs(resolved *schema.ResolvedSchema, path, text, format string) error {
+	for _, name := range resolved.Types.Keys() {
+		rtype, _ := resolved.Types.Get(name)
+		if rtype.Storage.Layout == schema.LayoutCollection && filepath.ToSlash(rtype.CollectionRelpath()) == path {
+			_, err := canon.LoadCollection(text, rtype.Storage.Fmt)
+			return err
+		}
+	}
+	_, _, err := canon.Parse(text, format)
+	return err
 }
