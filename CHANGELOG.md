@@ -4,6 +4,15 @@ Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+## [0.34.0] — 2026-11-24
+
+`khub serve` becomes the page a person reviews a workspace on. It opens on what
+needs attention, lists have facets and a side panel, an entity says who reviewed
+it and what changed since, and the copied `khub verify` command records the
+review in a terminal. The server stays read-only. Anything that read
+`/api/graph` from a running server has to move to `/api/overview`. The workspace
+format is unchanged, so no `khub upgrade` is needed.
+
 ### Changed
 
 - **`khub serve` is a review page.** Routed views replace Schema, Both, Graph,
