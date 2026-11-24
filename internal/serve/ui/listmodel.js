@@ -48,15 +48,34 @@ function textMatches(row, q) {
   });
 }
 
+// parseCount reads a count bound (`in:requirement.realized_in>=1`), or null.
+export function parseCount(spec) {
+  var m = /^((?:out|in):.+?)(>=|<=|!=|=|>|<)(\d+)$/.exec(spec || '');
+  return m ? { key: m[1], op: m[2], n: parseInt(m[3], 10) } : null;
+}
+
+function holds(v, op, n) {
+  switch (op) {
+    case '>=': return v >= n;
+    case '<=': return v <= n;
+    case '>': return v > n;
+    case '<': return v < n;
+    case '!=': return v !== n;
+    default: return v === n;
+  }
+}
+
 // filterRows keeps the rows passing every set filter (AND).
 export function filterRows(rowset, list) {
   var pair = list.attr ? attrPair(list.attr) : null;
+  var bound = list.count ? parseCount(list.count) : null;
   return (rowset.rows || []).filter(function (row) {
     if (list.q && !textMatches(row, list.q)) return false;
     if (list.rel && list.to) {
       var linked = (row.links && row.links[list.rel]) || [];
       if (linked.indexOf(list.to) === -1) return false;
     }
+    if (bound && !holds((row.counts && row.counts[bound.key]) || 0, bound.op, bound.n)) return false;
     if (pair && !attrMatches(row, pair.name, pair.value)) return false;
     if (list.status && !row[list.status]) return false;
     return true;

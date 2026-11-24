@@ -22,6 +22,22 @@ Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelo
   reload, back/forward or a pasted link restores it. The server stays
   read-only; the link/unlink command composer is gone with the views it served.
   On a 2,000-entity workspace a list loads in about 0.3 s.
+- **The overview is a layered diagram that never overlaps.** Types joined by
+  relations are framed as related groups and laid out in layers (dagre's
+  Sugiyama layout), relations running downward and routed around the rows
+  they cross; standalone types are gridded in their own frame; a relation to
+  any type points at its source's own "any type" box instead of a shared hub;
+  a relation from a type to itself is a `↻` tag beside its box; the base
+  relations every type inherits are not drawn. Group shapes and packing are
+  chosen to fit the canvas. Selecting a type fades everything outside its
+  neighbourhood; double-clicking it opens its list; a legend and a Fit button
+  sit with the diagram. A property test holds the no-overlap promise — boxes,
+  tags, relation labels and group frames — over the shipped presets and 300
+  generated schemas.
+- **The list filters by connection counts**, in `query --count`'s spelling:
+  `?count=in:requirement.realized_in=0` lists what nothing realizes. The header
+  row stays in view while a long list scrolls, the tab title names the page,
+  and focus moves to a newly opened page.
 - **`serve --aspect` is accepted for compatibility** and still printed on the
   URL; every value now opens the overview. Its help text says so — the one
   fixture byte change.
@@ -33,6 +49,10 @@ Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelo
   (what `khub schema base` prints), and a refusal from the server carries
   `field`, `expected` and `suggestion` when the error sets them, as the CLI's
   envelope does.
+- **dagre 3.1.3** (MIT, 48 KB, graphlib bundled), vendored byte-identical as
+  `internal/assets/dagre.min.js` and served at `/static/dagre.min.js`; it lays
+  out the overview. No network, DOM or string evaluation (an assets test holds
+  it to that).
 - **`github.com/yuin/goldmark` v1.8.7**, pure Go, used only by the new
   `internal/explore` package to parse entity bodies for the page (depguard
   keeps it there). Nothing on a write path depends on it.

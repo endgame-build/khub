@@ -40,7 +40,7 @@ function build() {
   return { model, schema, sch: m.buildSchemaGraph(schema, schema.edges, m.usedEdgeCounts(model), model.byType) };
 }
 
-test('every declared type is a box labelled with its entity count, base relations on `any`', () => {
+test('every declared type is a box labelled with its entity count, plus the base box', () => {
   const { sch } = build();
   const labels = Object.fromEntries(sch.nodes.map(n => [n.data.id, n.data.label]));
   assert.deepEqual(labels, {
@@ -50,21 +50,32 @@ test('every declared type is a box labelled with its entity count, base relation
   assert.ok(sch.nodes.find(n => n.data.id === 'schema:api').classes.includes('emptytype'));
 });
 
-test('derived inverses are not drawn; usage is counted, duplicates once', () => {
+test('derived inverses and base relations are not drawn; usage is counted, duplicates once', () => {
   const { sch } = build();
   const preds = sch.edges.map(e => e.data.predicate);
-  assert.deepEqual(preds, ['served_by', 'supersedes', 'provider', 'related']);
+  assert.deepEqual(preds, ['served_by', 'supersedes', 'provider']);
   const used = Object.fromEntries(sch.edges.map(e => [e.data.predicate, e.data.used]));
-  assert.deepEqual(used, { served_by: 2, supersedes: 1, provider: 0, related: 1 });
+  assert.deepEqual(used, { served_by: 2, supersedes: 1, provider: 0 });
   assert.ok(sch.edges.find(e => e.data.predicate === 'provider').classes.includes('unused'));
   assert.ok(sch.edges.find(e => e.data.predicate === 'provider').classes.includes('required'));
   assert.ok(sch.edges.find(e => e.data.predicate === 'supersedes').classes.includes('selfloop'));
 });
 
-test('layout: a ring below a dozen types, force layout from a dozen', () => {
-  assert.equal(m.schemaLayout(11), 'circle');
-  assert.equal(m.schemaLayout(12), 'cose');
-  assert.equal(m.schemaLayout(16), 'cose');
+test('a relation to any type points at its source\'s own "any type" box', () => {
+  const model = m.buildModel(graph);
+  const schema = m.indexSchema({ ...schemaPayload, edges: schemaPayload.edges.concat([
+    { predicate: 'affects', from: ['adr'], to: ['any'], kind: 'any', many: true, required: false, inverse: null, acyclic: false, derived: false },
+    { predicate: 'touches', from: ['use-case'], to: ['any'], kind: 'any', many: true, required: false, inverse: null, acyclic: false, derived: false }
+  ]) });
+  const sch = m.buildSchemaGraph(schema, schema.edges, m.usedEdgeCounts(model), model.byType);
+  const ghosts = sch.nodes.filter(n => n.data.schemaKind === 'ghost').map(n => [n.data.id, n.data.owner]);
+  assert.deepEqual(ghosts, [[m.ghostId('adr'), 'schema:adr'], [m.ghostId('use-case'), 'schema:use-case']]);
+  const affects = sch.edges.find(e => e.data.predicate === 'affects');
+  assert.equal(affects.data.target, m.ghostId('adr'));
+  assert.equal(affects.data.toType, 'any');
+  // adr/b relates to component/ledger: any-target usage sums across real targets.
+  assert.equal(affects.data.used, 0);
+  assert.deepEqual(m.relationDetails(sch, 'rel:adr.affects').to, 'any');
 });
 
 test('selection maps to diagram ids', () => {
@@ -73,7 +84,7 @@ test('selection maps to diagram ids', () => {
   assert.deepEqual(m.selectionIds(sch, 'type:any'), [m.SCHEMA_ANY]);
   assert.deepEqual(m.selectionIds(sch, 'type:nope'), []);
   assert.deepEqual(m.selectionIds(sch, 'rel:use-case.served_by'), ['schemaedge:schema:use-case served_by schema:component']);
-  assert.deepEqual(m.selectionIds(sch, 'rel:any.related'), ['schemaedge:schema-any related schema-any']);
+  assert.deepEqual(m.selectionIds(sch, 'rel:any.related'), []); // base relations are not drawn
   assert.deepEqual(m.selectionIds(sch, ''), []);
 });
 

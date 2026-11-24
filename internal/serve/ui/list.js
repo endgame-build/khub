@@ -8,7 +8,7 @@ import { el, fill, text } from './dom.js';
 import { markerTags, trustTag, notice } from './widgets.js';
 import {
   visibleColumns, columnByKey, filterRows, sortRows, countLine, linkTargets,
-  attrValues, columnTitle
+  attrValues, columnTitle, parseCount
 } from './listmodel.js';
 import { STATUSES, format, listRoute, entityRoute } from './route.js';
 
@@ -121,6 +121,27 @@ function build(main, rowset, route, ctx) {
   attrGroup.appendChild(ui.val);
   if ((rowset.attributes || []).length) bar.appendChild(attrGroup);
 
+  // How many: a relation column, a comparison, a number — the bound
+  // `khub query --count` takes. "→ realized_in = 0" lists what nothing realizes.
+  var applyCount = function () {
+    var n = parseInt(ui.cnum.value, 10);
+    if (!ui.ccol.value || !(n >= 0)) {
+      if (view.list.count) ctx.nav(listRoute(view.type, view.list, { count: '' }));
+      return;
+    }
+    ctx.nav(listRoute(view.type, view.list, { count: ui.ccol.value + ui.cop.value + n }));
+  };
+  ui.ccol = el('select', { 'aria-label': 'Count of relation', on: { change: applyCount } });
+  ui.cop = el('select', { 'aria-label': 'Comparison', on: { change: applyCount } });
+  [['=', '='], ['>=', '≥'], ['<=', '≤'], ['>', '>'], ['<', '<']].forEach(function (o) { ui.cop.appendChild(option(o[0], o[1])); });
+  ui.cnum = el('input', { type: 'number', min: 0, step: 1, class: 'cnum', 'aria-label': 'Count', on: { change: applyCount } });
+  var countGroup = el('span', { class: 'fgroup' });
+  countGroup.appendChild(el('span', { class: 'flabel' }, 'Count'));
+  countGroup.appendChild(ui.ccol);
+  countGroup.appendChild(ui.cop);
+  countGroup.appendChild(ui.cnum);
+  if ((rowset.relations || []).length) bar.appendChild(countGroup);
+
   ui.status = el('select', {
     'aria-label': 'Status',
     on: { change: function () { ctx.nav(listRoute(view.type, view.list, { status: ui.status.value })); } }
@@ -143,6 +164,8 @@ function build(main, rowset, route, ctx) {
     on: { click: function () {
       view.pendingRel = '';
       view.pendingAttr = '';
+      ui.ccol.value = '';
+      ui.cnum.value = '';
       ctx.nav(listRoute(view.type, { sort: view.list.sort, dir: view.list.dir, base: view.list.base }));
     } }
   }, 'Clear filters');
@@ -220,7 +243,18 @@ function update(route, ctx) {
     fill(ui.val, [option('', 'any value…')]);
     ui.val.disabled = true;
   }
-  ui.clear.disabled = !(list.q || list.rel || list.attr || list.status);
+  // The count bound's controls follow the address too; a column picked but
+  // not yet bounded survives a re-render.
+  var pendingCol = ui.ccol.value;
+  fill(ui.ccol, [option('', 'relation…')].concat(relCols.map(function (c) { return option(c.key, columnTitle(c)); })));
+  var bound = parseCount(list.count);
+  if (bound && !relCols.some(function (c) { return c.key === bound.key; })) {
+    var hiddenCol = columnByKey(rowset, bound.key);
+    if (hiddenCol) ui.ccol.appendChild(option(hiddenCol.key, columnTitle(hiddenCol)));
+  }
+  ui.ccol.value = bound ? bound.key : pendingCol;
+  if (bound) { ui.cop.value = bound.op; if (document.activeElement !== ui.cnum) ui.cnum.value = String(bound.n); }
+  ui.clear.disabled = !(list.q || list.rel || list.count || list.attr || list.status);
 
   var rows = sortRows(filterRows(rowset, list), list.sort, list.dir);
   text(ui.count, countLine(rows.length, rowset.total));

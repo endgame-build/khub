@@ -82,6 +82,18 @@ test('linked-entity, attribute and status filters combine with AND', () => {
   assert.deepEqual(ids(m.filterRows(rowset, { ...none, rel: 'out:related', to: 'adr/x' })), ['component/a']);
 });
 
+test('count bounds filter by how many entities a row links through a column', () => {
+  assert.deepEqual(ids(m.filterRows(rowset, { ...none, count: 'in:use-case.served_by=0' })), ['component/a', 'component/d']);
+  assert.deepEqual(ids(m.filterRows(rowset, { ...none, count: 'in:use-case.served_by>=2' })), ['component/b', 'component/c']);
+  assert.deepEqual(ids(m.filterRows(rowset, { ...none, count: 'out:system<1' })), ['component/c', 'component/d']);
+  assert.deepEqual(ids(m.filterRows(rowset, { ...none, count: 'out:system!=1' })), ['component/c', 'component/d']);
+  assert.deepEqual(ids(m.filterRows(rowset, { ...none, count: 'out:related>0' })), ['component/a']); // a hidden base column still bounds
+  // combines with the other filters
+  assert.deepEqual(ids(m.filterRows(rowset, { ...none, count: 'in:use-case.served_by>=2', status: 'draft' })), ['component/c']);
+  assert.equal(m.parseCount('nonsense'), null);
+  assert.deepEqual(m.parseCount('in:*.related>=10'), { key: 'in:*.related', op: '>=', n: 10 });
+});
+
 test('N of M, link targets and attribute values', () => {
   assert.equal(m.countLine(2, 4), '2 of 4');
   assert.equal(m.countLine(0, 0), '0 of 0');

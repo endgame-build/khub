@@ -13,12 +13,13 @@
   <nav id="crumbs" aria-label="Breadcrumb"></nav>
 </header>
 <main id="main" tabindex="-1"></main>
-<!-- Both tags carry src. The CSP forbids inline script, and the build gate in
-     internal/serve/serve_test.go fails on any tag lacking one — including a
-     mention inside a comment like this, which is why this note spells none.
-     The classic tag is not deferred and the module tag is, so the cytoscape
-     global is guaranteed to exist by the time app.js runs. -->
+<!-- Every tag carries src. The CSP forbids inline script, and the build gate
+     in internal/serve/serve_test.go fails on any tag lacking one — including
+     a mention inside a comment like this, which is why this note spells none.
+     The classic tags are not deferred and the module tag is, so the cytoscape
+     and dagre globals exist by the time app.js runs. -->
 <script src="/static/cytoscape.min.js"></script>
+<script src="/static/dagre.min.js"></script>
 <script type="module" src="/static/app.js"></script>
 </body>
 </html>

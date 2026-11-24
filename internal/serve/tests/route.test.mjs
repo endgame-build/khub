@@ -19,21 +19,23 @@ test('list: defaults are omitted, every parameter round-trips', () => {
   const plain = parse('#/type/component');
   assert.equal(plain.view, 'list');
   assert.equal(plain.type, 'component');
-  assert.deepEqual(plain.list, { sort: 'title', dir: 'asc', q: '', rel: '', to: '', attr: '', status: '', base: false });
+  assert.deepEqual(plain.list, { sort: 'title', dir: 'asc', q: '', rel: '', to: '', count: '', attr: '', status: '', base: false });
   assert.equal(format(plain), '#/type/component');
 
   const full = listRoute('use-case', null, {
     sort: 'in:requirement.use_cases', dir: 'desc', q: 'pay me', rel: 'out:served_by',
-    to: 'component/cmp-ledger', attr: 'trigger=human', status: 'incomplete', base: true
+    to: 'component/cmp-ledger', count: 'in:requirement.use_cases>=1', attr: 'trigger=human', status: 'incomplete', base: true
   });
   const h = format(full);
-  assert.equal(h, '#/type/use-case?sort=in%3Arequirement.use_cases&dir=desc&q=pay+me&rel=out%3Aserved_by&to=component%2Fcmp-ledger&attr=trigger%3Dhuman&status=incomplete&base=1');
+  assert.equal(h, '#/type/use-case?sort=in%3Arequirement.use_cases&dir=desc&q=pay+me&rel=out%3Aserved_by&to=component%2Fcmp-ledger&count=in%3Arequirement.use_cases%3E%3D1&attr=trigger%3Dhuman&status=incomplete&base=1');
   assert.deepEqual(parse(h), full);
 });
 
 test('list: half a pair and unknown values are dropped', () => {
-  const r = parse('#/type/x?rel=out:a&dir=sideways&status=shiny&base=yes&attr=noequals&zzz=1');
-  assert.deepEqual(r.list, { sort: 'title', dir: 'asc', q: '', rel: '', to: '', attr: '', status: '', base: false });
+  const r = parse('#/type/x?rel=out:a&dir=sideways&status=shiny&base=yes&attr=noequals&count=out:a~3&zzz=1');
+  assert.deepEqual(r.list, { sort: 'title', dir: 'asc', q: '', rel: '', to: '', count: '', attr: '', status: '', base: false });
+  assert.equal(parse('#/type/x?count=sideways:a%3D1').list.count, '');
+  assert.equal(parse('#/type/x?count=in:*.related%3D0').list.count, 'in:*.related=0');
   assert.deepEqual(parse('#/type/x?to=a/b').list.to, '');
   assert.equal(parse('#/type/x?rel=sideways:a&to=a/b').list.rel, '');
 });

@@ -35,8 +35,10 @@ function readColors() {
   };
 }
 
-// setCrumbs draws the breadcrumb trail: every item but the last is a link.
+// setCrumbs draws the breadcrumb trail — every item but the last is a link —
+// and names the browser tab after the page it ends on.
 function setCrumbs(items) {
+  if (items.length) document.title = items[items.length - 1].label + ' · khub';
   var nodes = [];
   items.forEach(function (it, i) {
     if (i) nodes.push(el('span', { class: 'sep', 'aria-hidden': 'true' }, '›'));
@@ -79,6 +81,9 @@ function render() {
   var key = viewKey(route);
   if (key !== lastKey) {
     main.scrollTop = 0;
+    // A new page: move focus to it, so a keyboard or screen-reader user
+    // starts at the top of what just opened rather than on a link that is gone.
+    if (lastKey) main.focus({ preventScroll: true });
     lastKey = key;
   }
   if (route.view !== 'overview') overview.unmount();

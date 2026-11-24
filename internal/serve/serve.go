@@ -185,9 +185,14 @@ func (s *server) page(w http.ResponseWriter, r *http.Request) {
 func (s *server) static(w http.ResponseWriter, r *http.Request) {
 	name := r.URL.Path[len("/static/"):]
 	w.Header().Set("X-Content-Type-Options", "nosniff")
-	if name == "cytoscape.min.js" {
+	switch name {
+	case "cytoscape.min.js":
 		w.Header().Set("Content-Type", "application/javascript; charset=utf-8")
 		_, _ = io.WriteString(w, assets.CytoscapeJS)
+		return
+	case "dagre.min.js":
+		w.Header().Set("Content-Type", "application/javascript; charset=utf-8")
+		_, _ = io.WriteString(w, assets.DagreJS)
 		return
 	}
 	// embed.FS rejects any path failing fs.ValidPath, so "../" cannot traverse

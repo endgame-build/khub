@@ -96,6 +96,13 @@ on the machine can reach it — and that is what the guards answer.
   overview's per-type counts and relation-usage tallies are summed on the page
   from the `viz` graph (`ui/model.js`), which is a picture, not a CLI fact. A
   list count or marker the page computed itself would be a second definition.
+- **The overview's picture is computed, never simulated.** `ui/layout.js`
+  places every box, tag, relation label and group frame with dagre (vendored
+  in `internal/assets`) from text-derived sizes; `cy.js` draws those positions
+  with no layout run and no dragging. `tests/layout.test.mjs` holds the
+  no-overlap property over the presets and 300 generated schemas — keep a new
+  diagram feature inside that model (a node the layout places) rather than
+  adding force-directed physics or renderer-placed decorations such as loops.
 - **Bodies reach the page as a block tree, never as markup.** `explore`
   parses Markdown (goldmark, confined there by depguard) into a dozen node
   kinds the page builds through `dom.js`; raw HTML arrives as text and only

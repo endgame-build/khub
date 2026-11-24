@@ -53,12 +53,19 @@ export var SCHEMA_ANY = 'schema-any';
 // schemaId keeps ontology nodes in their own namespace.
 export function schemaId(type) { return 'schema:' + type; }
 
+// ghostId is the "any type" box a type's any-target relations point at.
+// One per source type: a shared box would be a hub joining every type that
+// can point anywhere, and the layout would group unrelated types around it.
+export function ghostId(type) { return 'schema-anyof:' + type; }
+
 // buildSchemaGraph turns /api/schema's `edges` — which is introspect.EdgesView,
-// the same projection `khub schema edges` prints — into cytoscape elements.
+// the same projection `khub schema edges` prints — into the diagram's nodes
+// and edges (layout.js places them).
 //
-// Derived inverses are left out of the picture: each is its forward relation
-// read backwards, and drawing both doubles every arrow without adding
-// structure. The details panel names the inverse instead.
+// Left out of the picture, each for a reason the details panel makes up for:
+// derived inverses (each is its forward relation read backwards; the panel
+// names the inverse) and the base relations (declared on every type, so
+// drawing them is a complete graph; the base box's panel lists them).
 //
 // `used` counts instance edges per (fromType, predicate, toType) so a declared
 // relation nothing has ever used can be dimmed. That gap is the interesting
@@ -67,51 +74,41 @@ export function buildSchemaGraph(schema, edges, used, byType) {
   var nodes = [], seen = new Set(), out = [];
   // The count goes in the label, not into the node's area: a number is exact
   // and costs nothing, while sizes cannot express "958 versus 1".
-  function node(id, label, kind) {
+  function node(id, label, kind, extra) {
     if (seen.has(id)) return;
     seen.add(id);
-    var n = (byType && byType.get(label)) ? byType.get(label).length : 0;
-    var text = kind === 'any' ? 'any (base)' : label + '  ' + n;
-    nodes.push({
-      data: {
-        id: id, label: text,
-        type: label, schemaKind: kind, count: n,
-        // An explicit box width: cytoscape's `width: label` is deprecated and
-        // measures nothing until the first paint, so the layout and every edge
-        // endpoint would be computed against zero-sized boxes.
-        w: Math.round(text.length * 7.6 + 24)
-      },
-      classes: 'sch' + (kind !== 'any' && n === 0 ? ' emptytype' : '')
-    });
+    var n = (kind === 'type' && byType && byType.get(label)) ? byType.get(label).length : 0;
+    var data = {
+      id: id, label: kind === 'type' ? label + '  ' + n : label,
+      type: kind === 'type' ? label : '', schemaKind: kind, count: n
+    };
+    Object.assign(data, extra || {});
+    nodes.push({ data: data, classes: 'sch sch-' + kind + (kind === 'type' && n === 0 ? ' emptytype' : '') });
   }
   schema.declaredTypes.forEach(function (t) { node(schemaId(t), t, 'type'); });
+  node(SCHEMA_ANY, 'any (base)', 'any');
 
   edges.forEach(function (row) {
-    if (row.derived) return;
-    // `from: ["any"]` means a base relation, declared on every type. `to:
-    // ["any"]` means it may point at any type. They are different claims and
-    // `affects` is the second without being the first, so neither can stand in
-    // for the other.
-    var froms = row.from.indexOf('any') !== -1 ? [SCHEMA_ANY] : row.from.map(schemaId);
-    var tos = row.to.indexOf('any') !== -1 ? [SCHEMA_ANY] : row.to.map(schemaId);
-    if (froms[0] === SCHEMA_ANY || tos[0] === SCHEMA_ANY) node(SCHEMA_ANY, 'any', 'any');
-
-    froms.forEach(function (f) {
-      tos.forEach(function (t) {
-        var count = used ? countUses(used, f, row.predicate, t) : 0;
+    if (row.derived || row.from.indexOf('any') !== -1) return;
+    var toAny = row.to.indexOf('any') !== -1;
+    row.from.forEach(function (from) {
+      var f = schemaId(from);
+      var targets = toAny ? [{ id: ghostId(from), type: 'any' }] : row.to.map(function (t) { return { id: schemaId(t), type: t }; });
+      targets.forEach(function (tg) {
+        if (toAny) node(tg.id, 'any type', 'ghost', { owner: f });
+        var count = used ? countUses(used, from, row.predicate, toAny ? null : tg.type) : 0;
         out.push({
           data: {
-            id: 'schemaedge:' + f + ' ' + row.predicate + ' ' + t,
-            source: f, target: t,
+            id: 'schemaedge:' + f + ' ' + row.predicate + ' ' + tg.id,
+            source: f, target: tg.id,
             label: row.predicate + (row.many ? ' *' : ''),
             predicate: row.predicate, kind: row.kind,
             many: !!row.many, required: !!row.required,
             inverse: row.inverse || '', acyclic: !!row.acyclic,
-            used: count,
-            from: f === SCHEMA_ANY ? 'any' : f.slice(7)
+            used: count, from: from, toType: tg.type
           },
           classes: 'sch' + (row.required ? ' required' : '') + (count ? '' : ' unused') +
-            (f === t ? ' selfloop' : '')
+            (f === tg.id ? ' selfloop' : '')
         });
       });
     });
@@ -130,29 +127,17 @@ export function usedEdgeCounts(model) {
   return used;
 }
 
-// countUses resolves a declared edge against the instance tally. A wildcard
-// endpoint sums across every concrete type: instances of an `any` relation
-// point at real types, never at "any".
+// countUses resolves a declared edge against the instance tally. A null
+// target means "any type": instances of an any relation point at real types,
+// so their uses are summed across every concrete target.
 function countUses(used, from, predicate, to) {
-  var f = from === SCHEMA_ANY ? null : from.slice(7);
-  var t = to === SCHEMA_ANY ? null : to.slice(7);
-  if (f !== null && t !== null) return used.get(f + SEP + predicate + SEP + t) || 0;
+  if (to !== null) return used.get(from + SEP + predicate + SEP + to) || 0;
   var total = 0;
   used.forEach(function (n, key) {
     var parts = key.split(SEP);
-    if (parts[1] !== predicate) return;
-    if (f !== null && parts[0] !== f) return;
-    if (t !== null && parts[2] !== t) return;
-    total += n;
+    if (parts[0] === from && parts[1] === predicate) total += n;
   });
   return total;
-}
-
-// schemaLayout picks the diagram's layout by size: a ring
-// below a dozen types, where it cannot produce an outlier; a force layout at a
-// dozen or more, where a ring's circumference strings the labels out.
-export function schemaLayout(typeCount) {
-  return typeCount >= 12 ? 'cose' : 'circle';
 }
 
 // selectionIds maps an overview selection (`type:<name>` or
@@ -227,7 +212,7 @@ export function relationDetails(sch, sel) {
   var edges = sch.edges.filter(function (e) { return ids.indexOf(e.data.id) !== -1; });
   if (!edges.length) return null;
   var d = edges[0].data;
-  var to = edges.map(function (e) { return e.data.target === SCHEMA_ANY ? 'any' : e.data.target.slice(7); });
+  var to = edges.map(function (e) { return e.data.toType; });
   return {
     from: d.from, predicate: d.predicate, to: to.join(' | '), kind: d.kind,
     many: d.many, required: d.required, inverse: d.inverse, acyclic: d.acyclic,

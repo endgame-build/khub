@@ -7,9 +7,10 @@ import * as gfx from './cy.js';
 import { el, fill, clear, text } from './dom.js';
 import { notice } from './widgets.js';
 import {
-  buildModel, indexSchema, buildSchemaGraph, usedEdgeCounts, schemaLayout,
+  buildModel, indexSchema, buildSchemaGraph, usedEdgeCounts,
   selectionIds, typeDetails, baseDetails, relationDetails
 } from './model.js';
+import { layoutOntology, placeElements, BOX_H, GROUP_PAD } from './layout.js';
 import { format, typeRoute } from './route.js';
 
 var view = null; // { root, diagram, details, sch, schema, model, seq }
@@ -31,14 +32,21 @@ export function show(main, route, ctx) {
     return;
   }
   unmount();
-  var diagram = el('div', { id: 'cy', class: 'diagram', role: 'img', 'aria-label': 'Ontology diagram' });
+  var canvas = el('div', { id: 'cy', role: 'img', 'aria-label': 'Ontology diagram: types and the relations between them' });
+  var diagram = el('div', { class: 'diagram' });
+  diagram.appendChild(canvas);
+  diagram.appendChild(el('button', {
+    type: 'button', class: 'btn-ghost fitbtn', title: 'Fit the whole diagram in view',
+    on: { click: function () { gfx.fit(); } }
+  }, 'Fit'));
+  diagram.appendChild(legend());
   var details = el('aside', { class: 'details', 'aria-live': 'polite' });
   var root = el('section', { class: 'overview' });
   root.appendChild(diagram);
   root.appendChild(details);
   fill(main, [root]);
   fill(details, [el('p', { class: 'hint' }, 'Loading the ontology…')]);
-  view = { root: root, diagram: diagram, details: details, seq: 0, latest: route };
+  view = { root: root, canvas: canvas, details: details, seq: 0, latest: route };
   var mine = view;
 
   Promise.all([api.getGraph(), api.getSchema()]).then(function (r) {
@@ -54,8 +62,27 @@ export function show(main, route, ctx) {
   });
 }
 
+// legend explains the notation, as a diagram's legend should, beside it.
+function legend() {
+  var box = el('div', { class: 'legend', 'aria-label': 'Legend' });
+  [
+    ['solid', 'required relation'],
+    ['dashed', 'optional relation'],
+    ['dotted', 'declared, not used yet'],
+    ['ghost', 'any type'],
+    ['tag', 'relation to its own type']
+  ].forEach(function (row) {
+    var item = el('span', { class: 'lg' });
+    item.appendChild(el('span', { class: 'sw sw-' + row[0], 'aria-hidden': 'true' }));
+    item.appendChild(el('span', null, row[1]));
+    box.appendChild(item);
+  });
+  box.appendChild(el('span', { class: 'lg hint' }, 'Click a type for details · double-click to open its list'));
+  return box;
+}
+
 function draw(r, ctx) {
-  var diagram = view.diagram;
+  var canvas = view.canvas;
   var model = buildModel(r[0]);
   var schema = indexSchema(r[1]);
   // Present types first, sorted, then declared-but-empty ones — viz's own
@@ -68,11 +95,20 @@ function draw(r, ctx) {
   view.model = model;
   view.schema = schema;
   view.sch = sch;
-  gfx.mount(diagram, sch, gfx.buildStyle(typeOrder, ctx.colors, ctx.ink),
-    schemaLayout(schema.declaredTypes.length));
+  // Laid out once per load, against the canvas's shape, before drawing.
+  var aspect = canvas.clientWidth > 0 && canvas.clientHeight > 0 ? canvas.clientWidth / canvas.clientHeight : 1.2;
+  var lay = layoutOntology(window.dagre, sch, aspect);
+  gfx.mount(canvas, placeElements(sch, lay), gfx.buildStyle(typeOrder, ctx.colors, ctx.ink, BOX_H, GROUP_PAD));
   gfx.on(function (evt) {
     var sel = '';
-    if (evt.target === 'node') sel = 'type:' + (evt.data.schemaKind === 'any' ? 'any' : evt.data.type);
+    if (evt.target === 'node') {
+      var k = evt.data.schemaKind;
+      if (k === 'type' && evt.open) { ctx.nav(typeRoute(evt.data.type)); return; }
+      if (k === 'type') sel = 'type:' + evt.data.type;
+      else if (k === 'self') sel = 'rel:' + evt.data.from + '.' + evt.data.predicate;
+      else if (k === 'any' || k === 'ghost') sel = 'type:any';
+      else return;
+    }
     if (evt.target === 'edge') sel = 'rel:' + evt.data.from + '.' + evt.data.predicate;
     ctx.nav({ view: 'overview', sel: sel });
   });
@@ -113,7 +149,7 @@ function update(route, ctx) {
   fill(view.details, [
     el('div', { class: 'eyebrow' }, 'Ontology'),
     el('h2', null, view.schema.declaredTypes.length + ' types'),
-    el('p', { class: 'hint' }, 'Select a type in the diagram, or below, to see its attributes and relations. Select an arrow to see a relation.'),
+    el('p', { class: 'hint' }, 'Select a type in the diagram, or below, to see its attributes and relations; double-click it to open its list. Select an arrow to see a relation.'),
     index(ctx)
   ]);
 }
@@ -184,7 +220,13 @@ function renderType(d, ctx, isBase) {
   var relHead = ['Name', 'To', 'Cardinality', 'Inverse'];
   var relRow = function (r) {
     var name = el('span');
-    name.appendChild(el('span', { class: 'mono' }, r.predicate));
+    // Stored relations open their own panel: the keyboard path to what a
+    // click on an arrow shows.
+    if (!r.derived && !r.inherited) {
+      name.appendChild(el('a', { class: 'mono', href: format({ view: 'overview', sel: 'rel:' + d.name + '.' + r.predicate }) }, r.predicate));
+    } else {
+      name.appendChild(el('span', { class: 'mono' }, r.predicate));
+    }
     if (r.derived) name.appendChild(el('span', { class: 'tag', title: 'derived at read time from the inverse relation' }, 'derived'));
     return [name, typeLinks(r.to), (r.many ? 'many' : 'one') + (r.required ? ', required' : ''), r.inverse];
   };
