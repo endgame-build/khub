@@ -19,7 +19,8 @@ import (
 // markup sinks stays satisfiable, and the "content cannot run" guarantee lives
 // at the same choke point as every other string on the page.
 //
-// Kinds: p, h, ul, ol, li, pre, quote, hr, text, em, strong, code, a, br.
+// Kinds: p, h, ul, ol, li, pre, quote, hr, text, em, strong, code, a, br,
+// comment.
 
 // md is the CommonMark parser: no extensions, no HTML rendering — only the
 // AST is used.
@@ -32,23 +33,36 @@ var schemeRE = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9+.\-]*:`)
 // names, when it names one.
 type linkResolver func(dest string) (string, bool)
 
+// nameResolver turns a word of prose into the id of the entity it names
+// outright, when it names one.
+type nameResolver func(word string) (string, bool)
+
+// nameRE matches what an id or a slug can look like in prose. Only a word with
+// a dash or a slash in it counts, so an ordinary word that happens to be a
+// slug stays a word.
+var nameRE = regexp.MustCompile(`[\pL\pN][\pL\pN._/-]*[\pL\pN]`)
+
+func looksNamed(word string) bool { return strings.ContainsAny(word, "-/") }
+
 // BodyTree parses body into the block tree with no entity resolution: every
 // relative link becomes plain text. Used where no index is at hand.
-func BodyTree(body string) []any { return bodyTree(body, nil) }
+func BodyTree(body string) []any { return bodyTree(body, nil, nil) }
 
-func bodyTree(body string, resolve linkResolver) []any {
+func bodyTree(body string, resolve linkResolver, named nameResolver) []any {
 	if strings.TrimSpace(body) == "" {
 		return []any{}
 	}
 	src := []byte(body)
 	doc := md.Parser().Parse(text.NewReader(src))
-	w := &treeWriter{src: src, resolve: resolve}
+	w := &treeWriter{src: src, resolve: resolve, named: named}
 	return w.blocks(doc)
 }
 
 type treeWriter struct {
 	src     []byte
 	resolve linkResolver
+	named   nameResolver
+	inLink  bool // a link holds no other link
 }
 
 func block(kind string) *omap.Map {
@@ -112,7 +126,13 @@ func (w *treeWriter) block(n ast.Node) *omap.Map {
 		if v.HasClosure() {
 			raw += string(v.ClosureLine.Value(w.src))
 		}
-		return withChildren(block("p"), []any{textBlock("text", strings.TrimRight(raw, "\n"))})
+		raw = strings.TrimSpace(raw)
+		if inner, ok := strings.CutPrefix(raw, "<!--"); ok {
+			if inner, ok = strings.CutSuffix(inner, "-->"); ok && !strings.Contains(inner, "-->") {
+				return textBlock("comment", strings.TrimSpace(inner))
+			}
+		}
+		return withChildren(block("p"), []any{textBlock("text", raw)})
 	case *ast.LinkReferenceDefinition:
 		return nil // consumed by the links that use it
 	default:
@@ -164,7 +184,7 @@ func (w *treeWriter) inlines(n ast.Node) []any {
 func (w *treeWriter) inline(n ast.Node, push func(*omap.Map)) {
 	switch v := n.(type) {
 	case *ast.Text:
-		push(textBlock("text", string(v.Value(w.src))))
+		w.prose(string(v.Value(w.src)), push)
 		switch {
 		case v.HardLineBreak():
 			push(block("br"))
@@ -174,7 +194,12 @@ func (w *treeWriter) inline(n ast.Node, push func(*omap.Map)) {
 	case *ast.String:
 		push(textBlock("text", string(v.Value)))
 	case *ast.CodeSpan:
-		push(textBlock("code", w.plain(v)))
+		code := textBlock("code", w.plain(v))
+		if id, ok := w.names(w.plain(v)); ok {
+			push(withChildren(entityAnchor(id), []any{code}))
+			return
+		}
+		push(code)
 	case *ast.Emphasis:
 		kind := "em"
 		if v.Level >= 2 {
@@ -182,7 +207,7 @@ func (w *treeWriter) inline(n ast.Node, push func(*omap.Map)) {
 		}
 		push(withChildren(block(kind), w.inlines(v)))
 	case *ast.Link:
-		push(withChildren(w.anchor(string(v.Destination)), w.inlines(v)))
+		push(withChildren(w.anchor(string(v.Destination)), w.linked(v)))
 	case *ast.AutoLink:
 		a := w.anchor(string(v.URL(w.src)))
 		push(withChildren(a, []any{textBlock("text", string(v.Label(w.src)))}))
@@ -206,6 +231,50 @@ func (w *treeWriter) inline(n ast.Node, push func(*omap.Map)) {
 			w.inline(c, push)
 		}
 	}
+}
+
+// linked renders the inline children of a link.
+func (w *treeWriter) linked(n ast.Node) []any {
+	was := w.inLink
+	w.inLink = true
+	out := w.inlines(n)
+	w.inLink = was
+	return out
+}
+
+// names resolves a whole word or code span to the entity it names.
+func (w *treeWriter) names(word string) (string, bool) {
+	if w.named == nil || w.inLink || !looksNamed(word) {
+		return "", false
+	}
+	return w.named(word)
+}
+
+// prose pushes a run of text, with each word that names an entity as a link.
+func (w *treeWriter) prose(s string, push func(*omap.Map)) {
+	from := 0
+	for _, at := range nameRE.FindAllStringIndex(s, -1) {
+		id, ok := w.names(s[at[0]:at[1]])
+		if !ok {
+			continue
+		}
+		if at[0] > from {
+			push(textBlock("text", s[from:at[0]]))
+		}
+		push(withChildren(entityAnchor(id), []any{textBlock("text", s[at[0]:at[1]])}))
+		from = at[1]
+	}
+	if from < len(s) || s == "" {
+		push(textBlock("text", s[from:]))
+	}
+}
+
+// entityAnchor is a link to an entity's page.
+func entityAnchor(id string) *omap.Map {
+	a := block("a")
+	a.Set("href", "")
+	a.Set("entity", id)
+	return a
 }
 
 // anchor builds an `a` block. href survives only for http, https and mailto;

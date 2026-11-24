@@ -4,9 +4,11 @@
 // `fail`), emitted with a real HTTP status. One handler unwraps it so no caller
 // has to know the shape.
 
-function get(path) {
-  return fetch(path, { headers: { 'Accept': 'application/json' } })
-    .catch(function () {
+function get(path, signal) {
+  return fetch(path, { headers: { 'Accept': 'application/json' }, signal: signal })
+    .catch(function (cause) {
+      if (cause && cause.name === 'AbortError') throw cause; // the caller's own doing
+
       // The browser's own text ("Failed to fetch", "Load failed") says
       // nothing; the usual cause is that the operator stopped the server.
       var err = new Error('khub serve is not responding — is it still running?');
@@ -33,10 +35,17 @@ function get(path) {
     });
 }
 
-export function getGraph() { return get('/api/graph'); }
+function idPath(id) { return id.split('/').map(encodeURIComponent).join('/'); }
+
+export function getOverview() { return get('/api/overview'); }
+export function getFindings() { return get('/api/findings'); }
+export function getRecent(days) { return get('/api/recent?days=' + encodeURIComponent(days)); }
+export function getQueries() { return get('/api/queries'); }
+export function getQuery(name) { return get('/api/query/' + encodeURIComponent(name)); }
+export function search(q, signal) { return get('/api/search?q=' + encodeURIComponent(q), signal); }
 export function getSchema() { return get('/api/schema'); }
 export function getType(name) { return get('/api/type/' + encodeURIComponent(name)); }
-
 export function getRows(type) { return get('/api/rows/' + encodeURIComponent(type)); }
-
-export function getEntity(id) { return get('/api/entity/' + id.split('/').map(encodeURIComponent).join('/')); }
+export function getEntity(id) { return get('/api/entity/' + idPath(id)); }
+export function getHistory(id) { return get('/api/history/' + idPath(id)); }
+export function getReach(id) { return get('/api/reach/' + idPath(id)); }

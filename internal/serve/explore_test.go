@@ -49,7 +49,7 @@ func errorCode(t *testing.T, body string) string {
 }
 
 func TestRowsEndpointShape(t *testing.T) {
-	srv := httptest.NewServer(Handler(wsWithEntities(t)))
+	srv := httptest.NewServer(Handler(wsWithEntities(t), nil))
 	defer srv.Close()
 	var set struct {
 		Type       string           `json:"type"`
@@ -90,7 +90,7 @@ func TestRowsEndpointShape(t *testing.T) {
 
 func TestRowsEndpointRefusals(t *testing.T) {
 	root := wsWithEntities(t)
-	srv := httptest.NewServer(Handler(root))
+	srv := httptest.NewServer(Handler(root, nil))
 	defer srv.Close()
 
 	// An undeclared type: the same refusal /api/type gives.
@@ -120,7 +120,7 @@ func TestRowsEndpointBrokenSchema(t *testing.T) {
 		[]byte("ontology:\n  entities:\n    client: [this, is, not, a, type]\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	srv := httptest.NewServer(Handler(root))
+	srv := httptest.NewServer(Handler(root, nil))
 	defer srv.Close()
 	code, body := status(t, "GET", srv.URL+"/api/rows/client", "")
 	if code != http.StatusBadRequest || errorCode(t, body) == "" || errorCode(t, body) == "internal_error" {
@@ -136,7 +136,7 @@ func TestRowsEndpointHostileTitle(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	srv := httptest.NewServer(Handler(root))
+	srv := httptest.NewServer(Handler(root, nil))
 	defer srv.Close()
 	code, body := status(t, "GET", srv.URL+"/api/rows/client", "")
 	if code != http.StatusOK {
@@ -156,7 +156,7 @@ func TestRowsEndpointHostileTitle(t *testing.T) {
 
 func TestEntityEndpointExplorerFields(t *testing.T) {
 	root := wsWithEntities(t)
-	srv := httptest.NewServer(Handler(root))
+	srv := httptest.NewServer(Handler(root, nil))
 	defer srv.Close()
 	_, body := status(t, "GET", srv.URL+"/api/entity/opportunity/acme-deal", "")
 	// Existing fields first, unchanged in order; the explorer's appended.
@@ -197,7 +197,7 @@ func TestEntityEndpointRefusals(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	srv := httptest.NewServer(Handler(root))
+	srv := httptest.NewServer(Handler(root, nil))
 	defer srv.Close()
 	code, body := status(t, "GET", srv.URL+"/api/entity/acme", "")
 	if code != http.StatusConflict || errorCode(t, body) != "ambiguity_error" {
@@ -221,7 +221,7 @@ func TestEntityEndpointBodyIsText(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	srv := httptest.NewServer(Handler(root))
+	srv := httptest.NewServer(Handler(root, nil))
 	defer srv.Close()
 	var page struct {
 		BodyTree []json.RawMessage `json:"body_tree"`
@@ -242,7 +242,7 @@ func TestEntityEndpointBodyIsText(t *testing.T) {
 // The page's modules revalidate on every load, so an upgraded binary never
 // runs beside a cached module from the previous one.
 func TestUIAssetsRevalidate(t *testing.T) {
-	srv := httptest.NewServer(Handler(t.TempDir()))
+	srv := httptest.NewServer(Handler(t.TempDir(), nil))
 	defer srv.Close()
 	for _, name := range []string{"app.js", "route.js", "app.css"} {
 		resp, err := http.Get(srv.URL + "/static/" + name)
@@ -269,7 +269,7 @@ func TestEntityEndpointStrayIsExplicit(t *testing.T) {
 	if err := os.WriteFile(stray, []byte("---\ntype: person\ntitle: Notes\n---\nBody.\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	srv := httptest.NewServer(Handler(root))
+	srv := httptest.NewServer(Handler(root, nil))
 	defer srv.Close()
 	var page struct {
 		Stray      bool              `json:"stray"`
@@ -339,7 +339,7 @@ func TestRefusalCarriesMachineFields(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	srv := httptest.NewServer(Handler(root))
+	srv := httptest.NewServer(Handler(root, nil))
 	defer srv.Close()
 	type envelope struct {
 		Error map[string]json.RawMessage `json:"error"`
@@ -388,9 +388,9 @@ func containsStr(ss []string, s string) bool {
 // tree, and a cached one is the stale view the design refuses to show. The
 // vendored library is the deliberate exception that keeps browser caching.
 func TestAPIResponsesAreNotCached(t *testing.T) {
-	srv := httptest.NewServer(Handler(wsWithEntities(t)))
+	srv := httptest.NewServer(Handler(wsWithEntities(t), nil))
 	defer srv.Close()
-	for _, p := range []string{"/api/rows/client", "/api/entity/client/acme", "/api/graph", "/api/schema", "/api/rows/nosuchtype"} {
+	for _, p := range []string{"/api/rows/client", "/api/entity/client/acme", "/api/overview", "/api/findings", "/api/recent", "/api/queries", "/api/search?q=acme", "/api/schema", "/api/rows/nosuchtype"} {
 		resp, err := http.Get(srv.URL + p)
 		if err != nil {
 			t.Fatal(err)

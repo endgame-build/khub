@@ -1,7 +1,8 @@
-// Package explore builds the read models behind two of `khub serve`'s three
-// views: one type's rows with a count column per relation, and one entity's
-// page with its neighbours summarized and its body parsed into a safe block
-// tree. The third view, the ontology overview, draws from viz and introspect.
+// Package explore builds the read models behind `khub serve`'s page: the
+// workspace's totals, findings and changes for the review home, one type's rows
+// with a count column per relation, one entity's page with its body parsed into
+// a safe block tree, its history and its reach, search, and saved queries. The
+// schema the page draws comes from introspect.
 //
 // It is to the served page what introspect is to `khub schema`: every record
 // is derived from the live tree on each call, nothing is cached or written,

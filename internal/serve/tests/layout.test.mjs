@@ -18,10 +18,12 @@ const model = await load('model.js');
 const L = await load('layout.js');
 const fixtures = JSON.parse(await readFile(new URL('./fixtures/schemas.json', import.meta.url), 'utf8'));
 
-function graphOf(schema, counts) {
+function graphOf(schema, counts, relations) {
   const s = model.indexSchema({ types: schema.types.map(name => ({ name })), edges: schema.edges });
-  const byType = new Map(schema.types.map(t => [t, new Array((counts && counts[t]) || 0).fill('x')]));
-  return model.buildSchemaGraph(s, s.edges, new Map(), byType);
+  const numbers = model.indexOverview({
+    types: schema.types.map(name => ({ name, count: (counts && counts[name]) || 0 })), relations: relations || []
+  });
+  return model.buildSchemaGraph(s, s.edges, numbers);
 }
 
 const rect = (n, extraRight = 0) => ({ x1: n.x - n.w / 2, y1: n.y - n.h / 2, x2: n.x + n.w / 2 + extraRight, y2: n.y + n.h / 2 });
@@ -83,7 +85,8 @@ function checkLayout(name, sch, lay) {
   // A tag sits just right of its own box, in the same group.
   rects.filter(b => b.owner).forEach(t => {
     const o = rects.find(b => b.id === t.owner);
-    assert.ok(t.r.x1 > o.r.x2 && t.r.x1 - o.r.x2 < 20 && t.group === o.group, `${name}: tag ${t.id} sits beside ${t.owner}`);
+    const beside = lay.sideways ? t.r.y1 > o.r.y2 && Math.abs(t.r.x1 + t.r.x2 - o.r.x1 - o.r.x2) < 1e-6 : t.r.x1 > o.r.x2 && t.r.x1 - o.r.x2 < 20;
+    assert.ok(beside && t.group === o.group, `${name}: tag ${t.id} sits beside ${t.owner}`);
   });
   // Placed elements carry geometry cytoscape can draw; no loop is drawn.
   const placed = L.placeElements(sch, lay);
@@ -125,7 +128,7 @@ test('grouping: related types together, standalone types apart, no "any" hub', (
   assert.ok(lay.nodes.get(model.schemaId('use-case')).y < lay.nodes.get(model.schemaId('component')).y);
   const placed = L.placeElements(sch, lay);
   const frames = placed.nodes.filter(n => n.data.schemaKind === 'group').map(n => n.data.label);
-  assert.deepEqual(frames, ['Related types', 'Standalone types']);
+  assert.deepEqual(frames, ['Related types', 'Not linked to another type']);
 });
 
 test('segment geometry reproduces the polyline', () => {
@@ -184,13 +187,27 @@ function randomSchema(seed) {
     });
   }
   const counts = Object.fromEntries(types.map(t => [t, Math.floor(r() * 3000)]));
-  return { schema: { types, edges }, counts };
+  // Some relations to any type are in use, base ones included: they are drawn
+  // to the types they reach.
+  const relations = [];
+  edges.forEach(e => {
+    if (e.derived || e.to[0] !== 'any') return;
+    (e.from[0] === 'any' ? types : e.from).forEach(from => {
+      if (r() < 0.6) return;
+      const to = [...new Set(Array.from({ length: 1 + Math.floor(r() * 3) }, () => pick(types)))];
+      relations.push({ from, predicate: e.predicate, links: to.length, have: 1, total: 1, to: to.map(type => ({ type, links: 1 })) });
+    });
+  });
+  return { schema: { types, edges }, counts, relations };
 }
 
 test('300 generated schemas: the picture never overlaps', () => {
   for (let seed = 1; seed <= 300; seed++) {
-    const { schema, counts } = randomSchema(seed);
-    const sch = graphOf(schema, counts);
-    checkLayout(`seed ${seed}`, sch, L.layoutOntology(dagre, sch, [0.7, 1.2, 1.9][seed % 3]));
+    const { schema, counts, relations } = randomSchema(seed);
+    const sch = graphOf(schema, counts, relations);
+    const aspect = [0.7, 1.2, 1.9][seed % 3];
+    checkLayout(`seed ${seed}`, sch, L.layoutOntology(dagre, sch, aspect));
+    const at = model.mostConnected(sch);
+    checkLayout(`seed ${seed} around ${at}`, model.focusOn(sch, at), L.layoutOntology(dagre, model.focusOn(sch, at), aspect, true));
   }
 });

@@ -1,6 +1,7 @@
 package explore
 
 import (
+	"fmt"
 	"net/url"
 	"path"
 	"strings"
@@ -10,6 +11,8 @@ import (
 	"github.com/endgame-build/khub/internal/errs"
 	"github.com/endgame-build/khub/internal/index"
 	"github.com/endgame-build/khub/internal/omap"
+	"github.com/endgame-build/khub/internal/project"
+	"github.com/endgame-build/khub/internal/values"
 )
 
 // Page is what one entity's view adds to the record `khub get --edges` prints
@@ -70,14 +73,11 @@ func Page(root, id string, now time.Time) (*omap.Map, error) {
 			add(key, rid, s.neighbour(n))
 		}
 	}
-	isBase := func(predicate string) bool {
-		return s.resolved.BaseRelations != nil && s.resolved.BaseRelations.Has(predicate)
-	}
 	for _, g := range s.g.PredicateGroups(node) {
 		if g.Out {
 			continue
 		}
-		key := columnKey(false, g.SourceType, g.Predicate, isBase(g.Predicate))
+		key := columnKey(false, g.SourceType, g.Predicate, isBase(s.resolved, g.Predicate))
 		for _, n := range g.Nodes {
 			add(key, n.ID(), s.neighbour(n))
 		}
@@ -104,9 +104,43 @@ func Page(root, id string, now time.Time) (*omap.Map, error) {
 
 	out := omap.New()
 	out.Set("markers", s.markers(node).record())
-	out.Set("body_tree", bodyTree(s.idx.Body[node], s.linkResolver(node)))
+	out.Set("reasons", s.reasons(node))
+	out.Set("body_tree", bodyTree(s.idx.Body[node], s.linkResolver(node), s.nameResolver(node)))
 	out.Set("neighbours", groups)
+	out.Set("malformed", strList(s.malformed))
 	return out, nil
+}
+
+// reasons says, per marker that is set, what in the entity set it.
+func (s *snapshot) reasons(node index.Node) *omap.Map {
+	meta := s.idx.Meta[node]
+	m := s.markers(node)
+	out := omap.New()
+	if i, ok := s.incomplete[node]; ok {
+		out.Set("incomplete", missing(i))
+	}
+	if m.Orphan {
+		out.Set("orphan", "No relation joins it to another entity")
+	}
+	if m.Expired {
+		raw, _ := meta.Get("stale_after")
+		out.Set("expired", "Its stale_after, "+values.Str(raw)+", has passed")
+	}
+	if project.AgeStale(meta, s.now, s.staleDays, nil) {
+		date, source := project.EffectiveDate(meta, nil)
+		if date == nil {
+			out.Set("stale", "Its "+source+" holds no date")
+		} else {
+			out.Set("stale", fmt.Sprintf("Its date (%s, %s) is more than %d days old", source, date.Format("2006-01-02"), s.staleDays))
+		}
+	}
+	if m.Superseded {
+		out.Set("superseded", "Its content changed after its newest review, so the review no longer holds")
+	}
+	if m.Draft {
+		out.Set("draft", "Its status is draft, so check does not judge it")
+	}
+	return out
 }
 
 // neighbour is one resolved linked entity, in the field order page_test.go pins.
@@ -130,6 +164,25 @@ func unresolved(target string) *omap.Map {
 	m.Set("title", "")
 	m.Set("summary", "")
 	return m
+}
+
+// nameResolver resolves a word of the body that is exactly another entity's
+// id, or a slug only one entity has. The entity's own name stays text.
+func (s *snapshot) nameResolver(node index.Node) nameResolver {
+	return func(word string) (string, bool) {
+		n := index.Node{}
+		if typ, slug, ok := strings.Cut(word, "/"); ok {
+			n = index.Node{Type: typ, Slug: slug}
+		} else if types := s.idx.TypesBySlug[word]; len(types) == 1 {
+			for typ := range types {
+				n = index.Node{Type: typ, Slug: word}
+			}
+		}
+		if n == node || !s.idx.Nodes[n] {
+			return "", false
+		}
+		return n.ID(), true
+	}
 }
 
 // linkResolver resolves a body's relative link against the entity's own file:

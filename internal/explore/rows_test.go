@@ -38,7 +38,7 @@ func TestRowsShapeAndOrder(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if want := []string{"type", "total", "attributes", "relations", "rows"}; !eq(set.Keys(), want) {
+	if want := []string{"type", "total", "attributes", "relations", "rows", "malformed"}; !eq(set.Keys(), want) {
 		t.Fatalf("RowSet keys %v, want %v", set.Keys(), want)
 	}
 	if get(t, set, "total") != 3 {
@@ -66,7 +66,7 @@ func TestRowsShapeAndOrder(t *testing.T) {
 		t.Fatalf("row order %v, want %v", ids, want)
 	}
 	row := rowByID(t, set, "component/cmp-ledger")
-	want := []string{"id", "slug", "title", "draft", "stale", "orphan", "incomplete", "trust", "attrs", "counts", "links"}
+	want := []string{"id", "slug", "title", "draft", "stale", "orphan", "incomplete", "expired", "superseded", "trust", "updated", "by", "attrs", "counts", "links"}
 	if !eq(row.Keys(), want) {
 		t.Fatalf("Row keys %v, want %v", row.Keys(), want)
 	}
@@ -174,19 +174,25 @@ func TestRowsEncode(t *testing.T) {
 	}
 }
 
-// A file that does not parse would silently shrink every count; the view
-// refuses instead, as viz does, and names the file.
-func TestRowsRefuseMalformedScan(t *testing.T) {
+// A file that does not parse is named, and the rest of the workspace answers.
+func TestMalformedFileIsNamed(t *testing.T) {
 	root := buildHubWS(t)
 	writeFile(t, filepath.Join(root, "knowledge", "components", "cmp-broken.md"), "---\ntype: component\ntitle: [unclosed\n---\n")
-	for name, call := range map[string]func() error{
-		"rows": func() error { _, err := Rows(root, "component", now); return err },
-		"page": func() error { _, err := Page(root, "component/cmp-ledger", now); return err },
+	for name, call := range map[string]func() (*omap.Map, error){
+		"rows":     func() (*omap.Map, error) { return Rows(root, "component", now) },
+		"page":     func() (*omap.Map, error) { return Page(root, "component/cmp-ledger", now) },
+		"overview": func() (*omap.Map, error) { return Overview(root, now) },
+		"find":     func() (*omap.Map, error) { return Find(root, "ledger", now) },
+		"recent":   func() (*omap.Map, error) { return Recent(root, 7, now) },
 	} {
-		err := call()
-		var located *errs.Located
-		if !errors.As(err, &located) || located.Code != "malformed_projection" || !strings.Contains(located.Message, "cmp-broken.md") {
-			t.Errorf("%s: want malformed_projection naming the file, got %v", name, err)
+		out, err := call()
+		if err != nil {
+			t.Errorf("%s: %v", name, err)
+			continue
+		}
+		files := get(t, out, "malformed").([]any)
+		if len(files) != 1 || !strings.HasSuffix(files[0].(string), "cmp-broken.md") {
+			t.Errorf("%s malformed = %v", name, files)
 		}
 	}
 }

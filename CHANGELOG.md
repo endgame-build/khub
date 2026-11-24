@@ -6,66 +6,46 @@ Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelo
 
 ### Changed
 
-- **`khub serve` is an ontology explorer: three routed views replace Schema,
-  Both, Graph, List and the side panel.** The overview draws the declared
-  types and relations, with the selected type's own attributes and relations
-  (the inherited base folded away) or the selected relation's cardinality,
-  inverse and usage beside it. A type's list has one row per entity with its
-  draft, stale, orphan and incomplete markers, its trust tier, its own
-  attributes and one count of distinct linked entities per relation, outgoing
-  and incoming, counted off the graph `query --count` reads, sortable by any column and
-  filterable by an entity linked through one relation, an attribute value, a
-  marker and free text. An entity's page shows its attributes, verification
-  history, its body rendered as formatted text, and every connection grouped
-  by relation and direction, each neighbour with its type, title, markers and
-  a one-line summary. Every view has its own address in the URL fragment, so a
-  reload, back/forward or a pasted link restores it. The server stays
-  read-only; the link/unlink command composer and the entity search box are
-  gone with the views they served.
-  On a 2,000-entity workspace a list loads in about 0.3 s.
-- **The overview is a layered diagram that never overlaps.** Types joined by
-  relations are framed as related groups and laid out in layers (dagre's
-  Sugiyama layout), relations running downward and routed around the rows
-  they cross; standalone types are gridded in their own frame; a relation to
-  any type points at its source's own "any type" box instead of a shared hub;
-  a relation from a type to itself is a `↻` tag beside its box; the base
-  relations every type inherits are not drawn. Group shapes and packing are
-  chosen to fit the canvas. Selecting a type fades everything outside its
-  neighbourhood; double-clicking it opens its list; a legend and a Fit button
-  sit with the diagram. A property test holds the no-overlap promise — boxes,
-  tags, relation labels and group frames — over the shipped presets and 300
-  generated schemas.
-- **The list filters by connection counts**, in `query --count`'s spelling:
-  `?count=in:requirement.realized_in=0` lists what nothing realizes. The header
-  row stays in view while a long list scrolls, the tab title names the page,
-  and focus moves to a newly opened page.
-- **The explorer answers a reviewer's questions about what it shows.** A type's
-  panel carries its capture cue and the incoming relations that declare no
-  inverse; a relation's panel says how many entities have one and how many do
-  not, each a link to them. A list filters by trust tier, shows a base
-  attribute the type redeclares (a status with its own values), folds the
-  relation columns no row uses, and makes every count the way to what it
-  counts. An entity's page leads with its description, links the entities its
-  attributes name, and copies its id, its path and its verify command.
-- **The explorer keeps the reader's place.** Back brings back a list's scroll
-  and rows and the diagram's zoom; a breadcrumb returns to the list as it was
-  filtered; keyboard focus survives a sort and follows a choice into the panel;
-  the diagram lays itself out again when the window changes shape and never
-  opens too small to read. A list draws 300 rows at a time: one of 48,643
-  entities shows its first rows in about 3 s instead of 21 to 51 s.
-- **The header and the tab title name the workspace** (`workspace` on
-  `/api/schema`: the name `init` recorded, else the directory's).
+- **`khub serve` is a review page.** Routed views replace Schema, Both, Graph,
+  List and the side panel, each with its own address in the URL fragment, so a
+  reload, back/forward or a pasted link restores it and Back restores the place
+  in it. The page is specified in `docs/cli.md`, "The served page". The server
+  stays read-only; the link/unlink command composer is gone.
+  - It opens on what needs attention: unreviewed, incomplete, changed since
+    review, expired, orphan, draft and stale entities by type, the findings
+    `check` fails on, the changes of the last days, each type's review share and
+    largest gap, and the saved queries.
+  - Search in the header finds an exact id or alias, then text.
+  - A type's list has facets with counts, chips for what is applied, the
+    matching `khub query` to copy, counts that open what they count, and a side
+    panel to read an entity beside the rows (`j`, `k`, Enter, Esc). A list draws
+    300 rows at a time.
+  - An entity leads with its description and a review bar: who reviewed it, who
+    wrote it, why it carries each marker, what changed since the review, and the
+    verify command. Its links are rows by relation; its history and what it
+    reaches through other entities stand beside them.
+  - The ontology is a layered diagram in which nothing overlaps, held by a
+    property test over the shipped presets and 300 generated schemas. A schema
+    too dense to read whole opens on one type and its neighbors. A relation to
+    any type is drawn to the types it reaches, a base relation where it is used.
+  - A file that does not parse is named in a banner instead of failing every
+    view. A view reads the workspace again when its window comes to the front,
+    and an unchanged one stays as it is.
+  - The header and the tab title name the workspace.
 - **`serve --aspect` is accepted for compatibility** and still printed on the
-  URL; every value now opens the overview. Its help text says so — the one
+  URL; every value now opens the ontology overview, which is the diagram. Its help text says so — the one
   fixture byte change.
 
 ### Added
 
-- **`GET /api/rows/<type>`**, and `markers`, `body_tree` and `neighbours` on
-  `/api/entity/<id>` after the existing fields. `/api/schema` gains `base`
-  (what `khub schema base` prints), and a refusal from the server carries
-  `field`, `expected` and `suggestion` when the error sets them, as the CLI's
-  envelope does.
+- **Endpoints behind the page**: `/api/overview`, `/api/findings`,
+  `/api/recent`, `/api/search`, `/api/queries`, `/api/query/<name>`,
+  `/api/rows/<type>`, `/api/history/<id>` and `/api/reach/<id>`. `/api/entity/<id>`
+  gains `markers`, `reasons`, `body_tree`, `neighbours` and `malformed` after the
+  existing fields, and `stray` on a file the graph does not hold; `/api/schema` gains `base`, `workspace` and each type's
+  `when`; a refusal carries `field`, `expected` and `suggestion` when the error
+  sets them, as the CLI's envelope does. `/api/graph` is removed with the views
+  that drew it.
 - **dagre 3.1.3** (MIT, 48 KB, graphlib bundled), vendored byte-identical as
   `internal/assets/dagre.min.js` and served at `/static/dagre.min.js`; it lays
   out the overview. No network, DOM or string evaluation (an assets test holds

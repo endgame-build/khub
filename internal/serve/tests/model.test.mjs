@@ -5,20 +5,12 @@ import { readFile } from 'node:fs/promises';
 const code = await readFile(new URL('../ui/model.js', import.meta.url), 'utf8');
 const m = await import('data:text/javascript;base64,' + Buffer.from(code).toString('base64'));
 
-const graph = {
-  nodes: [
-    { data: { id: 'use-case/pay', type: 'use-case' } },
-    { data: { id: 'use-case/refund', type: 'use-case' } },
-    { data: { id: 'component/ledger', type: 'component' } },
-    { data: { id: 'adr/a', type: 'adr' } },
-    { data: { id: 'adr/b', type: 'adr' } }
-  ],
-  edges: [
-    { data: { source: 'use-case/pay', target: 'component/ledger', label: 'served_by' } },
-    { data: { source: 'use-case/pay', target: 'component/ledger', label: 'served_by' } }, // duplicate record
-    { data: { source: 'use-case/refund', target: 'component/ledger', label: 'served_by' } },
-    { data: { source: 'adr/b', target: 'adr/a', label: 'supersedes' } },
-    { data: { source: 'adr/b', target: 'component/ledger', label: 'related' } }
+const overview = {
+  types: [{ name: 'use-case', count: 2 }, { name: 'component', count: 1 }, { name: 'adr', count: 2 }, { name: 'api', count: 0 }],
+  relations: [
+    { from: 'use-case', predicate: 'served_by', base: false, links: 2, have: 2, total: 2, to: [{ type: 'component', links: 2 }] },
+    { from: 'adr', predicate: 'supersedes', base: false, links: 1, have: 1, total: 2, to: [{ type: 'adr', links: 1 }] },
+    { from: 'api', predicate: 'provider', base: false, links: 0, have: 0, total: 0, to: [] }
   ]
 };
 const schemaPayload = {
@@ -34,10 +26,10 @@ const schemaPayload = {
   ]
 };
 
-function build() {
-  const model = m.buildModel(graph);
+function build(more) {
+  const numbers = m.indexOverview({ types: overview.types, relations: overview.relations.concat(more || []) });
   const schema = m.indexSchema(schemaPayload);
-  return { model, schema, sch: m.buildSchemaGraph(schema, schema.edges, m.usedEdgeCounts(model), model.byType) };
+  return { numbers, schema, sch: m.buildSchemaGraph(schema, schema.edges, numbers) };
 }
 
 test('every declared type is a box labelled with its entity count, plus the base box', () => {
@@ -50,7 +42,7 @@ test('every declared type is a box labelled with its entity count, plus the base
   assert.ok(sch.nodes.find(n => n.data.id === 'schema:api').classes.includes('emptytype'));
 });
 
-test('derived inverses and base relations are not drawn; usage is counted, duplicates once', () => {
+test('derived inverses and unused base relations are not drawn; usage is counted', () => {
   const { sch } = build();
   const preds = sch.edges.map(e => e.data.predicate);
   assert.deepEqual(preds, ['served_by', 'supersedes', 'provider']);
@@ -61,21 +53,39 @@ test('derived inverses and base relations are not drawn; usage is counted, dupli
   assert.ok(sch.edges.find(e => e.data.predicate === 'supersedes').classes.includes('selfloop'));
 });
 
-test('a relation to any type points at its source\'s own "any type" box', () => {
-  const model = m.buildModel(graph);
-  const schema = m.indexSchema({ ...schemaPayload, edges: schemaPayload.edges.concat([
+test('a relation to any type is drawn to the types it reaches, else to its own "any type" box', () => {
+  const edges = schemaPayload.edges.concat([
     { predicate: 'affects', from: ['adr'], to: ['any'], kind: 'any', many: true, required: false, inverse: null, acyclic: false, derived: false },
     { predicate: 'touches', from: ['use-case'], to: ['any'], kind: 'any', many: true, required: false, inverse: null, acyclic: false, derived: false }
+  ]);
+  const schema = m.indexSchema({ ...schemaPayload, edges });
+  const numbers = m.indexOverview({ types: overview.types, relations: overview.relations.concat([
+    { from: 'adr', predicate: 'affects', base: false, links: 3, have: 2, total: 2, to: [{ type: 'use-case', links: 1 }, { type: 'component', links: 2 }] }
   ]) });
-  const sch = m.buildSchemaGraph(schema, schema.edges, m.usedEdgeCounts(model), model.byType);
+  const sch = m.buildSchemaGraph(schema, schema.edges, numbers);
   const ghosts = sch.nodes.filter(n => n.data.schemaKind === 'ghost').map(n => [n.data.id, n.data.owner]);
-  assert.deepEqual(ghosts, [[m.ghostId('adr'), 'schema:adr'], [m.ghostId('use-case'), 'schema:use-case']]);
-  const affects = sch.edges.find(e => e.data.predicate === 'affects');
-  assert.equal(affects.data.target, m.ghostId('adr'));
-  assert.equal(affects.data.toType, 'any');
-  // adr/b relates to component/ledger: any-target usage sums across real targets.
-  assert.equal(affects.data.used, 0);
-  assert.deepEqual(m.relationDetails(sch, 'rel:adr.affects').to, 'any');
+  assert.deepEqual(ghosts, [[m.ghostId('use-case'), 'schema:use-case']]);
+  assert.deepEqual(sch.edges.filter(e => e.data.predicate === 'affects').map(e => [e.data.target, e.data.used]),
+    [['schema:use-case', 1], ['schema:component', 2]]);
+  assert.equal(sch.edges.find(e => e.data.predicate === 'touches').data.target, m.ghostId('use-case'));
+  assert.equal(m.relationDetails(sch, 'rel:adr.affects').to, 'use-case | component');
+  assert.equal(m.relationDetails(sch, 'rel:adr.affects').used, 3);
+});
+
+test('a base relation is drawn where it is used', () => {
+  const { sch } = build([{ from: 'adr', predicate: 'related', base: true, links: 1, have: 1, total: 2, to: [{ type: 'component', links: 1 }] }]);
+  const base = sch.edges.filter(e => e.data.predicate === 'related');
+  assert.deepEqual(base.map(e => [e.data.from, e.data.toType, e.classes.includes('base')]), [['adr', 'component', true]]);
+});
+
+test('focus keeps one type, its neighbours and the relations between them', () => {
+  const { sch } = build();
+  const f = m.focusOn(sch, 'component');
+  assert.deepEqual(f.nodes.map(n => n.data.id), ['schema:use-case', 'schema:component', 'schema:api']);
+  assert.deepEqual(f.edges.map(e => e.data.predicate), ['served_by', 'provider']);
+  assert.equal(m.mostConnected(sch), 'use-case'); // meets component; the first declared of equals
+  const empty = m.buildSchemaGraph(m.indexSchema(schemaPayload), schemaPayload.edges, m.indexOverview({ types: overview.types, relations: [] }));
+  assert.equal(m.mostConnected(empty), 'component'); // nothing in use: what the schema joins most
 });
 
 test('selection maps to diagram ids', () => {
@@ -118,25 +128,21 @@ test('details panels: type, base and relation', () => {
 });
 
 test('incoming relations: the ones no declared inverse already lists', () => {
-  const { schema, model } = build();
-  const used = m.usedEdgeCounts(model);
+  const { schema, numbers } = build();
   // served_by declares an inverse, so component lists it as a derived relation
-  assert.deepEqual(m.incomingRelations(schema, 'component', used), [
+  assert.deepEqual(m.incomingRelations(schema, 'component', numbers), [
     { predicate: 'provider', from: 'api', many: false, required: true, used: 0 }
   ]);
   // a relation to any type comes in everywhere but from its own type
   const any = m.indexSchema({ ...schemaPayload, edges: schemaPayload.edges.concat([
     { predicate: 'affects', from: ['adr'], to: ['any'], kind: 'any', many: true, required: false, inverse: null, acyclic: false, derived: false }
   ]) });
-  assert.deepEqual(m.incomingRelations(any, 'use-case', used).map(r => r.predicate), ['affects']);
-  assert.deepEqual(m.incomingRelations(any, 'adr', used), []);
+  assert.deepEqual(m.incomingRelations(any, 'use-case', numbers).map(r => r.predicate), ['affects']);
+  assert.deepEqual(m.incomingRelations(any, 'adr', numbers), []);
 });
 
-test('coverage counts the entities that have a relation, self-links aside', () => {
-  const { model } = build();
-  assert.deepEqual(m.relationCoverage(model, 'use-case', 'served_by'), { have: 2, total: 2 });
-  assert.deepEqual(m.relationCoverage(model, 'adr', 'supersedes'), { have: 1, total: 2 });
-  assert.deepEqual(m.relationCoverage(model, 'api', 'provider'), { have: 0, total: 0 });
-  const selfish = m.buildModel({ nodes: graph.nodes, edges: [{ data: { source: 'adr/a', target: 'adr/a', label: 'supersedes' } }] });
-  assert.deepEqual(m.relationCoverage(selfish, 'adr', 'supersedes'), { have: 0, total: 2 });
+test('a relation nothing has used reads as zero', () => {
+  const { numbers } = build();
+  assert.deepEqual(m.relationOf(numbers, 'use-case', 'served_by').have, 2);
+  assert.deepEqual(m.relationOf(numbers, 'x', 'y'), { from: 'x', predicate: 'y', links: 0, have: 0, total: 0, to: [], base: false });
 });

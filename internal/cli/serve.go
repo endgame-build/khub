@@ -16,6 +16,8 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/endgame-build/khub/internal/errs"
+	"github.com/endgame-build/khub/internal/integrity"
+	"github.com/endgame-build/khub/internal/schema"
 	"github.com/endgame-build/khub/internal/serve"
 )
 
@@ -55,8 +57,8 @@ func registerServe(root *cobra.Command) {
 					bound = addr.Port
 				}
 				// The aspect rides on the printed URL so existing invocations
-				// and bookmarks keep working; the page ignores it and always
-				// lands on the ontology overview. Which view is open lives in
+				// and bookmarks keep working; every value of it opens the
+				// ontology diagram. Which view is open lives in
 				// the URL fragment the page writes.
 				page := "/"
 				if cmd.Flags().Changed("aspect") {
@@ -66,7 +68,9 @@ func registerServe(root *cobra.Command) {
 
 				ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 				defer stop()
-				return serve.Serve(ctx, ln, ws)
+				return serve.Serve(ctx, ln, ws, func(resolved *schema.ResolvedSchema) []integrity.FlagShadow {
+					return shadowedFields(cmd.Root(), resolved)
+				})
 			})
 		})
 	cmd.Args = clickArity(0)

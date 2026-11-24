@@ -1,23 +1,40 @@
-// app.js — boot and the router.
+// app.js — boot, the router and the frame around every view.
 //
-// The page is three views over one address: the ontology overview, one type's
-// list, one entity. Everything a view shows is derived from the URL fragment
-// (route.js), so reload, back/forward and a pasted link all restore it. Each
-// view fetches what it needs when it opens; nothing polls.
+// Everything a view shows is derived from the URL fragment (route.js), so
+// reload, back/forward and a pasted link all restore it. Each view fetches
+// what it needs when it opens, and again when the window comes back to the
+// front or the reader asks; nothing polls.
 
+import * as home from './home.js';
+import * as types from './types.js';
 import * as overview from './overview.js';
 import * as list from './list.js';
+import * as query from './query.js';
 import * as entity from './entity.js';
+import * as panel from './panel.js';
+import * as find from './find.js';
 import * as api from './api.js';
-import { parse, format, typeRoute } from './route.js';
-import { el, fill } from './dom.js';
+import { parse, format, typeRoute, homeRoute, overviewOf, entityRoute, opening, openId } from './route.js';
+import { step } from './listmodel.js';
+import { el, fill, text } from './dom.js';
 import { notice } from './widgets.js';
 
-var main, crumbs;
+var VIEWS = { home: home, types: types, overview: overview, list: list, query: query, entity: entity };
+var TABS = [
+  { label: 'Review', views: ['home', 'query'], route: homeRoute() },
+  { label: 'Types', views: ['types', 'list', 'entity'], route: { view: 'types' } },
+  { label: 'Ontology', views: ['overview'], route: overviewOf('') }
+];
+// REFRESH_MS is how fresh a view must be for the window's return to leave it.
+var REFRESH_MS = 5000;
+
+var main, tabs, asof, banner;
+var route = null;
 var lastKey = '';
 var workspace = ''; // its name, once /api/schema answers
 var page = '';      // what the tab title calls the view on screen
 var lists = Object.create(null); // type → the list address last shown for it
+var loadedAt = 0;   // when the view on screen was last read
 
 // What the page remembers per history entry: scroll, rows drawn, the
 // diagram's viewport. An entry is stamped the first time it is shown, so back
@@ -26,6 +43,8 @@ var entries = {};
 var entry = {};
 var stamps = 0;
 var restore = null;   // the scroll to put back once the view has drawn
+var carried = null;   // what a new entry of the same view starts from
+var refreshedAt = 0;
 var settled = false;  // no scroll is recorded while a view is still loading
 
 function enter() {
@@ -35,7 +54,8 @@ function enter() {
     id = Date.now() + '-' + stamps;
     history.replaceState({ khub: id }, '');
   }
-  entries[id] = entries[id] || {};
+  entries[id] = entries[id] || carried || {};
+  carried = null;
   entry = entries[id];
 }
 
@@ -63,17 +83,50 @@ function readColors() {
   };
 }
 
-// setCrumbs draws the breadcrumb trail — every item but the last is a link —
-// and names the browser tab after the page it ends on.
+// setCrumbs builds the trail to where the reader is — every item but the last
+// is a link — and names the browser tab after the page it ends on.
 function setCrumbs(items) {
-  if (items.length) { page = items[items.length - 1].label; setTitle(); }
-  var nodes = [];
-  items.forEach(function (it, i) {
-    if (i) nodes.push(el('span', { class: 'sep', 'aria-hidden': 'true' }, '›'));
-    if (it.route && i < items.length - 1) nodes.push(el('a', { class: 'crumb', href: format(it.route) }, it.label));
-    else nodes.push(el('span', { class: 'crumb here', 'aria-current': 'page' }, it.label));
+  page = items.length ? items[items.length - 1].label : '';
+  setTitle();
+  var nav = el('nav', { class: 'crumbs', 'aria-label': 'Breadcrumb' });
+  items.slice(0, -1).forEach(function (it) {
+    nav.appendChild(el('a', { href: format(it.route) }, it.label));
+    nav.appendChild(el('span', { class: 'sep', 'aria-hidden': 'true' }, '›'));
   });
-  fill(crumbs, nodes);
+  if (items.length) nav.appendChild(el('span', { 'aria-current': 'page' }, items[items.length - 1].label));
+  return nav;
+}
+
+function drawTabs() {
+  fill(tabs, TABS.map(function (t) {
+    var here = route && t.views.indexOf(route.view) !== -1;
+    return el('a', { href: format(t.route), class: here ? 'on' : null, 'aria-current': here ? 'true' : null }, t.label);
+  }));
+}
+
+// showBanner says which files are missing from everything on screen.
+function showBanner(files) {
+  banner.hidden = !files.length;
+  if (!files.length) { fill(banner, []); return; }
+  var shown = files.slice(0, 3).join(', ') + (files.length > 3 ? ' and ' + (files.length - 3) + ' more' : '');
+  fill(banner, [
+    el('b', null, files.length === 1 ? 'One file does not parse. ' : files.length + ' files do not parse. '),
+    el('span', null, 'Counts and markers leave ' + (files.length === 1 ? 'it' : 'them') + ' out: '),
+    el('span', { class: 'mono' }, shown)
+  ]);
+}
+
+// drawAsOf says when the view was read, or why it is older than it looks.
+function drawAsOf(err) {
+  var at = new Date(loadedAt);
+  var two = function (n) { return (n < 10 ? '0' : '') + n; };
+  if (!asof.firstChild) {
+    fill(asof, [el('span'), el('button', { type: 'button', class: 'copy', title: 'Read the workspace again (r)', on: { click: refresh } }, 'Refresh')]);
+  }
+  var said = asof.firstChild;
+  said.className = err ? 'late' : '';
+  asof.title = err ? err.message || String(err) : '';
+  text(said, err ? 'not refreshed' : 'as of ' + two(at.getHours()) + ':' + two(at.getMinutes()));
 }
 
 var colors = readColors();
@@ -84,42 +137,72 @@ var ctx = {
   crumbs: setCrumbs,
   // nav pushes a history entry, so back returns to the previous view; it
   // reports whether it pushed one.
-  nav: function (route) {
-    var h = format(route);
+  nav: function (to) {
+    var h = format(to);
     if (h === location.hash || (h === '#/' && location.hash === '')) { render(); return false; }
     location.hash = h;
     return true;
   },
   // replace rewrites the address without a history entry: typing into a
   // filter box is one step back, not one per keystroke.
-  replace: function (route) {
-    history.replaceState(history.state, '', location.pathname + location.search + format(route));
-    render();
+  replace: function (to) {
+    history.replaceState(history.state, '', location.pathname + location.search + format(to));
+    render(true);
   },
   // entry is what the page remembers about the history entry on screen.
   entry: function () { return entry; },
   // ready says the view has drawn, so its scroll can come back.
   ready: function () {
-    if (restore !== null) main.scrollTop = restore;
-    restore = null;
+    if (restore !== null) {
+      main.scrollTop = restore;
+      // A block still to load may be what makes the page long enough.
+      if (main.scrollTop >= restore - 1) restore = null;
+    }
     settled = true;
     entry.scroll = main.scrollTop;
   },
-  // listRoute is the list of a type as the reader last had it.
-  listRoute: function (type) { return lists[type] || typeRoute(type); }
+  // loaded says the view on screen was read just now, and which files the
+  // reading had to leave out.
+  loaded: function (malformed) {
+    loadedAt = Date.now();
+    drawAsOf(null);
+    if (malformed) showBanner(malformed);
+  },
+  // failed is a refresh that did not answer: what is on screen stays.
+  failed: function (err) { drawAsOf(err); },
+  refresh: refresh,
+  // listRoute is the list of a type as the reader last had it, with nothing
+  // open beside it.
+  listRoute: function (type) { return lists[type] ? opening(lists[type], '') : typeRoute(type); },
+  // canOpen says whether an entity can be read beside the view on screen.
+  canOpen: function (id) {
+    return ['list', 'query', 'entity'].indexOf(route.view) !== -1 && route.id !== id && panel.hasRoom();
+  },
+  open: function (id) {
+    var to = opening(route, id);
+    if (openId(route)) { ctx.replace(to); return; }
+    // The same rows and groups stay drawn under the new entry.
+    carried = { rows: entry.rows, groups: entry.groups };
+    ctx.nav(to);
+  },
+  close: function () { ctx.replace(opening(route, '')); },
+  route: function () { return route; }
 };
 
-// viewKey names what is on screen, ignoring sort and filters: a change of key
-// is a new page, which scrolls to the top.
-function viewKey(route) {
-  if (route.view === 'list') return 'list:' + route.type;
-  if (route.view === 'entity') return 'entity:' + route.id;
-  return route.view;
+// viewKey names what is on screen, ignoring sort, filters and what is open
+// beside it: a change of key is a new page, which scrolls to the top.
+function viewKey(r) {
+  if (r.view === 'list') return 'list:' + r.type;
+  if (r.view === 'entity') return 'entity:' + r.id;
+  if (r.view === 'query') return 'query:' + r.name;
+  return r.view;
 }
 
-function render() {
+// render draws the view the address names. here says the entry on screen only
+// changed its address, so its place is where the reader is.
+function render(here) {
   enter();
-  var route = parse(location.hash);
+  route = parse(location.hash);
   var key = viewKey(route);
   if (key !== lastKey) {
     settled = false;
@@ -130,37 +213,118 @@ function render() {
     // rather than on a link that is gone.
     main.focus({ preventScroll: true });
     lastKey = key;
-  } else if (entry.scroll !== undefined) {
+  } else if (here !== true && entry.scroll !== undefined) {
     restore = entry.scroll;
   }
   if (route.view === 'list') lists[route.type] = route;
-  if (route.view !== 'overview') overview.unmount();
-  if (route.view !== 'list') list.unmount();
-  if (route.view !== 'entity') entity.unmount();
+  Object.keys(VIEWS).forEach(function (name) { if (name !== route.view) VIEWS[name].unmount(); });
   document.body.dataset.view = route.view;
-  switch (route.view) {
-    case 'overview': overview.show(main, route, ctx); break;
-    case 'list': list.show(main, route, ctx); break;
-    case 'entity': entity.show(main, route, ctx); break;
-    default:
-      setCrumbs([{ label: 'Ontology', route: { view: 'overview', sel: '' } }, { label: 'Not found' }]);
-      fill(main, [notice('Nothing at this address', 'The address names no view of this workspace.',
-        [{ label: 'Back to the ontology', href: '#/' }])]);
+  drawTabs();
+  var view = VIEWS[route.view];
+  if (view) { view.show(main, route, ctx, false); return; }
+  setCrumbs([{ label: 'Not found' }]);
+  fill(main, [notice('Nothing at this address', 'The address names no view of this workspace.',
+    [{ label: 'Go to the review', href: '#/' }])]);
+}
+
+// refresh reads the view on screen again and puts the reader back where they
+// were. What is on screen stays until the new reading arrives.
+function refresh() {
+  var view = route && VIEWS[route.view];
+  if (!view) return;
+  restore = main.scrollTop;
+  refreshedAt = Date.now();
+  view.show(main, route, ctx, true);
+}
+
+function onReturn() {
+  // The window's return raises two events, and a reading may still be on its way.
+  if (document.visibilityState === 'visible' && loadedAt && Date.now() - Math.max(loadedAt, refreshedAt) > REFRESH_MS) refresh();
+}
+
+function typing(node) {
+  return node && (/^(INPUT|SELECT|TEXTAREA)$/.test(node.tagName) || node.isContentEditable);
+}
+
+// move opens the next or previous row of the view on screen beside it.
+function move(by) {
+  var view = VIEWS[route.view];
+  var rows = view && view.order ? view.order() : [];
+  var id = step(rows, openId(route), by);
+  if (!id || id === openId(route)) return;
+  if (!panel.hasRoom()) return;
+  var follow = document.activeElement.closest && document.activeElement.closest('tr, li');
+  ctx.open(id);
+  // The keyboard on a row moves with the open one, so Enter opens what is open.
+  if (follow && main.contains(follow)) setTimeout(function () { if (view.focusOn) view.focusOn(id); }, 0);
+}
+
+function onKey(evt) {
+  if (evt.metaKey || evt.ctrlKey || evt.altKey) return;
+  if (evt.key === 'Escape') {
+    if (find.close() || typing(evt.target) || document.querySelector('dialog[open]')) return;
+    if (openId(route)) ctx.close();
+    else if (VIEWS[route.view] && VIEWS[route.view].escape) VIEWS[route.view].escape(ctx);
+    return;
   }
+  if (typing(evt.target) || document.querySelector('dialog[open]')) return;
+  switch (evt.key) {
+    case '/': evt.preventDefault(); find.focus(); break;
+    case 'r': refresh(); break;
+    case 'j': move(1); break;
+    case 'k': move(-1); break;
+    case '?': keys(); break;
+    case 'Enter':
+      if (openId(route) && (evt.target === document.body || evt.target === main)) ctx.nav(entityRoute(openId(route)));
+      break;
+  }
+}
+
+// keys lists the keyboard's shortcuts.
+function keys() {
+  var dl = el('dl', { class: 'keys' });
+  [['/', 'Search'], ['j, k', 'Open the next or previous row beside the list'], ['Enter', 'Open what is beside the list as a page'],
+    ['Esc', 'Close what is open, or leave one type for the full map'], ['r', 'Read the workspace again'], ['?', 'This list']].forEach(function (k) {
+    dl.appendChild(el('dt', null, k[0]));
+    dl.appendChild(el('dd', null, k[1]));
+  });
+  var box = el('dialog', { class: 'keybox', 'aria-label': 'Keyboard shortcuts' });
+  box.appendChild(el('h2', null, 'Keyboard'));
+  box.appendChild(dl);
+  box.appendChild(el('button', { type: 'button', class: 'btn', on: { click: function () { box.close(); } } }, 'Close'));
+  box.addEventListener('close', function () { box.remove(); });
+  document.body.appendChild(box);
+  box.showModal();
 }
 
 function boot() {
   main = $('main');
-  crumbs = $('crumbs');
+  tabs = $('tabs');
+  asof = $('asof');
+  banner = $('banner');
+  // `khub serve --aspect` prints an address carrying it, and every value of it
+  // opens the diagram.
+  if (new URLSearchParams(location.search).has('aspect') && /^#?\/?$/.test(location.hash)) {
+    history.replaceState(null, '', location.pathname + format(overviewOf('')));
+  }
+  find.mount($('find'), ctx);
   window.addEventListener('hashchange', render);
+  window.addEventListener('focus', onReturn);
+  document.addEventListener('visibilitychange', onReturn);
+  document.addEventListener('keydown', onKey);
   main.addEventListener('scroll', function () { if (settled) entry.scroll = main.scrollTop; }, { passive: true });
+  // A reader who moves the page has taken it over.
+  ['wheel', 'touchmove', 'mousedown', 'keydown'].forEach(function (evt) {
+    main.addEventListener(evt, function () { restore = null; }, { passive: true });
+  });
   render();
   // Names the workspace: a reviewer of two of them has two of these tabs.
   // Without an answer the header goes unnamed, and the view on screen reports
   // what is wrong through its own request.
   api.getSchema().then(function (schema) {
     workspace = schema.workspace || '';
-    fill($('brand'), [el('span', null, 'khub'), workspace ? el('span', { class: 'ws' }, workspace) : null]);
+    if (workspace) text($('brand'), workspace);
+    $('brand').title = 'khub: ' + workspace;
     setTitle();
   }, function () {});
 }

@@ -15,8 +15,8 @@
 //     type points at a small "any type" box owned by its source, so it never
 //     pulls unrelated types together through a shared hub.
 //  2. Layer. Each group, and each standalone type with its "any type" boxes,
-//     is laid out top-down by dagre (a Sugiyama layered layout): relations run
-//     downward, rows are kept apart by rank separation and boxes within a row
+//     is laid out by dagre (a Sugiyama layered layout): relations run downward,
+//     or sideways around one type, rows are kept apart by rank separation and boxes within a row
 //     by node separation, and every relation label gets space of its own.
 //  3. Pack. Groups are shelf-packed left to right, largest first; standalone
 //     types are gridded inside one group, each row and column sized to its
@@ -99,20 +99,21 @@ function partition(sch) {
 
 // layered lays out one set of nodes with dagre and returns positions relative
 // to the set's own top-left corner.
-function layered(dagre, ids, sch, info) {
+function layered(dagre, ids, sch, info, dir) {
   var members = new Set(ids);
+  var sideways = dir === 'LR';
   // A type's "any type" box travels with it.
   sch.nodes.forEach(function (n) {
     if (kindOf(n) === 'ghost' && members.has(n.data.owner)) members.add(n.data.id);
   });
   var g = new dagre.graphlib.Graph({ multigraph: true });
-  g.setGraph({ rankdir: 'TB', nodesep: NODE_SEP, ranksep: RANK_SEP, edgesep: EDGE_SEP, marginx: 0, marginy: 0 });
+  g.setGraph({ rankdir: dir, nodesep: NODE_SEP, ranksep: RANK_SEP, edgesep: EDGE_SEP, marginx: 0, marginy: 0 });
   g.setDefaultEdgeLabel(function () { return {}; });
   sch.nodes.forEach(function (n) {
     var id = n.data.id;
     if (!members.has(id)) return;
     var it = info.get(id);
-    g.setNode(id, { width: it.w + it.pad, height: it.hh });
+    g.setNode(id, sideways ? { width: Math.max(it.w, it.pad - TAG_GAP), height: BOX_H + it.under } : { width: it.w + it.pad, height: it.hh });
   });
   var routed = [];
   sch.edges.forEach(function (e) {
@@ -131,18 +132,20 @@ function layered(dagre, ids, sch, info) {
   }
   g.nodes().forEach(function (id) {
     var p = g.node(id), it = info.get(id);
-    // dagre centred the box plus its tag room; the box sits at the left of
-    // that span and its tags stack on the right.
-    var x = p.x - it.pad / 2;
-    nodes.set(id, { x: x, y: p.y, w: it.w, h: BOX_H });
+    // dagre centred the box plus its tag room. The box sits at the left of that
+    // span and its tags stack on the right, or, where relations run sideways,
+    // at its top with the tags under it: either way out of the relations' path.
+    var x = sideways ? p.x : p.x - it.pad / 2;
+    var y = sideways ? p.y - it.under / 2 : p.y;
+    nodes.set(id, { x: x, y: y, w: it.w, h: BOX_H });
     it.tags.forEach(function (t, k) {
       nodes.set(t.id, {
-        x: x + it.w / 2 + TAG_GAP + t.w / 2,
-        y: p.y + (k - (it.tags.length - 1) / 2) * TAG_STEP,
+        x: sideways ? x : x + it.w / 2 + TAG_GAP + t.w / 2,
+        y: sideways ? y + BOX_H / 2 + TAG_GAP + TAG_H / 2 + k * TAG_STEP : y + (k - (it.tags.length - 1) / 2) * TAG_STEP,
         w: t.w, h: TAG_H, owner: id
       });
     });
-    grow(p.x - p.width / 2, p.y - it.hh / 2, p.x + p.width / 2, p.y + it.hh / 2);
+    grow(p.x - p.width / 2, p.y - p.height / 2, p.x + p.width / 2, p.y + p.height / 2);
   });
   routed.forEach(function (d) {
     var e = g.edge({ v: d.source, w: d.target, name: d.id });
@@ -216,8 +219,18 @@ function shelf(framed, target, aspect) {
 // routes every edge between two different nodes. aspect is the canvas's
 // width over its height. Returns absolute positions (box centres), routed
 // edges (interior bend points and the label's box) and the group frames.
-export function layoutOntology(dagre, sch, aspect) {
+// With either, relations may run sideways instead of downward: one type and its
+// many neighbours make a long row, or a column as tall as the canvas.
+export function layoutOntology(dagre, sch, aspect, either) {
   aspect = aspect > 0 ? aspect : 1.2;
+  var down = arrange(dagre, sch, aspect, 'TB');
+  if (!either) return down;
+  var across = arrange(dagre, sch, aspect, 'LR');
+  var scale = function (l) { return Math.min(aspect / l.width, 1 / l.height); };
+  return scale(across) > scale(down) ? across : down;
+}
+
+function arrange(dagre, sch, aspect, dir) {
   var info = new Map();
   var tags = new Map();
   sch.edges.forEach(function (e) {
@@ -232,13 +245,14 @@ export function layoutOntology(dagre, sch, aspect) {
     info.set(n.data.id, {
       w: boxWidth(n.data.label), tags: own,
       pad: own.length ? TAG_GAP + widest : 0,
+      under: own.length ? TAG_GAP + own.length * TAG_STEP : 0,
       hh: Math.max(BOX_H, own.length * TAG_STEP - (TAG_STEP - TAG_H))
     });
   });
 
   var parts = partition(sch);
   var groups = parts.linked.map(function (members, i) {
-    return { id: 'group:' + i, kind: 'linked', size: members.length, part: layered(dagre, members, sch, info) };
+    return { id: 'group:' + i, kind: 'linked', size: members.length, part: layered(dagre, members, sch, info, dir) };
   });
   var linkedCount = groups.length;
   // A frame is at least as wide as its title, so the title never spills over
@@ -252,7 +266,7 @@ export function layoutOntology(dagre, sch, aspect) {
   // Choose the standalone grid's shape and the shelf width together: every
   // combination is packed and the one that fits the canvas at the largest
   // scale wins. Ties keep the earlier candidate, so the choice is stable.
-  var cells = parts.standalone.map(function (id) { return layered(dagre, [id], sch, info); });
+  var cells = parts.standalone.map(function (id) { return layered(dagre, [id], sch, info, dir); });
   var colChoices = cells.length ? cells.map(function (_, i) { return i + 1; }) : [0];
   var best = null;
   colChoices.forEach(function (cols) {
@@ -269,7 +283,7 @@ export function layoutOntology(dagre, sch, aspect) {
     });
   });
 
-  var out = { nodes: new Map(), edges: new Map(), groups: [] };
+  var out = { nodes: new Map(), edges: new Map(), groups: [], sideways: dir === 'LR' };
   best.all.forEach(function (g, i) {
     var f = best.framed[i], p = best.packed.at[i];
     merge(out, g.part, p.x + GROUP_PAD + f.inset, p.y + GROUP_PAD + GROUP_LABEL);
@@ -285,7 +299,7 @@ export function layoutOntology(dagre, sch, aspect) {
 
 // groupLabel names a group frame for the reader.
 export function groupLabel(g, linkedCount) {
-  if (g.kind === 'standalone') return 'Standalone types';
+  if (g.kind === 'standalone') return 'Not linked to another type';
   return linkedCount > 1 ? 'Related types (' + g.size + ')' : 'Related types';
 }
 
@@ -348,6 +362,9 @@ export function placeElements(sch, lay) {
       return;
     }
     var r = lay.edges.get(d.id);
+    // Sideways, a relation leaves a box's side and enters a side, clear of the
+    // tags under it.
+    if (lay.sideways) classes += lay.nodes.get(d.source).x < lay.nodes.get(d.target).x ? ' rightward' : ' leftward';
     var seg = r && segments(lay.nodes.get(d.source), lay.nodes.get(d.target), r.points);
     if (seg) {
       d.segW = seg.weights;

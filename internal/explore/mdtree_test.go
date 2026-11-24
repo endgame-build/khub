@@ -107,6 +107,16 @@ func TestBodyTreeRawHTMLIsText(t *testing.T) {
 	}
 }
 
+// A comment is the one piece of markup a renderer hides. An agent reading the
+// entity sees it, so the reviewer does too, apart from the prose.
+func TestBodyTreeShowsComments(t *testing.T) {
+	tree := BodyTree("<!-- one statement,\n  in the present tense -->\n\nIt holds.\n\n<!-- a --><b>x</b>\n")
+	got := find(tree, "comment")
+	if len(got) != 1 || str(got[0], "text") != "one statement,\n  in the present tense" {
+		t.Fatalf("comments = %v", got)
+	}
+}
+
 // Only http, https and mailto survive as href; every other scheme, an
 // absolute path and an in-page anchor are dropped to plain text.
 func TestBodyTreeLinkAllowList(t *testing.T) {
@@ -118,7 +128,7 @@ func TestBodyTreeLinkAllowList(t *testing.T) {
 		"JavaScript:alert(1)": "",
 		"data:text/html,x":    "",
 		"vbscript:x":          "",
-		"/api/graph":          "",
+		"/api/overview":       "",
 		"//evil.test":         "",
 		"#section":            "",
 		"other.md":            "", // no resolver: relative links are text
@@ -150,7 +160,7 @@ func TestBodyTreeEntityLink(t *testing.T) {
 		}
 		return "", false
 	}
-	tree := bodyTree("See [the ledger](../components/cmp-ledger.md) and [nothing](nope.md).", resolve)
+	tree := bodyTree("See [the ledger](../components/cmp-ledger.md) and [nothing](nope.md).", resolve, nil)
 	as := find(tree, "a")
 	if len(as) != 2 {
 		t.Fatalf("anchors: %d", len(as))
@@ -166,5 +176,57 @@ func TestBodyTreeEntityLink(t *testing.T) {
 func TestBodyTreeEmpty(t *testing.T) {
 	if tree := BodyTree("  \n"); len(tree) != 0 {
 		t.Fatalf("blank body: %v", kinds(tree))
+	}
+}
+
+// A word that is exactly another entity's id or slug is a link to it; anything
+// else in the prose stays as written.
+func TestProseNamesBecomeLinks(t *testing.T) {
+	named := func(word string) (string, bool) {
+		if word == "cmp-ledger" || word == "component/cmp-ledger" {
+			return "component/cmp-ledger", true
+		}
+		return "", false
+	}
+	for src, want := range map[string]string{
+		"Uses cmp-ledger.":                   "Uses [cmp-ledger].",
+		"(component/cmp-ledger) twice":       "([component/cmp-ledger]) twice",
+		"cmp-ledger, cmp-ledger":             "[cmp-ledger], [cmp-ledger]",
+		"See `cmp-ledger` and `cmp-other`":   "See [cmp-ledger] and cmp-other",
+		"not cmp-ledgers or xcmp-ledger":     "not cmp-ledgers or xcmp-ledger",
+		"[cmp-ledger](https://ok.test) once": "<cmp-ledger> once",
+		"**cmp-ledger** strong":              "[cmp-ledger] strong",
+		"    cmp-ledger in a block":          "cmp-ledger in a block",
+	} {
+		var b strings.Builder
+		var walk func([]any)
+		walk = func(list []any) {
+			for _, e := range list {
+				m := e.(*omap.Map)
+				if txt, ok := m.Get("text"); ok {
+					b.WriteString(txt.(string))
+				}
+				kids, _ := m.Get("c")
+				list, _ := kids.([]any)
+				_, entity := m.Get("entity")
+				href, _ := m.Get("href")
+				switch {
+				case entity:
+					b.WriteString("[")
+					walk(list)
+					b.WriteString("]")
+				case href != nil && href != "":
+					b.WriteString("<")
+					walk(list)
+					b.WriteString(">")
+				default:
+					walk(list)
+				}
+			}
+		}
+		walk(bodyTree(src, nil, named))
+		if got := strings.TrimSpace(b.String()); got != want {
+			t.Errorf("%q = %q, want %q", src, got, want)
+		}
 	}
 }

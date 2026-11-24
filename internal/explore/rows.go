@@ -2,12 +2,12 @@ package explore
 
 import (
 	"sort"
-	"strings"
 	"time"
 
 	"github.com/endgame-build/khub/internal/errs"
 	"github.com/endgame-build/khub/internal/index"
 	"github.com/endgame-build/khub/internal/omap"
+	"github.com/endgame-build/khub/internal/project"
 	"github.com/endgame-build/khub/internal/schema"
 	"github.com/endgame-build/khub/internal/values"
 	"github.com/endgame-build/khub/internal/workspace"
@@ -31,9 +31,6 @@ func Rows(root, typeName string, now time.Time) (*omap.Map, error) {
 		return nil, unknownType(root, s.resolved, typeName)
 	}
 	cols := Columns(s.resolved, typeName)
-	isBase := func(predicate string) bool {
-		return s.resolved.BaseRelations != nil && s.resolved.BaseRelations.Has(predicate)
-	}
 	attrs := listAttributes(s.resolved, rtype)
 
 	rows := []any{}
@@ -43,7 +40,7 @@ func Rows(root, typeName string, now time.Time) (*omap.Map, error) {
 		}
 		links := map[string][]string{}
 		for _, g := range s.g.PredicateGroups(node) {
-			key := columnKey(g.Out, g.SourceType, g.Predicate, isBase(g.Predicate))
+			key := columnKey(g.Out, g.SourceType, g.Predicate, isBase(s.resolved, g.Predicate))
 			for _, n := range g.Nodes {
 				links[key] = appendUnique(links[key], n.ID())
 			}
@@ -69,6 +66,7 @@ func Rows(root, typeName string, now time.Time) (*omap.Map, error) {
 	out.Set("attributes", attrRecords)
 	out.Set("relations", colRecords)
 	out.Set("rows", rows)
+	out.Set("malformed", strList(s.malformed))
 	return out, nil
 }
 
@@ -81,11 +79,9 @@ func (s *snapshot) row(node index.Node, attrs []*schema.ResolvedAttribute, cols 
 	r.Set("id", node.ID())
 	r.Set("slug", node.Slug)
 	r.Set("title", s.title(node))
-	r.Set("draft", m.Draft)
-	r.Set("stale", m.Stale)
-	r.Set("orphan", m.Orphan)
-	r.Set("incomplete", m.Incomplete)
-	r.Set("trust", m.Trust)
+	m.into(r)
+	r.Set("updated", day(meta))
+	r.Set("by", writer(meta))
 	av := omap.New()
 	for _, a := range attrs {
 		if v, ok := plainValue(meta, a.Name); ok {
@@ -124,19 +120,29 @@ func listAttributes(resolved *schema.ResolvedSchema, rtype *schema.ResolvedType)
 	return out
 }
 
-// plainValue renders a stored attribute value as text: a list joined with
-// ", ", an absent or blank value reported as absent.
-func plainValue(meta *omap.Map, name string) (string, bool) {
+// day is the date the entity is judged stale by, "" when it has none.
+func day(meta *omap.Map) string {
+	date, _ := project.EffectiveDate(meta, nil)
+	if date == nil {
+		return ""
+	}
+	return date.Format("2006-01-02")
+}
+
+// plainValue renders a stored attribute value as text, a list as a list of
+// texts, so a comma in a value never reads as two. An absent or blank value is
+// reported as absent.
+func plainValue(meta *omap.Map, name string) (any, bool) {
 	v, ok := meta.Get(name)
 	if !ok || !values.Present(v) {
-		return "", false
+		return nil, false
 	}
 	if list, ok := v.([]any); ok {
-		parts := make([]string, 0, len(list))
+		parts := make([]any, 0, len(list))
 		for _, item := range list {
 			parts = append(parts, values.Str(item))
 		}
-		return strings.Join(parts, ", "), true
+		return parts, true
 	}
 	return values.Str(v), true
 }

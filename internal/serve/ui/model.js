@@ -1,35 +1,28 @@
-// model.js — pure derivations for the ontology overview. No document, no
-// cytoscape, no fetch, no imports, so node --test loads it directly.
-
-export function typeOf(id) {
-  var i = id.indexOf('/');
-  return i === -1 ? id : id.slice(0, i);
-}
+// model.js — pure derivations for the ontology diagram and its panels. No
+// document, no cytoscape, no fetch, no imports, so node --test loads it
+// directly.
 
 // SEP joins composite keys. A khub id, type and predicate are all drawn from a
 // safe charset that cannot contain a NUL, so keys built with it are
 // unambiguous by construction rather than by convention.
 var SEP = '\u0000';
 
-// buildModel reduces /api/graph to what the overview needs: entities per type,
-// for the counts in the type boxes, and the instance edges, deduplicated on the
-// (source, predicate, target) triple, for each relation's usage count.
-export function buildModel(payload) {
-  var byType = new Map();
-  (payload.nodes || []).forEach(function (n) {
-    var d = n.data;
-    if (!byType.has(d.type)) byType.set(d.type, []);
-    byType.get(d.type).push(d.id);
+// indexOverview turns /api/overview into lookups: each type's record, each
+// relation's, and how often a relation joins two types.
+export function indexOverview(payload) {
+  var types = new Map(), relations = new Map(), used = new Map();
+  (payload.types || []).forEach(function (t) { types.set(t.name, t); });
+  (payload.relations || []).forEach(function (r) {
+    relations.set(r.from + SEP + r.predicate, r);
+    r.to.forEach(function (t) { used.set(r.from + SEP + r.predicate + SEP + t.type, t.links); });
   });
-  var seen = new Set(), edges = [];
-  (payload.edges || []).forEach(function (e) {
-    var d = e.data;
-    var key = d.source + SEP + d.label + SEP + d.target;
-    if (seen.has(key)) return;
-    seen.add(key);
-    edges.push({ data: { source: d.source, target: d.target, label: d.label } });
-  });
-  return { byType: byType, edges: edges };
+  return { types: types, relations: relations, used: used };
+}
+
+// relationOf is a relation's record: its links, how many entities of its type
+// have one, and the types it reaches.
+export function relationOf(numbers, from, predicate) {
+  return numbers.relations.get(from + SEP + predicate) || { from: from, predicate: predicate, links: 0, have: 0, total: 0, to: [], base: false };
 }
 
 // indexSchema turns /api/schema into a lookup.
@@ -62,22 +55,24 @@ export function ghostId(type) { return 'schema-anyof:' + type; }
 // the same projection `khub schema edges` prints — into the diagram's nodes
 // and edges (layout.js places them).
 //
-// Left out of the picture, each for a reason the details panel makes up for:
-// derived inverses (each is its forward relation read backwards; the panel
-// names the inverse) and the base relations (declared on every type, so
-// drawing them is a complete graph; the base box's panel lists them).
+// A relation to any type is drawn to the types it really reaches, and to its
+// source's own "any type" box while it reaches none. A base relation is
+// declared on every type, so it is drawn only where it is used. Derived
+// inverses are left out: each is its forward relation read backwards, and the
+// panel names it.
 //
-// `used` counts instance edges per (fromType, predicate, toType) so a declared
-// relation nothing has ever used can be dimmed. That gap is the interesting
-// part of comparing a contract against its data.
-export function buildSchemaGraph(schema, edges, used, byType) {
+// The numbers come from /api/overview, so a declared relation nothing has ever
+// used can be dimmed. That gap is the interesting part of comparing a contract
+// against its data.
+export function buildSchemaGraph(schema, edges, numbers) {
   var nodes = [], seen = new Set(), out = [];
   // The count goes in the label, not into the node's area: a number is exact
   // and costs nothing, while sizes cannot express "958 versus 1".
   function node(id, label, kind, extra) {
     if (seen.has(id)) return;
     seen.add(id);
-    var n = (kind === 'type' && byType && byType.get(label)) ? byType.get(label).length : 0;
+    var rec = kind === 'type' ? numbers.types.get(label) : null;
+    var n = rec ? rec.count : 0;
     var data = {
       id: id, label: kind === 'type' ? label + '  ' + n : label,
       type: kind === 'type' ? label : '', schemaKind: kind, count: n
@@ -88,63 +83,78 @@ export function buildSchemaGraph(schema, edges, used, byType) {
   schema.declaredTypes.forEach(function (t) { node(schemaId(t), t, 'type'); });
   node(SCHEMA_ANY, 'any (base)', 'any');
 
+  function edge(row, from, target, toType, count, extraClass) {
+    var f = schemaId(from);
+    out.push({
+      data: {
+        id: 'schemaedge:' + f + ' ' + row.predicate + ' ' + target,
+        source: f, target: target,
+        label: row.predicate + (row.many ? ' *' : ''),
+        predicate: row.predicate, kind: row.kind,
+        many: !!row.many, required: !!row.required,
+        inverse: row.inverse || '', acyclic: !!row.acyclic,
+        used: count, from: from, toType: toType
+      },
+      classes: 'sch' + (row.required ? ' required' : '') + (count ? '' : ' unused') +
+        (f === target ? ' selfloop' : '') + extraClass
+    });
+  }
   edges.forEach(function (row) {
-    if (row.derived || row.from.indexOf('any') !== -1) return;
+    if (row.derived) return;
+    var base = row.from.indexOf('any') !== -1;
+    var sources = base ? schema.declaredTypes : row.from;
     var toAny = row.to.indexOf('any') !== -1;
-    row.from.forEach(function (from) {
-      var f = schemaId(from);
-      var targets = toAny ? [{ id: ghostId(from), type: 'any' }] : row.to.map(function (t) { return { id: schemaId(t), type: t }; });
-      targets.forEach(function (tg) {
-        if (toAny) node(tg.id, 'any type', 'ghost', { owner: f });
-        var count = used ? countUses(used, from, row.predicate, toAny ? null : tg.type) : 0;
-        out.push({
-          data: {
-            id: 'schemaedge:' + f + ' ' + row.predicate + ' ' + tg.id,
-            source: f, target: tg.id,
-            label: row.predicate + (row.many ? ' *' : ''),
-            predicate: row.predicate, kind: row.kind,
-            many: !!row.many, required: !!row.required,
-            inverse: row.inverse || '', acyclic: !!row.acyclic,
-            used: count, from: from, toType: tg.type
-          },
-          classes: 'sch' + (row.required ? ' required' : '') + (count ? '' : ' unused') +
-            (f === tg.id ? ' selfloop' : '')
-        });
-      });
+    sources.forEach(function (from) {
+      var reached = relationOf(numbers, from, row.predicate).to;
+      if (toAny && reached.length) {
+        reached.forEach(function (t) { edge(row, from, schemaId(t.type), t.type, t.links, ' open' + (base ? ' base' : '')); });
+        return;
+      }
+      if (base) return;
+      if (toAny) {
+        node(ghostId(from), 'any type', 'ghost', { owner: schemaId(from) });
+        edge(row, from, ghostId(from), 'any', 0, ' open');
+        return;
+      }
+      row.to.forEach(function (t) { edge(row, from, schemaId(t), t, numbers.used.get(from + SEP + row.predicate + SEP + t) || 0, ''); });
     });
   });
   return { nodes: nodes, edges: out };
 }
 
-// usedEdgeCounts tallies the instance graph by (fromType, predicate, toType),
-// which is what tells a declared relation apart from a used one.
-export function usedEdgeCounts(model) {
-  var used = new Map();
-  model.edges.forEach(function (e) {
-    var k = typeOf(e.data.source) + SEP + e.data.label + SEP + typeOf(e.data.target);
-    used.set(k, (used.get(k) || 0) + 1);
-  });
-  return used;
+// focusOn is the diagram around one type: the type, the types one relation
+// away in either direction, and those relations.
+export function focusOn(sch, type) {
+  var id = schemaId(type);
+  var edges = sch.edges.filter(function (e) { return e.data.source === id || e.data.target === id; });
+  var keep = new Set([id]);
+  edges.forEach(function (e) { keep.add(e.data.source); keep.add(e.data.target); });
+  return { nodes: sch.nodes.filter(function (n) { return keep.has(n.data.id); }), edges: edges };
 }
 
-// countUses resolves a declared edge against the instance tally. A null
-// target means "any type": instances of an any relation point at real types,
-// so their uses are summed across every concrete target.
-function countUses(used, from, predicate, to) {
-  if (to !== null) return used.get(from + SEP + predicate + SEP + to) || 0;
-  var total = 0;
-  used.forEach(function (n, key) {
-    var parts = key.split(SEP);
-    if (parts[0] === from && parts[1] === predicate) total += n;
+// mostConnected is the type the most types are one relation in use away from,
+// or one declared relation while none is in use; the first declared of equals.
+export function mostConnected(sch) {
+  var best = '', most = -1;
+  var inUse = sch.edges.some(function (e) { return e.data.used && e.data.source !== e.data.target; });
+  sch.nodes.forEach(function (n) {
+    if (n.data.schemaKind !== 'type') return;
+    var peers = new Set();
+    sch.edges.forEach(function (e) {
+      if (inUse && !e.data.used) return;
+      if (e.data.source === n.data.id) peers.add(e.data.target);
+      if (e.data.target === n.data.id) peers.add(e.data.source);
+    });
+    if (peers.size > most) { most = peers.size; best = n.data.type; }
   });
-  return total;
+  return best;
 }
 
 // incomingRelations lists the relations other types declare toward a type and
 // its own record does not show: those with a declared inverse are there as
 // derived relations, base relations are every type's, and its relations to
 // itself are its own.
-export function incomingRelations(schema, name, used) {
+export function incomingRelations(schema, name, numbers) {
   var out = [];
   schema.edges.forEach(function (row) {
     if (row.derived || row.inverse || row.from.indexOf('any') !== -1) return;
@@ -153,22 +163,11 @@ export function incomingRelations(schema, name, used) {
       if (from === name) return;
       out.push({
         predicate: row.predicate, from: from, many: !!row.many, required: !!row.required,
-        used: countUses(used, from, row.predicate, name)
+        used: numbers.used.get(from + SEP + row.predicate + SEP + name) || 0
       });
     });
   });
   return out;
-}
-
-// relationCoverage is how many of a type's entities have a relation at all. An
-// entity pointing at itself has none, as the list's columns count it.
-export function relationCoverage(model, from, predicate) {
-  var have = new Set();
-  model.edges.forEach(function (e) {
-    var d = e.data;
-    if (d.label === predicate && d.source !== d.target && typeOf(d.source) === from) have.add(d.source);
-  });
-  return { have: have.size, total: (model.byType.get(from) || []).length };
 }
 
 // selectionIds maps an overview selection (`type:<name>` or

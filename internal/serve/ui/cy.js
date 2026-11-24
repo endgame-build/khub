@@ -17,9 +17,11 @@ export function destroy() {
 var MAX_ZOOM = 1.25;
 var MIN_ZOOM = 0.8;
 var MARGIN = 32;
+var KEEP = 80; // how much of the diagram a pan always leaves in view
 
-// mount draws placed elements (layout.placeElements), framed to be read.
-export function mount(container, elements, style) {
+// mount draws placed elements (layout.placeElements): all of them, or framed
+// to be read, around one when the whole does not fit.
+export function mount(container, elements, style, around) {
   destroy();
   cy = cytoscape({
     container: container,
@@ -29,19 +31,36 @@ export function mount(container, elements, style) {
     // The layout is the contract: dragging a box would put it back on top of
     // another, so boxes stay where they were placed. Pan and zoom remain.
     autoungrabify: true,
-    boxSelectionEnabled: false
+    boxSelectionEnabled: false,
+    minZoom: 0.1,
+    maxZoom: 2.5
   });
-  frame();
+  if (around) frame(around); else fit();
+  cy.on('viewport', hold);
   return cy;
 }
 
+// hold keeps a part of the diagram in view, however far it is dragged.
+function hold() {
+  var box = cy.elements().renderedBoundingBox();
+  var dx = Math.max(0, KEEP - box.x2) + Math.min(0, cy.width() - KEEP - box.x1);
+  var dy = Math.max(0, KEEP - box.y2) + Math.min(0, cy.height() - KEEP - box.y1);
+  if (Math.abs(dx) > 1 || Math.abs(dy) > 1) cy.panBy({ x: dx, y: dy });
+}
+
+// readable says whether a laid-out diagram fits a canvas at a size its names
+// can be read at.
+export function readable(lay, w, h) {
+  return Math.min((w - 2 * MARGIN) / lay.width, (h - 2 * MARGIN) / lay.height) >= MIN_ZOOM;
+}
+
 // frame shows the diagram at a size its names can be read at: all of it when
-// that fits, else its middle. fit is how to see the whole of a large one.
-function frame() {
+// that fits, else the part around one node. fit shows the whole of it.
+function frame(around) {
   fit();
   if (cy.zoom() < MIN_ZOOM) {
     cy.zoom(MIN_ZOOM);
-    cy.center();
+    cy.center(cy.getElementById(around));
   }
 }
 
@@ -111,6 +130,9 @@ export function on(handler) {
   // The relation name sharpens under the pointer.
   cy.on('mouseover', 'edge', function (e) { e.target.addClass('hot'); });
   cy.on('mouseout', 'edge', function (e) { e.target.removeClass('hot'); });
+  // What can be clicked says so.
+  cy.on('mouseover', 'node, edge', function (e) { cy.container().style.cursor = e.target.hasClass('grp') ? '' : 'pointer'; });
+  cy.on('mouseout', 'node, edge', function () { cy.container().style.cursor = ''; });
 }
 
 // MONO matches layout.js: box widths are computed from character counts, so
@@ -182,7 +204,11 @@ export function buildStyle(types, colors, ink, boxH, groupPad) {
         'segment-radius': 6
       }
     },
+    { selector: 'edge.rightward', style: { 'source-endpoint': '50% 0%', 'target-endpoint': '-50% 0%' } },
+    { selector: 'edge.leftward', style: { 'source-endpoint': '-50% 0%', 'target-endpoint': '50% 0%' } },
     { selector: 'edge.required', style: { 'line-style': 'solid' } },
+    // Inherited from the base block: drawn where it is used, and quieter.
+    { selector: 'edge.base', style: { 'line-color': ink.soft, 'target-arrow-color': ink.soft, 'color': ink.soft, 'line-dash-pattern': [9, 4] } },
     // Declared and never used. The gap between a contract and its data.
     { selector: 'edge.unused', style: { 'opacity': 0.4, 'line-style': 'dotted', 'line-dash-pattern': [1, 3] } },
     // A relation from a type to itself: a tag beside the box, in the
@@ -197,6 +223,7 @@ export function buildStyle(types, colors, ink, boxH, groupPad) {
         'border-width': 1, 'border-color': ink.mid, 'border-opacity': 0.6, 'border-style': 'dashed'
       }
     },
+    { selector: 'node.tag.base', style: { 'color': ink.soft, 'border-color': ink.soft } },
     { selector: 'node.tag.required', style: { 'border-style': 'solid' } },
     { selector: 'node.tag.unused', style: { 'opacity': 0.55, 'border-style': 'dotted' } },
     { selector: 'edge.hot', style: { 'font-size': 11, 'color': ink.mid, 'opacity': 1, 'width': 2 } }

@@ -1,10 +1,9 @@
 // Package serve is `khub serve`: a read-only HTTP view of the workspace,
 // bound to loopback, rebuilding from the live files on every request.
 //
-// The page has three views — the ontology, one type's rows, one entity — and
-// draws them from core packages: viz for the graph, introspect for the
-// schema, explore for the rows and the entity page. This package only routes
-// and encodes.
+// The page's views are drawn from core packages: explore for everything about
+// the entities, introspect for the schema. This package only routes and
+// encodes.
 //
 // Read-only is structural, not a policy: there are no write endpoints, and the
 // guard rejects every method but GET and HEAD before routing, so adding one
@@ -32,10 +31,10 @@ import (
 	"github.com/endgame-build/khub/internal/entity"
 	"github.com/endgame-build/khub/internal/errs"
 	"github.com/endgame-build/khub/internal/explore"
+	"github.com/endgame-build/khub/internal/integrity"
 	"github.com/endgame-build/khub/internal/introspect"
 	"github.com/endgame-build/khub/internal/omap"
 	"github.com/endgame-build/khub/internal/schema"
-	"github.com/endgame-build/khub/internal/viz"
 	"github.com/endgame-build/khub/internal/workspace"
 )
 
@@ -62,16 +61,30 @@ const contentSecurityPolicy = "default-src 'none'; " +
 	// worst, but the guard is meant to be the whole posture.
 	"frame-ancestors 'none'"
 
-type server struct{ root string }
+// Shadows lists the schema fields a command's own flag hides: what `khub check`
+// reports as flag_shadowed, which needs the command tree.
+type Shadows func(*schema.ResolvedSchema) []integrity.FlagShadow
+
+type server struct {
+	root    string
+	shadows Shadows
+}
 
 // Handler builds the routed, guarded handler. Exported so tests drive the real
 // routing and the real guards through httptest without binding a port.
-func Handler(root string) http.Handler {
-	s := &server{root: root}
+func Handler(root string, shadows Shadows) http.Handler {
+	s := &server{root: root, shadows: shadows}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", s.page)
 	mux.HandleFunc("/static/", s.static)
-	mux.HandleFunc("/api/graph", s.apiGraph)
+	mux.HandleFunc("/api/overview", s.apiOverview)
+	mux.HandleFunc("/api/findings", s.apiFindings)
+	mux.HandleFunc("/api/recent", s.apiRecent)
+	mux.HandleFunc("/api/search", s.apiSearch)
+	mux.HandleFunc("/api/queries", s.apiQueries)
+	mux.HandleFunc("/api/query/", s.apiQuery)
+	mux.HandleFunc("/api/history/", s.apiHistory)
+	mux.HandleFunc("/api/reach/", s.apiReach)
 	mux.HandleFunc("/api/schema", s.apiSchema)
 	mux.HandleFunc("/api/entity/", s.apiEntity)
 	mux.HandleFunc("/api/type/", s.apiType)
@@ -100,9 +113,9 @@ func Listen(port int) (net.Listener, error) {
 }
 
 // Serve runs until ctx is cancelled, then drains in-flight requests.
-func Serve(ctx context.Context, ln net.Listener, root string) error {
+func Serve(ctx context.Context, ln net.Listener, root string, shadows Shadows) error {
 	srv := &http.Server{
-		Handler:           Handler(root),
+		Handler:           Handler(root, shadows),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 	done := make(chan error, 1)
@@ -219,37 +232,100 @@ func (s *server) static(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write(body)
 }
 
-// apiGraph rebuilds the graph from the live files on every request.
-//
-// Measured at 80ms for 2000 entities including process start and a 3MB file
-// write; in-process it is well under that. There is therefore no cache, which
-// means there is nothing to invalidate and no way to answer with a stale
-// graph — the property `search` has, for the same reason.
-func (s *server) apiGraph(w http.ResponseWriter, r *http.Request) {
-	// No type filter: the overview needs every node to count entities per type
-	// and every edge to tally each declared relation's usage. viz keeps --type
-	// because it renders one static file per invocation.
-	elements, types, err := viz.Graph(s.root, nil)
+// answer writes a derived payload, or the refusal in its place. Everything a
+// view shows is derived from the live files on every request: there is no
+// cache, so nothing to invalidate and no way to answer with a stale tree.
+func answer(w http.ResponseWriter, payload *omap.Map, err error) {
 	if err != nil {
 		failErr(w, err)
 		return
 	}
-	nodes := make([]any, 0, len(elements.Nodes))
-	for _, n := range elements.Nodes {
-		nodes = append(nodes, n)
-	}
-	edges := make([]any, 0, len(elements.Edges))
-	for _, e := range elements.Edges {
-		edges = append(edges, e)
-	}
-	payload := omap.New()
-	payload.Set("nodes", nodes)
-	payload.Set("edges", edges)
-	payload.Set("types", strList(types))
 	writeJSON(w, payload)
 }
 
-// apiSchema serves the resolved schema the overview draws: the declared types,
+// apiOverview serves the workspace in numbers: every type's counts, markers
+// and review tiers, and every relation's links and coverage.
+func (s *server) apiOverview(w http.ResponseWriter, r *http.Request) {
+	payload, err := explore.Overview(s.root, clock.Now())
+	answer(w, payload, err)
+}
+
+// apiFindings serves what `khub check` fails on, with reasons.
+func (s *server) apiFindings(w http.ResponseWriter, r *http.Request) {
+	payload, err := explore.Findings(s.root, s.shadows, clock.Now())
+	answer(w, payload, err)
+}
+
+// The window `recent` uses when none is asked for, and the longest one worth
+// asking for.
+const (
+	recentDays    = 7
+	maxRecentDays = 3650
+)
+
+// apiRecent serves the entities touched in the last `days` days.
+func (s *server) apiRecent(w http.ResponseWriter, r *http.Request) {
+	days := recentDays
+	if raw := r.URL.Query().Get("days"); raw != "" {
+		n, err := strconv.Atoi(raw)
+		if err != nil || n < 0 || n > maxRecentDays {
+			fail(w, http.StatusBadRequest, "bad_request", "The days window is a whole number from 0 to "+strconv.Itoa(maxRecentDays))
+			return
+		}
+		days = n
+	}
+	payload, err := explore.Recent(s.root, days, clock.Now())
+	answer(w, payload, err)
+}
+
+// apiSearch serves the hits for `q`: what it names outright, then full text.
+func (s *server) apiSearch(w http.ResponseWriter, r *http.Request) {
+	payload, err := explore.Find(s.root, r.URL.Query().Get("q"), clock.Now())
+	answer(w, payload, err)
+}
+
+// apiQueries serves the saved queries with what each matches today.
+func (s *server) apiQueries(w http.ResponseWriter, r *http.Request) {
+	payload, err := explore.SavedQueries(s.root, clock.Now())
+	answer(w, payload, err)
+}
+
+// apiQuery serves one saved query's rows.
+func (s *server) apiQuery(w http.ResponseWriter, r *http.Request) {
+	if name, ok := named(w, r, "/api/query/", "No saved query name given"); ok {
+		payload, err := explore.SavedQuery(s.root, name, clock.Now())
+		answer(w, payload, err)
+	}
+}
+
+// named is the part of the path after prefix; an empty one is answered with
+// the refusal.
+func named(w http.ResponseWriter, r *http.Request, prefix, refusal string) (string, bool) {
+	name := r.URL.Path[len(prefix):]
+	if name == "" {
+		fail(w, http.StatusNotFound, "not_found", refusal)
+	}
+	return name, name != ""
+}
+
+// apiHistory serves the commits that touched one entity, and what changed since
+// its newest review.
+func (s *server) apiHistory(w http.ResponseWriter, r *http.Request) {
+	if id, ok := named(w, r, "/api/history/", "No entity id given"); ok {
+		payload, err := explore.History(s.root, id, clock.Now())
+		answer(w, payload, err)
+	}
+}
+
+// apiReach serves what one entity leads to and what leads to it, through others.
+func (s *server) apiReach(w http.ResponseWriter, r *http.Request) {
+	if id, ok := named(w, r, "/api/reach/", "No entity id given"); ok {
+		payload, err := explore.Reach(s.root, id, clock.Now())
+		answer(w, payload, err)
+	}
+}
+
+// apiSchema serves the resolved schema the diagram draws: the declared types,
 // the base relations every type inherits, and the ontology's edges.
 func (s *server) apiSchema(w http.ResponseWriter, r *http.Request) {
 	resolved, err := introspect.LoadSchema(s.root)
@@ -263,6 +339,11 @@ func (s *server) apiSchema(w http.ResponseWriter, r *http.Request) {
 		record := omap.New()
 		record.Set("name", name)
 		record.Set("layout", t.Storage.Layout)
+		when := ""
+		if t.When != nil {
+			when = *t.When
+		}
+		record.Set("when", when)
 		record.Set("relations", relationRecords(t.Relations))
 		types = append(types, record)
 	}
@@ -275,8 +356,8 @@ func (s *server) apiSchema(w http.ResponseWriter, r *http.Request) {
 	payload.Set("types", types)
 	// The base block is already merged into every type's relations, so this
 	// list is not extra edges — it names which of a type's predicates are the
-	// universal ones. Kept for any caller reading it; the page draws the base
-	// relations once, from the `any` box, using `base` below.
+	// universal ones. Kept for any caller reading it; the page reads `base`
+	// below.
 	payload.Set("base_relations", relationRecords(resolved.BaseRelations))
 	// The ontology as a graph, straight from the projection `khub schema edges`
 	// prints. Serving it rather than re-deriving it on the page is what keeps
@@ -288,7 +369,7 @@ func (s *server) apiSchema(w http.ResponseWriter, r *http.Request) {
 	// and `types[].relations` above keeps its shape for any caller reading it.
 	payload.Set("edges", introspect.EdgesView(resolved))
 	// The base block in full — the record `khub schema base` prints — so the
-	// overview can show the attributes and relations every type inherits.
+	// page can show the attributes and relations every type inherits.
 	payload.Set("base", introspect.BaseView(resolved))
 	// What the header and the tab title call this workspace: a person reviewing
 	// two of them has two tabs open.
@@ -302,21 +383,17 @@ func (s *server) apiSchema(w http.ResponseWriter, r *http.Request) {
 // The id is resolved against the index by entity.Get, never joined onto a
 // filesystem path, so a traversal attempt is simply a lookup miss.
 //
-// The page's three extra fields (markers, body_tree, neighbours) are appended
-// after the `get` record, from explore.Page, so the existing fields keep their
-// order and meaning.
+// What the page adds (explore.Page's fields) is appended after the `get`
+// record, so the existing fields keep their order and meaning.
 //
 // Deliberate divergence: entity.Get builds its index WITHOUT
-// index.Filter(StrayNodes) and without RejectMalformed, unlike viz.Graph
-// (internal/viz/viz.go) and explore, so a stray file is fetchable by id while
-// not being a node in /api/graph or a row in /api/rows. Left rather than
-// forked — the page only links from rows and neighbours, so nothing in the UI
-// can reach the difference; a stray fetched by hand gets no markers and no
-// neighbours rather than an error.
+// index.Filter(StrayNodes), unlike explore, so a stray file is fetchable by id while
+// not being a row in /api/rows. Left rather than
+// forked: the page links only to entities of the filtered index, so a stray is
+// reached by its address alone, and says it is one.
 func (s *server) apiEntity(w http.ResponseWriter, r *http.Request) {
-	id := r.URL.Path[len("/api/entity/"):]
-	if id == "" {
-		fail(w, http.StatusNotFound, "not_found", "No entity id given")
+	id, ok := named(w, r, "/api/entity/", "No entity id given")
+	if !ok {
 		return
 	}
 	view, err := entity.Get(s.root, id, true)
@@ -364,6 +441,7 @@ func (s *server) apiEntity(w http.ResponseWriter, r *http.Request) {
 		record.Set("body_tree", explore.BodyTree(view.Body))
 		record.Set("neighbours", []any{})
 		record.Set("stray", true)
+		record.Set("malformed", []any{})
 	default:
 		failErr(w, err)
 		return
@@ -378,17 +456,10 @@ func (s *server) apiEntity(w http.ResponseWriter, r *http.Request) {
 //
 // An undeclared type is the same `unknown_type` refusal /api/type gives.
 func (s *server) apiRows(w http.ResponseWriter, r *http.Request) {
-	name := r.URL.Path[len("/api/rows/"):]
-	if name == "" {
-		fail(w, http.StatusNotFound, "not_found", "No type name given")
-		return
+	if name, ok := named(w, r, "/api/rows/", "No type name given"); ok {
+		rows, err := explore.Rows(s.root, name, clock.Now())
+		answer(w, rows, err)
 	}
-	rows, err := explore.Rows(s.root, name, clock.Now())
-	if err != nil {
-		failErr(w, err)
-		return
-	}
-	writeJSON(w, rows)
 }
 
 // relPath renders a workspace path the way the CLI's records do: relative to

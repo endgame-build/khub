@@ -43,9 +43,6 @@ func Columns(resolved *schema.ResolvedSchema, typeName string) []Column {
 	if !ok {
 		return nil
 	}
-	isBase := func(predicate string) bool {
-		return resolved.BaseRelations != nil && resolved.BaseRelations.Has(predicate)
-	}
 	var declared, baseOut, incoming, baseIn []Column
 	for _, predicate := range rtype.Relations.Keys() {
 		rel, _ := rtype.Relations.Get(predicate)
@@ -55,7 +52,7 @@ func Columns(resolved *schema.ResolvedSchema, typeName string) []Column {
 			Direction:  DirOut,
 			Predicate:  predicate,
 			PeerTypes:  peerTargets(rel),
-			Base:       isBase(predicate),
+			Base:       isBase(resolved, predicate),
 			sourceType: typeName,
 		}
 		if col.Base {
@@ -72,7 +69,7 @@ func Columns(resolved *schema.ResolvedSchema, typeName string) []Column {
 			if !targets(rel, typeName) {
 				continue
 			}
-			if isBase(predicate) {
+			if isBase(resolved, predicate) {
 				if seenBaseIn[predicate] {
 					continue
 				}

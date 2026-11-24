@@ -4,14 +4,19 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>khub</title>
-<link rel="stylesheet" href="/static/app.css">
+<!-- The id is the one cytoscape looks for before adding a style element of its
+     own, which the CSP would refuse. -->
+<link rel="stylesheet" href="/static/app.css" id="__________cytoscape_stylesheet">
 <link rel="icon" href="data:,">
 </head>
 <body>
 <header id="bar">
   <a id="brand" href="#/">khub</a>
-  <nav id="crumbs" aria-label="Breadcrumb"></nav>
+  <nav id="tabs" aria-label="Views"></nav>
+  <div id="find" role="search"></div>
+  <div id="asof"></div>
 </header>
+<div id="banner" role="status" hidden></div>
 <main id="main" tabindex="-1"></main>
 <!-- Every tag carries src. The CSP forbids inline script, and the build gate
      in internal/serve/serve_test.go fails on any tag lacking one — including
