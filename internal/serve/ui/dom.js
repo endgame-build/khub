@@ -41,6 +41,9 @@ export function el(tag, attrs, textContent) {
   return node;
 }
 
+// tn is a bare text node — inline text between elements in a rendered body.
+export function tn(value) { return document.createTextNode(value === null || value === undefined ? '' : String(value)); }
+
 // text is the only sanctioned way to set a node's text outside this module.
 export function text(node, value) { node.textContent = value === null || value === undefined ? '' : String(value); }
 
@@ -52,12 +55,4 @@ export function clear(node) {
 export function fill(node, children) {
   clear(node);
   children.forEach(function (c) { if (c) node.appendChild(c); });
-}
-
-// kv is the fact row the inspector is built from: mono key, value beside it.
-export function kv(key, value) {
-  var row = el('div', { class: 'kv' });
-  row.appendChild(el('span', { class: 'k' }, key));
-  row.appendChild(el('span', { class: 'v' }, value));
-  return row;
 }

@@ -18,14 +18,17 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"testing"
 
 	"github.com/endgame-build/khub/internal/canon"
 	"github.com/endgame-build/khub/internal/entity"
 	"github.com/endgame-build/khub/internal/errs"
+	"github.com/endgame-build/khub/internal/integrity"
 	"github.com/endgame-build/khub/internal/introspect"
 	"github.com/endgame-build/khub/internal/omap"
+	"github.com/endgame-build/khub/internal/schema"
 	"github.com/endgame-build/khub/internal/viz"
 	"github.com/endgame-build/khub/internal/workspace"
 )
@@ -57,11 +60,11 @@ func TestAllowedHost(t *testing.T) {
 }
 
 func TestGuardRejectsWrites(t *testing.T) {
-	srv := httptest.NewServer(Handler(t.TempDir()))
+	srv := httptest.NewServer(Handler(t.TempDir(), nil))
 	defer srv.Close()
 
 	for _, method := range []string{"POST", "PUT", "PATCH", "DELETE"} {
-		req, err := http.NewRequest(method, srv.URL+"/api/graph", nil)
+		req, err := http.NewRequest(method, srv.URL+"/api/overview", nil)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -71,16 +74,16 @@ func TestGuardRejectsWrites(t *testing.T) {
 		}
 		resp.Body.Close()
 		if resp.StatusCode != http.StatusMethodNotAllowed {
-			t.Errorf("%s /api/graph = %d, want 405", method, resp.StatusCode)
+			t.Errorf("%s /api/overview = %d, want 405", method, resp.StatusCode)
 		}
 	}
 }
 
 func TestGuardRejectsForeignHost(t *testing.T) {
-	srv := httptest.NewServer(Handler(t.TempDir()))
+	srv := httptest.NewServer(Handler(t.TempDir(), nil))
 	defer srv.Close()
 
-	req, err := http.NewRequest("GET", srv.URL+"/api/graph", nil)
+	req, err := http.NewRequest("GET", srv.URL+"/api/overview", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -99,10 +102,10 @@ func TestNoCORSHeaders(t *testing.T) {
 	// Same-origin policy is the second layer under the Host check: it stops a
 	// local page from READING a response it is allowed to send. One
 	// Access-Control-Allow-Origin header would undo that.
-	srv := httptest.NewServer(Handler(wsWithEntities(t)))
+	srv := httptest.NewServer(Handler(wsWithEntities(t), nil))
 	defer srv.Close()
 
-	resp, err := http.Get(srv.URL + "/api/graph")
+	resp, err := http.Get(srv.URL + "/api/overview")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -119,7 +122,7 @@ func TestNoCORSHeaders(t *testing.T) {
 }
 
 func TestPageCarriesCSP(t *testing.T) {
-	srv := httptest.NewServer(Handler(t.TempDir()))
+	srv := httptest.NewServer(Handler(t.TempDir(), nil))
 	defer srv.Close()
 
 	resp, err := http.Get(srv.URL + "/")
@@ -140,7 +143,7 @@ func TestPageCarriesCSP(t *testing.T) {
 // client-side. The server must answer that URL with the page itself — same
 // bytes, same headers — whatever the value, malformed escapes included.
 func TestAspectQueryServesThePage(t *testing.T) {
-	srv := httptest.NewServer(Handler(t.TempDir()))
+	srv := httptest.NewServer(Handler(t.TempDir(), nil))
 	defer srv.Close()
 
 	get := func(path string) (*http.Response, string) {
@@ -169,7 +172,7 @@ func TestAspectQueryServesThePage(t *testing.T) {
 }
 
 func TestUnknownPathIs404(t *testing.T) {
-	srv := httptest.NewServer(Handler(t.TempDir()))
+	srv := httptest.NewServer(Handler(t.TempDir(), nil))
 	defer srv.Close()
 
 	for _, path := range []string{"/nope", "/static/nope.js", "/api/nope"} {
@@ -184,68 +187,117 @@ func TestUnknownPathIs404(t *testing.T) {
 	}
 }
 
-func TestGraphEndpoint(t *testing.T) {
-	srv := httptest.NewServer(Handler(wsWithEntities(t)))
+func TestOverviewEndpoint(t *testing.T) {
+	srv := httptest.NewServer(Handler(wsWithEntities(t), nil))
 	defer srv.Close()
 
 	var payload struct {
-		Nodes []struct {
-			Data struct{ ID, Label, Type string } `json:"data"`
-		} `json:"nodes"`
-		Edges []struct {
-			Data struct{ Source, Target, Label string } `json:"data"`
-		} `json:"edges"`
-		Types []string `json:"types"`
+		Types []struct {
+			Name  string
+			Count int
+		}
+		Relations []struct {
+			From, Predicate    string
+			Links, Have, Total int
+		}
 	}
-	getJSON(t, srv.URL+"/api/graph", &payload)
-
-	if len(payload.Nodes) != 2 {
-		t.Fatalf("nodes = %d, want 2", len(payload.Nodes))
+	getJSON(t, srv.URL+"/api/overview", &payload)
+	counts := map[string]int{}
+	for _, ty := range payload.Types {
+		counts[ty.Name] = ty.Count
 	}
-	if len(payload.Edges) != 1 {
-		t.Fatalf("edges = %d, want 1", len(payload.Edges))
+	if counts["client"] != 1 || counts["opportunity"] != 1 {
+		t.Errorf("counts = %v", counts)
 	}
-	if payload.Edges[0].Data.Label != "client" {
-		t.Errorf("edge label = %q, want client", payload.Edges[0].Data.Label)
-	}
-	if len(payload.Types) != 2 {
-		t.Errorf("types = %v, want 2 entries", payload.Types)
+	for _, r := range payload.Relations {
+		if r.From == "opportunity" && r.Predicate == "client" && (r.Links != 1 || r.Have != 1 || r.Total != 1) {
+			t.Errorf("opportunity.client = %+v", r)
+		}
 	}
 }
 
-func TestGraphRebuildsPerRequest(t *testing.T) {
-	// The no-cache claim: a graph written after the server started must appear
-	// without a restart, because nothing is held between requests.
+func TestOverviewRebuildsPerRequest(t *testing.T) {
+	// The no-cache claim: an entity written after the server started must
+	// appear without a restart, because nothing is held between requests.
 	root := wsWithEntities(t)
-	srv := httptest.NewServer(Handler(root))
+	srv := httptest.NewServer(Handler(root, nil))
 	defer srv.Close()
 
-	var before struct {
-		Nodes []json.RawMessage `json:"nodes"`
+	people := func() int {
+		var payload struct {
+			Types []struct {
+				Name  string
+				Count int
+			}
+		}
+		getJSON(t, srv.URL+"/api/overview", &payload)
+		for _, ty := range payload.Types {
+			if ty.Name == "person" {
+				return ty.Count
+			}
+		}
+		t.Fatal("no person type")
+		return 0
 	}
-	getJSON(t, srv.URL+"/api/graph", &before)
-
+	before := people()
 	if _, err := entity.Create(root, "person", entity.CreateOpts{
 		Fields: pairs("title", "Added Later"), ID: "added-later", UseTemplate: true,
 	}); err != nil {
 		t.Fatal(err)
 	}
-
-	var after struct {
-		Nodes []json.RawMessage `json:"nodes"`
+	if after := people(); after != before+1 {
+		t.Errorf("people %d -> %d, want one more", before, after)
 	}
-	getJSON(t, srv.URL+"/api/graph", &after)
-	if len(after.Nodes) != len(before.Nodes)+1 {
-		t.Errorf("nodes %d -> %d, want one more", len(before.Nodes), len(after.Nodes))
+}
+
+func TestRecentRefusesABadWindow(t *testing.T) {
+	srv := httptest.NewServer(Handler(wsWithEntities(t), nil))
+	defer srv.Close()
+	for _, q := range []string{"days=-1", "days=x", "days=99999999999999999999", "limit=0", "limit=1001", "limit=x"} {
+		resp, err := http.Get(srv.URL + "/api/recent?" + q)
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp.Body.Close()
+		if resp.StatusCode != http.StatusBadRequest {
+			t.Errorf("%s = %d, want 400", q, resp.StatusCode)
+		}
+	}
+}
+
+// One file that does not parse must not take the page with it: every view
+// answers, and names the file.
+func TestViewsSurviveABrokenFile(t *testing.T) {
+	root := wsWithEntities(t)
+	if err := os.WriteFile(filepath.Join(root, "clients", "broken.md"), []byte("---\ntype: client\ntitle: [unclosed\n---\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	srv := httptest.NewServer(Handler(root, nil))
+	defer srv.Close()
+	for _, path := range []string{"/api/overview", "/api/rows/client", "/api/entity/client/acme", "/api/recent", "/api/search?q=acme"} {
+		var payload struct{ Malformed []string }
+		getJSON(t, srv.URL+path, &payload)
+		if len(payload.Malformed) != 1 || !strings.HasSuffix(payload.Malformed[0], "broken.md") {
+			t.Errorf("%s malformed = %v", path, payload.Malformed)
+		}
+	}
+	var found struct {
+		Passed  bool
+		Buckets []struct{ Bucket string }
+	}
+	getJSON(t, srv.URL+"/api/findings", &found)
+	if found.Passed || len(found.Buckets) == 0 || found.Buckets[0].Bucket != "malformed" {
+		t.Errorf("findings = %+v", found)
 	}
 }
 
 func TestSchemaEndpointNamesBaseRelations(t *testing.T) {
-	srv := httptest.NewServer(Handler(wsWithEntities(t)))
+	srv := httptest.NewServer(Handler(wsWithEntities(t), nil))
 	defer srv.Close()
 
 	var payload struct {
-		Types []struct {
+		Workspace string `json:"workspace"`
+		Types     []struct {
 			Name      string `json:"name"`
 			Relations []struct {
 				Predicate string   `json:"predicate"`
@@ -261,6 +313,9 @@ func TestSchemaEndpointNamesBaseRelations(t *testing.T) {
 	if len(payload.Types) == 0 {
 		t.Fatal("no types")
 	}
+	if payload.Workspace == "" || strings.ContainsAny(payload.Workspace, `/\\`) {
+		t.Errorf("workspace = %q, want its name and never a path", payload.Workspace)
+	}
 	// The page hides these by default; if they stopped being reported it would
 	// silently start drawing a complete graph instead.
 	base := map[string]bool{}
@@ -275,8 +330,8 @@ func TestSchemaEndpointNamesBaseRelations(t *testing.T) {
 }
 
 func TestAdversarialSlugStaysEncoded(t *testing.T) {
-	// Entity text is attacker-influenceable, and since `title` joined the node
-	// payload the response carries authored text verbatim.
+	// Entity text is attacker-influenceable, and a list row carries a
+	// title, so the response carries authored text verbatim.
 	//
 	// What is asserted here is what matters on THIS transport: the response is
 	// valid JSON and the value round-trips exactly. It is deliberately NOT the
@@ -295,27 +350,25 @@ func TestAdversarialSlugStaysEncoded(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	srv := httptest.NewServer(Handler(root))
+	srv := httptest.NewServer(Handler(root, nil))
 	defer srv.Close()
 
-	resp, err := http.Get(srv.URL + "/api/graph")
+	resp, err := http.Get(srv.URL + "/api/rows/person")
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer resp.Body.Close()
 	body := readAll(t, resp)
 	var payload struct {
-		Nodes []struct {
-			Data struct{ ID, Label, Title string } `json:"data"`
-		} `json:"nodes"`
+		Rows []struct{ ID, Title string } `json:"rows"`
 	}
 	if err := json.Unmarshal([]byte(body), &payload); err != nil {
 		t.Fatalf("response is not valid JSON: %v", err)
 	}
 	var got string
-	for _, n := range payload.Nodes {
-		if n.Data.ID == "person/xss-probe" {
-			got = n.Data.Title
+	for _, n := range payload.Rows {
+		if n.ID == "person/xss-probe" {
+			got = n.Title
 		}
 	}
 	if got != hostile {
@@ -522,7 +575,7 @@ func TestSchemaEdgesMatchTheCLI(t *testing.T) {
 	// about the ontology, so that equivalence is worth asserting rather than
 	// assuming.
 	root := wsWithEntities(t)
-	srv := httptest.NewServer(Handler(root))
+	srv := httptest.NewServer(Handler(root, nil))
 	defer srv.Close()
 
 	var payload struct {
@@ -560,7 +613,7 @@ func TestSchemaEdgesMatchTheCLI(t *testing.T) {
 }
 
 func TestApiType(t *testing.T) {
-	srv := httptest.NewServer(Handler(wsWithEntities(t)))
+	srv := httptest.NewServer(Handler(wsWithEntities(t), nil))
 	defer srv.Close()
 
 	var view map[string]any
@@ -583,7 +636,7 @@ func TestApiType(t *testing.T) {
 }
 
 func TestEntityEndpointSerializesResolvedTargetsAsArrays(t *testing.T) {
-	srv := httptest.NewServer(Handler(wsWithEntities(t)))
+	srv := httptest.NewServer(Handler(wsWithEntities(t), nil))
 	defer srv.Close()
 	var payload struct {
 		Edges []struct {
@@ -601,4 +654,69 @@ func TestEntityEndpointSerializesResolvedTargetsAsArrays(t *testing.T) {
 		}
 	}
 	t.Fatal("client edge missing")
+}
+
+// One entity's history and reach and one saved query answer, and refuse what
+// they cannot name in the CLI's envelope.
+func TestEntityAndQueryEndpoints(t *testing.T) {
+	root := wsWithEntities(t)
+	if err := os.WriteFile(filepath.Join(root, ".khub", "queries.yaml"), []byte("deals:\n  type: opportunity\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	srv := httptest.NewServer(Handler(root, nil))
+	defer srv.Close()
+
+	var history struct {
+		ID      string
+		Note    string
+		Commits []any
+	}
+	getJSON(t, srv.URL+"/api/history/opportunity/acme-deal", &history)
+	if history.ID != "opportunity/acme-deal" || history.Note == "" || len(history.Commits) != 0 {
+		t.Errorf("history = %+v", history)
+	}
+	var reach struct {
+		ID      string
+		In, Out []any
+	}
+	getJSON(t, srv.URL+"/api/reach/client/acme", &reach)
+	if reach.ID != "client/acme" {
+		t.Errorf("reach = %+v", reach)
+	}
+	var query struct {
+		Matched int
+		Rows    []struct{ ID string }
+	}
+	getJSON(t, srv.URL+"/api/query/deals", &query)
+	if query.Matched != 1 || len(query.Rows) != 1 || query.Rows[0].ID != "opportunity/acme-deal" {
+		t.Errorf("query = %+v", query)
+	}
+	for _, path := range []string{"/api/history/", "/api/reach/", "/api/query/", "/api/marked/", "/api/marked/nope", "/api/history/client/nope", "/api/reach/client/nope", "/api/query/nope"} {
+		resp, err := http.Get(srv.URL + path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		body := readAll(t, resp)
+		resp.Body.Close()
+		if resp.StatusCode < 400 || !strings.Contains(body, `"code"`) {
+			t.Errorf("GET %s = %d %s", path, resp.StatusCode, body)
+		}
+	}
+}
+
+// The findings are check's, the ones only the command line can see included.
+func TestFindingsCarryTheShadows(t *testing.T) {
+	root := wsWithEntities(t)
+	srv := httptest.NewServer(Handler(root, func(*schema.ResolvedSchema) []integrity.FlagShadow {
+		return []integrity.FlagShadow{{Type: "client", Field: "by", Commands: []string{"add"}}}
+	}))
+	defer srv.Close()
+	var payload struct {
+		Passed  bool
+		Buckets []struct{ Bucket string }
+	}
+	getJSON(t, srv.URL+"/api/findings", &payload)
+	if payload.Passed || !slices.ContainsFunc(payload.Buckets, func(b struct{ Bucket string }) bool { return b.Bucket == "flag_shadowed" }) {
+		t.Errorf("findings = %+v", payload)
+	}
 }

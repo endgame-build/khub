@@ -158,3 +158,23 @@ func TestStaleDaysRejectsNonNumericString(t *testing.T) {
 		t.Fatal("want error for non-numeric stale_days, got nil")
 	}
 }
+
+// The name is the one init recorded; a config without one, or no config at
+// all, reads as the directory's name, init's own default.
+func TestName(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "acme-hub")
+	if err := os.MkdirAll(filepath.Join(root, ".khub"), 0o777); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := Name(root); err != nil || got != "acme-hub" {
+		t.Errorf("Name without a config = %q, %v", got, err)
+	}
+	writeConfig(t, root, "preset: build-hub\nname: Acme\n")
+	if got, err := Name(root); err != nil || got != "Acme" {
+		t.Errorf("Name = %q, %v", got, err)
+	}
+	writeConfig(t, root, "preset: build-hub\n")
+	if got, err := Name(root); err != nil || got != "acme-hub" {
+		t.Errorf("Name without one = %q, %v", got, err)
+	}
+}

@@ -4,6 +4,68 @@ Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+### Changed
+
+- **`khub serve` is a review page.** Routed views replace Schema, Both, Graph,
+  List and the side panel, each with its own address in the URL fragment, so a
+  reload, back/forward or a pasted link restores it and Back restores the place
+  in it. The page is specified in `docs/cli.md`, "The served page". The server
+  stays read-only; the link/unlink command composer is gone.
+  - It opens on what needs attention: unreviewed, incomplete, changed since
+    review, expired, orphan, draft and stale entities by type, the findings
+    `check` fails on, the changes of the last days, each type's review share and
+    largest gap, and the saved queries. Each headline number opens one
+    list across types.
+  - Search in the header finds an exact id or alias, then text.
+  - A type's list has facets with counts, chips for what is applied, the
+    matching `khub query` to copy, counts that open what they count, and a side
+    panel to read an entity beside the rows (`j`, `k`, Enter, Esc). A list draws
+    300 rows at a time.
+  - An entity leads with its description and a review bar: who reviewed it, who
+    wrote it, why it carries each marker, what changed since the review, and the
+    verify command, with the reviewer's name asked for once. Its links are rows by relation; its history and what it
+    reaches through other entities stand beside them.
+  - The ontology is a layered diagram in which nothing overlaps, held by a
+    property test over the shipped presets and 300 generated schemas. A schema
+    too dense to read whole opens on one type and its neighbors. A relation to
+    any type is drawn to the types it reaches, a base relation where it is used.
+  - A file that does not parse is named in a banner instead of failing every
+    view. A view reads the workspace again when its window comes to the front,
+    and an unchanged one stays as it is.
+  - The header and the tab title name the workspace.
+- **`serve --aspect` is accepted for compatibility** and still printed on the
+  URL; every value now opens the ontology overview, which is the diagram. Its help text says so — the one
+  fixture byte change.
+
+### Added
+
+- **Endpoints behind the page**: `/api/overview`, `/api/findings`,
+  `/api/recent`, `/api/search`, `/api/queries`, `/api/query/<name>`,
+  `/api/marked/<marker>`,
+  `/api/rows/<type>`, `/api/history/<id>` and `/api/reach/<id>`. `/api/entity/<id>`
+  gains `markers`, `reasons`, `body_tree`, `neighbours` and `malformed` after the
+  existing fields, and `stray` on a file the graph does not hold; `/api/schema` gains `base`, `workspace` and each type's
+  `when`; a refusal carries `field`, `expected` and `suggestion` when the error
+  sets them, as the CLI's envelope does. `/api/graph` is removed with the views
+  that drew it.
+- **dagre 3.1.3** (MIT, 48 KB, graphlib bundled), vendored byte-identical as
+  `internal/assets/dagre.min.js` and served at `/static/dagre.min.js`; it lays
+  out the overview. No network, DOM or string evaluation (an assets test holds
+  it to that).
+- **`github.com/yuin/goldmark` v1.8.7**, pure Go, used only by the new
+  `internal/explore` package to parse entity bodies for the page (depguard
+  keeps it there). Nothing on a write path depends on it.
+
+### Fixed
+
+- The served page's modules revalidate on every load (`Cache-Control:
+  no-cache`), so a browser never runs a cached module from a previous binary
+  beside a new one.
+- The schema diagram draws its relation arrows: a self-relation's style named
+  a `curve-style` cytoscape does not have, which stopped every edge from being
+  laid out, and a deprecated label-sized box width left the layout measuring
+  empty boxes.
+
 ## [0.33.0] — 2026-11-15
 
 khub tells an agent more and lets it try a write first. A refusal now carries

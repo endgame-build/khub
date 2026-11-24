@@ -1,43 +1,74 @@
-// app.js — boot, dispatch, the render dispatcher, the effect runner.
+// app.js — boot, the router and the frame around every view.
 //
-// The only module allowed to reach for everything. Every state change in the
-// application goes through the one dispatch below: reduce (pure) → render (the
-// only place that touches the document or cytoscape) → effects (the only place
-// that fetches).
+// Everything a view shows is derived from the URL fragment (route.js), so
+// reload, back/forward and a pasted link all restore it. Each view fetches
+// what it needs when it opens, and again when the window comes back to the
+// front or the reader asks; nothing polls.
 
+import * as home from './home.js';
+import * as types from './types.js';
+import * as overview from './overview.js';
+import * as list from './list.js';
+import * as query from './query.js';
+import * as entity from './entity.js';
+import * as panel from './panel.js';
+import * as find from './find.js';
 import * as api from './api.js';
-import * as gfx from './cy.js';
-import * as panels from './panels.js';
-import { initial, reduce, diff } from './state.js';
-import { buildModel, indexSchema, computeVisible, legalTargetTypes, typeOf,
-         buildSchemaGraph, buildBothGraph, usedEdgeCounts, aspectView } from './model.js';
+import { parse, format, typeRoute, homeRoute, overviewOf, entityRoute, opening, openId, TIERS } from './route.js';
+import { step } from './listmodel.js';
 import { el, fill, text } from './dom.js';
+import { notice, MARKERS, MEANING, markerName } from './widgets.js';
 
-var state, model, schema, colors, ink, typeOrder;
-var lastLayout = '';
-// The view's own explanation of what is on screen (a layout fallback, edges the
-// predicate filter is hiding). Held because it outlives the render that
-// produced it and must not be destroyed by a passing message.
-var viewNotice = '';
-// computeVisible walks every edge, and render() used to call it on every
-// dispatch — including each search keystroke. It depends on exactly three
-// slices, so it is recomputed only when one of them moves.
-var lastVisible = null;
-var lastListMs = 0;
-// Where the list was scrolled, per type. Without this, clicking a row and
-// coming back drops you at the top, which ruins the scan-check-scan job the
-// list exists for.
-var listScroll = {};
-// The ontology, as introspect.EdgesView built it. Fetched once with the schema.
-var schemaEdges = [];
-var dom = {};
+var VIEWS = { home: home, types: types, overview: overview, list: list, query: query, marked: query, entity: entity };
+var TABS = [
+  { label: 'Review', views: ['home', 'query', 'marked'], route: homeRoute() },
+  { label: 'Types', views: ['types', 'list', 'entity'], route: { view: 'types' } },
+  { label: 'Ontology', views: ['overview'], route: overviewOf('') }
+];
+// REFRESH_MS is how fresh a view must be for the window's return to leave it.
+var REFRESH_MS = 5000;
+
+var main, tabs, asof, banner;
+var route = null;
+var lastKey = '';
+var workspace = ''; // its name, once /api/schema answers
+var page = '';      // what the tab title calls the view on screen
+var lists = Object.create(null); // type → the list address last shown for it
+var loadedAt = 0;   // when the view on screen was last read
+
+// What the page remembers per history entry: scroll, rows drawn, the
+// diagram's viewport. An entry is stamped the first time it is shown, so back
+// and forward find it again; a reload starts with nothing remembered.
+var entries = {};
+var entry = {};
+var stamps = 0;
+var restore = null;   // the scroll to put back once the view has drawn
+var carried = null;   // what a new entry of the same view starts from
+var refreshedAt = 0;
+var settled = false;  // no scroll is recorded while a view is still loading
+
+function enter() {
+  var id = history.state && history.state.khub;
+  if (!id) {
+    stamps += 1;
+    id = Date.now() + '-' + stamps;
+    history.replaceState({ khub: id }, '');
+  }
+  entries[id] = entries[id] || carried || {};
+  carried = null;
+  entry = entries[id];
+}
+
+function setTitle() {
+  document.title = [page, workspace, 'khub'].filter(Boolean).join(' · ');
+}
 
 function $(id) { return document.getElementById(id); }
 
-// readColors resolves Paper's sanctioned graph ramp out of the stylesheet.
-// app.js holds no colour literal of its own: the token sheet is the source, and
-// cytoscape needs hex because it parses colours itself and understands neither
-// custom properties nor lab().
+// readColors resolves the graph ramp out of the stylesheet. app.js holds no
+// colour literal of its own: the token sheet is the source, and cytoscape
+// needs hex because it parses colours itself and understands neither custom
+// properties nor lab().
 function readColors() {
   var cs = getComputedStyle(document.documentElement);
   function v(name) { return cs.getPropertyValue(name).trim(); }
@@ -52,309 +83,260 @@ function readColors() {
   };
 }
 
-function dispatch(action) {
-  if (action.type === 'NAV_ENTITY') rememberScroll();
-  var next = reduce(state, action);
-  if (next === state) return;
-  var changed = diff(state, next);
-  state = next;
-  render(changed);
-  effects(changed);
+// setCrumbs builds the trail to where the reader is — every item but the last
+// is a link — and names the browser tab after the page it ends on.
+function setCrumbs(items) {
+  page = items.length ? items[items.length - 1].label : '';
+  setTitle();
+  var nav = el('nav', { class: 'crumbs', 'aria-label': 'Breadcrumb' });
+  items.slice(0, -1).forEach(function (it) {
+    nav.appendChild(el('a', { href: format(it.route) }, it.label));
+    nav.appendChild(el('span', { class: 'sep', 'aria-hidden': 'true' }, '›'));
+  });
+  if (items.length) nav.appendChild(el('span', { 'aria-current': 'page' }, items[items.length - 1].label));
+  return nav;
 }
 
-function render(changed) {
-  if (!lastVisible || changed.focus || changed.depth || changed.filters) {
-    lastVisible = computeVisible(state, model);
-  }
-  var visible = lastVisible;
-  // View decides first, level second. computeVisible describes the instance
-  // graph and says nothing about an ontology, so schema must not be reasoned
-  // about through it.
-  var asSchema = state.view === 'schema';
-  var asList = !asSchema && state.view === 'list';
-  // The combined view is the graph view plus an overlay: the same focus,
-  // depth and filters decide which entities show, and their types are boxed
-  // above them.
-  var asBoth = state.view === 'both';
-  var moved = changed.focus || changed.depth || changed.filters || changed.view;
-
-  // A view switch changes which population is on the canvas, and lastLayout is
-  // one memo across all of them. Left stale, returning to a view whose layout
-  // name happens to match declines to run — leaving freshly added elements
-  // stacked at the origin.
-  if (changed.view) lastLayout = '';
-
-  if (asSchema && moved) {
-    var sch = buildSchemaGraph(schema, schemaEdges, state.hiddenPredicates,
-                               usedEdgeCounts(model), model.byType);
-    var schIds = new Set(gfx.setOverlay(sch));
-    gfx.setLevelClass(0);
-    gfx.showOnly(schIds);
-    // An ontology is layered, not a force field: requirement -> component ->
-    // repo is a chain, and cose with three connected pairs and three isolates
-    // has almost nothing to push against, so it scattered them — a connected
-    // type ended up further from its neighbour than the unconnected ones.
-    gfx.runLayout({ name: 'schema' });
-    viewNotice = schemaNotice(sch);
-    renderNotice();
-  }
-
-  if (!asSchema && !asList && moved) {
-    // The graph view draws no synthetic elements — the ontology is where the
-    // type level lives. The combined view is the one that adds them.
-    var ids = new Set();
-    visible.nodes.forEach(function (id) { ids.add(id); });
-    visible.edges.forEach(function (id) { ids.add(id); });
-    // Only navigation relayouts the combined view. A filter toggle rebuilds
-    // the overlay (which boxes and relations show depends on it), so the
-    // boxes' positions are read first and put back after.
-    var relayout = changed.focus || changed.depth || changed.view;
-    var saved = (asBoth && !relayout) ? gfx.overlayPositions() : null;
-    if (asBoth) {
-      var both = buildBothGraph(
-        buildSchemaGraph(schema, schemaEdges, state.hiddenPredicates, usedEdgeCounts(model), model.byType),
-        Array.from(visible.nodes));
-      gfx.setOverlay(both).forEach(function (id) { ids.add(id); });
-    } else {
-      gfx.setOverlay(null);
-    }
-
-    gfx.setLevelClass(visible.level);
-    gfx.showOnly(ids);
-
-    // Navigation relayouts; filters do not. Re-running a force-directed layout
-    // because someone toggled a legend row is both slow and maddening. The
-    // exception is a change of layout ALGORITHM: un-hiding a predicate can turn
-    // an edgeless set into a connected one, and a grid laid out for no edges is
-    // the wrong shape for a graph that now has a hundred.
-    //
-    // The combined view follows the same rule. Its overlay was just rebuilt,
-    // so on a filter change the boxes go back where they were, and a box the
-    // change brought in is placed above the entities that realize it rather
-    // than relaying out every entity on the canvas.
-    if (asBoth) {
-      lastLayout = 'both';
-      if (relayout || !saved.size) gfx.runLayout({ name: 'both' });
-      else gfx.restoreOverlay(saved);
-    } else if (changed.focus || changed.depth || changed.view ||
-        visible.layout.name !== lastLayout) {
-      lastLayout = visible.layout.name;
-      gfx.runLayout(visible.layout);
-    }
-  }
-
-  if (moved || changed.sort) {
-    dom.list.hidden = !asList;
-    if (asList) {
-      var t0 = performance.now();
-      panels.renderList(dom.list, state, model, visible, colors, typeOrder);
-      // focus is empty at the top level, where the list spans the workspace and
-      // there is no per-type scroll position to restore.
-      dom.list.scrollTop = state.focus.length ? (listScroll[state.focus[0].name] || 0) : 0;
-      lastListMs = Math.round(performance.now() - t0);
-    }
-    // The notice explains the canvas — a layout fallback, edges a filter is
-    // hiding. It says nothing about a list, and #notice floats above one.
-    viewNotice = (asList || asSchema) ? '' : visible.notice;
-    if (!asSchema) renderNotice();
-  }
-
-  if (changed.focus) panels.renderCrumbs(dom.crumbs, state, model);
-  if (changed.filters) panels.renderFilters(dom.filters, state, model, schema, colors, typeOrder);
-  if (changed.search) panels.renderSearch(dom.results, state, model);
-  if (changed.focus || changed.filters || changed.depth) {
-    panels.renderCounts(dom.counts, state, model, visible);
-  }
-  if (changed.inspect || changed.focus) panels.renderInspector(dom.inspector, state, model);
-  if (changed.compose) {
-    panels.renderComposer(dom.composer, state, schema);
-    gfx.mark(state.compose.a, state.compose.b,
-      state.compose.a ? legalTargetTypes(schema, typeOf(state.compose.a)) : null);
-  }
-  if (changed.notice) renderNotice();
-  if (changed.focus || changed.view) {
-    // All four are always available now — they are peers over one workspace,
-    // not a toggle that only means something at one level.
-    dom.asschema.className = 'btn-ghost' + (state.view === 'schema' ? ' on' : '');
-    dom.asgraph.className = 'btn-ghost' + (state.view === 'graph' ? ' on' : '');
-    dom.asboth.className = 'btn-ghost' + (state.view === 'both' ? ' on' : '');
-    dom.aslist.className = 'btn-ghost' + (state.view === 'list' ? ' on' : '');
-    // Levels and depth belong to the instance views; an ontology is flat.
-    dom.crumbs.hidden = asSchema;
-    dom.depthctl.hidden = asSchema;
-  }
-  if ((changed.depth || changed.focus || changed.view) && !asSchema) {
-    // Live at both levels now: at a type the + control is how other types come
-    // back into view.
-    dom.expand.disabled = !state.focus.length || state.depth >= 3;
-    dom.contract.disabled = !state.focus.length || state.depth <= 0;
-    text(dom.depth, state.focus.length
-      ? (state.depth === 0 ? 'this type only' : 'depth ' + state.depth)
-      : '');
-  }
+function drawTabs() {
+  fill(tabs, TABS.map(function (t) {
+    var here = route && t.views.indexOf(route.view) !== -1;
+    return el('a', { href: format(t.route), class: here ? 'on' : null, 'aria-current': here ? 'true' : null }, t.label);
+  }));
 }
 
-// An explanation of the current view always wins over a transient message.
-// They shared one slot before, so copying a command at L1 erased "101 edges are
-// hidden here" — the answer to a question the reader was still asking.
-function renderNotice() { panels.renderNotice(dom.notice, viewNotice || state.notice); }
+// showBanner says which files are missing from everything on screen.
+function showBanner(files) {
+  banner.hidden = !files.length;
+  if (!files.length) { fill(banner, []); return; }
+  var shown = files.slice(0, 3).join(', ') + (files.length > 3 ? ' and ' + (files.length - 3) + ' more' : '');
+  fill(banner, [
+    el('b', null, files.length === 1 ? 'One file does not parse. ' : files.length + ' files do not parse. '),
+    el('span', null, 'Counts and markers leave ' + (files.length === 1 ? 'it' : 'them') + ' out: '),
+    el('span', { class: 'mono' }, shown)
+  ]);
+}
 
-function effects(changed) {
-  if (changed.inspect && state.inspect && state.inspect.kind === 'type' && state.inspect.status === 'loading') {
-    var name = state.inspect.name;
-    api.getType(name).then(
-      function (data) { dispatch({ type: 'INSPECT_TYPE_OK', name: name, data: data }); },
-      function (err) { dispatch({ type: 'INSPECT_TYPE_ERR', name: name, message: err.message }); }
-    );
+// drawAsOf says when the view was read, or why it is older than it looks.
+function drawAsOf(err) {
+  var at = new Date(loadedAt);
+  var two = function (n) { return (n < 10 ? '0' : '') + n; };
+  if (!asof.firstChild) {
+    fill(asof, [el('span'), el('button', { type: 'button', class: 'copy', title: 'Read the workspace again (r)', on: { click: refresh } }, 'Refresh'),
+      el('button', { type: 'button', class: 'copy', title: 'Keys and terms (?)', 'aria-label': 'Keys and terms', on: { click: keys } }, '?')]);
+  }
+  var said = asof.firstChild;
+  said.className = err ? 'late' : '';
+  asof.title = err ? err.message || String(err) : '';
+  text(said, err ? 'not refreshed' : 'as of ' + two(at.getHours()) + ':' + two(at.getMinutes()));
+}
+
+var colors = readColors();
+
+var ctx = {
+  colors: colors.ramp,
+  ink: colors.ink,
+  crumbs: setCrumbs,
+  // nav pushes a history entry, so back returns to the previous view; it
+  // reports whether it pushed one.
+  nav: function (to) {
+    var h = format(to);
+    if (h === location.hash || (h === '#/' && location.hash === '')) { render(); return false; }
+    location.hash = h;
+    return true;
+  },
+  // replace rewrites the address without a history entry: typing into a
+  // filter box is one step back, not one per keystroke.
+  replace: function (to) {
+    history.replaceState(history.state, '', location.pathname + location.search + format(to));
+    render(true);
+  },
+  // entry is what the page remembers about the history entry on screen.
+  entry: function () { return entry; },
+  // ready says the view has drawn, so its scroll can come back.
+  ready: function () {
+    if (restore !== null) {
+      main.scrollTop = restore;
+      // A block still to load may be what makes the page long enough.
+      if (main.scrollTop >= restore - 1) restore = null;
+    }
+    settled = true;
+    entry.scroll = main.scrollTop;
+  },
+  // loaded says the view on screen was read just now, and which files the
+  // reading had to leave out.
+  loaded: function (malformed) {
+    loadedAt = Date.now();
+    drawAsOf(null);
+    if (malformed) showBanner(malformed);
+  },
+  // failed is a refresh that did not answer: what is on screen stays.
+  failed: function (err) { drawAsOf(err); },
+  refresh: refresh,
+  // listRoute is the list of a type as the reader last had it, with nothing
+  // open beside it.
+  listRoute: function (type) { return lists[type] ? opening(lists[type], '') : typeRoute(type); },
+  // canOpen says whether an entity can be read beside the view on screen.
+  canOpen: function (id) {
+    return ['list', 'query', 'marked', 'entity'].indexOf(route.view) !== -1 && route.id !== id && panel.hasRoom();
+  },
+  open: function (id) {
+    var to = opening(route, id);
+    if (openId(route)) { ctx.replace(to); return; }
+    // The same rows and groups stay drawn under the new entry.
+    carried = { rows: entry.rows, groups: entry.groups };
+    ctx.nav(to);
+  },
+  close: function () { ctx.replace(opening(route, '')); },
+  route: function () { return route; }
+};
+
+// viewKey names what is on screen, ignoring sort, filters and what is open
+// beside it: a change of key is a new page, which scrolls to the top.
+function viewKey(r) {
+  if (r.view === 'list') return 'list:' + r.type;
+  if (r.view === 'entity') return 'entity:' + r.id;
+  if (r.view === 'query' || r.view === 'marked') return r.view + ':' + r.name;
+  return r.view;
+}
+
+// render draws the view the address names. here says the entry on screen only
+// changed its address, so its place is where the reader is.
+function render(here) {
+  // A question asked over one view is not the next view's.
+  Array.prototype.forEach.call(document.querySelectorAll('dialog[open]'), function (d) { d.close(); });
+  enter();
+  route = parse(location.hash);
+  var key = viewKey(route);
+  if (key !== lastKey) {
+    settled = false;
+    restore = entry.scroll || 0;
+    main.scrollTop = 0;
+    // A new page: move focus to it, so the keys that scroll work at once and a
+    // keyboard or screen-reader user starts at the top of what just opened
+    // rather than on a link that is gone.
+    main.focus({ preventScroll: true });
+    lastKey = key;
+  } else if (here !== true && entry.scroll !== undefined) {
+    restore = entry.scroll;
+  }
+  if (route.view === 'list') lists[route.type] = route;
+  Object.keys(VIEWS).forEach(function (name) { if (VIEWS[name] !== VIEWS[route.view]) VIEWS[name].unmount(); });
+  document.body.dataset.view = route.view;
+  drawTabs();
+  var view = VIEWS[route.view];
+  if (view) { view.show(main, route, ctx, false); return; }
+  setCrumbs([{ label: 'Not found' }]);
+  fill(main, [notice('Nothing at this address', 'The address names no view of this workspace.',
+    [{ label: 'Go to the review', href: '#/' }])]);
+}
+
+// refresh reads the view on screen again and puts the reader back where they
+// were. What is on screen stays until the new reading arrives.
+function refresh() {
+  var view = route && VIEWS[route.view];
+  if (!view) return;
+  restore = main.scrollTop;
+  refreshedAt = Date.now();
+  view.show(main, route, ctx, true);
+}
+
+function onReturn() {
+  // The window's return raises two events, and a reading may still be on its way.
+  if (document.visibilityState === 'visible' && loadedAt && Date.now() - Math.max(loadedAt, refreshedAt) > REFRESH_MS) refresh();
+}
+
+function typing(node) {
+  return node && (/^(INPUT|SELECT|TEXTAREA)$/.test(node.tagName) || node.isContentEditable);
+}
+
+// move opens the next or previous row of the view on screen beside it.
+function move(by) {
+  var view = VIEWS[route.view];
+  var rows = view && view.order ? view.order() : [];
+  var id = step(rows, openId(route), by, panel.placeOf(openId(route)));
+  if (!id || id === openId(route)) return;
+  if (!panel.hasRoom()) return;
+  var follow = document.activeElement.closest && document.activeElement.closest('tr, li');
+  ctx.open(id);
+  // The keyboard on a row moves with the open one, so Enter opens what is open.
+  if (follow && main.contains(follow)) setTimeout(function () { if (view.focusOn) view.focusOn(id); }, 0);
+}
+
+function onKey(evt) {
+  if (evt.metaKey || evt.ctrlKey || evt.altKey) return;
+  if (evt.key === 'Escape') {
+    if (find.close() || typing(evt.target) || document.querySelector('dialog[open]')) return;
+    if (openId(route)) ctx.close();
+    else if (VIEWS[route.view] && VIEWS[route.view].escape) VIEWS[route.view].escape(ctx);
     return;
   }
-  if (changed.inspect && state.inspect && state.inspect.status === 'loading') {
-    var id = state.inspect.id;
-    api.getEntity(id).then(
-      function (data) { dispatch({ type: 'INSPECT_OK', id: id, data: data }); },
-      function (err) { dispatch({ type: 'INSPECT_ERR', id: id, message: err.message }); }
-    );
+  if (typing(evt.target) || document.querySelector('dialog[open]')) return;
+  switch (evt.key) {
+    case '/': evt.preventDefault(); find.focus(); break;
+    case 'r': refresh(); break;
+    case 'j': move(1); break;
+    case 'k': move(-1); break;
+    case '?': keys(); break;
+    case 'Enter':
+      if (openId(route) && (evt.target === document.body || evt.target === main)) ctx.nav(entityRoute(openId(route)));
+      break;
   }
 }
 
-// onGraph is the single meaning of a canvas click: focus what was clicked.
-// There is no selection mode — the command composer is driven from the
-// inspector's buttons, so one click never has two meanings.
-// schemaNotice says what the ontology is not showing. Unhiding the universal
-// predicates draws every type against every type, so their absence is worth
-// explaining rather than leaving as a silently partial picture.
-function schemaNotice(sch) {
-  var base = schema.baseRelations.filter(function (p) { return state.hiddenPredicates.has(p); });
-  var derived = (schema.derivedRelations || []).filter(function (p) { return state.hiddenPredicates.has(p); });
-  var parts = [];
-  if (base.length) parts.push(base.length + ' universal (' + base.join(', ') + ') — shown, they connect every type to every type');
-  if (derived.length) parts.push(derived.length + ' derived inverse' + (derived.length === 1 ? '' : 's') + ' (' + derived.join(', ') + ')');
-  return parts.length ? 'Hidden: ' + parts.join(' · ') : '';
-}
-
-function rememberScroll() {
-  if (state.focus.length === 1 && state.view === 'list') {
-    listScroll[state.focus[0].name] = dom.list.scrollTop;
-  }
-}
-
-function onGraph(evt) {
-  // A schema node is a declared type, not an entity and not a drill-down
-  // target: clicking it explains the contract rather than switching what you
-  // are looking at.
-  if (evt.schema) {
-    // An instance-of edge says only "this entity is of that type", which both
-    // its ends already show; it has nothing to inspect.
-    if (evt.data && evt.data.instanceOf) return;
-    if (evt.target === 'node' && evt.data.schemaKind === 'type') {
-      dispatch({ type: 'INSPECT_TYPE', name: evt.data.type });
-    } else if (evt.target === 'edge') {
-      dispatch({ type: 'INSPECT_RELATION', data: evt.data });
-    }
-    return;
-  }
-  if (evt.target === 'node') {
-    // NAV_ENTITY inspects as part of navigating, so this is one action.
-    dispatch({ type: 'NAV_ENTITY', id: evt.id });
-    return;
-  }
-  if (evt.target === 'edge') {
-    // An edge has nothing to drill into, so its click is unambiguous.
-    dispatch({
-      type: 'COMPOSE_UNLINK',
-      source: evt.data.source, predicate: evt.data.label, target: evt.data.target
+// keys lists the keyboard's shortcuts, and what the page's terms mean.
+function keys() {
+  var list = function (pairs) {
+    var dl = el('dl', { class: 'keys' });
+    pairs.forEach(function (k) {
+      dl.appendChild(el('dt', null, k[0]));
+      dl.appendChild(el('dd', null, k[1]));
     });
-    dispatch({ type: 'NOTICE', text: 'Queued an unlink for ' + evt.data.label });
-  }
+    return dl;
+  };
+  var box = el('dialog', { class: 'keybox', 'aria-label': 'Keys and terms' });
+  box.appendChild(el('h2', null, 'Keys'));
+  box.appendChild(list(  [['/', 'Search'], ['j, k', 'Open the next or previous row beside the list'], ['Enter', 'Open what is beside the list as a page'],
+    ['Esc', 'Close what is open, or leave one type for the full map'], ['r', 'Read the workspace again'], ['Shift-click', 'Leave a filter value out'], ['?', 'This list']]));
+  box.appendChild(el('h2', null, 'Markers'));
+  box.appendChild(list(MARKERS.map(function (k) { return [markerName(k), MEANING[k]]; })));
+  box.appendChild(el('h2', null, 'Trust'));
+  box.appendChild(list(TIERS.map(function (k) { return [k, MEANING[k]]; })));
+  box.appendChild(el('button', { type: 'button', class: 'btn', on: { click: function () { box.close(); } } }, 'Close'));
+  box.addEventListener('close', function () { box.remove(); });
+  document.body.appendChild(box);
+  box.showModal();
 }
 
 function boot() {
-  dom = {
-    cy: $('cy'), crumbs: $('crumbs'), counts: $('counts'), filters: $('filters'),
-    inspector: $('inspector'), composer: $('composer'), results: $('results'),
-    search: $('search'), notice: $('notice'), expand: $('expand'),
-    contract: $('contract'), depth: $('depth'), list: $('list'),
-    aslist: $('aslist'), asgraph: $('asgraph'), asschema: $('asschema'),
-    asboth: $('asboth'),
-    depthctl: $('depthctl')
-  };
-
-  Promise.all([api.getGraph(), api.getSchema()]).then(function (r) {
-    model = buildModel(r[0]);
-    schema = indexSchema(r[1]);
-    schemaEdges = r[1].edges || [];
-    var c = readColors();
-    colors = c.ramp;
-    ink = c.ink;
-
-    // One ordering, used by both the canvas and the legend — indexing them
-    // separately made a zero-count type magenta in the legend and grey on the
-    // canvas.
-    //
-    // Present types first, sorted, which is exactly viz.go's own rule
-    // (sortedKeys over the types present). That is what keeps a type the same
-    // colour in the served app and in the static artifact. Declared-but-empty
-    // types follow, so they still get a colour for their L0 circle; viz never
-    // draws them, so the tail cannot disagree with anything.
-    typeOrder = model.types.concat(
-      schema.declaredTypes.filter(function (t) { return !model.byType.has(t); }).sort()
-    );
-    state = initial(schema.baseRelations, schema.derivedRelations);
-    // `khub serve --aspect` prints a URL carrying ?aspect=, so the page lands
-    // where the operator asked. Read once at boot; the buttons own the view
-    // from then on.
-    var landing = aspectView(window.location.search);
-    if (landing) state = Object.assign({}, state, { view: landing });
-    panels.init(dispatch);
-
-    gfx.mount(dom.cy, { nodes: model.nodes, edges: model.edges },
-      gfx.buildStyle(typeOrder, colors, ink));
-    gfx.applyFlags();
-    gfx.on(onGraph);
-    gfx.hoverLabels();
-
-    dom.search.addEventListener('input', function () {
-      dispatch({ type: 'SET_SEARCH', text: dom.search.value });
-    });
-    dom.asschema.addEventListener('click', function () {
-      gfx.setSnapNextFit();
-      dispatch({ type: 'SET_VIEW', view: 'schema' });
-    });
-    dom.aslist.addEventListener('click', function () { dispatch({ type: 'SET_VIEW', view: 'list' }); });
-    dom.asboth.addEventListener('click', function () {
-      gfx.setSnapNextFit();
-      dispatch({ type: 'SET_VIEW', view: 'both' });
-    });
-    dom.asgraph.addEventListener('click', function () {
-      // Snap rather than tween: the canvas sat under the list with a stale
-      // viewport, so an animated fit would start from nowhere.
-      gfx.setSnapNextFit();
-      dispatch({ type: 'SET_VIEW', view: 'graph' });
-    });
-    dom.expand.addEventListener('click', function () { dispatch({ type: 'EXPAND' }); });
-    dom.contract.addEventListener('click', function () { dispatch({ type: 'CONTRACT' }); });
-
-    // Snap the first fit rather than animating it: cytoscape fits to every
-    // element at init, so the opening frame is the whole 2,000-node preset
-    // spread zoomed out, and animating away from it reads as a flash.
-    gfx.setSnapNextFit();
-    render({
-      focus: true, depth: true, filters: true, search: true,
-      inspect: true, compose: true, notice: true, view: true, sort: true
-    });
-
-    if (model.droppedDuplicateEdges) {
-      dispatch({
-        type: 'NOTICE',
-        text: 'Collapsed ' + model.droppedDuplicateEdges + ' duplicate edge record(s)'
-      });
-    }
-  }).catch(function (err) {
-    fill(dom.inspector, [
-      el('div', { class: 'cap' }, 'Could not load'),
-      el('div', { class: 'err' }, err.message || String(err))
-    ]);
+  main = $('main');
+  tabs = $('tabs');
+  asof = $('asof');
+  banner = $('banner');
+  // `khub serve --aspect` prints an address carrying it, and every value of it
+  // opens the diagram.
+  if (new URLSearchParams(location.search).has('aspect') && /^#?\/?$/.test(location.hash)) {
+    history.replaceState(null, '', location.pathname + format(overviewOf('')));
+  }
+  find.mount($('find'), ctx);
+  window.addEventListener('hashchange', render);
+  window.addEventListener('focus', onReturn);
+  document.addEventListener('visibilitychange', onReturn);
+  document.addEventListener('keydown', onKey);
+  main.addEventListener('scroll', function () { if (settled) entry.scroll = main.scrollTop; }, { passive: true });
+  // A reader who moves the page has taken it over.
+  ['wheel', 'touchmove', 'mousedown', 'keydown'].forEach(function (evt) {
+    main.addEventListener(evt, function () { restore = null; }, { passive: true });
   });
+  render();
+  // Names the workspace: a reviewer of two of them has two of these tabs.
+  // Without an answer the header goes unnamed, and the view on screen reports
+  // what is wrong through its own request.
+  api.getSchema().then(function (schema) {
+    workspace = schema.workspace || '';
+    if (workspace) text($('brand'), workspace);
+    $('brand').title = 'khub: ' + workspace;
+    setTitle();
+  }, function () {});
 }
 
 boot();
