@@ -10,14 +10,18 @@ import { parts } from './entity.js';
 
 var WIDE = '(min-width: 900px)'; // app.css stacks the panel below it
 var shown = null; // { host, id, seen }
+var current = null; // { open, id, rev, trust }: what the panel has read, and the address that opened it
 var place = null; // { id, at }: where the open entity last was among the rows
+
+// read is what the panel opened as open has read, null while it loads.
+export function read(open) { return current && current.open === open ? current : null; }
 
 // placeOf is that index, -1 for another entity.
 export function placeOf(id) { return place && place.id === id ? place.at : -1; }
 
 export function hasRoom() { return window.matchMedia(WIDE).matches; }
 
-export function unmount() { shown = null; place = null; }
+export function unmount() { shown = null; place = null; current = null; }
 
 // sync brings host in line with what the route holds open. rows, when given,
 // is the order next and previous follow. force reads the entity again.
@@ -32,9 +36,11 @@ export function sync(host, route, ctx, rows, force) {
   if (!host.firstChild) fill(host, [el('div', { class: 'pbar' }), el('div', { class: 'pbody' })]);
   bar(host, id, ctx, rows);
   var body = host.querySelector('.pbody');
-  if (!again) { fill(body, [skeleton('Loading ' + id, 6)]); host.scrollTop = 0; }
+  if (!again) { current = null; fill(body, [skeleton('Loading ' + id, 6)]); host.scrollTop = 0; }
   api.getEntity(id).then(function (e) {
-    if (shown !== mine || same(mine, e)) return;
+    if (shown !== mine) return;
+    current = { open: id, id: e.id, rev: e.stray ? '' : e.rev, trust: e.markers ? e.markers.trust : '' };
+    if (same(mine, e)) return;
     var p = parts(e, ctx, true);
     fill(body, [p.head, p.review, p.since, p.body, p.links, p.attributes].filter(Boolean));
   }, function (err) {

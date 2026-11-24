@@ -691,7 +691,14 @@ func TestEntityAndQueryEndpoints(t *testing.T) {
 	if query.Matched != 1 || len(query.Rows) != 1 || query.Rows[0].ID != "opportunity/acme-deal" {
 		t.Errorf("query = %+v", query)
 	}
-	for _, path := range []string{"/api/history/", "/api/reach/", "/api/query/", "/api/marked/", "/api/marked/nope", "/api/history/client/nope", "/api/reach/client/nope", "/api/query/nope"} {
+	var revs struct{ Revs map[string]*string }
+	getJSON(t, srv.URL+"/api/revs?id=client/acme&id=client/nope", &revs)
+	var acme struct{ Rev string }
+	getJSON(t, srv.URL+"/api/entity/client/acme", &acme)
+	if got := revs.Revs["client/acme"]; got == nil || *got != acme.Rev || acme.Rev == "" || revs.Revs["client/nope"] != nil {
+		t.Errorf("revs = %v, the entity says %q", revs.Revs, acme.Rev)
+	}
+	for _, path := range []string{"/api/history/", "/api/reach/", "/api/query/", "/api/marked/", "/api/marked/nope", "/api/revs", "/api/revs?" + strings.Repeat("id=client/acme&", 201), "/api/history/client/nope", "/api/reach/client/nope", "/api/query/nope"} {
 		resp, err := http.Get(srv.URL + path)
 		if err != nil {
 			t.Fatal(err)

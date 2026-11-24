@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
 const code = await readFile(new URL('../ui/shell.js', import.meta.url), 'utf8');
-const { word, verifyCommand, queryCommand, runCommand, reviewerFault } = await import('data:text/javascript;base64,' + Buffer.from(code).toString('base64'));
+const { word, verifyCommand, queryCommand, runCommand, reviewerFault, signable } = await import('data:text/javascript;base64,' + Buffer.from(code).toString('base64'));
 
 const hostile = [
   "x; touch PWNED; #", "it's", '$(id)', '`id`', 'a b', '--help me', 'é', "'; id; '", '*', '~', ''
@@ -55,6 +55,15 @@ const rs = { type: 'requirement', relations: [
   { key: 'in:use-case.served_by', label: 'serves', direction: 'in' }
 ] };
 const q = list => queryCommand(rs, { q: '', rel: '', attr: [], status: [], trust: [], by: [], not: [], count: [], ...list });
+
+test('only what is still as it was read is signed', () => {
+  const marked = [{ id: 'a/1', rev: 'r1' }, { id: 'a/2', rev: 'r2' }, { id: 'a/gone', rev: 'r3' }, { id: 'a/\u001b', rev: 'r4' }, { id: 'a/none', rev: '' }];
+  const now = new Map([['a/1', 'r1'], ['a/2', 'moved'], ['a/gone', null], ['a/\u001b', 'r4'], ['a/none', '']]);
+  const got = signable(marked, now, 'ana');
+  assert.deepEqual(got.lines, ['khub verify a/1 --by human:ana']);
+  assert.deepEqual(got.changed.map(m => m.id), ['a/2', 'a/gone', 'a/none']);
+  assert.deepEqual(got.unsafe.map(m => m.id), ['a/\u001b']);
+});
 
 test('a list the CLI can say is copied as its command', () => {
   assert.equal(q({}).command, 'khub query --type requirement');

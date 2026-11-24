@@ -3,6 +3,7 @@
 
 import * as api from './api.js';
 import * as panel from './panel.js';
+import * as marks from './marks.js';
 import { el, fill } from './dom.js';
 import { same, markerTags, trustTag, notice, entityLink, rowOpens, reveal, plural, num, copyButton, skeleton, markerName, MEANING } from './widgets.js';
 import { homeRoute, openId } from './route.js';
@@ -54,6 +55,7 @@ export function show(main, route, ctx, force) {
   what.read().then(function (found) {
     if (view !== mine) return;
     ctx.loaded(found.malformed);
+    marks.settle(found.rows);
     if (same(mine, found) && kept) { mark(ctx.route(), ctx, true); ctx.ready(); return; }
     var row = kept && document.activeElement.closest('tbody tr');
     draw(main, found, what, crumbs, ctx, kept && mine.aside);
@@ -69,6 +71,7 @@ export function show(main, route, ctx, force) {
 
 // draw builds the list. aside, when given, is the panel to keep.
 function draw(main, found, what, crumbs, ctx, aside) {
+  view.rows = found.rows;
   var root = el('section', { class: 'split' });
   var left = el('div', { class: 'pane' });
   var head = el('header', { class: 'viewhead' });
@@ -79,6 +82,7 @@ function draw(main, found, what, crumbs, ctx, aside) {
   if (what.command !== undefined) row.appendChild(copyButton(what.label, what.command));
   head.appendChild(row);
   if (what.note) head.appendChild(el('p', { class: 'sub' }, what.note + '.'));
+  head.appendChild(marks.bar(order));
   left.appendChild(head);
   if (!found.rows.length) left.appendChild(el('p', { class: 'empty' }, what.none));
   else {
@@ -93,6 +97,7 @@ function draw(main, found, what, crumbs, ctx, aside) {
       var line = el('tr', { 'data-id': r.id });
       var title = el('th', { scope: 'row', class: 'title' });
       title.appendChild(entityLink(r.id, r.title, ctx));
+      title.appendChild(marks.tag(r.id));
       title.appendChild(el('div', { class: 'slug mono' }, r.slug));
       line.appendChild(title);
       line.appendChild(el('td', { class: 'ty' }, r.type));
@@ -113,7 +118,6 @@ function draw(main, found, what, crumbs, ctx, aside) {
   root.appendChild(view.aside);
   fill(main, [root]);
   view.root = root;
-  view.rows = found.rows;
 }
 
 function mark(route, ctx, force) {

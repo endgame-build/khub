@@ -3,9 +3,11 @@
 // own request, so a slow one does not hold the rest.
 
 import * as api from './api.js';
+import * as panel from './panel.js';
+import * as marks from './marks.js';
 import { el, fill, text, tn } from './dom.js';
-import { same, markerTags, trustTag, trustBar, trustKey, entityLink, markerName, MEANING, MARKERS, plural, num, notice, skeleton, problem, copyButton } from './widgets.js';
-import { format, listRoute, typeRoute, homeRoute, markedRoute, DAYS } from './route.js';
+import { same, markerTags, trustTag, trustBar, trustKey, entityLink, markerName, MEANING, MARKERS, plural, num, notice, skeleton, problem, copyButton, rowOpens, reveal } from './widgets.js';
+import { format, listRoute, typeRoute, homeRoute, markedRoute, openId, DAYS } from './route.js';
 import { words } from './listmodel.js';
 
 var SHOWN = 3; // how many types a tile names before the reader asks for the rest
@@ -24,17 +26,61 @@ var BUCKETS = {
 
 var view = null;
 
-export function unmount() { view = null; }
+export function unmount() { view = null; panel.unmount(); }
+
+// order is what next and previous follow: the changes, then the findings.
+export function order() {
+  if (!view) return [];
+  var seen = Object.create(null);
+  return (view.changes || []).concat(view.found || []).filter(function (r) { return !seen[r.id] && (seen[r.id] = true); });
+}
+
+// rowsOf are the lines about one entity, its change before its findings.
+function rowsOf(id) {
+  return Array.prototype.filter.call(view.root.querySelectorAll('li[data-id]'), function (li) { return li.getAttribute('data-id') === id; })
+    .sort(function (a, b) { return (a.closest('.feed') ? 0 : 1) - (b.closest('.feed') ? 0 : 1); });
+}
+
+// focusOn puts the keyboard on a line's link.
+export function focusOn(id) {
+  var li = view && view.root && rowsOf(id)[0];
+  if (!li) return;
+  unfold(li);
+  li.querySelector('a').focus({ preventScroll: true });
+}
+
+// unfold opens the bucket a line is folded into.
+function unfold(li) {
+  var bucket = li.closest('details');
+  if (bucket) bucket.open = true;
+}
+
+// mark shows which line is open and reads it beside the page.
+function mark(route, ctx, force) {
+  var open = openId(route);
+  Array.prototype.forEach.call(view.root.querySelectorAll('li.open'), function (li) { li.classList.remove('open'); });
+  var lines = open ? rowsOf(open) : [];
+  lines.forEach(function (li) { li.classList.add('open'); });
+  panel.sync(view.aside, route, ctx, order(), force);
+  // Blocks above the line may still be loading, and move it.
+  if (lines.length && (open !== view.shown || view.pending)) {
+    unfold(lines[0]);
+    reveal(lines[0]);
+  }
+  // A line still to load is revealed when it does.
+  if (lines.length || !open) view.shown = open;
+}
 
 export function show(main, route, ctx, force) {
   ctx.crumbs([{ label: 'Review' }]);
   if (!force && view && view.root.isConnected) {
     if (view.days !== route.days) { view.days = route.days; view.most = ctx.entry().most || 0; recent(view, ctx); }
+    mark(route, ctx, false);
     ctx.ready();
     return;
   }
   var kept = force && view && view.root.isConnected ? view : null;
-  var mine = { days: route.days, most: ctx.entry().most || 0, from: 0, drawn: kept ? kept.drawn : false, root: kept ? kept.root : null, blocks: kept ? kept.blocks : null, seen: kept ? kept.seen : { overview: {}, findings: {}, recent: {}, queries: {} } };
+  var mine = { days: route.days, most: ctx.entry().most || 0, from: 0, drawn: kept ? kept.drawn : false, root: kept ? kept.root : null, aside: kept ? kept.aside : null, shown: kept ? kept.shown : '', pending: kept ? 0 : 4, changes: kept ? kept.changes : [], found: kept ? kept.found : [], blocks: kept ? kept.blocks : null, seen: kept ? kept.seen : { overview: {}, findings: {}, recent: {}, queries: {} } };
   view = mine;
   if (!mine.root) {
     mine.blocks = {
@@ -45,6 +91,7 @@ export function show(main, route, ctx, force) {
     head.appendChild(el('h1', null, 'Review'));
     mine.sub = el('p', { class: 'sub' });
     head.appendChild(mine.sub);
+    head.appendChild(marks.bar(order));
     var left = el('div', { class: 'col' }), right = el('div', { class: 'col' });
     left.appendChild(mine.blocks.findings);
     left.appendChild(mine.blocks.recent);
@@ -57,7 +104,11 @@ export function show(main, route, ctx, force) {
     mine.root.appendChild(head);
     mine.root.appendChild(mine.blocks.attention);
     mine.root.appendChild(cols);
-    fill(main, [mine.root]);
+    var split = el('section', { class: 'split' });
+    split.appendChild(mine.root);
+    mine.aside = el('aside', { class: 'peek', 'aria-label': 'Entity', hidden: true });
+    split.appendChild(mine.aside);
+    fill(main, [split]);
     fill(mine.blocks.attention, [skeleton('Loading the workspace', 2)]);
     fill(mine.blocks.types, [el('h2', null, 'Types'), skeleton('Loading types', 6)]);
   } else mine.sub = mine.root.querySelector('.sub');
@@ -73,12 +124,21 @@ export function show(main, route, ctx, force) {
     if (view !== mine) return;
     if (kept) { ctx.failed(err); return; }
     fill(main, [notice('Could not read the workspace', err.message, [], ctx.refresh)]);
-  });
+  }).then(function () { if (mine.root.isConnected) landed(mine, ctx); });
   api.getFindings().then(function (f) { if (view === mine && !same(mine.seen.findings, f)) findings(mine, f, ctx); },
-    function (err) { if (view === mine && !kept) { mine.blocks.findings.hidden = false; fill(mine.blocks.findings, [el('h2', null, 'Check'), problem(err)]); } });
+    function (err) { if (view === mine && !kept) { mine.blocks.findings.hidden = false; fill(mine.blocks.findings, [el('h2', null, 'Check'), problem(err)]); } }).then(function () { landed(mine, ctx); });
   api.getQueries().then(function (q) { if (view === mine && !same(mine.seen.queries, q)) queries(mine, q); },
-    function (err) { if (view === mine && !kept) { mine.blocks.queries.hidden = false; fill(mine.blocks.queries, [el('h2', null, 'Saved queries'), problem(err)]); } });
+    function (err) { if (view === mine && !kept) { mine.blocks.queries.hidden = false; fill(mine.blocks.queries, [el('h2', null, 'Saved queries'), problem(err)]); } }).then(function () { landed(mine, ctx); });
   recent(mine, ctx);
+  mark(route, ctx, force);
+}
+
+// landed counts a block that has loaded, and keeps the open line in view until
+// the last one has.
+function landed(mine, ctx) {
+  if (view !== mine) return;
+  mark(ctx.route(), ctx, false);
+  if (mine.pending) mine.pending -= 1;
 }
 
 function attention(mine, o) {
@@ -176,6 +236,8 @@ function typesBlock(mine, o) {
 
 function findings(mine, f, ctx) {
   mine.blocks.findings.hidden = false;
+  mine.found = [].concat.apply([], f.buckets.map(function (b) { return b.items; })).filter(function (i) { return i.id; });
+  marks.changed();
   if (f.passed) {
     fill(mine.blocks.findings, [el('p', { class: 'pass' }, 'khub check passes.')]);
     return;
@@ -187,9 +249,12 @@ function findings(mine, f, ctx) {
     d.appendChild(el('summary', null, (BUCKETS[b.bucket] || words(b.bucket)) + ' (' + num(b.total) + ')'));
     var ul = el('ul');
     b.items.forEach(function (i) {
-      var li = el('li');
-      if (i.id) li.appendChild(entityLink(i.id, i.id, ctx, 'mono'));
-      else if (i.about) li.appendChild(el('span', { class: 'mono' }, i.about));
+      var li = el('li', i.id ? { 'data-id': i.id, class: 'row' } : null);
+      if (i.id) {
+        rowOpens(li, i.id, ctx);
+        li.appendChild(entityLink(i.id, i.id, ctx, 'mono'));
+        li.appendChild(marks.tag(i.id));
+      } else if (i.about) li.appendChild(el('span', { class: 'mono' }, i.about));
       (i.ids || []).forEach(function (id, n) {
         if (n || i.about) li.appendChild(tn(' · '));
         li.appendChild(entityLink(id, id, ctx, 'mono'));
@@ -203,6 +268,7 @@ function findings(mine, f, ctx) {
   });
   nodes.push(copyButton('Copy khub check', 'khub check'));
   fill(mine.blocks.findings, nodes);
+  mark(ctx.route(), ctx, false);
 }
 
 function recent(mine, ctx) {
@@ -224,6 +290,9 @@ function recent(mine, ctx) {
     if (view !== mine || mine.days !== days) return;
     if (same(mine.seen.recent, found)) return;
     mine.drawn = true;
+    mine.changes = found.rows;
+    marks.settle(found.rows);
+    marks.changed();
     var nodes = [head()];
     if (!found.rows.length) nodes.push(el('p', { class: 'empty' }, 'Nothing was written in this window.'));
     else {
@@ -231,15 +300,17 @@ function recent(mine, ctx) {
       var last = '';
       found.rows.forEach(function (r) {
         if (r.date !== last) { last = r.date; ul.appendChild(el('li', { class: 'day' }, dayName(r))); }
-        var li = el('li');
+        var li = el('li', { 'data-id': r.id, class: 'row' });
+        rowOpens(li, r.id, ctx);
         li.appendChild(el('span', { class: 'ty' }, r.type));
         var mid = el('span', { class: 'mid' });
         mid.appendChild(entityLink(r.id, r.title, ctx));
+        mid.appendChild(marks.tag(r.id));
         mid.appendChild(el('span', { class: 'tail' }, [r.new ? 'new' : 'edited', r.by ? 'by ' + r.by : ''].filter(Boolean).join(' ')));
         li.appendChild(mid);
-        var marks = markerTags(r.markers);
-        marks.appendChild(trustTag(r.markers.trust));
-        li.appendChild(marks);
+        var tags = markerTags(r.markers);
+        tags.appendChild(trustTag(r.markers.trust));
+        li.appendChild(tags);
         ul.appendChild(li);
       });
       nodes.push(ul);
@@ -257,6 +328,7 @@ function recent(mine, ctx) {
       }
     }
     fill(mine.blocks.recent, nodes);
+    mark(ctx.route(), ctx, false);
     if (mine.from) {
       // The button is gone: the keyboard goes on from the first new change.
       var next = mine.blocks.recent.querySelectorAll('.feed .mid a')[mine.from];
@@ -267,7 +339,7 @@ function recent(mine, ctx) {
   }, function (err) {
     if (view !== mine) return;
     if (!mine.drawn) fill(mine.blocks.recent, [head(), problem(err)]);
-  });
+  }).then(function () { if (view === mine) landed(mine, ctx); });
 }
 
 function dayName(r) {

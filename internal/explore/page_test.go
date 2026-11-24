@@ -24,7 +24,7 @@ func TestPageShape(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if want := []string{"markers", "reasons", "body_tree", "neighbours", "malformed"}; !eq(page.Keys(), want) {
+	if want := []string{"markers", "reasons", "body_tree", "neighbours", "malformed", "rev"}; !eq(page.Keys(), want) {
 		t.Fatalf("page keys %v, want %v", page.Keys(), want)
 	}
 	var gkeys []string

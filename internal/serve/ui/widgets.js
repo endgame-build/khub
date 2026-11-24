@@ -104,6 +104,26 @@ export function opensBeside(a, id, ctx) {
   return a;
 }
 
+// copyLater puts text that is still being worked out on the clipboard, and says
+// whether it got there. The promise goes to the clipboard whole, so the press
+// that asked still counts as the reader's own when the answer is slow. Empty
+// text leaves the clipboard be; a promise that fails is the caller's.
+export function copyLater(promise) {
+  if (!navigator.clipboard) return Promise.resolve(false);
+  var yes = function () { return true; }, no = function () { return false; };
+  if (!window.ClipboardItem) {
+    return promise.then(function (value) { return value ? navigator.clipboard.writeText(value).then(yes, no) : false; });
+  }
+  var blob = promise.then(function (value) {
+    if (!value) throw new Error('nothing to copy');
+    return new Blob([value], { type: 'text/plain' });
+  });
+  blob.catch(function () {}); // the clipboard's refusal below is the one that counts
+  var wrote;
+  try { wrote = navigator.clipboard.write([new ClipboardItem({ 'text/plain': blob })]).then(yes, no); } catch (e) { wrote = Promise.resolve(false); }
+  return wrote;
+}
+
 // rowOpens makes a whole row a wider target for its title; text in it can still
 // be selected.
 export function rowOpens(tr, id, ctx) {
@@ -113,12 +133,12 @@ export function rowOpens(tr, id, ctx) {
   });
 }
 
-// reveal scrolls a row into view under its table's sticky header, and never
-// sideways.
+// reveal scrolls a row into view, under its table's sticky header when it is in
+// one, and never sideways.
 export function reveal(tr) {
-  var main = document.getElementById('main'), head = tr.closest('table').querySelector('thead');
+  var main = document.getElementById('main'), table = tr.closest('table'), head = table && table.querySelector('thead');
   var box = main.getBoundingClientRect(), row = tr.getBoundingClientRect();
-  var top = box.top + head.getBoundingClientRect().height;
+  var top = box.top + (head ? head.getBoundingClientRect().height : 0);
   if (row.top < top) main.scrollTop -= top - row.top;
   else if (row.bottom > box.bottom) main.scrollTop += row.bottom - box.bottom;
 }

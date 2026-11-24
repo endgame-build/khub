@@ -12,6 +12,7 @@ import (
 	"github.com/endgame-build/khub/internal/index"
 	"github.com/endgame-build/khub/internal/omap"
 	"github.com/endgame-build/khub/internal/project"
+	"github.com/endgame-build/khub/internal/trust"
 	"github.com/endgame-build/khub/internal/values"
 )
 
@@ -24,13 +25,21 @@ import (
 // it. Incoming groups come from the graph, keyed like the list's columns. Only
 // groups holding a connection are returned, in column order.
 func Page(root, id string, now time.Time) (*omap.Map, error) {
+	_, page, err := PageView(root, id, now)
+	return page, err
+}
+
+// PageView is Page with the record it belongs to. The record is read from its
+// file after the scan, so the body tree and the revision are of the record: the
+// text a reader marks is the text the revision names.
+func PageView(root, id string, now time.Time) (*entity.EntityView, *omap.Map, error) {
 	s, err := load(root, now)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	node, err := entity.ResolveID(s.idx, id)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	// A qualified id names one file. Resolution falls back to case-folding
 	// and aliases, so an id this scan has no node for (a stray, which the
@@ -38,11 +47,11 @@ func Page(root, id string, now time.Time) (*omap.Map, error) {
 	// name — and the page would show that entity's body and connections
 	// under this one's frontmatter. Only the exact node counts.
 	if strings.Contains(id, "/") && node.ID() != id {
-		return nil, errs.LookupError(id)
+		return nil, nil, errs.LookupError(id)
 	}
 	view, err := entity.View(root, s.idx, node, true)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	cols := Columns(s.resolved, node.Type)
@@ -105,10 +114,12 @@ func Page(root, id string, now time.Time) (*omap.Map, error) {
 	out := omap.New()
 	out.Set("markers", s.markers(node).record())
 	out.Set("reasons", s.reasons(node))
-	out.Set("body_tree", bodyTree(s.idx.Body[node], s.linkResolver(node), s.nameResolver(node)))
+	out.Set("body_tree", bodyTree(view.Body, s.linkResolver(node), s.nameResolver(node)))
 	out.Set("neighbours", groups)
 	out.Set("malformed", strList(s.malformed))
-	return out, nil
+	rtype, _ := s.resolved.Types.Get(node.Type)
+	out.Set("rev", trust.Rev(rtype, view.Meta, view.Body))
+	return view, out, nil
 }
 
 // reasons says, per marker that is set, what in the entity set it.

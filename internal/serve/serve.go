@@ -86,6 +86,7 @@ func Handler(root string, shadows Shadows) http.Handler {
 	mux.HandleFunc("/api/queries", s.apiQueries)
 	mux.HandleFunc("/api/query/", s.apiQuery)
 	mux.HandleFunc("/api/marked/", s.apiMarked)
+	mux.HandleFunc("/api/revs", s.apiRevs)
 	mux.HandleFunc("/api/history/", s.apiHistory)
 	mux.HandleFunc("/api/reach/", s.apiReach)
 	mux.HandleFunc("/api/schema", s.apiSchema)
@@ -340,6 +341,20 @@ func (s *server) apiMarked(w http.ResponseWriter, r *http.Request) {
 	answer(w, payload, err)
 }
 
+// maxRevs is how many entities one request may ask the revision of.
+const maxRevs = 200
+
+// apiRevs serves the content revision of each entity named, in one scan.
+func (s *server) apiRevs(w http.ResponseWriter, r *http.Request) {
+	ids := r.URL.Query()["id"]
+	if len(ids) == 0 || len(ids) > maxRevs {
+		fail(w, http.StatusBadRequest, "bad_request", fmt.Sprintf("Name from 1 to %d entities with 'id'", maxRevs))
+		return
+	}
+	payload, err := explore.Revs(s.root, ids, clock.Now())
+	answer(w, payload, err)
+}
+
 // apiHistory serves the commits that touched one entity, and what changed since
 // its newest review.
 func (s *server) apiHistory(w http.ResponseWriter, r *http.Request) {
@@ -433,6 +448,12 @@ func (s *server) apiEntity(w http.ResponseWriter, r *http.Request) {
 		failErr(w, err)
 		return
 	}
+	// The page's record is the one its revision and body tree belong to. A stray
+	// has none, and keeps the one above.
+	paged, page, perr := explore.PageView(s.root, view.Type+"/"+view.Slug, clock.Now())
+	if perr == nil {
+		view = paged
+	}
 	record := omap.New()
 	record.Set("id", view.Type+"/"+view.Slug)
 	record.Set("type", view.Type)
@@ -457,15 +478,14 @@ func (s *server) apiEntity(w http.ResponseWriter, r *http.Request) {
 		edges = append(edges, edge)
 	}
 	record.Set("edges", edges)
-	page, err := explore.Page(s.root, view.Type+"/"+view.Slug, clock.Now())
 	var located *errs.Located
 	switch {
-	case err == nil:
+	case perr == nil:
 		for _, k := range page.Keys() {
 			v, _ := page.Get(k)
 			record.Set(k, v)
 		}
-	case errors.As(err, &located) && located.Code == "lookup_error":
+	case errors.As(perr, &located) && located.Code == "lookup_error":
 		// A file `get` reads but the graph does not hold: a stray, which
 		// `check` reports. Said so outright, so the page can show it as one
 		// rather than as an entity with no markers and no connections.
@@ -475,7 +495,7 @@ func (s *server) apiEntity(w http.ResponseWriter, r *http.Request) {
 		record.Set("stray", true)
 		record.Set("malformed", []any{})
 	default:
-		failErr(w, err)
+		failErr(w, perr)
 		return
 	}
 	writeJSON(w, record)

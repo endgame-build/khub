@@ -13,6 +13,7 @@ import * as query from './query.js';
 import * as entity from './entity.js';
 import * as panel from './panel.js';
 import * as find from './find.js';
+import * as marks from './marks.js';
 import * as api from './api.js';
 import { parse, format, typeRoute, homeRoute, overviewOf, entityRoute, opening, openId, TIERS } from './route.js';
 import { step } from './listmodel.js';
@@ -44,11 +45,15 @@ var entry = {};
 var stamps = 0;
 var restore = null;   // the scroll to put back once the view has drawn
 var carried = null;   // what a new entry of the same view starts from
+var fresh = false;    // the entry on screen was just made
+var trail = [];       // the breadcrumb on screen
+var held = '';        // the page control the keyboard is to stay on
 var refreshedAt = 0;
 var settled = false;  // no scroll is recorded while a view is still loading
 
 function enter() {
   var id = history.state && history.state.khub;
+  fresh = !id;
   if (!id) {
     stamps += 1;
     id = Date.now() + '-' + stamps;
@@ -86,6 +91,7 @@ function readColors() {
 // setCrumbs builds the trail to where the reader is — every item but the last
 // is a link — and names the browser tab after the page it ends on.
 function setCrumbs(items) {
+  trail = items;
   page = items.length ? items[items.length - 1].label : '';
   setTitle();
   var nav = el('nav', { class: 'crumbs', 'aria-label': 'Breadcrumb' });
@@ -99,7 +105,8 @@ function setCrumbs(items) {
 
 function drawTabs() {
   fill(tabs, TABS.map(function (t) {
-    var here = route && t.views.indexOf(route.view) !== -1;
+    // An entity belongs to the list it was opened from.
+    var here = route && t.views.indexOf(route.view === 'entity' && entry.from ? entry.from.route.view : route.view) !== -1;
     return el('a', { href: format(t.route), class: here ? 'on' : null, 'aria-current': here ? 'true' : null }, t.label);
   }));
 }
@@ -161,6 +168,7 @@ var ctx = {
     }
     settled = true;
     entry.scroll = main.scrollTop;
+    marks.prune();
   },
   // loaded says the view on screen was read just now, and which files the
   // reading had to leave out.
@@ -177,16 +185,30 @@ var ctx = {
   listRoute: function (type) { return lists[type] ? opening(lists[type], '') : typeRoute(type); },
   // canOpen says whether an entity can be read beside the view on screen.
   canOpen: function (id) {
-    return ['list', 'query', 'marked', 'entity'].indexOf(route.view) !== -1 && route.id !== id && panel.hasRoom();
+    return ['home', 'list', 'query', 'marked', 'entity'].indexOf(route.view) !== -1 && route.id !== id && panel.hasRoom();
   },
   open: function (id) {
     var to = opening(route, id);
     if (openId(route)) { ctx.replace(to); return; }
     // The same rows and groups stay drawn under the new entry.
-    carried = { rows: entry.rows, groups: entry.groups };
+    carried = { rows: entry.rows, groups: entry.groups, most: entry.most, from: entry.from };
     ctx.nav(to);
   },
   close: function () { ctx.replace(opening(route, '')); },
+  // from is the list the entity on screen was opened from: its breadcrumb and
+  // its rows. null for a pasted link, and for an entity the list does not hold.
+  from: function () { return entry.from || null; },
+  // page goes to the next or previous entity of that list, as a page. It takes
+  // the entry over, so Back leaves the walk in one step.
+  page: function (by, label) {
+    var id = route.view === 'entity' && entry.from ? step(entry.from.rows, route.id, by) : '';
+    if (!id || id === route.id) return;
+    held = label || '';
+    entry.groups = null;
+    ctx.replace(entityRoute(id));
+  },
+  // held is the page control to put the keyboard back on, once.
+  held: function () { var h = held; held = ''; return h; },
   route: function () { return route; }
 };
 
@@ -204,12 +226,15 @@ function viewKey(r) {
 function render(here) {
   // A question asked over one view is not the next view's.
   Array.prototype.forEach.call(document.querySelectorAll('dialog[open]'), function (d) { d.close(); });
+  var was = route && VIEWS[route.view] && VIEWS[route.view].order ? { route: route, rows: VIEWS[route.view].order(), trail: trail } : null;
   enter();
   route = parse(location.hash);
+  if (here !== true) held = '';
+  if (fresh && was && was.route.view !== 'entity' && route.view === 'entity') comeFrom(was);
   var key = viewKey(route);
   if (key !== lastKey) {
     settled = false;
-    restore = entry.scroll || 0;
+    restore = here === true ? 0 : entry.scroll || 0;
     main.scrollTop = 0;
     // A new page: move focus to it, so the keys that scroll work at once and a
     // keyboard or screen-reader user starts at the top of what just opened
@@ -228,6 +253,27 @@ function render(here) {
   setCrumbs([{ label: 'Not found' }]);
   fill(main, [notice('Nothing at this address', 'The address names no view of this workspace.',
     [{ label: 'Go to the review', href: '#/' }])]);
+}
+
+// comeFrom keeps with an entity's entry the list it was opened from, when the
+// list holds it.
+function comeFrom(was) {
+  if (!was.rows.some(function (r) { return r.id === route.id; })) return;
+  var back = opening(was.route, '');
+  entry.from = {
+    route: back,
+    rows: idsOf(was.rows),
+    trail: was.trail.slice(0, -1).concat([{ label: was.trail[was.trail.length - 1].label, route: back }])
+  };
+}
+
+// idsOf is the ids of rows, as one list for as long as the rows stay the same:
+// a walk of many pages of a long list keeps it once.
+var lastIds = [];
+function idsOf(rows) {
+  var same = rows.length === lastIds.length && rows.every(function (r, i) { return r.id === lastIds[i].id; });
+  if (!same) lastIds = rows.map(function (r) { return { id: r.id }; });
+  return lastIds;
 }
 
 // refresh reads the view on screen again and puts the reader back where they
@@ -263,6 +309,11 @@ function move(by) {
 }
 
 function onKey(evt) {
+  // Brackets are typed with Option or AltGr on many layouts.
+  if ((evt.key === ']' || evt.key === '[') && !evt.metaKey && (evt.altKey || !evt.ctrlKey) && !typing(evt.target) && !document.querySelector('dialog[open]')) {
+    ctx.page(evt.key === ']' ? 1 : -1);
+    return;
+  }
   if (evt.metaKey || evt.ctrlKey || evt.altKey) return;
   if (evt.key === 'Escape') {
     if (find.close() || typing(evt.target) || document.querySelector('dialog[open]')) return;
@@ -276,11 +327,22 @@ function onKey(evt) {
     case 'r': refresh(); break;
     case 'j': move(1); break;
     case 'k': move(-1); break;
+    case ' ': markOpen(evt); break;
     case '?': keys(); break;
     case 'Enter':
       if (openId(route) && (evt.target === document.body || evt.target === main)) ctx.nav(entityRoute(openId(route)));
       break;
   }
+}
+
+// markOpen marks the entity open beside the view. Space stays what it is on a
+// control and in a block that scrolls on its own, and scrolls where nothing is
+// open.
+function markOpen(evt) {
+  var at = panel.read(openId(route));
+  if (!at || !at.rev || evt.shiftKey || evt.target.closest('button, summary, .linediff')) return;
+  evt.preventDefault();
+  if (!evt.repeat) marks.toggle(at.id, at.rev, at.trust);
 }
 
 // keys lists the keyboard's shortcuts, and what the page's terms mean.
@@ -295,8 +357,8 @@ function keys() {
   };
   var box = el('dialog', { class: 'keybox', 'aria-label': 'Keys and terms' });
   box.appendChild(el('h2', null, 'Keys'));
-  box.appendChild(list(  [['/', 'Search'], ['j, k', 'Open the next or previous row beside the list'], ['Enter', 'Open what is beside the list as a page'],
-    ['Esc', 'Close what is open, or leave one type for the full map'], ['r', 'Read the workspace again'], ['Shift-click', 'Leave a filter value out'], ['?', 'This list']]));
+  box.appendChild(list(  [['/', 'Search'], ['j, k', 'Open the next or previous row, or link of a page, beside it'], ['], [', 'Go to the next or previous page of the list it was opened from'], ['Enter', 'Open what is beside the list as a page'],
+    ['Space', 'Mark what is open beside the view for sign-off; the marked bar copies a verify line for each, to run in a terminal'], ['Esc', 'Close what is open, or leave one type for the full map'], ['r', 'Read the workspace again'], ['Shift-click', 'Leave a filter value out'], ['?', 'This list']]));
   box.appendChild(el('h2', null, 'Markers'));
   box.appendChild(list(MARKERS.map(function (k) { return [markerName(k), MEANING[k]]; })));
   box.appendChild(el('h2', null, 'Trust'));

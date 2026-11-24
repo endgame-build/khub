@@ -402,7 +402,7 @@ function renderType(d, isBase) {
     if (a.required) name.appendChild(el('span', { class: 'tag' }, 'required'));
     return [name, a.type, a.allowed];
   };
-  var relHead = ['Relation', 'To', 'Holds', 'Inverse'];
+  var relHead = ['Relation', 'To', 'Holds', 'Inverse', 'Links'];
   var relRow = function (r) {
     var name = el('span');
     // Stored relations open their own panel: the keyboard path to what a
@@ -413,7 +413,7 @@ function renderType(d, isBase) {
       name.appendChild(el('span', { class: 'mono' }, r.predicate));
     }
     if (r.derived) name.appendChild(el('span', { class: 'tag', title: 'Read from the inverse relation, never stored' }, 'derived'));
-    return [name, typeLinks(r.to), shape(r), r.inverse];
+    return [name, typeLinks(r.to), shape(r), r.inverse, r.derived || isBase ? '' : num(relationOf(view.numbers, d.name, r.predicate).links)];
   };
   var ownAttrs = d.attributes.filter(function (a) { return isBase || !a.inherited; });
   var baseAttrs = isBase ? [] : d.attributes.filter(function (a) { return a.inherited; });

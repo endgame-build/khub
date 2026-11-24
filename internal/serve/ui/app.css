@@ -342,6 +342,8 @@ th.num, td.num { text-align: right; font-variant-numeric: tabular-nums; }
 .feed li:last-child { border-bottom: 0; }
 .feed li.day { display: block; padding: 12px 0 4px; font-size: 12px; font-weight: 600; color: var(--ink-mid); }
 .feed .ty { overflow: hidden; text-overflow: ellipsis; }
+.feed li.row, .bucket li.row { cursor: pointer; }
+.feed li.open, .bucket li.open { background: var(--beige-deep); }
 .feed .mid a { overflow-wrap: anywhere; }
 .feed .tags { justify-content: flex-end; }
 .feed .trust { min-width: 60px; text-align: right; }
@@ -350,7 +352,7 @@ th.num, td.num { text-align: right; font-variant-numeric: tabular-nums; }
 .foot { margin: 10px 0 0; font-size: 12.5px; color: var(--ink-mid); }
 .findings .pass { margin: 0; color: var(--ok); font-weight: 500; }
 .bucket { border-top: 1px solid var(--line-soft); padding: 8px 0; }
-.bucket summary { cursor: pointer; font-size: 13px; font-weight: 500; }
+.bucket summary { font-size: 13px; font-weight: 500; }
 .bucket ul { list-style: none; margin: 6px 0 0; padding: 0; max-height: 300px; overflow: auto; }
 .bucket li { padding: 4px 0; font-size: 12.5px; overflow-wrap: anywhere; }
 .bucket li .why { display: block; color: var(--ink-mid); }
@@ -415,7 +417,7 @@ body[data-view="overview"] main { overflow: hidden; }
 .details .kvlist + h3 { margin-top: 18px; }
 .coverage { margin: 0 0 14px; font-size: 13px; font-variant-numeric: tabular-nums; }
 .inherited { margin-top: 16px; }
-.inherited summary { cursor: pointer; font-size: 12.5px; color: var(--ink-mid); margin-bottom: 8px; }
+.inherited summary { font-size: 12.5px; color: var(--ink-mid); margin-bottom: 8px; }
 .inherited .tblwrap + .tblwrap { margin-top: 8px; }
 .plainlist { list-style: none; margin: 0; padding: 0; font-size: 12.5px; }
 .plainlist li { padding: 3px 0; overflow-wrap: anywhere; }
@@ -424,7 +426,7 @@ body[data-view="overview"] main { overflow: hidden; }
 /* The panel stays while the view scrolls under it, so its height is the
    scrolling region's. */
 .split { display: flex; align-items: flex-start; min-height: 100%; }
-.split > .pane { flex: 1; min-width: 0; }
+.split > .pane, .split > .home { flex: 1; min-width: 0; }
 /* A table wider than its pane widens the pane, so main scrolls to its end
    instead of hiding it under the panel. The heading keeps to the window. */
 .listview > .pane, .split > .pane:has(> table.rows) { min-width: min-content; }
@@ -447,8 +449,7 @@ body[data-view="overview"] main { overflow: hidden; }
 
 /* ——— list ——— */
 .rail { position: sticky; top: 0; flex: none; width: 232px; max-height: 100cqh; overflow: auto; padding: 18px 4px 40px 20px; }
-.rail > summary { cursor: pointer; font-size: 13px; font-weight: 600; }
-.morefilters > summary { cursor: pointer; }
+.rail > summary { font-size: 13px; font-weight: 600; }
 .skip { position: absolute; left: 20px; top: 14px; padding: 2px 9px; border-radius: var(--r-control); background: var(--navy); color: var(--white); font-size: 12.5px; z-index: 3; }
 .skip:not(:focus) { opacity: 0; pointer-events: none; }
 .rail h2 { font-size: 13px; margin: 18px 0 0; }
@@ -471,6 +472,10 @@ body[data-view="overview"] main { overflow: hidden; }
 .check input { margin: 2px 0 0; }
 .filters { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 10px; }
 .filters input.q { width: 260px; }
+.markbar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin-top: 10px; padding: 7px 12px; background: var(--beige); border-radius: var(--r-control); font-size: 13px; }
+.markbar .btn { padding: 2px 12px; }
+.tag-read { margin-left: 8px; background: var(--navy); color: var(--white); }
+.copy[aria-pressed="true"] { background: var(--navy); color: var(--white); }
 .chips { display: inline-flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 .chip { display: inline-flex; gap: 6px; align-items: center; padding: 2px 9px; border-radius: 12px; background: var(--beige-deep); font-size: 12.5px; line-height: 20px; max-width: 100%; }
 .chip em { font-style: normal; color: var(--ink-soft); }
@@ -509,6 +514,9 @@ table.rows tbody tr.open > * { background: var(--beige-deep); }
 
 /* ——— entity ——— */
 .entity { max-width: 1600px; }
+.ptop { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+.walk { display: flex; align-items: center; gap: 6px; flex: none; }
+.walk .at { font-size: 12px; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
 .ehead h1 { max-width: 40ch; }
 .ehead h2 { font-size: 18px; line-height: 1.3; margin: 0; }
 .idline { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin: 4px 0 0; font-size: 12px; color: var(--ink-soft); overflow-wrap: anywhere; }
@@ -522,7 +530,7 @@ table.rows tbody tr.open > * { background: var(--beige-deep); }
 .said { color: var(--ink-mid); overflow-wrap: anywhere; }
 .said b { font-weight: 600; color: var(--ink); }
 .review details { margin-top: 6px; }
-.review summary, .level summary { cursor: pointer; font-size: 12.5px; color: var(--ink-mid); }
+.review summary, .level summary { font-size: 12.5px; color: var(--ink-mid); }
 .events { margin: 4px 0 0; padding-left: 20px; }
 .reasons { list-style: none; margin: 8px 0 0; padding: 8px 0 0; border-top: 1px solid var(--line-soft); display: grid; gap: 4px; }
 .reasons li { display: flex; gap: 8px; align-items: baseline; }
@@ -534,6 +542,10 @@ table.rows tbody tr.open > * { background: var(--beige-deep); }
 .diff dd { margin: 0; overflow-wrap: anywhere; }
 del { color: var(--crit-fg); background: var(--crit-tint); border-radius: 3px; padding: 0 3px; }
 ins { color: var(--cat-pine); text-decoration: none; background: lab(46.1094% -42.9662 35.1265 / 0.1); border-radius: 3px; padding: 0 3px; }
+summary { cursor: pointer; }
+.fold { margin-top: 8px; }
+.fold > summary { font-size: 12.5px; color: var(--ink-mid); }
+.lede .tag { margin-left: 8px; vertical-align: 2px; }
 .linediff { margin-top: 8px; max-height: 320px; overflow: auto; font-size: 12px; line-height: 18px; }
 .linediff > div { white-space: pre-wrap; overflow-wrap: anywhere; padding: 0 6px; }
 .l-add { background: lab(46.1094% -42.9662 35.1265 / 0.1); }
@@ -593,6 +605,7 @@ ins { color: var(--cat-pine); text-decoration: none; background: lab(46.1094% -4
   .listview:has(> .peek:not([hidden])) .viewhead { max-width: calc(100vw - var(--peek) - 48px); }
 }
 /* With a panel open the page beside it has one column to spare. */
+.split:has(> .peek:not([hidden])) .homecols { grid-template-columns: minmax(0, 1fr); }
 .split:has(> .peek:not([hidden])) .entitycols { grid-template-columns: minmax(0, 1fr); }
 @media (max-width: 1360px) { .listview :is(th, td).by { display: none; } }
 @media (max-width: 1280px) { .overview { grid-template-columns: 176px minmax(0, 1fr) 350px; } }

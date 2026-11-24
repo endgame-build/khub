@@ -43,6 +43,7 @@ export function getRecent(days, limit) { return get('/api/recent?days=' + encode
 export function getQueries() { return get('/api/queries'); }
 export function getQuery(name) { return get('/api/query/' + encodeURIComponent(name)); }
 export function getMarked(name) { return get('/api/marked/' + encodeURIComponent(name)); }
+export function getRevs(ids) { return get('/api/revs?' + ids.map(function (id) { return 'id=' + encodeURIComponent(id); }).join('&')); }
 export function search(q, signal) { return get('/api/search?q=' + encodeURIComponent(q), signal); }
 export function getSchema() { return get('/api/schema'); }
 export function getType(name) { return get('/api/type/' + encodeURIComponent(name)); }

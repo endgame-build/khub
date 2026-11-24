@@ -4,6 +4,27 @@ Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+### Changed
+
+- **`khub verify` refuses a reviewer trust never counts.** `--by human:`,
+  `--by 'human:Ana Ruiz'` and a bare word with a space exit 2 (`invalid_actor`)
+  and write nothing. They used to record an event no read counted.
+- **The served page names its dates and its parse errors.** The list column
+  Updated is Dated, the date staleness is judged by; an entity says its date
+  beside a younger write. A file that does not parse carries what the parser
+  says. The change since a review no longer repeats the description, and folds a
+  long difference of the body.
+- **The served page keeps the list a reader is walking.** The review home opens
+  an entity beside it, and an entity page opened from a list keeps the list's
+  breadcrumb and goes through it with `]` and `[`.
+
+### Added
+
+- **Marks on the served page.** Space marks what is open for sign-off, marks
+  hold across lists and through a reload, and one button copies a `khub verify` line for each, leaving out what
+  changed after it was marked. `/api/revs` answers content revisions, and
+  `/api/entity/<id>` gains `rev`.
+
 ## [0.34.0] — 2026-11-24
 
 `khub serve` becomes the page a person reviews a workspace on. It opens on what

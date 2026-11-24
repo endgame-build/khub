@@ -397,7 +397,7 @@ Every finding carries a stable location — the `field` on a `validate` row, the
 
 ## Trust
 
-`khub verify <id> --by <actor>` appends a review event `{by, at, rev}` to the entity's OKF `verified` list. `--by` is required, with no default: a review khub stamped itself would claim a tier nobody asserted. `at` defaults to the clock and must be ISO 8601 with a `T` and an offset (`t` and `z` are accepted and kept as written, as on every OKF datetime field). A bare `verified` mapping is one event, and becomes a list on the next verify. A review is not a write of content: it bumps no `updated` and stamps no `generated`.
+`khub verify <id> --by <actor>` appends a review event `{by, at, rev}` to the entity's OKF `verified` list. `--by` is required, with no default: a review khub stamped itself would claim a tier nobody asserted. A `--by` that follows no actor convention (`human:` alone, `human:Ana Ruiz`, a bare word with a space) is refused as `invalid_actor` and nothing is written, since no read would count it. `at` defaults to the clock and must be ISO 8601 with a `T` and an offset (`t` and `z` are accepted and kept as written, as on every OKF datetime field). A bare `verified` mapping is one event, and becomes a list on the next verify. A review is not a write of content: it bumps no `updated` and stamps no `generated`.
 
 `rev` is khub's one extension to the OKF shape. It is the first 12 hex digits of a SHA-256 over the entity's declared domain attributes, its `status` and its relations, by name in sorted order, plus its body with line endings normalized to `\n` and trailing newlines dropped. It leaves out identity and bookkeeping: `type`, `author`, `created`, `updated`, `generated`, `verified`, `tags`, `aliases` and `stale_after`. So a tag edit leaves a review standing, and a body, field or status edit supersedes it. Undeclared keys are not content. The same definition decides when a write stamps `generated` (see [Write semantics](#write-semantics)).
 
@@ -465,7 +465,8 @@ every such review under `superseded_verifications`. Trust is the review tier.
 **A type's list.** One row per entity with its markers, its trust, its own
 attributes (a base attribute it redeclares included), one count of distinct
 linked entities per relation, outgoing and incoming (counted off the graph
-`query --count` and `get --edges` read), its date and who wrote it. Each count opens what it
+`query --count` and `get --edges` read), the date staleness is judged by
+(`updated`, else `created`) and who wrote it. Each count opens what it
 counts. Any column sorts. Rows are drawn 300 at a time. Attributes that are
 empty or repeat the title or the date, the inherited `related`, `references` and
 `depends_on`, and the relations no row uses fold away until asked for (`base=1`).
@@ -482,17 +483,28 @@ command to copy where the CLI can say it. They are in the address: `q`, `rel` +
 `by=<writer>` and `not=<kind>:<value>`, which may repeat, beside `sort` and
 `dir`.
 
-**The side panel.** A click on a row, or on a link of an entity page, reads that
-entity beside the view (`?open=<id>`). `j` and `k` move to the next and previous
-row, or link of an entity page, Enter opens the page, Esc closes. Below 900 px a link opens the page.
+**The side panel.** A click on a row, on a change or finding of the review home,
+or on a link of an entity page, reads that entity beside the view (`?open=<id>`). `j` and `k` move to the next and previous
+row, or link of an entity page, Enter opens the page, Esc closes. A page opened
+from a list keeps that list's breadcrumb and goes through it with `]` and `[`,
+and Back leaves it in one step. Below 900 px a link opens the page.
+
+**Marks.** Space marks the entity open beside a list for sign-off, and Mark for
+sign-off is beside its verify command, there and on its page. Marks hold across
+the workspace's lists: the marked bar counts them, says how many the view on
+screen holds, and copies one `khub verify` line for each, under the reviewer's
+name. A mark holds the content revision that was read: copying
+asks for every revision again, and an entity that changed is left out and named.
+Marks last as long as the browser tab, through a reload, and one goes once a
+person's review holds.
 
 **An entity.** It leads with its description. A review bar says the tier, who
 reviewed it and when, who wrote it and why it carries each marker, and copies
 the `khub verify` command. The page asks for the reviewer's name the first time
-(one word, since a name with a space does not count toward trust) and keeps it in
-the browser's local storage, the one thing it keeps there. Where a review no longer holds, the page shows the
-fields and body lines that changed since the version reviewed, or says why git
-cannot tell. The body is rendered from a block tree the server parses: raw HTML
+(one word, since `khub verify` refuses a name with a space) and keeps it in
+the browser's local storage; that and the tab's marks are all it keeps. Where a review no longer holds, the page shows the
+fields and body lines that changed since the version reviewed (more than 8 lines
+of the body fold), or says why git cannot tell. The body is rendered from a block tree the server parses: raw HTML
 and comments are shown as text, only `http`, `https` and `mailto` links are
 kept, a relative link to another entity's file becomes a link inside the page,
 and so does a word or code span that is exactly an entity's id, or a slug only
