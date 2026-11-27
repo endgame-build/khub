@@ -595,3 +595,20 @@ func TestScoreRoundsHalfUp(t *testing.T) {
 		}
 	}
 }
+
+// An entry whose file .khub/ignore excludes is refused as add refuses it.
+func TestConformRefusesAnIgnoredPath(t *testing.T) {
+	root := seeded(t)
+	if err := os.WriteFile(filepath.Join(root, ".khub", "ignore"), []byte("clients/secret.md\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	report := conform(t, root, `{"entities": [{"type": "client", "fields": {"name": "Secret"}}, {"type": "client", "fields": {"name": "Open"}}]}`)
+	e := report.Entities
+	if e[0].OK || e[0].ID != "" || len(e[0].Errors) != 1 || e[0].Errors[0].Field != "id" ||
+		e[0].Errors[0].Reason != errs.PathIgnored("client", "clients/secret.md").Message {
+		t.Errorf("ignored path: %+v", e[0])
+	}
+	if !e[1].OK {
+		t.Errorf("a path outside the pattern: %+v", e[1])
+	}
+}

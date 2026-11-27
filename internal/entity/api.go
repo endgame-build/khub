@@ -5,8 +5,6 @@
 package entity
 
 import (
-	"path/filepath"
-
 	"github.com/endgame-build/khub/internal/errs"
 	"github.com/endgame-build/khub/internal/index"
 	"github.com/endgame-build/khub/internal/omap"
@@ -167,56 +165,23 @@ func UniqueTargets(idx *index.Index, rel *schema.ResolvedRelation, list []string
 }
 
 // PlanSlug is the id create would write meta under, or the refusal it would
-// raise before writing — minting from name then title in the type's scheme
-// (no_slug_source, invalid_slug, id_prefix_undecided), the Windows device
-// name and the OKF navigation names (invalid_slug), a slug the type already
-// holds (slug_taken), another entity's alias (alias_taken), and for a
-// singleton its fixed slug or singleton_exists. The same checks in the same
-// order as create (placeNew), read from the index instead of the exclusive
-// write, so `schema conform` promises only what add keeps. meta is the record
-// as create assembles it; today's date dates an id_date type, as it does on
-// add.
+// raise before writing: minting from name then title in the type's scheme
+// (no_slug_source, invalid_slug, id_prefix_undecided), then every gate
+// placeNew holds (a taken singleton, slug or alias, a Windows device name, an
+// OKF navigation name, an ignored path). It runs placeNew itself against the
+// index instead of the exclusive write, so `schema conform` promises only
+// what add keeps. meta is the record as create assembles it; today's date
+// dates an id_date type, as it does on add.
 func PlanSlug(rtype *schema.ResolvedType, meta *omap.Map, idx *index.Index) (string, error) {
-	typeName := rtype.Name
-	if rtype.Storage.Layout == schema.LayoutSingleton {
-		node := index.Node{Type: typeName, Slug: typeName}
-		if idx.Nodes[node] {
-			return "", singletonExists(idx.Root, typeName, entityPath(idx.Root, idx, node))
-		}
-		return typeName, nil
-	}
-	slug, err := chooseSlug(rtype, meta, "")
-	if err != nil {
-		return "", err
-	}
-	node := index.Node{Type: typeName, Slug: slug}
-	if rtype.Storage.Layout == schema.LayoutCollection {
-		if idx.Nodes[node] {
-			return "", errs.SlugTaken(slug, typeName, errs.Minted)
-		}
-		return slug, aliasTaken(idx, slug, errs.Minted)
-	}
-	if schema.ReservedDeviceName(slug) {
-		return "", errs.ReservedSlug(slug, typeName, errs.Minted)
-	}
-	if idx.Nodes[node] {
-		return "", errs.SlugTaken(slug, typeName, errs.Minted)
-	}
-	if err := aliasTaken(idx, slug, errs.Minted); err != nil {
-		return "", err
-	}
-	// The file the slug names, as placeNew lays it: index.md and log.md are
-	// OKF navigation, never an entity.
-	path := entityPath(idx.Root, idx, node)
-	if rtype.Templated() {
-		rel, err := templatedPath(rtype, slug, meta)
-		if err != nil {
+	slug := rtype.Name
+	if rtype.Storage.Layout != schema.LayoutSingleton {
+		var err error
+		if slug, err = chooseSlug(rtype, meta, ""); err != nil {
 			return "", err
 		}
-		path = filepath.Join(idx.Root, filepath.FromSlash(rel))
 	}
-	if name := filepath.Base(path); schema.ReservedEntityName(name) {
-		return "", errs.NavigationSlug(slug, typeName, name, errs.Minted)
+	if _, err := placeNew(idx.Root, idx.Resolved, idx, rtype, slug, meta, errs.Minted); err != nil {
+		return "", err
 	}
 	return slug, nil
 }
