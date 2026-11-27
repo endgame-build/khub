@@ -448,6 +448,18 @@ func CheckWith(root string, opts CheckOptions, now time.Time) (*CheckReport, err
 	return report, nil
 }
 
+// IncompleteIn is check's `incomplete` bucket over an index the caller has
+// already scanned and stripped of strays, as Check strips them: the same
+// verdicts, in the same order, with the same waivers applied, and none of
+// check's other passes. It exists so a reader that needs only completeness —
+// the serve page marking rows incomplete — scans the tree once instead of
+// twice; the definition stays here, in one place.
+func IncompleteIn(resolved *schema.ResolvedSchema, valid *index.Index) []Incomplete {
+	r := &CheckReport{Incomplete: incompleteEntities(resolved, valid, sortedNodes(valid))}
+	applyWaivers(resolved, valid, r)
+	return r.Incomplete
+}
+
 // applyWaivers moves every finding a policy `waive` entry names out of its
 // bucket into Waived, and reports each waiver that matched nothing as stale.
 //

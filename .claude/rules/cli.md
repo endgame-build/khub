@@ -79,16 +79,71 @@ review point.
 
 ## `khub serve`
 
-A read-only loopback view of the graph for a human. Its exposure is inbound —
-anything already running on the machine can reach it — and that is what the
-guards answer.
+A read-only loopback page for a human reviewer: what needs attention, one type's
+rows, one entity, the ontology diagram. Its exposure is inbound — anything
+already running on the machine can reach it — and that is what the guards
+answer.
 
 - **TTY gate.** `serve` refuses a non-terminal stdout (`serve_needs_tty`) so an
   agent that invokes it by accident gets an immediate refusal, not a hang.
   `TTY_COMPATIBLE=1` is the documented escape.
 - **The server rebuilds from the live tree on every request; the page fetches
-  once on load.** No polling, no event stream; do not add either without a
-  reason better than symmetry.
+  when a view loads, when the window comes back to the front, and on `r`.**
+  Views are routed by the URL fragment; a sort or filter change re-renders from
+  the data in hand. A refresh compares the reading with the one on screen
+  (`same` in `ui/widgets.js`) and leaves an unchanged view alone, so its DOM,
+  scroll and focus stay. No polling, no event stream; do not add either without
+  a reason better than symmetry.
+- **Every fact on the page comes from a core package.** Totals, coverage,
+  findings, rows, counts, markers, history and the body tree are
+  `internal/explore`, built on the functions `query`, `check`, `get`, `recent`,
+  `search`, `run` and `neighbors` call, each held to them by a test; `serve` routes
+  and encodes. What `check` fails on that only the command tree knows
+  (`flag_shadowed`) is handed to `serve` as `Shadows`. A marker the page judged
+  itself would be a second definition. The page arranges what it is given: it sums
+  types, picks the largest gap, and counts how many of the rows in hand a facet's
+  value keeps (`ui/listmodel.js`), since the filters are the page's own.
+- **A file that does not parse does not stop the page.** `explore.load` keeps
+  going and every payload read from a scan carries `malformed`, which the page
+  shows as a banner (`/api/queries` carries none; the home's overview does).
+  `viz`, `reindex` and `export` still refuse.
+- **The overview's picture is computed, never simulated.** `ui/layout.js`
+  places every box, tag, relation label and group frame with dagre (vendored
+  in `internal/assets`) from text-derived sizes; `cy.js` draws those positions
+  with no layout run and no dragging. One type and its neighbors (`?focus=`) is
+  the same layout over a smaller graph. `tests/layout.test.mjs` holds the
+  no-overlap property over the presets and 300 generated schemas, whole and
+  focused — keep a new diagram feature inside that model (a node the layout
+  places) rather than adding force-directed physics or renderer-placed
+  decorations such as loops.
+- **What the page remembers lives with the history entry.** `app.js` stamps
+  each entry in `history.state` and keeps its scroll, its drawn rows, the
+  diagram's viewport and the list an entity page was opened from in memory under
+  that stamp, so back and forward restore a place and a new visit starts at the
+  top. Three memories sit beside it: each type's last list address, which an
+  entity's breadcrumb returns to; the marks, in the tab's session storage until
+  the tab closes; and the reviewer's name, the only thing in local storage
+  (`ui/reviewer.js`). What a view shows stays in the fragment; a place is never
+  in the address.
+- **Text a reader pastes into a terminal goes through `ui/shell.js`.** An id is
+  a file's name and can hold anything a shell would run. Quoting does not stop a
+  control character, which the terminal acts on first, so such a value has no
+  word and its copy button is off.
+- **A mark holds the revision that was read** (`ui/marks.js`), and
+  `/api/entity` serves the revision of the record it answers with
+  (`explore.PageView`). The mark bar copies a line only while `/api/revs` still
+  answers that revision. The single verify command makes no such check, and
+  nothing covers an edit between the copy and the run.
+- **A path handed to git is a name, and git fetches nothing.**
+  `gitlog.FileVersions` passes `--literal-pathspecs`, overrules `log.follow` and
+  sets `GIT_NO_LAZY_FETCH`; a side git cannot show is unknown, never absent.
+- **Bodies reach the page as a block tree, never as markup.** `explore`
+  parses Markdown (goldmark, confined there by depguard) into a dozen node
+  kinds the page builds through `dom.js`; raw HTML and comments arrive as text
+  (an agent reading the entity sees a comment, so the reviewer must) and only
+  `http`/`https`/`mailto` hrefs survive. That is what keeps
+  `TestUIHasNoMarkupSinks` satisfiable — do not add a renderer that needs a
+  sink.
 - **Read-only is structural.** Every method but GET and HEAD is rejected
   before routing. A write endpoint would make three things mandatory: a
   per-run token in the URL, an `Origin` check, and harness coverage of the
@@ -105,5 +160,6 @@ guards answer.
   forever**: those modes do not set `TTY_COMPATIBLE=0`. Keep such cases in the
   default `mode: pipe`.
 - `entity.Get` builds its index without the stray filter, so `/api/entity/{id}`
-  can answer for a file `/api/graph` has no node for. The UI only links from
-  graph nodes; a new caller must not assume otherwise.
+  can answer for a file `/api/rows` has no node for (it then carries no markers
+  and no neighbours). The UI links only to entities of the filtered
+  index; a new caller must not assume otherwise.

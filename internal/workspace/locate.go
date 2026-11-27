@@ -68,15 +68,22 @@ func Provenance(root string) (*omap.Map, error) {
 	return out, nil
 }
 
-// Name is the workspace's `name` from .khub/config.yaml — what init recorded
-// (`--name`, else the directory's name). "" when the key is missing or null.
-// `schema rdf` mints entity IRIs under it.
+// Name is the workspace's name: the one init recorded in .khub/config.yaml,
+// or the default init would record, its directory's name. A workspace without
+// a config still has that one.
 func Name(root string) (string, error) {
 	cfg, err := loadConfig(root)
-	if err != nil {
+	var located *errs.Located
+	switch {
+	case errors.As(err, &located) && located.Code == errs.ConfigMissing().Code:
+		return resolvedName(root), nil
+	case err != nil:
 		return "", err
 	}
-	return configString(cfg, "name"), nil
+	if name := configString(cfg, "name"); name != "" {
+		return name, nil
+	}
+	return resolvedName(root), nil
 }
 
 // PresetSource is the `source` init recorded in .khub/config.yaml: the

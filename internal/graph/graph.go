@@ -201,6 +201,49 @@ func (g *Graph) Linked(u, v index.Node) bool {
 	return false
 }
 
+// PredicateGroup is one node's distinct neighbours through one stored
+// predicate in one direction. SourceType is the type of the entity that
+// stores the edge: the node's own type when Out, the neighbour's when not.
+type PredicateGroup struct {
+	Out        bool
+	SourceType string
+	Predicate  string
+	Nodes      []index.Node
+}
+
+// PredicateGroups returns n's neighbours grouped by direction, source type and
+// predicate: its outgoing groups first, then its incoming ones, each group and
+// each group's nodes in edge-insertion order.
+//
+// A neighbour appears once per group however it was reached, because addEdge
+// already keeps one edge per (u, v, predicate) — so len(Nodes) is the distinct
+// count `query --count` works from. Self-edges are absent for the same reason
+// they are absent from the graph.
+func (g *Graph) PredicateGroups(n index.Node) []PredicateGroup {
+	var out []PredicateGroup
+	at := map[[2]string]int{}
+	add := func(isOut bool, sourceType, predicate string, other index.Node) {
+		key := [2]string{sourceType, predicate}
+		if !isOut {
+			key[0] = "\x00in\x00" + sourceType
+		}
+		i, ok := at[key]
+		if !ok {
+			i = len(out)
+			at[key] = i
+			out = append(out, PredicateGroup{Out: isOut, SourceType: sourceType, Predicate: predicate})
+		}
+		out[i].Nodes = append(out[i].Nodes, other)
+	}
+	for _, e := range g.OutEdges(n) {
+		add(true, n.Type, e.Predicate, e.To)
+	}
+	for _, e := range g.InEdges(n) {
+		add(false, e.From.Type, e.Predicate, e.From)
+	}
+	return out
+}
+
 // OutDegree is G.out_degree(n): parallel edges count separately.
 func (g *Graph) OutDegree(n index.Node) int { return degree(g.succ[n]) }
 
