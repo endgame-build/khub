@@ -1,0 +1,8 @@
+# pflag rejects a flag value it cannot parse before any command runs, so the
+# text is a usage error on stderr with exit 2, never the JSON envelope. pflag
+# writes it, not khub: a pflag release that rewords it moves these bytes.
+# serve-refusals pins a non-numeric integer; these pin an integer too large for
+# the flag and a boolean given a value that is not one.
+steps:
+- argv: ["query", "--limit", "99999999999999999999"]
+- argv: ["check", "--strict=maybe"]

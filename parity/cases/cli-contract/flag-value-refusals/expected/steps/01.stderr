@@ -1,0 +1,6 @@
+Usage: khub query [OPTIONS]
+Try 'khub query --help' for help.
+╭─ Error ──────────────────────────────────────────────────────────────────────╮
+│ invalid argument "99999999999999999999" for "--limit" flag: must be an       │
+│ integer                                                                      │
+╰──────────────────────────────────────────────────────────────────────────────╯

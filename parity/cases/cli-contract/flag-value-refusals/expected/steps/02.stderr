@@ -1,0 +1,5 @@
+Usage: khub check [OPTIONS]
+Try 'khub check --help' for help.
+╭─ Error ──────────────────────────────────────────────────────────────────────╮
+│ invalid argument "maybe" for "--strict" flag: must be true or false          │
+╰──────────────────────────────────────────────────────────────────────────────╯

@@ -4,6 +4,16 @@ Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+### Changed
+
+- **New wording for a bad flag value.** pflag 1.1.0 rewords the usage error
+  for an integer or boolean flag given a value it cannot parse.
+  `--port not-a-number` now reads `must be an integer` instead of
+  `strconv.ParseInt: parsing "not-a-number": invalid syntax`, and
+  `--strict=maybe` reads `must be true or false`. An integer too large for the
+  flag also reads `must be an integer`, where it used to say `value out of
+  range`. The exit code stays 2 and the error stays on stderr.
+
 ## [0.35.0] — 2026-11-24
 
 A reviewer signs off several entities at once. On the served page, Space marks
