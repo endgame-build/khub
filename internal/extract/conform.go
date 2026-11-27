@@ -99,7 +99,7 @@ func Conform(root string, env *Envelope) (*Report, error) {
 			er = conformEntity(i, ent, rtype, idx, templates, supplied, minted)
 		} else {
 			er = undeclaredEntity(i, ent, unknownType(ent.Type, prov, resolved))
-			minted.ids = append(minted.ids, nil)
+			minted.add(nil, nil)
 		}
 		minted.oks = append(minted.oks, er.OK)
 		if er.OK {
@@ -136,13 +136,33 @@ func score(conformant, total int) float64 {
 // second entry minting an id an earlier one already claimed is reported
 // against that entry — a property of the envelope alone, decided by the same
 // minting add runs — and an unresolved target that names an earlier entry's
-// would-be id resolves to it when that entry conforms. ids and oks are in
-// entry order: ids holds a nil for an entry that minted nothing, oks each
-// entry's verdict.
+// would-be id or one of its aliases resolves to it when that entry conforms.
+// ids, aliases and oks are in entry order: ids holds a nil for an entry that
+// minted nothing, aliases each entry's aliases case-folded, oks each entry's
+// verdict.
 type mintedIDs struct {
-	first map[index.Node]int
-	ids   []*index.Node
-	oks   []bool
+	first   map[index.Node]int
+	ids     []*index.Node
+	aliases [][]string
+	oks     []bool
+}
+
+// add records an entry as it is judged.
+func (m *mintedIDs) add(node *index.Node, aliases []string) {
+	m.ids = append(m.ids, node)
+	m.aliases = append(m.aliases, aliases)
+}
+
+// aliasOwner is the earliest conformant entry that claims alias, which add,
+// run in envelope order, has written by the time a later entry is added.
+func (m *mintedIDs) aliasOwner(alias string) (int, index.Node, bool) {
+	want := index.Casefold(alias)
+	for j, node := range m.ids {
+		if node != nil && m.oks[j] && slices.Contains(m.aliases[j], want) {
+			return j, *node, true
+		}
+	}
+	return 0, index.Node{}, false
 }
 
 func conformEntity(
@@ -217,7 +237,7 @@ func conformEntity(
 		raw, _ := ent.Relations.Get(predicate)
 		relations.Set(predicate, append(listOf(relations, predicate), raw.([]string)...))
 	}
-	linked := map[string]bool{} // relations an earlier entry satisfies
+	linked := omap.New() // predicate -> the slugs of the earlier entries it names
 	for _, predicate := range relations.Keys() {
 		rel, ok := rtype.Relations.Get(predicate)
 		if !ok {
@@ -226,8 +246,9 @@ func conformEntity(
 		}
 		resolved := []string{}
 		// Targets an earlier entry mints: the edge add writes once that entry
-		// is added, so they count toward cardinality and completeness but stay
-		// out of FieldFindings, which checks against the workspace.
+		// is added, so they count toward cardinality, completeness and a path
+		// template but stay out of FieldFindings, which checks against the
+		// workspace.
 		fromEnvelope := map[index.Node]bool{}
 		for _, target := range listOf(relations, predicate) {
 			value, err := entity.ResolveWriteValue(idx, rel, predicate, target)
@@ -251,7 +272,13 @@ func conformEntity(
 		}
 		resolved = entity.UniqueTargets(idx, rel, resolved)
 		if len(fromEnvelope) > 0 {
-			linked[predicate] = true
+			slugs := make([]string, 0, len(fromEnvelope))
+			for _, node := range minted.ids {
+				if node != nil && fromEnvelope[*node] {
+					slugs = append(slugs, node.Slug) // entry order, as add stores them
+				}
+			}
+			linked.Set(predicate, slugs)
 			if !rel.Many && len(resolved)+len(fromEnvelope) > 1 && len(resolved) <= 1 {
 				fail(predicate, "single-valued relation has multiple values") // FieldFindings' wording
 			}
@@ -276,19 +303,21 @@ func conformEntity(
 	// second as slug_taken, and here the finding names the entry that got
 	// there first.
 	var mintedNode *index.Node
-	if slug, err := entity.PlanSlug(rtype, meta, idx); err != nil {
+	if slug, err := entity.PlanSlug(rtype, withEnvelopeTargets(meta, linked, rtype), idx); err != nil {
 		fail("id", reasonOf(err))
 	} else {
 		node := index.Node{Type: ent.Type, Slug: slug}
 		er.ID = node.ID()
 		if j, dup := minted.first[node]; dup {
 			fail("id", fmt.Sprintf("envelope entry #%d mints %s as well; name one of them differently", j, node.ID()))
+		} else if j, owner, taken := minted.aliasOwner(slug); taken {
+			fail("id", fmt.Sprintf("%s (envelope entry #%d)", errs.AliasTaken(slug, owner.ID(), errs.Minted).Message, j))
 		} else {
 			minted.first[node] = i
 			mintedNode = &node
 		}
 	}
-	minted.ids = append(minted.ids, mintedNode)
+	minted.add(mintedNode, aliasesOf(meta))
 
 	// The body against the type's template, as validate judges the written
 	// file. No body means add seeds the scaffold, which passes by construction.
@@ -315,7 +344,7 @@ func conformEntity(
 	}
 	for _, predicate := range rtype.Relations.Keys() {
 		rel, _ := rtype.Relations.Get(predicate)
-		if rel.Required && !linked[predicate] && !values.Present(metaGet(meta, predicate)) {
+		if _, viaEnvelope := linked.Get(predicate); rel.Required && !viaEnvelope && !values.Present(metaGet(meta, predicate)) {
 			er.Gaps = append(er.Gaps, predicate)
 		}
 	}
@@ -347,7 +376,67 @@ func (m *mintedIDs) names(rel *schema.ResolvedRelation, target string) (int, ind
 			return j, *node, true
 		}
 	}
+	// Lookup falls back to aliases once every slug misses; so does this.
+	alias := index.Casefold(target)
+	for j, node := range m.ids {
+		if node == nil || (rel.Kind != schema.KindAny && !slices.Contains(rel.Targets, node.Type)) {
+			continue
+		}
+		if slices.Contains(m.aliases[j], alias) {
+			return j, *node, true
+		}
+	}
 	return 0, index.Node{}, false
+}
+
+// aliasesOf is the record's aliases case-folded, the way lookup folds them.
+func aliasesOf(meta *omap.Map) []string {
+	var out []string
+	switch v := metaGet(meta, "aliases").(type) {
+	case string:
+		out = append(out, index.Casefold(v))
+	case []any:
+		for _, item := range v {
+			if s, ok := item.(string); ok {
+				out = append(out, index.Casefold(s))
+			}
+		}
+	}
+	return out
+}
+
+// withEnvelopeTargets is meta with the relations earlier entries satisfy
+// filled in, as the record add writes would hold them, so a path template
+// that names such a relation can place the entity. meta itself keeps only
+// workspace targets, for FieldFindings.
+func withEnvelopeTargets(meta, linked *omap.Map, rtype *schema.ResolvedType) *omap.Map {
+	if linked.Len() == 0 {
+		return meta
+	}
+	out := omap.New()
+	for _, key := range meta.Keys() {
+		v, _ := meta.Get(key)
+		out.Set(key, v)
+	}
+	for _, predicate := range linked.Keys() {
+		v, _ := linked.Get(predicate)
+		var slugs []string
+		switch held := metaGet(meta, predicate).(type) { // workspace targets, stored first
+		case string:
+			slugs = append(slugs, held)
+		case []any:
+			for _, s := range held {
+				slugs = append(slugs, s.(string))
+			}
+		}
+		slugs = append(slugs, v.([]string)...)
+		if rel, _ := rtype.Relations.Get(predicate); !rel.Many && len(slugs) == 1 {
+			out.Set(predicate, slugs[0])
+		} else {
+			out.Set(predicate, toAnyList(slugs))
+		}
+	}
+	return out
 }
 
 // templateCache loads each type's template once per conform run, keeping the

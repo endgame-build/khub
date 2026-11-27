@@ -612,3 +612,49 @@ func TestConformRefusesAnIgnoredPath(t *testing.T) {
 		t.Errorf("a path outside the pattern: %+v", e[1])
 	}
 }
+
+// An earlier conformant entry's aliases count as add, run in envelope order,
+// would see them: a later target resolves through one, and a later entry
+// minting a slug one of them holds is refused as alias_taken.
+func TestConformReadsEarlierEntriesAliases(t *testing.T) {
+	root := seeded(t)
+	report := conform(t, root, `{"entities": [
+	  {"type": "client", "fields": {"name": "Hooli", "aliases": ["crm:42", "Pied"]}},
+	  {"type": "project", "fields": {"title": "Box"}, "relations": {"client": "CRM:42", "owner": "noor"}},
+	  {"type": "client", "fields": {"name": "Pied"}}
+	]}`)
+	e := report.Entities
+	if !e[0].OK || !e[1].OK {
+		t.Errorf("a target through an earlier entry's alias: %+v / %+v", e[0], e[1])
+	}
+	want := errs.AliasTaken("pied", "client/hooli", errs.Minted).Message + " (envelope entry #0)"
+	if e[2].OK || len(e[2].Errors) != 1 || e[2].Errors[0].Field != "id" || e[2].Errors[0].Reason != want {
+		t.Errorf("a slug an earlier entry holds as an alias: %+v", e[2])
+	}
+}
+
+// A path template that names a relation places the entity when an earlier
+// entry satisfies that relation, as add run in order would.
+func TestConformPlacesAPathAnEarlierEntryFills(t *testing.T) {
+	root := seeded(t)
+	storage := filepath.Join(root, ".khub", "storage.yaml")
+	raw, err := os.ReadFile(storage)
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := strings.Replace(string(raw), "  case-study:\n    layout: file\n    path: case-studies\n",
+		"  case-study:\n    layout: file\n    path: case-studies/{client}/{slug}.md\n", 1)
+	if text == string(raw) {
+		t.Fatal("storage.yaml line for case-study not found")
+	}
+	if err := os.WriteFile(storage, []byte(text), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	report := conform(t, root, `{"entities": [
+	  {"type": "client", "fields": {"name": "Umbrella"}},
+	  {"type": "case-study", "fields": {"title": "Rollout", "published": false}, "relations": {"client": "umbrella"}}
+	]}`)
+	if cs := report.Entities[1]; cs.ID != "case-study/rollout" || len(cs.Errors) != 0 {
+		t.Errorf("templated path through an earlier entry: %+v", cs)
+	}
+}
