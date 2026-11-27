@@ -113,7 +113,8 @@ jobs:
         with:
           # Pinned, not `latest`: a linter release could turn the tree red
           # with no commit of ours, and the choke-point rules are a gate.
-          version: "v2.13.2"
+          # v2.15.0 is the first that reads Go 1.27 export data.
+          version: "v2.15.0"
       # The same lint over the Windows build, on a blocking leg. golangci-lint
       # loads packages through go/packages, which honours GOOS, so this lints
       # every *_windows.go file. The action downloads its binary by the
@@ -124,7 +125,7 @@ jobs:
         env:
           GOOS: windows
         with:
-          version: "v2.13.2"
+          version: "v2.15.0"
       - run: go test ./...
       - name: Build
         run: |
