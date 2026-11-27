@@ -31,13 +31,14 @@ type Segment = { words: string[]; ops: string[] }
 
 const NONE: Parsed = { kind: 'none' }
 const BOOLEAN_FLAGS = new Set([
-  'active', 'draft', 'dry-run', 'edges', 'execute', 'force', 'help', 'in', 'no-body', 'no-schema',
+  'active', 'draft', 'dry-run', 'edges', 'force', 'help', 'in', 'no-body', 'no-schema',
   'no-template', 'no-wire', 'open', 'orphan', 'out', 'plain', 'reverse', 'stale', 'strict',
 ])
 // A verb's own boolean flags. `add <type> --path <value>` may set a field named path, so
 // `get --path` cannot join the shared set: its paths are positional.
 const VERB_BOOLEAN_FLAGS: Record<string, Set<string>> = {
   get: new Set(['path']),
+  layout: new Set(['execute']),
   query: new Set(['replace']),
   reindex: new Set(['check']),
 }

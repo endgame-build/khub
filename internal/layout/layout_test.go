@@ -808,6 +808,25 @@ func TestStorageEntryKeyOrder(t *testing.T) {
 	}
 }
 
+// A type with no entities moved into a collection gets a readable, empty
+// collection file: with no source there is no mode to copy.
+func TestEmptyTypeToCollectionKeepsDefaultMode(t *testing.T) {
+	root := newWS(t)
+	_, _, cards := storageOf(t, root, "card")
+	if err := os.RemoveAll(filepath.Join(root, cards)); err != nil {
+		t.Fatal(err)
+	}
+	migrate(t, root, "card", layout.Target{Layout: "collection", Format: "yaml"})
+	_, _, coll := storageOf(t, root, "card")
+	info, err := os.Stat(filepath.Join(root, coll))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Mode().Perm()&0o400 == 0 {
+		t.Fatalf("collection mode = %v", info.Mode().Perm())
+	}
+}
+
 // A migrated file keeps its source's mode, a new collection file takes the
 // narrowest of its sources', and a collection source whose comments a format
 // change drops is listed as rewritten.

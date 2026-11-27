@@ -4,11 +4,11 @@ package canon
 // nested MAPPING entry — `storage.<type>` when `khub layout migrate` rewrites
 // a type's storage — and leaves every other byte of the document alone.
 //
-// SpliceMapping edits same-line scalars at any depth and appends a key at the
-// root only; a key added inside a nested block (`format: json` arriving on a
-// type that never declared one) is not expressible there and would fall back
-// to a whole-document re-emit, which drops the layer's provenance header and
-// every comment beside the other types. A storage entry is small and its own
+// A storage entry is usually authored in flow style, and a migration reorders
+// its keys (`layout, format, path` first). SpliceMapping falls back to a
+// whole-document re-emit for both a reordered key and a new key inside a flow
+// mapping, which drops the layer's provenance header and every comment beside
+// the other types. A storage entry is small and its own
 // comments are the only ones at stake, so this splice works at the granularity
 // of the entry: the lines the entry occupies are replaced by a fresh rendering
 // of it, and the rest of the file survives by construction.

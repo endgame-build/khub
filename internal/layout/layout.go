@@ -184,14 +184,7 @@ func plan(root, typeName string, target Target, now time.Time) (*Plan, error) {
 	}
 	rtype, ok := resolved.Types.Get(typeName)
 	if !ok {
-		prov, perr := workspace.Provenance(root)
-		if perr != nil {
-			return nil, perr
-		}
-		preset, _ := prov.Get("preset")
-		known := append([]string{}, resolved.Types.Keys()...)
-		sort.Strings(known)
-		return nil, errs.UnknownType(typeName, values.Str(preset), known)
+		return nil, workspace.UnknownType(root, typeName, resolved.Types.Keys())
 	}
 	from := describe(rtype)
 	if rtype.Storage.Layout == schema.LayoutSingleton {
@@ -401,7 +394,7 @@ func altitudeDiffs(node index.Node, scan, edit *omap.Map) []string {
 			seen[k] = true
 			sv, _ := scan.Get(k)
 			ev, _ := edit.Get(k)
-			if !canon.Equal(sv, ev) {
+			if !canon.EqualValues(sv, ev) {
 				out = append(out, fmt.Sprintf("%s: %s reads %s to the graph (YAML 1.1) but %s to the editor (YAML 1.2)",
 					node.ID(), k, repr(sv), repr(ev)))
 			}
@@ -691,7 +684,7 @@ func restoreInstants(attr *schema.ResolvedAttribute, v any) any {
 			return v
 		}
 		edit := canon.ResolvePlainScalarMode(s, canon.Mode12)
-		if !canon.Equal(edit, canon.ResolvePlainScalarMode(s, canon.Mode11)) {
+		if !canon.EqualValues(edit, canon.ResolvePlainScalarMode(s, canon.Mode11)) {
 			return v
 		}
 		switch edit.(type) {
@@ -780,11 +773,12 @@ func destination(root string, rtype *schema.ResolvedType, rel string, data []byt
 
 // createdModes is the files a plan creates, other than storage.yaml, with the
 // modes their sources had. Publication creates files at the default mode, so
-// these are set once it has committed.
+// these are set once it has committed. A file with no source (the empty
+// collection of a type with no entities) carries mode 0 and keeps the default.
 func createdModes(changes []workspace.FileChange) []workspace.FileChange {
 	var out []workspace.FileChange
 	for _, c := range changes {
-		if c.Before == nil && c.After != nil && c.Path != filepath.FromSlash(StorageYAML) {
+		if c.Before == nil && c.After != nil && c.After.Mode != 0 && c.Path != filepath.FromSlash(StorageYAML) {
 			out = append(out, workspace.FileChange{Path: c.Path, After: &workspace.FileState{Mode: c.After.Mode}})
 		}
 	}
@@ -1047,7 +1041,7 @@ func validateCandidate(root string, resolved *schema.ResolvedSchema, p *Plan, no
 }
 
 // checkFindings renders every gating finding of a check report as
-// "<bucket>: <item>", the buckets Passed consults, in its order. Orphans and
+// "<bucket>: <item>", the buckets Passed consults. Orphans and
 // the informational buckets are left out: a move changes no edge. The list
 // mirrors CheckReport.Passed in internal/integrity/check.go.
 func checkFindings(r *integrity.CheckReport) []string {
