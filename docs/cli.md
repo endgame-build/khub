@@ -593,14 +593,14 @@ The script holds no list of commands: at TAB time it runs `khub __complete <word
 | `khub`, a group (`schema`) | command and subcommand names, with their one-line help |
 | `-` | the command's options |
 | `-C`, `--workspace`, `-C<dir>` | directories |
-| `--format` | the command's closed set: `text`/`json`, plus `ids` (`query`, `search`), `table`/`raw` (`get`); `tree`/`json` for `impact` |
+| `--format` | the command's closed set: `text`/`json`, plus `ids` (`query`, `search`), `table`/`raw` (`get`), `markdown` (`schema scaffold`); `tree`/`json` for `impact` |
 | `wire --target` | `claude`, `agents`, `both` |
 | `query --trust` | `unverified`, `machine`, `human` |
 | `check --tier` | `machine`, `human` |
 | `viz --aspect`, `serve --aspect` | `instances`, `schema`, `both` |
 | `init` | the packaged presets, then a directory for PATH |
 | `completion` | `bash`, `zsh`, `fish`, `powershell` |
-| `--body-file`, `viz --out`, `import --type-map` | files |
+| `--body-file`, `viz --out`, `import --type-map`, `schema conform` | files |
 | `init --preset-source`, `export --okf`, `import --okf` | directories |
 | anything else: types, ids, predicates, field values, numbers | nothing, and no file names |
 
