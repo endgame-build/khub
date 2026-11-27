@@ -214,6 +214,12 @@ test. It gives a workspace at a fixed root and khub answering from the fixtures.
 | `status` | `total`, `draft`, `orphan`, `stale` |
 | `validate` | `count`, `errors[].{id, field, reason}`, `gaps` |
 | `schema show`, `schema diff`, `schema snapshot` | `name`, `fields`, `relations`, `pending`, `changes`, `types` |
+| `schema scaffold` | the number of `types` |
+| `schema conform` | `summary.{entities, conformant, score}` |
+
+`schema scaffold` and `schema conform` exist only in a binary that prints those
+fields; an older one refuses the call before any JSON, so they need no
+`MIN_KHUB` bump.
 
 Rows of `query`, `get`, `search` and `neighbors` end with `trust`, and
 `status` carries `expired` and `trust` counts and the `okf_nonconformant`
