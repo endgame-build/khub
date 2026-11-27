@@ -20,6 +20,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 
+	"github.com/endgame-build/khub/internal/layout"
 	"github.com/endgame-build/khub/internal/presets"
 	"github.com/endgame-build/khub/internal/trust"
 	"github.com/endgame-build/khub/internal/viz"
@@ -106,11 +107,13 @@ var defaultFormatValues = []string{"text", "json"}
 
 // optionValues are the closed sets of the other options that have one.
 var optionValues = map[string][]string{
-	"khub wire --target":  {"claude", "agents", "both"},
-	"khub query --trust":  trust.Tiers,
-	"khub check --tier":   {trust.Machine, trust.Human},
-	"khub viz --aspect":   viz.Aspects,
-	"khub serve --aspect": viz.Aspects,
+	"khub wire --target":              {"claude", "agents", "both"},
+	"khub query --trust":              trust.Tiers,
+	"khub check --tier":               {trust.Machine, trust.Human},
+	"khub viz --aspect":               viz.Aspects,
+	"khub serve --aspect":             viz.Aspects,
+	"khub layout migrate --layout":    layout.Layouts,
+	"khub layout migrate --to-format": layout.Formats,
 }
 
 // pathOptions are the options whose value is a path: a file (Default) or a

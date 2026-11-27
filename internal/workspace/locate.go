@@ -12,6 +12,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -66,6 +67,19 @@ func Provenance(root string) (*omap.Map, error) {
 	out.Set("preset", configString(cfg, "preset"))
 	out.Set("version", configString(cfg, "version"))
 	return out, nil
+}
+
+// UnknownType is the unknown_type refusal for a type the schema does not
+// declare: the workspace's preset and the declared types in sorted order. A
+// config that cannot be read is its own refusal, not a blank preset name.
+func UnknownType(root, name string, declared []string) error {
+	prov, err := Provenance(root)
+	if err != nil {
+		return err
+	}
+	preset, _ := prov.Get("preset")
+	known := slices.Sorted(slices.Values(declared))
+	return errs.UnknownType(name, preset.(string), known)
 }
 
 // Name is the workspace's name: the one init recorded in .khub/config.yaml,

@@ -104,6 +104,16 @@ upgrade when a real corpus hits a 500-row file with one typo.
   row by slug: one `LogEntry` per changed row, same two-`git show`s-per-commit
   cost as today. `gitlog.path_to_node` becomes one-path-to-many-nodes.
 
+## Moving a type in or out of a collection
+
+`khub layout migrate` moves a type in or out of a collection, and the row
+model above is what it renders to and reads from. A file's frontmatter and
+body become a row keyed by slug, with the body in the reserved `body` field
+and no `type`, since the binding supplies it. A row becomes a file that opens
+with `type:`. The git caveat above holds for a migrated collection too: rows
+take no commit date. The flags, the round-trip guarantee and the refusals are
+in [`cli.md`](cli.md#storage-migration).
+
 ## Schema authoring
 
 ```yaml

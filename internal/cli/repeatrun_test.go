@@ -144,6 +144,14 @@ var readCalls = map[string][][]string{
 	"schema base":  {{"schema", "base"}, {"schema", "base", "--format", "json"}},
 	"schema edges": {{"schema", "edges"}, {"schema", "edges", "--format", "json"}},
 	"schema diff":  {{"schema", "diff"}, {"schema", "diff", "--format", "json"}},
+	"layout":       {{"layout"}, {"layout", "--format", "json"}},
+	// A dry run is layout migrate's default: it plans the move of twenty
+	// components and writes nothing. The type keeps md, since its stem-bound
+	// template would be stray under another format (a refusal, below).
+	"layout migrate": {
+		{"layout", "migrate", "component", "--layout", "folder"},
+		{"layout", "migrate", "component", "--path", "knowledge/comps", "--format", "json"},
+	},
 	// A dry run writes nothing and takes no lock, so it repeats as a read. The
 	// forced remove previews cmp-c00's inbound edges, a tie of nine or more.
 	"add":    {{"add", "component", "--title", "Fresh", "--kind", "service", "--system", "sys-core", "--dry-run"}},
@@ -181,6 +189,8 @@ var refusalCalls = [][]string{
 	{"query", "--count", "bogus>=1"},
 	{"recent", "--days", "-1"},
 	{"remove", "cmp-c00", "--dry-run"},
+	{"layout", "migrate", "bogus", "--layout", "folder"},
+	{"layout", "migrate", "component", "--to-format", "json"},
 	{"run", "nope"},
 }
 

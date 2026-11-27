@@ -252,6 +252,7 @@ func newRoot() *cobra.Command {
 	registerBackfill(root)
 	registerWire(root)
 	registerSchema(root)
+	registerLayout(root)
 	registerCompletion(root)
 	dropHelpShorthand(root) // after every registration, so subcommands are covered
 	wireCompletions(root)

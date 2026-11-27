@@ -38,6 +38,7 @@ const BOOLEAN_FLAGS = new Set([
 // `get --path` cannot join the shared set: its paths are positional.
 const VERB_BOOLEAN_FLAGS: Record<string, Set<string>> = {
   get: new Set(['path']),
+  layout: new Set(['execute']),
   query: new Set(['replace']),
   reindex: new Set(['check']),
 }
@@ -267,7 +268,7 @@ function khubCall(words: string[], binary: RegExp): Simple | null {
 
   const found: Simple = { ...call(verb), workspace }
 
-  if (verb === 'schema' && SCHEMA_VIEWS.has(words[i] ?? '')) {
+  if ((verb === 'schema' && SCHEMA_VIEWS.has(words[i] ?? '')) || (verb === 'layout' && words[i] === 'migrate')) {
     found.sub = words[i] as string
     i += 1
   }
@@ -382,10 +383,12 @@ export const isDryRun = (found: Simple) => isOn(found.flags['dry-run'])
 // Tells whether a call is the `reindex --check` gate, which writes nothing.
 const isIndexCheck = (found: Simple) => found.verb === 'reindex' && isOn(found.flags.check)
 
-// Tells whether a call changes entities, the schema, the index or the agent files.
+// Tells whether a call changes entities, the schema, the index or the agent files. A
+// `layout migrate` is a dry run until `--execute`.
 export const mutates = (found: Simple) =>
   ((isWrite(found) || OPERATORS.has(found.verb)) && !isDryRun(found) && !isIndexCheck(found)) ||
-  (found.verb === 'schema' && found.sub === 'snapshot')
+  (found.verb === 'schema' && found.sub === 'snapshot') ||
+  (found.verb === 'layout' && found.sub === 'migrate' && isOn(found.flags['execute']))
 
 // Returns what a `khub edit` call changed, as `<field> <value>` pairs. A body is named,
 // never quoted.

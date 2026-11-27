@@ -1,0 +1,1 @@
+{"error": {"code": "migrate_target_exists", "message": "Refusing to migrate 'note': notes.yaml exists and is not what the migration would write. Move it away, or choose another --path"}}

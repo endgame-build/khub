@@ -1,10 +1,8 @@
 package explore
 
 import (
-	"sort"
 	"time"
 
-	"github.com/endgame-build/khub/internal/errs"
 	"github.com/endgame-build/khub/internal/index"
 	"github.com/endgame-build/khub/internal/omap"
 	"github.com/endgame-build/khub/internal/project"
@@ -28,7 +26,7 @@ func Rows(root, typeName string, now time.Time) (*omap.Map, error) {
 	}
 	rtype, ok := s.resolved.Types.Get(typeName)
 	if !ok {
-		return nil, unknownType(root, s.resolved, typeName)
+		return nil, workspace.UnknownType(root, typeName, s.resolved.Types.Keys())
 	}
 	cols := Columns(s.resolved, typeName)
 	attrs := listAttributes(s.resolved, rtype)
@@ -154,18 +152,4 @@ func appendUnique(ids []string, id string) []string {
 		}
 	}
 	return append(ids, id)
-}
-
-// unknownType is the refusal viz and `khub schema show` give for a type the
-// schema does not declare, naming the known ones in sorted order. A config
-// that cannot be read is its own refusal, not a blank preset name.
-func unknownType(root string, resolved *schema.ResolvedSchema, name string) error {
-	prov, err := workspace.Provenance(root)
-	if err != nil {
-		return err
-	}
-	p, _ := prov.Get("preset")
-	known := append([]string{}, resolved.Types.Keys()...)
-	sort.Strings(known)
-	return errs.UnknownType(name, values.Str(p), known)
 }

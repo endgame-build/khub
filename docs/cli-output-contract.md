@@ -100,11 +100,11 @@ error, as some tools do: the corrective action is the same (fix the input and
 run again), and `error.code` carries the difference for anyone who needs it.
 A new exit code would need a different action to go with it.
 
-Two codes are refusals that are not clean "nothing was written" cases.
+Three codes are refusals that are not clean "nothing was written" cases.
 `write_durability_uncertain` means the write or removal happened but could not
 be confirmed durable, so read the file before retrying. `upgrade_recovery_failed`
-means an upgrade's rollback needs a human to inspect the journal the message
-names.
+and `migrate_recovery_failed` mean an upgrade's or a `layout migrate`'s
+rollback needs a human to inspect the journal the message names.
 
 ## Refusals
 
@@ -165,6 +165,7 @@ Which codes carry which keys:
 | `unknown_type` | | the declared types, sorted | nearest type |
 | `unknown_preset` | | the shipped presets, sorted | nearest preset |
 | `bad_target` | | `claude`, `agents`, `both` | nearest target |
+| `migrate_target`, for an unknown `--layout` or `--to-format` | | the values the flag takes, in the message's order | nearest value |
 | `locked_removed` | | every locked element the upgrade removes, `type` or `type.predicate`, in the current schema's declaration order: the `--unlock` values the run takes | |
 | `unknown_saved_query`, when `.khub/queries.yaml` holds any | | the saved query names, in file order | nearest name |
 | `invalid_saved_query`, for a value in one definition | the definition key | | |

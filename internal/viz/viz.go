@@ -19,12 +19,10 @@ import (
 
 	"github.com/endgame-build/khub/internal/assets"
 	"github.com/endgame-build/khub/internal/canon"
-	"github.com/endgame-build/khub/internal/errs"
 	"github.com/endgame-build/khub/internal/graph"
 	"github.com/endgame-build/khub/internal/index"
 	"github.com/endgame-build/khub/internal/introspect"
 	"github.com/endgame-build/khub/internal/omap"
-	"github.com/endgame-build/khub/internal/schema"
 	"github.com/endgame-build/khub/internal/workspace"
 )
 
@@ -132,7 +130,7 @@ func AspectGraph(root, aspect string, typeFilter *string) (*Elements, []string, 
 	}
 	if typeFilter != nil && !resolved.Types.Has(*typeFilter) {
 		// A misspelled --type must fail loudly, not render an empty graph as "success".
-		return nil, nil, unknownType(root, resolved, *typeFilter)
+		return nil, nil, workspace.UnknownType(root, *typeFilter, resolved.Types.Keys())
 	}
 	els := &Elements{Nodes: []*omap.Map{}, Edges: []*omap.Map{}}
 	typeSet := map[string]bool{}
@@ -449,19 +447,6 @@ cytoscape({
 </body>
 </html>
 `
-}
-
-// unknownType is LocatedError.unknown_type with the workspace's preset name.
-func unknownType(root string, resolved *schema.ResolvedSchema, name string) error {
-	prov, err := workspace.Provenance(root)
-	if err != nil {
-		return err
-	}
-	preset, _ := prov.Get("preset")
-	presetName, _ := preset.(string)
-	known := append([]string{}, resolved.Types.Keys()...)
-	sort.Strings(known)
-	return errs.UnknownType(name, presetName, known)
 }
 
 func sortedKeys(set map[string]bool) []string {

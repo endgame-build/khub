@@ -291,3 +291,19 @@ var SkipDirs = map[string]bool{
 	".git": true, ".kb": true,
 	"node_modules": true, ".venv": true, "venv": true, "__pycache__": true,
 }
+
+// ChmodIn sets path's permission bits, confined to root; OpenPath's refusals
+// apply, and the descriptor is changed, never a path that could be swapped.
+func ChmodIn(root, path string, mode fs.FileMode) error {
+	r, rel, err := OpenPath(root, path)
+	if err != nil {
+		return err
+	}
+	defer r.Close()
+	f, err := r.Open(rel)
+	if err != nil {
+		return FileInPath(err, root, path)
+	}
+	defer f.Close()
+	return f.Chmod(mode.Perm())
+}

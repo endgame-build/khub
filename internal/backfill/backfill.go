@@ -117,7 +117,7 @@ func backfill(root string, typeName *string, inferType, dryRun bool) (*BackfillR
 	}
 	if typeName != nil && !resolved.Types.Has(*typeName) {
 		// A misspelled --type must fail loudly, not scaffold nothing and report success.
-		return nil, unknownType(root, resolved, *typeName)
+		return nil, workspace.UnknownType(root, *typeName, resolved.Types.Keys())
 	}
 	scanned, err := index.Build(root, resolved)
 	if err != nil {
@@ -454,19 +454,6 @@ func changeValue(v any) string {
 		return ""
 	}
 	return values.Str(v)
-}
-
-// unknownType is LocatedError.unknown_type with the workspace's preset name.
-func unknownType(root string, resolved *schema.ResolvedSchema, name string) error {
-	prov, err := workspace.Provenance(root)
-	if err != nil {
-		return err
-	}
-	preset, _ := prov.Get("preset")
-	presetName, _ := preset.(string)
-	known := append([]string{}, resolved.Types.Keys()...)
-	sort.Strings(known)
-	return errs.UnknownType(name, presetName, known)
 }
 
 // present is values.present over one key — the shared predicate the write gate
