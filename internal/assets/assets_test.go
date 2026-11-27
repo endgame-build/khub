@@ -12,6 +12,19 @@ import (
 	"testing"
 )
 
+// The layout engine is held to the same guarantee, and to the page's CSP:
+// no network, no DOM, nothing evaluated from strings.
+func TestDagreIsOfflineAndCSPSafe(t *testing.T) {
+	if len(DagreJS) < 30_000 || !strings.HasPrefix(DagreJS, `"use strict";var dagre=`) {
+		t.Fatalf("embedded dagre is not the expected bundle (%d bytes)", len(DagreJS))
+	}
+	for _, banned := range []string{"http://", "https://", "eval(", "new Function", "document.", "XMLHttpRequest", "fetch("} {
+		if strings.Contains(DagreJS, banned) {
+			t.Errorf("dagre bundle contains %q", banned)
+		}
+	}
+}
+
 // The self-containment guarantee: the library itself must not pull anything
 // over the network (PRJ-005 / REQ-PRJ003-02).
 func TestCytoscapeIsSubstantialAndOffline(t *testing.T) {

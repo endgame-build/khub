@@ -32,6 +32,11 @@ func run(root string, args ...string) (stdout string, code int, err error) {
 	var out, errOut bytes.Buffer
 	cmd.Stdout = &out
 	cmd.Stderr = &errOut
+	return finish(cmd, &out)
+}
+
+// finish runs cmd and reads its outcome for run and runOffline.
+func finish(cmd *exec.Cmd, out *bytes.Buffer) (stdout string, code int, err error) {
 	runErr := cmd.Run()
 	if runErr != nil {
 		var exit *exec.ExitError

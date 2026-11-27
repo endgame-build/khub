@@ -84,6 +84,9 @@ func Verify(root, id, by, at string, publish func(path string) error) (*VerifyRe
 }
 
 func verify(root, id, by, at string, publish func(path string) error) (*VerifyResult, error) {
+	if !trust.ValidActor(by) {
+		return nil, errs.InvalidActor(by)
+	}
 	resolved, err := introspect.LoadSchema(root)
 	if err != nil {
 		return nil, err

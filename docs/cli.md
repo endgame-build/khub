@@ -397,7 +397,7 @@ Every finding carries a stable location — the `field` on a `validate` row, the
 
 ## Trust
 
-`khub verify <id> --by <actor>` appends a review event `{by, at, rev}` to the entity's OKF `verified` list. `--by` is required, with no default: a review khub stamped itself would claim a tier nobody asserted. `at` defaults to the clock and must be ISO 8601 with a `T` and an offset (`t` and `z` are accepted and kept as written, as on every OKF datetime field). A bare `verified` mapping is one event, and becomes a list on the next verify. A review is not a write of content: it bumps no `updated` and stamps no `generated`.
+`khub verify <id> --by <actor>` appends a review event `{by, at, rev}` to the entity's OKF `verified` list. `--by` is required, with no default: a review khub stamped itself would claim a tier nobody asserted. A `--by` that follows no actor convention (`human:` alone, `human:Ana Ruiz`, a bare word with a space) is refused as `invalid_actor` and nothing is written, since no read would count it. `at` defaults to the clock and must be ISO 8601 with a `T` and an offset (`t` and `z` are accepted and kept as written, as on every OKF datetime field). A bare `verified` mapping is one event, and becomes a list on the next verify. A review is not a write of content: it bumps no `updated` and stamps no `generated`.
 
 `rev` is khub's one extension to the OKF shape. It is the first 12 hex digits of a SHA-256 over the entity's declared domain attributes, its `status` and its relations, by name in sorted order, plus its body with line endings normalized to `\n` and trailing newlines dropped. It leaves out identity and bookkeeping: `type`, `author`, `created`, `updated`, `generated`, `verified`, `tags`, `aliases` and `stale_after`. So a tag edit leaves a review standing, and a body, field or status edit supersedes it. Undeclared keys are not content. The same definition decides when a write stamps `generated` (see [Write semantics](#write-semantics)).
 
@@ -419,7 +419,7 @@ An entry in `verified` is a claim, not proof. Anyone who can write the file can 
 | `khub export` | `--okf <dir>` (required), `--force`, `--dry-run`, `--format <text\|json>` | write the workspace as an OKF 0.2 bundle in `<dir>`. Only entities are exported, from the scan: `.khub/`, the agent files, the workspace's own `index.md`, reference docs and ignored paths stay out, and strays are listed (`skipped_strays`), never dropped silently. One md concept per entity at a path mirroring the workspace. An md entity is copied as written, frontmatter comments and formatting included, since it is already an OKF concept. A json or yaml entity becomes `<path>.md` and a collection row `<collection path without its extension>/<slug>.md`, with the entity's fields as frontmatter in the safe profile (width 4096: a long scalar stays on one line, which a foreign parser was seen to lose when folded) and its `body` as the body. The type's declared relations are appended as one `# Related` section, `- <predicate>: [Title](/bundle/path.md)` per resolved target in declaration and value order; a value that resolves to no concept is listed as plain text; inverse edges are not written. Every directory gets an `index.md` (`# <type>` sections of `* [Title](file.md) - description`, then `# Subdirectories`), with titles and descriptions Markdown-escaped; only the root one has frontmatter, `okf_version: '0.2'`. No `log.md`. The bundle is built in a staging directory beside `<dir>` and swapped in at the end, so a failed export leaves `<dir>` as it was. Every export also writes `.khub-export` at the bundle root, a YAML file listing the bundle's own files; OKF readers skip it, since it is not Markdown. `<dir>` must be absent or empty, or, with `--force`, a bundle khub exported before, which is replaced whole. `--force` replaces `<dir>` only when it holds `.khub-export`, holds no `.khub/` and no `.git/`, and holds no file the marker does not list, so a workspace, a repository or a file someone added is never deleted. Refusals, exit 2 and nothing written: a non-empty `<dir>` without `--force` (`export_target_not_empty`), `--force` on a directory without the marker (`export_target_not_bundle`), `--force` on a bundle that holds `.khub/`, `.git/` or a file the marker does not list, named in the message (`export_target_unsafe`), a file (`export_target_not_directory`), a `<dir>` that is the workspace, inside it or holds it, judged by the filesystem, so a path through a link or spelled in another case on a case-insensitive volume counts (`export_target_overlaps`), two concepts on one path (`export_path_collision`), and a malformed file (`malformed_projection`). A `<dir>` that is a symlink is replaced where it points, and the link stays. Once the new bundle is in place, a replaced one that will not delete is listed in `cleanup_left` and left for the user; the export still succeeds. JSON returns `{path, concepts, indexes, okf_version, skipped_strays, cleanup_left, dry_run}`; `--dry-run` lists the same paths and writes nothing |
 | `khub import` | `--okf <dir>` (required), `--type-map <file>`, `--by <actor>`, `--dry-run`, `--format <text\|json>` | read an OKF bundle into the workspace as drafts, the permissive consume side (OKF §11). Every `.md` under the bundle except `index.md` and `log.md` is a concept; hidden directories are skipped; a bundle root reached through a symlink is read, and any link inside the bundle, to a file or a directory, is reported (`symlink`) and never followed. A concept's OKF `type` lands in the khub type the `--type-map` YAML names (`Metric: capability`), else a declared type of that name or its slug; anything else is skipped (`unmapped_type`), never invented. The id is minted by the type's scheme around the file's stem, as `add` mints one (its prefix, by-value or literal, and its date from `created`, else today); a stem that already follows the scheme is kept, and otherwise the stem is added to `aliases`, so a lookup or a link by the old name resolves. A stem that a slug or alias of the workspace, or of another imported concept, already answers to is not added, since a lookup by it would be ambiguous, and is reported as `alias_dropped`. A folder entity's `<slug>/_index.md` takes its folder's name. A taken, invalid or reserved id, or a by-value prefix whose deciding attribute is unset, is skipped, never suffixed or merged. Frontmatter is kept as written, unknown keys, nested values and key order included, spliced so its formatting and comments survive. Import changes four things: `type` becomes the khub type, and a differing OKF type is kept as `okf_type`; `status` becomes `draft`; the bundle's `verified` moves to `okf_verified`, verbatim and never counted by trust, so an imported concept reads `unverified`; and a relation value no entity answers to moves to `okf_unresolved: {<field>: [values]}`, so no dangling edge is written. `generated` stays as the producer's provenance claim, and is stamped from `--by` (then `KHUB_ACTOR`, then `agent/claude-code` under Claude Code, then `khub`) only when absent. A body link or a `sources[].resource` that names another imported concept (bundle-absolute `/x.md` or relative, anchor and query dropped, percent-escapes decoded) becomes a `references` edge to its id; the body and `sources` stay as written. export's `# Related` section, when every entry is in export's form and every predicate is declared on the type, is read back into those relations and stripped; any other section is the producer's prose and stays, its links read as ordinary links. Two spellings of one target are written once. Per concept, a document with no frontmatter (`no_frontmatter`), malformed YAML (`malformed_frontmatter`), no `type` (`missing_type`), a key import must write that the concept already carries (`quarantine_taken`, naming `okf_verified` beside `verified`, `okf_type` when its type maps to another name, or `okf_unresolved` when a value is unresolved) or a refused write is skipped and never stops the others; broken and external links are counted, never fatal. The run refuses whole, exit 2 and nothing written, for a bundle that is not a readable directory (`import_bundle_unreadable`), a bundle and workspace that overlap, judged as export judges its target (`import_bundle_overlaps`), and a type map that is not a mapping of strings or names an undeclared type (`import_type_map_invalid`). A real run holds the workspace lock from the first read to the last write. Every concept is planned first, to a fixed point: a concept refused leaves the plan, so a value or a link naming it is unresolved or broken, never a dangling edge. The concepts that land are then written all or none: a write that fails removes or restores every file the run wrote and returns its own error (`os_error`, exit 2), or `import_write_failed` naming any file it could not undo. JSON returns `{bundle, imported: [{concept, id, path, okf_type, alias, alias_dropped, status_was, verified_quarantined}], skipped: [{concept, reason, message}], unresolved: [{concept, field, value}], references_added, links: {resolved, broken, external}, dry_run}`; a completed run exits 0 even with skips; `--dry-run` plans the same and writes nothing |
 | `khub viz` | `--out <file.html=viz.html>`, `--open`, `--type <t>`, `--aspect <instances\|schema\|both>` | self-contained Cytoscape HTML over the typed graph. `--aspect instances` (the default) draws the entities, byte-identical to a bare `viz`. `--aspect schema` draws the resolved ontology and reads no entity file: one box per declared type listing its own attributes as `name: type [multiplicity]` (an enum shows its values, quoted where a value holds `|`, a brace, a quote or edge spaces; a `list` attribute's upper bound is `*`), an `any` box carrying the base block's attributes and relations, and one edge per declared relation and target type, labelled `predicate [multiplicity]` (UML: `[1]`, `[0..1]`, `[1..*]`, `[0..*]`), followed by ` / <inverse>` when the relation declares one (the inverse is derived from that edge, so it is named there rather than drawn as a second edge), solid when required and dashed when optional; a `to: any` relation lands on `any`. `--aspect both` draws the two together, laid out with the types above the entities, plus a dotted instance-of edge from each entity to its type. `--type` keeps the type's outbound frontier in every aspect: in the schema half, the type's box, its relations, and the boxes they reach — the base relations then leave the type for `any`. A value outside the three is a usage error (exit 2). The printed counts include every node and edge drawn |
-| `khub serve` | `--port <n=7777>`, `--aspect <instances\|schema\|both>` | read-only graph view over HTTP on `127.0.0.1`. Every request rebuilds from the live files, so a reload always shows the current tree and no cache can go stale; the page itself fetches once per load rather than polling. The live counterpart to `viz`, which stays the static, shareable, printable artifact. The page has four views: Schema (where it lands by default), Both, Graph and List. `--aspect` picks the landing view by printing the URL with `?aspect=<value>` (`instances` opens Graph); the same query parameter works on any visit, and an unknown value is ignored. An invalid `--aspect` is a usage error, checked before the TTY gate. Blocks until interrupted, so it refuses on a non-terminal stdout (`TTY_COMPATIBLE=1` overrides); a port already in use is a refusal naming `--port`, never a silent hop. No write endpoints: the page composes `khub link` / `khub unlink` commands to run, so every mutation stays on the validated CLI path |
+| `khub serve` | `--port <n=7777>`, `--aspect <instances\|schema\|both>` | read-only review page over HTTP on `127.0.0.1`, described under [The served page](#the-served-page). Every request rebuilds from the live files, so no cache can go stale. The live counterpart to `viz`, which stays the static, shareable, printable artifact. `--aspect` is accepted for compatibility and still printed on the URL as `?aspect=<value>`; every value opens the ontology diagram. An invalid `--aspect` is a usage error, checked before the TTY gate. Blocks until interrupted, so it refuses on a non-terminal stdout (`TTY_COMPATIBLE=1` overrides); a port already in use is a refusal naming `--port`, never a silent hop. No write endpoints: every mutation stays on the validated CLI path |
 | `khub backfill` | `--type <t>`, `--infer-type`, `--dry-run` | add missing frontmatter and dates from `git log`. `--infer-type` repairs a stray (see `strays` under [Reading check output](#reading-check-output)) whose frontmatter has no `type`, or a null or empty one: it writes `type:` from the one type whose layout holds the file, so the file becomes an ordinary entity that `validate` and `check` judge on its merits (a missing required field leaves it `incomplete`; nothing is blocked). The stamp goes through the same writer as `edit` and the rest of `backfill`: comments, key order and untouched values are kept and the key is appended (an empty frontmatter block is written fresh), but line endings come out as LF, and a document the writer cannot change in place (flow-style frontmatter, any `.json`) is re-emitted in khub's canonical form. The decision reads the file as that writer does, so an authored `type` is never overwritten. The stamped file is backfilled like any other entity in the same run, and `--dry-run` lists it as `<id>: type, …`. It covers `file`, `folder` (the `<slug>/_index.<fmt>` file) and `singleton` layouts. These strays are left, and each is printed as `Left stray <path>: <reason>`: a Markdown file with no frontmatter (`no frontmatter to stamp`; adopting a foreign file is not a stamp), a file starting with a UTF-8 byte-order mark (the scan cannot read past it and the writer would drop it), a file whose `type` names another type (`type is 'x', the layout holds 'y'`, or `type is not a type name, …` for a non-string; a disagreement is fixed by hand), a collection row (a row with no `type` already reads as its collection's type, so a row stray has another or a null `type`), and a path more than one type claims (the resolver refuses overlapping storage, so this is a guard). The real run prints `Stamped type on N strays` (`1 stray`). Like the rest of `backfill`, the stamp writes no `generated`. A write that would replace a value already present refuses with `would_overwrite` (exit 2) and stops the run |
 | `khub wire` | `--target <claude\|agents\|both>`, `--dry-run` | inject a managed khub block into the workspace's agent files. Bare `wire` writes both `CLAUDE.md` and `AGENTS.md`, creating either that is missing; `--target` creates a specific file. `CLAUDE.md` gets `@.khub/{ontology,policy,storage}.yaml` imports; `AGENTS.md` (no import directive) gets schema pointers. Both carry the command surface, so an agent reasons in the workspace ontology even without running khub. Both end with an install hint: the khub plugin for Claude Code in `CLAUDE.md`, and `npx skills add endgame-build/khub` in `AGENTS.md`. Idempotent, minimal-diff |
 
@@ -430,6 +430,109 @@ khub reindex --check   # exits 1 while index.md lags the graph; run `khub reinde
 ```
 
 `khub init` and `khub upgrade` both run `wire` and the index write as tails. khub installs no skills. They ship in the Claude Code plugin and through `npx skills add endgame-build/khub` (see [Agent skills](../README.md#agent-skills)). khub also leaves alone the skill copies that khub 0.27.0 and earlier wrote under `.claude/skills/`, `.agents/skills/` and `.opencode/skills/`; delete those folders and their `.gitignore` lines by hand.
+
+### The served page
+
+`khub serve` opens on what a reviewer has to look at. Each view has its own
+address in the URL fragment, so a reload, back/forward or a pasted link restores
+it. Back and forward also restore the place in it: the scroll, the rows drawn,
+the diagram's zoom.
+
+| Address | View |
+|---|---|
+| `#/` | Review: how many entities are unreviewed, incomplete, changed since review, expired, orphan, draft and stale, by type; the findings `check` fails on; what changed in the window (`?days=`, 7 by default; the newest 50, or up to 1,000 on request); each type with its review share and its largest gap (the relation in use that fewest of its entities have, leaving out inherited relations and those that only join a type to itself); the saved queries with their counts |
+| `#/types` | Every declared type with its capture cue, its count, its review share and its markers |
+| `#/type/<name>` | One type's entities as rows |
+| `#/entity/<type>/<slug>` | One entity |
+| `#/query/<name>` | The rows of a saved query, as `khub run` lists them |
+| `#/marked/<marker>` | The entities of every type carrying one marker (`incomplete`, `superseded`, `expired`, `orphan`, `draft`, `stale`), or `unverified`: at most 1,000 rows, the count whole. The headline numbers of the review home each open one |
+| `#/ontology` | The diagram of the types and their relations (`?sel=type:<name>` or `?sel=rel:<from>.<predicate>`, `?focus=<type>`, `?map=1`) |
+
+**Every view.** The header carries the workspace's name, a search box and the
+time the view was read; `?` lists the keys and what each marker and tier means. Search finds an exact id or alias first, then runs
+`khub search` in plain mode over titles and text. A file that does not parse is
+named in a banner; the counts and markers on the page leave it out. A view reads
+the workspace again when the window comes back to the front (unless it did so in
+the last five seconds), on Refresh and on `r`. Nothing polls. A reading that found
+nothing new leaves the page alone (a list of more than 5,000 rows is redrawn), and
+one that failed leaves what is on screen and says it was not refreshed.
+
+**Markers.** `draft`, `stale`, `orphan` and `incomplete` are as `query` and
+`check` define them. `expired` is past its own `stale_after`. `changed since
+review` means its newest review no longer matches its content; `check` lists
+every such review under `superseded_verifications`. Trust is the review tier.
+
+**A type's list.** One row per entity with its markers, its trust, its own
+attributes (a base attribute it redeclares included), one count of distinct
+linked entities per relation, outgoing and incoming (counted off the graph
+`query --count` and `get --edges` read), the date staleness is judged by
+(`updated`, else `created`) and who wrote it. Each count opens what it
+counts. Any column sorts. Rows are drawn 300 at a time. Attributes that are
+empty or repeat the title or the date, the inherited `related`, `references` and
+`depends_on`, and the relations no row uses fold away until asked for (`base=1`).
+
+Facets stand beside the rows: trust, markers, who wrote it, attributes with an
+enum or at most 12 values, and each relation as none or one and more. A facet
+counts its values over the rows the other filters leave. Values of one facet add
+up, facets narrow each other, and Shift-click leaves a value out. The rows also
+filter by free text over title, id and attribute values, and, under More, by one
+linked entity. The rail folds below 1100 px. The filters in force show as chips, with the matching `khub query`
+command to copy where the CLI can say it. They are in the address: `q`, `rel` +
+`to`, and `attr=<name>=<value>`, `count=<bound>` (`query --count`'s spelling,
+`in:requirement.realized_in=0`), `status=<marker>`, `trust=<tier>`,
+`by=<writer>` and `not=<kind>:<value>`, which may repeat, beside `sort` and
+`dir`.
+
+**The side panel.** A click on a row, on a change or finding of the review home,
+or on a link of an entity page, reads that entity beside the view (`?open=<id>`). `j` and `k` move to the next and previous
+row, or link of an entity page, Enter opens the page, Esc closes. A page opened
+from a list keeps that list's breadcrumb and goes through it with `]` and `[`,
+and Back leaves it in one step. Below 900 px a link opens the page.
+
+**Marks.** Space marks the entity open beside a list for sign-off, and Mark for
+sign-off is beside its verify command, there and on its page. Marks hold across
+the workspace's lists: the marked bar counts them, says how many the view on
+screen holds, and copies one `khub verify` line for each, under the reviewer's
+name. A mark holds the content revision that was read: copying
+asks for every revision again, and an entity that changed is left out and named.
+Marks last as long as the browser tab, through a reload, and one goes once a
+person's review holds.
+
+**An entity.** It leads with its description. A review bar says the tier, who
+reviewed it and when, who wrote it and why it carries each marker, and copies
+the `khub verify` command. The page asks for the reviewer's name the first time
+(one word, since `khub verify` refuses a name with a space) and keeps it in
+the browser's local storage; that and the tab's marks are all it keeps. Where a review no longer holds, the page shows the
+fields and body lines that changed since the version reviewed (more than 8 lines
+of the body fold), or says why git cannot tell. The body is rendered from a block tree the server parses: raw HTML
+and comments are shown as text, only `http`, `https` and `mailto` links are
+kept, a relative link to another entity's file becomes a link inside the page,
+and so does a word or code span that is exactly an entity's id, or a slug only
+one entity has, when it holds a `-` or a `/`. Links are listed
+by relation and direction, each with its title, its one-line summary (its
+`description`, else the opening of its body), its markers and its trust. Below
+them, what is reached through other entities (as `neighbors` walks every relation,
+two and three links out, both ways). Beside them, the attributes and the commits that touched the file,
+each with the fields it changed against its parent (the newest 50 commits; git
+fetches nothing). Text to paste into a terminal is quoted for the shell, and a
+value holding a control character is not offered.
+
+**The diagram.** Types joined by relations are framed together, with relations
+running downward (sideways where one type is shown alone and that reads larger),
+and types not linked to another type are gridded apart. A
+relation to any type is drawn to the types it reaches, and to its own "any type"
+box while it reaches none. A base relation is drawn where it is used. A relation
+from a type to itself is a `↻` tag beside it. No box, tag, relation label or
+frame overlaps another. A schema that cannot be drawn whole at a readable size
+opens on the selected type, else the most connected one, with its neighbors;
+Full map (or Esc) shows everything. Selecting a type or relation shows its
+details (a type: its capture cue, its attributes and relations, the incoming
+relations that declare no inverse, the inherited base folded away; a relation:
+its declaration and its coverage) and fades everything outside its
+neighborhood. Double-clicking a type opens its list. An address
+`#/?sel=…` opens the diagram too.
+
+The page loads nothing from the network and never writes.
 
 ## Shell completion
 

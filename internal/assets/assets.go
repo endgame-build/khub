@@ -15,3 +15,13 @@ import _ "embed"
 //
 //go:embed cytoscape.min.js
 var CytoscapeJS string
+
+// DagreJS is @dagrejs/dagre 3.1.3's dist/dagre.min.js, byte-identical to the
+// npm tarball (sha256 54a503e346f93ca0bb10abe7999587e037262935687aca45eb4e4b0f64bbb578):
+// a self-contained IIFE with graphlib bundled that defines the `dagre`
+// global. `khub serve` uses it to lay the ontology diagram out in layers, so
+// no type box can overlap another (internal/serve/ui/layout.js). MIT; the
+// license is at LICENSE.dagre.
+//
+//go:embed dagre.min.js
+var DagreJS string
