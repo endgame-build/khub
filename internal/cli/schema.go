@@ -84,7 +84,17 @@ func registerSchema(root *cobra.Command) {
 	diffCmd.Args = clickArity(0)
 	diffCmd.Flags().StringVar(&diffFormat, "format", "text", formatHelp)
 
-	schemaCmd.AddCommand(typesCmd, showCmd, edgesCmd, baseCmd, snapshotCmd, diffCmd)
+	var jsonschemaFormat string
+	jsonschemaCmd := newCmd("jsonschema",
+		"Print the JSON Schema of the .khub/ layer files, for editor validation.", "",
+		func(cmd *cobra.Command, args []string) error {
+			return Guard(jsonschemaFormat, func() error { return schemaJSONSchema(jsonschemaFormat) })
+		})
+	jsonschemaCmd.Args = clickArity(0)
+	jsonschemaCmd.Flags().StringVar(&jsonschemaFormat, "format", "text",
+		"text (indented JSON on a TTY) or json (one line).")
+
+	schemaCmd.AddCommand(typesCmd, showCmd, edgesCmd, baseCmd, snapshotCmd, diffCmd, jsonschemaCmd)
 	root.AddCommand(schemaCmd)
 }
 
@@ -140,6 +150,20 @@ func schemaDiff(format string) error {
 			}
 		}
 	})
+}
+
+// schemaJSONSchema prints the JSON Schema of the authored layer vocabulary.
+// It describes khub, not a workspace, so it reads none: it runs anywhere and
+// answers for the binary that prints it. JSON is the one-line CLI document;
+// the human view is the indented on-disk form, the bytes of
+// schemas/layers.schema.json.
+func schemaJSONSchema(format string) error {
+	doc := schema.LayerJSONSchema()
+	text, err := canon.EncodeDisk(doc)
+	if err != nil {
+		return err
+	}
+	return Emit(doc, format, func() { fmt.Print(text) })
 }
 
 func loadResolved() (string, *schema.ResolvedSchema, error) {

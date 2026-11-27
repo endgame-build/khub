@@ -1,0 +1,724 @@
+package schema
+
+// The layer JSON Schema against the vocabulary walk it describes: the committed
+// copy is what LayerJSONSchema builds, every shipped preset layer passes it,
+// every key list the walk forbids extras with is a property set of it, and on
+// a table of probes it never rejects what the walk accepts. A draft-07
+// validator judges every document.
+
+import (
+	"bytes"
+	"flag"
+	"fmt"
+	"go/ast"
+	"go/parser"
+	"go/token"
+	"os"
+	"path/filepath"
+	"regexp"
+	"slices"
+	"strconv"
+	"strings"
+	"testing"
+	"unicode"
+	"unicode/utf8"
+
+	"github.com/santhosh-tekuri/jsonschema/v6"
+
+	"github.com/endgame-build/khub/internal/canon"
+	"github.com/endgame-build/khub/internal/omap"
+)
+
+var updateJSONSchema = flag.Bool("update-jsonschema", false,
+	"rewrite schemas/layers.schema.json from LayerJSONSchema")
+
+const jsonSchemaFile = "../../schemas/layers.schema.json"
+
+func TestLayerJSONSchemaFileIsCurrent(t *testing.T) {
+	want, err := canon.EncodeDisk(LayerJSONSchema())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if *updateJSONSchema {
+		if err := os.WriteFile(jsonSchemaFile, []byte(want), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	got, err := os.ReadFile(jsonSchemaFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != want {
+		t.Fatalf("%s is stale; regenerate it with\n"+
+			"  go test ./internal/schema -run TestLayerJSONSchemaFileIsCurrent -update-jsonschema",
+			jsonSchemaFile)
+	}
+}
+
+// committedSchema decodes the committed file, so the checks below hold for the
+// bytes an editor reads.
+func committedSchema(t *testing.T) *omap.Map {
+	t.Helper()
+	raw, err := os.ReadFile(jsonSchemaFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	v, err := canon.DecodeOrderedJSONStrict(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return v.(*omap.Map)
+}
+
+// keyLists is every key list addExtras checks, paired with the schema node
+// holding its properties. A walk-only list (the base block and the re-nested
+// document are khub's own, never authored) has no node. The AST guard holds
+// each name to the literal it declares, so a row cannot pair a name with
+// another list.
+var keyLists = []struct {
+	name string
+	keys []string
+	node []string // nil: walk only
+}{
+	{"layerDocKeys", layerDocKeys, []string{}},
+	{"authoredOntologyKeys", authoredOntologyKeys, []string{"properties", "ontology", "anyOf", "0"}},
+	{"ontologyTypeKeys", ontologyTypeKeys, []string{"definitions", "entity"}},
+	{"attributeKeys", attributeKeys, []string{"definitions", "attribute"}},
+	{"relationKeys", relationKeys, []string{"definitions", "relation"}},
+	{"policyTypeKeys", policyTypeKeys, []string{"definitions", "policy"}},
+	{"retentionKeys", retentionKeys, []string{"definitions", "retention"}},
+	{"storageTypeKeys", storageTypeKeys, []string{"definitions", "storage"}},
+	{"idPrefixDeclKeys", idPrefixDeclKeys, []string{"definitions", "id_prefix_by"}},
+	{"baseKeys", baseKeys, nil},
+	{"ontologyKeys", ontologyKeys, nil},
+	{"walkLayerKeys", walkLayerKeys, nil},
+}
+
+// TestLayerJSONSchemaCoversVocabulary pins each closed mapping of the schema to
+// the key list the walk forbids extras with. LayerJSONSchema already panics on
+// a mismatch; this names which list moved.
+func TestLayerJSONSchemaCoversVocabulary(t *testing.T) {
+	s := committedSchema(t)
+	check := func(path, keys []string) {
+		node := dig(t, s, path)
+		props, _ := node.Get("properties")
+		if got := props.(*omap.Map).Keys(); !slices.Equal(got, keys) {
+			t.Errorf("%s: properties %v, vocabulary %v", strings.Join(path, "."), got, keys)
+		}
+		if ap, _ := node.Get("additionalProperties"); ap != false {
+			t.Errorf("%s: additionalProperties = %v, want false (the walk forbids extras)",
+				strings.Join(path, "."), ap)
+		}
+	}
+	for _, l := range keyLists {
+		if l.node != nil {
+			check(l.node, l.keys)
+		}
+	}
+	// A waiver's keys are the findings takeWaivers accepts, not an addExtras list.
+	check([]string{"definitions", "waiver"}, WaivableFindings)
+	// The walk's own ontology list differs from the authored one by `base`
+	// alone, which mergeLayers rejects from an authored file.
+	extra := []string{}
+	for _, k := range ontologyKeys {
+		if !slices.Contains(authoredOntologyKeys, k) {
+			extra = append(extra, k)
+		}
+	}
+	if !slices.Equal(extra, []string{"base"}) {
+		t.Errorf("ontologyKeys beyond the authored ones = %v, want [base]", extra)
+	}
+}
+
+// TestExtraKeyChecksUseTheKeyLists reads the package's source so a key cannot
+// reach the walk without reaching the schema. In every non-test file:
+//
+//   - every addExtras call passes, as `name...`, a package-level `…Keys` var
+//     whose value is a literal []string of string literals;
+//   - no other declaration (a local, a parameter, a range variable) and no
+//     assignment reuses such a name, so the name means the package list;
+//   - "extra_forbidden" and msgExtra appear only inside addExtras (and as an
+//     operand of == or !=, which reads a kind and reports nothing), so no key
+//     check bypasses it.
+//
+// Every list addExtras is called with must be a keyLists row, and every row's
+// keys must be the literal its name declares.
+func TestExtraKeyChecksUseTheKeyLists(t *testing.T) {
+	fset := token.NewFileSet()
+	names, err := filepath.Glob("*.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var files []*ast.File
+	for _, n := range names {
+		if strings.HasSuffix(n, "_test.go") {
+			continue
+		}
+		f, err := parser.ParseFile(fset, n, nil, parser.SkipObjectResolution)
+		if err != nil {
+			t.Fatal(err)
+		}
+		files = append(files, f)
+	}
+	for _, msg := range extraKeyViolations(fset, files) {
+		t.Error(msg)
+	}
+}
+
+// extraKeyViolations is the check of TestExtraKeyChecksUseTheKeyLists over
+// parsed files, one message per violation.
+func extraKeyViolations(fset *token.FileSet, files []*ast.File) []string {
+	var out []string
+	report := func(n ast.Node, format string, args ...any) {
+		out = append(out, fset.Position(n.Pos()).String()+": "+fmt.Sprintf(format, args...))
+	}
+
+	// The package-level key lists.
+	lists := map[string]*ast.Ident{}
+	values := map[string][]string{}
+	for _, f := range files {
+		for _, d := range f.Decls {
+			gd, ok := d.(*ast.GenDecl)
+			if !ok || gd.Tok != token.VAR {
+				continue
+			}
+			for _, spec := range gd.Specs {
+				vs := spec.(*ast.ValueSpec)
+				for i, name := range vs.Names {
+					if !strings.HasSuffix(name.Name, "Keys") {
+						continue
+					}
+					if i >= len(vs.Values) || !isStringListLiteral(vs.Values[i]) {
+						report(name, "%s is not a literal []string of string literals", name.Name)
+						continue
+					}
+					lists[name.Name] = name
+					for _, el := range vs.Values[i].(*ast.CompositeLit).Elts {
+						s, _ := strconv.Unquote(el.(*ast.BasicLit).Value)
+						values[name.Name] = append(values[name.Name], s)
+					}
+				}
+			}
+		}
+	}
+
+	used := map[string]bool{}
+	for _, f := range files {
+		for _, d := range f.Decls {
+			fd, isFunc := d.(*ast.FuncDecl)
+			if !isFunc {
+				// A package-level constant spelling the kind is a way around
+				// addExtras too.
+				ast.Inspect(d, func(n ast.Node) bool {
+					if bl, ok := n.(*ast.BasicLit); ok && isExtraMarker(bl) {
+						report(bl, "an extra key kind is spelled outside addExtras")
+					}
+					return true
+				})
+				continue
+			}
+			inAddExtras := fd.Recv == nil && fd.Name.Name == "addExtras"
+			ast.Inspect(fd, func(n ast.Node) bool {
+				switch x := n.(type) {
+				case *ast.BinaryExpr:
+					// Comparing a kind reads it and reports nothing.
+					if (x.Op == token.EQL || x.Op == token.NEQ) && (isExtraMarker(x.X) || isExtraMarker(x.Y)) {
+						return false
+					}
+				case *ast.Field:
+					for _, n := range x.Names {
+						if lists[n.Name] != nil {
+							report(n, "%s shadows the package key list", n.Name)
+						}
+					}
+				case *ast.BasicLit, *ast.Ident:
+					if !inAddExtras && isExtraMarker(x.(ast.Expr)) {
+						report(x, "an extra key is reported outside addExtras")
+					}
+				case *ast.AssignStmt:
+					for _, lhs := range x.Lhs {
+						if root := rootIdent(lhs); root != nil && lists[root.Name] != nil {
+							report(root, "%s is assigned or redeclared; the key lists are fixed", root.Name)
+						}
+					}
+				case *ast.ValueSpec:
+					for _, n := range x.Names {
+						if lists[n.Name] != nil {
+							report(n, "local %s shadows the package key list", n.Name)
+						}
+					}
+				case *ast.RangeStmt:
+					for _, e := range []ast.Expr{x.Key, x.Value} {
+						if id, ok := e.(*ast.Ident); ok && lists[id.Name] != nil {
+							report(id, "range variable %s shadows the package key list", id.Name)
+						}
+					}
+				case *ast.CallExpr:
+					fn, ok := x.Fun.(*ast.Ident)
+					if !ok || fn.Name != "addExtras" {
+						return true
+					}
+					last := x.Args[len(x.Args)-1]
+					id, isIdent := last.(*ast.Ident)
+					switch {
+					case !x.Ellipsis.IsValid() || !isIdent:
+						report(x, "addExtras must take its keys as one package key list, `name...`")
+					case lists[id.Name] == nil:
+						report(x, "addExtras takes %s, which is not a package-level …Keys literal", id.Name)
+					default:
+						used[id.Name] = true
+					}
+				}
+				return true
+			})
+		}
+	}
+	rows := map[string]bool{}
+	for _, l := range keyLists {
+		rows[l.name] = true
+		if !used[l.name] {
+			out = append(out, fmt.Sprintf("keyLists names %s, which no addExtras call checks", l.name))
+		}
+		if !slices.Equal(values[l.name], l.keys) {
+			out = append(out, fmt.Sprintf("keyLists pairs %s with %v, but it declares %v",
+				l.name, l.keys, values[l.name]))
+		}
+	}
+	for name := range used {
+		if !rows[name] {
+			out = append(out, fmt.Sprintf(
+				"addExtras checks %s, which keyLists does not pair with a schema node; "+
+					"add it to LayerJSONSchema and keyLists", name))
+		}
+	}
+	slices.Sort(out)
+	return out
+}
+
+func isStringListLiteral(e ast.Expr) bool {
+	cl, ok := e.(*ast.CompositeLit)
+	if !ok {
+		return false
+	}
+	at, ok := cl.Type.(*ast.ArrayType)
+	if !ok || at.Len != nil {
+		return false
+	}
+	if elt, ok := at.Elt.(*ast.Ident); !ok || elt.Name != "string" {
+		return false
+	}
+	for _, el := range cl.Elts {
+		if bl, ok := el.(*ast.BasicLit); !ok || bl.Kind != token.STRING {
+			return false
+		}
+	}
+	return true
+}
+
+// isExtraMarker is the kind literal or the message constant of an extra key.
+func isExtraMarker(e ast.Expr) bool {
+	switch x := e.(type) {
+	case *ast.BasicLit:
+		return x.Kind == token.STRING && x.Value == `"extra_forbidden"`
+	case *ast.Ident:
+		return x.Name == "msgExtra"
+	}
+	return false
+}
+
+// rootIdent is the variable an assignment target writes through: x in x,
+// x[i], x.f or *x.
+func rootIdent(e ast.Expr) *ast.Ident {
+	for {
+		switch x := e.(type) {
+		case *ast.Ident:
+			return x
+		case *ast.IndexExpr:
+			e = x.X
+		case *ast.SelectorExpr:
+			e = x.X
+		case *ast.StarExpr:
+			e = x.X
+		case *ast.ParenExpr:
+			e = x.X
+		default:
+			return nil
+		}
+	}
+}
+
+func TestShippedPresetLayersPassTheJSONSchema(t *testing.T) {
+	s := compiledSchema(t)
+	presets := presetsDir(t)
+	entries, err := os.ReadDir(presets)
+	if err != nil {
+		t.Fatal(err)
+	}
+	checked := 0
+	for _, e := range entries {
+		if !e.IsDir() || e.Name() == "core" {
+			continue
+		}
+		for _, p := range presetPaths(t, e.Name()) {
+			if err := validateDoc(t, s, parseLayerFile(t, p)); err != nil {
+				t.Errorf("%s fails the JSON Schema:\n%v", p, err)
+			}
+			checked++
+		}
+	}
+	if checked < 6 {
+		t.Fatalf("checked %d preset layer files; want every layer of build-hub and firm-ops", checked)
+	}
+	// The embedded base is not an authoring surface: an authored ontology.base
+	// is refused, and the schema says so too.
+	core := parseLayerFile(t, filepath.Join(presets, "core", "ontology.yaml"))
+	if validateDoc(t, s, core) == nil {
+		t.Error("core/ontology.yaml passes the JSON Schema; an authored ontology.base must not")
+	}
+}
+
+// TestJSONSchemaNamesATypoAndABadValue holds the two errors an editor exists
+// to catch to the place it points at.
+func TestJSONSchemaNamesATypoAndABadValue(t *testing.T) {
+	s := compiledSchema(t)
+	for _, tc := range []struct{ text, want string }{
+		{"ontology:\n  entitles: {}\n", "entitles"},
+		{"ontology:\n  entities:\n    a: {}\nstorage:\n  a: { layout: files }\n", "/storage/a/layout"},
+	} {
+		err := validateDoc(t, s, mustParseDoc(t, tc.text))
+		if err == nil {
+			t.Errorf("the JSON Schema accepts:\n%s", tc.text)
+			continue
+		}
+		if !strings.Contains(err.Error(), tc.want) {
+			t.Errorf("error does not name %q:\n%v", tc.want, err)
+		}
+	}
+}
+
+// TestJSONSchemaAgreesWithTheWalk runs probes through both. A probe the walk
+// accepts must pass the schema (the schema is never stricter, falsy layer
+// blocks aside); a probe the walk rejects on a single-field rule must fail it.
+func TestJSONSchemaAgreesWithTheWalk(t *testing.T) {
+	s := compiledSchema(t)
+	const ont = "ontology:\n  entities:\n    a:\n      attributes:\n        kind: { enum: [x, y] }\n    b: {}\n"
+	// An empty, comment-only, `~` or bare `---` document is null to an editor
+	// and an empty layer file to khub.
+	for _, text := range []string{"", "# notes only\n", "~\n", "---\n"} {
+		if msg := walkError(t, text); msg != "" {
+			t.Errorf("null document %q is refused by the walk: %s", text, msg)
+		}
+	}
+	if err := validateDoc(t, s, nil); err != nil {
+		t.Errorf("a null document fails the JSON Schema: %v", err)
+	}
+	// khub reads a document that is just `0` or `false` as empty too (ParseDoc
+	// collapses it before the walk); the schema asks for a mapping or null.
+	for _, v := range []any{int64(0), false} {
+		if msg := walkError(t, fmt.Sprintf("%v\n", v)); msg != "" {
+			t.Errorf("document %v is refused by the walk: %s", v, msg)
+		}
+		if validateDoc(t, s, v) == nil {
+			t.Errorf("document %v passes the JSON Schema", v)
+		}
+	}
+	accepted := []string{
+		"",
+		"version: '1.0'\n",
+		"ontology:\npolicy:\nstorage:\n",
+		"ontology:\n  entities:\n",
+		ont,
+		ont + "policy:\n  a: { required: 'No', orphan: 'On', path_refs: 0 }\n  b: { required: false, orphan: F, path_refs: y }\n",
+		ont + "policy:\n  a: { retention: { days: 30, no_outbound: 'yes' }, locked: true, locked_relations: [] }\n",
+		ont + "policy:\n  a: { retention: { days: 1 }, waive: null, locked_relations: null }\n",
+		ont + "policy:\n  a:\n    waive:\n      some-slug: { orphans: Retired., thin: 'A stub on purpose.' }\n",
+		ont + "storage:\n  a: { layout: file }\n",
+		ont + "storage:\n  a: { layout: file, path: null, format: md, id_prefix: null, template: null }\n",
+		ont + "storage:\n  a: { layout: file, path: 'w/{slug}.md' }\n",
+		ont + "storage:\n  a: { layout: file, path: ['w/{slug}.md', 'v/{slug}.md'] }\n",
+		ont + "storage:\n  a: { layout: collection, format: jsonl }\n",
+		ont + "storage:\n  a: { layout: file, id_prefix: ad, id_date: TRUE, id_ordinal: n }\n",
+		ont + "storage:\n  a: { layout: file, id_prefix: { by: kind, map: { x: xa, y: ya } } }\n",
+		ont + "storage:\n  a: { layout: file, template: false }\n",
+		ont + "storage:\n  a: { layout: file, template: note-body }\n",
+		"ontology:\n  entities:\n    a:\n      when: null\n      attributes:\n" +
+			"        f: { type: null, required: null, default: null, enum: null, pattern: null }\n" +
+			"        g: { type: date, default: 2026-01-01, required: 'off' }\n" +
+			"        h: {}\n" +
+			"        o: { type: object, fields: { k: { type: number }, n: { type: object, fields: {} } } }\n" +
+			"        l: { type: list, items: { type: text, enum: [p, q] } }\n" +
+			"      relations:\n" +
+			"        r: { to: any, many: 'yes', required: 0, inverse: null, acyclic: true }\n" +
+			"        s: { to: [a, b] }\n    b: {}\n",
+	}
+	rejected := []string{
+		"nope: 1\n",
+		"ontology:\n  base: {}\n",
+		"ontology:\n  entitles: {}\n",
+		"ontology:\n  entities:\n    a: { nope: 1 }\n",
+		"ontology:\n  entities:\n    a: { when: 3 }\n",
+		"ontology:\n  entities:\n    a: { attributes: null }\n",
+		"ontology:\n  entities:\n    a:\n      attributes:\n        f: { type: string }\n",
+		"ontology:\n  entities:\n    a:\n      attributes:\n        f: { enum: x }\n",
+		"ontology:\n  entities:\n    a:\n      attributes:\n        f: { enum: [1] }\n",
+		"ontology:\n  entities:\n    a:\n      attributes:\n        f: { required: maybe }\n",
+		"ontology:\n  entities:\n    a:\n      attributes:\n        f: { nope: 1 }\n",
+		"ontology:\n  entities:\n    a:\n      attributes:\n        f: { type: object, fields: null }\n",
+		"ontology:\n  entities:\n    a:\n      attributes:\n        f: { type: object, fields: { k: { nope: 1 } } }\n",
+		"ontology:\n  entities:\n    a:\n      attributes:\n        f: { type: list, items: null }\n",
+		"ontology:\n  entities:\n    a:\n      attributes:\n        f: { type: list, items: { type: nope } }\n",
+		"ontology:\n  entities:\n    a:\n      relations:\n        r: { many: true }\n",
+		"ontology:\n  entities:\n    a:\n      relations:\n        r: { to: 42 }\n",
+		"ontology:\n  entities:\n    a:\n      relations:\n        r: { to: [a, 1] }\n",
+		"ontology:\n  entities:\n    a:\n      relations:\n        r: { to: a, many: 2 }\n",
+		"ontology:\n  entities:\n    a:\n      relations:\n        r: { to: a, many: null }\n",
+		ont + "policy:\n  a: { nope: true }\n",
+		ont + "policy:\n  a: { orphan: null }\n",
+		ont + "policy:\n  a: null\n",
+		ont + "policy:\n  a: { retention: null }\n",
+		ont + "policy:\n  a: { retention: { no_outbound: true } }\n",
+		ont + "policy:\n  a: { retention: { days: 0 } }\n",
+		ont + "policy:\n  a: { retention: { days: '30' } }\n",
+		ont + "policy:\n  a: { retention: { days: 3, nope: 1 } }\n",
+		ont + "policy:\n  a: { waive: [] }\n",
+		ont + "policy:\n  a: { waive: { s: {} } }\n",
+		ont + "policy:\n  a: { waive: { s: [orphans] } }\n",
+		ont + "policy:\n  a: { waive: { s: { nope: Because. } } }\n",
+		ont + "policy:\n  a: { waive: { s: { orphans: '  ' } } }\n",
+		ont + "policy:\n  a: { waive: { s: { orphans: 3 } } }\n",
+		ont + "policy:\n  a: { waive: { '': { orphans: Because. } } }\n",
+		ont + "policy:\n  a: { waive: { ~: { orphans: Because. } } }\n",
+		ont + "policy:\n  a: { locked: maybe }\n",
+		ont + "policy:\n  a: { locked_relations: r }\n",
+		ont + "policy:\n  a: { locked_relations: [1] }\n",
+		ont + "storage:\n  a: { path: as }\n",
+		ont + "storage:\n  a: { layout: nope }\n",
+		ont + "storage:\n  a: { layout: file, format: gjson }\n",
+		ont + "storage:\n  a: { layout: file, format: null }\n",
+		ont + "storage:\n  a: { layout: file, path: [] }\n",
+		ont + "storage:\n  a: { layout: file, path: [1] }\n",
+		ont + "storage:\n  a: { layout: file, id_prefix: AD }\n",
+		ont + "storage:\n  a: { layout: file, id_prefix: { by: kind } }\n",
+		ont + "storage:\n  a: { layout: file, id_prefix: { map: { x: xa, y: ya } } }\n",
+		ont + "storage:\n  a: { layout: file, id_prefix: { by: kind, map: { x: X } } }\n",
+		ont + "storage:\n  a: { layout: file, id_prefix: { by: kind, map: {}, nope: 1 } }\n",
+		ont + "storage:\n  a: { layout: file, template: true }\n",
+		ont + "storage:\n  a: { layout: file, template: ../x }\n",
+		ont + "storage:\n  a: { layout: file, id_date: later }\n",
+	}
+	// The walk reads a falsy layer block as empty; the schema still asks for
+	// a mapping or null there, the one place it is stricter on purpose.
+	stricter := []string{
+		"ontology:\n  entities: []\n",
+		"policy: false\n",
+		"storage: ''\n",
+	}
+	for _, text := range stricter {
+		doc := mustParseDoc(t, text)
+		if msg := walkError(t, text); msg != "" {
+			t.Errorf("falsy-block probe is refused by the walk (%s):\n%s", msg, text)
+		}
+		if validateDoc(t, s, doc) == nil {
+			t.Errorf("falsy-block probe passes the JSON Schema:\n%s", text)
+		}
+	}
+	for _, text := range accepted {
+		doc := mustParseDoc(t, text)
+		if msg := walkError(t, text); msg != "" {
+			t.Errorf("probe meant to be accepted is refused by the walk (%s):\n%s", msg, text)
+			continue
+		}
+		if err := validateDoc(t, s, doc); err != nil {
+			t.Errorf("the walk accepts this but the JSON Schema refuses it (%v):\n%s", err, text)
+		}
+	}
+	for _, text := range rejected {
+		doc := mustParseDoc(t, text)
+		if walkError(t, text) == "" {
+			t.Errorf("probe meant to be refused is accepted by the walk:\n%s", text)
+			continue
+		}
+		if validateDoc(t, s, doc) == nil {
+			t.Errorf("the walk refuses this but the JSON Schema accepts it:\n%s", text)
+		}
+	}
+}
+
+// TestJSONSchemaAgreesOnNullForEveryKey writes `<key>: null` for every key of
+// every closed mapping, beside the keys a valid mapping needs, and asks the
+// walk and the schema for one verdict, so no key's nullability drifts.
+func TestJSONSchemaAgreesOnNullForEveryKey(t *testing.T) {
+	s := compiledSchema(t)
+	const ent = "ontology:\n  entities:\n    a:\n      attributes:\n        kind: { enum: [x, y] }\n"
+	// Per mapping: the keys a valid one needs, and where it sits (%s is its body).
+	type nullCtx struct {
+		needs map[string]string
+		wrap  string
+	}
+	contexts := map[string]nullCtx{
+		"waiver":               {nil, ent + "policy:\n  a:\n    waive:\n      s: { %s }\n"},
+		"layerDocKeys":         {nil, "%s\n"},
+		"authoredOntologyKeys": {nil, "ontology: { %s }\n"},
+		"ontologyTypeKeys":     {nil, "ontology:\n  entities:\n    a: { %s }\n"},
+		"attributeKeys":        {nil, "ontology:\n  entities:\n    a:\n      attributes:\n        f: { %s }\n"},
+		"relationKeys":         {map[string]string{"to": "a"}, "ontology:\n  entities:\n    a:\n      relations:\n        r: { %s }\n"},
+		"policyTypeKeys":       {nil, ent + "policy:\n  a: { %s }\n"},
+		"retentionKeys":        {map[string]string{"days": "1"}, ent + "policy:\n  a:\n    retention: { %s }\n"},
+		"storageTypeKeys":      {map[string]string{"layout": "file"}, ent + "storage:\n  a: { %s }\n"},
+		"idPrefixDeclKeys": {map[string]string{"by": "kind", "map": "{ x: xa, y: ya }"},
+			ent + "storage:\n  a:\n    layout: file\n    id_prefix: { %s }\n"},
+	}
+	type list struct {
+		name string
+		keys []string
+	}
+	lists := []list{{"waiver", WaivableFindings}}
+	for _, l := range keyLists {
+		if l.node != nil {
+			lists = append(lists, list{l.name, l.keys})
+		}
+	}
+	for _, l := range lists {
+		c, ok := contexts[l.name]
+		if !ok {
+			t.Errorf("%s has no null-probe context", l.name)
+			continue
+		}
+		for _, k := range l.keys {
+			var pairs []string
+			for _, other := range l.keys {
+				if v, needed := c.needs[other]; needed && other != k {
+					pairs = append(pairs, other+": "+v)
+				}
+			}
+			text := fmt.Sprintf(c.wrap, strings.Join(append(pairs, k+": null"), ", "))
+			walkOK := walkError(t, text) == ""
+			schemaOK := validateDoc(t, s, mustParseDoc(t, text)) == nil
+			if walkOK != schemaOK {
+				t.Errorf("%s: walk accepts %v, JSON Schema accepts %v:\n%s", k, walkOK, schemaOK, text)
+			}
+		}
+	}
+}
+
+// TestJSONSchemaKnownGaps pins the single-value rules JSON Schema cannot say,
+// which docs/schema.md lists: the walk refuses each, the schema lets it by.
+// A probe that starts failing here moved to one side; file it where it now
+// belongs.
+func TestJSONSchemaKnownGaps(t *testing.T) {
+	s := compiledSchema(t)
+	const ont = "ontology:\n  entities:\n    a:\n      attributes:\n        kind: { enum: [x, y] }\n"
+	for _, text := range []string{
+		ont + "policy:\n  a: { retention: { days: 30.0 } }\n",
+		ont + "storage:\n  a: { layout: file, path: ../outside }\n",
+		ont + "storage:\n  a: { layout: file, path: /tmp/a }\n",
+		ont + "storage:\n  a: { layout: file, path: .khub/a }\n",
+		ont + "storage:\n  a: { layout: file, path: ['w/{nope}.md'] }\n",
+		"ontology:\n  entities:\n    a:\n      attributes:\n        f: { pattern: '(' }\n",
+	} {
+		if walkError(t, text) == "" {
+			t.Errorf("the walk now accepts this known gap:\n%s", text)
+		}
+		if validateDoc(t, s, mustParseDoc(t, text)) != nil {
+			t.Errorf("the JSON Schema now refuses this known gap:\n%s", text)
+		}
+	}
+}
+
+// TestNonBlankIsTrimSpace holds nonBlank to strings.TrimSpace, rune by rune.
+func TestNonBlankIsTrimSpace(t *testing.T) {
+	re := regexp.MustCompile("^" + nonBlank + "$")
+	for r := rune(0); r <= unicode.MaxRune; r++ {
+		if utf8.ValidRune(r) && re.MatchString(string(r)) == unicode.IsSpace(r) {
+			t.Errorf("nonBlank and unicode.IsSpace disagree on %U", r)
+		}
+	}
+}
+
+// walkError resolves one probe document the way khub loads a workspace's
+// layers, every check of Resolve included. "" means accepted.
+func walkError(t *testing.T, text string) string {
+	t.Helper()
+	if _, err := ResolveWith(nil, writeSchemaFiles(t, text)); err != nil {
+		return err.Error()
+	}
+	return ""
+}
+
+// compiledSchema compiles the committed file with a draft-07 validator, which
+// also checks it against the draft-07 meta-schema.
+func compiledSchema(t *testing.T) *jsonschema.Schema {
+	t.Helper()
+	raw, err := os.ReadFile(jsonSchemaFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	doc, err := jsonschema.UnmarshalJSON(bytes.NewReader(raw))
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := jsonschema.NewCompiler()
+	if err := c.AddResource("layers.schema.json", doc); err != nil {
+		t.Fatal(err)
+	}
+	s, err := c.Compile("layers.schema.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	return s
+}
+
+// validateDoc validates a loaded layer document as an editor sees it: the
+// JSON form of what khub read, so a YAML date is the string it spells.
+func validateDoc(t *testing.T, s *jsonschema.Schema, doc any) error {
+	t.Helper()
+	text, err := canon.EncodeDisk(doc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	v, err := jsonschema.UnmarshalJSON(strings.NewReader(text))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return s.Validate(v)
+}
+
+func mustParseDoc(t *testing.T, text string) *omap.Map {
+	t.Helper()
+	m, err := ParseDoc("probe.yaml", text)
+	if err != nil {
+		t.Fatalf("parse probe: %v\n%s", err, text)
+	}
+	return m
+}
+
+func parseLayerFile(t *testing.T, path string) *omap.Map {
+	t.Helper()
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return mustParseDoc(t, string(raw))
+}
+
+func dig(t *testing.T, m *omap.Map, path []string) *omap.Map {
+	t.Helper()
+	var cur any = m
+	for _, p := range path {
+		switch x := cur.(type) {
+		case *omap.Map:
+			cur, _ = x.Get(p)
+		case []any:
+			i, err := strconv.Atoi(p)
+			if err != nil {
+				t.Fatalf("bad index %q in %v", p, path)
+			}
+			cur = x[i]
+		}
+	}
+	out, ok := cur.(*omap.Map)
+	if !ok {
+		t.Fatalf("no mapping at %v", path)
+	}
+	return out
+}

@@ -46,6 +46,7 @@ go build -o parity-run ./parity/runner
 ./parity-run -bin "$PWD/khub" -record -only <family>/<case>      # re-record one case
 bash smoke.sh                                                    # end-to-end, both build presets
 bash parity/tools/gen_cli_reference.sh                           # regenerate docs/cli-reference.md
+go test ./internal/schema -run TestLayerJSONSchemaFileIsCurrent -update-jsonschema   # regenerate schemas/layers.schema.json
 ```
 
 The npm channel has its own gates (CI runs these as the `npm-package` job):

@@ -63,6 +63,15 @@ linters:
           deny:
             - pkg: github.com/yuin/goldmark
               desc: "only internal/explore may import the Markdown parser (it builds the serve page's body tree)"
+        # The JSON Schema validator judges the emitted layer schema in tests
+        # and never ships in the binary.
+        jsonschema-test-only:
+          list-mode: lax
+          files:
+            - "!**/*_test.go"
+          deny:
+            - pkg: github.com/santhosh-tekuri/jsonschema
+              desc: "the JSON Schema validator is test-only (.claude/rules/dependencies.md)"
   exclusions:
     presets:
       - std-error-handling

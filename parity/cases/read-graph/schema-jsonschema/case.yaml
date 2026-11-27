@@ -1,0 +1,8 @@
+# `schema jsonschema`: the JSON Schema of the .khub/ layer files, for editor
+# validation. It describes the binary's vocabulary, not a workspace, so it runs
+# in a directory with no .khub/ at all. On a pipe it is the one-line CLI JSON
+# document like every other read; schema-jsonschema-human pins the indented
+# form a terminal gets, which is the bytes of schemas/layers.schema.json.
+steps:
+- argv: ["schema", "jsonschema"]
+- argv: ["schema", "jsonschema", "--format", "json"]

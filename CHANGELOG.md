@@ -4,6 +4,17 @@ Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+### Added
+
+- **JSON Schema for the layer files.** `khub schema jsonschema` prints a
+  draft-07 JSON Schema of the `.khub/` layer vocabulary, and
+  `schemas/layers.schema.json` carries the same bytes, so an editor can
+  complete keys and flag a typo'd key or a bad value in `ontology.yaml`,
+  `policy.yaml` and `storage.yaml` as you type. It is built from the key lists
+  the schema loader checks, and a test fails when the two disagree. See
+  [Editor validation](docs/schema.md#editor-validation-json-schema). The
+  plugin (0.1.12) reads the verb as a schema view.
+
 ## [0.35.0] — 2026-11-24
 
 A reviewer signs off several entities at once. On the served page, Space marks

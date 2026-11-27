@@ -237,6 +237,9 @@ commands:
 - name: 'schema diff'
   params:
   - '--format'
+- name: 'schema jsonschema'
+  params:
+  - '--format'
 - name: 'completion'
   params:
   - 'arg:shell'
