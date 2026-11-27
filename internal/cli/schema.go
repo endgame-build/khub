@@ -13,6 +13,7 @@ import (
 	"github.com/endgame-build/khub/internal/canon"
 	"github.com/endgame-build/khub/internal/introspect"
 	"github.com/endgame-build/khub/internal/omap"
+	"github.com/endgame-build/khub/internal/rdf"
 	"github.com/endgame-build/khub/internal/schema"
 	"github.com/endgame-build/khub/internal/workspace"
 )
@@ -84,8 +85,63 @@ func registerSchema(root *cobra.Command) {
 	diffCmd.Args = clickArity(0)
 	diffCmd.Flags().StringVar(&diffFormat, "format", "text", formatHelp)
 
-	schemaCmd.AddCommand(typesCmd, showCmd, edgesCmd, baseCmd, snapshotCmd, diffCmd)
+	var rdfFormat, rdfOut, rdfBase string
+	var rdfInstances, rdfDryRun bool
+	rdfCmd := newCmd("rdf",
+		"Project the resolved schema to RDFS + SHACL Turtle: khub schema rdf [--out F] [--instances] [--dry-run] [--base IRI].",
+		"", func(cmd *cobra.Command, args []string) error {
+			return Guard(rdfFormat, func() error {
+				return schemaRDF(rdf.Options{
+					Out: rdfOut, Instances: rdfInstances, DryRun: rdfDryRun, Base: rdfBase,
+				}, rdfFormat)
+			})
+		})
+	rdfCmd.Args = clickArity(0)
+	rdfCmd.Flags().StringVar(&rdfOut, "out", rdf.DefaultOut,
+		"Output path: relative to the workspace root and inside it, or absolute (may leave it); '-' prints the Turtle to stdout.")
+	rdfCmd.Flags().BoolVar(&rdfInstances, "instances", false,
+		"Also emit every entity as an individual (the ABox).")
+	rdfCmd.Flags().BoolVar(&rdfDryRun, "dry-run", false, "Render and report, write nothing.")
+	rdfCmd.Flags().StringVar(&rdfBase, "base", rdf.DefaultBase,
+		"Root of every minted IRI, absolute and ending in '/', '#' or ':' (the khub: vocabulary never moves).")
+	rdfCmd.Flags().StringVar(&rdfFormat, "format", "text", "text (one line on a TTY) or json.")
+
+	schemaCmd.AddCommand(typesCmd, showCmd, edgesCmd, baseCmd, snapshotCmd, diffCmd, rdfCmd)
 	root.AddCommand(schemaCmd)
+}
+
+// schemaRDF writes (or prints, or previews) the RDF projection. `--out -`
+// puts the Turtle itself on stdout and reports nothing else; every other
+// spelling reports the write as a record.
+func schemaRDF(opt rdf.Options, format string) error {
+	root, err := resolveRoot()
+	if err != nil {
+		return err
+	}
+	res, err := rdf.Project(root, opt)
+	if err != nil {
+		return err
+	}
+	if opt.Out == rdf.Stdout {
+		return EmitRaw(res.Content)
+	}
+	payload := omap.New()
+	payload.Set("path", res.Path)
+	payload.Set("written", res.Written)
+	payload.Set("dry_run", opt.DryRun)
+	payload.Set("instances", opt.Instances)
+	payload.Set("types", res.Types)
+	payload.Set("entities", res.Entities)
+	payload.Set("triples", res.Triples)
+	payload.Set("bytes", res.Bytes)
+	return Emit(payload, format, func() {
+		verb := "Wrote"
+		if opt.DryRun {
+			verb = "Would write"
+		}
+		fmt.Printf("%s %s (%d types, %d entities, %d triples)\n",
+			verb, res.Path, res.Types, res.Entities, res.Triples)
+	})
 }
 
 func schemaSnapshot(format string) error {

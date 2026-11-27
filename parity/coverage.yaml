@@ -237,6 +237,13 @@ commands:
 - name: 'schema diff'
   params:
   - '--format'
+- name: 'schema rdf'
+  params:
+  - '--out'
+  - '--instances'
+  - '--dry-run'
+  - '--base'
+  - '--format'
 - name: 'completion'
   params:
   - 'arg:shell'
@@ -273,6 +280,8 @@ error_codes:
 - import_type_map_invalid
 - inbound_edge_refusal
 - internal_path_error
+- invalid_base
+- invalid_out
 - invalid_query_name
 - invalid_saved_query
 - invalid_schema

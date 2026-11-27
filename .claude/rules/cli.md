@@ -8,7 +8,8 @@ primary consumer is **an AI agent**. That design position decides these rules.
 Every command routes through `internal/cli/render.go`. Never print outside an
 `Emit` render closure — the `fmt.Print*` calls in command files all sit inside
 the human-render `func()` handed to `Emit`. `Emit` / `Fail` / `Guard` are the
-only exits. An advisory line a caller must see whatever the format (search's
+only exits, plus `EmitRaw` for a document the caller asked for on stdout by
+name (`schema rdf --out -`), whose write error still reaches `Guard`. An advisory line a caller must see whatever the format (search's
 dropped-rows and thin-result note) goes through `Note`, to stderr, before
 `Emit`.
 
