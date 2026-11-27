@@ -1,500 +1,252 @@
-// model.js — pure derivations over the graph payload. No document, no
-// cytoscape, no fetch.
-
-export function typeOf(id) {
-  var i = id.indexOf('/');
-  return i === -1 ? id : id.slice(0, i);
-}
+// model.js — pure derivations for the ontology diagram and its panels. No
+// document, no cytoscape, no fetch, no imports, so node --test loads it
+// directly.
 
 // SEP joins composite keys. A khub id, type and predicate are all drawn from a
 // safe charset that cannot contain a NUL, so keys built with it are
 // unambiguous by construction rather than by convention.
 var SEP = '\u0000';
 
-export function buildModel(payload) {
-  var byType = new Map();
-  var haystack = [];
-  var ids = new Set();
-  var byId = new Map();
-  payload.nodes.forEach(function (n) {
-    var d = n.data;
-    if (!byType.has(d.type)) byType.set(d.type, []);
-    byType.get(d.type).push(d.id);
-    ids.add(d.id);
-    byId.set(d.id, d);
-    // What a human reads. `title` is optional in the schema, so the slug is the
-    // fallback rather than a blank node. Written onto the node's own data
-    // because cytoscape styles from data keys and cannot express a fallback in
-    // a selector.
-    d.display = d.title || d.label;
-    // Search matches the name AND the slug: the name is what you remember, the
-    // slug is what you paste into a command.
-    haystack.push({
-      id: d.id, label: d.display,
-      lc: (d.id + ' ' + d.label + ' ' + d.display).toLowerCase()
-    });
+// indexOverview turns /api/overview into lookups: each type's record, each
+// relation's, and how often a relation joins two types.
+export function indexOverview(payload) {
+  var types = new Map(), relations = new Map(), used = new Map();
+  (payload.types || []).forEach(function (t) { types.set(t.name, t); });
+  (payload.relations || []).forEach(function (r) {
+    relations.set(r.from + SEP + r.predicate, r);
+    r.to.forEach(function (t) { used.set(r.from + SEP + r.predicate + SEP + t.type, t.links); });
   });
-
-  // Dedupe on the (source, predicate, target) triple BEFORE synthesizing ids.
-  //
-  // internal/graph/graph.go appends predicates to its adjacency without
-  // deduplicating, so a relation list that resolves twice to the same node
-  // yields two identical edge records. Synthesized ids would then collide and
-  // cytoscape throws "Can not create second element with id", taking the whole
-  // page down with it. Hand-authored corpora never trip this; generated ones do.
-  var seen = new Set(), edges = [], dropped = 0;
-  payload.edges.forEach(function (e) {
-    var d = e.data;
-    var key = d.source + SEP + d.label + SEP + d.target;
-    if (seen.has(key)) { dropped++; return; }
-    seen.add(key);
-    edges.push({ data: { id: 'e' + SEP + key, source: d.source, target: d.target, label: d.label } });
-  });
-
-  // Undirected adjacency, built once at load. /api/graph carries stored forward
-  // edges only, so the reverse direction is synthesized here. Scanning the edge
-  // array inside a depth walk instead would be tens of millions of comparisons
-  // at 2000 entities.
-  var adj = new Map();
-  function push(from, to, predicate, dir) {
-    if (!adj.has(from)) adj.set(from, []);
-    adj.get(from).push({ id: to, predicate: predicate, dir: dir });
-  }
-  edges.forEach(function (e) {
-    push(e.data.source, e.data.target, e.data.label, 'out');
-    push(e.data.target, e.data.source, e.data.label, 'in');
-  });
-
-  return {
-    nodes: payload.nodes, edges: edges, adj: adj, byType: byType,
-    types: Array.from(byType.keys()).sort(),
-    ids: ids, byId: byId,
-    haystack: haystack, droppedDuplicateEdges: dropped
-  };
+  return { types: types, relations: relations, used: used };
 }
 
-// indexSchema turns /api/schema into a lookup, and records which predicates are
-// universal so the Filters panel can say why they start hidden.
+// relationOf is a relation's record: its links, how many entities of its type
+// have one, and the types it reaches.
+export function relationOf(numbers, from, predicate) {
+  return numbers.relations.get(from + SEP + predicate) || { from: from, predicate: predicate, links: 0, have: 0, total: 0, to: [], base: false };
+}
+
+// indexSchema turns /api/schema into a lookup.
 export function indexSchema(payload) {
   var byName = new Map();
   (payload.types || []).forEach(function (t) { byName.set(t.name, t); });
-  // The inverse names khub derives at read time. They are real ontology, but
-  // drawing them alongside their forward halves doubles every edge without
-  // adding structure — the same relation, read backwards — so they start hidden
-  // and the filter panel offers them like any other predicate.
-  var derived = [];
-  (payload.edges || []).forEach(function (e) {
-    if (e.derived && derived.indexOf(e.predicate) === -1) derived.push(e.predicate);
-  });
   return {
     byName: byName,
     declaredTypes: (payload.types || []).map(function (t) { return t.name; }),
-    baseRelations: (payload.base_relations || []).map(function (r) { return r.predicate; }),
-    derivedRelations: derived
+    base: payload.base || { fields: [], relations: [] },
+    edges: payload.edges || []
   };
 }
 
-// neighbourhood walks out from seeds, hop by hop.
-//
-// Hidden predicates are skipped DURING the walk, never filtered afterwards.
-// Filtering after both computes a closure that is then thrown away and answers
-// the wrong question: the operator said "don't show me `related`", and a
-// walk-then-filter would still have used `related` to decide what counts as a
-// neighbour.
-// Returns a Map of id -> hop distance from the seeds. The distance is not
-// bookkeeping: it is what the L2 layout draws rings from, so the picture says
-// how far each node is rather than merely which nodes are near.
-export function neighbourhood(model, seeds, depth, hiddenPredicates) {
-  var seen = new Map();
-  seeds.forEach(function (id) { seen.set(id, 0); });
-  var frontier = seeds.slice();
-  for (var d = 0; d < depth && frontier.length; d++) {
-    var next = [];
-    frontier.forEach(function (id) {
-      var links = model.adj.get(id);
-      if (!links) return;
-      links.forEach(function (link) {
-        if (hiddenPredicates.has(link.predicate) || seen.has(link.id)) return;
-        seen.set(link.id, d + 1);
-        next.push(link.id);
-      });
-    });
-    frontier = next;
-  }
-  return seen;
-}
-
-// computeVisible derives the whole picture from focus + depth + filters. It
-// returns the layout alongside the sets deliberately: the level decides both,
-// and splitting them means two switches on level that can drift apart.
-export function computeVisible(state, model) {
-  var level = state.focus.length;
-  if (level === 0) {
-    // Unscoped Graph is every entity. It used to be one synthetic node per
-    // type, but that drew the same picture as the schema view with different
-    // meaning — allowed edges there, actual edges here — and two views that
-    // look identical are worse than one. The ontology owns the type level now.
-    var all = new Set();
-    model.byId.forEach(function (_d, id) {
-      if (!state.hiddenTypes.has(typeOf(id))) all.add(id);
-    });
-    return withEdges(state, model, all, 0);
-  }
-
-  var seeds = level === 1
-    ? (model.byType.get(state.focus[0].name) || []).slice()
-    : [state.focus[1].id];
-  // Both levels walk state.depth. A type opens at 0 (itself alone) and an
-  // entity at 1, and the +/- controls move either. Taking one hop by default at
-  // a type seeded the walk with every entity of it and dragged in everything
-  // they touched — 400 components became 1,650 nodes of mixed types — so that
-  // view is reachable, just not automatic.
-  var depth = state.depth;
-
-  var hops = neighbourhood(model, seeds, depth, state.hiddenPredicates);
-
-  // The type filter applies after the walk, unlike the predicate filter:
-  // hiding a type should remove it from view, not silently change what counts
-  // as a neighbour of something else.
-  if (state.hiddenTypes.size) {
-    var keep = new Map();
-    hops.forEach(function (d, id) { if (!state.hiddenTypes.has(typeOf(id))) keep.set(id, d); });
-    hops = keep;
-  }
-  var nodes = new Set(hops.keys());
-  return withEdges(state, model, nodes, level, hops);
-}
-
-// withEdges resolves the edges, the layout and the notice for a node set. One
-// place, so an unscoped graph and a walked neighbourhood cannot drift on what
-// the predicate filter means or when the layout falls back.
-function withEdges(state, model, nodes, level, hops) {
-  // Count what the predicate filter suppresses among the nodes actually in
-  // view, so an empty picture can explain itself. Endpoints are checked first
-  // so the tally is "edges you would have seen here", not a global figure.
-  var edges = new Set();
-  var suppressed = 0;
-  var suppressedBy = new Set();
-  model.edges.forEach(function (e) {
-    var d = e.data;
-    if (!nodes.has(d.source) || !nodes.has(d.target)) return;
-    if (state.hiddenPredicates.has(d.label)) {
-      suppressed++;
-      suppressedBy.add(d.label);
-      return;
-    }
-    edges.add(d.id);
-  });
-
-  var layout, notice = '';
-  if (level === 2 && edges.size && hops) {
-    // Rings by hop distance, focus at the centre. breadthfirst was wrong here:
-    // it lays out one ROW per depth, so a star-shaped neighbourhood — which is
-    // what depth 1 always is — became a single line of overlapping labels.
-    layout = { name: 'concentric', hops: hops };
-  } else if (!edges.size) {
-    // No edges means no forces, and cose with nothing to push against collapses
-    // into a tall ribbon — measured 241x2768 in a 904x792 canvas. A grid is
-    // what an unconnected set actually is: it fills the space, it is O(n), and
-    // it stays readable at any count.
-    layout = { name: 'grid' };
-  } else if (nodes.size > 400) {
-    // cose is the only force-directed layout in the vendored 3.33.1 bundle and
-    // it is superlinear — at this size it blocks for tens of seconds. Fall back
-    // and say so, rather than appearing to hang.
-    layout = { name: 'concentric' };
-    notice = nodes.size + ' nodes — using the fast layout';
-  } else {
-    layout = { name: 'cose' };
-  }
-
-  // The four universal predicates are hidden by default because at L0 they
-  // connect almost everything to almost everything. Inside one type that
-  // reasoning does not hold — depends_on between components IS the structure
-  // you opened the type to see — so the default can empty the view completely.
-  // Rather than make the filter mean different things at different levels, say
-  // what is being hidden and leave the fix one click away.
-  if (!edges.size && suppressed) {
-    var hint = suppressed + (suppressed === 1 ? ' edge is' : ' edges are') +
-      ' hidden here by the predicate filter (' +
-      Array.from(suppressedBy).sort().join(', ') + ')';
-    notice = notice ? notice + ' · ' + hint : hint;
-  }
-  return { level: level, nodes: nodes, edges: edges, layout: layout, notice: notice };
-}
-
-export function search(model, text, limit) {
-  var q = text.trim().toLowerCase();
-  if (!q) return { hits: [], total: 0 };
-  var hits = [], total = 0;
-  for (var i = 0; i < model.haystack.length; i++) {
-    if (model.haystack[i].lc.indexOf(q) === -1) continue;
-    total++;
-    if (hits.length < limit) hits.push(model.haystack[i]);
-  }
-  return { hits: hits, total: total };
-}
-
-// legalPredicates is the schema doing the work: only relations declared on the
-// source type whose targets admit the destination type. The composer's <select>
-// is built from this, so an illegal link cannot be composed — the option is not
-// in the control.
-export function legalPredicates(schema, fromType, toType) {
-  var t = schema.byName.get(fromType);
-  if (!t) return [];
-  return (t.relations || []).filter(function (r) {
-    return r.kind === 'any' || (r.targets || []).indexOf(toType) !== -1;
-  }).map(function (r) { return r.predicate; });
-}
-
-// legalTargetTypes returns the types some predicate on fromType can reach, or
-// null when an `any` relation makes every type legal. Drives the highlight that
-// shows which nodes are pickable as B before B is picked.
-export function legalTargetTypes(schema, fromType) {
-  var t = schema.byName.get(fromType);
-  if (!t) return null;
-  var out = new Set(), anyAllowed = false;
-  (t.relations || []).forEach(function (r) {
-    if (r.kind === 'any') { anyAllowed = true; return; }
-    (r.targets || []).forEach(function (x) { out.add(x); });
-  });
-  return anyAllowed ? null : out;
-}
-
-// sh quotes an argument for a POSIX shell. khub slugs use a safe charset, so
-// this is almost always a no-op — but the output is a command the operator
-// pastes into a real shell, and "almost always" is not the standard to hold
-// that to.
-function sh(s) {
-  return /^[A-Za-z0-9_@%+=:,.\/-]+$/.test(s) ? s : "'" + String(s).replace(/'/g, "'\\''") + "'";
-}
-
-export function composeLink(a, predicate, b) {
-  return 'khub link ' + sh(a) + ' ' + sh(predicate) + ' ' + sh(b);
-}
-
-export function composeUnlink(a, predicate, b) {
-  return 'khub unlink ' + sh(a) + ' ' + sh(predicate) + ' ' + sh(b);
-}
-
-// HTTP resolves targets using the source relation's schema. Never guess from a
-// bare slug: two types may share one, even when the relation allows only one.
-export function edgeTargets(model, edge) {
-  return (edge.resolved_targets || []).filter(function (id) { return model.ids.has(id); });
-}
-
-// degreeOf counts an entity's edges, skipping predicates the filter hides.
-//
-// Excluding them is not a detail: model.adj holds every predicate, so a raw
-// count would print "degree 12" on a row sitting beside a graph that draws no
-// edges at all, because the universal predicates are hidden by default. The
-// number has to answer the same question the picture does.
-export function degreeOf(model, id, hiddenPredicates) {
-  var links = model.adj.get(id);
-  if (!links) return 0;
-  var n = 0;
-  for (var i = 0; i < links.length; i++) {
-    if (!hiddenPredicates.has(links[i].predicate)) n++;
-  }
-  return n;
-}
-
-// buildRows turns the visible id set into rows the list can sort and render.
-// Degree is resolved here, once per row, never inside a comparator.
-export function buildRows(model, ids, hiddenPredicates) {
-  var rows = [];
-  ids.forEach(function (id) {
-    var d = model.byId.get(id);
-    if (!d) return;
-    rows.push({
-      id: id, name: d.display || d.label, slug: d.label, type: d.type,
-      draft: !!d.draft, orphan: !!d.orphan,
-      degree: degreeOf(model, id, hiddenPredicates)
-    });
-  });
-  return rows;
-}
-
-// sortRows orders rows in place and returns them. Pure, so the ordering can be
-// reasoned about without a DOM.
-//
-// Slugs and types compare by byte order (< / >), matching how Go sorts them
-// everywhere else in khub; only the human name uses localeCompare, because it
-// is the one column a person reads as language rather than as an identifier.
-// Every key falls through to slug so the order is total and idempotent.
-export function sortRows(rows, sort) {
-  var dir = sort.dir === 'desc' ? -1 : 1;
-  var key = sort.key;
-  rows.sort(function (a, b) {
-    var c = 0;
-    if (key === 'name') {
-      c = a.name.localeCompare(b.name);
-    } else if (key === 'degree') {
-      c = a.degree - b.degree;
-    } else if (key === 'flags') {
-      // Problems first: orphans outrank drafts, both outrank a healthy row.
-      c = (a.orphan * 2 + a.draft) - (b.orphan * 2 + b.draft);
-    } else if (key === 'type') {
-      c = a.type < b.type ? -1 : a.type > b.type ? 1 : 0;
-    } else {
-      c = a.slug < b.slug ? -1 : a.slug > b.slug ? 1 : 0;
-    }
-    if (c !== 0) return c * dir;
-    return a.slug < b.slug ? -1 : a.slug > b.slug ? 1 : 0;
-  });
-  return rows;
-}
-
-// SCHEMA_ANY is the wildcard node. A relation declared `to: any` really does
-// point at anything, and drawing that by expansion would put an edge from its
-// source to every type — for depends_on, every type to every type. One node
-// says the same thing and stays readable.
-//
 // `schema-any`, not `schema:*`: a type box is `schema:<name>`, and the loader
 // accepts a type named `*`, whose box then took this id — cy.add drops the
 // duplicate and the base relations landed on that type. No `schema:<name>`
 // can equal this one. viz.SchemaAny is the same id.
 export var SCHEMA_ANY = 'schema-any';
 
-// schemaId keeps ontology nodes in their own namespace, distinct from an
-// entity's `type/slug`. A collision throws inside cy.add, mid-render, with
-// state already committed — a frozen half-drawn page rather than an error.
+// schemaId keeps ontology nodes in their own namespace.
 export function schemaId(type) { return 'schema:' + type; }
 
+// ghostId is the "any type" box a type's any-target relations point at.
+// One per source type: a shared box would be a hub joining every type that
+// can point anywhere, and the layout would group unrelated types around it.
+export function ghostId(type) { return 'schema-anyof:' + type; }
+
 // buildSchemaGraph turns /api/schema's `edges` — which is introspect.EdgesView,
-// the same projection `khub schema edges` prints — into cytoscape elements.
+// the same projection `khub schema edges` prints — into the diagram's nodes
+// and edges (layout.js places them).
 //
-// `used` counts instance edges per (fromType, predicate, toType) so a declared
-// relation nothing has ever used can be dimmed. That gap is the interesting
-// part of comparing a contract against its data.
-export function buildSchemaGraph(schema, edges, hiddenPredicates, used, byType) {
+// A relation to any type is drawn to the types it really reaches, and to its
+// source's own "any type" box while it reaches none. A base relation is
+// declared on every type, so it is drawn only where it is used. Derived
+// inverses are left out: each is its forward relation read backwards, and the
+// panel names it.
+//
+// The numbers come from /api/overview, so a declared relation nothing has ever
+// used can be dimmed. That gap is the interesting part of comparing a contract
+// against its data.
+export function buildSchemaGraph(schema, edges, numbers) {
   var nodes = [], seen = new Set(), out = [];
-  // The count goes in the label, not into the node's area. Seven boxes cannot
-  // express "958 versus 1" by size at any scale that still fits on screen —
-  // 958 and 1 rendered as near-identical rectangles, which is worse than not
-  // encoding it. A number is exact and costs nothing.
-  function node(id, label, kind) {
+  // The count goes in the label, not into the node's area: a number is exact
+  // and costs nothing, while sizes cannot express "958 versus 1".
+  function node(id, label, kind, extra) {
     if (seen.has(id)) return;
     seen.add(id);
-    var n = (byType && byType.get(label)) ? byType.get(label).length : 0;
-    nodes.push({
-      data: {
-        id: id, label: kind === 'any' ? label : label + '  ' + n,
-        type: label, schemaKind: kind, count: n
-      },
-      classes: 'sch' + (kind !== 'any' && n === 0 ? ' emptytype' : '')
-    });
+    var rec = kind === 'type' ? numbers.types.get(label) : null;
+    var n = rec ? rec.count : 0;
+    var data = {
+      id: id, label: kind === 'type' ? label + '  ' + n : label,
+      type: kind === 'type' ? label : '', schemaKind: kind, count: n
+    };
+    Object.assign(data, extra || {});
+    nodes.push({ data: data, classes: 'sch sch-' + kind + (kind === 'type' && n === 0 ? ' emptytype' : '') });
   }
   schema.declaredTypes.forEach(function (t) { node(schemaId(t), t, 'type'); });
+  node(SCHEMA_ANY, 'any (base)', 'any');
 
+  function edge(row, from, target, toType, count, extraClass) {
+    var f = schemaId(from);
+    out.push({
+      data: {
+        id: 'schemaedge:' + f + ' ' + row.predicate + ' ' + target,
+        source: f, target: target,
+        label: row.predicate + (row.many ? ' *' : ''),
+        predicate: row.predicate, kind: row.kind,
+        many: !!row.many, required: !!row.required,
+        inverse: row.inverse || '', acyclic: !!row.acyclic,
+        used: count, from: from, toType: toType
+      },
+      classes: 'sch' + (row.required ? ' required' : '') + (count ? '' : ' unused') +
+        (f === target ? ' selfloop' : '') + extraClass
+    });
+  }
   edges.forEach(function (row) {
-    if (hiddenPredicates.has(row.predicate)) return;
-    // `from: ["any"]` means a base relation, declared on every type. `to:
-    // ["any"]` means it may point at any type. They are different claims and
-    // `affects` is the second without being the first, so neither can stand in
-    // for the other.
-    var froms = row.from.indexOf('any') !== -1 ? [SCHEMA_ANY] : row.from.map(schemaId);
-    var tos = row.to.indexOf('any') !== -1 ? [SCHEMA_ANY] : row.to.map(schemaId);
-    if (froms[0] === SCHEMA_ANY || tos[0] === SCHEMA_ANY) node(SCHEMA_ANY, 'any', 'any');
-
-    froms.forEach(function (f) {
-      tos.forEach(function (t) {
-        var count = used ? countUses(used, f, row.predicate, t) : 0;
-        out.push({
-          data: {
-            id: 'schemaedge:' + f + ' ' + row.predicate + ' ' + t + (row.derived ? ':d' : ''),
-            source: f, target: t,
-            label: row.predicate + (row.many ? ' *' : ''),
-            predicate: row.predicate, kind: row.kind,
-            many: !!row.many, required: !!row.required,
-            inverse: row.inverse || '', acyclic: !!row.acyclic,
-            derived: !!row.derived, used: count
-          },
-          classes: 'sch' + (row.derived ? ' derived' : '') +
-            (row.required ? ' required' : '') + (count ? '' : ' unused') +
-            (f === t ? ' selfloop' : '')
-        });
-      });
+    if (row.derived) return;
+    var base = row.from.indexOf('any') !== -1;
+    var sources = base ? schema.declaredTypes : row.from;
+    var toAny = row.to.indexOf('any') !== -1;
+    sources.forEach(function (from) {
+      var reached = relationOf(numbers, from, row.predicate).to;
+      if (toAny && reached.length) {
+        reached.forEach(function (t) { edge(row, from, schemaId(t.type), t.type, t.links, ' open' + (base ? ' base' : '')); });
+        return;
+      }
+      if (base) return;
+      if (toAny) {
+        node(ghostId(from), 'any type', 'ghost', { owner: schemaId(from) });
+        edge(row, from, ghostId(from), 'any', 0, ' open');
+        return;
+      }
+      row.to.forEach(function (t) { edge(row, from, schemaId(t), t, numbers.used.get(from + SEP + row.predicate + SEP + t) || 0, ''); });
     });
   });
   return { nodes: nodes, edges: out };
 }
 
-// usedEdgeCounts tallies the instance graph by (fromType, predicate, toType),
-// which is what tells a declared relation apart from a used one.
-export function usedEdgeCounts(model) {
-  var used = new Map();
-  model.edges.forEach(function (e) {
-    var k = typeOf(e.data.source) + SEP + e.data.label + SEP + typeOf(e.data.target);
-    used.set(k, (used.get(k) || 0) + 1);
-  });
-  return used;
+// focusOn is the diagram around one type: the type, the types one relation
+// away in either direction, and those relations.
+export function focusOn(sch, type) {
+  var id = schemaId(type);
+  var edges = sch.edges.filter(function (e) { return e.data.source === id || e.data.target === id; });
+  var keep = new Set([id]);
+  edges.forEach(function (e) { keep.add(e.data.source); keep.add(e.data.target); });
+  return { nodes: sch.nodes.filter(function (n) { return keep.has(n.data.id); }), edges: edges };
 }
 
-// countUses resolves a declared edge against the instance tally.
-//
-// A wildcard endpoint has to sum across every concrete type rather than look
-// itself up: instances of an `any` relation point at real types, never at
-// "any", so a literal lookup would report every such relation as unused —
-// dimming `affects` as dead when it is in daily use.
-function countUses(used, from, predicate, to) {
-  var f = from === SCHEMA_ANY ? null : from.slice(7);
-  var t = to === SCHEMA_ANY ? null : to.slice(7);
-  if (f !== null && t !== null) return used.get(f + SEP + predicate + SEP + t) || 0;
-  var total = 0;
-  used.forEach(function (n, key) {
-    var parts = key.split(SEP);
-    if (parts[1] !== predicate) return;
-    if (f !== null && parts[0] !== f) return;
-    if (t !== null && parts[2] !== t) return;
-    total += n;
+// mostConnected is the type the most types are one relation in use away from,
+// or one declared relation while none is in use; the first declared of equals.
+export function mostConnected(sch) {
+  var best = '', most = -1;
+  var inUse = sch.edges.some(function (e) { return e.data.used && e.data.source !== e.data.target; });
+  sch.nodes.forEach(function (n) {
+    if (n.data.schemaKind !== 'type') return;
+    var peers = new Set();
+    sch.edges.forEach(function (e) {
+      if (inUse && !e.data.used) return;
+      if (e.data.source === n.data.id) peers.add(e.data.target);
+      if (e.data.target === n.data.id) peers.add(e.data.source);
+    });
+    if (peers.size > most) { most = peers.size; best = n.data.type; }
   });
-  return total;
+  return best;
 }
 
-// buildBothGraph is the combined view's overlay: the ontology cut down to the
-// types of the entities on screen, plus one instance-of edge from each entity
-// to its type box — the UML picture of a class above the objects that realize
-// it. `sch` is buildSchemaGraph's output, so predicate filters and the
-// required/derived/unused notation carry over unchanged.
-//
-// Only the types present are boxed: the combined view is scoped by the same
-// focus and depth as the graph view, and a box nothing on screen realizes is
-// the schema view's job. A relation is kept when it leaves a kept box and lands
-// on one (or on `any`); the base relations leave `any` itself, so they are the
-// schema view's to draw.
-export function buildBothGraph(sch, nodeIds) {
-  var keep = new Set();
-  nodeIds.forEach(function (id) { keep.add(schemaId(typeOf(id))); });
-  var edges = sch.edges.filter(function (e) {
-    return keep.has(e.data.source) && (keep.has(e.data.target) || e.data.target === SCHEMA_ANY);
-  });
-  var boxes = new Set(keep);
-  if (edges.some(function (e) { return e.data.target === SCHEMA_ANY; })) boxes.add(SCHEMA_ANY);
-  var nodes = sch.nodes.filter(function (n) { return boxes.has(n.data.id); });
-  nodeIds.forEach(function (id) {
-    edges.push({
-      // `label` is empty rather than absent: every edge.sch style reads it.
-      data: { id: 'instof:' + id, source: id, target: schemaId(typeOf(id)), label: '', instanceOf: true },
-      classes: 'sch instof'
+// incomingRelations lists the relations other types declare toward a type and
+// its own record does not show: those with a declared inverse are there as
+// derived relations, base relations are every type's, and its relations to
+// itself are its own.
+export function incomingRelations(schema, name, numbers) {
+  var out = [];
+  schema.edges.forEach(function (row) {
+    if (row.derived || row.inverse || row.from.indexOf('any') !== -1) return;
+    if (row.to.indexOf(name) === -1 && row.to.indexOf('any') === -1) return;
+    row.from.forEach(function (from) {
+      if (from === name) return;
+      out.push({
+        predicate: row.predicate, from: from, many: !!row.many, required: !!row.required,
+        used: numbers.used.get(from + SEP + row.predicate + SEP + name) || 0
+      });
     });
   });
-  return { nodes: nodes, edges: edges };
+  return out;
 }
 
-// ASPECT_VIEWS maps `khub serve --aspect` (which arrives as ?aspect= on the
-// printed URL) to the view the page lands on. The CLI's vocabulary is viz's;
-// the page's is its own, and this is the one place they meet.
-var ASPECT_VIEWS = { schema: 'schema', instances: 'graph', both: 'both' };
+// selectionIds maps an overview selection (`type:<name>` or
+// `rel:<from>.<predicate>`) to the diagram element ids it highlights.
+export function selectionIds(sch, sel) {
+  if (!sel) return [];
+  if (sel.indexOf('type:') === 0) {
+    var name = sel.slice(5);
+    var id = name === 'any' ? SCHEMA_ANY : schemaId(name);
+    return sch.nodes.some(function (n) { return n.data.id === id; }) ? [id] : [];
+  }
+  if (sel.indexOf('rel:') === 0) {
+    var rest = sel.slice(4);
+    var dot = rest.indexOf('.');
+    var from = rest.slice(0, dot), predicate = rest.slice(dot + 1);
+    return sch.edges.filter(function (e) {
+      return e.data.from === from && e.data.predicate === predicate;
+    }).map(function (e) { return e.data.id; });
+  }
+  return [];
+}
 
-// aspectView reads the landing view from a location.search string. An absent
-// or unknown value is null, and the page keeps its own default.
+// typeDetails is the details panel for a selected type, from /api/type/<name>
+// (introspect.TypeView, what `khub schema show` prints): its attributes, its
+// relations stored and derived, and its entity count.
 //
-// URLSearchParams, not decodeURIComponent: it decodes a malformed escape
-// (`%E0`) to U+FFFD instead of throwing, and a throw here would land inside
-// boot and leave the page unmounted over a typo in the address bar.
-export function aspectView(search) {
-  var name = new URLSearchParams(search || '').get('aspect');
-  if (name === null) return null;
-  return Object.prototype.hasOwnProperty.call(ASPECT_VIEWS, name) ? ASPECT_VIEWS[name] : null;
+// With `base` (the base block), each attribute and relation the type merely
+// inherits is flagged `inherited`, so the panel can lead with what the type
+// declares itself. A type that redeclares a base attribute (title, made
+// required) declares it: the flag follows the record, not the name alone.
+export function typeDetails(view, count, base) {
+  var baseFields = new Map(), baseRels = new Set();
+  if (base) {
+    (base.fields || []).forEach(function (f) { baseFields.set(f.name, f); });
+    (base.relations || []).forEach(function (r) { baseRels.add(r.predicate); });
+  }
+  function sameAsBase(f) {
+    var b = baseFields.get(f.name);
+    return !!b && b.type === f.type && !!b.required === !!f.required &&
+      JSON.stringify(b.enum || null) === JSON.stringify(f.enum || null);
+  }
+  return {
+    name: view.name,
+    when: view.when || '',
+    count: count,
+    attributes: (view.fields || []).map(function (f) {
+      return {
+        name: f.name, type: f.type, required: !!f.required,
+        allowed: f.enum && f.enum.length ? f.enum.join(', ') : '',
+        inherited: sameAsBase(f)
+      };
+    }),
+    relations: (view.relations || []).map(function (r) {
+      return {
+        predicate: r.predicate, to: (r.to || []).join(' | '), many: !!r.many,
+        required: !!r.required, inverse: r.inverse || '', derived: !!r.derived,
+        inherited: !r.derived && baseRels.has(r.predicate)
+      };
+    })
+  };
+}
+
+// baseDetails is the details panel for the `any` box: the base block every
+// type inherits (`khub schema base`).
+export function baseDetails(base) {
+  return typeDetails({ name: 'any (base)', fields: base.fields, relations: base.relations }, null);
+}
+
+// relationDetails is the details panel for a selected relation: the edges the
+// diagram drew for it, merged into one declaration.
+export function relationDetails(sch, sel) {
+  var ids = selectionIds(sch, sel);
+  var edges = sch.edges.filter(function (e) { return ids.indexOf(e.data.id) !== -1; });
+  if (!edges.length) return null;
+  var d = edges[0].data;
+  var to = edges.map(function (e) { return e.data.toType; });
+  return {
+    from: d.from, predicate: d.predicate, to: to.join(' | '), kind: d.kind,
+    many: d.many, required: d.required, inverse: d.inverse, acyclic: d.acyclic,
+    used: edges.reduce(function (n, e) { return n + e.data.used; }, 0)
+  };
 }
