@@ -13,6 +13,9 @@
 - **gonum** links a handful of leaf packages, no `mat`/BLAS; it is used only
   for strongly connected components.
 - **ncruces/go-sqlite3** is `wasm2go`-translated Go: no wazero, no CGO.
+- **yuin/goldmark** is pure Go and parses entity bodies for `khub serve`
+  alone: `internal/explore` turns them into a block tree, and depguard keeps
+  every other package off it.
 - **santhosh-tekuri/jsonschema/v6** is test-only: `internal/schema`'s tests
   judge the emitted layer JSON Schema and every probe with a real draft-07
   validator, which also checks the file against the draft-07 meta-schema. It

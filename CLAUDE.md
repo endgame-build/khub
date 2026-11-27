@@ -43,6 +43,7 @@ go build -o parity-run ./parity/runner
 bash smoke.sh                                                    # end-to-end, both build presets
 bash smoke-windows.sh                                            # all of smoke.sh, then the Windows-likely cases (every OS)
 bash parity/tools/gen_cli_reference.sh                           # regenerate docs/cli-reference.md
+go test ./internal/schema -run TestLayerJSONSchemaFileIsCurrent -update-jsonschema   # regenerate schemas/layers.schema.json
 bash parity/tools/coverage-floor.sh "$PWD/khub-cover" /tmp/cov    # parity with a `go build -cover` binary; internal/cli ≥ parity/coverage-floor.txt
 KHUB=$PWD/khub bash parity/scale/smoke.sh --scale 300            # a generated corpus against its own manifest, plus the footprint pin
 bash parity/compat/smoke.sh <old-khub> "$PWD/khub"               # a workspace an older binary wrote survives this one

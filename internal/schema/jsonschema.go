@@ -9,12 +9,10 @@ package schema
 // One schema covers all three files, as the layers merge on top-level key and
 // any file may carry any block. The schema is never stricter than the walk: a
 // value the walk accepts (a lax boolean such as `yes`, a null where a field is
-// optional) passes here too. It is looser where a rule spans fields or files —
-// the storage matrix, a policy entry for an undeclared type, a relation to an
-// unknown type — and where JSON Schema cannot say what the loader checks: a
-// storage path that leaves the workspace or names a reserved file, a path
-// template's placeholders, an attribute pattern that is not valid RE2, an
-// integer written as 30.0. khub reports those when it loads the schema. One
+// optional) passes here too. It is looser where a rule spans fields or files
+// and where JSON Schema cannot say what the loader checks; docs/schema.md
+// ("Editor validation") lists both, and TestJSONSchemaKnownGaps pins the
+// second. khub reports those when it loads the schema. One
 // deliberate exception: a document, a layer block or `entities` that is falsy
 // but neither a mapping nor null (`policy: false`, `entities: []`, a document
 // that is just `0`) loads as empty, and the schema still asks for a mapping
