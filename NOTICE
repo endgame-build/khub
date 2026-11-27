@@ -7,3 +7,9 @@ This product includes software developed by third parties:
   Consortium, MIT License. Vendored as internal/assets/cytoscape.min.js with its
   license header intact; the same text is at internal/assets/LICENSE.cytoscape.
   It is inlined into the HTML that `khub viz` and `khub serve` render.
+
+- dagre (https://github.com/dagrejs/dagre), Copyright (c) 2012-2014 Chris Pettitt,
+  MIT License, with graphlib bundled. Vendored byte-identical as
+  internal/assets/dagre.min.js (@dagrejs/dagre 3.1.3); the license is at
+  internal/assets/LICENSE.dagre. `khub serve` uses it to lay out the ontology
+  diagram.

@@ -53,6 +53,16 @@ linters:
           deny:
             - pkg: encoding/json
               desc: "only internal/canon/jsonio.go writes JSON bytes and only ojson.go decodes them (CLAUDE.md choke-point rule); use canon.EncodeCLI/EncodeDisk or canon's decoders"
+        # The Markdown parser reads bodies for the human view only. Kept to one
+        # package so a second surface cannot start rendering prose its own way,
+        # and so nothing on a write path ever depends on it.
+        markdown-choke-point:
+          list-mode: lax
+          files:
+            - "!**/internal/explore/*.go"
+          deny:
+            - pkg: github.com/yuin/goldmark
+              desc: "only internal/explore may import the Markdown parser (it builds the serve page's body tree)"
   exclusions:
     presets:
       - std-error-handling

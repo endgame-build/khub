@@ -579,7 +579,7 @@ Serve a read-only graph view on loopback: khub serve [--port 7777] [--aspect A].
 
 Options:
   --port <int>  Port to bind on 127.0.0.1; 0 takes an ephemeral one. [default: 7777]
-  --aspect <str>  View to open on: instances, schema, or both. Default: the schema view.
+  --aspect <str>  Accepted for compatibility; every value opens the ontology overview.
   --help  Show this message and exit.
 
 ```
