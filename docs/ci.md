@@ -28,7 +28,7 @@ is the one step that overrides it, in `go-extras`.
 | `go mod tidy -diff`, govulncheck, actionlint | a tidy module; reachable advisories; valid workflows and shellchecked `run:` blocks | pinned tools, ubuntu only |
 | golangci-lint, native and `GOOS=windows` | the choke-point rules: only `internal/canon` imports YAML, only `jsonio.go` writes JSON | depguard, pinned version |
 | `go test ./...` | the unit suite, with the fuzz seed corpora (five targets in `internal/canon`, one in `internal/migrate`, one in `internal/okfimport`) | toolchain |
-| Parity suite | exact stdout, stderr, exit code and a whole-tree manifest per step; the executable spec, 151 cases | `parity/runner`, unaided |
+| Parity suite | exact stdout, stderr, exit code and a whole-tree manifest per step; the executable spec | `parity/runner`, unaided |
 | err-os-error as a standard user | the write-denial case the admin runner skips | Windows only |
 | Coverage map | every command, flag, error code, format and mode reaches a recorded fixture, and the binary offers nothing the map does not list | `-coverage parity/coverage.yaml -subset-of` |
 | CLI smoke | `smoke-windows.sh`: all of `smoke.sh` (every verb over both presets, exit codes asserted; eight writers on one collection file in three formats; edit idempotence; NFC and NFD titles; one OKF chain of review, trust, supersede, expiry, the draft lifecycle, export and import into a fresh workspace), then git-dated stale and backfill, line endings, serve's TTY refusal | bash, every OS |
@@ -63,7 +63,7 @@ is the one step that overrides it, in `go-extras`.
 | shellcheck | `plugin/tools/*.sh` |
 | Marketplace and plugin manifests | `claude plugin validate --strict` on both |
 | Fixtures match the built binary | `tests/fixtures.ts` re-records byte-identical from this checkout's khub (node, no Python) |
-| Plugin tests | the 113 tests over the hooks, against recorded khub output |
+| Plugin tests | every test over the hooks, against recorded khub output |
 | Static budgets | each SKILL.md's bytes and description chars, and the wire block's bytes per preset and agent file, at or under `plugin/budget.json` |
 | Skills name real flags | every backticked `khub …` in both skills and the wired block is a call the built binary accepts; field flags read from the live schema |
 | Projected token cost | `claude plugin details` into the job summary (report only) |
