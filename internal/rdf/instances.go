@@ -54,9 +54,19 @@ func Instances(doc *Doc, resolved *schema.ResolvedSchema, idx *index.Index, g *g
 		for _, rn := range rtype.Relations.Keys() {
 			rel, _ := rtype.Relations.Get(rn)
 			pred := m.fieldIRI(rn)
+			// An object is asserted once per predicate, as the graph keeps
+			// one edge per target: RDF holds a triple once however often the
+			// file repeats the value.
+			emitted := map[string]bool{}
+			add := func(o IRI) {
+				if !emitted[o.Full] {
+					emitted[o.Full] = true
+					s.Add(pred, o)
+				}
+			}
 			for _, e := range out {
 				if e.Predicate == rn {
-					s.Add(pred, m.entityIRI(e.To))
+					add(m.entityIRI(e.To))
 				}
 			}
 			// Two stored values satisfy the relation without an edge in the
@@ -67,12 +77,12 @@ func Instances(doc *Doc, resolved *schema.ResolvedSchema, idx *index.Index, g *g
 			for _, target := range targets(raw) {
 				if hits := idx.ResolveTarget(rel, target); len(hits) > 0 {
 					if len(hits) == 1 && hits[node] {
-						s.Add(pred, m.entityIRI(node))
+						add(m.entityIRI(node))
 					}
 					continue
 				}
 				if path, ok := idx.FileRef(rel, target); ok {
-					s.Add(pred, m.fileIRI(path))
+					add(m.fileIRI(path))
 					if !seen[path] {
 						seen[path] = true
 						files = append(files, path)
@@ -181,9 +191,9 @@ func (m *mapper) fileIRI(rel string) IRI {
 func literal(v any, kind string) Term {
 	switch kind {
 	case "text":
-		return Str(stringForm(v))
+		return Str(textForm(v))
 	case "number":
-		return Typed(stringForm(v), xsdDecimal)
+		return Typed(decimalForm(v), xsdDecimal)
 	case "bool":
 		if values.IsBool(v) {
 			return Bool(values.AsBool(v))
@@ -215,6 +225,29 @@ func literal(v any, kind string) Term {
 		return Typed(xsdDateTimeLexical(x.ISO), xsdDateTime)
 	}
 	return Str(stringForm(v))
+}
+
+// textForm is a text attribute's literal: the string `validate` matches its
+// enum and pattern against (`True`, `1.0`), so the file's own sh:in and
+// sh:pattern decide as validate does. A structured value is its JSON text.
+func textForm(v any) string {
+	switch v.(type) {
+	case []any, *omap.Map:
+		return stringForm(v)
+	}
+	return values.Str(v)
+}
+
+// decimalForm is a number attribute's literal: the form `validate` compares
+// (`1.0` for a whole float), which is also an xsd:decimal, unless that form
+// is an exponent or a non-finite value, which xsd:decimal has no spelling for.
+func decimalForm(v any) string {
+	if f, ok := v.(float64); ok {
+		if s := canon.PyFloatRepr(f); !strings.ContainsAny(s, "eanif") {
+			return s
+		}
+	}
+	return stringForm(v)
 }
 
 // stringForm is a value's text: the lexical form a literal of the declared

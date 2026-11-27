@@ -186,7 +186,7 @@ func TestLiteralsFollowTheDeclaredKind(t *testing.T) {
 	for _, want := range []string{
 		`field:date "2026-01-15T00:00:00"^^xsd:dateTime`,
 		`khub:created "2026-01-15T10:00:00"^^xsd:dateTime`,
-		`field:industry "true" ;`,
+		`field:industry "True" ;`,
 		`field:website "{\"nested\": {\"deep\": true}}"`,
 		`khub:aliases "1"^^xsd:decimal, true, "{\"k\": \"v\"}"`,
 	} {
@@ -207,8 +207,10 @@ func TestLiteralsFollowTheDeclaredKind(t *testing.T) {
 		t.Error("an object attribute was emitted as its JSON text")
 	}
 	for in, want := range map[string]string{
-		"text-true": Str("true").String(), "number": `"3"^^xsd:decimal`, "bool-yes": "true",
-		"bool-bad": `"maybe"^^xsd:boolean`, "date-dt": `"2026-01-15T10:00:00"^^xsd:dateTime`,
+		"text-true": Str("True").String(), "number": `"3"^^xsd:decimal`, "bool-yes": "true",
+		"number-whole-float": `"1.0"^^xsd:decimal`, "number-exp": `"100000000000000000000"^^xsd:decimal`,
+		"text-float": Str("1.0").String(),
+		"bool-bad":   `"maybe"^^xsd:boolean`, "date-dt": `"2026-01-15T10:00:00"^^xsd:dateTime`,
 		"dt-date": `"2026-01-15T00:00:00"^^xsd:dateTime`, "list-float": `"1.5"^^xsd:decimal`,
 	} {
 		var got Term
@@ -217,6 +219,12 @@ func TestLiteralsFollowTheDeclaredKind(t *testing.T) {
 			got = literal(true, "text")
 		case "number":
 			got = literal("3", "number")
+		case "number-whole-float":
+			got = literal(1.0, "number")
+		case "number-exp":
+			got = literal(1e20, "number")
+		case "text-float":
+			got = literal(1.0, "text")
 		case "bool-yes":
 			got = literal("yes", "bool")
 		case "bool-bad":
@@ -239,7 +247,7 @@ func TestLiteralsFollowTheDeclaredKind(t *testing.T) {
 // minCount.
 func TestSelfReferenceIsEmitted(t *testing.T) {
 	root := firmOpsWS(t)
-	loop := "---\ntype: client\nname: Loop\ncreated: 2026-01-15\nrelated: [loop, initech]\n---\n"
+	loop := "---\ntype: client\nname: Loop\ncreated: 2026-01-15\nrelated: [loop, initech, loop]\n---\n"
 	if err := os.WriteFile(filepath.Join(root, "clients", "loop.md"), []byte(loop), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -295,8 +303,10 @@ func TestOutAndBaseRefusals(t *testing.T) {
 		// khub's own files: the schema layers, the lock, any case.
 		{Options{Out: ".khub/ontology.yaml"}, "unsafe_path"},
 		{Options{Out: ".khub/generated/locks/workspace.lock"}, "unsafe_path"},
-		{Options{Out: ".KHUB/policy.yaml"}, "unsafe_path"},
 		{Options{Out: filepath.Join(root, ".khub", "config.yaml")}, "unsafe_path"},
+		{Options{Out: ".khub/generated/sessions"}, "unsafe_path"},
+		{Options{Out: ".khub/generated/upgrade-x/schema.ttl"}, "unsafe_path"},
+		{Options{Out: ".khub/generated/sub/schema.ttl"}, "unsafe_path"},
 	} {
 		_, err := Project(root, c.opt)
 		var located *errs.Located
@@ -309,6 +319,34 @@ func TestOutAndBaseRefusals(t *testing.T) {
 	}
 	if text, err := os.ReadFile(filepath.Join(root, ".khub", "ontology.yaml")); err != nil || strings.Contains(string(text), "@prefix") {
 		t.Errorf("the ontology was replaced (err %v)", err)
+	}
+}
+
+// An absolute --out that reaches .khub/ by another name — through a symlink
+// to the workspace, or in another case on a case-insensitive volume — is
+// still khub's own file.
+func TestOutRefusesKhubFilesByAnyName(t *testing.T) {
+	root := firmOpsWS(t)
+	link := filepath.Join(t.TempDir(), "alias")
+	if err := os.Symlink(root, link); err != nil {
+		t.Skipf("symlink: %v", err)
+	}
+	outs := []string{filepath.Join(link, ".khub", "ontology.yaml")}
+	upper := filepath.Join(root, ".KHUB", "policy.yaml")
+	if _, err := os.Stat(filepath.Dir(upper)); err == nil {
+		outs = append(outs, upper) // the volume folds case
+	}
+	for _, out := range outs {
+		_, err := Project(root, Options{Out: out})
+		var located *errs.Located
+		if !errors.As(err, &located) || located.Code != "unsafe_path" {
+			t.Errorf("--out %s: err = %v, want unsafe_path", out, err)
+		}
+	}
+	for _, name := range []string{"ontology.yaml", "policy.yaml"} {
+		if text, err := os.ReadFile(filepath.Join(root, ".khub", name)); err != nil || strings.Contains(string(text), "@prefix") {
+			t.Errorf("%s was replaced (err %v)", name, err)
+		}
 	}
 }
 

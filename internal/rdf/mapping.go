@@ -79,67 +79,67 @@ func pn(prefix, local string) IRI { return IRI{Prefixed: prefix + ":" + local} }
 
 // Well-known terms.
 var (
-	rdfType          = pn("rdf", "type")
-	rdfProperty      = pn("rdf", "Property")
-	rdfsClass        = pn("rdfs", "Class")
-	rdfsSubClassOf   = pn("rdfs", "subClassOf")
-	rdfsLabel        = pn("rdfs", "label")
-	rdfsComment      = pn("rdfs", "comment")
-	owlOntology      = pn("owl", "Ontology")
-	owlDatatypeProp  = pn("owl", "DatatypeProperty")
-	owlObjectProp    = pn("owl", "ObjectProperty")
-	shNodeShape      = pn("sh", "NodeShape")
-	shTargetClass    = pn("sh", "targetClass")
-	shProperty       = pn("sh", "property")
-	shPath           = pn("sh", "path")
-	shName           = pn("sh", "name")
-	shOrder          = pn("sh", "order")
-	shDatatype       = pn("sh", "datatype")
-	shMinCount       = pn("sh", "minCount")
-	shMaxCount       = pn("sh", "maxCount")
-	shIn             = pn("sh", "in")
-	shPattern        = pn("sh", "pattern")
-	shNodeKind       = pn("sh", "nodeKind")
-	shIRI            = pn("sh", "IRI")
-	shBlankNode      = pn("sh", "BlankNode")
-	shNode           = pn("sh", "node")
-	shClass          = pn("sh", "class")
-	shOr             = pn("sh", "or")
-	xsdString        = pn("xsd", "string")
-	xsdBoolean       = pn("xsd", "boolean")
-	xsdDecimal       = pn("xsd", "decimal")
-	xsdDate          = pn("xsd", "date")
-	xsdDateTime      = pn("xsd", "dateTime")
-	khubEntity       = pn("khub", "Entity")
-	khubFile         = pn("khub", "File")
-	khubPreset       = pn("khub", "preset")
-	khubPresetVer    = pn("khub", "presetVersion")
-	khubWorkspace    = pn("khub", "workspace")
-	khubRequiredScop = pn("khub", "requiredScope")
-	khubTargetScope  = pn("khub", "requiredTargetScope")
-	khubLayout       = pn("khub", "layout")
-	khubFormat       = pn("khub", "format")
-	khubPath         = pn("khub", "path")
-	khubIDShape      = pn("khub", "idShape")
-	khubTemplate     = pn("khub", "template")
-	khubReqSingleton = pn("khub", "requiredSingleton")
-	khubOrphanExempt = pn("khub", "orphanExempt")
-	khubLocked       = pn("khub", "locked")
-	khubRetentionDay = pn("khub", "retentionDays")
-	khubRetentionOut = pn("khub", "retentionNoOutbound")
-	khubWaiver       = pn("khub", "waiver")
-	khubWaivedEntity = pn("khub", "waivedEntity")
-	khubWaivedFind   = pn("khub", "waivedFinding")
-	khubWaiverReason = pn("khub", "waiverReason")
-	khubWhen         = pn("khub", "when")
-	khubType         = pn("khub", "type")
-	khubItems        = pn("khub", "items")
-	khubDefault      = pn("khub", "default")
-	khubPattern      = pn("khub", "pattern")
-	khubKind         = pn("khub", "kind")
-	khubAcyclic      = pn("khub", "acyclic")
-	khubInverse      = pn("khub", "inverse")
-	khubPathRefs     = pn("khub", "pathRefs")
+	rdfType                 = pn("rdf", "type")
+	rdfProperty             = pn("rdf", "Property")
+	rdfsClass               = pn("rdfs", "Class")
+	rdfsSubClassOf          = pn("rdfs", "subClassOf")
+	rdfsLabel               = pn("rdfs", "label")
+	rdfsComment             = pn("rdfs", "comment")
+	owlOntology             = pn("owl", "Ontology")
+	owlDatatypeProp         = pn("owl", "DatatypeProperty")
+	owlObjectProp           = pn("owl", "ObjectProperty")
+	shNodeShape             = pn("sh", "NodeShape")
+	shTargetClass           = pn("sh", "targetClass")
+	shProperty              = pn("sh", "property")
+	shPath                  = pn("sh", "path")
+	shName                  = pn("sh", "name")
+	shOrder                 = pn("sh", "order")
+	shDatatype              = pn("sh", "datatype")
+	shMinCount              = pn("sh", "minCount")
+	shMaxCount              = pn("sh", "maxCount")
+	shIn                    = pn("sh", "in")
+	shPattern               = pn("sh", "pattern")
+	shNodeKind              = pn("sh", "nodeKind")
+	shIRI                   = pn("sh", "IRI")
+	shBlankNode             = pn("sh", "BlankNode")
+	shNode                  = pn("sh", "node")
+	shClass                 = pn("sh", "class")
+	shOr                    = pn("sh", "or")
+	xsdString               = pn("xsd", "string")
+	xsdBoolean              = pn("xsd", "boolean")
+	xsdDecimal              = pn("xsd", "decimal")
+	xsdDate                 = pn("xsd", "date")
+	xsdDateTime             = pn("xsd", "dateTime")
+	khubEntity              = pn("khub", "Entity")
+	khubFile                = pn("khub", "File")
+	khubPreset              = pn("khub", "preset")
+	khubPresetVersion       = pn("khub", "presetVersion")
+	khubWorkspace           = pn("khub", "workspace")
+	khubRequiredScope       = pn("khub", "requiredScope")
+	khubRequiredTargetScope = pn("khub", "requiredTargetScope")
+	khubLayout              = pn("khub", "layout")
+	khubFormat              = pn("khub", "format")
+	khubPath                = pn("khub", "path")
+	khubIDShape             = pn("khub", "idShape")
+	khubTemplate            = pn("khub", "template")
+	khubRequiredSingleton   = pn("khub", "requiredSingleton")
+	khubOrphanExempt        = pn("khub", "orphanExempt")
+	khubLocked              = pn("khub", "locked")
+	khubRetentionDays       = pn("khub", "retentionDays")
+	khubRetentionNoOutbound = pn("khub", "retentionNoOutbound")
+	khubWaiver              = pn("khub", "waiver")
+	khubWaivedEntity        = pn("khub", "waivedEntity")
+	khubWaivedFinding       = pn("khub", "waivedFinding")
+	khubWaiverReason        = pn("khub", "waiverReason")
+	khubWhen                = pn("khub", "when")
+	khubType                = pn("khub", "type")
+	khubItems               = pn("khub", "items")
+	khubDefault             = pn("khub", "default")
+	khubPattern             = pn("khub", "pattern")
+	khubKind                = pn("khub", "kind")
+	khubAcyclic             = pn("khub", "acyclic")
+	khubInverse             = pn("khub", "inverse")
+	khubPathRefs            = pn("khub", "pathRefs")
 )
 
 // vocabulary is the khub: block every export opens with, so the file is
@@ -153,23 +153,23 @@ var vocabulary = []struct {
 	{khubEntity, true, "Every khub entity. Each type is a subclass."},
 	{khubFile, true, "A workspace file a path reference names; not an entity."},
 	{khubPreset, false, "On the ontology: the preset the workspace was initialized from."},
-	{khubPresetVer, false, "On the ontology: that preset's version."},
+	{khubPresetVersion, false, "On the ontology: that preset's version."},
 	{khubWorkspace, false, "On the ontology: the workspace this export was rendered from."},
-	{khubRequiredScop, false, "On the ontology: sh:minCount is khub's required gate, enforced on this subset of entities (drafts are exempt)."},
-	{khubTargetScope, false, "On the ontology: a required relation counts only targets in this subset (a draft target never satisfies it)."},
+	{khubRequiredScope, false, "On the ontology: sh:minCount is khub's required gate, enforced on this subset of entities (drafts are exempt)."},
+	{khubRequiredTargetScope, false, "On the ontology: a required relation counts only targets in this subset (a draft target never satisfies it)."},
 	{khubLayout, false, "Storage: file, folder, collection or singleton."},
 	{khubFormat, false, "Storage: md, json, yaml or jsonl."},
 	{khubPath, false, "Storage: where the type's entities live, one value per path template; on a khub:File, its workspace-relative path."},
 	{khubIDShape, false, "Storage: the id a new entity is minted with."},
 	{khubTemplate, false, "Storage: the body template stem the type declares."},
-	{khubReqSingleton, false, "Policy: a singleton `check` requires to exist."},
+	{khubRequiredSingleton, false, "Policy: a singleton `check` requires to exist."},
 	{khubOrphanExempt, false, "Policy: instances are exempt from the orphan sweep."},
 	{khubLocked, false, "Policy: `khub upgrade` refuses a schema that drops this type, or this relation on a relation shape, unless unlocked."},
-	{khubRetentionDay, false, "Policy: `check` lists an entity of this type whose date is older than this many days."},
-	{khubRetentionOut, false, "Policy: the retention rule lists only entities with no outbound edge."},
+	{khubRetentionDays, false, "Policy: `check` lists an entity of this type whose date is older than this many days."},
+	{khubRetentionNoOutbound, false, "Policy: the retention rule lists only entities with no outbound edge."},
 	{khubWaiver, false, "Policy: one `check` finding waived for one entity of this type; a node holding the three terms below."},
 	{khubWaivedEntity, false, "On a waiver: the slug of the entity it covers."},
-	{khubWaivedFind, false, "On a waiver: the `check` bucket it waives."},
+	{khubWaivedFinding, false, "On a waiver: the `check` bucket it waives."},
 	{khubWaiverReason, false, "On a waiver: why the finding is accepted."},
 	{khubWhen, false, "The moment to capture an entity of this type, in domain language."},
 	{khubType, false, "The khub kind of an attribute: text, number, date, datetime, bool, list or object."},
@@ -206,10 +206,10 @@ func Schema(resolved *schema.ResolvedSchema, ns Namespaces, prov Provenance) *Do
 	ont.Add(rdfType, owlOntology)
 	ont.Add(rdfsLabel, Str(labelOf(prov)))
 	ont.Add(khubPreset, Str(prov.Preset))
-	ont.Add(khubPresetVer, Str(prov.Version))
+	ont.Add(khubPresetVersion, Str(prov.Version))
 	ont.Add(khubWorkspace, Str(prov.Workspace))
-	ont.Add(khubRequiredScop, Str("active"))
-	ont.Add(khubTargetScope, Str("active"))
+	ont.Add(khubRequiredScope, Str("active"))
+	ont.Add(khubRequiredTargetScope, Str("active"))
 	doc.Subjects = append(doc.Subjects, ont)
 
 	for _, v := range vocabulary {
@@ -304,7 +304,7 @@ func (m *mapper) class(t *schema.ResolvedType) *Subject {
 		s.Add(khubTemplate, Str(*t.Template))
 	}
 	if t.Required {
-		s.Add(khubReqSingleton, Bool(true))
+		s.Add(khubRequiredSingleton, Bool(true))
 	}
 	if t.Orphan {
 		s.Add(khubOrphanExempt, Bool(true))
@@ -313,15 +313,15 @@ func (m *mapper) class(t *schema.ResolvedType) *Subject {
 		s.Add(khubLocked, Bool(true))
 	}
 	if t.Retention != nil {
-		s.Add(khubRetentionDay, Int(t.Retention.Days))
+		s.Add(khubRetentionDays, Int(t.Retention.Days))
 		if t.Retention.NoOutbound {
-			s.Add(khubRetentionOut, Bool(true))
+			s.Add(khubRetentionNoOutbound, Bool(true))
 		}
 	}
 	for _, w := range t.Waivers {
 		s.Add(khubWaiver, Blank{Pairs: []Pair{
 			{Pred: khubWaivedEntity, Obj: Str(w.Slug)},
-			{Pred: khubWaivedFind, Obj: Str(w.Finding)},
+			{Pred: khubWaivedFinding, Obj: Str(w.Finding)},
 			{Pred: khubWaiverReason, Obj: Str(w.Reason)},
 		}})
 	}
@@ -640,6 +640,7 @@ func PortablePattern(p string) (string, bool) {
 	}
 	var b strings.Builder
 	inClass := false
+	first := -1 // where a class's first member sits; a `]` there is literal
 	for i := 0; i < len(p); i++ {
 		c := p[i]
 		if c == '.' && !inClass {
@@ -647,11 +648,21 @@ func PortablePattern(p string) (string, bool) {
 			b.WriteString(`[^\n]`)
 			continue
 		}
+		if inClass && (c == '[' || c == ']' && i == first) {
+			// RE2 reads these as literal members; XPath needs them escaped.
+			b.WriteByte('\\')
+			b.WriteByte(c)
+			continue
+		}
 		if c != '\\' {
 			b.WriteByte(c)
 			switch c {
 			case '[':
 				inClass = true
+				first = i + 1
+				if first < len(p) && p[first] == '^' {
+					first++
+				}
 			case ']':
 				inClass = false
 			}

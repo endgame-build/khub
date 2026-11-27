@@ -142,17 +142,22 @@ func load(root string, resolved *schema.ResolvedSchema) (*index.Index, *graph.Gr
 	return idx, graph.BuildGraph(idx), nil
 }
 
-// khubOwned reports whether a workspace-relative path lies in .khub/ outside
-// .khub/generated/, or in the lock directory: the schema layers, the
-// templates, the saved queries and the workspace lock, which a Turtle file
-// must never replace.
-func khubOwned(rel string) bool {
-	// Folded, so a case-insensitive filesystem cannot spell its way past.
-	parts := strings.Split(strings.ToLower(filepath.ToSlash(rel)), "/")
-	if parts[0] != ".khub" {
-		return false
+// khubOwned reports whether path lands in .khub/ anywhere but a plain file
+// directly in .khub/generated/: the schema layers, the templates, the saved
+// queries, the lock, the session and upgrade records, none of which a Turtle
+// file may replace. It asks the filesystem, not the spelling, so a path named
+// through a symlink or in another case on a case-insensitive volume is caught.
+func khubOwned(root, path string) (bool, error) {
+	khubDir := filepath.Join(root, ".khub")
+	in, err := fsio.Overlap(path, khubDir)
+	if err != nil || !in {
+		return false, err
 	}
-	return len(parts) < 3 || parts[1] != "generated" || parts[2] == "locks"
+	gen, gerr := os.Stat(filepath.Join(khubDir, "generated"))
+	parent, perr := os.Stat(filepath.Dir(path))
+	name := strings.ToLower(filepath.Base(path))
+	generated := gerr == nil && perr == nil && os.SameFile(gen, parent)
+	return !generated || name == "locks" || name == "sessions" || strings.HasPrefix(name, "upgrade-"), nil
 }
 
 // write publishes the document. A relative --out is against the workspace
@@ -180,12 +185,16 @@ func write(root, out string, data []byte) error {
 		return errs.New("unsafe_path", fmt.Sprintf("Path %s is outside workspace %s; a relative --out stays inside it, pass an absolute path to write elsewhere",
 			filepath.ToSlash(out), filepath.ToSlash(root)))
 	}
-	if inside && khubOwned(rel) {
-		return errs.New("unsafe_path", fmt.Sprintf("Path %s is one of khub's own files; --out writes under .khub/generated/ or outside .khub/",
-			filepath.ToSlash(out)))
-	}
 	if info, serr := os.Lstat(path); serr == nil && info.IsDir() {
 		return errs.New("invalid_out", fmt.Sprintf("Output path %s is a directory; --out names the file to write", filepath.ToSlash(out)))
+	}
+	owned, err := khubOwned(absRoot, path)
+	if err != nil {
+		return err
+	}
+	if owned {
+		return errs.New("unsafe_path", fmt.Sprintf("Path %s is one of khub's own files; --out writes under .khub/generated/ or outside .khub/",
+			filepath.ToSlash(out)))
 	}
 	if inside {
 		if err := fsio.MkdirAll(root, filepath.Dir(path)); err != nil {

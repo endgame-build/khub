@@ -93,7 +93,9 @@ so every property shape of either applies and the stricter wins — constraints
 neither workspace declared on its own. A workspace whose schema has drifted
 from its preset should pass its own `--base`; nothing warns about the drift
 (`schema diff` compares to a snapshot, not to the preset). `<name>` is the
-workspace name from the same file.
+workspace name from the same file, else the name of the workspace's
+directory, as `init` would record it; a workspace whose config has no `name`
+therefore mints entity IRIs that depend on where it is checked out.
 
 A predicate mints **one IRI per name, shared by every type that declares it**
 — `field:owner` is the same property on `opportunity`, `project` and
@@ -188,8 +190,8 @@ sh:property [
 
 | khub | SHACL | Notes |
 |---|---|---|
-| `type: text` | `sh:datatype xsd:string` | the default kind; an enum without `type` is text. An instance literal is always the value's string form, whatever YAML read it as |
-| `type: number` | `sh:datatype xsd:decimal` | khub does not split integers from floats; instances are typed `xsd:decimal` to match |
+| `type: text` | `sh:datatype xsd:string` | the default kind; an enum without `type` is text. An instance literal is the string `validate` matches enums and patterns against (`True`, `1.0`), whatever YAML read the value as |
+| `type: number` | `sh:datatype xsd:decimal` | khub does not split integers from floats; instances are typed `xsd:decimal` to match, in the form `validate` compares (`1.0` for a whole float), or written out in full where that form has an exponent |
 | `type: date` | `sh:or ( [sh:datatype xsd:date] [sh:datatype xsd:dateTime] )` | `validate` passes a datetime in a date field (one ISO parse gates both kinds), so the shape admits both and an instance keeps its time |
 | `type: datetime` | `sh:datatype xsd:dateTime` | khub writes `2026-01-15 10:00:00`; the literal takes XSD's `T`. A bare date, which `validate` also passes, becomes `T00:00:00` |
 | `type: bool` | `sh:datatype xsd:boolean` | |
@@ -291,9 +293,10 @@ a type) — the order every projection walks. Then:
   typed by the attribute's **declared kind**, never by the YAML shape of the
   value — the shape's `sh:datatype` comes from the kind, so a literal typed any
   other way would fail the file's own shapes where `validate` passes the
-  entity. `text` is always the value's string form (`"true"` for a text field
-  YAML read back as a boolean; the JSON text of a mapping or list a text field
-  holds); `number` is `xsd:decimal`; `bool` is the shorthand; `date` keeps a
+  entity. `text` is the string `validate` matches enums and patterns against
+  (`"True"` for a text field YAML read back as a boolean, `"1.0"` for a whole
+  float; the JSON text of a mapping or list a text field holds); `number` is
+  `xsd:decimal` in that same form; `bool` is the shorthand; `date` keeps a
   time of day when the value carries one (the shape admits both); `datetime`
   gives a bare date midnight. A list emits one triple per item: typed by the
   declared item kind when the list declares `items`, else by the item's own
@@ -399,8 +402,10 @@ diff of `schema.ttl`.
 
 ## Worked example
 
-From the firm-ops preset with one person, one client, one opportunity and one
-meeting (the parity case). Abridged — the recorded fixture is the whole file;
+From the firm-ops preset, rendered from the parity case (its fixture holds
+more clients and a second meeting). The TBox blocks match the golden render;
+the instance block is from the case's `--instances` step, under the default
+`--base`. Abridged — the recorded fixture is the whole file;
 the base block's `generated`, `verified`, `sources` and `usage_window` shapes,
 nested as the attributes table says, are left out here.
 

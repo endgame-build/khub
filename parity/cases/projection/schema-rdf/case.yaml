@@ -6,8 +6,8 @@
 # adds the ABox: typed individuals, present attributes as literals typed by
 # the DECLARED kind (a date in a datetime field is midnight, a datetime in a
 # date field keeps its time under the widened date shape, a text field YAML
-# reads back as a boolean is "true", a mapping in a text field is its JSON
-# text, the `generated` stamp and a `verified` event are blank nodes over
+# reads back as a boolean is "True" (the string validate compares), a mapping
+# in a text field is its JSON text, the `generated` stamp and a `verified` event are blank nodes over
 # their declared fields, a draft carries `khub:status "draft"`), forward
 # edges as object properties, no derived inverse. `--base` moves every minted
 # IRI but the khub: vocabulary. A dry run writes nothing and reports.

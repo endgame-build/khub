@@ -66,6 +66,20 @@ func TestVocabularyAndBaseNamesAreDisjoint(t *testing.T) {
 	}
 }
 
+// Every vocabulary term the export declares has its row in the normative
+// mapping, so adding a term without documenting it fails here.
+func TestVocabularyIsDocumented(t *testing.T) {
+	doc, err := os.ReadFile(filepath.Join("..", "..", "docs", "rdf-mapping.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, v := range vocabulary {
+		if !strings.Contains(string(doc), "`"+v.term.Prefixed+"`") {
+			t.Errorf("docs/rdf-mapping.md does not document %s", v.term.Prefixed)
+		}
+	}
+}
+
 func TestMintIRIs(t *testing.T) {
 	ns := Mint("", "firm-ops", "ws")
 	if ns.Vocab != "urn:khub:vocab/" || ns.Ontology != "urn:khub:ontology/firm-ops/" ||
@@ -104,6 +118,8 @@ func TestPortableAndAnchored(t *testing.T) {
 		`\S\D`:        "[^\\t\\n\\r\f ][^0-9]",
 		// RE2's dot admits \r, XPath's does not; inside a class a dot is literal.
 		`a.b[.]`: `a[^\n]b[.]`,
+		// A `]` opening a class and a `[` inside one are literal in RE2.
+		`[].]x`: `[\].]x`, `[^]a]`: `[^\]a]`, `[a[]`: `[a\[]`,
 	}
 	for in, want := range portable {
 		got, ok := PortablePattern(in)
