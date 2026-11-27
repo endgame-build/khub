@@ -43,7 +43,7 @@ const VERB_BOOLEAN_FLAGS: Record<string, Set<string>> = {
 }
 const WRITES = new Set(['add', 'edit', 'link', 'unlink', 'remove'])
 const OPERATORS = new Set(['backfill', 'init', 'reindex', 'upgrade', 'wire'])
-const SCHEMA_VIEWS = new Set(['base', 'diff', 'edges', 'show', 'snapshot', 'types'])
+const SCHEMA_VIEWS = new Set(['base', 'conform', 'diff', 'edges', 'scaffold', 'show', 'snapshot', 'types'])
 
 // These flags of `khub edit` name no field.
 const EDIT_OPTIONS = new Set(['dry-run', 'format', 'strict'])

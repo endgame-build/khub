@@ -29,7 +29,7 @@ workspace. Its completers live in `completion.go` and stay workspace-free.
   what darwin does. The Windows parity leg is the check.
 - EPIPE is not a failure (`khub schema | head`); `Guard` passes it through and
   `main.go` disables the SIGPIPE kill so the write error is visible at all.
-- Exit codes: 0 success · 1 a gate failed (`validate`/`check`/`reindex --check`/`doctor`) · 2 a refusal
+- Exit codes: 0 success · 1 a gate failed (`validate`/`check`/`reindex --check`/`doctor`/`schema conform`) · 2 a refusal
   or a usage error — every `Located` failure, envelope unchanged. The split is
   what an agent does next: on 2 the call was wrong and nothing was written,
   correct it; on 1 the workspace is wrong, fix it. New codes only with a

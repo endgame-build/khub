@@ -862,6 +862,9 @@ var helpArguments = map[string][]helpArg{
 	"khub schema show": {
 		{name: "type", metavar: "<str>", required: true, help: "Type name."},
 	},
+	"khub schema conform": {
+		{name: "file", metavar: "<path>", required: true, help: "The envelope JSON file, or - for stdin."},
+	},
 	"khub completion": {
 		{name: "SHELL", metavar: "<str>", required: true, help: "bash, zsh, fish, or powershell."},
 	},

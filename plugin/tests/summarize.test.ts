@@ -253,6 +253,17 @@ test('schema views say how much they hold', () => {
     'adr · 3 fields · 1 relation',
   )
   expect(sayOf('khub schema edges', [{}, {}]).line).toBe('2 predicates')
+  expect(sayOf('khub schema scaffold --type adr --format json', { types: [{}] }).line).toBe('contract · 1 type')
+  expect(sayOf('khub schema conform env.json', { entities: [], summary: { entities: 2, conformant: 2, score: 1.0 } })).toEqual({
+    head: 'khub schema conform',
+    line: '2 of 2 entities conformant · score 1 ✓',
+    tone: 'ok',
+  })
+  expect(sayOf('khub schema conform -', { entities: [], summary: { entities: 3, conformant: 1, score: 0.333 } })).toEqual({
+    head: 'khub schema conform',
+    line: '1 of 3 entities conformant · score 0.333',
+    tone: 'bad',
+  })
   expect(sayOf('khub schema diff', { pending: true, changes: [{}, {}] }).line).toBe('pending · 2 changes')
   expect(sayOf('khub schema diff', { pending: false, changes: [] }).line).toBe('no pending changes')
   expect(sayOf('khub schema snapshot', { path: '.khub/schema.applied.yaml', types: 11 })).toEqual({

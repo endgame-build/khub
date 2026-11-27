@@ -237,6 +237,14 @@ commands:
 - name: 'schema diff'
   params:
   - '--format'
+- name: 'schema scaffold'
+  params:
+  - '--type'
+  - '--format'
+- name: 'schema conform'
+  params:
+  - 'arg:file'
+  - '--format'
 - name: 'completion'
   params:
   - 'arg:shell'
@@ -273,6 +281,7 @@ error_codes:
 - import_type_map_invalid
 - inbound_edge_refusal
 - internal_path_error
+- invalid_envelope
 - invalid_query_name
 - invalid_saved_query
 - invalid_schema
@@ -322,6 +331,7 @@ error_codes:
 format_specials:
 - json
 - ids
+- markdown
 - raw
 - tree
 modes:

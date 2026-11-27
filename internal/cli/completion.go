@@ -100,6 +100,8 @@ var formatValues = map[string][]string{
 	"khub query":  {"text", "json", "ids"},
 	"khub search": {"text", "json", "ids"},
 	"khub impact": {"tree", "json"},
+
+	"khub schema scaffold": {"text", "markdown", "json"},
 }
 
 var defaultFormatValues = []string{"text", "json"}
@@ -136,6 +138,9 @@ var positionalValues = map[string][]func() ([]string, cobra.ShellCompDirective){
 		func() ([]string, cobra.ShellCompDirective) {
 			return completionShells, cobra.ShellCompDirectiveNoFileComp
 		},
+	},
+	"khub schema conform": {
+		func() ([]string, cobra.ShellCompDirective) { return nil, cobra.ShellCompDirectiveDefault },
 	},
 }
 

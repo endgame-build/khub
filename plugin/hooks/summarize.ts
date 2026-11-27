@@ -117,6 +117,17 @@ function schemaResult(call: Simple, json: unknown): Result {
 
   if (call.sub === 'edges') return { line: count(sizeOf(json), 'predicate'), tone: 'plain' }
 
+  if (call.sub === 'scaffold') return { line: `contract · ${count(sizeOf(row.types), 'type')}`, tone: 'plain' }
+
+  if (call.sub === 'conform') {
+    const summary = isRow(row.summary) ? row.summary : {}
+    const entities = Number(summary.entities)
+    const conformant = Number(summary.conformant)
+    const line = `${conformant} of ${count(entities, 'entity', 'entities')} conformant · score ${text(summary.score)}`
+
+    return conformant === entities ? { line: `${line} ✓`, tone: 'ok' } : { line, tone: 'bad' }
+  }
+
   if (call.sub === 'diff') {
     const line = row.pending === true ? `pending · ${count(sizeOf(row.changes), 'change')}` : 'no pending changes'
 

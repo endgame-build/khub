@@ -22,6 +22,7 @@ COMMANDS=(
   init upgrade status doctor add get edit link unlink remove verify query run search retrieve neighbors impact
   history validate check stale recent reindex export import viz serve backfill wire schema
   "schema types" "schema show" "schema edges" "schema base" "schema snapshot" "schema diff"
+  "schema scaffold" "schema conform"
   completion
 )
 

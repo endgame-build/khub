@@ -1,0 +1,1 @@
+{"entities": [{"index": 0, "type": "widget", "id": null, "ok": false, "errors": [{"field": "type", "reason": "No type 'widget' in the firm-ops schema. Known types: case-study, client, fragment, meeting, opportunity, partnership, person, project, transcript"}], "gaps": [], "unresolved": [], "confidence": null}], "summary": {"entities": 1, "conformant": 0, "score": 0.0}}
