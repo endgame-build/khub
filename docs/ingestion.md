@@ -76,6 +76,9 @@ khub add client --name "Globex" --draft --author "facet:kickoff-notes" \
   record when the source is read again
   ([Identity](ingestion-conflicts.md#identity)), and a later reference to it
   resolves through the alias.
+- **List values.** A list field takes one flag with the items comma-separated,
+  as in `--aliases "facet:CLI-007,Globex Inc"`. Repeating the flag keeps only
+  its last value.
 - **Provenance.** Quote the `source` passage at the top of the body, under the
   first heading or as its own paragraph. The OKF `sources` list has no `add`
   spelling today.
