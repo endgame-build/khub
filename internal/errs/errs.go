@@ -450,6 +450,18 @@ func NoReviewList(type_ string) *Located {
 	}
 }
 
+// InvalidActor is `invalid_actor`: a reviewer that follows no actor convention,
+// so the review would never count toward trust.
+func InvalidActor(value string) *Located {
+	return &Located{
+		Code: "invalid_actor",
+		Message: fmt.Sprintf("'%s' names no reviewer trust counts. Use human:<name> or process:<name>, with no space in the name, "+
+			"or <producer>[/<version>]", value),
+		Target: value,
+		Field:  "verified.by",
+	}
+}
+
 // DateViolation is `date_violation`: a value that is not a valid date or
 // datetime (kind) for field.
 func DateViolation(value, kind, field string) *Located {
