@@ -1,5 +1,5 @@
 Usage: khub review [OPTIONS] [PATH]...
 Try 'khub review --help' for help.
 ╭─ Error ──────────────────────────────────────────────────────────────────────╮
-│ --by and --dry-run need --record.                                            │
+│ Pass --record or --changed, not both.                                        │
 ╰──────────────────────────────────────────────────────────────────────────────╯

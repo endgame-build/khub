@@ -1,1 +1,1 @@
-{"error": {"code": "invalid_verdict", "message": "verdicts[0].verdict is 'maybe'; use pass or fail. Nothing was recorded", "field": "verdict", "expected": ["pass", "fail"]}}
+{"error": {"code": "lookup_error", "message": "No entity 'req-nothing' found"}}

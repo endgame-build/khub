@@ -43,7 +43,7 @@ re-run recreates only missing files and keeps the schema and entities.
 
 ### JSON record shape
 
-Every JSON record that identifies an entity carries the qualified `id` = `"type/slug"` plus separate `type` and `slug` keys, uniform across `query`, `search`, `retrieve`, `add`, `get`, `edit`, `link`, `unlink`, `remove`, `verify`, `neighbors`, `impact`, `history`, `stale`, `recent`, and the `validate`/`check` error rows. Writes obey the same output gate as reads: JSON on a pipe or under `--format json`, prose only on a TTY. For example, `khub get initech-pov --format json` emits `{"id": "opportunity/initech-pov", "type": "opportunity", "slug": "initech-pov", …}`. (`check`'s `orphans` are qualified `type/slug`; `strays` are file paths, `path` or `path#slug`.) `query`, `get`, `search`, `retrieve` and `neighbors` records end with `trust`, the entity's review tier (see [Trust](#trust)). A frontmatter float with no digits (`.inf`, `-.inf`, `.nan`, which JSON cannot spell) is carried as a string of that YAML literal, so every `--format json` document stays parseable.
+Every JSON record that identifies an entity carries the qualified `id` = `"type/slug"` plus separate `type` and `slug` keys, uniform across `query`, `search`, `retrieve`, `add`, `get`, `edit`, `link`, `unlink`, `remove`, `verify`, `review`, `neighbors`, `impact`, `history`, `stale`, `recent`, and the `validate`/`check` error rows. Writes obey the same output gate as reads: JSON on a pipe or under `--format json`, prose only on a TTY. For example, `khub get initech-pov --format json` emits `{"id": "opportunity/initech-pov", "type": "opportunity", "slug": "initech-pov", …}`. (`check`'s `orphans` are qualified `type/slug`; `strays` are file paths, `path` or `path#slug`.) `query`, `get`, `search`, `retrieve` and `neighbors` records end with `trust`, the entity's review tier (see [Trust](#trust)). A frontmatter float with no digits (`.inf`, `-.inf`, `.nan`, which JSON cannot spell) is carried as a string of that YAML literal, so every `--format json` document stays parseable.
 
 ## Validation and open schema
 
@@ -406,7 +406,7 @@ A template's lenses are review questions about a body ([Body templates](#body-te
 | `khub review` | `--changed <path>...`, `--format text\|json` | read-only. The targets are, with `--changed`, the entities stored at the paths that follow, resolved exactly as `get --path` resolves them (relative to the working directory), drafts included; without it, every active entity of a templated type with at least one applicable lens. A path that names no entity (`path_not_entity`, `path_is_collection`, `path_outside_workspace`: a deleted file, a file beside the workspace, a collection file), a stray, and an entity with no applicable lens go to `skipped`, in argument order; any other path refusal (`unsafe_path`) refuses the call. Two paths that name one entity name it once. `--changed` with no path reviews nothing. Exit 0 |
 | `khub review --record <file\|->` | `--by <actor>` (required), `--dry-run`, `--format text\|json` | append one lens verdict per reply verdict, all or none. `-` reads stdin |
 
-Each target carries its `rev` (as [Trust](#trust) defines it) and its applicable lenses exactly as `validate <type/slug>` lists them: the template's lenses whose `when` holds, in template order. Each lens carries `q`, the question hash: the first 12 hex digits of a SHA-256 over the lens's `instruction` exactly as the JSON prints it, the template's string with leading and trailing newlines dropped. Each lens has one `state`, read from the last event in `verified` whose `lens` is its code and whose `verdict` is `pass` or `fail` (an event with any other verdict is skipped):
+Each target carries its `rev` (as [Trust](#trust) defines it) and its applicable lenses exactly as `validate <type/slug>` lists them: the template's lenses whose `when` holds, in template order. Each lens carries `q`, the question hash: the first 12 hex digits of a SHA-256 over the lens's `instruction` exactly as the JSON prints it, the template's string with leading and trailing newlines dropped (the template is read with line endings normalized to `\n`, so a CRLF checkout hashes the same). Each lens has one `state`, read from the last event in `verified` whose `lens` is its code and whose `verdict` is `pass` or `fail` (an event with any other verdict is skipped):
 
 | state | when |
 |---|---|
@@ -469,6 +469,8 @@ A typical gate, in CI:
 ```bash
 khub check --require-lenses --changed $(git diff --name-only origin/main...HEAD)
 ```
+
+`git diff --name-only` prints paths from the repository root, and a relative path is read from the working directory, so run the gate from the repository root and name a workspace in a subdirectory with `-C` (`khub -C <dir> check …`). From another directory the paths name no entity and are ignored, and the gate judges nothing.
 
 ## Trust
 

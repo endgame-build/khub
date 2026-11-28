@@ -1,14 +1,17 @@
 # Keys a verified event carries beyond {by, at, rev} — the lens verdict keys
 # and any other — survive every khub write that rewrites the file (edit, link,
-# verify, upgrade, review --record) and land in export --okf as written.
+# verify, review --record, and upgrade, which migrates the legacy `draft` key
+# of req-order-cap) and land in export --okf as written.
 steps:
 - argv: ["init", "build-hub", ".", "--no-wire"]
 - argv: ["add", "system", "--title", "Billing"]
 - sh: "mkdir -p knowledge/requirements && printf -- '---\\ntype: requirement\\ncreated: 2026-01-15\\ntitle: Invoice totals\\nkind: constraint\\nverified:\\n- by: human:ana\\n  at: 2026-01-15T00:00:00Z\\n  rev: 0123456789ab\\n  lens: single\\n  verdict: fail\\n  q: ba9876543210\\n  note: Two rules in one.\\n- by: process:ci\\n  at: 2026-01-15T00:00:00Z\\n  custom: {kept: true}\\n---\\nEvery invoice total equals the sum of its lines.\\n' > knowledge/requirements/req-invoice-totals.md"
+- sh: "printf -- '---\\ntype: requirement\\ncreated: 2026-01-15\\ntitle: Order cap\\nkind: constraint\\ndraft: true\\nverified:\\n- by: human:ana\\n  at: 2026-01-15T00:00:00Z\\n  rev: 0123456789ab\\n  lens: single\\n  verdict: fail\\n  q: ba9876543210\\n  note: Two rules in one.\\n---\\nAn order holds at most 500 lines.\\n' > knowledge/requirements/req-order-cap.md"
 - argv: ["edit", "req-invoice-totals", "kind", "functional"]
 - argv: ["link", "req-invoice-totals", "related", "sys-billing"]
 - argv: ["verify", "req-invoice-totals", "--by", "human:ana"]
 - argv: ["upgrade", "--no-wire"]
+- argv: ["get", "req-order-cap", "--format", "raw"]
 - argv: ["review", "--record", "-", "--by", "human:ana"]
   stdin: '{"verdicts": [{"id": "req-invoice-totals", "lens": "single", "rev": "58702aa18e48", "verdict": "pass"}]}'
 - argv: ["get", "req-invoice-totals", "--format", "raw"]

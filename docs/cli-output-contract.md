@@ -21,13 +21,14 @@ Exceptions, each of which the caller opts into or which is a human command:
 |---|---|
 | Bare ids, one per line | `query --format ids`, `search --format ids` |
 | The entity's file bytes, or its row | `get <id> --format raw` |
+| The review prompt | `review --format text`, given explicitly. Without the flag a pipe gets the JSON read; `review --record --format text` on a pipe is still JSON |
 | A text tree | `impact --format tree` |
 | Prose | the operator commands `reindex`, `viz`, `backfill` and `wire`, which take no `--format`. A refusal from one of them is still the JSON envelope on a pipe. `serve` runs only on a terminal; on a pipe it prints only the `serve_needs_tty` refusal |
 | A shell script | `completion <shell>`, which takes no `--format`. The hidden `__complete` it calls at TAB time prints cobra's line protocol (candidates, then `:<directive>`) |
 | The version number alone | `--version` |
 | Help text | `--help` |
 
-`--format table` (or `text`) on a pipe is still JSON. The gate is the stream,
+`--format table` (or `text`, except on `review`) on a pipe is still JSON. The gate is the stream,
 and an explicit table only applies on a terminal. So is a `--format` value the
 command does not offer (`csv`, or `raw` on `query`): it is not refused, and on
 a pipe the output is JSON.

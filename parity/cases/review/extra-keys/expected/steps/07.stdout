@@ -1,1 +1,16 @@
-{"recorded": [{"id": "requirement/req-invoice-totals", "type": "requirement", "slug": "req-invoice-totals", "path": "knowledge/requirements/req-invoice-totals.md", "lens": "single", "verdict": "pass", "rev": "58702aa18e48", "q": "651318ff2db7", "by": "human:ana", "at": "2026-01-15T00:00:00Z"}]}
+---
+type: requirement
+created: 2026-01-15
+title: Order cap
+kind: constraint
+status: draft
+verified:
+- by: human:ana
+  at: 2026-01-15T00:00:00Z
+  rev: 0123456789ab
+  lens: single
+  verdict: fail
+  q: ba9876543210
+  note: Two rules in one.
+---
+An order holds at most 500 lines.

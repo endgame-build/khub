@@ -1,1 +1,1 @@
-{"error": {"code": "invalid_actor", "message": "'human:Ana Ruiz' names no reviewer trust counts. Use human:<name> or process:<name>, with no space in the name, or <producer>[/<version>]", "field": "verified.by"}}
+{"error": {"code": "invalid_reply", "message": "The reply is not {\"verdicts\": [{\"id\", \"lens\", \"rev\", \"verdict\", \"note\"}]}: it does not parse as JSON; nothing was recorded"}}
