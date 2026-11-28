@@ -109,3 +109,39 @@ func TestEventsFailingTheRulesNeverCount(t *testing.T) {
 		t.Errorf("an event without at: tier %s", got)
 	}
 }
+
+// A lens verdict (an event with a `lens` key) never counts: not toward a
+// tier, not as a superseded review, not as the newest review. The indices
+// Superseded returns stay indices into the whole list.
+func TestLensEventsNeverCount(t *testing.T) {
+	rt := noteType(t)
+	meta := omap.New()
+	meta.Set("title", "N")
+	rev := Rev(rt, meta, "Body.")
+	lens := func(rev string) *omap.Map {
+		e := event("human:ana", "2026-01-01T00:00:00Z", rev)
+		e.Set("lens", "single")
+		e.Set("verdict", "pass")
+		return e
+	}
+	meta.Set("verified", []any{lens(rev), lens("000000000000")})
+	if got := Tier(rt, meta, "Body."); got != Unverified {
+		t.Errorf("lens events alone = %s, want unverified", got)
+	}
+	if got := Superseded(rt, meta, "Body."); len(got) != 0 {
+		t.Errorf("a stale lens event read as superseded: %v", got)
+	}
+	if got := NewestReview(meta); got != -1 {
+		t.Errorf("NewestReview = %d, want -1", got)
+	}
+	meta.Set("verified", []any{lens(rev), event("process:ci", "2026-01-01T00:00:00Z", "000000000000"), lens(rev)})
+	if got := Superseded(rt, meta, "Body."); len(got) != 1 || got[0] != 1 {
+		t.Errorf("Superseded = %v, want [1]", got)
+	}
+	if got := NewestReview(meta); got != 1 {
+		t.Errorf("NewestReview = %d, want 1", got)
+	}
+	if got := Tier(rt, meta, "Body."); got != Unverified {
+		t.Errorf("a superseded review beside lens events = %s, want unverified", got)
+	}
+}

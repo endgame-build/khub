@@ -101,7 +101,7 @@ func (s *snapshot) markers(node index.Node) Markers {
 func (s *snapshot) superseded(node index.Node) bool {
 	rtype, _ := s.resolved.Types.Get(node.Type)
 	meta := s.idx.Meta[node]
-	newest := len(trust.Events(meta)) - 1
+	newest := trust.NewestReview(meta)
 	return newest >= 0 && slices.Contains(trust.Superseded(rtype, meta, s.idx.Body[node]), newest)
 }
 

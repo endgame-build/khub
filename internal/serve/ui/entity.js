@@ -222,8 +222,11 @@ function review(e) {
   var box = el('div', { class: 'review' });
   var line = el('div', { class: 'rline' });
   if (m) line.appendChild(trustTag(m.trust));
-  // One review may be written as a mapping of its own.
-  var events = (Array.isArray(fm.verified) ? fm.verified : [fm.verified]).filter(function (ev) { return ev && typeof ev === 'object'; });
+  // One review may be written as a mapping of its own. A lens verdict
+  // (`khub review --record`, an event with a `lens` key) is not a review.
+  var events = (Array.isArray(fm.verified) ? fm.verified : [fm.verified]).filter(function (ev) {
+    return ev && typeof ev === 'object' && !Object.prototype.hasOwnProperty.call(ev, 'lens');
+  });
   var last = events[events.length - 1];
   line.appendChild(said(last ? (m && m.superseded ? 'last reviewed by' : 'reviewed by') : 'No review yet', last && last.by, last && last.at));
   var made = fm.generated || {};
