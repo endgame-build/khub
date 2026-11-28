@@ -4,6 +4,45 @@ Notable changes to khub. Format follows [Keep a Changelog](https://keepachangelo
 
 ## [Unreleased]
 
+Teams use a khub workspace as the knowledge harness of coding agents, and
+templates already carry review questions (lenses) that khub printed but never
+recorded an answer to. `khub review` asks every open lens of the entities a
+change touches as one prompt, `khub review --record` keeps each answer as a
+verdict that goes stale when the content or the question changes, and
+`khub check --require-lenses --changed <path>...` gates a pull request on the
+lenses of what it changed, so old debt elsewhere never fails it. khub calls no
+model: an agent, a person or a script answers. Without the new flags every
+command behaves as before, and the workspace format is unchanged, so no
+`khub upgrade` is needed.
+
+### Added
+
+- **`khub review [--changed <path>...]`.** The open lenses of the entities at
+  those paths (resolved as `get --path` resolves them), or of every active
+  entity with one, as a prompt with each body verbatim, or as JSON: every
+  applicable lens with its question hash `q` and its state (`pass`, `fail`,
+  `stale`, `unreviewed`), and the paths that named no entity with a lens.
+- **`khub review --record <file|-> --by <actor> [--dry-run]`.** Appends one
+  lens verdict `{by, at, rev, lens, verdict, q, note?}` per reply verdict to
+  the entity's `verified` list, all or none. It refuses the whole batch on an
+  unknown entity, a lens that does not apply (`lens_not_applicable`), a bad
+  verdict (`invalid_verdict`), a fail with no note (`note_required`), a reply
+  that is not the shape (`invalid_reply`), an invalid actor, or a rev that is
+  not current (`stale_reply`). Like `verify`, it bumps no `updated` and stamps
+  no `generated`; it prints the write warnings in a session.
+- **`khub check --require-lenses [--changed <path>...]`.** A `lenses` bucket,
+  `{id, type, slug, lens, state}` per applicable lens of an active entity not
+  in state `pass`, that fails the gate; absent without the flag.
+
+### Changed
+
+- **A `verified` event with a `lens` key never counts toward trust.** No tier,
+  `query --trust`, `status` count, `check --require-verified` or
+  `superseded_verifications` row counts a lens verdict, and the served page
+  does not show one as a review. Events without `lens` count as before. An
+  older khub reads a lens verdict, a `fail` included, as a live review: upgrade
+  every binary that reads the workspace before you record one.
+
 ## [0.35.0] — 2026-11-24
 
 A reviewer signs off several entities at once. On the served page, Space marks
