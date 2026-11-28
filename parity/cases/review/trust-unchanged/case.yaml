@@ -1,0 +1,19 @@
+# Lens verdicts never count toward trust: an entity with only lens events
+# reads unverified in get, query and status, check --require-verified lists it
+# below the tier, and a stale lens event is no superseded verification. A
+# verify after them still counts, and once the body moves only that review is
+# superseded, at its index in the whole list.
+steps:
+- argv: ["init", "build-hub", ".", "--no-wire"]
+- argv: ["add", "requirement", "--title", "Invoice totals", "--kind", "constraint"]
+- argv: ["review", "--record", "-", "--by", "human:ana"]
+  stdin: '{"verdicts": [{"id": "req-invoice-totals", "lens": "single", "rev": "cf829f80c682", "verdict": "pass"}, {"id": "req-invoice-totals", "lens": "testable", "rev": "cf829f80c682", "verdict": "pass"}]}'
+- argv: ["get", "req-invoice-totals", "--format", "json"]
+- argv: ["query", "--trust", "unverified", "--type", "requirement"]
+- argv: ["status"]
+- argv: ["check", "--require-verified", "--format", "json"]
+- argv: ["verify", "req-invoice-totals", "--by", "human:ana"]
+- argv: ["query", "--type", "requirement"]
+- argv: ["edit", "req-invoice-totals", "--body", "An order holds at most 500 lines.\n"]
+- argv: ["query", "--type", "requirement"]
+- argv: ["check", "--format", "json"]

@@ -1,0 +1,37 @@
+---
+type: requirement
+created: 2026-01-15
+updated: 2026-01-15
+title: Invoice totals
+generated:
+  by: khub
+  at: 2026-01-15T00:00:00Z
+kind: non-functional
+verified:
+- by: human:ana
+  at: 2026-01-15T00:00:00Z
+  rev: 15dfd18b9df0
+  lens: single
+  verdict: pass
+  q: 651318ff2db7
+- by: human:ana
+  at: 2026-01-15T00:00:00Z
+  rev: 15dfd18b9df0
+  lens: testable
+  verdict: pass
+  q: 00464b128ef4
+  note: An outside reader can tell.
+- by: human:ana
+  at: 2026-01-15T00:00:00Z
+  rev: 15dfd18b9df0
+  lens: measurable
+  verdict: pass
+  q: 7795032b7267
+- by: human:ana
+  at: 2026-01-15T00:00:00Z
+  rev: 15dfd18b9df0
+  lens: realized
+  verdict: pass
+  q: 7d7a54c8b5a0
+---
+<!-- one statement, in the present tense, of what must hold. EARS reads well here: "When <trigger>, the system shall <response>." Say what is measured and what enforces it — a `non-functional` requirement without a number is a wish. Link `realized_in` to the component that satisfies it. -->

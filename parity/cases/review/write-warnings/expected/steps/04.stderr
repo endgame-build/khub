@@ -1,0 +1,2 @@
+warning: requirement/req-order-cap › incomplete: missing kind
+warning: requirement/req-order-cap › dangling: related -> 'nothing' does not resolve

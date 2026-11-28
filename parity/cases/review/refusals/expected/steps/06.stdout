@@ -1,0 +1,1 @@
+{"error": {"code": "lens_not_applicable", "message": "verdicts[1] answers lens 'measurable', which does not apply to requirement/req-order-cap (applicable: single, testable, violation, realized); run khub review for the current lenses. Nothing was recorded", "field": "lens", "expected": ["single", "testable", "violation", "realized"]}}

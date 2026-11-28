@@ -3,8 +3,11 @@ package entity
 import (
 	"errors"
 	"path/filepath"
+	"strings"
 	"testing"
 
+	"github.com/endgame-build/khub/internal/index"
+	"github.com/endgame-build/khub/internal/schema"
 	"github.com/endgame-build/khub/internal/values"
 )
 
@@ -113,5 +116,67 @@ func TestVerifyRestoresTheFileWhenPublishFails(t *testing.T) {
 	}
 	if readFile(t, res.Path) != before {
 		t.Fatalf("a failed publish left the event written:\n%s", readFile(t, res.Path))
+	}
+}
+
+// Keys an event carries beyond {by, at, rev} — the lens verdict keys among
+// them — survive every write that rewrites the file: edit, link, verify and
+// AppendLensEvents keep each existing event byte for byte.
+func TestVerifiedEventExtraKeysSurviveWrites(t *testing.T) {
+	ws := newWSFrom(t, "nav", writePreset(t, "nav", navigationPreset, nil))
+	_, err := Create(ws, "note", CreateOpts{ID: "b", Fields: fields("title", "B"), UseTemplate: true})
+	requireNoError(t, err)
+	path := filepath.Join(ws, "notes", "a.md")
+	mkdirAll(t, filepath.Dir(path))
+	events := "verified:\n" +
+		"- by: human:ana\n  at: 2026-01-01T00:00:00Z\n  rev: 0123456789ab\n" +
+		"  lens: single\n  verdict: fail\n  q: ba9876543210\n  note: Two rules in one.\n" +
+		"- by: process:ci\n  at: 2026-01-02T00:00:00Z\n  custom: {kept: true}\n"
+	writeFile(t, path, "---\ntype: note\ntitle: A\ncreated: 2026-01-01\nupdated: 2026-01-01\n"+events+"---\nBody.\n")
+	contains := func(step string) {
+		t.Helper()
+		if text := readFile(t, path); !strings.Contains(text, events) {
+			t.Fatalf("after %s the events moved:\n%s", step, text)
+		}
+	}
+	_, err = Update(ws, "note/a", UpdateOpts{Fields: fields("title", "A2")})
+	requireNoError(t, err)
+	contains("edit")
+	body := "Changed."
+	_, err = Update(ws, "note/a", UpdateOpts{Body: &body})
+	requireNoError(t, err)
+	contains("edit --body")
+	_, err = Link(ws, "note/a", "related", "note/b", "", false)
+	requireNoError(t, err)
+	contains("link")
+	_, err = Verify(ws, "note/a", "human:ilya", "", nil)
+	requireNoError(t, err)
+	contains("verify")
+	_, err = AppendLensEvents(ws, false, func(_ *schema.ResolvedSchema, idx *index.Index) ([]LensEvent, error) {
+		return []LensEvent{{Node: index.Node{Type: "note", Slug: "a"}, Event: kv("by", "human:ana", "lens", "x")}}, nil
+	})
+	requireNoError(t, err)
+	contains("a lens append")
+}
+
+// A refused plan writes nothing, and a dry run writes nothing either.
+func TestAppendLensEventsIsAllOrNothing(t *testing.T) {
+	ws := newWSFrom(t, "nav", writePreset(t, "nav", navigationPreset, nil))
+	res, err := Create(ws, "note", CreateOpts{ID: "a", Fields: fields("title", "A"), UseTemplate: true})
+	requireNoError(t, err)
+	before := readFile(t, res.Path)
+	node := index.Node{Type: "note", Slug: "a"}
+	_, err = AppendLensEvents(ws, false, func(*schema.ResolvedSchema, *index.Index) ([]LensEvent, error) {
+		return nil, errors.New("refused")
+	})
+	if err == nil || err.Error() != "refused" {
+		t.Fatalf("err = %v", err)
+	}
+	got, err := AppendLensEvents(ws, true, func(*schema.ResolvedSchema, *index.Index) ([]LensEvent, error) {
+		return []LensEvent{{Node: node, Event: kv("by", "human:ana", "lens", "x")}}, nil
+	})
+	requireNoError(t, err)
+	if len(got) != 1 || readFile(t, res.Path) != before {
+		t.Fatalf("dry run: %v\n%s", got, readFile(t, res.Path))
 	}
 }

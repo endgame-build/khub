@@ -1,0 +1,5 @@
+orphan requirement/req-invoice-totals
+lens requirement/req-invoice-totals single: unreviewed, pass asked for
+lens requirement/req-invoice-totals testable: unreviewed, pass asked for
+lens requirement/req-invoice-totals violation: unreviewed, pass asked for
+lens requirement/req-invoice-totals realized: unreviewed, pass asked for

@@ -1,0 +1,6 @@
+Usage: khub review [OPTIONS] [PATH]...
+Try 'khub review --help' for help.
+╭─ Error ──────────────────────────────────────────────────────────────────────╮
+│ Got unexpected extra argument(s)                                             │
+│ (knowledge/requirements/req-invoice-totals.md); pass paths after --changed.  │
+╰──────────────────────────────────────────────────────────────────────────────╯

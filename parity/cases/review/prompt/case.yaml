@@ -1,0 +1,13 @@
+# khub review as a prompt: an explicit --format text prints it on a pipe too.
+# Without --changed it covers every active entity with an applicable lens (the
+# draft requirement is left out); with --changed only the entities stored at
+# the paths, and a path that names no entity is skipped. --changed with no
+# path reviews nothing.
+steps:
+- argv: ["init", "build-hub", ".", "--no-wire"]
+- argv: ["add", "requirement", "--title", "Invoice totals", "--kind", "non-functional"]
+- argv: ["add", "requirement", "--title", "Order cap", "--kind", "constraint"]
+- argv: ["add", "requirement", "--title", "Billing export", "--kind", "functional", "--draft"]
+- argv: ["review", "--format", "text"]
+- argv: ["review", "--changed", "knowledge/requirements/req-invoice-totals.md", "knowledge/requirements/req-billing-export.md", "README.md", "knowledge/gone.md", "--format", "text"]
+- argv: ["review", "--changed", "--format", "text"]

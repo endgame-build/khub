@@ -1,0 +1,21 @@
+# A pass verdict per lens makes each lens pass; the dry run checks the reply
+# and writes nothing (the tree manifest), the real run appends one verified
+# event per verdict, bumps no `updated` and stamps no `generated`. A pass may
+# carry a note. Once every lens passes, check --require-lenses --changed passes
+# for that entity.
+steps:
+- argv: ["init", "build-hub", ".", "--no-wire"]
+- argv: ["add", "requirement", "--title", "Invoice totals", "--kind", "non-functional"]
+- argv: ["review", "--record", "-", "--by", "human:ana", "--dry-run"]
+  stdin: '{"verdicts": [{"id": "req-invoice-totals", "lens": "single", "rev": "15dfd18b9df0", "verdict": "pass"}]}'
+- argv: ["review", "--record", "-", "--by", "human:ana"]
+  stdin: |
+    {"verdicts": [
+      {"id": "req-invoice-totals", "lens": "single", "rev": "15dfd18b9df0", "verdict": "pass"},
+      {"id": "requirement/req-invoice-totals", "lens": "testable", "rev": "15dfd18b9df0", "verdict": "pass", "note": "An outside reader can tell."},
+      {"id": "req-invoice-totals", "lens": "measurable", "rev": "15dfd18b9df0", "verdict": "pass"},
+      {"id": "req-invoice-totals", "lens": "realized", "rev": "15dfd18b9df0", "verdict": "pass"}]}
+- argv: ["get", "req-invoice-totals", "--format", "raw"]
+- argv: ["review", "--changed", "knowledge/requirements/req-invoice-totals.md"]
+- argv: ["review", "--changed", "knowledge/requirements/req-invoice-totals.md", "--format", "text"]
+- argv: ["check", "--require-lenses", "--changed", "knowledge/requirements/req-invoice-totals.md"]

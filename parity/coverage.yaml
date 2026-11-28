@@ -63,6 +63,13 @@ commands:
   - '--at'
   - '--commit'
   - '--format'
+- name: 'review'
+  params:
+  - '--changed'
+  - '--record'
+  - '--by'
+  - '--dry-run'
+  - '--format'
 - name: 'link'
   params:
   - '--by'
@@ -166,6 +173,8 @@ commands:
   - '--require-verified'
   - '--tier'
   - '--mentions'
+  - '--require-lenses'
+  - '--changed'
   - '--format'
 - name: 'stale'
   params:
@@ -274,10 +283,13 @@ error_codes:
 - inbound_edge_refusal
 - internal_path_error
 - invalid_query_name
+- invalid_reply
 - invalid_saved_query
 - invalid_schema
 - invalid_slug
 - invalid_snapshot
+- invalid_verdict
+- lens_not_applicable
 - locked_removed
 - locks_unreadable
 - lookup_error
@@ -292,6 +304,7 @@ error_codes:
 - no_seed
 - no_slug_source
 - no_workspace
+- note_required
 - number_violation
 - os_error
 - path_is_collection
@@ -308,6 +321,7 @@ error_codes:
 - singleton_exists
 - singleton_id
 - slug_taken
+- stale_reply
 - strict_unknown_field
 - target_not_empty
 - template_invalid

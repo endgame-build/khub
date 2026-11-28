@@ -30,6 +30,8 @@
 │             old-fragment [--force].                                          │
 │ verify      Record a review: khub verify ad-2026-01-15-use-jwt --by          │
 │             human:ilya.                                                      │
+│ review      Prompt for the open review lenses, or record the answers: khub   │
+│             review --changed <path>...                                       │
 │ query       Filter entities: khub query --type opportunity --stage prospect  │
 │             --format json.                                                   │
 │ run         Run a saved query: khub run open-prospects --format json.        │

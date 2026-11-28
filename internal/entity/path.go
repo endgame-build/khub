@@ -37,6 +37,14 @@ func GetManyByPath(root, base string, paths []string, edges bool) ([]*EntityView
 	})
 }
 
+// PathResolver is the mapping `get --path` uses, over a scan the caller made:
+// each path resolves to the node stored there, or refuses as `get --path`
+// refuses it (path_not_entity, path_is_collection, path_outside_workspace,
+// unsafe_path). base is the directory a relative path is read from.
+func PathResolver(root, base string, idx *index.Index) func(string) (index.Node, error) {
+	return newPathResolver(root, base, idx).resolve
+}
+
 // pathResolver maps paths to nodes for one scan.
 type pathResolver struct {
 	root, base string

@@ -131,9 +131,7 @@ func Validate(root string, target *string, strict bool) (*ValidateReport, error)
 			}
 			// Only a template that loaded clean can say which lenses apply; a
 			// broken one is already an error above.
-			if tpl := body.templates[reviewed.Type]; tpl != nil {
-				lenses = tpl.ApplicableLenses(lensFront(rtype, valid.Meta[*reviewed]))
-			}
+			lenses = applicableLenses(rtype, body.templates[reviewed.Type], valid.Meta[*reviewed])
 		}
 	}
 

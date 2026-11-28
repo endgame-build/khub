@@ -1,0 +1,13 @@
+# An edit of a lens's instruction in the template moves its question hash, so
+# the verdict recorded against the old question is stale; the other lenses
+# keep their state.
+steps:
+- argv: ["init", "build-hub", ".", "--no-wire"]
+- argv: ["add", "requirement", "--title", "Invoice totals", "--kind", "non-functional"]
+- argv: ["review", "--record", "-", "--by", "human:ana"]
+  stdin: |
+    {"verdicts": [{"id": "req-invoice-totals", "lens": "single", "rev": "15dfd18b9df0", "verdict": "pass"},
+                  {"id": "req-invoice-totals", "lens": "testable", "rev": "15dfd18b9df0", "verdict": "pass"}]}
+- argv: ["review", "--changed", "knowledge/requirements/req-invoice-totals.md"]
+- sh: "perl -pi -e 's/Does the body state exactly one thing\\?/Does the body state one thing only?/' .khub/templates/requirement.yaml && grep -c 'one thing only' .khub/templates/requirement.yaml"
+- argv: ["review", "--changed", "knowledge/requirements/req-invoice-totals.md"]

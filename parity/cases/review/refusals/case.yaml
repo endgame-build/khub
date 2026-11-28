@@ -1,0 +1,31 @@
+# Every refusal of review --record refuses the whole batch, exit 2, and writes
+# nothing (the tree manifest): a fail with no note, a rev that is not current,
+# a lens that does not apply, an unknown entity, a bad verdict, a reply that
+# is not the shape, an invalid actor. The first verdict of each batch is
+# valid, so a partial write would show. Usage errors: --record without --by,
+# --record with --changed, --by without --record, paths without --changed.
+steps:
+- argv: ["init", "build-hub", ".", "--no-wire"]
+- argv: ["add", "requirement", "--title", "Invoice totals", "--kind", "non-functional"]
+- argv: ["add", "requirement", "--title", "Order cap", "--kind", "constraint"]
+- argv: ["review", "--record", "-", "--by", "human:ana"]
+  stdin: '{"verdicts": [{"id": "req-invoice-totals", "lens": "single", "rev": "15dfd18b9df0", "verdict": "pass"}, {"id": "req-invoice-totals", "lens": "measurable", "rev": "15dfd18b9df0", "verdict": "fail"}]}'
+- argv: ["review", "--record", "-", "--by", "human:ana"]
+  stdin: '{"verdicts": [{"id": "req-invoice-totals", "lens": "single", "rev": "15dfd18b9df0", "verdict": "pass"}, {"id": "req-invoice-totals", "lens": "testable", "rev": "000000000000", "verdict": "pass"}]}'
+- argv: ["review", "--record", "-", "--by", "human:ana"]
+  stdin: '{"verdicts": [{"id": "req-invoice-totals", "lens": "single", "rev": "15dfd18b9df0", "verdict": "pass"}, {"id": "req-order-cap", "lens": "measurable", "rev": "17d298123554", "verdict": "pass"}]}'
+- argv: ["review", "--record", "-", "--by", "human:ana"]
+  stdin: '{"verdicts": [{"id": "req-invoice-totals", "lens": "single", "rev": "15dfd18b9df0", "verdict": "pass"}, {"id": "req-nothing", "lens": "single", "rev": "15dfd18b9df0", "verdict": "pass"}]}'
+- argv: ["review", "--record", "-", "--by", "human:ana"]
+  stdin: '{"verdicts": [{"id": "req-invoice-totals", "lens": "single", "rev": "15dfd18b9df0", "verdict": "maybe"}]}'
+- argv: ["review", "--record", "-", "--by", "human:ana"]
+  stdin: '{"verdict": []}'
+- argv: ["review", "--record", "-", "--by", "human:ana", "--format", "json"]
+  stdin: 'not json'
+- argv: ["review", "--record", "-", "--by", "human:Ana Ruiz"]
+  stdin: '{"verdicts": []}'
+- argv: ["review", "--record", "-"]
+- argv: ["review", "--record", "-", "--by", "human:ana", "--changed"]
+- argv: ["review", "--by", "human:ana"]
+- argv: ["review", "knowledge/requirements/req-invoice-totals.md"]
+- argv: ["review", "--changed", "knowledge/requirements/req-invoice-totals.md"]

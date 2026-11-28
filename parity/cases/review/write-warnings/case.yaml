@@ -1,0 +1,13 @@
+# review --record warns as the other write verbs do: in a session, a real
+# record prints each gating check finding the session has not been shown, on
+# stderr, before its result. A dry run prints none.
+env:
+  KHUB_SESSION: review-session
+steps:
+- argv: ["init", "build-hub", ".", "--no-wire"]
+- argv: ["add", "requirement", "--title", "Invoice totals", "--kind", "constraint"]
+- sh: "printf -- '---\\ntype: requirement\\ncreated: 2026-01-15\\ntitle: Order cap\\nrelated: [nothing]\\n---\\nAn order holds at most 500 lines.\\n' > knowledge/requirements/req-order-cap.md"
+- argv: ["review", "--record", "-", "--by", "human:ana", "--dry-run"]
+  stdin: '{"verdicts": [{"id": "req-invoice-totals", "lens": "single", "rev": "cf829f80c682", "verdict": "pass"}]}'
+- argv: ["review", "--record", "-", "--by", "human:ana"]
+  stdin: '{"verdicts": [{"id": "req-invoice-totals", "lens": "single", "rev": "cf829f80c682", "verdict": "pass"}]}'

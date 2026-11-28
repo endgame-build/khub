@@ -1,0 +1,11 @@
+# A body edit moves the content revision, so every verdict recorded against
+# the old one is stale, and check --require-lenses fails on it again.
+steps:
+- argv: ["init", "build-hub", ".", "--no-wire"]
+- argv: ["add", "requirement", "--title", "Invoice totals", "--kind", "constraint"]
+- argv: ["review", "--record", "-", "--by", "process:ci"]
+  stdin: '{"verdicts": [{"id": "req-invoice-totals", "lens": "single", "rev": "cf829f80c682", "verdict": "pass"}]}'
+- argv: ["review", "--changed", "knowledge/requirements/req-invoice-totals.md"]
+- argv: ["edit", "req-invoice-totals", "--body", "Every invoice total equals the sum of its lines.\n"]
+- argv: ["review", "--changed", "knowledge/requirements/req-invoice-totals.md"]
+- argv: ["check", "--require-lenses", "--changed", "knowledge/requirements/req-invoice-totals.md"]
