@@ -1,19 +1,18 @@
-# Lens verdicts never count toward trust: an entity with only lens events
-# reads unverified in get, query and status, check --require-verified lists it
-# below the tier, and a stale lens event is no superseded verification. A
-# verify after them still counts, and once the body moves only that review is
-# superseded, at its index in the whole list.
+# Lens verdicts never count toward trust. With lens events beside a human
+# verify the tier is human; after a body edit the lens events are stale and
+# the verify is superseded, the tier is unverified, check --require-verified
+# lists it, and superseded_verifications names only the verify, at its index
+# in the whole list. The lens keys survive the edit and an upgrade that
+# rewrites the file (it migrates a legacy `draft` key).
 steps:
 - argv: ["init", "build-hub", ".", "--no-wire"]
 - argv: ["add", "requirement", "--title", "Invoice totals", "--kind", "constraint"]
 - argv: ["review", "--record", "-", "--by", "human:ana"]
-  stdin: '{"verdicts": [{"id": "req-invoice-totals", "lens": "single", "rev": "cf829f80c682", "verdict": "pass"}, {"id": "req-invoice-totals", "lens": "testable", "rev": "cf829f80c682", "verdict": "pass"}]}'
-- argv: ["get", "req-invoice-totals", "--format", "json"]
-- argv: ["query", "--trust", "unverified", "--type", "requirement"]
-- argv: ["status"]
-- argv: ["check", "--require-verified", "--format", "json"]
+  stdin: '{"verdicts": [{"id": "req-invoice-totals", "lens": "single", "rev": "cf829f80c682", "verdict": "pass"}, {"id": "req-invoice-totals", "lens": "violation", "rev": "cf829f80c682", "verdict": "fail", "note": "Name what breaks."}]}'
 - argv: ["verify", "req-invoice-totals", "--by", "human:ana"]
 - argv: ["query", "--type", "requirement"]
 - argv: ["edit", "req-invoice-totals", "--body", "An order holds at most 500 lines.\n"]
-- argv: ["query", "--type", "requirement"]
-- argv: ["check", "--format", "json"]
+- argv: ["check", "--require-verified", "--format", "json"]
+- sh: "perl -pi -e 's/^kind: constraint$/kind: constraint\\ndraft: false/' knowledge/requirements/req-invoice-totals.md && grep -q '^draft: false$' knowledge/requirements/req-invoice-totals.md"
+- argv: ["upgrade", "--no-wire"]
+- argv: ["get", "req-invoice-totals", "--format", "raw"]

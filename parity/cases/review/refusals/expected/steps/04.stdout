@@ -1,1 +1,1 @@
-{"error": {"code": "note_required", "message": "verdicts[1] fails lens 'measurable' on req-invoice-totals with no note; a fail must say what to change. Nothing was recorded", "field": "note"}}
+{"error": {"code": "stale_reply", "message": "verdicts[1] saw requirement/req-invoice-totals at rev 000000000000, and its content is now rev 15dfd18b9df0; run khub review again and answer the current body. Nothing was recorded", "field": "rev"}}

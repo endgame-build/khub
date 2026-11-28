@@ -1,0 +1,14 @@
+# A fail with a note records state fail. check without the flag is the gate it
+# was: no lenses bucket. check --require-lenses adds the bucket over every
+# active entity and fails; --changed limits it to the entities at those paths
+# and ignores a path that names none. --changed without --require-lenses is a
+# usage error.
+steps:
+- argv: ["init", "build-hub", ".", "--no-wire"]
+- argv: ["add", "requirement", "--title", "Invoice totals", "--kind", "non-functional"]
+- argv: ["review", "--record", "-", "--by", "human:ana"]
+  stdin: '{"verdicts": [{"id": "req-invoice-totals", "lens": "measurable", "rev": "15dfd18b9df0", "verdict": "fail", "note": "No number: say the bound and where it is measured."}]}'
+- argv: ["check"]
+- argv: ["check", "--require-lenses"]
+- argv: ["check", "--require-lenses", "--changed", "knowledge/requirements/req-invoice-totals.md", "README.md"]
+- argv: ["check", "--changed", "knowledge/requirements/req-invoice-totals.md"]

@@ -1,1 +1,1 @@
-{"id": "requirement/req-order-cap", "type": "requirement", "slug": "req-order-cap", "path": "knowledge/requirements/req-order-cap.md", "draft": false}
+{"error": {"code": "note_required", "message": "verdicts[1] fails lens 'measurable' on req-invoice-totals with no note; a fail must say what to change. Nothing was recorded", "field": "note"}}
