@@ -119,6 +119,7 @@ var pathOptions = map[string]cobra.ShellCompDirective{
 	"body-file":     cobra.ShellCompDirectiveDefault,
 	"out":           cobra.ShellCompDirectiveDefault,
 	"type-map":      cobra.ShellCompDirectiveDefault,
+	"record":        cobra.ShellCompDirectiveDefault,
 	"preset-source": cobra.ShellCompDirectiveFilterDirs,
 	"okf":           cobra.ShellCompDirectiveFilterDirs,
 }
@@ -211,8 +212,15 @@ func completeArgs(cmd *cobra.Command, args []string, toComplete string) ([]strin
 	if len(args) < len(fns) {
 		return fns[len(args)]()
 	}
+	if pathArgs[cmd.CommandPath()] {
+		return nil, cobra.ShellCompDirectiveDefault
+	}
 	return nil, cobra.ShellCompDirectiveNoFileComp
 }
+
+// pathArgs are the commands whose positionals are file paths, any number of
+// them (the paths after --changed).
+var pathArgs = map[string]bool{"khub review": true, "khub check": true}
 
 // prepareCompletionRequest adapts a `__complete` call before cobra sees it.
 // The shell hands over the words as typed, so an attached -C<dir> arrives as

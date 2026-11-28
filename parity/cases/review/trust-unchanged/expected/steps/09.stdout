@@ -1,0 +1,28 @@
+---
+type: requirement
+created: 2026-01-15
+updated: 2026-01-15
+title: Invoice totals
+generated:
+  by: khub
+  at: 2026-01-15T00:00:00Z
+kind: constraint
+verified:
+- by: human:ana
+  at: 2026-01-15T00:00:00Z
+  rev: cf829f80c682
+  lens: single
+  verdict: pass
+  q: 651318ff2db7
+- by: human:ana
+  at: 2026-01-15T00:00:00Z
+  rev: cf829f80c682
+  lens: violation
+  verdict: fail
+  q: 6ede492164ea
+  note: Name what breaks.
+- by: human:ana
+  at: 2026-01-15T00:00:00Z
+  rev: cf829f80c682
+---
+An order holds at most 500 lines.

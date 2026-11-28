@@ -311,7 +311,7 @@ A required heading added to a shipped template turns every existing body of that
 
 ### Lenses
 
-A template may carry `lenses:` — review questions for whoever is reading the document. khub resolves which apply, orders them and prints them beneath the per-section word counts of `khub validate <type>/<slug>` (as `lenses` and `body` under `--format json`, computed only for a single named entity); it never answers one and never turns one into a finding. The judgement is the reader's, and the point of a lens is that the reader can disagree with it.
+A template may carry `lenses:` — review questions for whoever is reading the document. khub resolves which apply, orders them and prints them beneath the per-section word counts of `khub validate <type>/<slug>` (as `lenses` and `body` under `--format json`, computed only for a single named entity); it never answers one. [`khub review`](cli.md#review) asks the open ones as one prompt and records the answers, and only `check --require-lenses` turns an open lens into a finding. The judgement is the reader's, and the point of a lens is that the reader can disagree with it.
 
 ```yaml
 lenses:

@@ -63,6 +63,20 @@ func stamp(rtype *schema.ResolvedType, meta *omap.Map, actor string) {
 	meta.Set("generated", g)
 }
 
+// appendVerified appends one event to m's `verified` list. A bare mapping
+// becomes a list, and every key already on an event stays as written.
+func appendVerified(m *omap.Map, event *omap.Map) {
+	existing, _ := m.Get("verified")
+	switch v := existing.(type) {
+	case nil:
+		m.Set("verified", []any{event})
+	case []any:
+		m.Set("verified", append(v, event))
+	default:
+		m.Set("verified", []any{v, event})
+	}
+}
+
 // VerifyResult is the event a verify recorded and where it landed.
 type VerifyResult struct {
 	Type, Slug, Path, Locator string
@@ -116,17 +130,7 @@ func verify(root, id, by, at string, publish func(path string) error) (*VerifyRe
 	event.Set("by", by)
 	event.Set("at", canon.DateTime{ISO: at})
 	event.Set("rev", rev)
-	record := func(m *omap.Map) {
-		existing, _ := m.Get("verified")
-		switch v := existing.(type) {
-		case nil:
-			m.Set("verified", []any{event})
-		case []any:
-			m.Set("verified", append(v, event))
-		default:
-			m.Set("verified", []any{v, event})
-		}
-	}
+	record := func(m *omap.Map) { appendVerified(m, event) }
 
 	path := entityPath(root, idx, node)
 	res := &VerifyResult{

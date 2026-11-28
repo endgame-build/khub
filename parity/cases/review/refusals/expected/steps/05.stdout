@@ -1,0 +1,1 @@
+{"error": {"code": "lens_not_applicable", "message": "verdicts[1] answers lens 'violation', which does not apply to requirement/req-invoice-totals (applicable: single, testable, measurable, realized); run khub review for the current lenses. Nothing was recorded", "field": "lens", "expected": ["single", "testable", "measurable", "realized"]}}

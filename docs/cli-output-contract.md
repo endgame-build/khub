@@ -21,13 +21,14 @@ Exceptions, each of which the caller opts into or which is a human command:
 |---|---|
 | Bare ids, one per line | `query --format ids`, `search --format ids` |
 | The entity's file bytes, or its row | `get <id> --format raw` |
+| The review prompt | `review --format text`, given explicitly. Without the flag a pipe gets the JSON read; `review --record --format text` on a pipe is still JSON |
 | A text tree | `impact --format tree` |
 | Prose | the operator commands `reindex`, `viz`, `backfill` and `wire`, which take no `--format`. A refusal from one of them is still the JSON envelope on a pipe. `serve` runs only on a terminal; on a pipe it prints only the `serve_needs_tty` refusal |
 | A shell script | `completion <shell>`, which takes no `--format`. The hidden `__complete` it calls at TAB time prints cobra's line protocol (candidates, then `:<directive>`) |
 | The version number alone | `--version` |
 | Help text | `--help` |
 
-`--format table` (or `text`) on a pipe is still JSON. The gate is the stream,
+`--format table` (or `text`, except on `review`) on a pipe is still JSON. The gate is the stream,
 and an explicit table only applies on a terminal. So is a `--format` value the
 command does not offer (`csv`, or `raw` on `query`): it is not refused, and on
 a pipe the output is JSON.
@@ -156,6 +157,10 @@ Which codes carry which keys:
 | `filter_error`, for an undeclared field or a `--count` name | the undeclared name | the declared fields, or the relations and inverses `--count` takes, sorted | nearest name |
 | `filter_error`, for an unknown trust tier | | the tiers the option takes, lowest first | nearest tier |
 | `invalid_actor` | `verified.by` | | |
+| `invalid_verdict` | `verdict` | `pass`, `fail` | |
+| `note_required` | `note` | | |
+| `lens_not_applicable` | `lens` | the lenses that apply to the entity, in template order | |
+| `stale_reply` | `rev` | | |
 | `illegal_predicate` | the undeclared predicate | the type's relations, in declaration order | nearest relation |
 | `unknown_predicate` | the undeclared predicate | every declared predicate, sorted; for `query --via`, the declared inverses too | nearest predicate |
 | `cardinality_violation`, `empty_relation_value` | the relation | | |

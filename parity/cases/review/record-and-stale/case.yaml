@@ -1,0 +1,16 @@
+# A dry run checks the reply and writes nothing; a record appends one verified
+# event per verdict (no `updated` bump, no `generated` stamp) and the lenses
+# pass. An edit of a lens instruction in the template moves its q, so that
+# verdict alone goes stale; a body edit moves the rev, so every verdict does.
+steps:
+- argv: ["init", "build-hub", ".", "--no-wire"]
+- argv: ["add", "requirement", "--title", "Invoice totals", "--kind", "non-functional"]
+- argv: ["review", "--record", "-", "--by", "human:ana", "--dry-run"]
+  stdin: '{"verdicts": [{"id": "req-invoice-totals", "lens": "single", "rev": "15dfd18b9df0", "verdict": "pass"}]}'
+- argv: ["review", "--record", "-", "--by", "human:ana"]
+  stdin: '{"verdicts": [{"id": "req-invoice-totals", "lens": "single", "rev": "15dfd18b9df0", "verdict": "pass"}, {"id": "requirement/req-invoice-totals", "lens": "testable", "rev": "15dfd18b9df0", "verdict": "pass", "note": "An outside reader can tell."}]}'
+- argv: ["review", "--changed", "knowledge/requirements/req-invoice-totals.md"]
+- sh: "perl -pi -e 's/Does the body state exactly one thing\\?/Does the body state one thing only?/' .khub/templates/requirement.yaml && grep -q 'one thing only' .khub/templates/requirement.yaml"
+- argv: ["review", "--changed", "knowledge/requirements/req-invoice-totals.md"]
+- argv: ["edit", "req-invoice-totals", "--body", "Every invoice total equals the sum of its lines.\n"]
+- argv: ["review", "--changed", "knowledge/requirements/req-invoice-totals.md"]

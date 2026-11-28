@@ -1043,3 +1043,69 @@ func typoDistance(a, b string) int {
 	}
 	return d[len(ar)][len(br)]
 }
+
+// --- lens review (`khub review --record`) ---------------------------------------
+
+// InvalidReply is `invalid_reply`: a `review --record` reply that is not the
+// documented shape, {"verdicts": [{id, lens, rev, verdict, note?}]}. reason
+// says what is wrong and where.
+func InvalidReply(reason string) *Located {
+	return &Located{
+		Code: "invalid_reply",
+		Message: "The reply is not {\"verdicts\": [{\"id\", \"lens\", \"rev\", \"verdict\", \"note\"}]}: " + reason +
+			"; nothing was recorded",
+	}
+}
+
+// InvalidVerdict is `invalid_verdict`: a verdict that is neither pass nor fail.
+func InvalidVerdict(i int, value string) *Located {
+	return &Located{
+		Code:     "invalid_verdict",
+		Message:  fmt.Sprintf("verdicts[%d].verdict is '%s'; use pass or fail. Nothing was recorded", i, value),
+		Field:    "verdict",
+		Target:   value,
+		Expected: []string{"pass", "fail"},
+	}
+}
+
+// NoteRequired is `note_required`: a fail verdict with no note, which would
+// tell the author nothing about what to change.
+func NoteRequired(i int, id, lens string) *Located {
+	return &Located{
+		Code: "note_required",
+		Message: fmt.Sprintf("verdicts[%d] fails lens '%s' on %s with no note; a fail must say what to change. "+
+			"Nothing was recorded", i, lens, id),
+		Field:  "note",
+		Target: id,
+	}
+}
+
+// LensNotApplicable is `lens_not_applicable`: a verdict for a lens the entity's
+// template does not declare, or whose `when` does not hold for it now.
+// applicable lists the codes that do apply, in template order.
+func LensNotApplicable(i int, lens, id string, applicable []string) *Located {
+	which := "none"
+	if len(applicable) > 0 {
+		which = strings.Join(applicable, ", ")
+	}
+	return &Located{
+		Code: "lens_not_applicable",
+		Message: fmt.Sprintf("verdicts[%d] answers lens '%s', which does not apply to %s (applicable: %s); "+
+			"run khub review for the current lenses. Nothing was recorded", i, lens, id, which),
+		Field:    "lens",
+		Target:   lens,
+		Expected: applicable,
+	}
+}
+
+// StaleReply is `stale_reply`: the reviewer saw a revision of the content that
+// is no longer current, so the verdict would answer a body that has changed.
+func StaleReply(i int, id, saw, now string) *Located {
+	return &Located{
+		Code: "stale_reply",
+		Message: fmt.Sprintf("verdicts[%d] saw %s at rev %s, and its content is now rev %s; "+
+			"run khub review again and answer the current body. Nothing was recorded", i, id, saw, now),
+		Field:  "rev",
+		Target: id,
+	}
+}

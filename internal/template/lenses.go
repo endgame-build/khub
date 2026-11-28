@@ -3,10 +3,11 @@
 // `_order_lenses`, `Lens.applies`).
 //
 // khub validates, filters and orders the registry and prints it beside the
-// body metrics; it never executes an `instruction` and never turns one into a
-// finding. A lens is a prompt for whoever is reviewing the body, human or
-// agent — the judgement it asks for is the part a reader has to be able to
-// disagree with.
+// body metrics; it never executes an `instruction`. A lens is a prompt for
+// whoever is reviewing the body, human or agent — the judgement it asks for is
+// the part a reader has to be able to disagree with. `khub review` asks the
+// open ones and records the answers, and only `check --require-lenses` turns
+// an open lens into a finding (integrity/review.go).
 
 package template
 

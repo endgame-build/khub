@@ -162,6 +162,11 @@ type CheckReport struct {
 	// failing finding (`check --require-verified`).
 	BelowTier []TierFinding
 	TierGate  string
+	// Applicable lenses not in state pass, filled only under LensGate
+	// (`check --require-lenses`), over the active entities or the changed
+	// ones. Fails the gate when non-empty.
+	Lenses   []LensFinding
+	LensGate bool
 	// Review events whose recorded `rev` no longer matches the content: the
 	// review saw an earlier version. Informational, like Thin.
 	Superseded []SupersededVerification
@@ -228,6 +233,13 @@ type CheckOptions struct {
 	Strict bool
 	// Mentions runs the body-mention audit (see mentions.go).
 	Mentions bool
+	// Lenses fills the `lenses` bucket and makes it gate
+	// (`check --require-lenses`). Changed, when not nil, limits it to the
+	// entities stored at those paths, resolved as `get --path` resolves them
+	// from Base; a path that names no entity is ignored.
+	Lenses  bool
+	Changed []string
+	Base    string
 }
 
 // FlagShadow is one field a write verb's flag shadows: Commands are the verbs
@@ -260,6 +272,9 @@ func (r *CheckReport) Passed() bool {
 		return false
 	}
 	if len(r.FlagShadowed) > 0 {
+		return false
+	}
+	if r.LensGate && len(r.Lenses) > 0 {
 		return false
 	}
 	return len(r.Incomplete) == 0 &&
@@ -443,6 +458,13 @@ func CheckWith(root string, opts CheckOptions, now time.Time) (*CheckReport, err
 		BelowTier:               tiers(resolved, valid, entityNodes),
 		Superseded:              supersededVerifications(resolved, valid, entityNodes),
 		Retention:               retentionHits(resolved, valid, g, entityNodes, now),
+	}
+	if opts.Lenses {
+		report.LensGate = true
+		report.Lenses, err = lensFindings(root, opts.Base, resolved, scanned, valid, body.templates, opts.Changed)
+		if err != nil {
+			return nil, err
+		}
 	}
 	applyWaivers(resolved, valid, report)
 	return report, nil

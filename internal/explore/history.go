@@ -206,11 +206,11 @@ func clean(body string) string { return strings.TrimRight(canon.NormalizeNewline
 // version at all, "" when it shows some.
 func (s *snapshot) sinceReview(node index.Node, rtype *schema.ResolvedType, current *content,
 	versions []gitlog.Version, parsed []*content, more bool, note string) any {
-	events := trust.Events(current.meta)
-	if len(events) == 0 {
+	newest := trust.NewestReview(current.meta)
+	if newest < 0 {
 		return nil
 	}
-	event := events[len(events)-1]
+	event := trust.Events(current.meta)[newest]
 	rev, _ := event.Get("rev")
 	unmarked := !values.Present(rev)
 	if !s.superseded(node) && !unmarked {

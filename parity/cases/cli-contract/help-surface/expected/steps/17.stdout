@@ -7,6 +7,8 @@ Options:
   --stale  Fail the gate on active entities whose stale_after has passed.
   --require-verified  Fail the gate on active entities below --tier.
   --tier <str>  The review tier --require-verified asks for: machine or human. [default: machine]
+  --require-lenses  Fail the gate on applicable review lenses of active entities not in state pass (see khub review).
+  --changed  With --require-lenses: judge only the entities stored at the paths that follow.
   --mentions  Also suggest edges for entities a body names but no relation links (informational; never written).
   --format <str>  text (Rich on a TTY) or json. [default: text]
   --help  Show this message and exit.

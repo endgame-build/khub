@@ -121,6 +121,11 @@ func (r *CheckReport) Findings() []Finding {
 	for _, f := range r.BelowGate() {
 		add(f.ID(), "below_tier", "trust "+f.Trust+", "+r.TierGate+" asked for")
 	}
+	if r.LensGate {
+		for _, f := range r.Lenses {
+			add(f.ID(), "lenses", "lens "+f.Lens+" is "+f.State+", pass asked for")
+		}
+	}
 	for _, w := range r.StaleWaivers {
 		add(w.ID(), "stale_waivers", "waiver for "+w.Finding+" matches no finding; remove it from policy.yaml")
 	}

@@ -1,0 +1,1 @@
+{"error": {"code": "invalid_reply", "message": "The reply is not {\"verdicts\": [{\"id\", \"lens\", \"rev\", \"verdict\", \"note\"}]}: 'verdicts' is missing or not a list; nothing was recorded"}}

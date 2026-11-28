@@ -1,0 +1,18 @@
+# Each refusal of review --record refuses the whole batch, exit 2, and writes
+# nothing (the tree manifest). Where a batch holds two verdicts, the first is
+# valid, so a partial write would show.
+steps:
+- argv: ["init", "build-hub", ".", "--no-wire"]
+- argv: ["add", "requirement", "--title", "Invoice totals", "--kind", "non-functional"]
+- argv: ["review", "--record", "-", "--by", "human:ana"]
+  stdin: '{"verdicts": [{"id": "req-invoice-totals", "lens": "single", "rev": "15dfd18b9df0", "verdict": "pass"}, {"id": "req-invoice-totals", "lens": "measurable", "rev": "15dfd18b9df0", "verdict": "fail"}]}'
+- argv: ["review", "--record", "-", "--by", "human:ana"]
+  stdin: '{"verdicts": [{"id": "req-invoice-totals", "lens": "single", "rev": "15dfd18b9df0", "verdict": "pass"}, {"id": "req-invoice-totals", "lens": "testable", "rev": "000000000000", "verdict": "pass"}]}'
+- argv: ["review", "--record", "-", "--by", "human:ana"]
+  stdin: '{"verdicts": [{"id": "req-invoice-totals", "lens": "single", "rev": "15dfd18b9df0", "verdict": "pass"}, {"id": "req-invoice-totals", "lens": "violation", "rev": "15dfd18b9df0", "verdict": "pass"}]}'
+- argv: ["review", "--record", "-", "--by", "human:ana"]
+  stdin: '{"verdicts": [{"id": "req-invoice-totals", "lens": "single", "rev": "15dfd18b9df0", "verdict": "maybe"}]}'
+- argv: ["review", "--record", "-", "--by", "human:ana"]
+  stdin: '{"verdict": []}'
+- argv: ["review", "--record", "-", "--by", "human:Ana Ruiz"]
+  stdin: '{"verdicts": []}'

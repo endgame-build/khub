@@ -88,6 +88,27 @@ func Events(meta *omap.Map) []*omap.Map {
 	return out
 }
 
+// IsLensEvent reports whether an event is a lens verdict (`khub review
+// --record`): it carries a `lens` key. A lens verdict answers one review
+// question about the body; it is not a review of the entity, so no tier,
+// supersession or trust gate ever counts it.
+func IsLensEvent(event *omap.Map) bool {
+	_, has := event.Get("lens")
+	return has
+}
+
+// NewestReview is the index in Events of the newest event that is not a lens
+// verdict, -1 when there is none.
+func NewestReview(meta *omap.Map) int {
+	events := Events(meta)
+	for i := len(events) - 1; i >= 0; i-- {
+		if !IsLensEvent(events[i]) {
+			return i
+		}
+	}
+	return -1
+}
+
 // Live reports whether an event still holds for content at rev. An event
 // counts only when its `by` follows the actor convention and its `at` is an
 // OKF datetime. One carrying a `rev` (khub's extension) holds while it
@@ -116,7 +137,7 @@ func ValidActor(s string) bool { return actorConvention.MatchString(s) }
 
 // Tier is the entity's review tier from its live events: human when a live
 // event's `by` is `human:…`, machine when any other event is live, else
-// unverified.
+// unverified. A lens verdict never counts (IsLensEvent).
 func Tier(rtype *schema.ResolvedType, meta *omap.Map, body string) string {
 	events := Events(meta)
 	if len(events) == 0 {
@@ -125,7 +146,7 @@ func Tier(rtype *schema.ResolvedType, meta *omap.Map, body string) string {
 	rev := Rev(rtype, meta, body)
 	tier := Unverified
 	for _, e := range events {
-		if !Live(e, rev) {
+		if IsLensEvent(e) || !Live(e, rev) {
 			continue
 		}
 		if by, _ := get(e, "by").(string); strings.HasPrefix(by, "human:") {
@@ -137,7 +158,9 @@ func Tier(rtype *schema.ResolvedType, meta *omap.Map, body string) string {
 }
 
 // Superseded lists the indices of events whose recorded `rev` no longer
-// matches the content: a review of a version that has since changed.
+// matches the content: a review of a version that has since changed. The
+// indices are into Events, lens verdicts included, and a lens verdict is never
+// one of them: its staleness is `khub review`'s state, not a superseded review.
 func Superseded(rtype *schema.ResolvedType, meta *omap.Map, body string) []int {
 	events := Events(meta)
 	if len(events) == 0 {
@@ -146,6 +169,9 @@ func Superseded(rtype *schema.ResolvedType, meta *omap.Map, body string) []int {
 	rev := Rev(rtype, meta, body)
 	var out []int
 	for i, e := range events {
+		if IsLensEvent(e) {
+			continue
+		}
 		if r, has := e.Get("rev"); has && r != nil && r != rev {
 			out = append(out, i)
 		}

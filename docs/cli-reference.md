@@ -26,6 +26,7 @@ Commands:
   unlink  Remove a relation: khub unlink initech-pov partner northwind.
   remove  Remove an entity, guarded by inbound edges: khub remove old-fragment [--force].
   verify  Record a review: khub verify ad-2026-01-15-use-jwt --by human:ilya.
+  review  Prompt for the open review lenses, or record the answers: khub review --changed <path>...
   query  Filter entities: khub query --type opportunity --stage prospect --format json.
   run  Run a saved query: khub run open-prospects --format json.
   search  Full-text search: khub search modernization --type transcript --format json.
@@ -271,6 +272,24 @@ Options:
 
 ```
 
+## khub review
+
+```console
+$ khub review --help
+Usage: khub review [OPTIONS] [PATH]...
+
+Prompt for the open review lenses, or record the answers: khub review --changed <path>...
+
+Options:
+  --changed  Review only the entities stored at the paths that follow, resolved as get --path does; none given reviews nothing.
+  --record <str>  Record a reply from this file (- for stdin): {"verdicts": [{id, lens, rev, verdict, note}]}.
+  --by <str>  Who answered (required with --record): human:<name>, process:<name>, or <producer>[/<version>].
+  --dry-run  With --record: check the reply and print what would be recorded; write nothing.
+  --format <str>  text (the prompt) or json. [default: text]
+  --help  Show this message and exit.
+
+```
+
 ## khub query
 
 ```console
@@ -461,6 +480,8 @@ Options:
   --stale  Fail the gate on active entities whose stale_after has passed.
   --require-verified  Fail the gate on active entities below --tier.
   --tier <str>  The review tier --require-verified asks for: machine or human. [default: machine]
+  --require-lenses  Fail the gate on applicable review lenses of active entities not in state pass (see khub review).
+  --changed  With --require-lenses: judge only the entities stored at the paths that follow.
   --mentions  Also suggest edges for entities a body names but no relation links (informational; never written).
   --format <str>  text (Rich on a TTY) or json. [default: text]
   --help  Show this message and exit.

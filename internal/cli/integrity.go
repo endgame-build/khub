@@ -6,6 +6,8 @@ package cli
 
 import (
 	"fmt"
+	"os"
+	"slices"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -57,17 +59,33 @@ func registerValidate(root *cobra.Command) {
 
 func registerCheck(root *cobra.Command) {
 	var format string
-	var strict, stale, requireVerified, mentions bool
+	var strict, stale, requireVerified, mentions, requireLenses, changed bool
 	var tier string
 	cmd := newCmd("check", "Check the active graph: completeness, orphans, dangling edges, strays, cycles, bodies.",
 		"", func(cmd *cobra.Command, args []string) error {
+			switch {
+			case changed && !requireLenses:
+				return clickUsageErr(cmd.CommandPath(), "", "--changed needs --require-lenses.")
+			case !changed && len(args) > 0:
+				return clickUsageErr(cmd.CommandPath(), "",
+					"Got unexpected extra argument(s) ("+strings.Join(args, " ")+")")
+			case slices.Contains(args, ""):
+				return clickUsageErr(cmd.CommandPath(), "", "An empty string is not a file path.")
+			}
 			return Guard(format, func() error {
 				ws, err := resolveRoot()
 				if err != nil {
 					return err
 				}
-				report, err := integrity.CheckWith(ws,
-					integrity.CheckOptions{Strict: strict, Mentions: mentions}, clock.Now())
+				opts := integrity.CheckOptions{Strict: strict, Mentions: mentions, Lenses: requireLenses}
+				if changed {
+					// Paths read from the working directory, as get --path reads them.
+					if opts.Base, err = os.Getwd(); err != nil {
+						return err
+					}
+					opts.Changed = append([]string{}, args...)
+				}
+				report, err := integrity.CheckWith(ws, opts, clock.Now())
 				if err != nil {
 					return err
 				}
@@ -92,11 +110,14 @@ func registerCheck(root *cobra.Command) {
 				return nil
 			})
 		})
-	cmd.Args = clickArity(0)
 	cmd.Flags().BoolVar(&strict, "strict", false, "Fail the gate on orphans too (default: informational).")
 	cmd.Flags().BoolVar(&stale, "stale", false, "Fail the gate on active entities whose stale_after has passed.")
 	cmd.Flags().BoolVar(&requireVerified, "require-verified", false, "Fail the gate on active entities below --tier.")
 	cmd.Flags().StringVar(&tier, "tier", trust.Machine, "The review tier --require-verified asks for: machine or human.")
+	cmd.Flags().BoolVar(&requireLenses, "require-lenses", false,
+		"Fail the gate on applicable review lenses of active entities not in state pass (see khub review).")
+	cmd.Flags().BoolVar(&changed, "changed", false,
+		"With --require-lenses: judge only the entities stored at the paths that follow.")
 	cmd.Flags().BoolVar(&mentions, "mentions", false,
 		"Also suggest edges for entities a body names but no relation links (informational; never written).")
 	cmd.Flags().StringVar(&format, "format", "text", "text (Rich on a TTY) or json.")
@@ -277,6 +298,20 @@ func checkPayload(report *integrity.CheckReport) *omap.Map {
 			below = append(below, record)
 		}
 		payload.Set("below_tier", below)
+	}
+	// Only under --require-lenses: applicable lenses not in state pass.
+	if report.LensGate {
+		lenses := make([]any, 0, len(report.Lenses))
+		for _, f := range report.Lenses {
+			record := omap.New()
+			record.Set("id", f.ID())
+			record.Set("type", f.Type)
+			record.Set("slug", f.Slug)
+			record.Set("lens", f.Lens)
+			record.Set("state", f.State)
+			lenses = append(lenses, record)
+		}
+		payload.Set("lenses", lenses)
 	}
 	// A schema field a write verb's flag shadows: that verb can never set it.
 	shadowed := make([]any, 0, len(report.FlagShadowed))
@@ -528,6 +563,11 @@ func checkHuman(report *integrity.CheckReport) {
 	}
 	for _, f := range report.BelowGate() {
 		fmt.Printf("below tier %s: trust %s, %s asked for\n", f.ID(), f.Trust, report.TierGate)
+	}
+	if report.LensGate {
+		for _, f := range report.Lenses {
+			fmt.Printf("lens %s %s: %s, pass asked for\n", f.ID(), f.Lens, f.State)
+		}
 	}
 	if report.StaleGate {
 		for _, id := range report.Expired {
